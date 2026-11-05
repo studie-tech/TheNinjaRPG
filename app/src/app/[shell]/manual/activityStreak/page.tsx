@@ -21,9 +21,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ActivityStreakType } from "@/drizzle/constants";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
+import { useContentListActions } from "@/hooks/useContentListActions";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
+import { formatEventPassCost } from "@/libs/activityStreak";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
@@ -50,15 +52,11 @@ export default function ActivityStreakListPage() {
       ? allConfigs
       : allConfigs?.filter((c) => c.streakType === typeFilter);
 
+  const { onCreated } = useContentListActions(refetch, "/manual/activityStreak/edit");
+
   const { mutate: create, isPending: createPending } =
     api.activityStreak.createConfig.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await refetch();
-          router.push(`/manual/activityStreak/edit/${data.message}`);
-        }
-      },
+      onSuccess: onCreated,
     });
 
   const { mutate: remove, isPending: deletePending } =
@@ -167,15 +165,10 @@ export default function ActivityStreakListPage() {
                       {config.streakType === "EVENT_PASS" && (
                         <>
                           {" • "}
-                          {(() => {
-                            const costs: string[] = [];
-                            if (config.ryoCost > 0) costs.push(`${config.ryoCost} ryo`);
-                            if (config.repsCost > 0)
-                              costs.push(`${config.repsCost} reps`);
-                            if (config.seichiSilverCost > 0)
-                              costs.push(`${config.seichiSilverCost} silver`);
-                            return costs.length > 0 ? costs.join(" / ") : "Free";
-                          })()}
+                          {formatEventPassCost(config, {
+                            separator: " / ",
+                            repsLabel: "reps",
+                          })}
                         </>
                       )}
                     </div>
@@ -230,15 +223,10 @@ export default function ActivityStreakListPage() {
                   <div>
                     <h3 className="font-medium text-sm">Cost</h3>
                     <p className="text-muted-foreground text-sm">
-                      {selectedConfig.ryoCost > 0 && `${selectedConfig.ryoCost} ryo `}
-                      {selectedConfig.repsCost > 0 &&
-                        `${selectedConfig.repsCost} reps `}
-                      {selectedConfig.seichiSilverCost > 0 &&
-                        `${selectedConfig.seichiSilverCost} silver`}
-                      {selectedConfig.ryoCost === 0 &&
-                        selectedConfig.repsCost === 0 &&
-                        selectedConfig.seichiSilverCost === 0 &&
-                        "Free"}
+                      {formatEventPassCost(selectedConfig, {
+                        separator: " ",
+                        repsLabel: "reps",
+                      })}
                     </p>
                   </div>
                 )}

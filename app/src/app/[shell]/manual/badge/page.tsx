@@ -1,17 +1,16 @@
 "use client";
 
 import { FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import type { Badge } from "@/drizzle/schema";
+import { useContentListActions } from "@/hooks/useContentListActions";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
-import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -20,9 +19,6 @@ export default function ManualBadges() {
   const { data: userData } = useUserData();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [badge, setBadge] = useState<Badge | undefined>(undefined);
-
-  // Router for forwarding
-  const router = useRouter();
 
   // Query data
   const {
@@ -38,22 +34,15 @@ export default function ManualBadges() {
   );
   const allBadges = badges?.pages.flatMap((page) => page.data);
 
+  const { onCreated, onDeleted } = useContentListActions(refetch, "/manual/badge/edit");
+
   // Mutations
   const { mutate: create, isPending: load1 } = api.badge.create.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await refetch();
-        router.push(`/manual/badge/edit/${data.message}`);
-      }
-    },
+    onSuccess: onCreated,
   });
 
   const { mutate: remove, isPending: load2 } = api.badge.delete.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await refetch();
-    },
+    onSuccess: onDeleted,
   });
 
   // Derived

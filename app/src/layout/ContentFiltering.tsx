@@ -466,6 +466,22 @@ export const useContentFiltering = <
  * - Applies normalizeForFilter if provided
  * - Adds exclusions if any are non-empty
  */
+/** Whether a field's value leaves the filter off, per its type and `emptyValues`. */
+const isFieldEmpty = (field: AnyFieldConfig, value: unknown) => {
+  if (field.type === "multi-select") return !Array.isArray(value) || value.length === 0;
+  if (field.type === "text" || field.type === "date")
+    return typeof value !== "string" || value.length === 0;
+  if (field.type === "tri-state") return value === undefined;
+  if (field.type === "number") return !Number.isFinite(value);
+  if (
+    "emptyValues" in field &&
+    Array.isArray(field.emptyValues) &&
+    (field.emptyValues as unknown[]).includes(value)
+  )
+    return true;
+  return !value;
+};
+
 export const buildFilter = <
   F extends readonly AnyFieldConfig[],
   E extends readonly ExclusionCategoryConfig<string>[] | undefined =
@@ -482,24 +498,7 @@ export const buildFilter = <
     const id = field.id as keyof ValuesFromSchema<F> & string;
     const debouncedValue = state.debounced[id];
 
-    const isEmpty = () => {
-      if (field.type === "multi-select")
-        return Array.isArray(debouncedValue) && debouncedValue.length === 0;
-      if (field.type === "text" || field.type === "date")
-        return typeof debouncedValue !== "string" || debouncedValue.length === 0;
-      if (field.type === "tri-state") return debouncedValue === undefined;
-      if (field.type === "number")
-        return debouncedValue === undefined || !Number.isFinite(debouncedValue);
-      if (
-        "emptyValues" in field &&
-        Array.isArray(field.emptyValues) &&
-        (field.emptyValues as unknown[]).includes(debouncedValue)
-      )
-        return true;
-      return false;
-    };
-
-    if (!isEmpty()) {
+    if (!isFieldEmpty(field, debouncedValue)) {
       const normalized =
         "normalizeForFilter" in field && field.normalizeForFilter
           ? field.normalizeForFilter(debouncedValue as never)
@@ -712,36 +711,12 @@ export const ContentFiltering = <
     for (const field of fieldsToRender) {
       const id = field.id as keyof ContentFilteringState<F, E>["values"] & string;
       const val = state.values[id];
-      const isArray = Array.isArray(val);
       if ("countActive" in field && field.countActive) {
         total += (field.countActive as (v: unknown) => number)(val);
         continue;
       }
-      if (field.type === "multi-select") {
-        total += isArray ? (val as unknown[]).length : 0;
-        continue;
-      }
-      if (field.type === "tri-state") {
-        total += val !== undefined ? 1 : 0;
-        continue;
-      }
-      if ("emptyValues" in field && Array.isArray(field.emptyValues)) {
-        if ((field.emptyValues as unknown[]).includes(val)) continue;
-      }
-      if (field.type === "text") {
-        total += typeof val === "string" && val.length > 0 ? 1 : 0;
-        continue;
-      }
-      if (field.type === "date") {
-        total += typeof val === "string" && val.length > 0 ? 1 : 0;
-        continue;
-      }
-      if (field.type === "number") {
-        total += Number.isFinite(val) ? 1 : 0;
-        continue;
-      }
-      // single-select default
-      total += val ? 1 : 0;
+      if (isFieldEmpty(field, val)) continue;
+      total += field.type === "multi-select" ? (val as unknown[]).length : 1;
     }
     return total;
   };
