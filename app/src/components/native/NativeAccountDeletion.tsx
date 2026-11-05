@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
+import { STORE_SUBSCRIPTION_URLS } from "@/libs/legalLinks";
 import { appleAuth } from "@/libs/native";
 import { ACCOUNT_DELETION_CONFIRMATION } from "@/validators/accountDeletion";
 
@@ -168,10 +169,10 @@ export const NativeAccountDeletion = () => {
         >
           <p className="text-[14px]">Cancel subscriptions where you bought them.</p>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-2">
-            <NativeExternalLink href="https://apps.apple.com/account/subscriptions">
+            <NativeExternalLink href={STORE_SUBSCRIPTION_URLS.ios}>
               Apple subscriptions
             </NativeExternalLink>
-            <NativeExternalLink href="https://play.google.com/store/account/subscriptions">
+            <NativeExternalLink href={STORE_SUBSCRIPTION_URLS.android}>
               Google Play subscriptions
             </NativeExternalLink>
             <NativeExternalLink href="https://www.paypal.com/myaccount/autopay/">
