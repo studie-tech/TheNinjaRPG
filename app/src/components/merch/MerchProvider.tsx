@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowRight, Check, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { ArrowRight, Check, ShoppingBag, Trash2 } from "lucide-react";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -20,11 +20,14 @@ import Link from "@/layout/Link";
 import { formatMerchMoney, preferredMerchImage } from "@/libs/merch/catalog";
 import { usePublicPathname } from "@/utils/routing";
 import {
+  MERCH_MAX_QUANTITY,
+  MERCH_REVIEW_BAG_LIMIT,
   type MerchCartLine,
   type MerchProduct,
   type MerchVariant,
   merchReviewCartSchema,
 } from "@/validators/merch";
+import { MerchQuantityStepper } from "./MerchQuantityStepper";
 
 const REVIEW_BAG_KEY = "tnr-merch-review-bag-v1";
 type MerchContextValue = {
@@ -87,6 +90,17 @@ export function MerchProvider({ children }: { children: ReactNode }) {
     if (result.isSuccess) setNeedsCartRefresh(false);
   };
 
+  /** A response without the cart leaves the bag stale until a read succeeds. */
+  const applyCartResult = (result: RouterOutputs["merch"]["addToCart"]) => {
+    setMessage(result.message);
+    if (!result.success) void cart.refetch();
+    else if (result.cart) utils.merch.getCart.setData(undefined, result.cart);
+    else {
+      setNeedsCartRefresh(true);
+      void refreshCart();
+    }
+  };
+
   useEffect(() => {
     if (pathname === "/merch/cart") setBagOpen(true);
   }, [pathname]);
@@ -139,7 +153,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
     setMessage("");
     if (preview) {
       if (
-        reviewLines.length >= 50 &&
+        reviewLines.length >= MERCH_REVIEW_BAG_LIMIT &&
         !reviewLines.some((line) => line.variantId === variant.id)
       ) {
         setMessage("Your review bag is full. Remove an item before adding another.");
@@ -150,7 +164,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
         if (existing)
           return current.map((l) =>
             l.id === existing.id
-              ? { ...l, quantity: Math.min(10, l.quantity + quantity) }
+              ? { ...l, quantity: Math.min(MERCH_MAX_QUANTITY, l.quantity + quantity) }
               : l,
           );
         return [
@@ -175,15 +189,8 @@ export function MerchProvider({ children }: { children: ReactNode }) {
       .mutateAsync({ variantId: variant.id, quantity })
       .catch(() => null);
     if (!result) return;
-    setMessage(result.message);
-    if (result.success) {
-      if (result.cart) utils.merch.getCart.setData(undefined, result.cart);
-      else {
-        setNeedsCartRefresh(true);
-        void refreshCart();
-      }
-      setBagOpen(true);
-    } else void cart.refetch();
+    applyCartResult(result);
+    if (result.success) setBagOpen(true);
   };
   const update = async (line: MerchCartLine, quantity: number) => {
     if (busy) return;
@@ -199,15 +206,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
     const result = await updateMutation
       .mutateAsync({ lineId: line.id, quantity })
       .catch(() => null);
-    if (!result) return;
-    setMessage(result.message);
-    if (result.success) {
-      if (result.cart) utils.merch.getCart.setData(undefined, result.cart);
-      else {
-        setNeedsCartRefresh(true);
-        void refreshCart();
-      }
-    } else void cart.refetch();
+    if (result) applyCartResult(result);
   };
   const checkout = async () => {
     if (busy || preview) return;
@@ -334,25 +333,13 @@ export function MerchProvider({ children }: { children: ReactNode }) {
                           {line.price && " per item"}
                         </strong>
                         <div className="merch-line-actions">
-                          <div className="merch-quantity">
-                            <button
-                              type="button"
-                              disabled={busy || line.quantity <= 1}
-                              aria-label={`Decrease quantity of ${line.title}`}
-                              onClick={() => void update(line, line.quantity - 1)}
-                            >
-                              <Minus size={14} />
-                            </button>
-                            <span>{line.quantity}</span>
-                            <button
-                              type="button"
-                              disabled={busy || line.quantity >= 10}
-                              aria-label={`Increase quantity of ${line.title}`}
-                              onClick={() => void update(line, line.quantity + 1)}
-                            >
-                              <Plus size={14} />
-                            </button>
-                          </div>
+                          <MerchQuantityStepper
+                            value={line.quantity}
+                            disabled={busy}
+                            iconSize={14}
+                            label={`quantity of ${line.title}`}
+                            onChange={(quantity) => void update(line, quantity)}
+                          />
                           <button
                             type="button"
                             disabled={busy}
