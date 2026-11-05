@@ -239,6 +239,7 @@ export const findUserDataForGetSectorData = (
       anbuSquad: {
         columns: { id: true, name: true, image: true, villageId: true },
       },
+      village: { columns: { kageId: true } },
     },
   });
 

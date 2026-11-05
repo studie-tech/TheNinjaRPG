@@ -1,3 +1,4 @@
+import type { UserRank } from "@/drizzle/constants";
 import {
   MAP_RESERVED_SECTORS,
   WAR_ESPIONAGE_TARGET,
@@ -235,6 +236,12 @@ export const selectWarObjectives = (
     destroyed: false,
   }));
 };
+
+/** Elders and the Kage of a viewer's own village read objectives without espionage. */
+export const isWarObjectiveLeader = (
+  user: { userId: string; rank: UserRank },
+  ownVillage: { kageId: string } | null | undefined,
+) => user.rank === "ELDER" || ownVillage?.kageId === user.userId;
 
 /**
  * Return only the viewer's mercenary contract and cross-war assignment. Objective

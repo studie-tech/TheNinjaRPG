@@ -39,6 +39,7 @@ import {
   areWarObjectivesRevealed,
   getWarSide,
   isObjectiveWarActive,
+  isWarObjectiveLeader,
   maskWarObjectives,
   withMercenaryParticipation,
 } from "@/libs/objectiveWar";
@@ -382,7 +383,7 @@ export const warRouter = createTRPCRouter({
         war: maskWarObjectives(
           activeWar,
           user.villageId,
-          user.rank === "ELDER" || ownVillage[0]?.kageId === user.userId,
+          isWarObjectiveLeader(user, ownVillage[0]),
           ctx.userId,
         ),
         missions: missions
@@ -723,10 +724,10 @@ export const warRouter = createTRPCRouter({
     })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const [wars, viewer, ledVillage] = await Promise.all([
+      const [wars, viewer, ownVillage] = await Promise.all([
         fetchActiveWars(ctx.drizzle),
         fetchUser(ctx.drizzle, ctx.userId),
-        findLedVillageId(ctx.drizzle, ctx.userId),
+        selectVillageForGetObjectiveWarInfo(ctx.drizzle, ctx),
       ]);
       return wars
         .filter((w) =>
@@ -738,7 +739,7 @@ export const warRouter = createTRPCRouter({
           maskWarObjectives(
             w,
             viewer.villageId,
-            viewer.rank === "ELDER" || ledVillage?.id === viewer.villageId,
+            isWarObjectiveLeader(viewer, ownVillage[0]),
             ctx.userId,
           ),
         );
