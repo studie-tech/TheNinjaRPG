@@ -52,6 +52,17 @@ it("keeps a reachable Activity launcher while chatting and can return to the les
   expect(view.getByText("Saved lesson")).toBeTruthy();
 });
 
+it("runs the hidden-lesson fallback whenever the lesson is out of view", () => {
+  const view = render(<ActivityDock hiddenLesson="Hidden sync">Saved lesson</ActivityDock>);
+  expect(view.queryByText("Hidden sync")).toBeNull();
+  act(() => getDefaultStore().set(chatPanelAtom, { owner: "chat", tab: "tavern" }));
+  expect(view.getByText("Hidden sync")).toBeTruthy();
+  act(() => getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" }));
+  fireEvent.click(view.getByRole("button", { name: "Collapse Activity" }));
+  expect(view.queryByText("Saved lesson")).toBeNull();
+  expect(view.getByText("Hidden sync")).toBeTruthy();
+});
+
 it("reveals the lesson when the player re-enables the tutorial in Settings", () => {
   user.tutorialOn = false;
   const view = render(<ActivityDock>Saved lesson</ActivityDock>);

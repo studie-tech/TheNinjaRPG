@@ -385,6 +385,22 @@ export const isGeninObjectiveSatisfied = (
 };
 
 /**
+ * Whether a running tutorial has nothing left to teach: the player graduated
+ * while its panel was out of view, so no step ever saw them do it.
+ */
+export const hasOutgrownTutorial = (
+  user?:
+    | (StarterQuestTutorialUser & {
+        tutorialOn?: boolean | null;
+        tutorialStep?: number | null;
+      })
+    | null,
+) =>
+  isTutorialActive(user) &&
+  !!user?.userQuests &&
+  isGeninObjectiveSatisfied(GENIN_QUEST_OBJECTIVES.win, user);
+
+/**
  * Index of the step a player should be moved to because their quest is
  * already past what the current step asks for, or undefined to stay put.
  *

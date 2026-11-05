@@ -64,6 +64,7 @@ import {
   getTutorialCatchUpStepIndex,
   getTutorialChapterProgress,
   getTutorialPortraitSide,
+  hasOutgrownTutorial,
   isTutorialActive,
   isTutorialPageMatch,
   isUsableHighlightRect,
@@ -493,10 +494,39 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
   // Account-scoped presentation resets when the player changes; progress stays in the profile.
   if (!userData || isBrowserAuthPath(pathname)) return null;
   return (
-    <ActivityDock key={userData.userId}>
+    <ActivityDock key={userData.userId} hiddenLesson={<TutorialCompletionSync />}>
       <PlayerTutorialAssistant {...props} tutorialIdentityRef={tutorialIdentityRef} />
     </ActivityDock>
   );
+};
+
+/**
+ * Finishes the tutorial of a player who graduated with the lesson collapsed, on
+ * the Quests tab or behind chat. The assistant only runs while the lesson is on
+ * screen, so without this they stay in the tutorial's restricted interface.
+ */
+const TutorialCompletionSync: React.FC = () => {
+  const { data: userData, updateUser } = useUserDataSelector((user) => ({
+    tutorialOn: user.tutorialOn,
+    tutorialStep: user.tutorialStep,
+    rank: user.rank,
+    userQuests: user.userQuests,
+  }));
+  const { mutate: finishTutorial } = api.profile.updateTutorialStep.useMutation({
+    onSuccess: async (data) => {
+      if (data.success && data.userPatch?.tutorialStep !== undefined) {
+        await updateUser({ tutorialStep: data.userPatch.tutorialStep });
+      }
+    },
+  });
+  const isOutgrown = hasOutgrownTutorial(userData);
+  const requestedRef = React.useRef(false);
+  useEffect(() => {
+    if (!isOutgrown || requestedRef.current) return;
+    requestedRef.current = true;
+    finishTutorial({ step: TUTORIAL_STEPS_COUNT });
+  }, [isOutgrown, finishTutorial]);
+  return null;
 };
 
 const PlayerTutorialAssistant: React.FC<
