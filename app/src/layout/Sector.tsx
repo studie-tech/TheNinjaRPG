@@ -1832,8 +1832,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         // Don't attack allies in active wars
         const areWarAllies =
           user.allianceStatus === "ALLY" ||
-          (user.allianceStatus !== "ENEMY" &&
-            isWarAllies(warData, userData.villageId, user.villageId));
+          (user.allianceStatus !== "ENEMY" && isWarAllies(warData, userData, user));
         if (areWarAllies) {
           return false;
         }
