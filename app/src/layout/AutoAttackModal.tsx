@@ -1,10 +1,15 @@
 "use client";
 
+import { Zap, ZapOff } from "lucide-react";
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
+import { AUTO_ATTACK_SETTINGS, useAutoAttackMode } from "@/hooks/autoAttack";
 import { safeLocalStorageSetItem, useLocalStorage } from "@/hooks/localstorage";
 import Modal from "@/layout/Modal";
+import { cn } from "@/libs/shadui";
+
+const { minLevel, delay } = AUTO_ATTACK_SETTINGS;
 
 interface AutoAttackModalProps {
   isOpen: boolean;
@@ -18,12 +23,12 @@ export default function AutoAttackModal({
   onEnable,
 }: AutoAttackModalProps) {
   const [autoAttackMinLevel, setAutoAttackMinLevel] = useLocalStorage<number>(
-    "autoAttackMinLevel",
-    1,
+    minLevel.key,
+    minLevel.default,
   );
   const [autoAttackDelay, setAutoAttackDelay] = useLocalStorage<number>(
-    "autoAttackDelay",
-    5,
+    delay.key,
+    delay.default,
   );
 
   const [minLevelDraft, setMinLevelDraft] = useState(autoAttackMinLevel);
@@ -36,19 +41,19 @@ export default function AutoAttackModal({
   }, [isOpen, autoAttackMinLevel, autoAttackDelay]);
   const isValid =
     Number.isInteger(minLevelDraft) &&
-    minLevelDraft >= 1 &&
-    minLevelDraft <= 100 &&
+    minLevelDraft >= minLevel.min &&
+    minLevelDraft <= minLevel.max &&
     Number.isInteger(delayDraft) &&
-    delayDraft >= 1 &&
-    delayDraft <= 60;
+    delayDraft >= delay.min &&
+    delayDraft <= delay.max;
 
   const handleEnable = () => {
     if (!isValid) return;
     setAutoAttackMinLevel(minLevelDraft);
     setAutoAttackDelay(delayDraft);
     // Auto attack reads storage as soon as it starts, before storage-hook effects run.
-    safeLocalStorageSetItem("autoAttackMinLevel", JSON.stringify(minLevelDraft));
-    safeLocalStorageSetItem("autoAttackDelay", JSON.stringify(delayDraft));
+    safeLocalStorageSetItem(minLevel.key, JSON.stringify(minLevelDraft));
+    safeLocalStorageSetItem(delay.key, JSON.stringify(delayDraft));
     onEnable();
     setIsOpen(false);
   };
@@ -70,13 +75,13 @@ export default function AutoAttackModal({
           </label>
           <NumberInput
             id="auto-attack-min-level"
-            min="1"
-            max="100"
+            min={minLevel.min}
+            max={minLevel.max}
             value={minLevelDraft}
             onValueChange={setMinLevelDraft}
-            emptyFallback={1}
+            emptyFallback={minLevel.default}
             className="w-full"
-            placeholder="1"
+            placeholder={String(minLevel.default)}
           />
           <p className="mt-1 text-muted-foreground text-xs">
             Only attack enemies at or above this level
@@ -89,13 +94,13 @@ export default function AutoAttackModal({
           </label>
           <NumberInput
             id="auto-attack-delay"
-            min="1"
-            max="60"
+            min={delay.min}
+            max={delay.max}
             value={delayDraft}
             onValueChange={setDelayDraft}
-            emptyFallback={5}
+            emptyFallback={delay.default}
             className="w-full"
-            placeholder="5"
+            placeholder={String(delay.default)}
           />
           <p className="mt-1 text-muted-foreground text-xs">
             Wait this many seconds between attacks
@@ -114,3 +119,44 @@ export default function AutoAttackModal({
     </Modal>
   );
 }
+
+/** ANBU page control: stops a running auto attack, or opens its configuration. */
+export const AutoAttackToggle = ({
+  className,
+  iconClassName,
+}: {
+  className?: string;
+  iconClassName: string;
+}) => {
+  const [autoAttackMode, setAutoAttackMode] = useAutoAttackMode();
+  const [showModal, setShowModal] = useState(false);
+
+  return (
+    <>
+      {autoAttackMode ? (
+        <Button
+          className={cn(className, "text-red-500")}
+          aria-label="Disable auto attack"
+          hoverText="Auto Attack"
+          onClick={() => setAutoAttackMode(false)}
+        >
+          <Zap className={iconClassName} />
+        </Button>
+      ) : (
+        <Button
+          className={cn(className, "hover:text-red-500")}
+          aria-label="Configure auto attack"
+          hoverText="Auto Attack"
+          onClick={() => setShowModal(true)}
+        >
+          <ZapOff className={iconClassName} />
+        </Button>
+      )}
+      <AutoAttackModal
+        isOpen={showModal}
+        setIsOpen={setShowModal}
+        onEnable={() => setAutoAttackMode(true)}
+      />
+    </>
+  );
+};

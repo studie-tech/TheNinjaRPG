@@ -55,6 +55,7 @@ import {
   VILLAGE_REDUCED_GAINS_DAYS,
 } from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
+import { useAutoAttackMode } from "@/hooks/autoAttack";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useMap } from "@/hooks/map";
@@ -160,10 +161,7 @@ function Travel() {
     "showOwnership",
     false,
   );
-  const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>(
-    "autoAttackMode",
-    false,
-  );
+  const [autoAttackMode, setAutoAttackMode] = useAutoAttackMode();
   const [sensoryAllyAttack, setSensoryAllyAttack] = useLocalStorage<boolean>(
     "friendlyAttackSensory",
     false,

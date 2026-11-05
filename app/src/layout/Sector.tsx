@@ -31,8 +31,9 @@ import {
   WAR_SHRINE_IMAGE_BY_BIOME,
 } from "@/drizzle/constants";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
+import { AUTO_ATTACK_SETTINGS, readAutoAttackSetting } from "@/hooks/autoAttack";
 import { useGameScene } from "@/hooks/game-scene";
-import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
@@ -1784,17 +1785,14 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       // Check if enough time has passed since last attack
       const now = Date.now();
       const lastAttackTime = lastAutoAttackTimeRef.current;
-      const attackDelaySeconds = parseInt(
-        safeLocalStorageGetItem("autoAttackDelay") || "5",
-        10,
-      );
-      const attackDelayMs = attackDelaySeconds * 1000; // Convert seconds to milliseconds
+      const attackDelayMs = readAutoAttackSetting(AUTO_ATTACK_SETTINGS.delay) * 1000;
 
       if (lastAttackTime && now - lastAttackTime < attackDelayMs) {
         return; // Not enough time has passed, wait
       }
 
       // Find nearby enemies to attack
+      const minLevel = readAutoAttackSetting(AUTO_ATTACK_SETTINGS.minLevel);
       const nearbyEnemies = usersRef.current.filter((user) => {
         if (!user.userId || user.userId === userData.userId) return false;
         // Overworld NPCs share this list for map rendering/interaction, but are fought
@@ -1825,10 +1823,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         if (RANKS_RESTRICTED_FROM_PVP.includes(user.rank)) return false;
 
         // Check minimum level requirement
-        const minLevel = parseInt(
-          safeLocalStorageGetItem("autoAttackMinLevel") || "1",
-          10,
-        );
         if (user.level < minLevel) return false;
 
         return true;
