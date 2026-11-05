@@ -3,6 +3,7 @@ import { CRAFTING_REQUIRED_EXP } from "@/drizzle/constants";
 import {
   formatCraftingRank,
   getCraftingRank,
+  getImbueBlockedMessage,
   getImbuementRankCapMessage,
   getMissingCraftingRank,
 } from "@/libs/crafting";
@@ -95,5 +96,31 @@ describe("getImbuementRankCapMessage", () => {
   it("stays quiet when the item itself is full", () => {
     expect(getImbuementRankCapMessage("APPRENTICE", 1, 1)).toBeNull();
     expect(getImbuementRankCapMessage("FORGEMASTER", 2, 2)).toBeNull();
+  });
+});
+
+describe("getImbueBlockedMessage", () => {
+  it("names the Apprentice rank and its experience for Novices", () => {
+    const message = getImbueBlockedMessage("NOVICE", 2, 2, 2);
+    expect(message).toContain("Apprentice rank");
+    expect(message).toContain(
+      CRAFTING_REQUIRED_EXP.APPRENTICE.toLocaleString("en-US"),
+    );
+  });
+
+  it("points at the Can be Imbued property when no owned item has it", () => {
+    expect(getImbueBlockedMessage("APPRENTICE", 0, 0, 2)).toContain("Can be Imbued");
+  });
+
+  it("reports the crystal cap ahead of missing crystals", () => {
+    expect(getImbueBlockedMessage("APPRENTICE", 3, 0, 0)).toContain("crystal cap");
+  });
+
+  it("reports missing crystals when an item can still take one", () => {
+    expect(getImbueBlockedMessage("APPRENTICE", 3, 1, 0)).toContain("no crystals");
+  });
+
+  it("stays silent when an item and a crystal are available", () => {
+    expect(getImbueBlockedMessage("APPRENTICE", 3, 1, 1)).toBeNull();
   });
 });

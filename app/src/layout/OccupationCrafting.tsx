@@ -26,6 +26,7 @@ import {
   getCraftingRankProgress,
   getCurrentCraftingStatus,
   getEffectiveMaxImbuements,
+  getImbueBlockedMessage,
   getImbuementRankCapMessage,
 } from "@/libs/crafting";
 import { calcItemRepairCost } from "@/libs/item";
@@ -227,7 +228,33 @@ export default function OccupationCrafting() {
       ),
     };
   });
+  const openImbueOptions = imbueOptions.filter((option) => option.canAddMoreCrystals);
   const rankCappedItems = imbueOptions.filter((option) => option.rankCapMessage);
+  const imbueBlockedMessage = getImbueBlockedMessage(
+    userCraftingRank,
+    imbuableItems.length,
+    openImbueOptions.length,
+    crystals.length,
+  );
+
+  const rankCapNotes = rankCappedItems.length > 0 && (
+    <div
+      className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3"
+      data-testid="imbue-rank-cap-notes"
+    >
+      <p className="mb-1 flex items-center gap-2 font-medium text-sm">
+        <Info className="h-4 w-4" />
+        Limited by your crafting rank
+      </p>
+      <ul className="space-y-1 text-sm">
+        {rankCappedItems.map(({ userItem, rankCapMessage }) => (
+          <li key={userItem.id}>
+            <strong>{userItem.item?.name || "Unknown"}</strong>: {rankCapMessage}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 
   // Guard
   if (userData?.occupation !== "CRAFTING") return null;
@@ -522,6 +549,10 @@ export default function OccupationCrafting() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-4">
+                <p className="text-muted-foreground text-sm">
+                  You can imbue one item at a time. Imbueable Items comes back when this
+                  one finishes.
+                </p>
                 <ItemWithEffects
                   item={{
                     ...activeImbuingItem.item,
@@ -566,42 +597,32 @@ export default function OccupationCrafting() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {maxCrystalsPerItem === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    You need to be at least Apprentice rank to imbue items.
-                  </p>
-                ) : imbuableItems.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    No items available for imbuing. Items must have the &quot;Can Be
-                    Imbued&quot; property.
-                  </p>
-                ) : crystals.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    No crystals available for imbuing. Obtain crystals to enhance your
-                    items.
-                  </p>
+                {imbueBlockedMessage ? (
+                  <>
+                    <p
+                      className="text-muted-foreground text-sm"
+                      data-testid="imbue-blocked-message"
+                    >
+                      {imbueBlockedMessage}
+                    </p>
+                    {maxCrystalsPerItem > 0 && rankCapNotes}
+                  </>
                 ) : (
                   <>
                     <div>
                       <h4 className="mb-2 font-medium">Select Item to Imbue</h4>
                       <ActionSelector
-                        items={imbueOptions
-                          .filter((option) => option.canAddMoreCrystals)
-                          .map(
-                            ({
-                              userItem,
-                              currentCrystals,
-                              effectiveMaxImbuements,
-                            }) => ({
-                              id: userItem.id,
-                              name: `${userItem.item?.name || "Unknown"} (${currentCrystals}/${effectiveMaxImbuements} crystals)`,
-                              image: userItem.item?.image || "",
-                              rarity: userItem.item?.rarity || "COMMON",
-                              type: "item" as const,
-                              effects: userItem.item?.effects || [],
-                              hidden: false,
-                            }),
-                          )}
+                        items={openImbueOptions.map(
+                          ({ userItem, currentCrystals, effectiveMaxImbuements }) => ({
+                            id: userItem.id,
+                            name: `${userItem.item?.name || "Unknown"} (${currentCrystals}/${effectiveMaxImbuements} crystals)`,
+                            image: userItem.item?.image || "",
+                            rarity: userItem.item?.rarity || "COMMON",
+                            type: "item" as const,
+                            effects: userItem.item?.effects || [],
+                            hidden: false,
+                          }),
+                        )}
                         selectedId={selectedImbuableItem?.id}
                         showBgColor={false}
                         showLabels={true}
@@ -613,25 +634,7 @@ export default function OccupationCrafting() {
                           setSelectedCrystalUserItem(undefined);
                         }}
                       />
-                      {rankCappedItems.length > 0 && (
-                        <div
-                          className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3"
-                          data-testid="imbue-rank-cap-notes"
-                        >
-                          <p className="mb-1 flex items-center gap-2 font-medium text-sm">
-                            <Info className="h-4 w-4" />
-                            Limited by your crafting rank
-                          </p>
-                          <ul className="space-y-1 text-sm">
-                            {rankCappedItems.map(({ userItem, rankCapMessage }) => (
-                              <li key={userItem.id}>
-                                <strong>{userItem.item?.name || "Unknown"}</strong>:{" "}
-                                {rankCapMessage}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                      {rankCapNotes}
                     </div>
 
                     {selectedImbuableItem && (
