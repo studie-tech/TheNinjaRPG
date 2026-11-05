@@ -9,7 +9,6 @@ import {
 import {
   CRAFTING_TIMES_MINS,
   MAP_WAKE_ISLAND_SECTOR,
-  OCCUPATION_CHANGE_COOLDOWN_DAYS,
   OCCUPATIONS,
 } from "@/drizzle/constants";
 import { userData, userItem } from "@/drizzle/schema";
@@ -38,6 +37,7 @@ import {
   getInventoryBucketFullMessage,
   splitIntoStacks,
 } from "@/libs/item";
+import { getOccupationChangeDaysRemaining } from "@/libs/occupation";
 import { getPvpBoost } from "@/libs/pvpExperience";
 import {
   filterQuestTrackersForDbPersist,
@@ -132,15 +132,8 @@ export const occupationRouter = createTRPCRouter({
 
       // Guard
       if (user.occupation && user.occupationSignupAt) {
-        const daysSinceSignup = Math.floor(
-          (Date.now() - user.occupationSignupAt.getTime()) / (1000 * 60 * 60 * 24),
-        );
-
-        if (
-          daysSinceSignup < OCCUPATION_CHANGE_COOLDOWN_DAYS &&
-          !canChangeContent(user.role)
-        ) {
-          const daysRemaining = OCCUPATION_CHANGE_COOLDOWN_DAYS - daysSinceSignup;
+        const daysRemaining = getOccupationChangeDaysRemaining(user.occupationSignupAt);
+        if (daysRemaining > 0 && !canChangeContent(user.role)) {
           return errorResponse(
             `You must wait ${daysRemaining} more day(s) before changing occupations`,
           );

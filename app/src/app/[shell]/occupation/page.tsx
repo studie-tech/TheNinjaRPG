@@ -26,6 +26,10 @@ import Loader from "@/layout/Loader";
 import OccupationCrafting from "@/layout/OccupationCrafting";
 import OccupationGathering from "@/layout/OccupationGathering";
 import OccupationHunter from "@/layout/OccupationHunter";
+import {
+  getOccupationChangeAvailableAt,
+  getOccupationChangeDaysRemaining,
+} from "@/libs/occupation";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -68,16 +72,6 @@ export default function Occupations() {
   const occupationInfo = OCCUPATION_DATA.find(
     (occ) => occ.type === userData?.occupation,
   );
-  let canChange = true;
-  let daysRemaining = 0;
-  if (userData?.occupation && userData?.occupationSignupAt) {
-    const daysSinceSignup = Math.floor(
-      (Date.now() - userData.occupationSignupAt.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    canChange = daysSinceSignup >= OCCUPATION_CHANGE_COOLDOWN_DAYS;
-    daysRemaining = canChange ? 0 : OCCUPATION_CHANGE_COOLDOWN_DAYS - daysSinceSignup;
-  }
-  const changeStatusData = { canChange, daysRemaining };
 
   // Mutation for selecting occupation
   const { mutate: selectOccupation, isPending } =
@@ -111,9 +105,14 @@ export default function Occupations() {
     }
   };
 
+  const canChange =
+    !userData.occupation ||
+    !userData.occupationSignupAt ||
+    getOccupationChangeDaysRemaining(userData.occupationSignupAt) === 0 ||
+    canChangeContent(userData.role);
+
   const topRightContent =
-    userData.occupation &&
-    (changeStatusData.canChange || canChangeContent(userData.role)) ? (
+    userData.occupation && canChange ? (
       <Dialog open={changeDialogOpen} onOpenChange={setChangeDialogOpen}>
         <DialogTrigger asChild>
           <Button>
@@ -162,25 +161,20 @@ export default function Occupations() {
                   </span>
                 </div>
               )}
-              {changeStatusData &&
-                !changeStatusData.canChange &&
-                !canChangeContent(userData.role) && (
-                  <div className="flex items-center gap-1.5 font-medium text-orange-600 text-xs sm:text-sm">
-                    <span>You can change occupations in</span>
-                    {userData.occupationSignupAt && (
-                      <span className="rounded bg-popover px-2 py-0.5 font-mono">
-                        <Countdown
-                          targetDate={
-                            new Date(
-                              userData.occupationSignupAt.getTime() +
-                                OCCUPATION_CHANGE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000,
-                            )
-                          }
-                        />
-                      </span>
-                    )}
-                  </div>
-                )}
+              {!canChange && (
+                <div className="flex items-center gap-1.5 font-medium text-orange-600 text-xs sm:text-sm">
+                  <span>You can change occupations in</span>
+                  {userData.occupationSignupAt && (
+                    <span className="rounded bg-popover px-2 py-0.5 font-mono">
+                      <Countdown
+                        targetDate={getOccupationChangeAvailableAt(
+                          userData.occupationSignupAt,
+                        )}
+                      />
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -229,7 +223,7 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
       {!isChanging && (
         <p className="text-center text-muted-foreground">
           Choose an occupation to begin your journey. You can change your occupation
-          every 3 days.
+          every {OCCUPATION_CHANGE_COOLDOWN_DAYS} days.
         </p>
       )}
 
