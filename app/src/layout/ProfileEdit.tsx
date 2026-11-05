@@ -279,9 +279,10 @@ export function ProfileEdit() {
         {
           id: "preferences",
           title: "Combat preferences",
-          description: "Battle settings, elemental mastery, and AI behavior",
+          description:
+            "Automatic waking, battle settings, elemental mastery, and AI behavior",
           keywords:
-            "automatic auto combat damage generals description sleep awake hospital",
+            "wake up automatically for actions waking auto combat damage generals description sleep awake hospital",
           icon: Swords,
           content: (
             <>
