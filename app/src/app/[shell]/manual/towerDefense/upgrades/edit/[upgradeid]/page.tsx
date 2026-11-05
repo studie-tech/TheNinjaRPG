@@ -1,18 +1,18 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { use } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { TowerDefenseUpgrade } from "@/drizzle/schema";
 import { useTowerDefenseUpgradeEditForm } from "@/hooks/towerDefenseUpgrade";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
 import Loader from "@/layout/Loader";
 import { getUpgradeColor, getUpgradeIcon } from "@/libs/towerDefense/upgrades";
 import { canChangeContent } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type UpdateTowerDefenseUpgrade,
   updateTowerDefenseUpgradeSchema,
@@ -24,27 +24,32 @@ export default function TowerDefenseUpgradeEdit(props: {
   const params = use(props.params);
   const upgradeId = params.upgradeid;
 
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(canChangeContent);
 
   // Queries
-  const { data, isPending, refetch } = api.towerDefense.getUpgrade.useQuery(
-    { id: upgradeId },
-    { retry: false, enabled: !!upgradeId },
-  );
+  const { data, isPending, isError, isFetching, refetch } =
+    api.towerDefense.getUpgrade.useQuery(
+      { id: upgradeId },
+      { retry: false, enabled: !!upgradeId },
+    );
 
   // Convert key null values to empty strings
   setNullsToEmptyStrings(data);
 
-  // Redirect if not content editor
-  useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
-      void router.push("/profile");
-    }
-  }, [userData, router]);
-
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="upgrade"
+        subtitle="Upgrade Configuration"
+        backHref="/manual/towerDefense/upgrades"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return <SingleEditUpgrade upgrade={data} refetch={refetch} />;

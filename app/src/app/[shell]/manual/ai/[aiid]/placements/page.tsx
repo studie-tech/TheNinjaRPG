@@ -2,8 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy, Pencil, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useState } from "react";
 import { type Control, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -27,12 +26,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { OverworldInteractionTypes } from "@/drizzle/constants";
 import type { OverworldAiPlacement, OverworldAiPlacementQuest } from "@/drizzle/schema";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type OverworldPlacementInput,
   OverworldPlacementSchema,
@@ -44,25 +43,16 @@ export default function ManualAiPlacements(props: {
 }) {
   const params = use(props.params);
   const aiId = params.aiid;
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
-  const canManagePlacements = !!userData && canChangeContent(userData.role);
+  const { hasAccess } = useRequireRole(canChangeContent);
 
   // Queries
   const { data: placements, isPending } = api.overworldAi.getPlacementsForAi.useQuery(
     { aiTemplateUserId: aiId },
-    { enabled: !!aiId && canManagePlacements },
+    { enabled: !!aiId && hasAccess },
   );
 
-  // Redirect to profile if not content or admin
-  useEffect(() => {
-    if (userData && !canManagePlacements) {
-      router.push("/profile");
-    }
-  }, [canManagePlacements, router, userData]);
-
   // Prevent unauthorized access
-  if (!userData || !canManagePlacements || isPending) {
+  if (!hasAccess || isPending) {
     return <Loader explanation="Loading data" />;
   }
 
