@@ -202,6 +202,7 @@ export const getCurrentCraftingStatus = (
       craftingRank: null,
       craftingExperience: 0,
       currentCraftingItem: null,
+      currentCraftingUserItemId: null,
       craftingFinishedAt: null,
       nextRankExperience: 0,
     };
@@ -225,6 +226,7 @@ export const getCurrentCraftingStatus = (
       craftingRank,
       craftingExperience: userData.craftingExperience,
       currentCraftingItem: currentCraftingItem?.item || null,
+      currentCraftingUserItemId: currentCraftingItem?.id ?? null,
       craftingFinishedAt: currentCraftingItem?.craftingFinishedAt || null,
       nextRankExperience,
     };

@@ -22,6 +22,7 @@ import {
   type EquippedAssignment,
   type EquippedConstraintState,
   finishedImbuementItems,
+  finishedImbuements,
   userItemDisplay,
   getItemStackMergeBucketKey,
   getHomeStorageBucket,
@@ -1133,6 +1134,21 @@ describe("userItemDisplay", () => {
 
   it("shows a variant in place of the base item", () => {
     expect(userItemDisplay(ui, { name: "Gilded Blade" }, NOW).name).toBe("Gilded Blade");
+  });
+});
+
+describe("finishedImbuements", () => {
+  it("keeps the rows finished at or before now", () => {
+    const row = (id: string, craftingFinishedAt: Date | null) => ({ id, craftingFinishedAt });
+    const ui = {
+      imbuements: [
+        row("done", new Date(NOW.getTime() - 1)),
+        row("boundary", NOW),
+        row("legacy", null),
+        row("active", new Date(NOW.getTime() + 1)),
+      ],
+    };
+    expect(finishedImbuements(ui, NOW).map((i) => i.id)).toEqual(["done", "boundary", "legacy"]);
   });
 });
 
