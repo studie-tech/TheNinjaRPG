@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getFarmBulkMutationUpdate, getFarmMutationUpdate } from "@/deltas/farming";
 import { FARM_MAX_CROP_SELL_QUANTITY } from "@/drizzle/constants";
+import { useNow } from "@/hooks/useNow";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { summarizeFarmPlots } from "@/libs/farming";
 import { showMutationToast } from "@/libs/toast";
@@ -34,7 +35,7 @@ export function useFarmController() {
   const pendingBulkActionRef = useRef<string | null>(null);
   const pendingInventoryKeysRef = useRef<Set<string>>(new Set());
   const [announcement, setAnnouncement] = useState("");
-  const [clockNow, setClockNow] = useState(() => Date.now());
+  const clockNow = useNow(5_000);
   const [effectEvent, setEffectEvent] = useState<{
     id: number;
     slotIndex: number;
@@ -55,11 +56,6 @@ export function useFarmController() {
   const buyMutation = api.farming.buyShopItem.useMutation();
   const sellMutation = api.farming.sellCrop.useMutation();
   const extractMutation = api.farming.extractSeeds.useMutation();
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setClockNow(Date.now()), 5_000);
-    return () => window.clearInterval(interval);
-  }, []);
 
   const farmState = query.data ?? null;
   const now = useMemo(() => new Date(clockNow - timeDiff), [clockNow, timeDiff]);

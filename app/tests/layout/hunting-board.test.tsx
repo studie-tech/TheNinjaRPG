@@ -8,6 +8,7 @@ import { HuntingArrival } from "@/layout/HuntingArrival";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import * as Modal from "@/layout/Modal";
 import { optimisticGlobalTravelStart } from "@/libs/travel";
+import { pushToCombat } from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
 import { huntingContract, huntingHabitatContent } from "../setup/hunting";
 
@@ -57,6 +58,28 @@ beforeEach(() => {
 });
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+it("enters a started hunt once when the battle event already navigated", async () => {
+  let options!: { onSuccess: (result: object, input: undefined, revision: number) => Promise<void> };
+  const invalidate = async () => undefined;
+  Object.assign(client.api, {
+    useUtils: () => ({
+      hunting: { getBoard: { invalidate }, getSession: { invalidate } },
+      combat: { getBattle: { invalidate } },
+    }),
+  });
+  Object.assign(client.api.hunting.start, {
+    useMutation: (mutationOptions: typeof options) => {
+      options = mutationOptions;
+      return {};
+    },
+  });
+  render(<HuntingBoard />);
+  const router = navigation.useRouter();
+  pushToCombat(router, "hunt-battle");
+  await options.onSuccess({ success: true, message: "Started", battleId: "hunt-battle" }, undefined, 1);
+  expect(router.push).toHaveBeenCalledTimes(1);
+});
 
 it("hides nonmatching habitats and combines rank, creature and material filters", () => {
   const view = render(<HuntingBoard />);

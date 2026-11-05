@@ -39,6 +39,7 @@ import {
   SHRINE_WEEKLY_MAINTENANCE_COST,
 } from "@/drizzle/constants";
 import { useActiveWars } from "@/hooks/useActiveWars";
+import { useNow } from "@/hooks/useNow";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -299,8 +300,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
   const { updateUser } = useRequiredUserData();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
-  const now = useUtcNow(isActive, 60_000);
-  const nowMs = now.getTime();
+  const nowMs = useNow(60_000, { enabled: isActive });
+  const now = new Date(nowMs);
   const currentDayOfWeek = now.getUTCDay();
   const currentSlotIndex = getSlotIndex(now.getUTCHours());
 
@@ -856,23 +857,6 @@ const StatsCard = ({ icon: Icon, label, value }: StatsCardProps) => (
     <Icon className="h-4 w-4 text-muted-foreground" />
   </div>
 );
-
-const useUtcNow = (enabled: boolean, intervalMs: number) => {
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    setNow(new Date());
-    const intervalId = window.setInterval(() => {
-      setNow(new Date());
-    }, intervalMs);
-
-    return () => window.clearInterval(intervalId);
-  }, [enabled, intervalMs]);
-
-  return now;
-};
 
 // After a 2-hour slot boundary is crossed, keep refreshing for this long. The
 // maintenance cron that activates template boosts only runs once per minute and its

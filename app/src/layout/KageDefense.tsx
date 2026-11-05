@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
   KAGE_PRESTIGE_COST,
 } from "@/drizzle/constants";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { useNow } from "@/hooks/useNow";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
@@ -28,6 +29,7 @@ import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { type KageWindow, kageScheduleSchema } from "@/validators/kage";
 import type { UserSearchResult } from "@/validators/register";
@@ -47,16 +49,11 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
   const [message, setMessage] = useState<{ success: boolean; message: string } | null>(
     null,
   );
-  const [clientNow, setClientNow] = useState(Date.now());
-  const now = clientNow - timeDiff;
+  const now = useNow(1000) - timeDiff;
   const { data, isPending, error, refetch } = api.kage.getDefenses.useQuery(
     { villageId: user.villageId ?? "" },
     { enabled: !!user.villageId, refetchInterval: 15_000 },
   );
-  useEffect(() => {
-    const interval = setInterval(() => setClientNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
   /** Keep action feedback visible and refresh leadership before entering an admitted battle. */
   const onSuccess = async (result: {
     success: boolean;
@@ -72,8 +69,12 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
         utils.village.get.invalidate(),
       ]);
       if (result.battleId) {
-        await updateUser({ status: "BATTLE", battleId: result.battleId });
-        router.push("/combat");
+        await updateUser({
+          status: "BATTLE",
+          battleId: result.battleId,
+          updatedAt: new Date(),
+        });
+        pushToCombat(router, result.battleId);
       }
     }
   };
