@@ -13,7 +13,7 @@ import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NindoChange from "@/layout/NindoChange";
-import StatusBar from "@/layout/StatusBar";
+import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { useAiEditForm } from "@/libs/ais";
 import { showMutationToast } from "@/libs/toast";
@@ -139,33 +139,7 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
             <div className="mb-4 flex items-center justify-between">
               <h1 className="font-bold text-2xl">Edit AI</h1>
             </div>
-            <StatusBar
-              title="HP"
-              tooltip="Health"
-              color="bg-red-500"
-              showText={true}
-              status={processedUser.status}
-              current={processedUser.curHealth}
-              total={processedUser.maxHealth}
-            />
-            <StatusBar
-              title="CP"
-              tooltip="Chakra"
-              color="bg-blue-500"
-              showText={true}
-              status={processedUser.status}
-              current={processedUser.curChakra}
-              total={processedUser.maxChakra}
-            />
-            <StatusBar
-              title="SP"
-              tooltip="Stamina"
-              color="bg-green-500"
-              showText={true}
-              status={processedUser.status}
-              current={processedUser.curStamina}
-              total={processedUser.maxStamina}
-            />
+            <PoolStatusBars pools={processedUser} status={processedUser.status} />
             <EditContent
               schema={insertAiSchema}
               form={form as unknown as UseFormReturn<InsertAiSchema, any>}

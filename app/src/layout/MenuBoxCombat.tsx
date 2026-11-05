@@ -8,7 +8,7 @@ import AvatarImage from "@/layout/Avatar";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
-import StatusBar from "@/layout/StatusBar";
+import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import { getBloodline, getKeystoneItem } from "@/libs/combat/util";
 import { userBattleAtom, useUserData } from "@/utils/UserContext";
 
@@ -60,43 +60,12 @@ const MenuBoxCombat: React.FC = () => {
         </Link>
 
         <div className="pt-5">
-          <StatusBar
-            key={`hp-${pools.curHealth}-${pools.maxHealth}`}
-            title="HP"
-            tooltip="Health"
-            color="bg-red-500"
-            showText={true}
+          <PoolStatusBars
+            pools={pools}
+            remountOnChange
             lastRegenAt={battleUser.regenAt}
             regen={0}
             status={"AWAKE"}
-            current={pools.curHealth}
-            total={pools.maxHealth}
-            timeDiff={timeDiff}
-          />
-          <StatusBar
-            key={`cp-${pools.curChakra}-${pools.maxChakra}`}
-            title="CP"
-            tooltip="Chakra"
-            color="bg-blue-500"
-            showText={true}
-            lastRegenAt={battleUser.regenAt}
-            regen={0}
-            status={"AWAKE"}
-            current={pools.curChakra}
-            total={pools.maxChakra}
-            timeDiff={timeDiff}
-          />
-          <StatusBar
-            key={`sp-${pools.curStamina}-${pools.maxStamina}`}
-            title="SP"
-            tooltip="Stamina"
-            color="bg-green-500"
-            showText={true}
-            lastRegenAt={battleUser.regenAt}
-            regen={0}
-            status={"AWAKE"}
-            current={pools.curStamina}
-            total={pools.maxStamina}
             timeDiff={timeDiff}
           />
         </div>
