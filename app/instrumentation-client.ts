@@ -20,6 +20,8 @@ import {
   type StackFrame,
   isExtensionExecutorEvent,
   isInjectedWalletRejection,
+  isPayPalCleanupError,
+  PAYPAL_CLEANUP_PATTERNS,
 } from "@/utils/error";
 
 Sentry.init({
@@ -246,19 +248,17 @@ declare global {
 }
 
 /**
- * Check if an error is a PayPal cleanup error that should be suppressed.
- * These occur when users navigate away while PayPal buttons are initializing.
+ * Cross-window SDK noise that stays out of Sentry. The checkout page does not treat these
+ * as cleanup and still shows its error toast for them.
  */
-const isPayPalCleanupError = (err: unknown): boolean => {
+const PAYPAL_CROSS_WINDOW_PATTERNS = ["postrobot_method", "paypal_js_sdk"];
+
+/** Check if a rejection is PayPal cleanup or cross-window noise that should be suppressed. */
+const isPayPalRejection = (err: unknown): boolean => {
   const errorMessage = err?.toString() ?? "";
   return (
-    errorMessage.includes("zoid destroyed") ||
-    errorMessage.includes("popup close") ||
-    errorMessage.includes("Window closed") ||
-    errorMessage.includes("Component closed") ||
-    errorMessage.includes("Target window is closed") ||
-    errorMessage.includes("postrobot_method") ||
-    errorMessage.includes("paypal_js_sdk")
+    isPayPalCleanupError(err) ||
+    PAYPAL_CROSS_WINDOW_PATTERNS.some((pattern) => errorMessage.includes(pattern))
   );
 };
 
@@ -415,13 +415,8 @@ const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
 
   // Check message for PayPal-related error patterns
   const paypalErrorPatterns = [
-    "zoid destroyed",
-    "popup close",
-    "Window closed",
-    "Component closed",
-    "Target window is closed",
-    "postrobot_method",
-    "paypal_js_sdk",
+    ...PAYPAL_CLEANUP_PATTERNS,
+    ...PAYPAL_CROSS_WINDOW_PATTERNS,
     "Can not send postrobot",
     "Bootstrap Error", // PayPal SDK zoid bootstrap/initialization errors
   ];
@@ -2283,7 +2278,7 @@ const ensureBrowserErrorHandler = () => {
   // Capture unhandled promise rejections
   window.addEventListener("unhandledrejection", (event) => {
     // Skip PayPal cleanup errors - these are expected when users navigate away
-    if (isPayPalCleanupError(event.reason)) {
+    if (isPayPalRejection(event.reason)) {
       event.preventDefault();
       return;
     }

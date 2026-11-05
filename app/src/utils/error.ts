@@ -147,6 +147,25 @@ export const isInjectedWalletRejection = (reason: unknown): boolean => {
   return record.code === 4001 && /wallet/i.test(message);
 };
 
+/** Messages the PayPal SDK raises when its buttons or popup close mid-flight. */
+export const PAYPAL_CLEANUP_PATTERNS = [
+  "zoid destroyed",
+  "popup close",
+  "Window closed",
+  "Component closed",
+  "Target window is closed",
+];
+
+/**
+ * Users navigating away while PayPal buttons initialize, or closing the popup before the
+ * transaction completes. Checkout stays silent on these, so a pattern added here hides
+ * that failure from the player.
+ */
+export const isPayPalCleanupError = (err: unknown): boolean => {
+  const message = err?.toString() ?? "";
+  return PAYPAL_CLEANUP_PATTERNS.some((pattern) => message.includes(pattern));
+};
+
 export const isNetworkError = createErrorPatternMatcher([
   "Load failed",
   "fetch failed",
