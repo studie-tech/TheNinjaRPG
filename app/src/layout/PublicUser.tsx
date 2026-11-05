@@ -98,7 +98,6 @@ import ContentBox from "@/layout/ContentBox";
 import DeleteUserButton from "@/layout/DeleteUserButton";
 import GraphCombatLog from "@/layout/GraphCombatLog";
 import Image from "@/layout/Image";
-import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -106,18 +105,14 @@ import { ModerationSummary } from "@/layout/ModerationSummary";
 import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import Post from "@/layout/Post";
+import { EffectsPopover, PvpRecord } from "@/layout/ProfileStats";
 import ReportUser from "@/layout/Report";
 import RichInput from "@/layout/RichInput";
 import { publicUserIntro } from "@/layout/seoTexts";
 import Table from "@/layout/Table";
 import { TransactionHistory } from "@/layout/TransactionHistory";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import {
-  canAttackBracket,
-  formatPvpWinRate,
-  getExpBracket,
-  showUserRank,
-} from "@/libs/profile";
+import { canAttackBracket, getExpBracket, showUserRank } from "@/libs/profile";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
@@ -1339,43 +1334,11 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             <p>ANBU: {profile.anbuSquad?.name || "None"}</p>
             <p>
               Bloodline:{" "}
-              {profile.bloodline ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="cursor-pointer font-bold hover:text-orange-500"
-                    >
-                      {profile.bloodline.name}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[500px] max-w-[90vw]">
-                    <ItemWithEffects item={profile.bloodline} />
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                "None"
-              )}
+              {profile.bloodline ? <EffectsPopover item={profile.bloodline} /> : "None"}
             </p>
             <p>
               Sage Mode:{" "}
-              {profile.sageMode ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="cursor-pointer font-bold hover:text-orange-500"
-                    >
-                      {profile.sageMode.name}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[500px] max-w-[90vw]">
-                    <ItemWithEffects item={profile.sageMode} />
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                "None"
-              )}
+              {profile.sageMode ? <EffectsPopover item={profile.sageMode} /> : "None"}
             </p>
             <p>
               Sensei:{" "}
@@ -1405,14 +1368,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             {(profile.showPvpRecord || canSeeSecrets) &&
               profile.pvpWins != null &&
               profile.pvpLosses != null && (
-                <>
-                  <p>PvP Wins: {profile.pvpWins}</p>
-                  <p>PvP Losses: {profile.pvpLosses}</p>
-                  <p>
-                    PvP Win Rate: {formatPvpWinRate(profile.pvpWins, profile.pvpLosses)}
-                    %
-                  </p>
-                </>
+                <PvpRecord wins={profile.pvpWins} losses={profile.pvpLosses} />
               )}
             <p>Yapper Rank: {profile.tavernMessages}</p>
             {userData && userData.userId !== profile.userId && !profile.isAi && (
