@@ -1,6 +1,9 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { VisualizeEffects } from "@/layout/MenuBoxProfile";
+import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
+import { getEffectMagnitude } from "@/libs/combat/power";
+import { invertPower } from "@/libs/combat/tags";
+import type { GroundEffect } from "@/libs/combat/types";
 import { makeEffect } from "../libs/combat/helpers/battleScenario";
 
 const userId = "holder";
@@ -36,10 +39,24 @@ describe("combat active effects", () => {
     expect(view.getByText(`${label} +100% ↻ 3`)).toBeTruthy();
   });
 
-  it("preserves the displayed power of other statuses", () => {
+  it("shows other statuses at their applied percentage", () => {
     const effect = makeEffect("reflect", { power: 120, powerPerLevel: 0.3, rounds: 3, calculation: "percentage" }, { ...runtime, level: 100 });
     const view = render(<VisualizeEffects effects={[effect]} userId={userId} />);
-    expect(view.getByText("Reflect +150% ↻ 3")).toBeTruthy();
+    expect(view.getByText("Reflect +100% ↻ 3")).toBeTruthy();
+  });
+
+  it("shows ground effects at their applied percentage", () => {
+    const effect = makeEffect("reflect", { power: 120, powerPerLevel: 0.3, rounds: 3, calculation: "percentage" }, { ...runtime, level: 100 });
+    const view = render(<VisualizeGroundEffects effects={[effect as unknown as GroundEffect]} />);
+    expect(view.getByText(/100%/)).toBeTruthy();
+    expect(view.queryByText(/150%/)).toBeNull();
+  });
+
+  it("keeps uncapped static power and inverted decreases at their applied size", () => {
+    const flat = makeEffect("reflect", { power: 120, powerPerLevel: 0.3, rounds: 3, calculation: "static" }, { ...runtime, level: 100 });
+    const decrease = invertPower(makeEffect("decreasedamagegiven", { power: 120, powerPerLevel: 0.3, rounds: 3, calculation: "percentage" }, { ...runtime, level: 100 }));
+    expect(getEffectMagnitude(flat)).toBe(150);
+    expect(getEffectMagnitude(decrease)).toBe(150);
   });
 
   it("hides stored Curse healing with its filtered source", () => {
