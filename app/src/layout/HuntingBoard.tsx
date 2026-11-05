@@ -19,6 +19,7 @@ import {
   huntingEligibility,
   huntingSessionStage,
 } from "@/libs/hunting/contracts";
+import { getScrollBehavior } from "@/utils/dom";
 import { pushToCombat } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 import type { HuntingReceipt } from "@/validators/hunting";
@@ -283,11 +284,7 @@ export function HuntingBoard({
                       requestAnimationFrame(() => {
                         selector.current?.focus({ preventScroll: true });
                         selector.current?.scrollIntoView({
-                          behavior: window.matchMedia(
-                            "(prefers-reduced-motion: reduce)",
-                          ).matches
-                            ? "auto"
-                            : "smooth",
+                          behavior: getScrollBehavior(),
                           block: "start",
                         });
                       });

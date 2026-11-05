@@ -65,7 +65,7 @@ import {
   MAX_DAILY_TRAININGS,
   MAX_JUTSU_TRAIN_TIME_MS,
   MasteryNames,
-  SENSEI_RANKS,
+  SENSEI_REQUIRED_RANK,
   SENSEI_STUDENT_RYO_PER_MISSION,
   STATS_PER_ENERGY,
   STEALTH_SENSORY_CAP,
@@ -134,6 +134,7 @@ import {
   findJutsuInTraining,
   getMasteryTrainingState,
   getTrainingSections,
+  hasRequiredRank,
   isJutsuInTraining,
   isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,
@@ -177,7 +178,8 @@ export default function Training() {
   if (!access) return <Loader explanation="Accessing Training Grounds" />;
 
   // Show sensei component
-  const showSenseiSystem = [...SENSEI_RANKS, "GENIN"].includes(userData.rank);
+  const showSenseiSystem =
+    userData.rank === "GENIN" || hasRequiredRank(userData.rank, SENSEI_REQUIRED_RANK);
   const energyQueueLength = getEnergyQueue(userData).length;
   const trainingSections = getTrainingSections(showSenseiSystem);
 
@@ -292,7 +294,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
   // Queries
   const { data: students, isFetching } = api.sensei.getStudents.useQuery(
     { userId: userData.userId },
-    { enabled: SENSEI_RANKS.includes(userData.rank) },
+    { enabled: hasRequiredRank(userData.rank, SENSEI_REQUIRED_RANK) },
   );
 
   const { data: requests } = api.sensei.getRequests.useQuery(undefined, {
@@ -378,7 +380,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
     isRejecting ||
     isCancelling ||
     isRemoving;
-  const canSensei = SENSEI_RANKS.includes(userData.rank);
+  const canSensei = hasRequiredRank(userData.rank, SENSEI_REQUIRED_RANK);
   const message = canSensei
     ? "Search for Genin to take in as students."
     : "Search for Jonin to be your sensei. ";

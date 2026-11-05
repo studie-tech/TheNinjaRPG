@@ -9,7 +9,7 @@ import {
   RANKED_PVP_STATS,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
-import { getExpBracket } from "@/libs/profile";
+import { getExpBracket, getPvpWinRate } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest";
 import {
@@ -877,10 +877,7 @@ const snapshotFor = (
 ): EventParticipant["snapshot"] => ({
   bracket: getExpBracket(user.experience, user.rank),
   pvpWins: user.pvpWins,
-  winRate:
-    user.pvpWins + user.pvpLosses
-      ? (user.pvpWins / (user.pvpWins + user.pvpLosses)) * 100
-      : 0,
+  winRate: getPvpWinRate(user.pvpWins, user.pvpLosses),
   masteredJutsu: user.masteredJutsu,
 });
 /** Reserve a stable bracket seat while retaining the player's eligibility snapshot. */

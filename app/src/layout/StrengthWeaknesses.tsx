@@ -17,10 +17,10 @@ import {
   getUserCaps,
   MAX_MASTERY_CAP,
   MasteryNames,
+  SKILL_TREE_REQUIRED_RANK,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   TOTAL_MASTERY_CAP,
-  UserRolesWithSkillTreeAccess,
 } from "@/drizzle/constants";
 import { Bloodright } from "@/layout/Bloodright";
 import ContentBox from "@/layout/ContentBox";
@@ -35,6 +35,7 @@ import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { getStealthStatus } from "@/libs/stealth";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
+import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
@@ -570,7 +571,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   };
 
   // Check if user has chunin+ rank to access skill tree
-  const hasSkillTreeAccess = UserRolesWithSkillTreeAccess.includes(userData.rank);
+  const hasSkillTreeAccess = hasRequiredRank(userData.rank, SKILL_TREE_REQUIRED_RANK);
 
   if (!hasSkillTreeAccess) {
     return (

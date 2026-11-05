@@ -565,7 +565,7 @@ export const UserRoles = [
 ] as const;
 export type UserRole = (typeof UserRoles)[number];
 
-export const UserRolesWithSkillTreeAccess = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"];
+export const SKILL_TREE_REQUIRED_RANK: UserRank = "CHUNIN";
 
 // Staff Applications
 export const StaffApplicationStates = ["PENDING", "APPROVED", "REJECTED"] as const;
@@ -1727,7 +1727,7 @@ export const ANBU_STEALTH_CHANGE_PER_LEVEL = 5;
 export const ANBU_STEALTH_UPGRADE_COST = 200;
 
 // Sensei config
-export const SENSEI_RANKS = ["JONIN", "ELITE JONIN", "ELDER"];
+export const SENSEI_REQUIRED_RANK: UserRank = "JONIN";
 export const SENSEI_STUDENT_RYO_PER_MISSION = 100;
 export const SENSEI_GENIN_TRAIN_EXP_BOOST_PERC = 5; // % extra stat training experience for Genin
 export const SENSEI_GENIN_MED_EXP_SHARE_PERC = 5; // % of medical exp shared to Genin student when sensei heals
@@ -2535,6 +2535,10 @@ export const ID_SFX_CLEAR = "mOSkDnYv4hchkPbhdpTDd";
 // Discord invite link
 export const DISCORD_INVITE_URL = "https://discord.gg/eNtgPdAh7j";
 
+// Source repository
+export const GITHUB_REPO_URL = "https://github.com/studie-tech/TheNinjaRPG";
+export const GITHUB_ISSUES_URL = `${GITHUB_REPO_URL}/issues`;
+
 // GitHub issue token
 export const GITHUB_API_ENDPOINT =
   "https://api.github.com/repos/studie-tech/TheNinjaRPG";
@@ -3104,6 +3108,41 @@ export const IMG_ICON_TWITTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMi2fCxtsO4cexqW2RDgkE3zZbNXSFGitmnar.png";
 export const IMG_ICON_YOUTUBE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy7pL6jukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.png";
+
+/** The game's social profiles, for the sidebar icons and the schema.org sameAs graph. */
+export const SOCIAL_LINKS = [
+  { url: DISCORD_INVITE_URL, image: IMG_ICON_DISCORD, alt: "Discord" },
+  {
+    url: "https://www.facebook.com/profile.php?id=61554961626034",
+    image: IMG_ICON_FACEBOOK,
+    alt: "Facebook",
+  },
+  {
+    url: "https://www.youtube.com/@fullstackscientist",
+    image: IMG_ICON_YOUTUBE,
+    alt: "Youtube",
+  },
+  {
+    url: "https://twitter.com/RealTheNinjaRPG",
+    image: IMG_ICON_TWITTER,
+    alt: "Twitter",
+  },
+  {
+    url: "https://www.instagram.com/theninjarpg/",
+    image: IMG_ICON_INSTAGRAM,
+    alt: "Instagram",
+  },
+  {
+    url: "https://www.tiktok.com/@theninjarpg",
+    image: IMG_ICON_TIKTOK,
+    alt: "Tiktok",
+  },
+  {
+    url: "https://www.reddit.com/r/theninjarpg/",
+    image: IMG_ICON_REDDIT,
+    alt: "Reddit",
+  },
+] as const;
 export const IMG_ICON_MOVE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJepKSYSyV3OvUJQExAi0bGoIZDF74LqSnHRdp.png";
 export const IMG_ICON_HEAL =

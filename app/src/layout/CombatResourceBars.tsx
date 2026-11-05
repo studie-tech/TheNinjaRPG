@@ -3,6 +3,7 @@ import type { CombatResourceBarsVisibility } from "@/hooks/combat";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
+import { calculatePercent } from "@/utils/math";
 
 export const CombatResourceBars = ({
   battle,
@@ -60,7 +61,7 @@ export const CombatResourceBars = ({
           const maximum = Math.max(0, Math.round(resource.maximum));
           const percentage =
             resource.maximum > 0
-              ? Math.min(100, Math.max(0, (resource.current / resource.maximum) * 100))
+              ? calculatePercent(resource.current, resource.maximum)
               : 0;
 
           return (
