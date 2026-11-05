@@ -27,7 +27,6 @@ import { GuideArticleValidator, type ZodGuideArticleType } from "@/validators/gu
 export default function GuideEdit(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
   const guideId = params.id;
-  const router = useRouter();
   const { userData, hasAccess } = useRequireRole(canChangeContent);
 
   const { data, isPending, isError, isFetching, refetch } = api.guide.get.useQuery(

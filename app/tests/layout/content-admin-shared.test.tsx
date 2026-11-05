@@ -1,6 +1,8 @@
 /** Shared staff content controls: editor load failures, effect lists, clones and row links. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import * as client from "@/app/_trpc/client";
+import { ClearBattleDataButton } from "@/layout/ClearDataConfirm";
 import { ConfirmedCloneControl } from "@/layout/ConfirmedCloneControl";
 import * as ContentBox from "@/layout/ContentBox";
 import { ContentLinksCell } from "@/layout/ContentLinksCell";
@@ -32,8 +34,9 @@ beforeEach(() => {
   );
   vi.spyOn(EditContent, "EffectFormWrapper").mockImplementation(({ idx }) => <p>form {idx}</p>);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(Modal, "default").mockImplementation(({ children, proceed_label, onAccept }) => (
+  vi.spyOn(Modal, "default").mockImplementation(({ title, children, proceed_label, onAccept }) => (
     <div>
+      <h3>{title}</h3>
       {children}
       <button type="button" onClick={onAccept as never}>
         {proceed_label}
@@ -206,5 +209,30 @@ describe("ContentLinksCell", () => {
     const view = render(<ContentLinksCell type="item" id="a" canEdit={false} onInfo={onInfo} />);
     fireEvent.click(view.container.querySelector("svg.lucide-info") as Element);
     expect(onInfo).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ClearBattleDataButton", () => {
+  it.each([
+    ["AI", "ai", "Clear All AI Battle Data"],
+    ["jutsu", "jutsu", "Clear All Jutsu Battle Data"],
+  ] as const)("titles the %s dialog", (label, type, title) => {
+    const mutate = vi.fn();
+    Object.assign(vi.spyOn(client, "api" as never), {
+      data: {
+        deleteAllDataBattleAction: {
+          useMutation: () => ({ mutate, isPending: false }),
+        },
+      },
+    });
+    const view = render(
+      <ClearBattleDataButton type={type} label={label} onCleared={async () => undefined} />,
+    );
+    expect(view.getByText(title)).toBeTruthy();
+    expect(view.container.textContent).toContain(
+      `clear all ${label} battle action data`,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Clear Data" }));
+    expect(mutate).toHaveBeenCalledWith({ type });
   });
 });
