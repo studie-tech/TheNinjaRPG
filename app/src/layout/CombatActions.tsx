@@ -309,6 +309,21 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
     settings.onClick(item.id);
   };
 
+  const art = (
+    <ContentImage
+      image={image}
+      alt={name}
+      rarity={rarity}
+      className={cn(settings.aspectRatioClass)}
+      roundFull={settings.roundFull}
+      hideBorder={settings.hideBorder}
+      frames={frames}
+      speed={speed}
+      eager={settings.eagerImages}
+      onClick={handleClick}
+    />
+  );
+
   // Render
   return (
     <div
@@ -336,19 +351,21 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
               />
             </div>
           </div>
+        ) : settings.combatMode ? (
+          // In battle, hovering names the action and its use; the help icon keeps the full details.
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>{art}</div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-60 text-left">
+                <p className="font-bold">{name}</p>
+                <p>{actionHoverSummary(item, effectiveActionCost)}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : (
-          <ContentImage
-            image={image}
-            alt={name}
-            rarity={rarity}
-            className={cn(settings.aspectRatioClass)}
-            roundFull={settings.roundFull}
-            hideBorder={settings.hideBorder}
-            frames={frames}
-            speed={speed}
-            eager={settings.eagerImages}
-            onClick={handleClick}
-          />
+          art
         )}
         {/* Count overlay - bottom right corner (amber = stack / jutsu quantity) */}
         {props.count !== undefined && (settings.labelSingles || props.count > 1) && (
@@ -483,4 +500,18 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
       {settings.showLabels && <span className="w-full break-words">{name}</span>}
     </div>
   );
+};
+
+/** One line on what a battle action is aimed at and what it costs, e.g. "Target: other user · Range 4 · 60 AP". */
+const actionHoverSummary = (item: ActionItemProps, actionCost: number | undefined) => {
+  const target =
+    "target" in item && typeof item.target === "string" ? item.target : null;
+  const range = "range" in item && typeof item.range === "number" ? item.range : null;
+  return [
+    target && `Target: ${target.toLowerCase().replaceAll("_", " ")}`,
+    range !== null && target !== "CHARACTER" && target !== "SELF" && `Range ${range}`,
+    actionCost !== undefined && `${actionCost} AP`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 };
