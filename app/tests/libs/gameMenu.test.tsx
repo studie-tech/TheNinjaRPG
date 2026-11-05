@@ -9,9 +9,11 @@ import * as context from "@/utils/UserContext";
 
 const store = getDefaultStore();
 let mutedConversationIds: string[] = [];
+let unmutedTavernIds: string[] = [];
 
 beforeEach(() => {
   mutedConversationIds = [];
+  unmutedTavernIds = ["global", "akikaze"];
   store.set(chatMentionsAtom, {});
   store.set(chatTavernActivityAtom, {});
   vi.spyOn(context, "useUserDataSelector").mockImplementation(((select: (user: unknown) => unknown) => ({
@@ -25,6 +27,7 @@ beforeEach(() => {
       latitude: 0,
       chatMuted: false,
       mutedConversationIds,
+      unmutedTavernIds,
     }),
   })) as never);
   vi.spyOn(context, "useUserInfo").mockReturnValue({ notifications: [] } as never);
@@ -51,7 +54,14 @@ it("counts new tavern messages on the menu's Tavern entry", () => {
 });
 
 it("leaves muted taverns out of the menu count", () => {
-  mutedConversationIds = ["akikaze"];
+  unmutedTavernIds = ["global"];
   store.set(chatTavernActivityAtom, { global: 3, akikaze: 2 });
   expect(tavernCount()).toBe(3);
+});
+
+it("counts only pings while every tavern is muted, as it starts", () => {
+  unmutedTavernIds = [];
+  store.set(chatTavernActivityAtom, { global: 3, akikaze: 2 });
+  store.set(chatMentionsAtom, { akikaze: 1 });
+  expect(tavernCount()).toBe(1);
 });

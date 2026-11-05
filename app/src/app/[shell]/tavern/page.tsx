@@ -110,6 +110,7 @@ export default function Tavern() {
             <ChatMuteButton
               label={conversation}
               conversationId={tavernId}
+              isTavern
               variant="default"
               size="default"
               className=""

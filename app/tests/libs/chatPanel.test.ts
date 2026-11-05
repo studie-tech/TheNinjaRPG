@@ -6,14 +6,16 @@ import {
   getInboxNews,
   isConversationMuted,
   isConversationUnread,
+  isTavernMuted,
   unreadForTavern,
   toggleMutedConversation,
 } from "@/libs/chatPanel";
 
-const user = (chatMuted: boolean, mutedConversationIds: string[] = []) => ({
-  chatMuted,
-  mutedConversationIds,
-});
+const user = (
+  chatMuted: boolean,
+  mutedConversationIds: string[] = [],
+  unmutedTavernIds: string[] = [],
+) => ({ chatMuted, mutedConversationIds, unmutedTavernIds });
 
 describe("chat mutes", () => {
   it("silences a muted conversation, or every conversation when chat is muted", () => {
@@ -34,12 +36,14 @@ describe("chat mutes", () => {
 describe("chat badge", () => {
   it("adds inbox news to tavern counts, keeping only pings from muted taverns", () => {
     expect(
-      countChatNotifications(user(false, ["muted"]), 2, { tavern: 3, muted: 4 }, { muted: 9 }),
+      countChatNotifications(user(false, [], ["tavern"]), 2, { tavern: 3, quiet: 4 }, { quiet: 9 }),
     ).toBe(9);
   });
 
   it("keeps only pings while all chat is muted, and shows nothing without a player", () => {
-    expect(countChatNotifications(user(true), 2, { tavern: 3 }, { tavern: 8, other: 5 })).toBe(3);
+    expect(
+      countChatNotifications(user(true, [], ["tavern"]), 2, { tavern: 3 }, { tavern: 8, other: 5 }),
+    ).toBe(3);
     expect(countChatNotifications(null, 2, { tavern: 3 }, {})).toBe(0);
   });
 });
@@ -71,16 +75,20 @@ describe("tavern activity", () => {
 });
 
 describe("tavern unread", () => {
-  it("adds new messages and mentions per tavern, leaving out muted ones", () => {
-    expect(countTavernUnread(user(false, ["akikaze"]), { global: 1 }, { global: 3, akikaze: 2, ally: 1 })).toBe(4);
+  it("starts every tavern muted until the player unmutes it", () => {
+    expect(isTavernMuted(user(false), "global")).toBe(true);
+    expect(isTavernMuted(user(false, [], ["global"]), "global")).toBe(false);
+    expect(isTavernMuted(user(true, [], ["global"]), "global")).toBe(true);
+    expect(isTavernMuted(null, "global")).toBe(false);
   });
 
-  it("still counts pings in a muted tavern, or while all chat is muted", () => {
-    expect(countTavernUnread(user(false, ["akikaze"]), { akikaze: 2 }, { akikaze: 7 })).toBe(2);
-    expect(unreadForTavern(user(false, ["akikaze"]), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(2);
-    expect(unreadForTavern(user(false), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(7);
-    expect(unreadForTavern(user(true), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(2);
-    expect(countTavernUnread(user(true), { global: 1 }, { global: 3 })).toBe(1);
+  it("counts new messages only in unmuted taverns, and pings everywhere", () => {
+    expect(
+      countTavernUnread(user(false, [], ["global"]), { global: 1, ally: 2 }, { global: 3, akikaze: 5, ally: 4 }),
+    ).toBe(5);
+    expect(unreadForTavern(user(false), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(2);
+    expect(unreadForTavern(user(false, [], ["akikaze"]), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(7);
+    expect(unreadForTavern(user(true, [], ["akikaze"]), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(2);
   });
 
   it("is zero without a player", () => {

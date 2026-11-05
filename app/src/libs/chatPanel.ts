@@ -66,7 +66,7 @@ export const combineChatCounts = (
 
 type ChatMuteUser = Pick<
   NonNullable<UserWithRelations>,
-  "chatMuted" | "mutedConversationIds"
+  "chatMuted" | "mutedConversationIds" | "unmutedTavernIds"
 >;
 
 /** Whether a conversation's ordinary activity stays out of counts and alerts; pings always arrive. */
@@ -77,6 +77,15 @@ export const isConversationMuted = (
   !!user &&
   (user.chatMuted ||
     (!!conversationId && user.mutedConversationIds.includes(conversationId)));
+
+/**
+ * Whether a tavern's ordinary messages stay out of counts. Taverns start muted, so only pings
+ * reach the player until they unmute one; muting all chat mutes every tavern.
+ */
+export const isTavernMuted = (
+  user: ChatMuteUser | null | undefined,
+  tavernId: string,
+) => !!user && (user.chatMuted || !user.unmutedTavernIds.includes(tavernId));
 
 /** Mute list after toggling one conversation. */
 export const toggleMutedConversation = (mutedIds: string[], conversationId: string) =>
@@ -96,7 +105,7 @@ export const unreadForTavern = (
 ) => {
   if (!user) return 0;
   const pings = mentions[conversationId] ?? 0;
-  return isConversationMuted(user, conversationId)
+  return isTavernMuted(user, conversationId)
     ? pings
     : Math.max(pings, activity[conversationId] ?? 0);
 };

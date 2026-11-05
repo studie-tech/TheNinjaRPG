@@ -54,7 +54,7 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
   queryClients.push(queryClient);
   const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
   const profile = {
-    userData: { userId: "player", level: MESSAGING_MIN_LEVEL, chatMuted: false, mutedConversationIds: [] },
+    userData: { userId: "player", level: MESSAGING_MIN_LEVEL, chatMuted: false, mutedConversationIds: [], unmutedTavernIds: [] },
     notifications: [],
   };
   queryClient.setQueryDefaults(profileKey, { queryFn: async () => profile });
@@ -108,7 +108,7 @@ it("counts only public conversation pings as Tavern notifications", async () => 
   queryClients.push(queryClient);
   const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
   const profile = {
-    userData: { userId: "player", chatMuted: false, mutedConversationIds: [] },
+    userData: { userId: "player", chatMuted: false, mutedConversationIds: [], unmutedTavernIds: [] },
     notifications: [],
   };
   queryClient.setQueryDefaults(profileKey, { queryFn: async () => profile });

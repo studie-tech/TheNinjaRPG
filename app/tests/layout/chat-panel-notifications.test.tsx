@@ -30,7 +30,7 @@ afterEach(() => {
 it("reconciles cleared inbox news when the phone chat list loads", () => {
   const updateNotifications = vi.fn();
   const notifications = [{ href: "/inbox", name: "2 messages", notificationCount: 2 }, { href: "/news", name: "News" }];
-  vi.spyOn(context, "useUserData").mockReturnValue({ data: { userId: "reader", tutorialOn: true, chatMuted: false, mutedConversationIds: [] }, notifications, updateNotifications } as never);
+  vi.spyOn(context, "useUserData").mockReturnValue({ data: { userId: "reader", tutorialOn: true, chatMuted: false, mutedConversationIds: [], unmutedTavernIds: [] }, notifications, updateNotifications } as never);
   vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global"], isLoading: false } as never);
   vi.spyOn(mutes, "useChatMutes").mockReturnValue({ chatMuted: false, isSilenced: () => false } as never);
   vi.spyOn(prompt, "NewConversationPrompt").mockReturnValue(<></>);
@@ -45,7 +45,7 @@ it("reconciles cleared inbox news when the phone chat list loads", () => {
 it("shows new tavern messages per tavern on the phone chat list", () => {
   getDefaultStore().set(chatTavernActivityAtom, { global: 3, akikaze: 2 });
   getDefaultStore().set(chatMentionsAtom, { global: 1 });
-  vi.spyOn(context, "useUserData").mockReturnValue({ data: { userId: "reader", tutorialOn: true, chatMuted: false, mutedConversationIds: ["akikaze"] }, notifications: [], updateNotifications: vi.fn() } as never);
+  vi.spyOn(context, "useUserData").mockReturnValue({ data: { userId: "reader", tutorialOn: true, chatMuted: false, mutedConversationIds: [], unmutedTavernIds: ["global"] }, notifications: [], updateNotifications: vi.fn() } as never);
   vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global", "Akikaze"], isLoading: false } as never);
   vi.spyOn(mutes, "useChatMutes").mockReturnValue({ chatMuted: false, isSilenced: (id: string) => id === "akikaze" } as never);
   vi.spyOn(prompt, "NewConversationPrompt").mockReturnValue(<></>);

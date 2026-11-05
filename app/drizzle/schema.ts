@@ -2973,6 +2973,8 @@ export const userData = mysqlTable(
     iframesMuted: boolean("iframesMuted").default(false).notNull(),
     chatMuted: boolean("chatMuted").default(false).notNull(),
     mutedConversationIds: json("mutedConversationIds").$type<string[]>().default([]).notNull(),
+    // Taverns notify only on pings until the player unmutes them here.
+    unmutedTavernIds: json("unmutedTavernIds").$type<string[]>().default([]).notNull(),
     tutorialStep: tinyint("tutorialStep", { unsigned: true }).default(0).notNull(),
     tutorialOn: boolean("tutorialOn").default(true).notNull(),
     homeType: mysqlEnum("homeType", consts.HomeTypes).default("NONE").notNull(),

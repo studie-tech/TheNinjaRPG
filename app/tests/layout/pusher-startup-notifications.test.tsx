@@ -62,8 +62,8 @@ afterEach(() => {
 });
 
 const muteSettings = [
-  { chatMuted: true, mutedConversationIds: [] },
-  { chatMuted: false, mutedConversationIds: ["global"] },
+  { chatMuted: true, mutedConversationIds: [], unmutedTavernIds: [] },
+  { chatMuted: false, mutedConversationIds: ["global"], unmutedTavernIds: [] },
 ];
 it.each(muteSettings)(
   "waits for the profile, then delivers a ping whatever is muted (%j)",
@@ -290,7 +290,7 @@ it("settles failed initial profiles without rejecting the pending event handler"
 
 function mount(
   options: {
-    mute?: { chatMuted: boolean; mutedConversationIds: string[] };
+    mute?: { chatMuted: boolean; mutedConversationIds: string[]; unmutedTavernIds: string[] };
     initialCount?: number;
     deferredRefresh?: boolean;
     refreshCounts?: number[];
@@ -325,7 +325,7 @@ function mount(
       clanId: "clan",
       villageId: "village",
       chatMuted: false,
-      mutedConversationIds: [],
+      mutedConversationIds: [], unmutedTavernIds: [],
       ...options.mute,
     },
     notifications: count

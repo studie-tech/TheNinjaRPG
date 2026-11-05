@@ -57,8 +57,8 @@ import {
   chatTavernActivityAtom,
   countTavernUnread,
   getInboxNews,
-  isConversationMuted,
   isConversationUnread,
+  isTavernMuted,
   unreadForTavern,
 } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
@@ -353,7 +353,11 @@ function TavernPane({
       toolbarEnd={
         <>
           {loadedConversation?.tavern === tavern && (
-            <ChatMuteButton label={tavern} conversationId={loadedConversation.id} />
+            <ChatMuteButton
+              label={tavern}
+              conversationId={loadedConversation.id}
+              isTavern
+            />
           )}
           <TavernMoreMenu
             onOpenFullTavern={() => {
@@ -831,7 +835,7 @@ function useTavernUnread() {
   const tavernActivity = useAtomValue(chatTavernActivityAtom);
   return (name: string) => {
     const id = taverns?.find((tavern) => tavern.title === name)?.id;
-    const muted = !!id && isConversationMuted(userData, id);
+    const muted = !!id && isTavernMuted(userData, id);
     return {
       count: id ? unreadForTavern(userData, id, mentions, tavernActivity) : 0,
       muted,

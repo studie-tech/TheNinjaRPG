@@ -34,14 +34,15 @@ const pusher = {
   },
 } as unknown as Pusher;
 
-const player = (mutedConversationIds: string[] = [], chatMuted = false) =>
+const player = (unmutedTavernIds: string[] = ["global", "akikaze"], chatMuted = false) =>
   ({
     userId: "me",
     level: 50,
     isBanned: false,
     isSilenced: false,
     chatMuted,
-    mutedConversationIds,
+    mutedConversationIds: [],
+    unmutedTavernIds,
   }) as never;
 
 const store = getDefaultStore();
@@ -98,13 +99,18 @@ it("counts new messages from other players in every unmuted tavern", async () =>
 
 it("leaves out muted taverns and every tavern while all chat is muted", () => {
   const { rerender } = renderHook(({ user }) => useTavernActivity(pusher, user), {
-    initialProps: { user: player(["global"]) },
+    initialProps: { user: player(["akikaze"]) },
   });
   expect(Object.keys(handlers)).toEqual(["akikaze"]);
   store.set(chatTavernActivityAtom, { global: 1, akikaze: 2 });
   rerender({ user: player([], true) });
   expect(Object.keys(handlers)).toEqual([]);
   expect(activity()).toEqual({ global: 1, akikaze: 2 });
+});
+
+it("follows no tavern until the player unmutes one", () => {
+  renderHook(() => useTavernActivity(pusher, player([])));
+  expect(Object.keys(handlers)).toEqual([]);
 });
 
 it("ignores own messages, other events, open taverns and blocked players", async () => {
@@ -209,7 +215,9 @@ it("keeps counts during a tavern lookup and discards unavailable taverns once it
       getTavernIds: { useQuery: () => ({ data: visible }) },
     },
   });
-  const { rerender } = renderHook(() => useTavernActivity(pusher, player()));
+  const { rerender } = renderHook(() =>
+    useTavernActivity(pusher, player(["global", "akikaze", "hyorin"])),
+  );
   await act(async () => {
     handlers.global?.({ message: "new", fromId: "sora", commentId: "sora" });
     handlers.akikaze?.({ message: "new", fromId: "sora", commentId: "sora" });

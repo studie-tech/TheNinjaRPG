@@ -5,12 +5,14 @@ import { cn } from "@/libs/shadui";
 
 /**
  * Bell for one conversation or tavern. While all chat is muted it shows muted and turns
- * "mute all" off; otherwise it mutes or unmutes this conversation. Mutes are saved on the
- * account, so the chat panel and the tavern page always agree.
+ * "mute all" off; otherwise it mutes or unmutes this conversation. Taverns start muted, so
+ * they notify only on pings until unmuted. Mutes are saved on the account, so the chat panel
+ * and the tavern page always agree.
  */
 export function ChatMuteButton({
   label,
   conversationId,
+  isTavern = false,
   variant = "ghost",
   size = "icon",
   className = "w-[32px]",
@@ -18,13 +20,16 @@ export function ChatMuteButton({
 }: {
   label: string;
   conversationId: string;
+  isTavern?: boolean;
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
   className?: string;
   iconClassName?: string;
 }) {
   const mutes = useChatMutes();
-  const muted = mutes.isSilenced(conversationId);
+  const muted = isTavern
+    ? mutes.isTavernSilenced(conversationId)
+    : mutes.isSilenced(conversationId);
   const action = mutes.chatMuted
     ? "Unmute all chat notifications"
     : muted
@@ -40,7 +45,11 @@ export function ChatMuteButton({
       title={action}
       disabled={mutes.isPending}
       onClick={() =>
-        mutes.chatMuted ? mutes.setChatMuted(false) : mutes.toggleMute(conversationId)
+        mutes.chatMuted
+          ? mutes.setChatMuted(false)
+          : isTavern
+            ? mutes.toggleTavernMute(conversationId)
+            : mutes.toggleMute(conversationId)
       }
     >
       {muted ? (

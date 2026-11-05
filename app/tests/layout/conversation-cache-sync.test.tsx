@@ -375,8 +375,8 @@ it("targets the selected tavern's mute control only after that conversation load
   });
   localStorage.removeItem("selectedTavern2");
   vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global", "Village"], localTavern: "Village", canAccessGlobal: true, isLoading: false } as never);
-  const toggleMute = vi.fn();
-  vi.spyOn(mutes, "useChatMutes").mockReturnValue({ chatMuted: false, isSilenced: () => false, toggleMute } as never);
+  const toggleTavernMute = vi.fn();
+  vi.spyOn(mutes, "useChatMutes").mockReturnValue({ chatMuted: false, isSilenced: () => false, isTavernSilenced: () => false, toggleTavernMute } as never);
   vi.spyOn(richInput, "default").mockReturnValue(<textarea aria-label="Message" />);
   const view = render(<ChatPanelBody isPhone={false} isWide={false} onToggleWide={() => {}} onClose={() => {}} />, { wrapper });
   await view.findByRole("button", { name: "Mute Global" });
@@ -387,7 +387,7 @@ it("targets the selected tavern's mute control only after that conversation load
   expect(view.queryByRole("button", { name: "Mute Global" })).toBeNull();
   await act(async () => finishVillage({ data: [], convo: { id: "village-id", title: "Village", isPublic: true }, nextCursor: null }));
   fireEvent.click(await view.findByRole("button", { name: "Mute Village" }));
-  expect(toggleMute.mock.calls).toEqual([["village-id"]]);
+  expect(toggleTavernMute.mock.calls).toEqual([["village-id"]]);
 });
 
 it.each(["", "<p>Unsent Tavern draft</p>"])("keeps arrow-key tab focus when mounting and restoring the Tavern composer (%s)", async (draft) => {
@@ -400,7 +400,7 @@ it.each(["", "<p>Unsent Tavern draft</p>"])("keeps arrow-key tab focus when moun
   localStorage.removeItem("selectedTavern2");
   getDefaultStore().set(chatDraftsAtom, { Global: draft });
   vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global"], canAccessGlobal: true, isLoading: false } as never);
-  vi.spyOn(mutes, "useChatMutes").mockReturnValue({ isSilenced: () => false } as never);
+  vi.spyOn(mutes, "useChatMutes").mockReturnValue({ isSilenced: () => false, isTavernSilenced: () => false } as never);
   vi.spyOn(richInput, "default").mockImplementation(actualRichInput);
   vi.spyOn(uploadthing, "useUploadThing").mockReturnValue({ startUpload: vi.fn() } as never);
   vi.spyOn(conversationComments, "ConversationComments").mockImplementation(({ onMentionUser }) => <button type="button" onClick={() => onMentionUser?.("Friend")}>Mention Friend</button>);

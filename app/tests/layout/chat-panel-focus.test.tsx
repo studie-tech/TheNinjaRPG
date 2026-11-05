@@ -18,7 +18,7 @@ beforeEach(() => {
     CustomEvent: { configurable: true, value: window.CustomEvent },
   });
   vi.spyOn(media, "useMediaQuery").mockReturnValue(true);
-  vi.spyOn(context, "useUserData").mockImplementation(() => ({ data: { userId: "reader", level, tutorialOn: true, chatMuted: false, mutedConversationIds: [] } }) as never);
+  vi.spyOn(context, "useUserData").mockImplementation(() => ({ data: { userId: "reader", level, tutorialOn: true, chatMuted: false, mutedConversationIds: [], unmutedTavernIds: [] } }) as never);
   vi.spyOn(content, "default").mockImplementation(({ onClose }) => <button type="button" onClick={onClose}>Close chat</button>);
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   getDefaultStore().set(chatMentionsAtom, {});

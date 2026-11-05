@@ -117,7 +117,7 @@ for (const source of ["save", "event"] as const) {
         isBanned: false,
         isSilenced: false,
         chatMuted: false,
-        mutedConversationIds: [],
+        mutedConversationIds: [], unmutedTavernIds: ["global"],
       } as never;
       const LiveTab = () => {
         const pusher = usePusherHandler("me");
