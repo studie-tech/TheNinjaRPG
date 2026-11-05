@@ -129,7 +129,6 @@ describe("optional farm crop artwork", () => {
       fixture.pointer("pointerdown", 400 + position.x * scale, 220 + position.y * scale);
     }
     expect(options.onPlotClick.mock.calls.map(([slot]) => slot)).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(options.onPlotClick.mock.calls[0]![1]).toMatchObject({ id: "plot", isReady: true, fertilizerApplied: true });
     expect(cropSprites(fixture.game).every((sprite) => sprite.texture === Texture.EMPTY)).toBe(true);
     expect(console.warn).toHaveBeenCalledWith("Farm crop artwork unavailable", failure);
     hook.unmount();

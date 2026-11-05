@@ -9,10 +9,9 @@ import Countdown from "@/layout/Countdown";
 import { FarmItemCount } from "@/layout/FarmItemCount";
 import Image from "@/layout/Image";
 import {
-  canWaterPlot,
   getFarmPlotStatus,
   getFarmPrimaryAction,
-  getNextWateringAt,
+  getLivePlotTiming,
 } from "@/libs/farming";
 import { cn } from "@/libs/shadui";
 import { formatHoursMinutes } from "@/utils/time";
@@ -61,8 +60,7 @@ export function FarmPlotInspector({
   }, [plot.id]);
 
   const status = getFarmPlotStatus(plot, now);
-  const canWater = status === "growing" && canWaterPlot(plot.lastWateredAt, now);
-  const nextWateringAt = canWater ? null : getNextWateringAt(plot.lastWateredAt, now);
+  const { canWater, nextWateringAt } = getLivePlotTiming(plot, now);
   const selectedSeed =
     farmState.availableSeeds.find((seed) => seed.itemId === selectedSeedId) ??
     farmState.availableSeeds[0];

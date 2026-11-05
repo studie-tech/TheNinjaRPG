@@ -4,7 +4,7 @@ import {
   IMG_FARM_BACKGROUND,
   IMG_FARM_PLOT_SOIL,
 } from "@/drizzle/constants";
-import { canWaterPlot, getPlotGrowthStage, isPlotReady } from "@/libs/farming";
+import { getLivePlotTiming } from "@/libs/farming";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { farmLightingClock, nextFarmVisualAt } from "@/libs/rendering/scenes/farmClock";
 import {
@@ -28,7 +28,7 @@ export const createFarmScene = async (options: {
   /** Local minus server time in milliseconds, subtracted from Date.now(). */
   getTimeDiff: () => number;
   showDayNight: () => boolean;
-  onPlotClick: (slot: number, plot: FarmPlotState | undefined) => void;
+  onPlotClick: (slot: number) => void;
   /** A press on the field outside every plot. */
   onFieldClick?: () => void;
   onError: (error: unknown) => void;
@@ -173,7 +173,10 @@ export const createFarmScene = async (options: {
         changed = true;
       }
       const plots = new Map(
-        state.plots.map((plot) => [plot.slotIndex, livePlot(plot, now)]),
+        state.plots.map((plot) => [
+          plot.slotIndex,
+          { ...plot, ...getLivePlotTiming(plot, now) },
+        ]),
       );
       for (let slot = 0; slot < state.totalPlots; slot++) {
         let entry = entries.get(slot);
@@ -273,8 +276,7 @@ export const createFarmScene = async (options: {
         options.onFieldClick?.();
         return;
       }
-      const plot = state.plots.find((candidate) => candidate.slotIndex === slot);
-      options.onPlotClick(slot, plot ? livePlot(plot, clock()) : undefined);
+      options.onPlotClick(slot);
     });
     game.setUpdate((sourceFrame) => {
       const frame = game.visualEffects.spriteAnimations
@@ -371,17 +373,6 @@ const squareSprite = (texture: Texture, size: number) => {
   sprite.anchor.set(0.5);
   sprite.width = sprite.height = size;
   return sprite;
-};
-
-const livePlot = (plot: FarmPlotState, now: Date) => {
-  const active = !!plot.seedItemId && !!plot.plantedAt && !!plot.finishAt;
-  const ready = active && isPlotReady(plot.finishAt, now);
-  return {
-    ...plot,
-    isReady: ready,
-    canWater: active && !ready && canWaterPlot(plot.lastWateredAt, now),
-    growthStage: active ? getPlotGrowthStage(plot.plantedAt, plot.finishAt, now) : 0,
-  };
 };
 
 const FARM_EFFECT_COLORS: Record<FarmEffect, number> = {
