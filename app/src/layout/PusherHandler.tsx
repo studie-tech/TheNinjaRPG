@@ -242,30 +242,10 @@ export const usePusherHandler = (
             message: data.message ?? "You have a new message",
             duration: data.duration,
             title: "Notification!",
-            action: (
-              <ToastAction altText="To Arena">
-                <Link
-                  href={data.route ?? "/battlearena"}
-                  onNavigate={(event) => {
-                    const url = new URL(
-                      data.route ?? "/battlearena",
-                      window.location.href,
-                    );
-                    if (
-                      url.hash &&
-                      url.origin === window.location.origin &&
-                      url.pathname === window.location.pathname &&
-                      url.search === window.location.search
-                    ) {
-                      // Fragment tabs need the native hashchange event to select their panel.
-                      event.preventDefault();
-                      window.location.assign(url.href);
-                    }
-                  }}
-                >
-                  {data.routeText ?? "To Profile"}
-                </Link>
-              </ToastAction>
+            action: routeToastAction(
+              "To Arena",
+              data.route ?? "/battlearena",
+              data.routeText ?? "To Profile",
             ),
           });
         } else if (data.type === "pinged") {
@@ -298,12 +278,10 @@ export const usePusherHandler = (
               message: data.message ?? "You have a new message",
               duration: data.duration,
               title: "Notification!",
-              action: (
-                <ToastAction altText="To Arena">
-                  <Link href={data.route ?? "/battlearena"}>
-                    {data.routeText ?? "To Profile"}
-                  </Link>
-                </ToastAction>
+              action: routeToastAction(
+                "To Arena",
+                data.route ?? "/battlearena",
+                data.routeText ?? "To Profile",
               ),
             });
           }
@@ -319,11 +297,9 @@ export const usePusherHandler = (
               message: data.message ?? "Village alert!",
               duration: data.duration,
               title: "Village Notification!",
-              action: data.route ? (
-                <ToastAction altText="Action">
-                  <Link href={data.route}>{data.routeText ?? "Go"}</Link>
-                </ToastAction>
-              ) : undefined,
+              action: data.route
+                ? routeToastAction("Action", data.route, data.routeText ?? "Go")
+                : undefined,
             });
           }
         });
@@ -349,3 +325,27 @@ export const usePusherHandler = (
 
   return pusher;
 };
+
+/** Link action for a notification toast. */
+const routeToastAction = (altText: string, route: string, label: string) => (
+  <ToastAction altText={altText}>
+    <Link
+      href={route}
+      onNavigate={(event) => {
+        const url = new URL(route, window.location.href);
+        if (
+          url.hash &&
+          url.origin === window.location.origin &&
+          url.pathname === window.location.pathname &&
+          url.search === window.location.search
+        ) {
+          // Fragment tabs need the native hashchange event to select their panel.
+          event.preventDefault();
+          window.location.assign(url.href);
+        }
+      }}
+    >
+      {label}
+    </Link>
+  </ToastAction>
+);
