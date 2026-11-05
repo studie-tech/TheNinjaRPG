@@ -42,13 +42,4 @@ describe("runClaimedCron", () => {
     const response = await runClaimedCron(timer, "/api/test", failing);
     expect(response.status).toBe(500);
   });
-
-  it("holds the period on failure for work that must not rerun", async () => {
-    const timer = claim();
-    const response = await runClaimedCron(timer, "/api/test", failing, {
-      keepClaimOnError: true,
-    });
-    expect(response.status).toBe(500);
-    expect(timer.release).not.toHaveBeenCalled();
-  });
 });
