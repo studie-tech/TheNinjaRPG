@@ -21,6 +21,7 @@ import type { AchievementProgress, UserWithRelations } from "@/api/routers/profi
 import { api } from "@/app/_trpc/client";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import type { StructureRoute } from "@/drizzle/constants";
+import { useActionPreferenceCacheUpdate } from "@/hooks/useActionPreferenceCacheUpdate";
 import { useMasteryQueueRefresh } from "@/hooks/useMasteryQueueRefresh";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
@@ -77,6 +78,7 @@ type UserContextValue = {
   /** Server-known auth state until Clerk finishes loading, then Clerk's live state. */
   isSignedIn: boolean;
   prepareUserUpdate: () => number | undefined;
+  actionPreferences: ReturnType<typeof useActionPreferenceCacheUpdate>;
   /** Resolve true for an accepted local projection; false retains dependent-cache recovery. */
   updateUser: (
     patch: UserUpdate | undefined,
@@ -100,6 +102,16 @@ const defaultUserContext: UserContextValue = {
   isClerkLoaded: false,
   isSignedIn: false,
   prepareUserUpdate: () => undefined,
+  actionPreferences: {
+    prepareUpdate: () => ({
+      query: undefined,
+      autoWakeUp: undefined,
+      release: () => {},
+      isCurrent: () => false,
+    }),
+    updateCache: async () => false,
+    dispose: () => {},
+  },
   updateUser: async () => false,
   updateNotifications: async () => {
     // do nothing
@@ -209,6 +221,11 @@ export function UserContextProvider(props: {
     () => getQueryKey(api.profile.getUser, undefined, "query"),
     [],
   );
+  const actionPreferences = useActionPreferenceCacheUpdate(
+    queryClient,
+    userQueryKey,
+    userId,
+  );
   const prepareUserUpdate = useCallback(
     () => captureUserUpdate(queryClient, userQueryKey),
     [queryClient, userQueryKey],
@@ -291,6 +308,7 @@ export function UserContextProvider(props: {
       isClerkLoaded: isLoaded,
       isSignedIn: effectiveIsSignedIn,
       prepareUserUpdate,
+      actionPreferences,
       updateUser,
       updateNotifications: updateNotifications,
     }),
@@ -306,6 +324,7 @@ export function UserContextProvider(props: {
       isLoaded,
       effectiveIsSignedIn,
       prepareUserUpdate,
+      actionPreferences,
       updateUser,
       updateNotifications,
     ],

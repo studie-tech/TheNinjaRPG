@@ -453,6 +453,16 @@ export const getUpdatePreferencesUserUpdate = ({
   userPatch: resultRowsAffected > 0 ? input : undefined,
 });
 
+/** Project only the confirmed automatic-wake choice for the character that saved it. */
+export const getActionPreferenceUserUpdate = (
+  current: User,
+  userId: string | undefined,
+  autoWakeUp: boolean | undefined,
+) =>
+  current.userId === userId && typeof autoWakeUp === "boolean"
+    ? { autoWakeUp }
+    : undefined;
+
 /** Project the saved cosmetic sprite body style. */
 export const getUpdateSpriteBodyUserUpdate = ({
   inputBody,
