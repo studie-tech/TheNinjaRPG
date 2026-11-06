@@ -229,6 +229,8 @@ export const RichInput = (props: RichInputProps) => {
     generationRef.current++;
     lastValueRef.current = value;
     if (needsHtmlSource(value)) setSourceMode(true);
+    // A draft cleared from outside, such as after sending, starts over in the visual editor.
+    else if (!value) setSourceMode(false);
     const editor = quillRef.current;
     if (!editor) return;
     editor.setContents(editor.clipboard.convert(richTextInput(value)), "silent");
@@ -579,6 +581,8 @@ export const RichInput = (props: RichInputProps) => {
         }
       }}
       onChange={(event) => {
+        // The author's own source edits are not outside changes to the draft.
+        lastValueRef.current = event.target.value;
         field.onChange(event);
         checkMention(event.target.value, event.target.selectionStart);
       }}
@@ -864,8 +868,9 @@ export const RichInput = (props: RichInputProps) => {
       )}
       {!props.plainText && sourceMode && (
         <p className="text-muted-foreground mt-1 text-xs">
-          HTML mode preserves advanced markup and embeds. Switching to visual editing
-          supports basic formatting, links and images.
+          Writing HTML for this message, so advanced markup and embeds are kept. Press
+          &lt;/&gt; to go back to the visual editor, which keeps basic formatting, links
+          and images.
         </p>
       )}
       {props.error && (
