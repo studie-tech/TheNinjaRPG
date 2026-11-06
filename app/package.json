@@ -44,6 +44,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.99",
     "@ai-sdk/react": "^4.0.152",
+    "@blockstruggle/game-ui": "file:./vendor/blockstruggle/blockstruggle-game-ui-0.1.17.tgz",
     "@clerk/mcp-tools": "^0.6.0",
     "@clerk/nextjs": "^7.9.19",
     "@emoji-mart/data": "^1.2.1",
@@ -87,6 +88,7 @@
     "@upstash/ratelimit": "^2.2.0",
     "@upstash/redis": "^1.39.0",
     "@vercel/og": "^1.0.3",
+    "@vercel/oidc": "3.2.0",
     "@vercel/speed-insights": "^2.0.0",
     "ai": "^7.0.148",
     "alea": "1.0.1",
@@ -107,6 +109,7 @@
     "dotenv": "^18.0.8",
     "drizzle-orm": "0.45.4",
     "drizzle-zod": "^0.8.3",
+    "effect": "3.22.2",
     "embla-carousel-auto-height": "8.6.0",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
@@ -194,7 +197,8 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@types/react-cytoscapejs": {
       "cytoscape": "$cytoscape"
-    }
+    },
+    "effect": "3.22.2"
   },
   "resolutions": {
     "@types/react": "19.3.0",
