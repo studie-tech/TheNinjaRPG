@@ -427,9 +427,7 @@ function TavernMoreMenu({ onOpenFullTavern }: { onOpenFullTavern: () => void }) 
               disabled={mutes.isPending}
             >
               {mutes.chatMuted ? <Bell /> : <BellOff />}
-              {mutes.chatMuted
-                ? "Unmute all chat notifications"
-                : "Mute all chat notifications"}
+              {mutes.chatMuted ? "Unmute chat notifications" : "Mute chat except pings"}
             </MenuButton>
             <MenuButton onClick={() => setShowBlocked(true)}>
               <Ban /> Blocked users

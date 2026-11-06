@@ -77,7 +77,7 @@ it("turns muting all chat off rather than changing one tavern", () => {
   chatMuted = true;
   unmutedTavernIds = ["konoki-id"];
   const view = render(<Tavern />);
-  fireEvent.click(view.getByRole("button", { name: "Unmute all chat notifications" }));
+  fireEvent.click(view.getByRole("button", { name: "Unmute chat notifications" }));
   expect(setChatMuted).toHaveBeenCalledWith(false);
   expect(toggleTavernMute).not.toHaveBeenCalled();
 });

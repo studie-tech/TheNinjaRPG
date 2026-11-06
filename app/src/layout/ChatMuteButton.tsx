@@ -32,7 +32,7 @@ export function ChatMuteButton({
     ? mutes.isTavernSilenced(conversationId)
     : mutes.isSilenced(conversationId);
   const action = mutes.chatMuted
-    ? "Unmute all chat notifications"
+    ? "Unmute chat notifications"
     : muted
       ? `Unmute ${label}`
       : `Mute ${label}`;

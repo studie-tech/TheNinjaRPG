@@ -113,15 +113,12 @@ export default function Tavern() {
               conversationId={tavernId}
               isTavern
               variant="default"
-              size="default"
-              className=""
-              iconClassName="h-6 w-6"
             />
           )}
           <Popover>
             <PopoverTrigger asChild>
-              <Button id="filter-bloodline">
-                <UserRoundX className="h-6 w-6 hover:text-orange-500" />
+              <Button id="filter-bloodline" size="icon" className="w-[32px]">
+                <UserRoundX className="h-4 w-4 hover:text-orange-500" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[300px] overflow-hidden p-0">
