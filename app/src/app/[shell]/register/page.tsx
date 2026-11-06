@@ -50,8 +50,10 @@ import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { cn } from "@/libs/shadui";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getRandomElement, shuffle } from "@/utils/array";
+import { isRetryableTrpcError } from "@/utils/error";
 import { secureRandomInt } from "@/utils/math";
 import { useUserData } from "@/utils/UserContext";
 import {
@@ -149,7 +151,11 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
   // Create avatar mutation
   const createAvatar = api.avatar.createAvatar.useMutation();
 
-  // Create character mutation
+  // Why the last submission failed, kept on the final step after the toast has gone
+  const [failureMessage, setFailureMessage] = useState<string>();
+
+  // Create character mutation. The global mutation error handler keeps showing its toast,
+  // which a caller's onError would replace, so the failure is read in onSettled.
   const { mutate: createCharacter, isPending } =
     api.register.createCharacter.useMutation({
       onSuccess: async (data) => {
@@ -161,6 +167,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
           showMutationToast(data);
         }
       },
+      onSettled: (data, error) => setFailureMessage(getFailureMessage(data, error)),
     });
 
   // Prepare initial randomized defaults for style-related fields
@@ -213,25 +220,39 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
     (errors) => showFormErrorsToast(errors),
   );
 
+  // The steps stay mounted while creating, only hidden, because the carousel holds the
+  // current step: a rejected submission has to come back to the step it was sent from.
   return (
     <ContentBox {...REGISTER_BOX}>
-      {!isPending && (
+      <div className="relative">
         <Form {...form}>
-          <form onSubmit={handleCreateCharacter} className="relative">
-            <RegisterSteps form={form} isLoading={isLoading} />
+          <form
+            onSubmit={handleCreateCharacter}
+            className={cn("relative", isPending && "invisible")}
+          >
+            <RegisterSteps
+              form={form}
+              isLoading={isLoading}
+              failureMessage={failureMessage}
+            />
           </form>
         </Form>
-      )}
-      {isPending && <Loader explanation="Creating character..." />}
+        {isPending && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader explanation="Creating character..." />
+          </div>
+        )}
+      </div>
     </ContentBox>
   );
 };
 
 /** Carousel of registration steps; while loading, the first step's banner and a loader */
-const RegisterSteps: React.FC<{ form: RegisterFormApi; isLoading: boolean }> = ({
-  form,
-  isLoading,
-}) => {
+const RegisterSteps: React.FC<{
+  form: RegisterFormApi;
+  isLoading: boolean;
+  failureMessage: string | undefined;
+}> = ({ form, isLoading, failureMessage }) => {
   // Carousel state
   const [cApi, setCApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
@@ -282,7 +303,7 @@ const RegisterSteps: React.FC<{ form: RegisterFormApi; isLoading: boolean }> = (
               </CarouselItem>
               <CarouselItem className="flex flex-col items-center gap-4">
                 <StepBanner alt="step4" src={IMG_REGISTRATIN_STEP9} />
-                <AgreementStep form={form} />
+                <AgreementStep form={form} failureMessage={failureMessage} />
               </CarouselItem>
             </>
           )}
@@ -687,7 +708,10 @@ const BloodlineStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
 };
 
 /** Step 4: agreements and submit */
-const AgreementStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => (
+const AgreementStep: React.FC<{
+  form: RegisterFormApi;
+  failureMessage: string | undefined;
+}> = ({ form, failureMessage }) => (
   <>
     <div className="px-10">
       <FormField
@@ -758,7 +782,15 @@ const AgreementStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => (
         )}
       />
     </div>
-    <div className="w-full px-10">
+    <div className="flex w-full flex-col gap-4 px-10">
+      {failureMessage && (
+        <p
+          role="alert"
+          className="border-destructive rounded-md border-2 p-3 text-center font-bold"
+        >
+          {failureMessage}
+        </p>
+      )}
       <Button
         id="create"
         type="submit"
@@ -848,6 +880,19 @@ const NextStepButton: React.FC<{
       </Button>
     </div>
   );
+};
+
+/** The reason a settled submission failed, in words the player can act on */
+const getFailureMessage = (
+  data: { success: boolean; message: string } | undefined,
+  error: { message: string } | null,
+) => {
+  if (error) {
+    return isRetryableTrpcError(error)
+      ? "We could not confirm whether your character was created. Refresh the page to check before trying again."
+      : error.message;
+  }
+  return data && !data.success ? data.message : undefined;
 };
 
 /** Helper to get boolean from localStorage with default */
