@@ -118,6 +118,21 @@ const card = (name: string) => screen.getByRole("article", { name });
 // Confirm wraps its trigger, so the tower's own button is found by its id.
 const climbButton = (id: string) => document.getElementById(`tutorial-take-quest-${id}`)!;
 
+it("keeps a climb without a saved tracker playable and abandonable", () => {
+  userQuests = [
+    {
+      questId: "t-capped",
+      endAt: null,
+      startedAt: new Date("2026-01-01"),
+      quest: { id: "t-capped", name: "Skychain Monastery", questType: "battlepyramid" },
+    },
+  ];
+  render(<PyramidMode />);
+  const climb = card("Skychain Monastery");
+  expect(within(climb).getByText("Climbing now")).toBeDefined();
+  expect(within(climb).getByText("Current objective")).toBeDefined();
+});
+
 it("lists the tower being climbed first", () => {
   userQuests = [{ questId: "t-items", endAt: null, quest: { id: "t-items", name: "Tower of Echoes", questType: "battlepyramid" } }];
   questData = [{ id: "t-items", goals: [] }];

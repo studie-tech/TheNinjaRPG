@@ -83,6 +83,7 @@ import {
   getIsolatedPyramid,
   hasQuestContentChanged,
   isBetweenPyramidBattles,
+  isOpenPyramidRun,
 } from "@/libs/questRun";
 import {
   buildRewardChoiceCards,
@@ -2354,6 +2355,7 @@ export const isAvailableUserQuests = (
     previousAttempts?: number | null;
     previousCompletes?: number | null;
     completed?: number | null;
+    endAt?: Date | string | null;
     retryDelay: RetryQuestDelay;
     periodCompletes?: number | null;
     periodStartAt?: Date | string | null;
@@ -2495,13 +2497,17 @@ export const isAvailableUserQuests = (
     "originalLevel" in user && typeof user.originalLevel === "number"
       ? user.originalLevel
       : (user.level ?? 1);
+  // The cap gates entering a Pyramid; a run's own fights can carry the player past it.
+  const maxLevel = isOpenPyramidRun(questAndUserQuestInfo)
+    ? null
+    : questAndUserQuestInfo.maxLevel;
   const levelCheck =
     (!questAndUserQuestInfo.requiredLevel ||
       userLevel >= questAndUserQuestInfo.requiredLevel) &&
-    (!questAndUserQuestInfo.maxLevel ||
+    (!maxLevel ||
       userLevel <=
         getQuestMaxLevel({
-          maxLevel: questAndUserQuestInfo.maxLevel,
+          maxLevel,
           content: questAndUserQuestInfo.content,
         }));
 
@@ -2596,8 +2602,8 @@ export const isAvailableUserQuests = (
     ) {
       message += `Quest requires level ${questAndUserQuestInfo.requiredLevel}\n`;
     }
-    if (questAndUserQuestInfo.maxLevel && userLevel > questAndUserQuestInfo.maxLevel) {
-      message += `Quest is only available up to level ${questAndUserQuestInfo.maxLevel}\n`;
+    if (maxLevel && userLevel > maxLevel) {
+      message += `Quest is only available up to level ${maxLevel}\n`;
     }
   }
   // Returned detailed info on all the checks

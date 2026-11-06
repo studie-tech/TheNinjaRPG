@@ -1,7 +1,7 @@
 import type { UserRole } from "@/drizzle/constants";
 import type { UserData, UserQuest } from "@/drizzle/schema";
 import { canPlayHiddenQuests } from "@/utils/permissions";
-import type { QuestContentType } from "@/validators/objectives";
+import type { QuestContentType, QuestTrackerType } from "@/validators/objectives";
 
 /** Shared feedback for server rejections and the isolated-run boundary. */
 export const ISOLATED_PYRAMID_MESSAGE =
@@ -12,6 +12,24 @@ export const getIsolatedPyramid = (
   user: { userQuests?: readonly UserQuest[] } | null | undefined,
 ) =>
   user?.userQuests?.find((entry) => entry.isolated && !entry.endAt && !entry.completed);
+
+/** A Pyramid attempt in progress; `endAt` is absent on rows without an attempt. */
+export const isOpenPyramidRun = (entry: {
+  questType: string;
+  completed?: number | null;
+  endAt?: Date | string | null;
+}) => entry.questType === "battlepyramid" && entry.endAt === null && !entry.completed;
+
+/** A run's saved tracker; without one it renders from the first objective. */
+export const getPyramidRunTracker = (
+  run: Pick<UserQuest, "questId" | "startedAt" | "quest">,
+  questData: readonly QuestTrackerType[] | null | undefined,
+): QuestTrackerType =>
+  questData?.find((entry) => entry.id === run.questId) ?? {
+    id: run.questId,
+    startAt: run.startedAt?.toISOString() ?? run.quest.createdAt.toISOString(),
+    goals: [],
+  };
 
 /** BATTLE without a fight keeps the run locked while its own quest can advance or end. */
 export const isBetweenPyramidBattles = (
