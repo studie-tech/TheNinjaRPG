@@ -60,7 +60,7 @@ import Modal from "@/layout/Modal";
 import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
 import { PetTasks } from "@/layout/PetTasks";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
-import { canAttemptAwakeAction } from "@/libs/actionReadiness";
+import { actionStatusMessage, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import {
   getPetJutsuCost,
   getPetSkillCost,
@@ -243,7 +243,10 @@ export function PetProfile() {
       }));
       showMutationToast({
         ...result,
-        message: `${context?.name ?? "Companion"}: ${result.message}`,
+        message:
+          !result.success && result.message === actionStatusMessage("HOSPITALIZED")
+            ? result.message
+            : `${context?.name ?? "Companion"}: ${result.message}`,
       });
       await Promise.all([
         invalidatePetData(),

@@ -1129,7 +1129,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       utils.client.travel.moveInSector.mutate(input),
     meta: { handlesTransportError: true },
     onSuccess: async (result) => {
-      showActionReadinessToast(result);
+      if (result.success && result.data) showActionReadinessToast(result);
     },
   });
 
@@ -1503,7 +1503,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       return { walk, sector: prepareSectorUpdate(), userRevision: prepareUserUpdate() };
     },
     onSuccess: async (res, input, context) => {
-      showActionReadinessToast(res);
+      if (res.success && res.data) showActionReadinessToast(res);
       const walk = context?.walk ?? Promise.resolve();
       const mutation = {
         revision: context?.userRevision,
