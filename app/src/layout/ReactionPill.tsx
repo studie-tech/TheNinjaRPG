@@ -49,11 +49,19 @@ export function ReactionPill(props: ReactionPillProps) {
   );
 }
 
-/** "Ana", "Ana and Ben", "Ana, Ben and Cy". */
-const listNames = (names: string[]) =>
-  names.length <= 1
-    ? (names[0] ?? "")
-    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+/**
+ * "Ana", "Ana and Ben", "Ana, Ben and Cy", "Ana, Ben, Cy and 3 others": the label stays short,
+ * and the tooltip lists everyone.
+ */
+const listNames = (names: string[]) => {
+  const shown = names.length > 3 ? names.slice(0, 3) : names;
+  const rest = names.length - shown.length;
+  if (rest > 0)
+    return `${shown.join(", ")} and ${rest} ${rest === 1 ? "other" : "others"}`;
+  return shown.length <= 1
+    ? (shown[0] ?? "")
+    : `${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
+};
 
 interface ReactionPillProps {
   emoji: string;
