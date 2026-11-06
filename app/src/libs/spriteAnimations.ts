@@ -19,8 +19,14 @@ export const snapshotSpriteAnimations = (
   Object.fromEntries(
     bindings.flatMap(({ actionKey, animation }) => {
       if (!animation) return [];
-      const { id, name, url, columns, rows, frameCount, fps, facing } = animation;
-      return [[actionKey, { id, name, url, columns, rows, frameCount, fps, facing }]];
+      const { id, name, url, smallUrl, columns, rows, frameCount, fps, facing } =
+        animation;
+      return [
+        [
+          actionKey,
+          { id, name, url, smallUrl, columns, rows, frameCount, fps, facing },
+        ],
+      ];
     }),
   );
 
@@ -39,7 +45,15 @@ export const spriteAnimationFrame = (
 /** Rendering metadata copied into a battle; excludes author and editor-only fields. */
 export type CharacterAnimation = Pick<
   SpriteAnimation,
-  "id" | "name" | "url" | "columns" | "rows" | "frameCount" | "fps" | "facing"
+  | "id"
+  | "name"
+  | "url"
+  | "smallUrl"
+  | "columns"
+  | "rows"
+  | "frameCount"
+  | "fps"
+  | "facing"
 >;
 /** Frozen sheets indexed by catalogue action key, with optional idle/move defaults. */
 export type CharacterAnimations = Record<string, CharacterAnimation>;

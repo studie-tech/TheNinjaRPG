@@ -15,6 +15,7 @@ import {
   touchAnimationAi,
 } from "@/queries/spriteAnimation";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import { prepareSpriteSheetUrls } from "@/server/utils/spriteSheets";
 import { canChangeContent } from "@/utils/permissions";
 import {
   aiSpriteAnimationInput,
@@ -53,10 +54,14 @@ export const spriteAnimationRouter = createTRPCRouter({
       const editor = await fetchUser(ctx.drizzle, ctx.userId);
       if (editor.isBanned || !canChangeContent(editor.role))
         return errorResponse("Content editor access required");
+      const sheet = await prepareSpriteSheetUrls(input);
+      if (!sheet.success) return errorResponse(sheet.message);
       const id = nanoid();
       await Promise.all([
         insertSpriteAnimation(ctx.drizzle, {
           ...input,
+          url: sheet.url,
+          smallUrl: sheet.smallUrl,
           id,
           createdByUserId: ctx.userId,
         }),

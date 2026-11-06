@@ -3,7 +3,6 @@ import { SPRITE_ANIMATION_LIMITS } from "@/drizzle/constants";
 import { stabilizeNearestTexture } from "@/libs/rendering/assets";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
 import { textureImageUrl } from "@/utils/image";
-import variants from "./animationTextureVariants.json";
 
 const MAX_BYTES = 32 * 1024 * 1024;
 const MAX_SHEETS = 16;
@@ -34,12 +33,9 @@ export const animationTextureUrl = (
   animation: CharacterAnimation,
   cellSize: number,
 ) => {
-  const source = new URL(animation.url);
-  const key = source.pathname.split("/").pop() ?? "";
-  const published = (variants as Record<string, string[]>)[key];
-  // Prepared raw-key uploads bypass the CDN's asynchronous image optimizer.
-  if (published && (cellSize === 128 || cellSize === 256))
-    return `https://uploadthing.b-cdn.net/f/${published[cellSize === 128 ? 0 : 1]}`;
+  // Prepared raw sheets bypass the CDN's asynchronous image optimizer.
+  if (animation.smallUrl && cellSize === 128) return animation.smallUrl;
+  if (animation.smallUrl && cellSize === 256) return textureImageUrl(animation.url, 0);
   const url = new URL(textureImageUrl(animation.url, animation.columns * cellSize));
   if (url.hostname === "uploadthing.b-cdn.net") {
     url.searchParams.set("height", String(animation.rows * cellSize));

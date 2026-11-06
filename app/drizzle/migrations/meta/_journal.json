@@ -981,6 +981,27 @@
       "when": 1793963594480,
       "tag": "0140_dazzling_dracula",
       "breakpoints": false
+    },
+    {
+      "idx": 141,
+      "version": "5",
+      "when": 1793966954397,
+      "tag": "0141_seed_remaining_sprite_animations",
+      "breakpoints": false
+    },
+    {
+      "idx": 142,
+      "version": "5",
+      "when": 1793971710517,
+      "tag": "0142_absent_mathemanic",
+      "breakpoints": false
+    },
+    {
+      "idx": 143,
+      "version": "5",
+      "when": 1793971732245,
+      "tag": "0143_backfill_sprite_small_urls",
+      "breakpoints": false
     }
   ]
 }

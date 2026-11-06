@@ -1,0 +1,1 @@
+ALTER TABLE `SpriteAnimation` ADD `smallUrl` varchar(2048);

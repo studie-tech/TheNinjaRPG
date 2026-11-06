@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { resolveSpriteAnimation, snapshotSpriteAnimations, spriteActionKey, spriteAnimationFrame, type CharacterAnimation } from "@/libs/spriteAnimations";
 import { spriteAnimationSchema } from "@/validators/spriteAnimation";
-const idle: CharacterAnimation = { id: "idle", name: "Idle", url: "https://example.com/idle.png", columns: 6, rows: 4, frameCount: 24, fps: 12, facing: "left" };
+const idle: CharacterAnimation = { id: "idle", name: "Idle", url: "https://example.com/idle.png", smallUrl: null, columns: 6, rows: 4, frameCount: 24, fps: 12, facing: "left" };
 describe("AI animation metadata", () => {
   it("resolves catalogue actions and idle fallback", () => {
     expect(spriteActionKey({type:"basic",id:"move"})).toBe("move");

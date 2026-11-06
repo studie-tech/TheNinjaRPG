@@ -3,9 +3,8 @@ import { Assets, BufferImageSource, Sprite, Texture, TextureSource } from "pixi.
 import { spriteGroundContact, textureGroundContact } from "@/libs/rendering/assets";
 import { acquireAnimationTexture, animationTextureUrl, clearUnusedAnimationTextures } from "@/libs/rendering/animationTextures";
 import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
-import variants from "@/libs/rendering/animationTextureVariants.json";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
-const idle: CharacterAnimation={id:"idle",name:"Idle",url:"https://uploadthing.b-cdn.net/f/idle.webp",columns:2,rows:2,frameCount:4,fps:4,facing:"left"};
+const idle: CharacterAnimation={id:"idle",name:"Idle",url:"https://uploadthing.b-cdn.net/f/idle.webp",smallUrl:null,columns:2,rows:2,frameCount:4,fps:4,facing:"left"};
 const atlas=()=>new Texture({source:new TextureSource({width:256,height:256})});
 const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
 afterEach(async()=>{clearUnusedAnimationTextures();await flush();vi.restoreAllMocks();});
@@ -68,9 +67,9 @@ describe("Pixi AI atlases",()=>{
   const b=acquireAnimationTexture(idle)!;expect(a.resource).toBe(b.resource);a.release();b.release();
  });
  it("uses prepared sizes directly and bounds long existing clips",()=>{
-  const [key, files]=Object.entries(variants)[0]!;
-  expect(animationTextureUrl({...idle,url:`https://uploadthing.b-cdn.net/f/${key}`},128)).toBe(`https://uploadthing.b-cdn.net/f/${files[0]}`);
-  expect(animationTextureUrl({...idle,url:`https://uploadthing.b-cdn.net/f/${key}`},256)).toBe(`https://uploadthing.b-cdn.net/f/${files[1]}`);
+  const prepared={...idle,url:"https://utfs.io/f/large",smallUrl:"https://uploadthing.b-cdn.net/f/small"};
+  expect(animationTextureUrl(prepared,128)).toBe("https://uploadthing.b-cdn.net/f/small");
+  expect(animationTextureUrl(prepared,256)).toBe("https://uploadthing.b-cdn.net/f/large");
   const long={...idle,columns:9,rows:18,frameCount:160,fps:12.5};
   expect(acquireAnimationTexture(long,256)).toBeUndefined();
   expect(acquireAnimationTexture(long,128,1024)).toBeUndefined();
