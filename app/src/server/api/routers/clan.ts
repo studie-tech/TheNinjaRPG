@@ -1408,8 +1408,10 @@ export const clanRouter = createTRPCRouter({
           battleId: null,
         });
         // A failed member insert leaves no row for lobby deletion to find and release.
-        if (!deleted || failedInsert)
-          await undoClanBattleJoin(ctx.drizzle, user.userId, entryId);
+        const wake =
+          !deleted || failedInsert
+            ? await undoClanBattleJoin(ctx.drizzle, user.userId, entryId)
+            : undefined;
         if (failedInsert && !isMysqlDuplicateKeyError(failedInsert.reason))
           throw failedInsert.reason;
         return actionReadinessResponse(
@@ -1418,6 +1420,7 @@ export const clanRouter = createTRPCRouter({
           ),
           readiness,
           ctx.drizzle,
+          wake && wake.rowsAffected > 0 ? { status: "AWAKE" } : null,
         );
       }
       // Notify all clan members of both clans
@@ -1515,22 +1518,24 @@ export const clanRouter = createTRPCRouter({
             entryId,
           ))
         ) {
-          await undoClanBattleJoin(ctx.drizzle, user.userId, entryId);
+          const wake = await undoClanBattleJoin(ctx.drizzle, user.userId, entryId);
           return actionReadinessResponse(
             errorResponse(
               "Battle started, was deleted, or queue changed; refresh and try again",
             ),
             readiness,
             ctx.drizzle,
+            wake.rowsAffected > 0 ? { status: "AWAKE" } : null,
           );
         }
       } catch (error) {
-        await undoClanBattleJoin(ctx.drizzle, user.userId, entryId);
+        const wake = await undoClanBattleJoin(ctx.drizzle, user.userId, entryId);
         if (!isMysqlDuplicateKeyError(error)) throw error;
         return actionReadinessResponse(
           errorResponse("Slot was taken. Please try again."),
           readiness,
           ctx.drizzle,
+          wake.rowsAffected > 0 ? { status: "AWAKE" } : null,
         );
       }
       return actionReadinessResponse(

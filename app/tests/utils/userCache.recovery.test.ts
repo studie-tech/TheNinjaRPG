@@ -2,8 +2,12 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { expect, it } from "bun:test";
 import type { UserCache } from "@/deltas/profile";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import { actionReadinessResponse } from "@/server/utils/actionReadiness";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import type { UserRecovery } from "@/validators/base";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+import { afterTasks } from "../setup/after";
 
 const key = [["profile", "getUser"], { type: "query" }];
 
@@ -29,6 +33,28 @@ const setup = (status: "ASLEEP" | "HOSPITALIZED" = "ASLEEP") => {
 const recovery = { userId: "actor", activity: { status: "AWAKE" as const, battleId: null }, userPatch: {
   status: "AWAKE" as const, curHealth: 100, curChakra: 90, curStamina: 80, curEnergy: 70,
 } };
+
+it("withholds defeated compensation fields while preserving publication, feedback and the cached battle without a read", async () => {
+  const test = setup();
+  try {
+    test.client.setQueryData(key, test.canonical);
+    const before = test.value();
+    const tasks: Array<() => unknown> = [];
+    const response = afterTasks.run(tasks, () => actionReadinessResponse(
+      { success: false, message: "Queue changed", userRecovery: recovery as UserRecovery },
+      { initial: test.initial.userData!, user: { ...test.initial.userData!, status: "AWAKE" }, userRecovery: recovery, notice: AUTO_WAKE_MESSAGE },
+      {} as never,
+      null,
+    ));
+    expect(response).toMatchObject({ actionNotice: AUTO_WAKE_MESSAGE, message: `Queue changed ${AUTO_WAKE_MESSAGE}` });
+    expect(response.userRecovery).toEqual({ userId: "actor", requiresUserRefresh: true });
+    expect(tasks).toHaveLength(1);
+    expect(await updateUserCache(test.client, key, response, { revision: prepareUserUpdate(test.client, key) })).toBe(false);
+    expect(test.value()).toBe(before);
+    expect(test.reads()).toBe(0);
+    expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+  } finally { test.close(); }
+});
 
 it.each(["ASLEEP", "HOSPITALIZED"] as const)("applies %s recovery before the action in one cache write without a profile read", async (status) => {
   const test = setup(status);

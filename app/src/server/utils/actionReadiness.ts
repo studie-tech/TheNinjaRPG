@@ -289,6 +289,8 @@ export const prepareActionReadiness = <T extends UserData>(
  * Supply the client for a full committed plan to publish training logs and end hospital activity.
  * Notice-only wrappers omit it when the inner action already publishes recovery.
  * Supply final activity when it differs from the saved actor or the action's public patch.
+ * Supply null when compensation loses its activity guard: retain only recovery identity,
+ * withholding cache fields without introducing an eager profile refresh.
  */
 export const actionReadinessResponse = <T extends { message?: string }>(
   response: T,
@@ -300,7 +302,7 @@ export const actionReadinessResponse = <T extends { message?: string }>(
     | Pick<ActionReadiness, "notice">
     | undefined,
   client?: DrizzleClient,
-  activity?: UserRecoveryActivity,
+  activity?: UserRecoveryActivity | null,
 ): T & { actionNotice?: string; userRecovery?: UserRecovery } => {
   if (!readiness?.notice) return response;
   if (client && "initial" in readiness && "user" in readiness) {
@@ -338,23 +340,29 @@ export const actionReadinessResponse = <T extends { message?: string }>(
           : `${response.message} ${readiness.notice}`
         : readiness.notice,
     actionNotice: readiness.notice,
-    ...("userRecovery" in readiness
+    ...("userRecovery" in readiness || activity === null
       ? {
-          userRecovery: readiness.userRecovery
-            ? {
-                ...readiness.userRecovery,
-                activity: getActionRecoveryActivity(
-                  readiness.user,
-                  "userPatch" in response
-                    ? (response.userPatch as UserCachePatch | undefined)
-                    : undefined,
-                  activity ??
-                    ("userRecovery" in response
-                      ? (response.userRecovery as UserRecovery | undefined)?.activity
-                      : undefined),
-                ),
-              }
-            : undefined,
+          userRecovery:
+            activity === null
+              ? "initial" in readiness
+                ? { userId: readiness.initial.userId, requiresUserRefresh: true }
+                : undefined
+              : "userRecovery" in readiness && readiness.userRecovery
+                ? {
+                    ...readiness.userRecovery,
+                    activity: getActionRecoveryActivity(
+                      readiness.user,
+                      "userPatch" in response
+                        ? (response.userPatch as UserCachePatch | undefined)
+                        : undefined,
+                      activity ??
+                        ("userRecovery" in response
+                          ? (response.userRecovery as UserRecovery | undefined)
+                              ?.activity
+                          : undefined),
+                    ),
+                  }
+                : undefined,
         }
       : {}),
   };

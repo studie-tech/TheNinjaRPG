@@ -17,6 +17,7 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { clanRouter } from "@/server/api/routers/clan";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { profileRouter } from "@/server/api/routers/profile";
@@ -439,8 +440,9 @@ describeWithDatabase("clan queue claim ownership", () => {
       expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(2);
     });
 
-    it(`rejects ${operation} after the lobby reserves combat before member publication`, async () => {
+    it.each([false, true])(`reports only confirmed recovery when ${operation}'s lobby reserves combat, started=%s`, async (started) => {
       const db = await getTestDatabase();
+      await db.update(userData).set({ status: "ASLEEP", regeneration: 0 }).where(eq(userData.userId, "leader"));
       const client = beforeStatements(db, mpvpBattleUser, [
         async () => {
           if (operation === "challenge") {
@@ -460,10 +462,14 @@ describeWithDatabase("clan queue claim ownership", () => {
             .update(mpvpBattleQueue)
             .set({ battleId: "reserved-combat" })
             .where(eq(mpvpBattleQueue.id, lobby.id));
+          if (started) await db.update(userData).set({ status: "BATTLE", battleId: "reserved-combat" }).where(eq(userData.userId, "leader"));
         },
       ]);
-      expect((await join(client)).success).toBe(false);
-      expect(await storedUser()).toEqual({ status: "AWAKE", battleId: null });
+      const result = await join(client);
+      expect(result).toMatchObject({ success: false, actionNotice: AUTO_WAKE_MESSAGE });
+      if (started) expect(result.userRecovery).toEqual({ userId: "leader", requiresUserRefresh: true });
+      else expect(result.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
+      expect(await storedUser()).toEqual({ status: started ? "BATTLE" : "AWAKE", battleId: started ? "reserved-combat" : null });
       expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
       expect(
         await db.query.mpvpBattleQueue.findMany({
@@ -472,6 +478,20 @@ describeWithDatabase("clan queue claim ownership", () => {
       ).toHaveLength(1);
     });
   }
+
+  it.each([false, true])("reports only confirmed recovery after a duplicate clan join, started=%s", async (started) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "ASLEEP", regeneration: 0 }).where(eq(userData.userId, "leader"));
+    const client = beforeStatements(db, mpvpBattleUser, [async () => {
+      if (started) await db.update(userData).set({ status: "BATTLE", battleId: "newer-combat" }).where(eq(userData.userId, "leader"));
+      throw new Error("Duplicate entry for MpvpBattleUser_userId_key");
+    }]);
+    const result = await callerForDatabase(clanRouter, "leader", client).joinClanBattle({ clanBattleId: "new" });
+    expect(result).toMatchObject({ success: false, actionNotice: AUTO_WAKE_MESSAGE });
+    if (started) expect(result.userRecovery).toEqual({ userId: "leader", requiresUserRefresh: true });
+    else expect(result.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
+    expect(await storedUser()).toEqual({ status: started ? "BATTLE" : "AWAKE", battleId: started ? "newer-combat" : null });
+  });
 
   it("settles a delayed challenge-lobby insert before compensating a lost membership", async () => {
     const db = await getTestDatabase();

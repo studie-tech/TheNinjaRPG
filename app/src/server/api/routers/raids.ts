@@ -854,11 +854,12 @@ export const raidsRouter = createTRPCRouter({
 
         // Guard - team still exists
         if (!freshTeam) {
-          await wakeQueuedUser(ctx.drizzle, ctx.userId);
+          const wake = await wakeQueuedUser(ctx.drizzle, ctx.userId);
           return actionReadinessResponse(
             errorResponse("Team is no longer available"),
             readiness,
             ctx.drizzle,
+            wake.rowsAffected > 0 ? { status: "AWAKE" } : null,
           );
         }
 
@@ -867,11 +868,12 @@ export const raidsRouter = createTRPCRouter({
 
         // Guard - slot available
         if (availableSlot === undefined) {
-          await wakeQueuedUser(ctx.drizzle, ctx.userId);
+          const wake = await wakeQueuedUser(ctx.drizzle, ctx.userId);
           return actionReadinessResponse(
             errorResponse("Team is full"),
             readiness,
             ctx.drizzle,
+            wake.rowsAffected > 0 ? { status: "AWAKE" } : null,
           );
         }
       }
@@ -886,7 +888,7 @@ export const raidsRouter = createTRPCRouter({
       ]);
 
       if (userInsertResult.status === "rejected" || chatResult.status === "rejected") {
-        await rollbackJoinRaidQueue({
+        const wake = await rollbackJoinRaidQueue({
           client: ctx.drizzle,
           userId: ctx.userId,
           teamId,
@@ -898,6 +900,7 @@ export const raidsRouter = createTRPCRouter({
           errorResponse("Failed to join raid - please try again"),
           readiness,
           ctx.drizzle,
+          wake.rowsAffected > 0 ? { status: "AWAKE" } : null,
         );
       }
 
@@ -1413,12 +1416,12 @@ const rollbackJoinRaidQueue = async ({
   // Delete our user row, drop chat membership, and reset status first, so the
   // team-empty check below sees the row we may have inserted as already gone.
   const raidChatConversationId = getRaidChatConversationId(raidQuestId);
-  await Promise.all([
+  const [wake] = await Promise.all([
+    wakeQueuedUser(client, userId),
     ...(deleteUserRow
       ? [deleteMpvpBattleUserForRollbackJoinRaidQueue(client, userId, teamId)]
       : []),
     purgeRaidChatMembership(client, raidChatConversationId, userId),
-    wakeQueuedUser(client, userId),
   ]);
   // Only delete the team if no other queue rows still reference it. A concurrent
   // joiner could have inserted into mpvpBattleUser during the await window
@@ -1430,6 +1433,7 @@ const rollbackJoinRaidQueue = async ({
       await deleteQueueById(client, teamId);
     }
   }
+  return wake;
 };
 
 /**
