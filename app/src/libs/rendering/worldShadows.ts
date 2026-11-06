@@ -1673,16 +1673,18 @@ const updateReceiverBatches = (
 const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
   const vertices: number[] = [];
   const index = 0;
-  const sourceRatio =
-    entry.material.width / entry.record.sprite.texture.source.pixelWidth;
-  const heightRatio =
-    entry.material.height / entry.record.sprite.texture.source.pixelHeight;
-  const frame = entry.record.sprite.texture.frame,
+  // Live cells own a standalone material; its UVs and texel scale must use that cell, not the albedo atlas.
+  const texture = entry.record.cell
+    ? entry.material.texture
+    : entry.record.sprite.texture;
+  const sourceRatio = entry.material.width / texture.source.pixelWidth;
+  const heightRatio = entry.material.height / texture.source.pixelHeight;
+  const frame = texture.frame,
     m = entry.transform;
   // Inverse transpose of the source-pixel surface transform, scaled by object height.
   // The physical basis is (x, -2*(y+height), height), so screen shear also changes a wall's normal.
   const aspect = entry.record.character
-      ? entry.record.sprite.texture.orig.width / entry.record.sprite.texture.orig.height
+      ? texture.orig.width / texture.orig.height
       : frame.width / frame.height,
     h = entry.height;
   const a = (m[0] ?? 0) / aspect,
@@ -1702,7 +1704,7 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
       : [0, 1, 0];
   // Match albedo sampling at texel boundaries so receiver normals/coverage do not reintroduce bands.
   if (instanced) {
-    const { orig, trim } = entry.record.sprite.texture;
+    const { orig, trim } = texture;
     // One object record drives a shared quad; GPU positioning does not duplicate the per-object normal basis.
     vertices.push(
       m[0] ?? 0,
@@ -1722,11 +1724,11 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
       entry.material.isBillboard
         ? (frame.y -
             (entry.record.character ? (trim?.y ?? 0) + orig.height / 2 - 28 : 0)) /
-            entry.record.sprite.texture.source.pixelHeight
+            texture.source.pixelHeight
         : 0,
       entry.material.isBillboard
         ? (entry.record.character ? orig.height : frame.height) /
-            entry.record.sprite.texture.source.pixelHeight
+            texture.source.pixelHeight
         : 0,
       ...normalX,
       h / ((entry.record.character ? orig.height : frame.height) * heightRatio),
@@ -1741,7 +1743,7 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
     return new Float32Array(vertices);
   }
   for (const [u, v] of corners) {
-    const { orig, trim } = entry.record.sprite.texture;
+    const { orig, trim } = texture;
     const logicalU = entry.record.character
       ? ((trim?.x ?? 0) + u * (trim?.width ?? orig.width)) / orig.width
       : u;
@@ -1760,11 +1762,11 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
       entry.material.isBillboard
         ? (frame.y -
             (entry.record.character ? (trim?.y ?? 0) + orig.height / 2 - 28 : 0)) /
-            entry.record.sprite.texture.source.pixelHeight
+            texture.source.pixelHeight
         : 0,
       entry.material.isBillboard
         ? (entry.record.character ? orig.height : frame.height) /
-            entry.record.sprite.texture.source.pixelHeight
+            texture.source.pixelHeight
         : 0,
       ...normalX,
       ...normalY,
