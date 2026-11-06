@@ -1,9 +1,15 @@
 import { z } from "zod";
+import type { UserData } from "@/drizzle/schema";
 import type { UserCachePatch } from "@/validators/userCache";
 
-/** Confirmed recovery precedes the action's own cache projection; a withheld patch requires reconciliation. */
+/** Final committed activity remains projectable when other mutation effects are withheld. */
+export type UserRecoveryActivity = Pick<UserData, "status"> &
+  Partial<Pick<UserData, "battleId" | "travelFinishAt">>;
+
+/** Confirmed recovery includes final activity even when other cache effects are unavailable. */
 export type UserRecovery = {
   userId: string;
+  activity?: UserRecoveryActivity;
   userPatch?: UserCachePatch;
   /** A live SQL-dependent effect is not fully represented by the known fields. */
   requiresUserRefresh?: boolean;

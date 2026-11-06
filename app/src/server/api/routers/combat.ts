@@ -5,7 +5,10 @@ import { nanoid } from "nanoid";
 import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
-import { getActionRecoveryUpdate } from "@/deltas/actionReadiness";
+import {
+  getActionRecoveryActivity,
+  getActionRecoveryUpdate,
+} from "@/deltas/actionReadiness";
 import {
   buildCombatStateUpdate,
   type CombatStateUpdate,
@@ -3681,6 +3684,12 @@ export const initiateBattle = async (
     return { success: false, message: "Attack failed, did the target move?" };
   }
 
+  if (actionReadiness?.userRecovery) {
+    actionReadiness.userRecovery.activity = getActionRecoveryActivity(
+      actionReadiness.user,
+      { status: "BATTLE", battleId },
+    );
+  }
   try {
     // Push websockets message to target
     notifyBattleDefenders(client, {
@@ -3690,7 +3699,6 @@ export const initiateBattle = async (
       users,
     });
     const pusher = getServerPusher();
-
     // Keep human fighters on the sector map as combat markers so nearby players
     // can see who is fighting. AI templates are not sector-map entities and must
     // not be broadcast. Auto-battles stay off this broadcast.
@@ -3758,6 +3766,7 @@ export const initiateBattle = async (
     // Participant settlement publishes training history; recovery only ends the hospital activity here.
     actionReadiness ? { ...actionReadiness, trainingLogs: [] } : undefined,
     client,
+    actionReadiness?.userRecovery?.activity,
   );
 };
 

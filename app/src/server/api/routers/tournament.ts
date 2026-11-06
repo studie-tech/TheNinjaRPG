@@ -240,6 +240,9 @@ export const tournamentRouter = createTRPCRouter({
         },
         readiness,
         ctx.drizzle,
+        result?.success && result.battleId
+          ? { status: "BATTLE", battleId: result.battleId }
+          : undefined,
       );
     }),
 });

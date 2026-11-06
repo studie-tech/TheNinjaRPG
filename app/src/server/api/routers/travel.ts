@@ -1123,9 +1123,14 @@ export const travelRouter = createTRPCRouter({
               );
               if (battle.success) {
                 return actionReadinessResponse(
-                  { success: true, message: "Attacked by village protector" },
+                  {
+                    ...battle,
+                    success: true,
+                    message: "Attacked by village protector",
+                  },
                   readiness,
                   ctx.drizzle,
+                  { status: "BATTLE", battleId: battle.battleId },
                 );
               }
             }

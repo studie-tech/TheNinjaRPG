@@ -1461,6 +1461,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     } else {
       // Attacked (success without data) or rejected: re-sync from the server
       showMutationToast(res);
+      if (res.userRecovery) await updateUser(res, { ...mutation, refetch: false });
       await refreshMovementPosition();
     }
   };

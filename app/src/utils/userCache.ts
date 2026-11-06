@@ -1,6 +1,7 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import {
   applyUserChanges,
+  applyUserRecoveryActivity,
   type UserCache,
   type UserPatch,
   type UserUpdate,
@@ -21,7 +22,7 @@ export const updateUserCache = async (
   key: QueryKey,
   update: UserUpdate | undefined,
   mutation?: UserUpdateOptions,
-) => {
+): Promise<boolean> => {
   let patch: UserPatch | undefined;
   const response =
     update &&
@@ -68,14 +69,22 @@ export const updateUserCache = async (
     !mutation?.userRecovery
   )
     return false;
+  let complete = false;
   const applied = await updateQueryCache<UserCache>(
     client,
     key,
-    delta === undefined
+    delta === undefined && !mutation?.userRecovery?.activity
       ? undefined
-      : (current) => applyUserChanges(current, patch, delta, mutation),
+      : (current) => {
+          const next =
+            delta === undefined
+              ? undefined
+              : applyUserChanges(current, patch, delta, mutation);
+          complete = next !== undefined && !mutation?.userRecovery?.requiresUserRefresh;
+          return next ?? applyUserRecoveryActivity(current, mutation?.userRecovery);
+        },
     mutation,
   );
   // Known recovery fields may apply while unmodelled effects remain for ordinary refreshes.
-  return applied && !mutation?.userRecovery?.requiresUserRefresh;
+  return applied && complete;
 };

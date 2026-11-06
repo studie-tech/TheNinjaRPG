@@ -24,7 +24,7 @@ const farm = { farmingExperience: 0, farmingLevel: 1, farmCurrency: 100, farmPlo
 const initial = { userData: { userId: "farmer", status: "ASLEEP", curEnergy: 10, farmingExperience: 0,
   farmCurrency: 100, farmPlotsPurchased: 0, farmExtractorsOwned: 0, questData: [] } } as unknown as UserCache;
 const progress = QuestTracker.parse({ id: "farm-quest", goals: [{ id: "water", value: 1 }] });
-const recovered = { userId: "farmer", userPatch: { status: "AWAKE" as const, curEnergy: 70 } };
+const recovered = { userId: "farmer", activity: { status: "AWAKE" as const }, userPatch: { status: "AWAKE" as const, curEnergy: 70 } };
 
 beforeEach(() => {
   Object.assign(vi.spyOn(appClient, "api" as never), { farming: testApi.farming, useUtils: testApi.useUtils });
@@ -106,11 +106,28 @@ it("preserves a newer profile revision without reading or replaying recovery and
 });
 
 
-it("preserves explicitly unknown progress without requesting the profile", async () => {
+it("applies confirmed activity on a base-only success without requesting the profile", async () => {
+  const test = harness({ success: true, message: "Watered", userRecovery: recovered });
+  await act(async () => { test.view.result.current.water(plot); });
+  await waitFor(() => expect(test.view.result.current.pendingPlotSlots.size).toBe(0));
+  expect(test.profileReads()).toBe(0);
+  expect(test.profile()).toMatchObject({ status: "AWAKE", curEnergy: 10, farmingExperience: 0, farmCurrency: 100 });
+});
+
+it("applies confirmed activity while preserving explicitly unknown progress without requesting the profile", async () => {
   const test = harness({ success: false, message: "Progress changed", userRecovery: recovered,
     userPatch: undefined, userDelta: undefined });
   await act(async () => { test.view.result.current.water(plot); });
   await waitFor(() => expect(test.view.result.current.pendingPlotSlots.size).toBe(0));
   expect(test.profileReads()).toBe(0);
-  expect(test.profile()).toMatchObject({ farmingExperience: 0, farmCurrency: 100 });
+  expect(test.profile()).toMatchObject({ status: "AWAKE", curEnergy: 10, farmingExperience: 0, farmCurrency: 100 });
+});
+
+it("keeps confirmed recovery after a partial bulk failure with withheld profile effects", async () => {
+  const test = harness({ success: false, message: "Some plots changed", userRecovery: recovered,
+    userPatch: undefined, userDelta: undefined, updatedPlots: [{ before: plot, after: { ...plot, canWater: false } }] });
+  await act(async () => { await test.view.result.current.waterAll(); });
+  expect(test.profileReads()).toBe(0);
+  expect(test.profile()).toMatchObject({ status: "AWAKE", curEnergy: 10, farmingExperience: 0, farmCurrency: 100 });
+  expect(test.view.result.current.pendingBulkAction).toBeNull();
 });

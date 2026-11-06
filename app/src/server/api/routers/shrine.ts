@@ -797,6 +797,7 @@ export const shrineRouter = createTRPCRouter({
         },
         readiness,
         ctx.drizzle,
+        { status: "QUEUED" },
       );
     }),
 
@@ -914,18 +915,24 @@ export const shrineRouter = createTRPCRouter({
           findUserDataForJoinShrineBattle(ctx.drizzle, user),
           findMpvpBattleUserForJoinShrineBattle(ctx.drizzle, user, input),
         ]);
+        let committedStatus: "AWAKE" | "QUEUED" | undefined =
+          currentUser?.status === "QUEUED" && existingEntry ? "QUEUED" : undefined;
 
         // Only revert if user is still QUEUED and not in this battle
         if (currentUser?.status === "QUEUED" && !existingEntry) {
-          await wakeQueuedUser(ctx.drizzle, user.userId);
+          const reverted = await wakeQueuedUser(ctx.drizzle, user.userId);
+          if (reverted.rowsAffected > 0) committedStatus = "AWAKE";
         }
 
         if (isDuplicateError) {
-          return actionReadinessResponse(
+          // A concurrent activity change can defeat compensation; status alone cannot project it safely.
+          const response = actionReadinessResponse(
             errorResponse("Slot was taken by another player. Please try again."),
             readiness,
             ctx.drizzle,
+            committedStatus ? { status: committedStatus } : undefined,
           );
+          return committedStatus ? response : { ...response, userRecovery: undefined };
         }
         // For other errors, rethrow after status revert
         throw error;
@@ -939,6 +946,7 @@ export const shrineRouter = createTRPCRouter({
         },
         readiness,
         ctx.drizzle,
+        { status: "QUEUED" },
       );
     }),
 

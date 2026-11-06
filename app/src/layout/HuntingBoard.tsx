@@ -59,7 +59,12 @@ export function HuntingBoard({
     revision: number | undefined,
   ) => {
     showActionReadinessToast(result);
-    if (result.success || result.userPatch || result.actionNotice)
+    if (
+      result.success ||
+      result.userPatch ||
+      result.actionNotice ||
+      result.userRecovery
+    )
       await updateUser(result, {
         revision,
         refetch: !!(result.success || result.userPatch),
@@ -93,7 +98,10 @@ export function HuntingBoard({
           utils.combat.getBattle.invalidate(),
         ]);
         if (!onStarted) router.push("/combat");
-      } else await board.refetch();
+      } else {
+        if (result.userRecovery) await updateUser(result, { revision, refetch: false });
+        await board.refetch();
+      }
     },
     onError: (e) => {
       setMessage(e.message);

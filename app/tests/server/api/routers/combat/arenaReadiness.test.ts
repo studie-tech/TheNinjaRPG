@@ -138,7 +138,7 @@ describeWithDatabase("arena readiness reads", () => {
     expect(events.find(([channel]) => channel === aiId)?.[2]).not.toHaveProperty("originSocketId");
   });
 
-  it("preserves loaded cache state without a read when outer arena hydration refunds a dropped job", async () => {
+  it("projects committed battle activity without guessing a dropped job refund or reading the profile", async () => {
     const database = await getTestDatabase();
     await database.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, userId));
     await database.insert(userQueue).values({ id: "deleted-arena-job", userId, kind: "JUTSU", position: 1,
@@ -159,7 +159,10 @@ describeWithDatabase("arena readiness reads", () => {
       expect(result.userDelta).toBeUndefined();
       await updateUserCache(cache, key, result, { revision });
       expect(read).not.toHaveBeenCalled();
-      expect(cache.getQueryData<UserCache>(key)?.userData).toEqual(initial);
+      expect(cache.getQueryData<UserCache>(key)?.userData).toEqual({
+        ...initial, ...result.userRecovery?.activity,
+      });
+      expect(result.userRecovery?.activity).toMatchObject({ status: "BATTLE", battleId: result.battleId });
       expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
       expect(await database.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({
         status: "BATTLE", money: initial.money + 30,

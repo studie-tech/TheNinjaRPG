@@ -174,7 +174,8 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
-      if (!data.success && data.userRecovery) await updateUser(data, { revision });
+      if (data.userRecovery && (!data.success || !data.healer))
+        await updateUser(data, { revision });
       void utils.hospital.getHospitalizedUsers.invalidate();
       if (data.success && data.healer) {
         await updateUser(data.healer, { revision, userRecovery: data.userRecovery });

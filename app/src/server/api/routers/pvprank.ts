@@ -555,6 +555,7 @@ export const pvpRankRouter = createTRPCRouter({
         },
         readiness,
         ctx.drizzle,
+        { status: "QUEUED" },
       );
     }),
 

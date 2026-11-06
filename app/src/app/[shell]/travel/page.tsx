@@ -1677,6 +1677,8 @@ const StealthControls: React.FC<{
             },
             { revision, refetch: false, userRecovery: data.userRecovery },
           );
+        } else if (data.userRecovery) {
+          await updateUser(data, { revision, refetch: false });
         }
       },
       onSettled: () => {
@@ -1718,6 +1720,8 @@ const StealthControls: React.FC<{
             ),
             utils.travel.getSectorData.invalidate(),
           ]);
+        } else if (data.userRecovery) {
+          void updateUser(data, { revision, refetch: false });
         }
       },
       onSettled: () => {

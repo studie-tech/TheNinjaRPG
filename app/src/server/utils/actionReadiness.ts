@@ -1,7 +1,10 @@
 import * as Sentry from "@sentry/nextjs";
 import { and, eq, isNull, type SQL, sql } from "drizzle-orm";
 import { after } from "next/server";
-import { getActionRecoveryUpdate } from "@/deltas/actionReadiness";
+import {
+  getActionRecoveryActivity,
+  getActionRecoveryUpdate,
+} from "@/deltas/actionReadiness";
 import { CombatStatNames, MasteryNames, REGEN_SECONDS } from "@/drizzle/constants";
 import { type GameSetting, type UserData, userData } from "@/drizzle/schema";
 import {
@@ -26,7 +29,8 @@ import {
 import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { getUserRegenerationGain } from "@/server/utils/regeneration";
 import { getStrucBoost } from "@/utils/village";
-import type { UserRecovery } from "@/validators/base";
+import type { UserRecovery, UserRecoveryActivity } from "@/validators/base";
+import type { UserCachePatch } from "@/validators/userCache";
 
 /** Recovery columns and predicates composed into an endpoint's existing account write. */
 export type ActionReadinessWrite = {
@@ -284,6 +288,7 @@ export const prepareActionReadiness = <T extends UserData>(
  * Call only after the account write succeeds; deferred work adds no database phase to the mutation response.
  * Supply the client for a full committed plan to publish training logs and end hospital activity.
  * Notice-only wrappers omit it when the inner action already publishes recovery.
+ * Supply final activity when it differs from the saved actor or the action's public patch.
  */
 export const actionReadinessResponse = <T extends { message?: string }>(
   response: T,
@@ -295,6 +300,7 @@ export const actionReadinessResponse = <T extends { message?: string }>(
     | Pick<ActionReadiness, "notice">
     | undefined,
   client?: DrizzleClient,
+  activity?: UserRecoveryActivity,
 ): T & { actionNotice?: string; userRecovery?: UserRecovery } => {
   if (!readiness?.notice) return response;
   if (client && "initial" in readiness && "user" in readiness) {
@@ -332,6 +338,24 @@ export const actionReadinessResponse = <T extends { message?: string }>(
           : `${response.message} ${readiness.notice}`
         : readiness.notice,
     actionNotice: readiness.notice,
-    ...("userRecovery" in readiness ? { userRecovery: readiness.userRecovery } : {}),
+    ...("userRecovery" in readiness
+      ? {
+          userRecovery: readiness.userRecovery
+            ? {
+                ...readiness.userRecovery,
+                activity: getActionRecoveryActivity(
+                  readiness.user,
+                  "userPatch" in response
+                    ? (response.userPatch as UserCachePatch | undefined)
+                    : undefined,
+                  activity ??
+                    ("userRecovery" in response
+                      ? (response.userRecovery as UserRecovery | undefined)?.activity
+                      : undefined),
+                ),
+              }
+            : undefined,
+        }
+      : {}),
   };
 };

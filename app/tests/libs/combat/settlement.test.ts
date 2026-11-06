@@ -386,14 +386,15 @@ describeWithDatabase("CAS combat settlement", () => {
       const after = (await database.query.userData.findFirst({ where: eq(userData.userId, "counter-player") }))!;
       expect(after.pveFights).toBe(11);
       expect(result.profileUpdate?.userPatch.pveFights).toBe(after.pveFights);
-      expect(result.profileUpdate?.userPatch.curEnergy).toBeCloseTo(after.curEnergy, 4);
+      // MySQL fractional-tick division rounds at four decimal places.
+      expect(result.profileUpdate?.userPatch.curEnergy).toBeCloseTo(after.curEnergy, 3);
       await updateUserCache(client, key, (user) => combatProfilePatch(user, result.profileUpdate!), {
         revision: prepareUserUpdate(client, key), delta: result.profileUpdate!.userDelta,
       });
       const cached = client.getQueryData<{ userData: typeof initial }>(key)!.userData;
       expect(cached).toMatchObject({ status: "AWAKE", battleId: null, pveFights: after.pveFights,
         money: after.money, experience: after.experience, earnedExperience: after.earnedExperience });
-      expect(cached.curEnergy).toBeCloseTo(after.curEnergy, 4);
+      expect(cached.curEnergy).toBeCloseTo(after.curEnergy, 3);
       expect(cached.regenAt.getTime()).toBe(after.regenAt.getTime());
       expect(client.getQueryState(key)?.isInvalidated).toBe(false);
       expect(reads).toBe(0);

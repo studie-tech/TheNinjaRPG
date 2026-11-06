@@ -26,7 +26,7 @@ const setup = (status: "ASLEEP" | "HOSPITALIZED" = "ASLEEP") => {
     close: () => { unsubscribe(); client.clear(); } };
 };
 
-const recovery = { userId: "actor", userPatch: {
+const recovery = { userId: "actor", activity: { status: "AWAKE" as const, battleId: null }, userPatch: {
   status: "AWAKE" as const, curHealth: 100, curChakra: 90, curStamina: 80, curEnergy: 70,
 } };
 
@@ -61,7 +61,7 @@ it("retains nested hospital payment/pool results and committed recovery on faile
   } finally { test.close(); }
 });
 
-it.each(["feature", "revision", "identity"] as const)("preserves unknown %s state without an extra read or unsafe partial patch", async (reason) => {
+it.each(["revision", "identity"] as const)("preserves unknown %s state without an extra read or unsafe partial patch", async (reason) => {
   const test = setup();
   try {
     const revision = prepareUserUpdate(test.client, key);
@@ -69,8 +69,8 @@ it.each(["feature", "revision", "identity"] as const)("preserves unknown %s stat
     const before = test.value();
     await updateUserCache(test.client, key, {
       success: true,
-      userPatch: reason === "feature" ? undefined : { status: "BATTLE", battleId: "battle" },
-      userDelta: reason === "feature" ? undefined : {},
+      userPatch: { status: "BATTLE", battleId: "battle" },
+      userDelta: {},
       userRecovery: reason === "identity" ? { ...recovery, userId: "another-user" } : recovery,
     }, { revision });
     expect(test.reads()).toBe(0);
@@ -92,5 +92,31 @@ it("applies known recovery and final action fields while leaving unmodelled bala
     expect(test.value()?.userData).toMatchObject({ status: "BATTLE", battleId: "battle",
       curHealth: 100, curChakra: 90, curStamina: 80, curEnergy: 70, money: 100, pveFights: 2 });
     expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+  } finally { test.close(); }
+});
+
+
+it.each(["AWAKE", "BATTLE", "TRAVEL", "QUEUED"] as const)("applies confirmed %s activity when feature fields are withheld", async (status) => {
+  const test = setup();
+  try {
+    const activity = { status, battleId: status === "BATTLE" ? "battle" : null };
+    expect(await updateUserCache(test.client, key, {
+      success: true, userPatch: undefined, userDelta: undefined,
+      userRecovery: { ...recovery, activity },
+    }, { revision: prepareUserUpdate(test.client, key) })).toBe(false);
+    expect(test.value()?.userData).toMatchObject({ ...activity, money: 100, pveFights: 2, curEnergy: 4 });
+    expect(test.reads()).toBe(0);
+    expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+  } finally { test.close(); }
+});
+
+it("applies committed waking independently of a rejected action cache guard", async () => {
+  const test = setup();
+  try {
+    expect(await updateUserCache(test.client, key, {
+      success: false, userPatch: {}, userDelta: {}, userExpected: { status: "TRAVEL" }, userRecovery: recovery,
+    }, { revision: prepareUserUpdate(test.client, key) })).toBe(false);
+    expect(test.value()?.userData).toMatchObject({ status: "AWAKE", battleId: null, money: 100, curEnergy: 4 });
+    expect(test.reads()).toBe(0);
   } finally { test.close(); }
 });

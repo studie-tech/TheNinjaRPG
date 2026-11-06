@@ -638,6 +638,7 @@ export const overworldAiRouter = createTRPCRouter({
           },
           readiness,
           ctx.drizzle,
+          claim.committedActivity,
         );
       }
 

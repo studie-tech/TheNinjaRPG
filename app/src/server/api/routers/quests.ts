@@ -325,6 +325,7 @@ import {
 } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
+import type { UserRecoveryActivity } from "@/validators/base";
 import {
   type InventoryQuantityChange,
   inventoryQuantityChangeSchema,
@@ -811,6 +812,7 @@ export const questsRouter = createTRPCRouter({
         },
         result.success ? readiness : undefined,
         ctx.drizzle,
+        result.success ? { status: user.status, battleId: user.battleId } : undefined,
       );
     }),
   abandon: protectedProcedure
@@ -1549,6 +1551,7 @@ export const questsRouter = createTRPCRouter({
         },
         readiness,
         ctx.drizzle,
+        claim.committedActivity,
       );
     }),
 
@@ -1786,6 +1789,7 @@ export const questsRouter = createTRPCRouter({
         },
         readiness,
         ctx.drizzle,
+        claim.committedActivity,
       );
     }),
   getPendingRewardChoices: protectedProcedure
@@ -2131,6 +2135,7 @@ export const questsRouter = createTRPCRouter({
         claimed,
         battleAttempted,
         battleUserUpdate,
+        committedActivity,
       } = await handleQuestConsequences(
         ctx.drizzle,
         user,
@@ -2174,6 +2179,7 @@ export const questsRouter = createTRPCRouter({
         },
         claimed ? readiness : undefined,
         ctx.drizzle,
+        committedActivity,
       );
     }),
 });
@@ -3648,6 +3654,7 @@ type CommitQuestObjectiveRewardsResult =
       rewardChoicePending: boolean;
       userDelta: UserDelta | undefined;
       userCacheEligible: boolean;
+      committedActivity?: UserRecoveryActivity;
       questCacheUpdate?: ReturnType<typeof getQuestRewardCacheUpdate>;
     }
   /** Resolved completion lost the CAS and the row is already completed (idempotent re-claim). */
@@ -3754,6 +3761,7 @@ export const commitQuestObjectiveRewards = async (info: {
           rewardChoicePending: false,
           userCacheEligible: false,
           userDelta: undefined,
+          committedActivity: helperClaim.committedActivity,
         }
       : { outcome: "state_changed" };
   }
@@ -3951,51 +3959,49 @@ export const commitQuestObjectiveRewards = async (info: {
     }
   }
 
-  const { notifications: postNotifications, claimed } = await handleQuestConsequences(
-    client,
-    user,
-    consequences,
-    notifications,
-    {
-      alwaysClaimUserState: true,
-      readiness: info.readiness,
-      claimUserState: claimManagedCompletion,
-      partyTrackers: trackers,
-      progressionUpdate: milestonePatch,
-      // Unresolved objectives have no completion CAS; guard their payout at the snapshot claim.
-      claimConditions: [
-        liveQuestCondition,
-        // Recheck earned progression and exam caps at the guarded account write.
-        ...(milestonePatch || rewards.reward_rank === "ELITE JONIN"
-          ? [
-              eq(userData.level, user.level),
-              eq(userData.rank, user.rank),
-              ...(rewards.reward_rank === "ELITE JONIN"
-                ? [
-                    gte(userData.offence, getUserCaps("JONIN").stats_cap),
-                    gte(userData.defence, getUserCaps("JONIN").stats_cap),
-                    ...(
-                      ["strength", "speed", "intelligence", "willpower"] as const
-                    ).map((stat) => gte(userData[stat], getUserCaps("JONIN").gens_cap)),
-                  ]
-                : []),
-            ]
-          : []),
-        ...(isolatedRun && !petTask
-          ? [
-              eq(userData.status, "BATTLE"),
-              isNull(userData.battleId),
-              isolatedRun.questId === userQuest?.questId ? undefined : sql`FALSE`,
-            ]
-          : []),
-        ...(!resolved && userQuest && userQuest.quest.questType !== "achievement"
-          ? [
-              sql`EXISTS (SELECT 1 FROM ${questHistory} WHERE ${questHistory.questId} = ${userQuest.questId} AND ${questHistory.userId} = ${userId} AND ${questHistory.completed} = 0 AND ${questHistory.endAt} IS NULL)`,
-            ]
-          : []),
-      ],
-    },
-  );
+  const {
+    notifications: postNotifications,
+    claimed,
+    committedActivity,
+  } = await handleQuestConsequences(client, user, consequences, notifications, {
+    alwaysClaimUserState: true,
+    readiness: info.readiness,
+    claimUserState: claimManagedCompletion,
+    partyTrackers: trackers,
+    progressionUpdate: milestonePatch,
+    // Unresolved objectives have no completion CAS; guard their payout at the snapshot claim.
+    claimConditions: [
+      liveQuestCondition,
+      // Recheck earned progression and exam caps at the guarded account write.
+      ...(milestonePatch || rewards.reward_rank === "ELITE JONIN"
+        ? [
+            eq(userData.level, user.level),
+            eq(userData.rank, user.rank),
+            ...(rewards.reward_rank === "ELITE JONIN"
+              ? [
+                  gte(userData.offence, getUserCaps("JONIN").stats_cap),
+                  gte(userData.defence, getUserCaps("JONIN").stats_cap),
+                  ...(["strength", "speed", "intelligence", "willpower"] as const).map(
+                    (stat) => gte(userData[stat], getUserCaps("JONIN").gens_cap),
+                  ),
+                ]
+              : []),
+          ]
+        : []),
+      ...(isolatedRun && !petTask
+        ? [
+            eq(userData.status, "BATTLE"),
+            isNull(userData.battleId),
+            isolatedRun.questId === userQuest?.questId ? undefined : sql`FALSE`,
+          ]
+        : []),
+      ...(!resolved && userQuest && userQuest.quest.questType !== "achievement"
+        ? [
+            sql`EXISTS (SELECT 1 FROM ${questHistory} WHERE ${questHistory.questId} = ${userQuest.questId} AND ${questHistory.userId} = ${userId} AND ${questHistory.completed} = 0 AND ${questHistory.endAt} IS NULL)`,
+          ]
+        : []),
+    ],
+  });
 
   if (!claimed) {
     if (claimManagedCompletion && userQuest) {
@@ -4247,6 +4253,7 @@ export const commitQuestObjectiveRewards = async (info: {
     rewardChoicePending: !!rewardChoice,
     questCacheUpdate,
     userDelta,
+    committedActivity,
     userCacheEligible:
       userCacheEligible &&
       (!needsConfirmedSkillPoints || confirmedSkillPoints !== undefined) &&
@@ -4283,6 +4290,8 @@ const executeClaimedQuestConsequences = async ({
 }) => {
   user.updatedAt = claimedAt;
   let battleUserUpdate: Pick<UserDeltaResponse, "userPatch" | "userDelta"> | undefined;
+  let questActivity: UserRecoveryActivity | undefined;
+  let battleActivity: UserRecoveryActivity | undefined;
   const collectedItems = collected.flatMap(({ ids }) => ids);
   // Combat preloads trackers without the live party relation; both carry receipt ownership.
   const partyQuestId =
@@ -4373,6 +4382,10 @@ const executeClaimedQuestConsequences = async ({
                   continue;
                 }
                 Object.assign(user, assigned);
+                questActivity = {
+                  status: assigned.status,
+                  battleId: assigned.battleId,
+                };
               } else {
                 await upsertQuestEntry(client, user, nextQuest, "quest_objective");
               }
@@ -4398,6 +4411,8 @@ const executeClaimedQuestConsequences = async ({
                 ambush: opponent,
               });
               if (!result.success) notifications.push(result.message);
+              else if (result.battleId)
+                battleActivity = { status: "BATTLE", battleId: result.battleId };
               return;
             }
             const result = await initiateBattle(
@@ -4431,17 +4446,21 @@ const executeClaimedQuestConsequences = async ({
               opponent.scaleGains ?? 1,
             );
             if (!result.success) notifications.push(result.message);
-            else if (result.userPatch && !result.requiresUserRefresh)
-              battleUserUpdate = {
-                userPatch: result.userPatch,
-                userDelta: result.userDelta,
-              };
+            else {
+              battleActivity = { status: "BATTLE", battleId: result.battleId };
+              if (result.userPatch && !result.requiresUserRefresh)
+                battleUserUpdate = {
+                  userPatch: result.userPatch,
+                  userDelta: result.userDelta,
+                };
+            }
           })()
         : Promise.resolve(),
     ],
   ]);
   return {
     battleUserUpdate,
+    committedActivity: battleActivity ?? questActivity,
     itemsRemoved: (await itemRemoval).rowsAffected === removedUserItemIds.length,
   };
 };
@@ -4478,6 +4497,7 @@ export const handleQuestConsequences = async (
   battleAttempted: boolean;
   inventoryChanges?: InventoryQuantityChange[];
   battleUserUpdate?: Pick<UserDeltaResponse, "userPatch" | "userDelta">;
+  committedActivity?: UserRecoveryActivity;
 }> => {
   // Quests reset
   const resetQuests = consequences.filter(
@@ -4611,17 +4631,18 @@ export const handleQuestConsequences = async (
         });
         notifications.push("Quest team progress will update on your next request.");
       }
-      const { battleUserUpdate, itemsRemoved } = await executeClaimedQuestConsequences({
-        client,
-        user,
-        claimedAt: claimResult.claimedAt,
-        notifications,
-        startedQuestIds,
-        endedQuestIds,
-        collected,
-        removedUserItemIds,
-        opponent,
-      });
+      const { battleUserUpdate, itemsRemoved, committedActivity } =
+        await executeClaimedQuestConsequences({
+          client,
+          user,
+          claimedAt: claimResult.claimedAt,
+          notifications,
+          startedQuestIds,
+          endedQuestIds,
+          collected,
+          removedUserItemIds,
+          opponent,
+        });
 
       return {
         notifications,
@@ -4634,6 +4655,7 @@ export const handleQuestConsequences = async (
         ),
         battleAttempted: !!opponent,
         ...(battleUserUpdate ? { battleUserUpdate } : {}),
+        ...(committedActivity ? { committedActivity } : {}),
       };
     }
   }

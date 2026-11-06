@@ -6,7 +6,7 @@ import { getPublicQuestUser } from "@/libs/quest";
 import { getTimedRegeneration } from "@/libs/timedBuffs";
 import { regenerationBuffs } from "@/libs/titles";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import type { UserRecovery } from "@/validators/base";
+import type { UserRecovery, UserRecoveryActivity } from "@/validators/base";
 import type { UserCachePatch } from "@/validators/userCache";
 
 /**
@@ -21,7 +21,10 @@ export const getActionRecoveryUpdate = (
   settings: GameSetting[],
   now: Date,
 ): UserRecovery => {
-  const recovery = { userId: initial.userId };
+  const recovery = {
+    userId: initial.userId,
+    activity: getActionRecoveryActivity(user),
+  };
   const related = user as NonNullable<UserWithRelations> & MasteryBuffUser;
   if (
     related.regenerationWithoutTimedBuffs !== undefined &&
@@ -110,3 +113,20 @@ export const getActionRecoveryUpdate = (
     },
   };
 };
+
+/** Project the committed activity independently of withheld balances, inventory or quest effects. */
+export const getActionRecoveryActivity = (
+  user: Pick<UserData, "status" | "battleId" | "travelFinishAt">,
+  patch?: UserCachePatch,
+  activity?: UserRecoveryActivity,
+): UserRecoveryActivity => ({
+  status: user.status,
+  battleId: user.battleId,
+  travelFinishAt: user.travelFinishAt,
+  ...(patch?.status !== undefined ? { status: patch.status } : {}),
+  ...(patch?.battleId !== undefined ? { battleId: patch.battleId } : {}),
+  ...(patch?.travelFinishAt !== undefined
+    ? { travelFinishAt: patch.travelFinishAt }
+    : {}),
+  ...activity,
+});

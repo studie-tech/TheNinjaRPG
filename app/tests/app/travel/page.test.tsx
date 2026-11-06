@@ -18,11 +18,13 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as TravelPosition from "@/layout/TravelPositionLabel";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { useGameMenu } from "@/libs/menus";
+import type { BaseServerResponse } from "@/validators/base";
 
 const sensoryCapture = vi.spyOn(client, "api" as never);
+const sensoryEndpoint = { useMutation: (_options: unknown) => ({ mutate: vi.fn(), isPending: false }) };
 Object.assign(sensoryCapture, {
   stealth: {
-    useSensory: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    useSensory: sensoryEndpoint,
   },
 });
 const dynamicSpy = vi.spyOn(dynamic, "default").mockReturnValue((() => null) as never);
@@ -237,6 +239,58 @@ it("keeps Quick Travel disabled for the current sector", async () => {
   ).toBe(true);
   expect(mutation.mutate).not.toHaveBeenCalled();
 });
+
+for (const procedure of ["activateStealth", "useSensory"] as const)
+  it.each([true, false])(`projects confirmed recovery for ${procedure} without action data (success=%p)`, async (success) => {
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const key = ["profile", "actor"];
+    actor.status = "ASLEEP";
+    const initial = { userData: { ...actor, curHealth: 5, curChakra: 6, curStamina: 7 } };
+    cache.setQueryData(key, initial);
+    const read = vi.fn(async () => initial);
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
+    vi.spyOn(UserContext, "useRequiredUserDataSelector").mockReturnValue({
+      data: actor,
+      timeDiff: 0,
+      prepareUserUpdate: () => prepareUserUpdate(cache, key),
+      updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) => updateUserCache(cache, key, patch, options),
+    } as never);
+    let callbacks: {
+      onMutate: () => number | undefined;
+      onSuccess: (result: BaseServerResponse, input: undefined, revision: number | undefined) => void | Promise<void>;
+    };
+    Object.assign(client.api, {
+      stealth: new Proxy({}, { get: (_target, name) => ({
+        useMutation: (options: typeof callbacks) => {
+          if (name === procedure) callbacks = options;
+          return mutation;
+        },
+      }) }),
+    });
+    if (procedure === "useSensory")
+      vi.spyOn(sensoryEndpoint, "useMutation").mockImplementation((options) => {
+        callbacks = options as typeof callbacks;
+        return mutation;
+      });
+    try {
+      render(<TravelPage />);
+      await act(async () => {
+        await callbacks.onSuccess({ success, message: "Recovery confirmed", userRecovery: {
+          userId: String(actor.userId), activity: { status: "AWAKE" },
+          userPatch: { status: "AWAKE", curHealth: 100, curChakra: 100, curStamina: 100 },
+        } }, undefined, callbacks.onMutate());
+      });
+      expect(cache.getQueryData(key)).toMatchObject({ userData: {
+        status: "AWAKE", curHealth: 5, curChakra: 6, curStamina: 7,
+      } });
+      expect(read).not.toHaveBeenCalled();
+      expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+    } finally {
+      unsubscribe();
+      cache.clear();
+    }
+  });
 
 for (const outcome of ["transport error", "success", "rejected"] as const)
   it.each([

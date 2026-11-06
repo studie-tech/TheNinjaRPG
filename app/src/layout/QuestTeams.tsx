@@ -56,7 +56,7 @@ export const QuestTeams = ({
     revision: number | undefined,
   ) => {
     setMessage(result.success ? "" : result.message);
-    if (!result.success && result.actionNotice) {
+    if (!result.success && (result.actionNotice || result.userRecovery)) {
       showActionReadinessToast(result);
       await updateUser(result, { revision, refetch: false });
     }

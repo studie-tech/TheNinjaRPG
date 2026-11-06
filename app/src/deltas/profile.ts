@@ -89,6 +89,15 @@ export type UserUpdateOptions = {
   ) => NavBarDropdownLink[] | undefined;
 };
 
+/** Apply only a confirmed recovery activity when the action's other cache effects are unavailable. */
+export const applyUserRecoveryActivity = (
+  current: UserCache,
+  recovery: UserRecovery | undefined,
+): UserCache | undefined => {
+  if (!recovery?.activity || current.userData?.userId !== recovery.userId) return;
+  return applyUserChanges(current, recovery.activity);
+};
+
 /**
  * Apply confirmed fields, numeric deltas and scalar guards, then refresh derived navigation
  * and notices. Return undefined when missing data, mismatched guards or unsafe relation
