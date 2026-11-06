@@ -37,6 +37,7 @@ const setup = () => {
     pendingCrossRef: { current: null },
     pendingWorldTargetRef: { current: null },
     publishSurroundingsRef: { current: false },
+    publishSurroundings: () => undefined,
     userRef: { current: { sector: 1 } },
     snapMovementPosition: vi.fn(),
     setTarget: vi.fn(),

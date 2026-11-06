@@ -470,7 +470,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
       // Check for quest updates
       // The tutorial claims its own quest rewards from the assistant panel
-      if (data.updatedQuestIds && !isTutorialActive(userData)) {
+      if (data.updatedQuestIds?.length && !isTutorialActive(userData)) {
         // Show popup for consecutive quests
         const questId = findConsecutiveQuestId(
           userData?.userQuests,

@@ -123,7 +123,7 @@ it.each([false, true])("applies the hunting response without refetching the acto
   expect(test.mutate).toHaveBeenCalledWith({ id: "session", originSocketId: "1.1" });
   expect(test.reads[0]).not.toHaveBeenCalled();
   expect(test.profile(1).userData).toMatchObject({ status: "BATTLE", battleId: "hunt" });
-  expect(routing.pushToCombat).toHaveBeenCalledTimes(1);
+  expect(routing.pushToCombat).toHaveBeenCalledWith(expect.anything(), "hunt");
 });
 
 it.each([false, true])("recovers known hunting admission without reading the profile (event after failure: %s)", async (eventAfterResponse) => {

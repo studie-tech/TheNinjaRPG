@@ -6,7 +6,7 @@ import { KageDefense } from "@/layout/KageDefense";
 import { pushToCombat } from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
 
-type Options = { onSuccess: (result: object) => Promise<void> };
+type Options = { onSuccess: (result: object, input?: undefined, revision?: number) => Promise<void> };
 
 const updateUser = vi.fn(async () => undefined);
 const push = vi.fn();
@@ -46,14 +46,10 @@ afterEach(() => {
 
 const battleStart = { success: true, message: "Started", battleId: "kage-battle" };
 
-it("stamps the battle patch and navigates through the shared battle entry", async () => {
+it("applies the battle response and navigates through the shared battle entry", async () => {
   render(<KageDefense user={{ userId: "kage", villageId: "village" } as never} />);
-  await options.onSuccess(battleStart);
-  expect(updateUser).toHaveBeenCalledWith({
-    status: "BATTLE",
-    battleId: "kage-battle",
-    updatedAt: expect.any(Date),
-  });
+  await options.onSuccess(battleStart, undefined, 7);
+  expect(updateUser).toHaveBeenCalledWith(battleStart, { revision: 7, refetch: false });
   expect(push).toHaveBeenCalledTimes(1);
 });
 
