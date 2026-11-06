@@ -19,6 +19,7 @@ import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 import { WarMercenaries } from "@/layout/WarMercenaries";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import {
   getObjectiveWarDeadline,
   getWarEspionage,
@@ -228,7 +229,22 @@ export const ObjectiveWarPanel = ({
           role={feedback.success ? "status" : "alert"}
         >
           <AlertDescription>
-            <p className="text-foreground">{feedback.message}</p>
+            <p className="text-foreground">
+              {feedback.message}
+              {!feedback.success &&
+                feedback.message === actionStatusMessage("HOSPITALIZED") && (
+                  <>
+                    {" "}
+                    <Link
+                      href="/hospital"
+                      onNavigate={onNavigate}
+                      className="font-medium underline underline-offset-4"
+                    >
+                      Go to hospital
+                    </Link>
+                  </>
+                )}
+            </p>
           </AlertDescription>
         </Alert>
       )}

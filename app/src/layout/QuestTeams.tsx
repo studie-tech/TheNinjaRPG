@@ -15,6 +15,7 @@ import Modal from "@/layout/Modal";
 import { PartyRoster } from "@/layout/PartyRoster";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -244,6 +245,17 @@ export const QuestTeams = ({
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm"
         >
           {message || error?.message}
+          {(message || error?.message) === actionStatusMessage("HOSPITALIZED") && (
+            <>
+              {" "}
+              <Link
+                href="/hospital"
+                className="font-medium underline underline-offset-4"
+              >
+                Go to hospital
+              </Link>
+            </>
+          )}
         </p>
       )}
       {!current && questId && (

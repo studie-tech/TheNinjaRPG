@@ -12,7 +12,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { SearchSelect } from "@/layout/SearchSelect";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
-import { canAttemptAwakeAction } from "@/libs/actionReadiness";
+import { actionStatusMessage, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getHuntingRank, getHuntingRankProgress } from "@/libs/hunting";
 import {
   huntingAllowance,
@@ -162,6 +162,19 @@ export function HuntingBoard({
         {(message || board.error) && (
           <p role="status" className="rounded border p-3">
             {message || board.error?.message}
+            {(message || board.error?.message) ===
+              actionStatusMessage("HOSPITALIZED") &&
+              !(session && user?.status === "HOSPITALIZED") && (
+                <>
+                  {" "}
+                  <Link
+                    href="/hospital"
+                    className="font-medium underline underline-offset-4"
+                  >
+                    Go to hospital
+                  </Link>
+                </>
+              )}
           </p>
         )}
         {!sessionOnly && user && (

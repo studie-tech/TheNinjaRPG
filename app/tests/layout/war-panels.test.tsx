@@ -16,6 +16,7 @@ import { ObjectiveWarPanel } from "@/layout/ObjectiveWarPanel";
 import { WarDashboardNotices } from "@/layout/WarDashboardNotices";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { WarMercenaries } from "@/layout/WarMercenaries";
+import { actionStatusMessage, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import type { UserWithRelations } from "@/routers/profile";
 import * as routing from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
@@ -636,6 +637,7 @@ describe("war field objectives", () => {
       start.respond({ success: false, message: "Return to your village first" }),
     );
     expect(view.getByRole("alert").textContent).toBe("Return to your village first");
+    expect(view.queryByRole("link", { name: "Go to hospital" })).toBeNull();
     expect(invalidateObjective).toHaveBeenCalledWith({ warId: "war-1" });
     expect(invalidateWars).toHaveBeenCalledTimes(1);
     expect(invalidateUser).not.toHaveBeenCalled();
@@ -647,6 +649,23 @@ describe("war field objectives", () => {
       (view.getByRole("button", { name: "Start sabotage" }) as HTMLButtonElement)
         .disabled,
     ).toBe(false);
+  });
+
+  it("offers hospital recovery beside a rejected mission and clears it on retry", async () => {
+    user.status = "HOSPITALIZED";
+    const view = mount(<ObjectiveWarPanel warId="war-1" />);
+    openTab(view, "Missions");
+    fireEvent.click(view.getByRole("button", { name: "Start sabotage" }));
+    await act(() => start.respond({ success: false, message: actionStatusMessage("HOSPITALIZED") }));
+    expect(view.getByRole("alert").textContent).toContain(actionStatusMessage("HOSPITALIZED"));
+    expect(view.getByRole("link", { name: "Go to hospital" }).getAttribute("href")).toBe("/hospital");
+    expect((view.getByRole("button", { name: "Start sabotage" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(invalidateUser).not.toHaveBeenCalled();
+    fireEvent.click(view.getByRole("button", { name: "Start sabotage" }));
+    expect(view.queryByRole("link", { name: "Go to hospital" })).toBeNull();
+    await act(() => start.respond({ success: false, message: `Return to your village first ${AUTO_WAKE_MESSAGE}`, actionNotice: AUTO_WAKE_MESSAGE }));
+    expect(view.getByRole("alert").textContent).toBe(`Return to your village first ${AUTO_WAKE_MESSAGE}`);
+    expect(view.queryByRole("link", { name: "Go to hospital" })).toBeNull();
   });
 
   it("retains cancellation after a war ends and blocks starting a second concurrent mission", async () => {
