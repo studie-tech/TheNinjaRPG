@@ -784,11 +784,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Rarity</b>: {capitalizeFirstLetter(item.rarity)}
                 </p>
               )}
-              {"maxImbueNumber" in item && item.maxImbueNumber > 0 && (
-                <p>
-                  <b>Max Imbue Number</b>: {item.maxImbueNumber}
-                </p>
-              )}
+              {"canBeImbued" in item &&
+                item.canBeImbued &&
+                "maxImbueNumber" in item &&
+                item.maxImbueNumber > 0 && (
+                  <p>
+                    <b>Max Imbue Number</b>: {item.maxImbueNumber}
+                  </p>
+                )}
               {"canBeImbued" in item && item.canBeImbued && (
                 <p>
                   <b>Can be Imbued</b>: {item.canBeImbued ? "yes" : "no"}
