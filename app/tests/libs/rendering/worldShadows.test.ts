@@ -912,6 +912,47 @@ describe("physical world lighting", () => {
     } finally {registration();f.dispose();for(const frame of frames)frame.destroy(false);atlas.destroy(true);source.dispose();}
   });
 
+  it.each([false, true])("samples the complete live-cell silhouette at every atlas row and column (instanced: %s)", async (instanced) => {
+    const f = fixture(instanced), source = materialSourceFixture();
+    const pixels = new Uint8Array(8 * 8 * 4);
+    for (let cell = 0; cell < 4; cell++) {
+      const x = (cell % 2) * 4 + 1, y = Math.floor(cell / 2) * 4 + 1;
+      pixels[(y * 8 + x) * 4 + 3] = 255;
+    }
+    const atlas = new Texture({ source: new BufferImageSource({ resource: pixels, width: 8, height: 8 }) });
+    const frames = Array.from({ length: 4 }, (_, cell) => new Texture({ source: atlas.source,
+      frame: new Rectangle((cell % 2) * 4, Math.floor(cell / 2) * 4, 4, 4) }));
+    const sprite = new Sprite(source.texture);
+    sprite.position.set(40, 40); sprite.scale.set(5, -5); f.parent.addChild(sprite);
+    const registration = f.shadows.register(sprite, { id: `cell-uv-${instanced}`, kind: "character",
+      image: `cell-uv-portrait-${instanced}`, size: 20, x: 40, y: 40, groundY: 20, shadowCaster: "character" });
+    try {
+      await registration.ready;
+      for (const frame of frames) {
+        sprite.texture = frame;
+        f.shadows.update(worldSunlight(), viewport);
+        const layer = f.render.mock.calls.find(([call]) => call.container.children.some((child: Mesh) => !!child.shader?.resources.uMaterial0))![0].container;
+        const mesh = layer.children[0] as Mesh<Geometry, Shader>;
+        const buffer = mesh.geometry.getBuffer(instanced ? "aUVRect" : "aUV").data;
+        const material = mesh.shader!.resources.uMaterial0 as BufferImageSource;
+        const u = Number(buffer[instanced ? 8 : 2]), v = Number(buffer[instanced ? 9 : 3]);
+        const spanU = instanced ? Number(buffer[10]) : Number(buffer[22]) - u;
+        const spanV = instanced ? Number(buffer[11]) : Number(buffer[43]) - v;
+        expect(u).toBeCloseTo(0); expect(v).toBeCloseTo(0);
+        expect(spanU).toBeCloseTo(1); expect(spanV).toBeCloseTo(1);
+        expect(buffer[instanced ? 14 : 6]).toBeCloseTo(0);
+        expect(buffer[instanced ? 15 : 7]).toBeCloseTo(1);
+        expect(buffer[instanced ? 19 : 16]).toBeCloseTo(5);
+        // Sampling the lit quad must keep both a covered texel and transparent padding in place.
+        for (const [x, y, alpha] of [[1, 1, 255], [0, 0, 0], [3, 3, 0]] as const) {
+          const px = Math.min(3, Math.floor((u + (x + 0.5) / 4 * spanU) * 4));
+          const py = Math.min(3, Math.floor((v + (y + 0.5) / 4 * spanV) * 4));
+          expect((material.resource as Uint8Array)[(py * 4 + px) * 4 + 3]).toBe(alpha);
+        }
+      }
+    } finally { registration(); f.dispose(); for (const frame of frames) frame.destroy(false); atlas.destroy(true); source.dispose(); }
+  });
+
   it.each([false, true])("draws ground-cover receivers below fighters regardless of foot order (instanced: %s)", async (instanced) => {
     const f = fixture(instanced), source = materialSourceFixture();
     const fighter = new Sprite(source.texture), prop = new Sprite(source.texture);
