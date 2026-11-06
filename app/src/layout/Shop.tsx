@@ -1,74 +1,46 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  Check,
-  ChefHat,
-  CircleAlert,
-  Diamond,
-  FlaskConical,
-  Gem,
-  LayoutGrid,
-  Package,
-  Search,
-  Shield,
-  ShoppingBag,
-  Sofa,
-  Sparkles,
-  Sword,
-  Tag,
-  Ticket,
-} from "lucide-react";
-import {
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
-  useMemo,
-  useState,
-} from "react";
+"use client";
+
+import { Search } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ItemTypes, TUTORIAL_ITEM_ID } from "@/drizzle/constants";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { TUTORIAL_ITEM_ID } from "@/drizzle/constants";
 import type { Item, ItemType } from "@/drizzle/schema";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import ContentBox from "@/layout/ContentBox";
-import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
 import {
   getShopFilter,
   ItemShopFiltering,
   useShopFiltering,
 } from "@/layout/ItemShopFiltering";
-import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal from "@/layout/Modal";
-import { UncontrolledSliderField } from "@/layout/SliderField";
-import { useInfinitePagination } from "@/libs/pagination";
+import { ShopInspector } from "@/layout/shop/ShopInspector";
+import { ShopItemCard } from "@/layout/shop/ShopItemCard";
 import { cn } from "@/libs/shadui";
+import type { ShopCurrency, ShopSort } from "@/libs/shop";
 import {
-  getMaxItemShopPurchaseQuantity,
   getShopDiscounts,
-  getShopStackPrice,
   isItemAvailableInStore,
+  missingForPrices,
+  SHOP_SORTS,
   shopItemDiscountFactor,
+  shopItemPrices,
+  shopTypeChips,
+  sortShopItems,
 } from "@/libs/shop";
-import { showMutationToast } from "@/libs/toast";
 import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake, usePublicPathname } from "@/utils/routing";
-import { useUserData } from "@/utils/UserContext";
 
-/** First-page catalog size; further rows load through the existing infinite-query cursor. */
-const SHOP_CATALOG_PAGE_SIZE = 30;
+/** Catalog rows per request; the whole catalog loads so the type chips can count it. */
+const SHOP_CATALOG_PAGE_SIZE = 100;
 
 /** Optional overrides for the catalog UI (e.g. black-market reputation vs silver). */
 export interface ShopCatalogOverrides {
-  heroTitle?: string;
-  heroDescription?: string;
-  heroBadge?: string;
-  searchId?: string;
-  /** `false` omits the catalog list wrapper id; string overrides. Default: tutorial-itemshop when not `eventItems`. */
+  /** `false` omits the catalog list id; string overrides. Default: tutorial-itemshop when not `eventItems`. */
   listId?: string | false;
   filterTriggerId?: string;
   /** User-facing Seichi silver wording (`silver` on black market; default village: seichi). */
@@ -77,226 +49,43 @@ export interface ShopCatalogOverrides {
   headerExtra?: ReactNode;
 }
 
-interface ShopProps {
-  userData: NonNullable<UserWithRelations>;
-  defaultType: ItemType;
-  restrictTypes?: ItemType[];
-  eventItems?: boolean;
-  title?: string;
-  image?: string;
-  subtitle?: string;
-  defaultBackHref?: string;
-  initialBreak?: boolean;
-  minCost?: number;
-  minRepsCost?: number;
-  minSeichiSilverCost?: number;
-  catalog?: ShopCatalogOverrides;
-}
-
-const SILVER_COPY = {
-  seichi: {
-    catalog: "seichi",
-    purchase: "seichi silver",
-    wallet: "Seichi Silver:",
-  },
-  silver: {
-    catalog: "silver",
-    purchase: "silver",
-    wallet: "Silver:",
-  },
-} as const;
-
-const SHOP_ITEM_TYPE_TAB_ICON: Partial<Record<ItemType, LucideIcon>> = {
-  WEAPON: Sword,
-  CONSUMABLE: FlaskConical,
-  ARMOR: Shield,
-  ACCESSORY: Sparkles,
-  MATERIAL: Package,
-  COOKING: ChefHat,
-  MEAL: ChefHat,
-  FURNITURE: Sofa,
-  KEYSTONE: Gem,
-  CRYSTAL: Diamond,
-};
-
-const SHOP_ITEM_TYPE_TAB_HINT: Record<ItemType, string> = {
-  WEAPON: "Weapons — damage tags, stat scaling, and battle usage vary by piece.",
-  CONSUMABLE: "Consumables — scrolls, pills, and one-off tools for combat and travel.",
-  ARMOR: "Armor — defensive layers and resistances for your build.",
-  ACCESSORY: "Accessories — rings, charms, and extras that tweak your kit.",
-  MATERIAL: "Materials — crafting and upgrade components.",
-  COOKING: "Cooking — ingredients and prepared foods for storage.",
-  MEAL: "Meals — cooked food with a timed effect.",
-  FURNITURE: "Furniture — painted props to place and arrange in your residence.",
-  KEYSTONE: "Keystones — slot upgrades and build-defining modifiers.",
-  CRYSTAL: "Crystals — special slot items and enhancements.",
-  OTHER: "Other — miscellaneous goods in stock.",
-};
-
-const SHOP_ITEM_TYPE_TAB_LABEL: Record<ItemType, string> = {
-  WEAPON: "Weapon",
-  CONSUMABLE: "Consumable",
-  ARMOR: "Armor",
-  ACCESSORY: "Accessory",
-  MATERIAL: "Material",
-  COOKING: "Cooking",
-  MEAL: "Meals",
-  FURNITURE: "Furniture",
-  KEYSTONE: "Keystone",
-  CRYSTAL: "Crystal",
-  OTHER: "Other",
-};
-
-function categoryTabIcon(type: ItemType) {
-  const cls = "h-4 w-4 shrink-0 opacity-90";
-  const Icon = SHOP_ITEM_TYPE_TAB_ICON[type] ?? LayoutGrid;
-  return <Icon className={cls} />;
-}
-
-function ShopCatalogCard({
-  item,
-  selected,
-  onSelect,
-  previewFactor,
-  canAfford,
-  seichiCatalogWord,
-}: {
-  item: Item;
-  selected: boolean;
-  onSelect: () => void;
-  previewFactor: number;
-  canAfford: boolean;
-  seichiCatalogWord: string;
-}) {
-  const ryo = item.cost > 0 ? Math.ceil(item.cost * previewFactor) : null;
-  const lineParts = [
-    ryo !== null ? `${ryo.toLocaleString()} ryo` : null,
-    item.repsCost > 0 ? `${item.repsCost.toLocaleString()} rep` : null,
-    item.seichiSilverCost > 0
-      ? `${item.seichiSilverCost.toLocaleString()} ${seichiCatalogWord}`
-      : null,
-  ].filter(Boolean);
-
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-card text-center shadow-sm transition-colors sm:rounded-xl",
-        selected ? "border-primary bg-muted/40" : "border-border hover:bg-muted/30",
-      )}
-    >
-      <div className="flex shrink-0 items-center justify-center px-1.5 pt-1.5 pb-1 sm:px-3 sm:pt-3 sm:pb-2">
-        <div className="relative aspect-square size-16 shrink-0 overflow-hidden rounded border border-border/70 bg-muted/20 sm:size-28 sm:rounded-md lg:size-32">
-          <ContentImage
-            image={item.image}
-            alt={item.name}
-            rarity={item.rarity ?? undefined}
-            hideBorder
-            className="h-full max-h-full w-full max-w-full object-contain"
-          />
-        </div>
-      </div>
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-1 border-border border-t px-1.5 pt-1.5 pb-2 sm:px-2.5 sm:pt-2.5 sm:pb-3">
-        <div className="min-h-0 min-w-0 flex-1 text-balance">
-          <p className="break-words font-semibold text-[11px] leading-tight sm:text-sm">
-            {item.name}
-          </p>
-          {lineParts.length > 0 ? (
-            <p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">
-              {lineParts.join(" · ")}
-            </p>
-          ) : (
-            <p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">
-              Tap for details
-            </p>
-          )}
-        </div>
-        <div
-          className={cn(
-            "-mx-1.5 flex shrink-0 items-center justify-center gap-0.5 rounded px-1.5 py-0.5 font-medium text-[9px] sm:-mx-2.5 sm:gap-1 sm:rounded-md sm:px-2.5 sm:py-1 sm:text-[11px]",
-            canAfford
-              ? "bg-emerald-500/15 text-emerald-900 ring-1 ring-emerald-600/30 ring-inset dark:bg-emerald-500/20 dark:text-emerald-50 dark:ring-emerald-400/35"
-              : "bg-destructive/10 text-destructive",
-          )}
-        >
-          {canAfford ? (
-            <>
-              <Check
-                className="h-2.5 w-2.5 shrink-0 opacity-90 sm:h-3 sm:w-3"
-                aria-hidden
-              />
-              <span>Afford</span>
-            </>
-          ) : (
-            <>
-              <CircleAlert
-                className="h-2.5 w-2.5 shrink-0 opacity-90 sm:h-3 sm:w-3"
-                aria-hidden
-              />
-              <span>Can't afford</span>
-            </>
-          )}
-        </div>
-      </div>
-    </button>
-  );
-}
-
+/**
+ * A shop catalog laid out like the Items page: search and sort, type chips with counts and an
+ * Affordable chip, item cards with their price, and the picked item's inspector beside the list
+ * (a bottom sheet on narrow screens). The village Item Shop, Souvenirs and Black Market share it.
+ */
 const Shop: React.FC<ShopProps> = (props) => {
   const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost, catalog } =
     props;
-
-  const { prepareUserUpdate, updateUser } = useUserData();
   const silverCopy = SILVER_COPY[catalog?.silverLabel ?? "seichi"];
-
-  const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [item, setItem] = useState<Item | undefined>(undefined);
-  const [requestedStacksize, setStacksize] = useState<number>(1);
-  const [purchaseError, setPurchaseError] = useState<string | null>(null);
-  const allowance = api.item.getPurchaseAllowance.useQuery(
-    { id: item?.id ?? "" },
-    { enabled: isOpen && !!item, staleTime: 0, refetchInterval: 30_000 },
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const [chip, setChip] = useState<ItemType | "ALL" | "AFFORDABLE">(defaultType);
+  const [sort, setSort] = useLocalStorage<ShopSort>(
+    `shop:sort:${userData.userId}`,
+    "rarity",
   );
-  const maxPurchaseQuantity = Math.min(
-    item?.canStack ? getMaxItemShopPurchaseQuantity(item.stackSize) : 1,
-    allowance.data?.remaining ?? Number.POSITIVE_INFINITY,
-  );
-  const stacksize = Math.min(requestedStacksize, Math.max(1, maxPurchaseQuantity));
-  const canPurchaseQuantity =
-    !!allowance.data &&
-    !allowance.isError &&
-    stacksize >= 1 &&
-    stacksize <= maxPurchaseQuantity;
-  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const filteringState = useShopFiltering(defaultType);
+  const filteringState = useShopFiltering();
   const isAwake = useAwake(userData);
-  const itemTypeTabOptions = useMemo(
-    () => (props.restrictTypes?.length ? props.restrictTypes : ItemTypes) as ItemType[],
-    [props.restrictTypes],
-  );
+  const pathname = usePublicPathname();
+  const { currentStep, completeTutorialAction } = useTutorialStep();
+  // Shop also renders the souvenir and black-market catalogs; the tutorial pin
+  // belongs only on the page its step points at.
+  const isItemBuyStep =
+    isTutorialItemBuyStep(currentStep) &&
+    isTutorialPageMatch(currentStep?.page, pathname);
 
-  const utils = api.useUtils();
-
-  const hasBloodlineRoll = item?.effects.some(
-    (effect) => effect.type === "rollbloodline",
+  const { data: tutorialItem } = api.item.get.useQuery(
+    { id: TUTORIAL_ITEM_ID },
+    { enabled: isItemBuyStep },
   );
-  const rollOdds = api.item.getBloodlineRollOdds.useQuery(
-    { id: item?.id ?? "" },
-    { enabled: isOpen && !!hasBloodlineRoll, staleTime: 0 },
-  );
-  const canReviewRollOdds =
-    !hasBloodlineRoll ||
-    (!rollOdds.isFetching &&
-      !rollOdds.isError &&
-      !!rollOdds.data?.length &&
-      rollOdds.data.every((roll) => roll.outcomes.length > 0));
-
   const {
-    data: items,
+    data: pages,
     isFetching,
     fetchNextPage,
     hasNextPage,
+    isFetchNextPageError,
   } = api.item.getAll.useInfiniteQuery(
     {
       minCost,
@@ -316,318 +105,130 @@ const Shop: React.FC<ShopProps> = (props) => {
       placeholderData: (previousData) => previousData,
     },
   );
-  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
-  const allItems = items?.pages
-    .flatMap((page) => page.data)
-    .filter((row) => isItemAvailableInStore(row.expireFromStoreAt));
 
-  const pathname = usePublicPathname();
-  const { currentStep, completeTutorialAction } = useTutorialStep();
-  // Shop also renders the souvenir and black-market catalogs; the tutorial pin
-  // belongs only on the page its step points at.
-  const isItemBuyStep =
-    isTutorialItemBuyStep(currentStep) &&
-    isTutorialPageMatch(currentStep?.page, pathname);
+  // Load the rest of the catalog so chips, counts and sorting cover every item. A failed
+  // page stops here; the player retries from the message under the toolbar.
+  useEffect(() => {
+    if (hasNextPage && !isFetching && !isFetchNextPageError) void fetchNextPage();
+  }, [hasNextPage, isFetching, isFetchNextPageError, fetchNextPage]);
 
-  const setItemConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
-    const next = typeof open === "function" ? open(isOpen) : open;
-    setIsOpen(next);
-    if (!next) {
-      setPurchaseError(null);
-      setItem(undefined);
-      setStacksize(1);
-    }
+  // Wide containers show the inspector beside the list; narrow ones use a bottom sheet.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setIsNarrow(entry.contentRect.width < 600);
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [isAwake]);
+
+  if (!isAwake) return <Loader explanation="Redirecting because not awake" />;
+
+  const discountsFor = (item: Pick<Item, "effects"> | null | undefined) =>
+    getShopDiscounts(userData, userData.village?.structures, item);
+  const wallet: Record<ShopCurrency, number> = {
+    ryo: userData.money,
+    rep: userData.reputationPoints,
+    silver: userData.seichiSilver,
   };
 
-  const { data: tutorialItem } = api.item.get.useQuery(
-    { id: TUTORIAL_ITEM_ID },
-    { enabled: isItemBuyStep },
+  const loaded = (pages?.pages.flatMap((page) => page.data) ?? []).filter(
+    (row) =>
+      isItemAvailableInStore(row.expireFromStoreAt) &&
+      (!props.restrictTypes?.length || props.restrictTypes.includes(row.itemType)),
   );
-
-  const catalogItems = [...(allItems ?? [])];
+  const rows = loaded.map((row) => {
+    const prices = shopItemPrices(row, shopItemDiscountFactor(discountsFor(row)));
+    return {
+      item: row,
+      prices,
+      canAfford: missingForPrices(prices, wallet).length === 0,
+    };
+  });
+  // Price sorting uses the currency this shop sells for; an item may also cost ryo.
+  const sortCurrency: ShopCurrency = minSeichiSilverCost
+    ? "silver"
+    : minRepsCost
+      ? "rep"
+      : "ryo";
+  const chips = shopTypeChips(loaded);
+  const affordableCount = rows.filter((row) => row.canAfford).length;
+  const activeChip =
+    chip === "AFFORDABLE" || chips.some((entry) => entry.value === chip) ? chip : "ALL";
+  const shown = sortShopItems(
+    rows
+      .filter((row) =>
+        activeChip === "ALL"
+          ? true
+          : activeChip === "AFFORDABLE"
+            ? row.canAfford
+            : row.item.itemType === activeChip,
+      )
+      .map((row) => ({
+        ...row,
+        name: row.item.name,
+        rarity: row.item.rarity,
+        itemType: row.item.itemType,
+      })),
+    SHOP_SORTS.some((option) => option.value === sort) ? sort : "rarity",
+    (row) => row.prices.find((price) => price.currency === sortCurrency)?.amount ?? 0,
+  );
+  // The tutorial's item leads the list while its step is open.
   if (isItemBuyStep && tutorialItem) {
-    const pinnedIdx = catalogItems.findIndex((row) => row.id === TUTORIAL_ITEM_ID);
-    if (pinnedIdx === -1) {
-      catalogItems.unshift(tutorialItem);
-    } else if (pinnedIdx > 0) {
-      const [pinned] = catalogItems.splice(pinnedIdx, 1);
-      if (pinned) catalogItems.unshift(pinned);
-    }
+    const index = shown.findIndex((row) => row.item.id === TUTORIAL_ITEM_ID);
+    const pinned =
+      index >= 0
+        ? shown.splice(index, 1)[0]
+        : (() => {
+            const prices = shopItemPrices(
+              tutorialItem,
+              shopItemDiscountFactor(discountsFor(tutorialItem)),
+            );
+            return {
+              item: tutorialItem,
+              prices,
+              canAfford: missingForPrices(prices, wallet).length === 0,
+              name: tutorialItem.name,
+              rarity: tutorialItem.rarity,
+              itemType: tutorialItem.itemType,
+            };
+          })();
+    if (pinned) shown.unshift(pinned);
   }
 
-  const { mutate: purchase, isPending: isPurchasing } = api.item.buy.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: (data, variables, revision) => {
-      showMutationToast(data);
-      if (data.success) {
-        setItemConfirmOpen(false);
-        void updateUser(data.userPatch, { revision, delta: data.userDelta });
-        void utils.item.getUserItems.invalidate();
-        void utils.item.getPurchaseAllowance.invalidate();
-        if (item?.itemType === "FURNITURE") {
-          void utils.home.getUserHome.invalidate();
-        }
-        if (isItemBuyStep && variables.itemId === TUTORIAL_ITEM_ID) {
-          void completeTutorialAction("buyItem");
-        }
-      } else {
-        setPurchaseError(data.message);
-        void allowance.refetch();
-      }
-    },
-    onError: (error) => setPurchaseError(error.message),
-  });
-
-  const discounts = getShopDiscounts(userData, userData.village?.structures, item);
-  const selectedItemFactor = item ? shopItemDiscountFactor(discounts) : 1;
-  const totalDiscount = discounts.reduce((acc, d) => acc + d.value, 0);
-
-  const { ryoCost, repsCost, seichiSilverCost } = getShopStackPrice(
-    item,
-    stacksize,
-    selectedItemFactor,
-  );
-  const canAfford =
-    userData.money >= ryoCost &&
-    userData.reputationPoints >= repsCost &&
-    userData.seichiSilver >= seichiSilverCost;
-  const costs = [
-    ...(ryoCost > 0 ? [`${ryoCost.toLocaleString()} ryo`] : []),
-    ...(repsCost > 0 ? [`${repsCost.toLocaleString()} reputation points`] : []),
-    ...(seichiSilverCost > 0
-      ? [`${seichiSilverCost.toLocaleString()} ${silverCopy.purchase}`]
-      : []),
-  ];
-  const missing = [
-    ...(ryoCost > userData.money
-      ? [`${(ryoCost - userData.money).toLocaleString()} more ryo`]
-      : []),
-    ...(repsCost > userData.reputationPoints
-      ? [
-          `${(repsCost - userData.reputationPoints).toLocaleString()} more reputation points`,
-        ]
-      : []),
-    ...(seichiSilverCost > userData.seichiSilver
-      ? [
-          `${(seichiSilverCost - userData.seichiSilver).toLocaleString()} more ${silverCopy.purchase}`,
-        ]
-      : []),
-  ];
-  const costString = `Buy for ${costs.join(", ")}`;
-  const missingString = `Need ${missing.join(", ")}`;
-
-  const catalogSearchId = catalog?.searchId ?? "shop-catalog-search";
-  const catalogListDomId =
+  const selected =
+    shown.find((row) => row.item.id === selectedId)?.item ??
+    loaded.find((row) => row.id === selectedId) ??
+    (tutorialItem?.id === selectedId ? tutorialItem : undefined);
+  const discounts = discountsFor(selected);
+  const listId =
     catalog?.listId === false
       ? undefined
       : (catalog?.listId ?? (props.eventItems ? undefined : "tutorial-itemshop"));
 
-  const catalogHeroTitle =
-    catalog?.heroTitle ??
-    (props.eventItems ? "Souvenir counter" : "Village storefront");
-  const catalogHeroDescription =
-    catalog?.heroDescription ??
-    (props.eventItems
-      ? "Limited-run goods for ryo. Use filters to narrow rarity and effects, then open a card to review and purchase."
-      : "Open categories to browse village stock. Filters stack with search — your discounts apply at checkout.");
-  const catalogHeroBadge =
-    catalog?.heroBadge ?? (props.eventItems ? "Event catalog" : "Village pricing");
-
-  const selectedItemType = filteringState.itemType as ItemType;
-  const tabHint = SHOP_ITEM_TYPE_TAB_HINT[selectedItemType];
-
-  if (!isAwake) return <Loader explanation="Redirecting because not awake" />;
-
-  const purchaseModal = isOpen && item && (
-    <Modal
-      id="tutorial-itemshop-confirmPurchase"
-      title="Confirm Purchase"
-      proceed_label={isPurchasing ? undefined : canAfford ? costString : missingString}
-      isOpen={isOpen}
-      setIsOpen={setItemConfirmOpen}
-      isValid={false}
-      isLoading={isPurchasing}
-      keepOpenOnAccept
-      proceedDisabled={!canReviewRollOdds || !canPurchaseQuantity || isPurchasing}
-      onAccept={() => {
-        if (!canReviewRollOdds || !canPurchaseQuantity || isPurchasing) return;
-        setPurchaseError(null);
-        if (canAfford) {
-          purchase({
-            itemId: item.id,
-            stack: stacksize,
-            villageId: userData.villageId,
-          });
-        } else {
-          setItemConfirmOpen(false);
+  const inspector = selected && (
+    <ShopInspector
+      key={selected.id}
+      item={selected}
+      userData={userData}
+      ryoFactor={shopItemDiscountFactor(discounts)}
+      discounts={discounts}
+      silverCopy={silverCopy}
+      onClose={() => setSelectedId(undefined)}
+      onPurchased={(itemId) => {
+        setSelectedId(undefined);
+        if (isItemBuyStep && itemId === TUTORIAL_ITEM_ID) {
+          void completeTutorialAction("buyItem");
         }
       }}
-      confirmClassName={
-        canAfford
-          ? "bg-blue-600 text-white hover:bg-blue-700"
-          : "bg-red-600 text-white hover:bg-red-700"
-      }
-    >
-      {purchaseError && (
-        <p role="alert" className="text-destructive">
-          {purchaseError}
-        </p>
-      )}
-      {item.itemType === "FURNITURE" && (
-        <p className="pb-3 text-sm">Furniture is delivered to your home storage.</p>
-      )}
-      {allowance.isPending && <p>Loading purchase allowance…</p>}
-      {allowance.isError && (
-        <p role="alert">
-          Could not load purchase allowance.{" "}
-          <Button onClick={() => void allowance.refetch()}>Retry</Button>
-        </p>
-      )}
-      {allowance.data?.limit != null && (
-        <p className="pb-3 text-sm">
-          Limit: {allowance.data.limit} units {allowance.data.period.toLowerCase()} (UTC
-          {allowance.data.period === "WEEKLY" ? ", resets Monday" : ""}). Purchased:{" "}
-          {allowance.data.purchased}. Remaining: {allowance.data.remaining}.
-        </p>
-      )}
-      <div className="grid grid-cols-2 gap-2 pb-3">
-        <div className="rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
-          <h4 className="mb-2 font-semibold text-sm">Your Currency</h4>
-          <div className="grid grid-cols-1 gap-1 text-sm">
-            <div className="flex justify-between">
-              <span>Ryo:</span>
-              <span className="font-mono">{userData.money.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Reputation Points:</span>
-              <span className="font-mono">
-                {userData.reputationPoints.toLocaleString()}
-              </span>
-            </div>
-            {userData.seichiSilver > 0 && (
-              <div className="flex justify-between">
-                <span>{silverCopy.wallet}</span>
-                <span className="font-mono">
-                  {userData.seichiSilver.toLocaleString()}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-        {discounts.length > 0 && (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
-            <h4 className="mb-2 font-semibold text-green-800 text-sm dark:text-green-200">
-              Active Discounts ({totalDiscount}% total)
-            </h4>
-            <div className="space-y-1 text-sm">
-              {discounts.map((discount) => (
-                <div
-                  key={discount.label}
-                  className="flex justify-between text-green-700 dark:text-green-300"
-                >
-                  <span className="capitalize">{discount.label}:</span>
-                  <span className="font-mono">{discount.value}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-      {!isPurchasing && (
-        <>
-          {hasBloodlineRoll && (
-            <div
-              className="rounded-lg border bg-background p-3 text-sm"
-              aria-live="polite"
-            >
-              <h4 className="font-semibold">Bloodline odds</h4>
-              {rollOdds.isFetching ? (
-                <Loader explanation="Loading your possible bloodlines" />
-              ) : rollOdds.isError || !rollOdds.data?.length ? (
-                <div className="space-y-2">
-                  <p>Could not load the odds. Please retry before buying.</p>
-                  <Button variant="outline" onClick={() => void rollOdds.refetch()}>
-                    Retry
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-muted-foreground">
-                    Odds per use with your current village and roll history. Each use
-                    rolls again; changing villages or rolling bloodlines can change the
-                    pool. A successful roll replaces your equipped bloodline.
-                  </p>
-                  {rollOdds.data.length > 1 && (
-                    <p>
-                      Rolls run in order; the last successful roll determines your
-                      bloodline.
-                    </p>
-                  )}
-                  {rollOdds.data.map((roll, index) => (
-                    <div key={`${roll.rank}-${index}`}>
-                      <p className="font-medium">
-                        {roll.rank}-rank roll
-                        {roll.outcomes.length > 0 && `: ${roll.successChance}% success`}
-                      </p>
-                      {roll.outcomes.length === 0 ? (
-                        <p role="alert">
-                          No bloodlines are currently available for this roll.
-                        </p>
-                      ) : (
-                        <ul>
-                          {roll.outcomes.map((outcome) => (
-                            <li key={outcome.id} className="flex justify-between gap-3">
-                              <span className="min-w-0 break-words">
-                                {outcome.name}
-                              </span>
-                              <span className="shrink-0 tabular-nums">
-                                {outcome.chance.toLocaleString(undefined, {
-                                  maximumFractionDigits: 4,
-                                })}
-                                %
-                              </span>
-                            </li>
-                          ))}
-                          {roll.successChance < 100 && (
-                            <li>No new bloodline: {100 - roll.successChance}%</li>
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <ItemWithEffects
-            item={item}
-            key={item.id}
-            showEdit="item"
-            showStatistic="item"
-          />
-          {item.canStack && item.stackSize > 1 && maxPurchaseQuantity > 0 ? (
-            <UncontrolledSliderField
-              id="stackSize"
-              label={`How many to buy: ${stacksize}`}
-              value={stacksize}
-              min={1}
-              max={maxPurchaseQuantity}
-              setValue={setStacksize}
-            />
-          ) : undefined}
-        </>
-      )}
-      {isPurchasing && <Loader explanation={`Purchasing ${item.name}`} />}
-    </Modal>
+    />
   );
 
   return (
     <ContentBox
       title={props.title ?? "Item Shop"}
-      subtitle={
-        props.subtitle ??
-        "Browse categories, search the catalog, then open a card to buy."
-      }
+      subtitle={props.subtitle ?? "Gear and supplies"}
       defaultBackHref={props.defaultBackHref}
       initialBreak={props.initialBreak}
       padding={false}
@@ -651,183 +252,198 @@ const Shop: React.FC<ShopProps> = (props) => {
           priority={true}
         />
       )}
-
-      <div className="relative overflow-hidden border-b bg-linear-to-br from-amber-950/25 via-card to-card px-3 py-4 md:px-6 md:py-8">
-        <div className="pointer-events-none absolute -top-24 right-0 h-48 w-48 rounded-full bg-amber-500/10 blur-3xl" />
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-amber-500/15 p-3 ring-1 ring-amber-500/35">
-              <ShoppingBag className="h-7 w-7 text-amber-700 dark:text-amber-400" />
-            </div>
-            <div className="space-y-1">
-              <p className="font-semibold text-lg tracking-tight md:text-xl">
-                {catalogHeroTitle}
-              </p>
-              <p className="max-w-xl text-muted-foreground text-sm leading-relaxed">
-                {catalogHeroDescription}
-              </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Badge
-                  variant="secondary"
-                  className="gap-1 border-amber-500/25 bg-background/60 font-normal"
-                >
-                  <Tag className="h-3 w-3" />
-                  {catalogHeroBadge}
-                </Badge>
-                <Badge
-                  variant="secondary"
-                  className="gap-1 border-amber-500/25 bg-background/60 font-normal"
-                >
-                  <Ticket className="h-3 w-3" />
-                  Tap a card to buy
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-b bg-linear-to-b from-amber-950/10 to-muted/30 px-2 py-3 md:px-6 md:py-4">
-        <div className="mx-auto flex max-w-5xl flex-col gap-1.5 sm:gap-2">
-          <div
-            className="grid grid-cols-4 gap-0.5 rounded-lg bg-muted/90 p-0.5 shadow-inner ring-1 ring-border/50 sm:grid-cols-4 sm:gap-1 sm:rounded-xl sm:p-1 lg:grid-cols-8 dark:bg-muted/40"
-            role="tablist"
-            aria-label="Item category"
-          >
-            {itemTypeTabOptions.map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="tab"
-                aria-selected={selectedItemType === t}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-1.5 font-semibold text-[10px] transition-all sm:flex-row sm:gap-2 sm:rounded-lg sm:px-1 sm:py-3 sm:text-xs",
-                  selectedItemType === t
-                    ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
-                    : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
-                )}
-                onClick={() => {
-                  if (selectedItemType === t) return;
-                  filteringState.setItemType(t);
-                  setItemConfirmOpen(false);
-                }}
-              >
-                {categoryTabIcon(t)}
-                <span className="text-center leading-tight">
-                  {SHOP_ITEM_TYPE_TAB_LABEL[t]}
-                </span>
-              </button>
-            ))}
-          </div>
-          <p className="text-balance text-center text-[11px] text-muted-foreground leading-relaxed sm:text-xs">
-            {tabHint}
-          </p>
-        </div>
-      </div>
-
-      <div className="border-b bg-muted/25 px-2 py-3 md:px-5 md:py-4">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <Label
-              htmlFor={catalogSearchId}
-              className="text-muted-foreground text-xs uppercase"
-            >
-              Search catalog
-            </Label>
-            <div className="relative mt-1">
-              <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id={catalogSearchId}
-                placeholder="Search by item name…"
+      <div ref={rootRef} className="@container">
+        <div className="flex flex-col gap-2 border-b p-2 @min-[600px]:p-3">
+          <div className="flex gap-2">
+            <label className="bg-background text-muted-foreground flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2">
+              <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="sr-only">Search items</span>
+              <input
+                type="search"
                 value={filteringState.name}
-                onChange={(e) => filteringState.setName(e.target.value)}
-                className="h-11 rounded-xl border-border/80 bg-background pl-10 shadow-sm"
+                onChange={(event) => filteringState.setName(event.target.value)}
+                placeholder="Search"
+                className="text-foreground h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
               />
-            </div>
+            </label>
+            <label className="text-muted-foreground flex items-center gap-1.5 text-xs">
+              Sort
+              <select
+                value={sort}
+                onChange={(event) => setSort(event.target.value as ShopSort)}
+                className="bg-background text-foreground h-9 rounded-md border px-1.5 text-sm"
+              >
+                {SHOP_SORTS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-          <p className="text-muted-foreground text-xs lg:max-w-xs lg:text-right">
-            More filters (rarity, slot, effects, …) stay in the filter button above.
+          <div className="flex flex-wrap gap-1.5">
+            {chips.map((entry) => (
+              <ShopChip
+                key={entry.value}
+                label={entry.label}
+                count={entry.count}
+                isActive={entry.value === activeChip}
+                onClick={() => setChip(entry.value)}
+              />
+            ))}
+            <ShopChip
+              label="Affordable"
+              count={affordableCount}
+              isActive={activeChip === "AFFORDABLE"}
+              onClick={() => setChip("AFFORDABLE")}
+              accent
+            />
+          </div>
+        </div>
+        {isFetchNextPageError && (
+          <p role="alert" className="text-destructive border-b px-3 py-2 text-sm">
+            Some items could not load.{" "}
+            <Button
+              variant="link"
+              className="h-auto p-0"
+              onClick={() => void fetchNextPage()}
+            >
+              Try again
+            </Button>
           </p>
+        )}
+        <div className="grid @min-[600px]:grid-cols-[minmax(0,1fr)_24rem]">
+          <ul
+            id={listId}
+            aria-label="Shop items"
+            className="grid min-w-0 list-none grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] content-start gap-2 p-2 @min-[600px]:max-h-[600px] @min-[600px]:overflow-y-auto @min-[600px]:p-3"
+          >
+            {shown.map((row) => (
+              <li
+                key={row.item.id}
+                id={
+                  row.item.id === TUTORIAL_ITEM_ID && selectedId !== TUTORIAL_ITEM_ID
+                    ? "tutorial-itemshop-item"
+                    : undefined
+                }
+              >
+                <ShopItemCard
+                  item={row.item}
+                  prices={row.prices}
+                  wallet={wallet}
+                  silverLabel={silverCopy.catalog}
+                  isSelected={row.item.id === selectedId}
+                  onSelect={() =>
+                    setSelectedId(row.item.id === selectedId ? undefined : row.item.id)
+                  }
+                />
+              </li>
+            ))}
+            {shown.length === 0 && (
+              <li className="text-muted-foreground col-span-full py-10 text-center text-sm">
+                {isFetching ? (
+                  <Loader explanation="Loading catalog" />
+                ) : loaded.length === 0 ? (
+                  "Nothing for sale here right now."
+                ) : (
+                  "No items match. Try another chip or clear the search."
+                )}
+              </li>
+            )}
+          </ul>
+          {!isNarrow && (
+            <aside
+              aria-label="Item"
+              className="bg-poppopover max-h-[600px] min-w-0 overflow-y-auto border-l-2 border-dashed p-3 @max-[600px]:hidden"
+            >
+              {inspector ?? (
+                <p className="text-muted-foreground py-10 text-center text-sm">
+                  Pick an item to see its effects and buy it.
+                </p>
+              )}
+            </aside>
+          )}
         </div>
       </div>
-
-      <div className="px-1.5 py-2 sm:px-3 sm:py-3 md:p-5" id={catalogListDomId}>
-        {!catalogItems.length && (isFetching || hasNextPage) ? (
-          <div className="flex min-h-[40vh] flex-col items-center justify-center">
-            <Loader explanation="Loading catalog…" />
-            {hasNextPage ? (
-              <div ref={setLastElement} className="h-px w-full" aria-hidden />
-            ) : null}
-          </div>
-        ) : !catalogItems.length ? (
-          <div className="flex min-h-[36vh] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 px-6 py-16 text-center">
-            <ShoppingBag className="mb-3 h-12 w-12 text-muted-foreground opacity-60" />
-            <p className="font-medium text-lg">No items match your filters</p>
-            <p className="mt-1 max-w-sm text-muted-foreground text-sm">
-              {filteringState.name.trim()
-                ? "Try clearing the name search or opening the filter panel to reset rarity, slot, or effects."
-                : "Try another category tab or widen filters in the panel above."}
-            </p>
-          </div>
-        ) : (
-          <>
-            <ul className="mx-auto grid max-w-7xl list-none grid-cols-3 gap-1 sm:gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-6">
-              {catalogItems.map((row) => {
-                const rowFactor = shopItemDiscountFactor(
-                  getShopDiscounts(userData, userData.village?.structures, row),
-                );
-                const ryoDue = row.cost > 0 ? Math.ceil(row.cost * rowFactor) : 0;
-                const repsDue = Math.ceil(row.repsCost ?? 0);
-                const seichiDue = Math.ceil(row.seichiSilverCost ?? 0);
-                const canAffordRow =
-                  userData.money >= ryoDue &&
-                  userData.reputationPoints >= repsDue &&
-                  userData.seichiSilver >= seichiDue;
-                return (
-                  <li
-                    key={row.id}
-                    id={
-                      row.id === TUTORIAL_ITEM_ID && !isOpen
-                        ? "tutorial-itemshop-item"
-                        : undefined
-                    }
-                    className="h-full min-h-0 min-w-0"
-                  >
-                    <ShopCatalogCard
-                      item={row}
-                      selected={item?.id === row.id}
-                      previewFactor={rowFactor}
-                      canAfford={canAffordRow}
-                      seichiCatalogWord={silverCopy.catalog}
-                      onSelect={() => {
-                        if (item?.id === row.id) {
-                          setItemConfirmOpen(false);
-                        } else {
-                          setItem(row);
-                          setStacksize(1);
-                          setIsOpen(true);
-                        }
-                      }}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-            {hasNextPage ? (
-              <div ref={setLastElement} className="h-px w-full" aria-hidden />
-            ) : null}
-            {isFetching && catalogItems.length > 0 && (
-              <div className="flex justify-center py-8">
-                <Loader explanation="Updating catalog…" />
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {purchaseModal}
+      {isNarrow && (
+        <Sheet
+          open={!!selected}
+          onOpenChange={(open) => !open && setSelectedId(undefined)}
+        >
+          <SheetContent
+            side="bottom"
+            // The inspector draws its own close button in its header.
+            showCloseButton={false}
+            className="max-h-[85dvh] overflow-y-auto rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] outline-none"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              (event.currentTarget as HTMLElement | null)?.focus();
+            }}
+            // The sheet's strict containment would ignore the inspector's height; keep it
+            // content-sized up to the maximum.
+            style={{ contain: "layout paint" }}
+          >
+            <SheetTitle className="sr-only">{selected?.name ?? "Item"}</SheetTitle>
+            {inspector}
+          </SheetContent>
+        </Sheet>
+      )}
     </ContentBox>
   );
 };
+
+/** One filter chip, styled like the backpack's. */
+function ShopChip({
+  label,
+  count,
+  isActive,
+  onClick,
+  accent,
+}: {
+  label: string;
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+  accent?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={isActive}
+      onClick={onClick}
+      className={cn(
+        "h-8 rounded-full border px-2.5 text-xs",
+        isActive
+          ? "border-primary bg-primary text-primary-foreground font-semibold"
+          : "bg-background hover:bg-muted",
+        accent && !isActive && "border-amber-400 text-amber-900 dark:text-amber-200",
+      )}
+    >
+      {label} <span className="opacity-70">{count}</span>
+    </button>
+  );
+}
+
+const SILVER_COPY = {
+  seichi: { catalog: "seichi", purchase: "seichi silver" },
+  silver: { catalog: "silver", purchase: "silver" },
+} as const;
+
+interface ShopProps {
+  userData: NonNullable<UserWithRelations>;
+  /** The chip the shop opens on, when it has items of that type. */
+  defaultType: ItemType;
+  restrictTypes?: ItemType[];
+  eventItems?: boolean;
+  title?: string;
+  image?: string;
+  subtitle?: string;
+  defaultBackHref?: string;
+  initialBreak?: boolean;
+  minCost?: number;
+  minRepsCost?: number;
+  minSeichiSilverCost?: number;
+  catalog?: ShopCatalogOverrides;
+}
 
 export default Shop;

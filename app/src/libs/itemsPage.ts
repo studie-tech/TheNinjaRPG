@@ -32,7 +32,8 @@ export const BACKPACK_SORTS: { value: BackpackSort; label: string }[] = [
   { value: "durability", label: "Durability" },
 ];
 
-const TYPE_LABELS: Record<ItemType, string> = {
+/** Plural item type names for chips and counts. */
+export const ITEM_TYPE_LABELS: Record<ItemType, string> = {
   WEAPON: "Weapons",
   CONSUMABLE: "Consumables",
   ARMOR: "Armor",
@@ -112,7 +113,7 @@ export const backpackFilterChips = (
 ): { value: BackpackFilter["type"]; label: string; count: number }[] => {
   const types = ItemTypes.flatMap((type) => {
     const count = items.filter((ui) => ui.item.itemType === type).length;
-    return count > 0 ? [{ value: type, label: TYPE_LABELS[type], count }] : [];
+    return count > 0 ? [{ value: type, label: ITEM_TYPE_LABELS[type], count }] : [];
   });
   const worn = items.filter(needsInventoryRepair).length;
   return [
