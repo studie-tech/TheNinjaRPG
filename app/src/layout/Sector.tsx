@@ -1622,7 +1622,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       showMutationToast(result);
     },
     onError: (error) => {
-      void updateUser(undefined);
+      void updateUser(undefined, { revision: undefined });
       showMutationToast({ success: false, message: error.message });
     },
   });
@@ -1643,7 +1643,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }
     },
     onError: () => {
-      void updateUser(undefined);
+      void updateUser(undefined, { revision: undefined });
       document.body.style.cursor = "default";
     },
   });

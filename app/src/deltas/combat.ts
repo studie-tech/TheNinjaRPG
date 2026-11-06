@@ -377,8 +377,9 @@ export const combatCacheIntegerDelta = (
   ) as Pick<UserDelta, "money" | "experience" | "earnedExperience" | "seichiSilver">;
 
 /**
- * Project battle admission, stealth breaks and the non-tournament PvE counter for a settled
- * actor. Withhold both fields when queues, PvP or immunity changes require a profile refresh.
+ * Project battle admission, stealth breaks and fight counters for a settled actor.
+ * Queued training needs a recovery baseline and PvP needs a known participant role;
+ * unsettled receipts and immunity changes require a profile refresh.
  */
 export const getCombatAdmissionUserUpdate = ({
   cacheActor,

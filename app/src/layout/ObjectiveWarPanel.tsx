@@ -115,7 +115,7 @@ export const ObjectiveWarPanel = ({
   const attack = api.combat.startShrineBattle.useMutation({
     onSuccess: onBattleSuccess,
     onError: (error) => {
-      void updateUser(undefined);
+      void updateUser(undefined, { revision: undefined });
       onError(error);
     },
     onMutate,
@@ -123,7 +123,7 @@ export const ObjectiveWarPanel = ({
   const camp = api.war.attackWarCamp.useMutation({
     onSuccess: onBattleSuccess,
     onError: (error) => {
-      void updateUser(undefined);
+      void updateUser(undefined, { revision: undefined });
       onError(error);
     },
     onMutate,

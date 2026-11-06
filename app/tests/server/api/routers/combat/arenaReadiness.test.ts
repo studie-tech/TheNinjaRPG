@@ -74,7 +74,7 @@ describeWithDatabase("arena readiness reads", () => {
 
   for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
     for (const queued of ["idle", "energy", "mastery", "both", "companion"] as const) {
-      it(`patches ${status} battle admission and ${queued} progression ${queued === "companion" && status === "HOSPITALIZED" ? "with unknown live companion reconciliation" : "without a getUser read"}`, async () => {
+      it(`patches ${status} battle admission and ${queued} progression ${queued === "companion" ? "with unknown live companion reconciliation" : "without a getUser read"}`, async () => {
         const database = await getTestDatabase();
         await database.update(userData).set({ status, curHealth: 1, maxHealth: 1000,
           curEnergy: 100, curChakra: 1, curStamina: 1, regeneration: 1, regenAt: new Date(0) })
@@ -107,7 +107,7 @@ describeWithDatabase("arena readiness reads", () => {
           expect(result).toMatchObject({ success: true, userRecovery: { userId } });
           await updateUserCache(cache, key, result, { revision });
           const saved = (await database.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
-          expect(reads).toBe(status === "HOSPITALIZED" && queued === "companion" ? 1 : 0);
+          expect(reads).toBe(queued === "companion" ? 1 : 0);
           const projected = cache.getQueryData<UserCache>(key)?.userData;
           expect(projected).toMatchObject({ status: "BATTLE", battleId: saved.battleId,
             curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina,
@@ -132,6 +132,31 @@ describeWithDatabase("arena readiness reads", () => {
       event === "event" && typeof data === "object" && "type" in data && data.type === "battle");
     expect(events.find(([channel]) => channel === userId)?.[2]).toMatchObject({ originSocketId: "origin-tab" });
     expect(events.find(([channel]) => channel === aiId)?.[2]).not.toHaveProperty("originSocketId");
+  });
+
+  it("retains reconciliation when outer arena hydration drops a due job and refunds its reservation", async () => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, userId));
+    await database.insert(userQueue).values({ id: "deleted-arena-job", userId, kind: "JUTSU", position: 1,
+      jutsuId: "deleted", reservedRyo: 30, startsAt: new Date(Date.now() + 3600_000), finishesAt: new Date(Date.now() + 3601_000) });
+    const initial = await fetchActionUser(database, userId);
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["arena-outer-settlement"];
+    cache.setQueryData(key, { userData: initial, notifications: [] });
+    const read = vi.fn(async () => ({ userData: await fetchActionUser(database, userId), notifications: [] }));
+    const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity, queryFn: read });
+    const stop = observer.subscribe(() => {});
+    try {
+      const revision = prepareUserUpdate(cache, key);
+      await database.update(userQueue).set({ startsAt: new Date(0), finishesAt: new Date(1000) });
+      const result = await launch(database);
+      expect(result.success).toBe(true);
+      expect(result.userPatch).toBeUndefined();
+      expect(result.userDelta).toBeUndefined();
+      await updateUserCache(cache, key, result, { revision });
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(cache.getQueryData<UserCache>(key)?.userData).toMatchObject({ status: "BATTLE", money: initial.money + 30, queue: [] });
+    } finally { stop(); cache.clear(); }
   });
 
   it("omits display alerts and reads achievements once across readiness and battle preload", async () => {

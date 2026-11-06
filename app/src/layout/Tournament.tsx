@@ -92,7 +92,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
         if (data.success && data.battleId) pushToCombat(router, data.battleId);
       },
       onError: (error) => {
-        void updateUser(undefined);
+        void updateUser(undefined, { revision: undefined });
         showMutationToast({ success: false, message: error.message });
       },
     });

@@ -454,7 +454,7 @@ export const huntingRouter = createTRPCRouter({
   /** Validate accepted terms and preload combat data before guarded encounter admission. */
   start: protectedProcedure
     .use(ratelimitMiddleware)
-    .input(huntingIdSchema)
+    .input(huntingIdSchema.extend({ originSocketId: z.string().max(128).optional() }))
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const [initialUser, actionSettings, session, progressRows, materials] =
@@ -511,6 +511,7 @@ export const huntingRouter = createTRPCRouter({
         {
           client: ctx.drizzle,
           cacheUserId: ctx.userId,
+          originSocketId: input.originSocketId,
           actionReadiness: readiness,
           userIds: [ctx.userId],
           targetIds: [contract.aiId],

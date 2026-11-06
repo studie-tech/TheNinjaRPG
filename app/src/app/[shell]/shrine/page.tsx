@@ -57,7 +57,7 @@ export default function Shrine() {
         }
       },
       onError: (error) => {
-        void updateUser(undefined);
+        void updateUser(undefined, { revision: undefined });
         showMutationToast({ success: false, message: error.message });
       },
     });

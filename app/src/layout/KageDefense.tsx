@@ -95,7 +95,7 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
     onMutate: prepareUserUpdate,
     onSuccess,
     onError: (error) => {
-      void updateUser(undefined);
+      void updateUser(undefined, { revision: undefined });
       onError(error);
     },
   });

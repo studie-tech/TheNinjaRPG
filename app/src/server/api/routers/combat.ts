@@ -982,7 +982,7 @@ export const combatRouter = createTRPCRouter({
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information
-      const [{ user }, selectedAI] = await Promise.all([
+      const [{ user, requiresProgressionRefresh }, selectedAI] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -1011,6 +1011,7 @@ export const combatRouter = createTRPCRouter({
             targetIds: [selectedAI.userId],
             client: ctx.drizzle,
             actionUserId: ctx.userId,
+            requiresUserRefresh: requiresProgressionRefresh,
             originSocketId: input.originSocketId,
             targetStatDistribution: input.stats ?? undefined,
             biome: "default",
@@ -1642,7 +1643,13 @@ export const combatRouter = createTRPCRouter({
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information (use fetchActiveWars to get village relations with sectors)
-      const [{ user }, activeWars, sectorData, shrineAis, isHome] = await Promise.all([
+      const [
+        { user, requiresProgressionRefresh },
+        activeWars,
+        sectorData,
+        shrineAis,
+        isHome,
+      ] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -1707,6 +1714,7 @@ export const combatRouter = createTRPCRouter({
           forceDefenderVillageId: shrineOwnerVillageId,
           client: ctx.drizzle,
           actionUserId: ctx.userId,
+          requiresUserRefresh: requiresProgressionRefresh,
           originSocketId: input.originSocketId,
           biome: "default",
         },
@@ -1822,6 +1830,8 @@ export const initiateBattle = async (
     originSocketId?: string;
     /** A caller plan opts this actor into recovery; admission revalidates the fresh snapshot. */
     actionReadiness?: ActionReadiness;
+    /** Prior hydration can settle effects outside the bounded battle admission projection. */
+    requiresUserRefresh?: boolean;
     /** Shared launch contract; each activity keeps its own progress and settlement policy. */
     coop?: CoopEncounter;
     /** Current rules, guarded session/allowance versions and rewards preloaded for settlement. */
@@ -2018,7 +2028,10 @@ export const initiateBattle = async (
   );
   // Settlement can change resources and receipts outside the combat cache projection,
   // including partial writes before an optional settlement failure.
-  let requiresUserRefresh = queueOwners.length > 0;
+  let requiresUserRefresh =
+    queueOwners.length > 0 ||
+    !!info.requiresUserRefresh ||
+    !!info.actionReadiness?.userRecovery?.requiresUserRefresh;
   if (queueOwners.length > 0) {
     try {
       await settleDueTimedQueues(client, queueOwners);

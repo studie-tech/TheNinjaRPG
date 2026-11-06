@@ -12,7 +12,7 @@ import type { UserCachePatch } from "@/validators/userCache";
 /**
  * Capture committed recovery independently of later endpoint edits. The client applies
  * this baseline before the action's own patch/delta, preserving costs and final activity.
- * Live companion XP eligibility remains explicitly unknown instead of inventing a balance.
+ * Hydration side effects and live companion XP eligibility retain authoritative reconciliation.
  */
 export const getActionRecoveryUpdate = (
   initial: UserData,
@@ -41,7 +41,7 @@ export const getActionRecoveryUpdate = (
   // Hydrated endpoints may already have settled elapsed training before preparing recovery.
   const knownFields = new Set<keyof UserData>([
     ...fields.filter((field) => field !== "petExperience"),
-    ...(!fields.includes("petExperience") && !related.requiresPetExperienceRefresh
+    ...(!fields.includes("petExperience") && !related.requiresProgressionRefresh
       ? ["petExperience" as const]
       : []),
     ...CombatStatNames,
@@ -61,6 +61,17 @@ export const getActionRecoveryUpdate = (
     "masteryTrainingStartedAt",
     "trainingSpeed",
     "dailyTrainings",
+    "dailyMissions",
+    "dailyErrands",
+    "dailyMedicalMissions",
+    "dailyWarMissions",
+    "dailyArenaFights",
+    "dailyPvpMissions",
+    "dailySageActivations",
+    "dailyOverworldQuestRolls",
+    "cookingExperience",
+    "primaryElement",
+    "secondaryElement",
     "currentlyTrainingElement",
     "elementalTrainingStartedAt",
     "elementalTrainingSpeed",
@@ -73,9 +84,14 @@ export const getActionRecoveryUpdate = (
   ) as UserCachePatch;
   userPatch.questData = getPublicQuestUser(related).questData;
   if (related.queue) userPatch.queue = structuredClone(related.queue);
+  if (related.cookingJobs)
+    userPatch.cookingJobs = structuredClone(related.cookingJobs).map((job) => ({
+      ...job,
+      userId: user.userId,
+    }));
   return {
     ...recovery,
-    ...(related.requiresPetExperienceRefresh ||
+    ...(related.requiresProgressionRefresh ||
     (fields.includes("petExperience") &&
       initial.activePetId &&
       user.experience > initial.experience)

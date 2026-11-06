@@ -40,7 +40,7 @@ export function HuntingBoard({
 }) {
   const router = useRouter();
   const utils = api.useUtils();
-  const { updateUser, prepareUserUpdate } = useUserData();
+  const { updateUser, prepareUserUpdate, pusher } = useUserData();
   const [habitatId, setHabitatId] = useState("");
   const [creature, setCreature] = useState("");
   const [rank, setRank] = useState("");
@@ -92,7 +92,10 @@ export function HuntingBoard({
         if (!onStarted) router.push("/combat");
       } else await board.refetch();
     },
-    onError: (e) => setMessage(e.message),
+    onError: (e) => {
+      void updateUser(undefined, { revision: undefined });
+      setMessage(e.message);
+    },
   });
   const pending = accept.isPending || action.isPending || start.isPending;
   const data = board.data;
@@ -234,7 +237,12 @@ export function HuntingBoard({
                           active,
                         )
                       }
-                      onClick={() => start.mutate({ id: session.id })}
+                      onClick={() =>
+                        start.mutate({
+                          id: session.id,
+                          originSocketId: pusher?.connection.socket_id,
+                        })
+                      }
                     >
                       {receipt?.outcome === "Won" ? "Hunt Again" : "Fight creature"}
                     </Button>

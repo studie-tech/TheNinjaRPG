@@ -202,3 +202,32 @@ it.each(["ASLEEP", "HOSPITALIZED"] as const)(
     }
   },
 );
+
+it("reconciles a lost battle response through the component error callback and allows retry", async () => {
+  const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = [["profile", "getUser"], { type: "query" }];
+  const initial = { userData: { userId: "me", status: "AWAKE", rank: "GENIN", level: 22,
+    dailyArenaFights: 3, items: [], titles: [], battleId: null }, notifications: [] };
+  const canonical = { ...initial, userData: { ...initial.userData, status: "BATTLE", battleId: "fight", dailyArenaFights: 4 } };
+  cache.setQueryData(key, initial);
+  const read = vi.fn(async () => canonical);
+  const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity, queryFn: read });
+  const unsubscribe = observer.subscribe(() => {});
+  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ data: initial.userData,
+    prepareUserUpdate: () => prepareUserUpdate(cache, key),
+    updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) => updateUserCache(cache, key, patch, options),
+  } as never);
+  let callbacks!: { onError: (error: Error) => void };
+  Object.assign(client.api.combat.startArenaBattle, {
+    useMutation: (options: typeof callbacks) => { callbacks = options; return { mutate, isPending: false }; },
+  });
+  try {
+    render(<ArenaMode aiId="ai-1" setAiId={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Fight Yama" }));
+    await act(async () => callbacks.onError(new Error("Response lost after commit")));
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(cache.getQueryData(key)).toEqual(canonical);
+    fireEvent.click(screen.getByRole("button", { name: "Fight Yama" }));
+    expect(mutate).toHaveBeenCalledTimes(2);
+  } finally { unsubscribe(); cache.clear(); }
+});

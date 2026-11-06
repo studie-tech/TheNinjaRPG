@@ -58,6 +58,7 @@ import {
   type UserQueue,
   type UserTitle,
   type UserVote,
+  type userCookingJob,
   userData,
   type Village,
   type VillageAlliance,
@@ -2575,6 +2576,8 @@ export const fetchUpdatedUser = async (
         result.requiresUserRefresh = true;
         result.requiresProgressionRefresh = true;
       }
+      if (result.user)
+        result.user.requiresProgressionRefresh = result.requiresProgressionRefresh;
       return { isPyramidIsolated: false, ...result };
     }
   }
@@ -2681,7 +2684,7 @@ const fetchUpdatedUserOnce = async (
     | (NonNullable<typeof fetchedUser> & {
         regenerationWithoutTimedBuffs?: number;
         baseRegeneration?: number;
-        requiresPetExperienceRefresh?: boolean;
+        requiresProgressionRefresh?: boolean;
       })
     | undefined = fetchedUser;
 
@@ -3258,7 +3261,6 @@ const fetchUpdatedUserOnce = async (
         ) {
           // Live companion eligibility is evaluated by SQL; the loaded pet XP bank is stale after this grant.
           // Selecting a first companion advances the guarded owner snapshot, so a missing companion grants nothing.
-          user.requiresPetExperienceRefresh = true;
           requiresProgressionRefresh = true;
         }
       } catch (error) {
@@ -3602,8 +3604,8 @@ export type UserWithRelations =
       regenerationWithoutTimedBuffs?: number;
       /** Persisted rate retained for status transitions without applying derived boosts twice. */
       baseRegeneration?: number;
-      /** A live SQL companion grant needs an authoritative bank before projecting cached progression. */
-      requiresPetExperienceRefresh?: boolean;
+      /** Hydration side effects require authoritative reconciliation when projecting action recovery. */
+      requiresProgressionRefresh?: boolean;
       displayTitle?: string;
       dungeonsCompleted?: number;
       /** Current reservation, including a completed squad awaiting its claim. */
@@ -3617,6 +3619,7 @@ export type UserWithRelations =
       userSkills?: NonNullable<MasterySources["userSkills"]>;
       /** Every queue entry of the user, in queue order per kind */
       queue?: UserQueue[];
+      cookingJobs?: Omit<typeof userCookingJob.$inferSelect, "userId">[];
       bloodline?: Bloodline | null;
       sageMode?: SageMode | null;
       activeReskin?: BloodlineReskin | null;

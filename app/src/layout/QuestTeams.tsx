@@ -74,41 +74,18 @@ export const QuestTeams = ({
   };
   /** Mutation and background refresh failures retain controls and show a recoverable message. */
   const onError = (error: { message: string }) => setMessage(error.message);
-  const create = api.coop.quest.create.useMutation({
+  const mutationOptions = {
     onMutate: prepareUserUpdate,
     onSuccess: refresh,
     onError,
-  });
-  const join = api.coop.quest.join.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: refresh,
-    onError,
-  });
-  const leave = api.coop.quest.leave.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: refresh,
-    onError,
-  });
-  const invite = api.coop.quest.invite.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: refresh,
-    onError,
-  });
-  const remove = api.coop.quest.remove.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: refresh,
-    onError,
-  });
-  const disband = api.coop.quest.disband.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: refresh,
-    onError,
-  });
-  const start = api.coop.quest.startEncounter.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: refresh,
-    onError,
-  });
+  };
+  const create = api.coop.quest.create.useMutation(mutationOptions);
+  const join = api.coop.quest.join.useMutation(mutationOptions);
+  const leave = api.coop.quest.leave.useMutation(mutationOptions);
+  const invite = api.coop.quest.invite.useMutation(mutationOptions);
+  const remove = api.coop.quest.remove.useMutation(mutationOptions);
+  const disband = api.coop.quest.disband.useMutation(mutationOptions);
+  const start = api.coop.quest.startEncounter.useMutation(mutationOptions);
   const busy =
     remove.isPending ||
     disband.isPending ||

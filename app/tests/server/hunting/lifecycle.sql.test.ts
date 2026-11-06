@@ -74,8 +74,10 @@ describeWithDatabase("Hunting lifecycle", () => {
           throw new Error("Cooking settlement failed after its writes");
         });
       }
-      const response = await hunter.start({ id: session.id });
+      const response = await hunter.start({ id: session.id, originSocketId: "hunter-tab" });
       expect(response.success).toBe(true);
+      expect(Pusher.prototype.trigger).toHaveBeenCalledWith("hunter", "event", expect.objectContaining({ type: "battle", originSocketId: "hunter-tab" }));
+      expect(Pusher.prototype.trigger).toHaveBeenCalledWith("enemy", "event", expect.not.objectContaining({ originSocketId: "hunter-tab" }));
       await updateUserCache(cache, key, response.userPatch, { revision });
       const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") });
       const cached = cache.getQueryData<typeof initial>(key)!.userData;

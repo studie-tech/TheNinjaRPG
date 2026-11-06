@@ -51,6 +51,7 @@ const mount = (createCharacter: () => Promise<Outcome>) => {
     vi.spyOn(carousel, part).mockReturnValue(null as never);
   }
   const mutationToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  mutationToast.mockClear();
   vi.spyOn(resolvers, "zodResolver").mockReturnValue((async (values: object) => ({
     values,
     errors: {},
