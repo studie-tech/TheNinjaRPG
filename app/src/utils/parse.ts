@@ -153,17 +153,28 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
   );
 };
 
-const getTextFromNode = (node: HtmlNode): string => {
-  if (node.type === "text") return node.data ?? "";
-  if (node.children) return node.children.map(getTextFromNode).join("");
-  return "";
+const VOID_TAGS = new Set(["br", "hr", "img"]);
+
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** Serialize parsed nodes back to HTML, so a quote keeps its images and formatting. */
+const nodeToHtml = (node: HtmlNode): string => {
+  if (node.type === "text") return escapeHtml(node.data ?? "");
+  if (node.type !== "tag") return "";
+  const attributes = Object.entries(node.attribs ?? {})
+    .map(([name, value]) => ` ${name}="${escapeHtml(value)}"`)
+    .join("");
+  if (VOID_TAGS.has(node.name)) return `<${node.name}${attributes}>`;
+  const inner = (node.children ?? []).map(nodeToHtml).join("");
+  return `<${node.name}${attributes}>${inner}</${node.name}>`;
 };
 
 /**
  * Transform blockquote nodes to Quote component
  */
 const transformBlockquoteNode = (blockquoteNode: HtmlNode): React.ReactElement => {
-  const content = blockquoteNode.children?.map(getTextFromNode).join("");
+  const content = blockquoteNode.children?.map(nodeToHtml).join("");
 
   const author = blockquoteNode.attribs?.author || undefined;
   const date = blockquoteNode.attribs?.date || undefined;
