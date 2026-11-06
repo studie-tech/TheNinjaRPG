@@ -147,6 +147,9 @@ it("lists the tower being climbed first", () => {
   expect(within(card("Tower of Echoes")).getByText("Current objective")).toBeDefined();
   const other = within(card("Test Arena")).getByRole("button", { name: /Finish Tower of Echoes first/ });
   expect(other.hasAttribute("disabled")).toBe(true);
+  // A long tower name wraps inside the fixed-width button instead of spilling out.
+  expect(other.className).toContain("whitespace-normal");
+  expect(other.className).not.toMatch(/(^|\s)h-11(\s|$)/);
 });
 
 it("lists towers open to the player before towers missing entry items", () => {

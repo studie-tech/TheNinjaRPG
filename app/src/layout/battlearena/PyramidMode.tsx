@@ -162,14 +162,14 @@ export function PyramidMode() {
           const climbButton = (
             <Button
               id={`tutorial-take-quest-${tower.id}`}
-              className="h-11 w-full @min-[600px]:w-44"
+              className="h-auto min-h-11 w-full whitespace-normal py-2 text-center @min-[600px]:w-44"
               disabled={state.kind !== "open" || isPending}
               onClick={needsConfirm ? undefined : () => start(tower.id)}
             >
               {state.kind === "missingItems" ? (
-                <Lock className="mr-2 h-5 w-5" aria-hidden />
+                <Lock className="mr-2 h-5 w-5 shrink-0" aria-hidden />
               ) : (
-                <Gamepad2 className="mr-2 h-5 w-5" aria-hidden />
+                <Gamepad2 className="mr-2 h-5 w-5 shrink-0" aria-hidden />
               )}
               {state.kind === "busy"
                 ? `Finish ${state.climbing} first`
