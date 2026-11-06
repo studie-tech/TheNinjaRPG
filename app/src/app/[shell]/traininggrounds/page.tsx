@@ -1129,7 +1129,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     fetchNextPage,
     hasNextPage,
   } = api.jutsu.getAll.useInfiniteQuery(
-    { limit: 100, hideAi: true, ...getFilter(state) },
+    // Learned jutsu come first, so later pages only add new ones below them.
+    { limit: 100, hideAi: true, ownedFirst: true, ...getFilter(state) },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
