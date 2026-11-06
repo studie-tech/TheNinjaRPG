@@ -738,9 +738,6 @@ export const raidsRouter = createTRPCRouter({
       if (existingQueueEntries.length > 0) {
         return reject("Already in a battle queue");
       }
-      if (user.status !== "AWAKE") {
-        return reject("You cannot join a raid queue in your current status");
-      }
 
       // Guard - raid active state
       const now = new Date();

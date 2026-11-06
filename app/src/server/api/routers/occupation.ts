@@ -211,7 +211,6 @@ export const occupationRouter = createTRPCRouter({
         (item) => item.craftingFinishedAt && item.craftingFinishedAt > new Date(),
       );
       // Guards
-      if (!user) return errorResponse("User not found");
       const craftingBlock = craftingStartBlockMessage(user);
       if (craftingBlock) return errorResponse(craftingBlock);
       if (itemWithRequirements?.itemType !== "MEAL" && user.occupation !== "CRAFTING") {

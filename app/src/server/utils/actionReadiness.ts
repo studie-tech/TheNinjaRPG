@@ -89,14 +89,7 @@ export const prepareActionReadiness = <T extends UserData>(
 
   const regeneration =
     related.regenerationWithoutTimedBuffs ??
-    calcActiveUserRegen(
-      {
-        ...related,
-        village: related.village ? { ...related.village, structures } : null,
-      },
-      settings,
-      false,
-    );
+    calcActiveUserRegen(related, settings, false);
   const maxEnergy = calcMaxEnergy(related);
   const gain = getUserRegenerationGain(
     { ...related, regenerationWithoutTimedBuffs: regeneration },

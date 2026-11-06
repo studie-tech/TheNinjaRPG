@@ -227,7 +227,6 @@ export const sageModeRouter = createTRPCRouter({
         fetchActionUser(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;

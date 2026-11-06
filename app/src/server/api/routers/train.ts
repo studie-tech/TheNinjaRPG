@@ -91,7 +91,6 @@ export const trainRouter = createTRPCRouter({
         fetchActionUser(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -461,8 +460,6 @@ export const trainRouter = createTRPCRouter({
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      if (user.status !== "AWAKE")
-        return errorResponse(actionStatusMessage(user.status));
       const kind = isInArray(input.stat, BasicElementName) ? "ELEMENT" : "MASTERY";
       const fields = masteryTrainingFields[kind];
       const { stat: trained, startedAt, speed } = getMasteryTrainingState(user, kind);

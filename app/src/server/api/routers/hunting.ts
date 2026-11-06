@@ -232,16 +232,14 @@ export const huntingRouter = createTRPCRouter({
           findHuntingSessionForUser(ctx.drizzle, ctx),
           findHuntingProgressForAccept(ctx.drizzle, ctx, input),
         ]);
-      const readiness = initialUser
-        ? prepareActionReadiness(initialUser, actionSettings)
-        : undefined;
-      if (readiness?.error) return errorResponse(readiness.error);
-      const user = readiness?.user ?? initialUser;
+      const readiness = prepareActionReadiness(initialUser, actionSettings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const habitat = habitats.find((h) => h.id === input.habitatId);
       const contract = habitat?.content.contracts.find(
         (c) => c.id === input.contractId,
       );
-      if (!user || user.isAi || user.isBanned || user.status !== "AWAKE")
+      if (user.isAi || user.isBanned || user.status !== "AWAKE")
         return errorResponse(
           "You must be awake and out of combat to select a contract.",
         );
@@ -359,7 +357,7 @@ export const huntingRouter = createTRPCRouter({
         findHuntingSessionForUser(ctx.drizzle, ctx),
       ]);
       const readiness =
-        initialUser && input.action === "prepare"
+        input.action === "prepare"
           ? prepareActionReadiness(initialUser, actionSettings)
           : undefined;
       if (readiness?.error) return errorResponse(readiness.error);
@@ -409,7 +407,6 @@ export const huntingRouter = createTRPCRouter({
         (c) => c.id === session.contractId,
       );
       if (
-        !user ||
         user.status !== "AWAKE" ||
         user.isBanned ||
         user.sector !== session.sector ||
@@ -465,11 +462,9 @@ export const huntingRouter = createTRPCRouter({
           listHuntingProgressForGetBoard(ctx.drizzle, ctx),
           listHuntableItems(ctx.drizzle),
         ]);
-      const readiness = initialUser
-        ? prepareActionReadiness(initialUser, actionSettings)
-        : undefined;
-      if (readiness?.error) return errorResponse(readiness.error);
-      const user = readiness?.user ?? initialUser;
+      const readiness = prepareActionReadiness(initialUser, actionSettings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const contract = session?.content?.contracts.find(
         (c) => c.id === session?.contractId,
       );
@@ -478,7 +473,6 @@ export const huntingRouter = createTRPCRouter({
       const progress = progressRows.find((p) => p.contractId === contract.id);
       const allowance = huntingAllowance(contract, progress);
       if (
-        !user ||
         user.status !== "AWAKE" ||
         user.isBanned ||
         user.isAi ||

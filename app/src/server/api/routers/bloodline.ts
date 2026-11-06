@@ -712,7 +712,6 @@ export const bloodlineRouter = createTRPCRouter({
         fetchBloodlineProgression(ctx.drizzle, ctx.userId),
       ]);
       // Guard
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;

@@ -129,7 +129,6 @@ export const petsRouter = createTRPCRouter({
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      if (!user) return errorResponse("User not found");
       if (user.isBanned || user.status !== "AWAKE" || user.battleId || user.isAi)
         return errorResponse(
           "You must be awake and out of combat to unlock a companion slot.",
@@ -192,8 +191,7 @@ export const petsRouter = createTRPCRouter({
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
-      if (restriction || !user || !pet)
-        return errorResponse(restriction ?? "Pet not found");
+      if (restriction || !pet) return errorResponse(restriction ?? "Pet not found");
       if (pet.id === user.activePetId)
         return errorResponse("This companion is already active.");
       if (pet.rank > getMaxPetRank(user.rank))
@@ -255,8 +253,7 @@ export const petsRouter = createTRPCRouter({
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
-      if (restriction || !user || !pet)
-        return errorResponse(restriction ?? "Pet not found");
+      if (restriction || !pet) return errorResponse(restriction ?? "Pet not found");
       const blocked = validatePetAbilities({
         pet: { ...pet, jutsuIds: input.jutsuIds, skillIds: input.skillIds },
         owner: user,
@@ -301,8 +298,7 @@ export const petsRouter = createTRPCRouter({
       const user = readiness.user;
       const now = new Date();
       const feedBlock = petFeedBlockMessage(user, pet, now);
-      if (feedBlock || !user || !pet)
-        return errorResponse(feedBlock ?? "Pet not found");
+      if (feedBlock || !pet) return errorResponse(feedBlock ?? "Pet not found");
       if (
         meal?.item?.itemType !== "MEAL" ||
         meal.storedAtHome ||
@@ -483,7 +479,6 @@ export const petsRouter = createTRPCRouter({
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      if (!user) return errorResponse("User not found");
       const restriction = acquisitionBlockMessage(user);
       if (restriction) return errorResponse(restriction);
       const capacity = getPetCollectionCapacity(user);
@@ -619,8 +614,7 @@ export const petsRouter = createTRPCRouter({
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
-      if (restriction || !user || !pet)
-        return errorResponse(restriction ?? "Pet not found");
+      if (restriction || !pet) return errorResponse(restriction ?? "Pet not found");
       if (hasActiveGeneration(pet))
         return errorResponse(
           "Wait for your pet's appearance to finish before releasing it.",
@@ -713,8 +707,7 @@ export const petsRouter = createTRPCRouter({
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
-      if (restriction || !user || !pet)
-        return errorResponse(restriction ?? "Pet not found");
+      if (restriction || !pet) return errorResponse(restriction ?? "Pet not found");
       if (input.battleEnabled && !PET_BATTLE_CONFIG.enabled)
         return errorResponse("Companion battles are not available yet.");
       if (input.battleEnabled && pet.rank > getMaxPetRank(user.rank))
@@ -751,8 +744,7 @@ export const petsRouter = createTRPCRouter({
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
-      if (restriction || !user || !pet)
-        return errorResponse(restriction ?? "Pet not found");
+      if (restriction || !pet) return errorResponse(restriction ?? "Pet not found");
       if (pet.rank > getMaxPetRank(user.rank))
         return errorResponse("Your rank does not support this companion rank.");
       const changed = await updateOwnedPet(
@@ -816,8 +808,7 @@ export const petsRouter = createTRPCRouter({
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
-      if (restriction || !user || !pet)
-        return errorResponse(restriction ?? "Pet not found");
+      if (restriction || !pet) return errorResponse(restriction ?? "Pet not found");
       if (pet.rank > getMaxPetRank(user.rank))
         return errorResponse("Your rank does not support this companion rank.");
       if (!isPetAppearanceReady(pet))
@@ -903,8 +894,7 @@ export const petsRouter = createTRPCRouter({
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
-      if (restriction || !user || !pet)
-        return errorResponse(restriction ?? "Pet not found");
+      if (restriction || !pet) return errorResponse(restriction ?? "Pet not found");
       const blocked = petRankUpBlockMessage(pet, user);
       if (blocked) return errorResponse(blocked);
       const next = PET_RANKS.find((entry) => entry.rank === pet.rank + 1);
@@ -957,7 +947,7 @@ export const petsRouter = createTRPCRouter({
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      if (!user || !pet) return errorResponse("Pet not found");
+      if (!pet) return errorResponse("Pet not found");
       const restriction = petMutationBlockMessage(user, pet);
       if (restriction) return errorResponse(restriction);
       if (!pet.species)

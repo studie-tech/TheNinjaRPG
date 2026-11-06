@@ -356,12 +356,10 @@ export const dungeonRouter = createTRPCRouter({
             ? listUserPetForInitiateBattle(ctx.drizzle, [ctx.userId], [])
             : [],
         ]);
-      const readiness = initialUser
-        ? prepareActionReadiness(initialUser, actionSettings)
-        : undefined;
-      if (readiness?.error) return errorResponse(readiness.error);
-      const user = readiness?.user ?? initialUser;
-      if (user?.status !== "AWAKE" || user.isBanned || user.isAi)
+      const readiness = prepareActionReadiness(initialUser, actionSettings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
+      if (user.status !== "AWAKE" || user.isBanned || user.isAi)
         return errorResponse(
           "You must be awake and out of combat to create a dungeon lobby.",
         );
@@ -456,12 +454,12 @@ export const dungeonRouter = createTRPCRouter({
         fetchAllGameSettings(ctx.drizzle),
       ]);
       const readiness =
-        initialUser && input.action === "accept"
+        input.action === "accept"
           ? prepareActionReadiness(initialUser, actionSettings)
           : undefined;
       if (readiness?.error) return errorResponse(readiness.error);
       const user = readiness?.user ?? initialUser;
-      if (!run || !user) return errorResponse("Dungeon not found.");
+      if (!run) return errorResponse("Dungeon not found.");
       if (await expireDungeonRun(ctx.drizzle, run)) {
         return {
           ...errorResponse("The dungeon deadline expired."),

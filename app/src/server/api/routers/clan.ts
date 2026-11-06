@@ -1035,7 +1035,6 @@ export const clanRouter = createTRPCRouter({
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
       const locationLabel = user?.isOutlaw ? "syndicate" : "village";
       // Guards
-      if (!user) return errorResponse("User not found");
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!user.clanId) return errorResponse(`Not in a ${groupLabel}`);
       const readiness = prepareActionReadiness(user, settings);

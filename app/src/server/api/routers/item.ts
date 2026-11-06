@@ -956,7 +956,6 @@ export const itemRouter = createTRPCRouter({
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      if (!user) return errorResponse("User not found");
 
       if (!evolutionItem) return errorResponse("Evolution item not found");
       const parentItemId = evolutionItem.parentItemId;
@@ -1544,7 +1543,6 @@ export const itemRouter = createTRPCRouter({
           findUserItemVariantForPurchaseVariant(ctx.drizzle, ctx, input),
           fetchAllGameSettings(ctx.drizzle),
         ]);
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -1553,7 +1551,6 @@ export const itemRouter = createTRPCRouter({
       // spent while the user is not AWAKE (covers TRAVEL/BATTLE/ASLEEP/etc.), while
       // the token stack is still crafting, or while it is tied to an active auction.
       // The atomic consumption below also rechecks auction and hunting availability.
-      if (!user) return errorResponse("User not found");
       if (user.isBanned) return errorResponse("You are banned");
 
       if (!tokenItem) return errorResponse("Token item not found");
@@ -1680,7 +1677,6 @@ export const itemRouter = createTRPCRouter({
         fetchActionUser(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -1697,13 +1693,12 @@ export const itemRouter = createTRPCRouter({
         ),
         updateUserForActionReadiness(ctx.drizzle, readiness, recoveredAt),
       ]);
-      const confirmedReadiness = recovery.rowsAffected > 0 ? readiness : undefined;
       if (!recovery.rowsAffected)
         return errorResponse("Your status changed. Please try again.");
       if (!result.success) {
         return actionReadinessResponse(
           { success: false, message: result.message },
-          confirmedReadiness,
+          readiness,
           ctx.drizzle,
         );
       }
@@ -1714,7 +1709,7 @@ export const itemRouter = createTRPCRouter({
           inventoryChanges: result.inventoryChanges,
           ...getMergedStacksUserUpdate(user, result.inventoryChanges),
         },
-        confirmedReadiness,
+        readiness,
         ctx.drizzle,
       );
     }),
@@ -1739,7 +1734,6 @@ export const itemRouter = createTRPCRouter({
         restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -1809,7 +1803,6 @@ export const itemRouter = createTRPCRouter({
         ),
         updateUserForActionReadiness(ctx.drizzle, readiness, recoveredAt),
       ]);
-      const confirmedReadiness = recovery.rowsAffected > 0 ? readiness : undefined;
       if (!recovery.rowsAffected)
         return errorResponse("Your status changed. Please try again.");
       const failed = results.filter((r) => !r.success);
@@ -1818,7 +1811,7 @@ export const itemRouter = createTRPCRouter({
       if (failed.length > 0 && mergedTypes === 0) {
         return actionReadinessResponse(
           { success: false, message: failed[0]?.message ?? "Merge failed" },
-          confirmedReadiness,
+          readiness,
           ctx.drizzle,
         );
       }
@@ -1828,7 +1821,7 @@ export const itemRouter = createTRPCRouter({
             success: false,
             message: `Merged ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}, but ${failed.length} other type${failed.length === 1 ? "" : "s"} did not complete (inventory may already show partial merges — try merge again).`,
           },
-          confirmedReadiness,
+          readiness,
           ctx.drizzle,
         );
       }
@@ -1849,7 +1842,7 @@ export const itemRouter = createTRPCRouter({
             ? undefined
             : results.flatMap((result) => result.inventoryChanges ?? []),
         },
-        confirmedReadiness,
+        readiness,
         ctx.drizzle,
       );
     }),
@@ -2114,7 +2107,6 @@ export const itemRouter = createTRPCRouter({
       const user = readiness.user;
 
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!useritem) return errorResponse("User item not found");
       if (useritem.item.itemType === "MEAL") {
         const result = await consumeMeal({
@@ -2802,12 +2794,10 @@ export const itemRouter = createTRPCRouter({
         fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!useritem) return errorResponse("User item not found");
       if (user.occupation !== "CRAFTING") {
         return errorResponse("You must have the Crafting occupation to repair items");
@@ -2882,12 +2872,10 @@ export const itemRouter = createTRPCRouter({
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       // Guard
-      if (!user) return errorResponse("User not found");
       if (user.occupation !== "CRAFTING") {
         return errorResponse("You must have the Crafting occupation to repair items");
       }
@@ -2989,12 +2977,10 @@ export const itemRouter = createTRPCRouter({
           fetchAllGameSettings(ctx.drizzle),
         ],
       );
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!repairUserItem) return errorResponse("Repair item not found");
       if (!hasRequiredSkill(repairUserItem.item, user))
         return errorResponse("Activate the required skill to use this repair item");
@@ -3053,7 +3039,6 @@ export const itemRouter = createTRPCRouter({
         ),
         updateUserForActionReadiness(ctx.drizzle, readiness),
       ]);
-      const confirmedReadiness = recovery.rowsAffected > 0 ? readiness : undefined;
       if (!recovery.rowsAffected) {
         if (repaired)
           await restoreUserItemDurability(
@@ -3070,7 +3055,7 @@ export const itemRouter = createTRPCRouter({
           errorResponse(
             "Could not repair item — it may have been stored, auctioned, or already repaired",
           ),
-          confirmedReadiness,
+          readiness,
           ctx.drizzle,
         );
       }
@@ -3112,7 +3097,7 @@ export const itemRouter = createTRPCRouter({
             errorResponse(
               "Could not consume repair kit — inventory changed, please try again",
             ),
-            confirmedReadiness,
+            readiness,
             ctx.drizzle,
           );
         }
@@ -3128,7 +3113,7 @@ export const itemRouter = createTRPCRouter({
           ]),
           message: `Repaired ${targetUserItem.item.name} by ${actualRepair} durability using ${repairUserItem.item.name}`,
         },
-        confirmedReadiness,
+        readiness,
         ctx.drizzle,
       );
     }),
@@ -3143,12 +3128,10 @@ export const itemRouter = createTRPCRouter({
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
-      if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       // Guard
-      if (!user) return errorResponse("User not found");
 
       // Filter items that need repair (carried inventory only — not home/auction)
       const itemsNeedingRepair = useritems.filter(needsInventoryRepair);

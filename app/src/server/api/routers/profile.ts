@@ -1755,7 +1755,6 @@ export const profileRouter = createTRPCRouter({
         fetchActionUser(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
-      if (!initialUser) return errorResponse("User not found");
       const hasElementAllocation = BasicElementName.some(
         (element) => Math.floor(input[element]) > 0,
       );

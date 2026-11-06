@@ -951,8 +951,6 @@ export const combatRouter = createTRPCRouter({
       if (user.money < BATTLE_ARENA_HEAL_COST)
         return errorResponse("You don't have enough money");
       if (user.isBanned) return errorResponse("You are banned");
-      if (user.status !== "AWAKE")
-        return errorResponse(actionStatusMessage(user.status));
       // Mutate with guard
       const result = await updateUserDataForBattleArenaHeal(
         ctx.drizzle,
