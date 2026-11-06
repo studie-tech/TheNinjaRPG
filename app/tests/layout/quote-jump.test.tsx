@@ -60,5 +60,6 @@ it("says the message is further back when it is not loaded", () => {
   const view = render(<QuoteJump commentId="gone" author="Bob">Quoted from Bob</QuoteJump>);
   fireEvent.click(view.getByRole("button", { name: "Jump to the quoted message from Bob" }));
   expect(scrollIntoView).not.toHaveBeenCalled();
+  expect(toastMock().mock.calls[0]?.[0].title).toBe("Not loaded yet");
   expect(String(toastMock().mock.calls[0]?.[0].message)).toContain("further back");
 });

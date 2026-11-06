@@ -17,6 +17,7 @@ export function QuoteJump({ commentId, author, children }: QuoteJumpProps) {
     if (!target) {
       showMutationToast({
         success: false,
+        title: "Not loaded yet",
         message: "That message is further back in the chat. Scroll up to load it.",
         id: "quote-jump",
       });
@@ -41,7 +42,7 @@ export function QuoteJump({ commentId, author, children }: QuoteJumpProps) {
 }
 
 /** Classes that outline the message a quote jumped to. */
-const JUMP_OUTLINE = ["rounded-md", "ring-2", "ring-primary", "ring-offset-2"];
+const JUMP_OUTLINE = ["rounded-md", "ring-2", "ring-inset", "ring-primary"];
 
 /**
  * The quoted message nearest the quote: the closest ancestor holding a row with that id,
