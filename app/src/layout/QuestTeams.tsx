@@ -15,7 +15,7 @@ import Modal from "@/layout/Modal";
 import { PartyRoster } from "@/layout/PartyRoster";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
-import { actionStatusMessage } from "@/libs/actionReadiness";
+import { actionStatusMessage, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -147,7 +147,9 @@ export const QuestTeams = ({
   const canEncounter = current?.hasEncounter && !current.completed && !current.failed;
   const missingMembers = current?.members.filter(
     (member) =>
-      member.status !== "AWAKE" ||
+      (member.userId === user.userId && current.leaderId === user.userId
+        ? !canAttemptAwakeAction(user)
+        : member.status !== "AWAKE") ||
       !location ||
       member.sector !== location.sector ||
       member.longitude !== location.longitude ||
@@ -329,8 +331,8 @@ export const QuestTeams = ({
               </p>
               <p>
                 {missingMembers?.length
-                  ? `Waiting for: ${missingMembers.map((member) => member.username).join(", ")}. Everyone must be awake at the encounter location.`
-                  : "Everyone is ready at the encounter location."}
+                  ? `Waiting for: ${missingMembers.map((member) => member.username).join(", ")}. They must be awake at the encounter location.`
+                  : "Ready to attempt the team encounter."}
               </p>
               {!atEncounter && (
                 <Button asChild variant="secondary" size="sm">

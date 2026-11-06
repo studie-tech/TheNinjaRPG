@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { useRef, useState } from "react";
 import * as client from "@/app/_trpc/client";
+import type { UserStatus } from "@/drizzle/constants";
 import { QuestTeams } from "@/layout/QuestTeams";
 import { actionStatusMessage, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import * as toast from "@/libs/toast";
@@ -29,13 +30,28 @@ const mutation = () => {
 };
 const create = mutation();
 const join = mutation();
+const start = mutation();
 const updateUser = vi.fn(async () => undefined);
 const invalidate = vi.fn(async () => undefined);
+const encounterLocation = { sector: 50, longitude: 12, latitude: 13 };
+const encounterTeam = () => ({
+  id: "team", questId: "quest", name: "Team", leaderId: "ninja",
+  members: [
+    { userId: "ninja", username: "Leader", status: "AWAKE" as UserStatus, ...encounterLocation },
+    { userId: "helper", username: "Helper", status: "AWAKE" as UserStatus, ...encounterLocation },
+  ],
+  encounterLocation: { ...encounterLocation }, hasEncounter: true,
+  completed: false, failed: false, battleId: null, version: 1, isPublic: true,
+});
+let current: ReturnType<typeof encounterTeam> | null;
+let actor: { userId: string; status: UserStatus; autoWakeUp: boolean } & typeof encounterLocation;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  current = null;
+  actor = { userId: "ninja", status: "HOSPITALIZED", autoWakeUp: true, ...encounterLocation };
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
-    data: { userId: "ninja", status: "HOSPITALIZED" },
+    data: actor,
     prepareUserUpdate: () => 7,
     updateUser,
   } as never);
@@ -44,12 +60,72 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ coop: { quest: { overview: { invalidate } } }, quests: { specificQuests: { invalidate }, getPendingRewardChoices: { invalidate } } }),
     coop: { quest: {
-      overview: { useQuery: () => ({ data: { current: null, teams: [{ id: "team", questId: "quest", name: "Team", members: [], invited: false }] }, isPending: false }) },
-      create, join, leave: inactive, invite: inactive, remove: inactive, disband: inactive, startEncounter: inactive,
+      overview: { useQuery: () => ({ data: { current, teams: [{ id: "team", questId: "quest", name: "Team", members: [], invited: false }] }, isPending: false }) },
+      create, join, leave: inactive, invite: inactive, remove: inactive, disband: inactive, startEncounter: start,
     } },
   });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+  it(`offers an encounter attempt to the recoverable ${status} leader without changing roster status`, () => {
+    current = encounterTeam();
+    actor.status = status;
+    current.members[0]!.status = status;
+    const view = render(<QuestTeams questId="quest" />);
+    expect(view.getByRole("status").textContent).toContain("Ready to attempt the team encounter.");
+    expect(view.getByRole("list", { name: "Party members" }).textContent).toContain(status === "ASLEEP" ? "Asleep" : "Hospitalized");
+    fireEvent.click(view.getByRole("button", { name: "Start Team Encounter" }));
+    expect(start.mutate).toHaveBeenCalledWith({ partyId: "team" });
+  });
+}
+
+for (const status of ["ASLEEP", "BATTLE", "TRAVEL", "QUEUED"] as const) {
+  it(`keeps the ${status} leader in the waiting hint when recovery is unavailable`, () => {
+    current = encounterTeam();
+    actor.status = status;
+    actor.autoWakeUp = false;
+    current.members[0]!.status = status;
+    const view = render(<QuestTeams questId="quest" />);
+    expect(view.getByRole("status").textContent).toContain("Waiting for: Leader.");
+  });
+}
+
+for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+  it(`keeps ${status} teammates in the leader's waiting hint`, () => {
+    current = encounterTeam();
+    actor.status = "ASLEEP";
+    current.members[0]!.status = "ASLEEP";
+    current.members[1]!.status = status;
+    const view = render(<QuestTeams questId="quest" />);
+    expect(view.getByRole("status").textContent).toContain("Waiting for: Helper. They must be awake at the encounter location.");
+  });
+
+  it(`does not project recovery for the ${status} viewer who is not the leader`, () => {
+    current = encounterTeam();
+    actor.userId = "helper";
+    actor.status = status;
+    current.members[1]!.status = status;
+    const view = render(<QuestTeams questId="quest" />);
+    expect(view.getByRole("status").textContent).toContain("Waiting for: Helper.");
+    expect(view.queryByRole("button", { name: "Start Team Encounter" })).toBeNull();
+  });
+}
+
+for (const memberIndex of [0, 1]) {
+  for (const coordinate of ["sector", "longitude", "latitude"] as const) {
+    it(`keeps member ${memberIndex} waiting when their ${coordinate} differs from the encounter`, () => {
+      current = encounterTeam();
+      actor.status = "ASLEEP";
+      current.members[0]!.status = "ASLEEP";
+      const member = current.members[memberIndex]!;
+      member[coordinate] += 1;
+      if (memberIndex === 0) actor[coordinate] += 1;
+      const view = render(<QuestTeams questId="quest" />);
+      expect(view.getByRole("status").textContent).toContain(`Waiting for: ${member.username}.`);
+    });
+  }
+}
 
 for (const [label, action] of [["Form Quest Team", create], ["Join Team", join]] as const) {
   it(`offers recovery beside a rejected ${label} and allows retry`, async () => {
