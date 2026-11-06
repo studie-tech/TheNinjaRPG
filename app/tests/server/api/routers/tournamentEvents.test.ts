@@ -47,6 +47,8 @@ import { maintainEventTournaments, syncEventTournament } from "@/server/api/rout
 import type { DrizzleClient } from "@/server/db";
 import { eventTournamentConfigSchema, type EventParticipant } from "@/validators/tournament";
 import { ObjectiveReward } from "@/validators/rewards";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { withAfterTasks } from "../../../setup/after";
 import { insertItems, insertUsers } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements } from "../../../setup/statements";
@@ -641,6 +643,40 @@ describeWithDatabase("event tournament persistence", () => {
       expect(response).not.toHaveProperty("userPatch");
     } finally { unsubscribe(); cache.clear(); }
   });
+
+  for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+    it.each([false, true])(`preserves committed ${status} acceptance activity without a profile read (launch: %s)`, async (launches) => {
+      const { database, game, accept } = await readyEvent();
+      const userId = game.userIds[launches ? 1 : 0]!;
+      if (!launches) {
+        const row = (await fetchEvent(database, "launch"))!;
+        row.eventData!.series[0]!.games[0]!.accepted = [];
+        await database.update(tournament).set({ eventData: row.eventData }).where(eq(tournament.id, "launch"));
+      }
+      await database.update(userData).set({ status, autoWakeUp: true, regenAt: new Date(0) }).where(eq(userData.userId, userId));
+      const profile = await callerFor(profileRouter, userId);
+      const initial = await profile.getUser();
+      const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const key = ["event-recovery-profile"];
+      const read = vi.fn(() => profile.getUser());
+      cache.setQueryData(key, initial);
+      const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+      const unsubscribe = observer.subscribe(() => {});
+      try {
+        const revision = prepareUserUpdate(cache, key);
+        const response = await withAfterTasks({ accept: () => accept(userId) }).accept();
+        expect(response.success).toBe(true);
+        const activity = { status: launches ? "BATTLE" : "AWAKE", battleId: launches ? game.battleId : null };
+        const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
+        expect(saved).toMatchObject(activity);
+        expect(response.userRecovery?.activity).toMatchObject(activity);
+        await updateUserCache(cache, key, response, { revision });
+        expect(cache.getQueryData<typeof initial>(key)?.userData).toMatchObject(activity);
+        expect(read).not.toHaveBeenCalled();
+        expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+      } finally { unsubscribe(); cache.clear(); }
+    });
+  }
   it("blocks open-world attacks on registered entrants until they withdraw", async () => {
     const database = await getTestDatabase();
     await insertUsers(
@@ -758,7 +794,7 @@ describeWithDatabase("event tournament persistence", () => {
         },
       ]),
     );
-    let recovering: Promise<boolean> | undefined;
+    let recovering: ReturnType<typeof syncEventTournament> | undefined;
     try {
       await inserting.promise;
       expect(await database.query.tournamentMatch.findMany()).toHaveLength(0);
@@ -830,7 +866,7 @@ describeWithDatabase("event tournament persistence", () => {
         ],
       ),
     );
-    let recovering: Promise<boolean> | undefined;
+    let recovering: ReturnType<typeof syncEventTournament> | undefined;
     try {
       await inserting.promise;
       vi.spyOn(Date, "now").mockReturnValue(
@@ -1112,7 +1148,7 @@ describeWithDatabase("event tournament persistence", () => {
         await release.promise;
       });
       const launching = accept(game.userIds[1]!, stalled);
-      let recovering: Promise<boolean> | undefined;
+      let recovering: ReturnType<typeof syncEventTournament> | undefined;
       try {
         await reached.promise;
         // Let independently dispatched siblings settle before checking atomic visibility.
