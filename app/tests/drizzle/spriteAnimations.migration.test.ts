@@ -4,12 +4,15 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { aiSpriteAnimation, spriteAnimation, userData } from "@/drizzle/schema";
-import variants from "@/libs/rendering/animationTextureVariants.json";
 import { spriteAnimationSchema } from "@/validators/spriteAnimation";
 import { insertUsers } from "../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../setup/testDatabase";
 
 const migration = await readFile(new URL("../../drizzle/migrations/0138_seed_sprite_animations.sql", import.meta.url), "utf8");
+const backfill = await readFile(
+  new URL("../../drizzle/migrations/0143_backfill_sprite_small_urls.sql", import.meta.url),
+  "utf8",
+);
 const kappa = {
   userId: "9zteAgVlXWDTDzxSS4Jxm", username: "Kappa Creature", isAi: true,
   avatar: "https://utfs.io/f/3308884f-5ccc-4a7a-ad81-cf7f27668b3e-1omb0r.webp", avatarFacing: "left",
@@ -52,7 +55,7 @@ describeWithDatabase("delivered sprite animation migration", () => {
     for (const sheet of sheets) {
       expect(spriteAnimationSchema.safeParse(sheet).success).toBe(true);
       const key = new URL(sheet.url).pathname.split("/").pop()!;
-      expect(key in variants).toBe(true);
+      expect(backfill).toContain(`WHEN '${key}' THEN`);
     }
     expect(await db.query.userData.findMany({ orderBy: userData.userId })).toEqual(users);
 

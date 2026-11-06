@@ -160,7 +160,7 @@ describeWithDatabase("combat sprite animation delivery", () => {
           isSummonTemplate: inactive === "template",
           fledBattle: inactive === "fled", leftBattle: inactive === "left",
           spriteAnimations: { idle: {
-            id: "idle", name: "Idle", url: "https://example.com/idle.png",
+            id: "idle", name: "Idle", url: "https://example.com/idle.png", smallUrl: null,
             columns: 6, rows: 2, frameCount: 12, fps: 12, facing: "left",
           } },
         });

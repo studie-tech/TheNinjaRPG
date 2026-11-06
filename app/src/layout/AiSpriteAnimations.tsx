@@ -245,12 +245,11 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
           Upload a transparent sheet with equal square cells, read left to right, then
           top to bottom. Use at most {SPRITE_ANIMATION_LIMITS.frames} frames,{" "}
           {SPRITE_ANIMATION_LIMITS.cells} cells and {SPRITE_ANIMATION_LIMITS.seconds}{" "}
-          seconds per loop. Battles request 128- or 256-pixel cells to match the
-          displayed size. Keep transparency and frame padding consistent throughout the
-          loop; the first frame establishes the feet position. Upload replacements as
-          new files so browsers can cache each version independently. Uploaded sheets
-          use CDN resizing; external URLs need 128-pixel cells for mobile. New sheets
-          stay in the library when assignments change.
+          seconds per loop. Upload one sheet at any resolution; saving prepares the 128-
+          and 256-pixel versions battles use. Keep transparency and frame padding
+          consistent throughout the loop; the first frame establishes the feet position.
+          Upload replacements as new files so browsers can cache each version
+          independently. New sheets stay in the library when assignments change.
         </p>
         <form
           onSubmit={form.handleSubmit((values) => create.mutate(values))}
@@ -323,7 +322,7 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
               <p className="mb-2 font-semibold text-sm">Draft preview</p>
               <SpriteAnimationPreview
                 key={JSON.stringify(draftPreview.data)}
-                animation={{ ...draftPreview.data, id: "draft" }}
+                animation={{ ...draftPreview.data, id: "draft", smallUrl: null }}
               />
             </div>
           )}

@@ -4,7 +4,6 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { aiSpriteAnimation, spriteAnimation, userData } from "@/drizzle/schema";
-import variants from "@/libs/rendering/animationTextureVariants.json";
 import { spriteAnimationSchema } from "@/validators/spriteAnimation";
 import { insertUsers } from "../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../setup/testDatabase";
@@ -15,6 +14,10 @@ const migration = await readFile(
 );
 const previous = await readFile(
   new URL("../../drizzle/migrations/0138_seed_sprite_animations.sql", import.meta.url),
+  "utf8",
+);
+const backfill = await readFile(
+  new URL("../../drizzle/migrations/0143_backfill_sprite_small_urls.sql", import.meta.url),
   "utf8",
 );
 const start = migration.indexOf("FROM (\n") + "FROM (\n".length;
@@ -46,8 +49,13 @@ describeWithDatabase("remaining sprite animation migration", () => {
     await insertUsers(roster.map((row) => ({ ...row, username: `AI-${row.userId}`, isAi: true })));
 
     await runRawSql(migration);
+    await runRawSql(backfill);
 
     const sheets = await db.query.spriteAnimation.findMany({ orderBy: spriteAnimation.id });
+    for (const sheet of sheets) {
+      expect(sheet.smallUrl).toStartWith("https://uploadthing.b-cdn.net/f/");
+      expect(sheet.smallUrl).not.toBe(sheet.url);
+    }
     const bindings = await db.query.aiSpriteAnimation.findMany({
       orderBy: [aiSpriteAnimation.userId, aiSpriteAnimation.actionKey],
     });
@@ -56,7 +64,6 @@ describeWithDatabase("remaining sprite animation migration", () => {
     expect(new Set(bindings.map((row) => row.userId)).size).toBe(425);
     for (const sheet of sheets) {
       expect(spriteAnimationSchema.safeParse(sheet).success).toBe(true);
-      expect(new URL(sheet.url).pathname.split("/").pop()! in variants).toBe(true);
     }
 
     await runRawSql(migration);

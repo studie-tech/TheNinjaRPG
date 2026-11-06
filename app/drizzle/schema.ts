@@ -208,6 +208,8 @@ export const spriteAnimation = mysqlTable("SpriteAnimation", {
   id: varchar("id", { length: 191 }).primaryKey().notNull(),
   name: varchar("name", { length: 191 }).notNull(),
   url: varchar("url", { length: 2048 }).notNull(),
+  /** Raw 128-pixel-per-cell sheet; `url` serves 256. Sheets without one use CDN resizing. */
+  smallUrl: varchar("smallUrl", { length: 2048 }),
   columns: smallint("columns").notNull(),
   rows: smallint("rows").notNull(),
   frameCount: smallint("frameCount").notNull(),
