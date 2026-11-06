@@ -118,7 +118,7 @@ const card = (name: string) => screen.getByRole("article", { name });
 // Confirm wraps its trigger, so the tower's own button is found by its id.
 const climbButton = (id: string) => document.getElementById(`tutorial-take-quest-${id}`)!;
 
-it("keeps a climb without a saved tracker playable and abandonable", () => {
+it("renders the logbook entry of a climb without a saved tracker", () => {
   userQuests = [
     {
       questId: "t-capped",
@@ -131,6 +131,10 @@ it("keeps a climb without a saved tracker playable and abandonable", () => {
   const climb = card("Skychain Monastery");
   expect(within(climb).getByText("Climbing now")).toBeDefined();
   expect(within(climb).getByText("Current objective")).toBeDefined();
+  expect(vi.mocked(logbook.LogbookEntry).mock.calls[0]?.[0].tracker).toMatchObject({
+    id: "t-capped",
+    goals: [],
+  });
 });
 
 it("lists the tower being climbed first", () => {
