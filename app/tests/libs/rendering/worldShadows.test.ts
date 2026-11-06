@@ -896,21 +896,48 @@ describe("physical world lighting", () => {
     const frames=[0,4].map(x=>new Texture({source:atlas.source,frame:new Rectangle(x,0,4,4)}));
     const sprite=new Sprite(source.texture);sprite.position.set(40,40);sprite.scale.set(5,-5);f.parent.addChild(sprite);
     const registration=f.shadows.register(sprite,{id:"combat-sheet",kind:"character",image:"combat-sheet-portrait",size:20,x:40,y:40,groundY:20,shadowCaster:"character"});
-    const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
     try {
       await registration.ready;
-      sprite.texture=frames[0]!;f.shadows.update(worldSunlight(),viewport);await flush();f.shadows.update(worldSunlight(),viewport);
+      sprite.texture=frames[0]!;f.shadows.update(worldSunlight(),viewport);
       const layer=f.render.mock.calls.find(([call])=>call.container.children.some((child:Mesh)=>!!child.shader?.resources.uMaterial0))![0].container;
       const mesh=layer.children[0] as Mesh<Geometry, Shader>;
       const shader=mesh.shader;
       if(!shader)throw new Error("Expected a receiver shader");
       const material=shader.resources.uMaterial0 as BufferImageSource;
       expect(material.pixelWidth).toBe(4);expect((material.resource as Uint8Array)[(2*4+1)*4+3]).toBe(255);
-      sprite.texture=frames[1]!;f.shadows.update(worldSunlight(),viewport);await flush();f.shadows.update(worldSunlight(),viewport);
+      sprite.texture=frames[1]!;f.shadows.update(worldSunlight(),viewport);
       expect(layer.children[0]).toBe(mesh);expect(mesh.shader).toBe(shader);expect(shader.resources.uMaterial0).toBe(material);
       expect((material.resource as Uint8Array)[(2*4+1)*4+3]).toBe(0);
       expect((material.resource as Uint8Array)[(1*4+2)*4+3]).toBe(255);
     } finally {registration();f.dispose();for(const frame of frames)frame.destroy(false);atlas.destroy(true);source.dispose();}
+  });
+
+  it.each([false, true])("draws ground-cover receivers below fighters regardless of foot order (instanced: %s)", async (instanced) => {
+    const f = fixture(instanced), source = materialSourceFixture();
+    const fighter = new Sprite(source.texture), prop = new Sprite(source.texture);
+    const releases: ReturnType<typeof f.shadows.register>[] = [];
+    try {
+      fighter.position.set(40, 40); fighter.width = fighter.height = 20; fighter.zIndex = -100;
+      prop.position.set(40, 40); prop.width = prop.height = 40; prop.zIndex = 100;
+      f.parent.addChild(fighter, prop);
+      releases.push(
+        f.shadows.register(fighter, { id: "ground-order-fighter", kind: "character", image: "ground-order-fighter.png", size: 20, x: 40, y: 40, groundY: 100, shadowCaster: "character" }),
+        f.shadows.register(prop, { id: "ground-order-prop", kind: "decoration", image: "ground-order-prop.png", size: 40, x: 40, y: 40, groundY: -100, small: true }),
+      );
+      await Promise.all(releases.map((release) => release.ready));
+      f.shadows.update(worldSunlight(), viewport);
+      const layer = f.render.mock.calls.find(([call]) => call.container.children.some((child: Mesh) => !!child.shader?.resources.uMaterial0))![0].container;
+      const heights = layer.children.flatMap((mesh: { geometry: Geometry }) => {
+        const attribute = mesh.geometry.getAttribute("aData");
+        const stride = attribute.stride! / Float32Array.BYTES_PER_ELEMENT;
+        const offset = attribute.offset! / Float32Array.BYTES_PER_ELEMENT;
+        return Array.from(mesh.geometry.getBuffer("aData").data).filter((_, index) => index % stride === offset);
+      });
+      expect(heights).toEqual(instanced ? [40, 20] : [...Array(6).fill(40), ...Array(6).fill(20)]);
+    } finally {
+      for (const release of releases) release();
+      f.dispose(); source.dispose();
+    }
   });
 
   it("refreshes receiver and occlusion data when same-sized animation images change", async () => {

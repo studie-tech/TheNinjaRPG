@@ -748,39 +748,19 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           if (!liveCell) record.cached = null;
           if (liveCell) {
             const lease = acquireCharacterFrameMaterial(sprite.texture);
-            const cell = {
+            const previous = record.animatedMaterial;
+            const material = updateCharacterFrameMaterial(lease.material, previous);
+            record.cell = {
               texture: sprite.texture,
               lease,
-              material: undefined as WorldMaterial | undefined,
+              material,
             };
-            record.cell = cell;
-            const install = (material: WorldMaterial) => {
-              if (!record.active || record.cell !== cell) return;
-              const previous = record.animatedMaterial;
-              cell.material = updateCharacterFrameMaterial(material, previous);
-              if (previous && previous !== cell.material)
-                retired.push(() => previous.texture.destroy(true));
-              record.animatedMaterial = cell.material;
-              record.cached = null;
-              invalidate();
-            };
-            if (lease.material) install(lease.material);
-            else void cell.lease.resource.then(install, () => {});
+            if (previous && previous !== material)
+              retired.push(() => previous.texture.destroy(true));
+            record.animatedMaterial = material;
+            record.cached = null;
+            invalidate();
           }
-        }
-        if (liveCell && !record.cell?.material) {
-          // Retain the last complete shadow while the next cell's CPU data settles.
-          // Keeping its binding avoids tearing down GPU batches during cold playback.
-          if (
-            record.cached &&
-            boundsOverlap(record.cached.receiver.bounds, viewport, margin)
-          ) {
-            visible.push(record.cached.receiver);
-            if (record.cached.sun) sunCasters.push(record.cached.sun);
-            if (record.occluder) dynamicOccluders.push(record.occluder);
-            appendLights(record, record.cached.lights);
-          }
-          continue;
         }
         const pose = record.cached?.pose;
         if (
@@ -1503,7 +1483,11 @@ const quadBounds = (m: Float32Array) => {
 
 /** Material quads follow the same ground, root and layer ordering as the visible artwork. */
 const receiverOrder = (a: VisibleCaster, b: VisibleCaster) =>
-  a.order - b.order || a.rootOrder - b.rootOrder || a.layerOrder - b.layerOrder;
+  // Ground cover belongs below all upright art, independently of its foot coordinate.
+  Number(!a.record.description.small) - Number(!b.record.description.small) ||
+  a.order - b.order ||
+  a.rootOrder - b.rootOrder ||
+  a.layerOrder - b.layerOrder;
 
 /** Batches adjacent painter-ordered quads; atlas limits never reorder overlapping artwork. */
 const updateReceiverBatches = (
@@ -1899,7 +1883,7 @@ type Caster = {
   cell?: {
     texture: Texture;
     lease: ReturnType<typeof acquireCharacterFrameMaterial>;
-    material?: WorldMaterial;
+    material: WorldMaterial;
   };
   sources: Map<Texture["source"], number>;
   active: boolean;

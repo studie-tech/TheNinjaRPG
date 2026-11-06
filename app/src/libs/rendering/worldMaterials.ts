@@ -129,47 +129,46 @@ export const acquireWorldMaterial = (
   );
 };
 
-const characterSources = new Map<string, Texture>();
 const characterMaterials = new Map<string, WorldMaterial>();
-const characterMaterialCache = createLeaseCache<WorldMaterial>({
-  load: async (key) => {
-    const source = characterSources.get(key)!;
-    characterSources.delete(key);
-    // Physical shadows need silhouette coverage, not the full albedo resolution.
-    // A 64px cell keeps sub-gameplay detail while bounding dynamic geometry and readback.
-    const scale = Math.min(1, 64 / Math.max(source.frame.width, source.frame.height));
-    const width = Math.max(1, Math.round(source.frame.width * scale)),
-      height = Math.max(1, Math.round(source.frame.height * scale));
-    const pixels = readTextureFramePixels(source, 64);
-    const normal = encodeWorldNormal(0, -1, 0);
-    for (let y = 0; y < height; y++)
-      for (let x = 0; x < width; x++) {
-        const offset = (y * width + x) * 4;
-        pixels[offset] = (Math.round(normal[0] * 31) << 3) | 1;
-        pixels[offset + 1] = Math.round(normal[1] * 255);
-        pixels[offset + 2] = Math.round((1 - (y + 0.5) / height) * 255);
-      }
-    const material: WorldMaterial = {
-      texture: new Texture({
-        source: new BufferImageSource({
-          resource: pixels,
-          width,
-          height,
-          format: "rgba8unorm",
-          alphaMode: "no-premultiply-alpha",
-          scaleMode: "nearest",
-        }),
+/** Decoded cells prepare synchronously so albedo and lighting use the same pose on its first frame. */
+const createCharacterFrameMaterial = (source: Texture): WorldMaterial => {
+  // Physical shadows need silhouette coverage, not the full albedo resolution.
+  // A 64px cell keeps sub-gameplay detail while bounding dynamic geometry and readback.
+  const scale = Math.min(1, 64 / Math.max(source.frame.width, source.frame.height));
+  const width = Math.max(1, Math.round(source.frame.width * scale)),
+    height = Math.max(1, Math.round(source.frame.height * scale));
+  const pixels = readTextureFramePixels(source, 64);
+  const normal = encodeWorldNormal(0, -1, 0);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const offset = (y * width + x) * 4;
+      pixels[offset] = (Math.round(normal[0] * 31) << 3) | 1;
+      pixels[offset + 1] = Math.round(normal[1] * 255);
+      pixels[offset + 2] = Math.round((1 - (y + 0.5) / height) * 255);
+    }
+  const material: WorldMaterial = {
+    texture: new Texture({
+      source: new BufferImageSource({
+        resource: pixels,
+        width,
+        height,
+        format: "rgba8unorm",
+        alphaMode: "no-premultiply-alpha",
+        scaleMode: "nearest",
       }),
-      pixels,
-      width,
-      height,
-      shape: "character",
-      isBillboard: true,
-      frames: new Map(),
-    };
-    characterMaterials.set(key, material);
-    return material;
-  },
+    }),
+    pixels,
+    width,
+    height,
+    shape: "character",
+    isBillboard: true,
+    frames: new Map(),
+  };
+  return material;
+};
+const characterMaterialCache = createLeaseCache<WorldMaterial>({
+  // Acquiring a cell prepares its CPU data before the ownership cache starts loading it.
+  load: async (key) => characterMaterials.get(key)!,
   unload: async (key) => {
     characterMaterials.get(key)?.texture.destroy(true);
     characterMaterials.delete(key);
@@ -183,10 +182,14 @@ const characterMaterialCache = createLeaseCache<WorldMaterial>({
 export const acquireCharacterFrameMaterial = (texture: Texture) => {
   const frame = texture.frame;
   const key = `${texture.source.uid}:${frame.x}:${frame.y}:${frame.width}:${frame.height}`;
-  if (!characterMaterials.has(key)) characterSources.set(key, texture);
+  let material = characterMaterials.get(key);
+  if (!material) {
+    material = createCharacterFrameMaterial(texture);
+    characterMaterials.set(key, material);
+  }
   return {
     ...characterMaterialCache.acquire(key),
-    material: characterMaterials.get(key),
+    material,
   };
 };
 

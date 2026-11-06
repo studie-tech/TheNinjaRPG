@@ -59,6 +59,11 @@ describe("packed character shadow volumes", () => {
     const next=new Texture({source:atlas.source,frame:new Rectangle(4,0,4,4)});
     const a=acquireCharacterFrameMaterial(first), b=acquireCharacterFrameMaterial(same), c=acquireCharacterFrameMaterial(next);
     try {
+      // A cold cell must be available in the same render that changes its visible texture.
+      expect(a.material?.pixels[(2*4+1)*4+3]).toBe(255);
+      expect(b.material).toBe(a.material);
+      expect(c.material?.pixels[(2*4+1)*4+3]).toBe(0);
+      expect(c.material?.pixels[(1*4+2)*4+3]).toBe(255);
       const [one,two,three]=await Promise.all([a.resource,b.resource,c.resource]);
       expect(one).toBe(two);expect(three).not.toBe(one);
       expect(one.width).toBe(4);expect(one.height).toBe(4);
