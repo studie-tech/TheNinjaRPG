@@ -159,10 +159,20 @@ export function PyramidMode() {
             name: itemName(required.itemId, required.name),
           }));
           const needsConfirm = requirements.length > 0 || tower.content.isolated;
+          // The climbing tower is named in its own card above and in the busy button's title.
+          const climbLabel =
+            state.kind === "busy"
+              ? "Finish current climb"
+              : state.kind === "missingItems"
+                ? `Missing ${state.missing} ${state.missing === 1 ? "item" : "items"}`
+                : "Climb tower";
           const climbButton = (
             <Button
               id={`tutorial-take-quest-${tower.id}`}
-              className="h-auto min-h-11 w-full whitespace-normal py-2 text-center @min-[600px]:w-44"
+              className="@container h-11 w-full @min-[600px]:w-44"
+              title={
+                state.kind === "busy" ? `Finish ${state.climbing} first` : climbLabel
+              }
               disabled={state.kind !== "open" || isPending}
               onClick={needsConfirm ? undefined : () => start(tower.id)}
             >
@@ -171,11 +181,12 @@ export function PyramidMode() {
               ) : (
                 <Gamepad2 className="mr-2 h-5 w-5 shrink-0" aria-hidden />
               )}
-              {state.kind === "busy"
-                ? `Finish ${state.climbing} first`
-                : state.kind === "missingItems"
-                  ? `Missing ${state.missing} ${state.missing === 1 ? "item" : "items"}`
-                  : "Climb tower"}
+              <span
+                className="min-w-0 truncate"
+                style={{ fontSize: climbLabelFontSize(climbLabel) }}
+              >
+                {climbLabel}
+              </span>
             </Button>
           );
           return (
@@ -382,3 +393,11 @@ function TowerHeading({ name, state }: { name: string; state: TowerState }) {
     </div>
   );
 }
+
+/**
+ * Font size that fits a climb label on one line of its fixed-size button: the button's content
+ * width minus its icon (1.75rem), shared by the label's characters at about 0.55em each,
+ * between 10px and the button's usual 14px.
+ */
+export const climbLabelFontSize = (label: string) =>
+  `clamp(10px, calc((100cqi - 1.75rem) / ${Number((label.length * 0.55).toFixed(2))}), 14px)`;
