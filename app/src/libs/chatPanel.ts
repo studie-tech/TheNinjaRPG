@@ -52,18 +52,6 @@ export const chatMentionsAtom = atom<Record<string, number>>({});
 /** New tavern messages from other players since the page loaded, per tavern. */
 export const chatTavernActivityAtom = atom<Record<string, number>>({});
 
-/** One count per conversation: its new tavern messages, or its mentions when higher. */
-export const combineChatCounts = (
-  mentions: Record<string, number>,
-  activity: Record<string, number>,
-): Record<string, number> => {
-  const combined = { ...mentions };
-  for (const [conversationId, count] of Object.entries(activity)) {
-    combined[conversationId] = Math.max(combined[conversationId] ?? 0, count);
-  }
-  return combined;
-};
-
 type ChatMuteUser = Pick<
   NonNullable<UserWithRelations>,
   "chatMuted" | "mutedConversationIds" | "unmutedTavernIds"
@@ -116,7 +104,7 @@ export const countTavernUnread = (
   mentions: Record<string, number>,
   activity: Record<string, number>,
 ) =>
-  Object.keys(combineChatCounts(mentions, activity)).reduce(
+  Object.keys({ ...mentions, ...activity }).reduce(
     (sum, conversationId) =>
       sum + unreadForTavern(user, conversationId, mentions, activity),
     0,

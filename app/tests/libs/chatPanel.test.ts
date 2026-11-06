@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import {
-  combineChatCounts,
   countChatNotifications,
   countTavernUnread,
   getInboxNews,
@@ -61,16 +60,6 @@ describe("unread conversations", () => {
     expect(isConversationUnread({ updatedAt: at(10), lastReadAt: at(5) })).toBe(true);
     expect(isConversationUnread({ updatedAt: at(5), lastReadAt: at(10) })).toBe(false);
     expect(isConversationUnread({ updatedAt: at(5), lastReadAt: null })).toBe(true);
-  });
-});
-
-describe("tavern activity", () => {
-  it("counts each conversation once, by its new messages or its mentions", () => {
-    expect(combineChatCounts({ global: 1, village: 2 }, { global: 4, ally: 1 })).toEqual({
-      global: 4,
-      village: 2,
-      ally: 1,
-    });
   });
 });
 
