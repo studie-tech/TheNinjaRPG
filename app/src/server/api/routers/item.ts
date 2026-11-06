@@ -17,6 +17,7 @@ import {
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getBulkSellUserUpdate,
   getBuyUserUpdate,
   getConsumedItemUserUpdate,
   getConsumedMealUserUpdate,
@@ -40,6 +41,7 @@ import {
   ITEM_LEVEL_CAP,
   type ItemSlot,
   ItemSlots,
+  MAX_BULK_SELL_ITEMS,
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_EXTRA_RESKIN_SLOTS,
   MAX_ITEM_VARIANTS,
@@ -102,6 +104,7 @@ import {
   readItemListFilterSlot,
 } from "@/libs/item";
 import { getItemPurchaseAllowance, itemPurchaseLimitMessage } from "@/libs/itemEconomy";
+import { bulkSellBlockReason, bulkSellMessage } from "@/libs/itemsPage";
 import { getJutsuSlotIncreaseError } from "@/libs/jutsuSlots";
 import {
   buildMissingLoadouts,
@@ -164,6 +167,7 @@ import {
   deleteUserItemImbuementForDelete,
   deleteUserItemImbuementForEvolveItem,
   deleteUserItemImbuementForSellUserItem,
+  deleteUserItemImbuementsForSellUserItems,
   deleteUserItemVariantForDelete,
   deleteUserItemVariantForDeleteItemVariant,
   executeUserPetForClaim,
@@ -225,6 +229,7 @@ import {
   listUserItemForFetchUserItems,
   listUserItemForFetchUserItemsWithVariants,
   listUserItemForMergeAllStacks,
+  listUserItemsForSellUserItems,
   listUserPetForConsume,
   listVariantNames,
   restoreUserItemDurability,
@@ -240,6 +245,7 @@ import {
   selectUserItemForSelectItemLoadout,
   selectUserItemVariantForGetUserUnlockedVariants,
   selectVillageStructureForSellUserItem,
+  sellUserItemAtomically,
   updateBloodlineRollsForConsume,
   updateItemForUpdate,
   updateItemLoadoutForEvolveItem,
@@ -1918,6 +1924,125 @@ export const itemRouter = createTRPCRouter({
           cost > 0
             ? `You sold ${useritem.item.name} for ${cost} ryo`
             : `You dropped ${useritem.item.name}`,
+      };
+    }),
+  sellUserItems: protectedProcedure
+    .meta({ mcp: { description: "Sell or drop several user items at once" } })
+    .input(
+      z.object({
+        userItemIds: z
+          .array(z.string())
+          .min(1)
+          .max(MAX_BULK_SELL_ITEMS)
+          .refine(
+            (ids) => new Set(ids).size === ids.length,
+            "Each item can be sold once",
+          ),
+      }),
+    )
+    .output(
+      userDeltaResponseSchema.extend({
+        soldUserItemIds: z.array(z.string()),
+        ryo: z.number(),
+        refused: z.array(
+          z.object({ userItemId: z.string(), name: z.string(), reason: z.string() }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Fetch
+      const [user, useritems, structures] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        listUserItemsForSellUserItems(ctx.drizzle, ctx, input.userItemIds),
+        selectVillageStructureForSellUserItem(ctx.drizzle, ctx),
+      ]);
+      // Guard each stack: a single sale's rules, limited to the backpack's unequipped stacks
+      const refused: { userItemId: string; name: string; reason: string }[] = [];
+      const sellable: typeof useritems = [];
+      for (const userItemId of input.userItemIds) {
+        const useritem = useritems.find((row) => row.id === userItemId);
+        const reason = useritem
+          ? bulkSellBlockReason(useritem, user.farmCurrency)
+          : "is not in your inventory";
+        if (useritem && !reason) sellable.push(useritem);
+        else {
+          refused.push({
+            userItemId,
+            name: useritem?.item.name ?? "Item",
+            reason: reason ?? "is not in your inventory",
+          });
+        }
+      }
+      const salePrices = sellable.map((useritem) =>
+        calcItemSellingPrice(user, useritem, structures),
+      );
+      const sales = await Promise.allSettled(
+        sellable.map((useritem, index) =>
+          retryOnDeadlock(async () =>
+            sellUserItemAtomically(ctx.drizzle, ctx, useritem, salePrices[index] ?? 0),
+          ),
+        ),
+      );
+      const unconfirmed: typeof refused = [];
+      const sold = sellable.filter((useritem, index) => {
+        const sale = sales[index];
+        if (sale?.status === "fulfilled" && sale.value.rowsAffected > 0) {
+          return true;
+        }
+        if (sale?.status === "rejected") {
+          // A lost acknowledgement can follow a committed sale, so its balance is unknown.
+          unconfirmed.push({
+            userItemId: useritem.id,
+            name: useritem.item.name,
+            reason: "sale could not be confirmed",
+          });
+          return false;
+        }
+        refused.push({
+          userItemId: useritem.id,
+          name: useritem.item.name,
+          reason: "changed, is in use by a hunting battle, or could not be sold",
+        });
+        return false;
+      });
+      const prices = salePrices.filter((_, index) => {
+        const sale = sales[index];
+        return sale?.status === "fulfilled" && sale.value.rowsAffected > 0;
+      });
+      const ryo = prices.reduce((sum, price) => sum + price, 0);
+      // Cleanup cannot make a paid stack sellable again, even if it needs retrying.
+      if (sold.length > 0) {
+        await Promise.all([
+          deleteUserItemImbuementsForSellUserItems(
+            ctx.drizzle,
+            sold.map((useritem) => useritem.id),
+          ),
+          deleteEmptyUserItem(
+            ctx.drizzle,
+            sold.map((useritem) => useritem.id),
+            ctx.userId,
+          ),
+          ...sold.flatMap((useritem, index) =>
+            useritem.item.cost >= 500000
+              ? [
+                  insertActionLogForSellUserItem(
+                    ctx.drizzle,
+                    ctx,
+                    useritem,
+                    prices[index] ?? 0,
+                  ),
+                ]
+              : [],
+          ),
+        ]);
+      }
+      return {
+        success: sold.length > 0,
+        message: bulkSellMessage(prices, refused, unconfirmed),
+        soldUserItemIds: sold.map((useritem) => useritem.id),
+        ryo,
+        refused: [...refused, ...unconfirmed],
+        ...(unconfirmed.length > 0 ? {} : getBulkSellUserUpdate(ryo)),
       };
     }),
   // Use user item

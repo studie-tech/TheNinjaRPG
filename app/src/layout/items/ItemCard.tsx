@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import type { ItemRarity } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import ContentImage from "@/layout/ContentImage";
@@ -7,6 +8,7 @@ import DurabilityBar from "@/layout/DurabilityBar";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { showsItemLevelBadge } from "@/libs/item";
 import { cn } from "@/libs/shadui";
+import { capitalizeFirstLetter } from "@/utils/string";
 
 /** One backpack item: art, name, rarity and where it goes, with stack size or wear. */
 export function ItemCard({
@@ -15,16 +17,23 @@ export function ItemCard({
   onSelect,
   onDragStart,
   onDragEnd,
+  isTicked,
+  blockReason,
 }: ItemCardProps) {
   const { item } = userItem;
   const look = applyActiveVariant(userItem as UserItemWithVariants);
   const wears = item.maxDurability > 0;
   const detail = itemDetail(userItem);
+  // A ticked stack that can no longer be sold can still be unticked.
+  const isBlocked = !!blockReason && !isTicked;
   return (
     <button
       type="button"
       data-item-name={item.name}
       aria-current={isSelected ? "true" : undefined}
+      aria-pressed={isTicked}
+      disabled={isBlocked}
+      title={blockReason ? `${item.name} ${blockReason}` : undefined}
       draggable={!!onDragStart}
       onDragStart={
         onDragStart
@@ -40,6 +49,8 @@ export function ItemCard({
       className={cn(
         "flex w-full min-w-0 items-center gap-2 rounded-lg border bg-card p-1.5 text-left hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-primary",
         isSelected && "border-primary ring-2 ring-primary/40",
+        isTicked && "border-destructive bg-destructive/10 ring-2 ring-destructive/40",
+        isBlocked && "cursor-not-allowed opacity-50",
       )}
     >
       <span className="relative h-11 w-11 shrink-0">
@@ -49,6 +60,11 @@ export function ItemCard({
           rarity={item.rarity}
           className="h-11 w-11"
         />
+        {isTicked && (
+          <span className="absolute -top-1 -left-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white">
+            <Check className="h-3.5 w-3.5" aria-hidden />
+          </span>
+        )}
         {wears && (
           <DurabilityBar
             currentDurability={userItem.durability}
@@ -59,15 +75,21 @@ export function ItemCard({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold text-sm">{look.name}</span>
-        <span
-          className={cn(
-            "block truncate text-xs font-medium",
-            rarityTextClass[item.rarity],
-          )}
-        >
-          {rarityLabel[item.rarity]} · {slotLabel(userItem)}
-          {showsItemLevelBadge(item) && ` · Lv ${userItem.level}`}
-        </span>
+        {blockReason ? (
+          <span className="block truncate text-xs font-medium text-destructive">
+            {capitalizeFirstLetter(blockReason)}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "block truncate text-xs font-medium",
+              rarityTextClass[item.rarity],
+            )}
+          >
+            {rarityLabel[item.rarity]} · {slotLabel(userItem)}
+            {showsItemLevelBadge(item) && ` · Lv ${userItem.level}`}
+          </span>
+        )}
       </span>
       {detail && (
         <span className="shrink-0 text-muted-foreground text-xs font-semibold">
@@ -120,4 +142,8 @@ interface ItemCardProps {
   /** Makes the card a drag-to-equip source; the page passes it on devices with a mouse or trackpad. */
   onDragStart?: (userItem: UserItemWithRelations) => void;
   onDragEnd?: () => void;
+  /** While selecting, whether the card is ticked; undefined outside select mode. */
+  isTicked?: boolean;
+  /** While selecting, why the card cannot be ticked. */
+  blockReason?: string | null;
 }

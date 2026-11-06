@@ -61,6 +61,7 @@ import {
   villageStructure,
 } from "@/drizzle/schema";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
+import { isFarmMarketSeed } from "@/libs/farming";
 import { getJutsuSlotIncreaseLimit } from "@/libs/jutsuSlots";
 import { collapseRewards } from "@/libs/quest";
 import { cacheItemIds, isRestrictedCacheReward } from "@/libs/weightedCache";
@@ -1267,6 +1268,64 @@ export const deleteUserItemForSellUserItem = (
       ),
     );
 
+/**
+ * Atomically consume one eligible stack and credit its sale price, so a failed payment
+ * leaves the inventory intact. Call once per stack: a joined UPDATE changes the shared
+ * owner row only once. A zero-ryo drop can affect only the inventory row.
+ */
+export const sellUserItemAtomically = (
+  client: Pick<DrizzleClient, "execute">,
+  ctx: { userId: string },
+  useritem: Pick<UserItem, "id" | "itemId" | "quantity"> & {
+    item: Pick<Item, "isFarmSeed" | "inShop" | "hidden" | "farmSellValue">;
+  },
+  price: number,
+) =>
+  client.execute(sql`UPDATE ${userItem} INNER JOIN ${userData} ON ${eq(userData.userId, userItem.userId)}
+    SET ${userItem.quantity} = 0, ${userData.money} = ${userData.money} + ${price}
+    WHERE ${and(
+      eq(userItem.id, useritem.id),
+      eq(userItem.itemId, useritem.itemId),
+      eq(userItem.userId, ctx.userId),
+      eq(userItem.quantity, useritem.quantity),
+      gt(userItem.quantity, 0),
+      eq(userItem.isInAuction, false),
+      eq(userItem.equipped, "NONE"),
+      eq(userItem.storedAtHome, false),
+      or(
+        isNull(userItem.craftingFinishedAt),
+        lte(userItem.craftingFinishedAt, new Date()),
+      ),
+      isFarmMarketSeed(useritem.item)
+        ? gte(userData.farmCurrency, useritem.item.farmSellValue)
+        : undefined,
+      hasNoHuntingBattle(ctx.userId),
+    )}`);
+
+/** Load the owned positive-quantity rows a bulk sell names, with their items. */
+export const listUserItemsForSellUserItems = (
+  client: Pick<DrizzleClient, "query">,
+  ctx: { userId: string },
+  userItemIds: string[],
+) =>
+  client.query.userItem.findMany({
+    where: and(
+      inArray(userItem.id, userItemIds),
+      eq(userItem.userId, ctx.userId),
+      gt(userItem.quantity, 0),
+    ),
+    with: { item: true },
+  });
+
+/** Build the `userItemImbuement` deletion for every stack a bulk sell removed. */
+export const deleteUserItemImbuementsForSellUserItems = (
+  client: Pick<DrizzleClient, "delete">,
+  userItemIds: string[],
+) =>
+  client
+    .delete(userItemImbuement)
+    .where(inArray(userItemImbuement.userItemId, userItemIds));
+
 /** Build the `userItemImbuement` deletion for `sellUserItem`, using predicates on `userItemId`. */
 export const deleteUserItemImbuementForSellUserItem = (
   client: Pick<DrizzleClient, "delete">,
@@ -1535,17 +1594,17 @@ export const updateUserDataForCommitConsumption = (
     })
     .where(eq(userData.userId, ctx.userId));
 
-/** Build deletion of an empty inventory row guarded by its owner and zero quantity. */
+/** Build deletion of empty inventory rows guarded by their owner and zero quantity. */
 export const deleteEmptyUserItem = (
   client: Pick<DrizzleClient, "delete">,
-  userItemId: string,
+  userItemId: string | string[],
   userId: string,
 ) =>
   client
     .delete(userItem)
     .where(
       and(
-        eq(userItem.id, userItemId),
+        inArray(userItem.id, Array.isArray(userItemId) ? userItemId : [userItemId]),
         eq(userItem.userId, userId),
         eq(userItem.quantity, 0),
       ),

@@ -4,13 +4,15 @@ import { MutationObserver, type MutationObserverOptions, QueryClient, QueryObser
 import { expect, it, vi } from "bun:test";
 
 // Exercise the actual callbacks alongside cache recovery and user feedback.
-for (const procedure of ["item.mergeStacks", "item.mergeAllStacks", "item.sellUserItem", "item.toggleEquip", "jutsu.toggleEquip"]) {
+for (const procedure of ["item.mergeStacks", "item.mergeAllStacks", "item.sellUserItem", "item.sellUserItems", "item.toggleEquip", "jutsu.toggleEquip"]) {
   it(`${procedure} shows failures, recovers observed caches and releases the action`, async () => {
     const isItem = procedure.startsWith("item.");
     const isMergeAll = procedure === "item.mergeAllStacks";
     const file = isMergeAll
       ? "../../src/layout/MergeAllStacksButton.tsx"
-      : isItem
+      : procedure === "item.sellUserItems"
+        ? "../../src/hooks/useBulkSellItems.ts"
+        : isItem
         ? "../../src/hooks/useItemActions.ts"
         : "../../src/app/[shell]/jutsus/page.tsx";
     const source = readFileSync(join(import.meta.dirname, file), "utf8");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getConsumedRaidBuffs, getEquippedInventory, getInventoryEquipmentChanges, getInventoryQuantities, getInventoryQuantityChanges, getSoldInventory } from "@/deltas/item";
+import { getConsumedRaidBuffs, getEquippedInventory, getInventoryEquipmentChanges, getInventoryQuantities, getInventoryQuantityChanges, getSoldInventory, getBulkSellUserUpdate, getBulkSoldInventory } from "@/deltas/item";
 import { getEquippedJutsus } from "@/deltas/jutsu";
 
 const rows = [
@@ -24,6 +24,19 @@ describe("inventory reconciliation", () => {
   it("removes only the confirmed sold instance", () => {
     expect(getSoldInventory(rows, "one")).toEqual([rows[1]!]);
     expect(getSoldInventory(rows, "missing")).toBeUndefined();
+  });
+
+  it("removes every stack a bulk sell confirmed and keeps the rest", () => {
+    const three = [...rows, { id: "three", equipped: "NONE" as const, variants: [] }];
+    expect(getBulkSoldInventory(three, ["one", "three"])).toEqual([rows[1]!]);
+  });
+
+  it("asks for reconciliation when a bulk-sold stack is not loaded", () => {
+    expect(getBulkSoldInventory(rows, ["one", "missing"])).toBeUndefined();
+  });
+
+  it("credits a bulk sell's summed ryo", () => {
+    expect(getBulkSellUserUpdate(1_250)).toEqual({ userDelta: { money: 1_250 } });
   });
 });
 

@@ -441,6 +441,10 @@ export type PoolType = (typeof PoolTypes)[number];
 
 export const ItemRarities = ["COMMON", "RARE", "EPIC", "LEGENDARY"] as const;
 export type ItemRarity = (typeof ItemRarities)[number];
+/** Most backpack stacks one bulk sell or drop request may remove. */
+export const MAX_BULK_SELL_ITEMS = 100;
+/** Rarities a bulk sell names again in a second confirmation before they go. */
+export const BULK_SELL_WARN_RARITIES: readonly ItemRarity[] = ["RARE", "EPIC", "LEGENDARY"];
 
 export const ItemSlotTypes = [
   "HEAD",

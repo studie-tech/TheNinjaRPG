@@ -3,9 +3,11 @@
 import { Search } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import type { ItemRarity } from "@/drizzle/constants";
+import { ItemRarities } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { ItemCard } from "@/layout/items/ItemCard";
+import { ItemCard, rarityLabel } from "@/layout/items/ItemCard";
 import type { BackpackFilter, BackpackSort } from "@/libs/itemsPage";
 import {
   BACKPACK_SORTS,
@@ -28,6 +30,7 @@ export function BackpackList({
   onSelect,
   onDragItem,
   wrapCard,
+  selection,
 }: BackpackListProps) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useLocalStorage<BackpackSort>(
@@ -102,11 +105,40 @@ export function BackpackList({
           );
         })}
       </div>
+      {selection && (
+        <fieldset aria-label="Quick select" className="flex flex-wrap gap-1.5">
+          {ItemRarities.filter((rarity) =>
+            shown.some((userItem) => userItem.item.rarity === rarity),
+          ).map((rarity) => (
+            <button
+              key={rarity}
+              type="button"
+              onClick={() => selection.onPickRarity(rarity, shown)}
+              className="h-8 rounded-full border border-dashed bg-background px-2.5 text-xs hover:bg-muted"
+            >
+              All {rarityLabel[rarity]}
+            </button>
+          ))}
+        </fieldset>
+      )}
       <ul
         aria-label="Backpack items"
         className="grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-2"
       >
         {shown.map((userItem) => {
+          if (selection) {
+            return (
+              <li key={userItem.id}>
+                <ItemCard
+                  userItem={userItem}
+                  isSelected={false}
+                  onSelect={selection.onToggle}
+                  isTicked={selection.ids.includes(userItem.id)}
+                  blockReason={selection.blockReason(userItem)}
+                />
+              </li>
+            );
+          }
           const card = (
             <ItemCard
               userItem={userItem}
@@ -142,4 +174,12 @@ interface BackpackListProps {
     userItem: UserItemWithRelations,
     card: React.ReactNode,
   ) => React.ReactNode;
+  /** Select mode: cards tick instead of opening, without menus or dragging. */
+  selection?: {
+    ids: string[];
+    onToggle: (userItemId: string) => void;
+    /** Ticks or unticks every sellable item of a rarity among the items shown. */
+    onPickRarity: (rarity: ItemRarity, shown: UserItemWithRelations[]) => void;
+    blockReason: (userItem: UserItemWithRelations) => string | null;
+  };
 }

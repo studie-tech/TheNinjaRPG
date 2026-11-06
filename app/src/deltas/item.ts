@@ -449,6 +449,21 @@ export const getSoldInventory = <T extends { id: string }>(
     ? rows.filter((row) => row.id !== userItemId)
     : undefined;
 
+/**
+ * Remove every stack a bulk sell confirmed, preserving the rest; a sold stack missing from
+ * the loaded rows asks for reconciliation instead.
+ */
+export const getBulkSoldInventory = <T extends { id: string }>(
+  rows: T[],
+  soldIds: string[],
+): T[] | undefined =>
+  soldIds.every((id) => rows.some((row) => row.id === id))
+    ? rows.filter((row) => !soldIds.includes(row.id))
+    : undefined;
+
+/** Credit the ryo a bulk sell paid for the stacks it removed. */
+export const getBulkSellUserUpdate = (ryo: number) => ({ userDelta: { money: ryo } });
+
 /** Describe committed stack writes using a matching loaded baseline for every target. */
 export const getInventoryQuantityChanges = (
   before: Pick<UserItem, "id" | "itemId" | "quantity">[],

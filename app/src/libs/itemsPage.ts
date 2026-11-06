@@ -1,8 +1,25 @@
 import type { ItemRarity, ItemSlot, ItemType } from "@/drizzle/constants";
-import { ItemRarities, ItemSlots, ItemSlotTypes, ItemTypes } from "@/drizzle/constants";
-import type { Item, UserItemWithRelations } from "@/drizzle/schema";
+import {
+  BULK_SELL_WARN_RARITIES,
+  ItemRarities,
+  ItemSlots,
+  ItemSlotTypes,
+  ItemTypes,
+} from "@/drizzle/constants";
+import type {
+  Item,
+  UserData,
+  UserItemWithRelations,
+  VillageStructure,
+} from "@/drizzle/schema";
 import { applyActiveVariant } from "@/libs/combat/util";
-import { byItemName, isCompatibleEquipSlot } from "@/libs/item";
+import { canDropFarmSeed } from "@/libs/farming";
+import {
+  byItemName,
+  calcItemSellingPrice,
+  getEquipBlockReason,
+  isCompatibleEquipSlot,
+} from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
 
 /** Supported backpack sort choices and their player-facing labels. */
@@ -197,3 +214,98 @@ type SortableItem = Pick<
   UserItemWithRelations,
   "durability" | "createdAt" | "activeVariantId" | "item"
 >;
+
+/**
+ * Why a stack cannot be sold or dropped in bulk, as a phrase after its name ("is in
+ * auction"), or null when it can. Farm market seeds stay while the player could not buy one
+ * back, as with a single drop.
+ */
+export const bulkSellBlockReason = (
+  userItem: Pick<
+    UserItemWithRelations,
+    "equipped" | "storedAtHome" | "isInAuction" | "craftingFinishedAt"
+  > & { item: Pick<Item, "isFarmSeed" | "inShop" | "hidden" | "farmSellValue"> },
+  farmCurrency: number,
+  now: Date = new Date(),
+): string | null => {
+  if (userItem.equipped !== "NONE") return "is equipped";
+  const blocked = getEquipBlockReason(userItem, now);
+  if (blocked) return blocked;
+  if (!canDropFarmSeed(userItem.item, farmCurrency)) {
+    return `needs ${userItem.item.farmSellValue} farm coins to buy back`;
+  }
+  return null;
+};
+
+/**
+ * Select every sellable shown stack of one rarity, or deselect them when all are already
+ * selected. Stacks outside `shown` keep their selection.
+ */
+export const toggleRarityPick = (
+  shown: UserItemWithRelations[],
+  rarity: ItemRarity,
+  selected: string[],
+  farmCurrency: number,
+): string[] => {
+  const ids = shown
+    .filter(
+      (ui) =>
+        ui.item.rarity === rarity && bulkSellBlockReason(ui, farmCurrency) === null,
+    )
+    .map((ui) => ui.id);
+  const allPicked = ids.length > 0 && ids.every((id) => selected.includes(id));
+  return allPicked
+    ? selected.filter((id) => !ids.includes(id))
+    : [...selected, ...ids.filter((id) => !selected.includes(id))];
+};
+
+/** Ryo a bulk sell pays and how many stacks sell or drop; a stack worth 0 ryo is dropped. */
+export const bulkSellTotals = (
+  items: UserItemWithRelations[],
+  user: UserData,
+  structures: VillageStructure[] | undefined,
+) => {
+  const totals = { ryo: 0, sellCount: 0, dropCount: 0 };
+  for (const ui of items) {
+    const price = calcItemSellingPrice(user, ui, structures);
+    if (price > 0) {
+      totals.ryo += price;
+      totals.sellCount += 1;
+    } else totals.dropCount += 1;
+  }
+  return totals;
+};
+
+/** Stacks rare enough that a bulk sell names them again before they go. */
+export const warnedItems = (items: UserItemWithRelations[]) =>
+  items.filter((ui) => BULK_SELL_WARN_RARITIES.includes(ui.item.rarity));
+
+/** Describe confirmed sales, refused stacks and sales that need authoritative reconciliation. */
+export const bulkSellMessage = (
+  prices: number[],
+  refused: { name: string; reason: string }[],
+  unconfirmed: { name: string }[] = [],
+) => {
+  const plural = (count: number) => `${count} item${count === 1 ? "" : "s"}`;
+  const sold = prices.filter((price) => price > 0);
+  const dropped = prices.length - sold.length;
+  const ryo = sold.reduce((sum, price) => sum + price, 0);
+  const done =
+    sold.length > 0
+      ? `Sold ${plural(sold.length)} for ${ryo.toLocaleString()} ryo${dropped > 0 ? ` and dropped ${dropped}` : ""}.`
+      : dropped > 0
+        ? `Dropped ${plural(dropped)}.`
+        : unconfirmed.length > 0
+          ? "No sales were confirmed."
+          : "Nothing was sold.";
+  const stayed = refused.map(({ name, reason }) => `${name} ${reason}`).join("; ");
+  return [
+    done,
+    ...(refused.length > 0 ? [`${refused.length} stayed: ${stayed}.`] : []),
+    ...(unconfirmed.length > 0
+      ? [
+          `Could not confirm ${unconfirmed.map(({ name }) => name).join(", ")}. Your inventory and ryo will be refreshed.`,
+        ]
+      : []),
+  ].join(" ");
+};

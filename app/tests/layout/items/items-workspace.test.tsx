@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import * as bulkSell from "@/hooks/useBulkSellItems";
 import * as itemActions from "@/hooks/useItemActions";
 import * as contentImage from "@/layout/ContentImage";
 import * as equipmentPreview from "@/layout/EquipmentPreview";
@@ -45,6 +46,7 @@ beforeEach(() => {
     if (!options.useritem) settle = options.onDone;
     return { equip: options.useritem ? inspectorEquip : equip, merge: vi.fn(), isEquipping: options.useritem ? false : isEquipping, isPending: false };
   }) as never);
+  vi.spyOn(bulkSell, "useBulkSellItems").mockReturnValue({ sellMany: vi.fn(), isSelling: false });
   setFinePointer(true);
   containerWidth = 1000;
   // The workspace measures its own width to choose inline panels or a bottom sheet.
@@ -394,7 +396,7 @@ it("keeps hidden items out of the slot picker for players", () => {
 it("shows the bag's capacity beside the backpack heading and its tabs below", () => {
   renderWorkspace({ backpackStatus: <p>4 / 20</p>, bagTabs: <p>Bag tabs</p> });
   const heading = screen.getByRole("heading", { name: "Backpack" });
-  expect(heading.parentElement?.textContent).toBe("Backpack4 / 20");
+  expect(heading.parentElement?.textContent).toBe("BackpackSelect4 / 20");
   expect(heading.parentElement?.nextElementSibling?.textContent).toBe("Bag tabs");
 });
 
