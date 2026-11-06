@@ -140,10 +140,8 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
 
     if (
       getRemainingCooldown(selectedItem, currentRound) > 0 ||
-      lacksActionPoints(selectedItem, {
+      lacksActionPoints(getEffectiveActionCost(selectedItem, props), {
         combatMode,
-        battle: props.battle,
-        userId: props.userId,
         userActionPoints,
       })
     ) {
@@ -271,7 +269,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
     ? item.effects.flatMap((e) => ("elements" in e && e.elements ? e.elements : []))
     : [];
   const effectiveActionCost = getEffectiveActionCost(item, settings);
-  const insufficientAP = lacksActionPoints(item, settings);
+  const insufficientAP = lacksActionPoints(effectiveActionCost, settings);
 
   // Keep unavailable actions unselectable for both pointer and keyboard activation.
   const handleClick = () => {
@@ -497,12 +495,11 @@ const getEffectiveActionCost = (
     : item.actionCostPerc;
 };
 
-/** In combat, whether the player cannot afford an action at its effective AP cost. */
+/** In combat, whether the player cannot afford the supplied AP cost. */
 const lacksActionPoints = (
-  item: ActionItemProps,
-  settings: ActionCostSettings & Pick<ActionSelectorSettingsProps, "userActionPoints">,
+  cost: number | undefined,
+  settings: Pick<ActionSelectorSettingsProps, "combatMode" | "userActionPoints">,
 ) => {
-  const cost = getEffectiveActionCost(item, settings);
   return (
     !!settings.combatMode &&
     settings.userActionPoints !== undefined &&
