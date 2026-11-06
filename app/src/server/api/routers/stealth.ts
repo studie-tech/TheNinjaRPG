@@ -212,16 +212,19 @@ export const stealthRouter = createTRPCRouter({
       const detectedUserIds = detectedUsers.map((u) => u.userId);
       const lastSensoryAt = new Date();
 
-      // Claim availability and reveal targets together before broadcasting them.
+      // Claim availability before revealing anyone. These stay separate because a self-joined
+      // UPDATE of UserData changes only the first of several joined targets.
       const result = await updateUserDataForUseSensory(
         ctx.drizzle,
         lastSensoryAt,
         ctx,
         readiness,
-        detectedUserIds,
       );
       if (!result.rowsAffected)
         return errorResponse("Your status changed. Please try again.");
+      if (detectedUserIds.length > 0) {
+        await clearStealthForUsers(ctx.drizzle, detectedUserIds);
+      }
 
       // Broadcast map updates and notifications for detected users
       if (detectedUsers.length > 0) {
