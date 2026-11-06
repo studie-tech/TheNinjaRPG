@@ -2120,10 +2120,14 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     watchType === "noncombatconsumereward" &&
     watchAll.rewardMode !== "weightedCache" &&
     watchAll.weightedCache &&
-    getWeightedCacheIssues(watchAll.weightedCache, itemData ?? [], {
-      isActive: false,
-      catalogReady: !isItemCatalogLoading && !isItemCatalogError && !!itemData,
-    }).issues.length > 0;
+    getWeightedCacheIssues(
+      watchAll.weightedCache,
+      new Map((itemData ?? []).map((item) => [item.id, item])),
+      {
+        isActive: false,
+        catalogReady: !isItemCatalogLoading && !isItemCatalogError && !!itemData,
+      },
+    ).issues.length > 0;
   const cacheEditor = (
     <WeightedCacheEditor
       cache={watchAll.weightedCache ?? defaultWeightedCache()}

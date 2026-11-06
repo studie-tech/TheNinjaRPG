@@ -87,8 +87,12 @@ describe("weighted cache validation and legacy compatibility", () => {
 
 describe("getWeightedCacheIssues", () => {
   const items = (draft: WeightedCache) =>
-    draft.tiers.flatMap((tier) =>
-      tier.entries.flatMap((entry) => entry.items.map((item) => ({ id: item.itemId }))),
+    new Map<string, { isRestrictedCacheReward?: boolean }>(
+      draft.tiers.flatMap((tier) =>
+        tier.entries.flatMap((entry) =>
+          entry.items.map((item) => [item.itemId, {}] as const),
+        ),
+      ),
     );
 
   it("accepts a cache whose rewards are all in the catalog", () => {
@@ -99,20 +103,22 @@ describe("getWeightedCacheIssues", () => {
   });
 
   it("ignores the catalog until it is ready", () => {
-    const result = getWeightedCacheIssues(cache(), [], { isActive: true, catalogReady: false });
+    const result = getWeightedCacheIssues(cache(), new Map(), { isActive: true, catalogReady: false });
     expect(result.issues).toEqual([]);
   });
 
   it("flags missing and restricted rewards once the catalog is ready", () => {
     const draft = cache();
-    const [restricted, ...rest] = items(draft);
+    const catalog = items(draft);
+    const [restricted] = catalog.keys();
+    catalog.set(restricted ?? "", { isRestrictedCacheReward: true });
     const { issues } = getWeightedCacheIssues(
       draft,
-      rest.filter((item) => item.id !== restricted?.id).concat({ id: restricted?.id ?? "", isRestrictedCacheReward: true } as never),
+      catalog,
       { isActive: true, catalogReady: true },
     );
     expect(issues.some((issue) => issue.message === CACHE_RESTRICTED_REWARD_MESSAGE)).toBe(true);
-    const missing = getWeightedCacheIssues(draft, [], { isActive: true, catalogReady: true });
+    const missing = getWeightedCacheIssues(draft, new Map(), { isActive: true, catalogReady: true });
     expect(missing.issues.every((issue) => issue.message.startsWith("Remove or replace"))).toBe(true);
     expect(missing.issues.length).toBeGreaterThan(0);
   });

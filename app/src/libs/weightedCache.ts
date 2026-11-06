@@ -131,11 +131,11 @@ export type CacheIssue = { path: PropertyKey[]; message: string };
 
 /**
  * Save blockers of a cache draft: the schema (the draft one while the cache is inactive),
- * plus, once the item catalog is ready, rewards that are missing or restricted.
+ * plus, once the item catalog is ready, rewards missing or restricted in its lookup.
  */
 export const getWeightedCacheIssues = (
   cache: WeightedCache,
-  items: { id: string; isRestrictedCacheReward?: boolean }[],
+  itemById: ReadonlyMap<string, { isRestrictedCacheReward?: boolean }>,
   { isActive, catalogReady }: { isActive: boolean; catalogReady: boolean },
 ) => {
   const validation = (
@@ -144,7 +144,6 @@ export const getWeightedCacheIssues = (
   const issues: CacheIssue[] = [...(validation.error?.issues ?? [])];
   const isSchemaValid = validation.success;
   if (!catalogReady) return { issues, isSchemaValid };
-  const itemById = new Map(items.map((item) => [item.id, item]));
   cache.tiers.forEach((tier, tierIndex) => {
     tier.entries.forEach((entry, entryIndex) => {
       entry.items.forEach((reward, itemIndex) => {

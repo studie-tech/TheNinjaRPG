@@ -46,11 +46,11 @@ export const WeightedCacheEditor = ({
   disabled?: boolean;
 }) => {
   const editor = useRef<HTMLElement>(null);
-  const { issues, isSchemaValid } = getWeightedCacheIssues(cache, items, {
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const { issues, isSchemaValid } = getWeightedCacheIssues(cache, itemById, {
     isActive,
     catalogReady: !isLoading && !isError,
   });
-  const itemById = new Map(items.map((item) => [item.id, item]));
   const renderErrors = (errors: CacheIssue[]) =>
     errors.map((issue, index) => (
       <p
