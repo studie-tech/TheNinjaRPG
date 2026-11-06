@@ -1066,6 +1066,7 @@ export const getNewTrackers = (
     useritems?: UserItem[];
     farmingCollectionCount?: number;
     bloodlineCollectionProgress?: BloodlineCollectionProgress;
+    ownedObjectiveJutsus?: { jutsuId: string; masteryTypes: MasteryType[] }[];
   },
   tasks: ObjectiveTrackerTaskInput[],
   combatContext?: CombatQuestContext,
@@ -1439,6 +1440,25 @@ export const getNewTrackers = (
             typeof user.farmingCollectionCount === "number"
           ) {
             status.value = user.farmingCollectionCount;
+          } else if (
+            task === "train_specific_jutsu" &&
+            user.ownedObjectiveJutsus &&
+            objectiveContentIds(objective).length > 0
+          ) {
+            // Learning emits once, and is lost if this objective was not reached yet. A
+            // named jutsu cannot be learned twice, so owning it has to count as well.
+            const owned = user.ownedObjectiveJutsus.filter(
+              ({ jutsuId, masteryTypes }) =>
+                matchesContentObjective(objective, {
+                  task,
+                  contentId: jutsuId,
+                  masteryTypes,
+                }),
+            ).length;
+            if (owned > status.value) {
+              status.value = owned;
+              consequences.push({ type: "update_user", ids: ["owned_jutsu_update"] });
+            }
           } else if (task === "days_in_village") {
             const days = Math.floor(secondsPassed(user.joinedVillageAt) / 60 / 60 / 24);
             status.value = days;

@@ -64,8 +64,10 @@ import {
   getTutorialCatchUpStepIndex,
   getTutorialChapterProgress,
   getTutorialPortraitSide,
+  getTutorialRewindStepIndex,
   hasOutgrownTutorial,
   isTutorialActive,
+  isTutorialJutsuPickStep,
   isTutorialPageMatch,
   isUsableHighlightRect,
   type TutorialPortraitSide,
@@ -1322,9 +1324,11 @@ const PlayerTutorialAssistant: React.FC<
   // The starter quest can be further along than the step expects (a player
   // who came back after the trials changed, or whose action landed while
   // another tab was on an earlier step). Move them to the first step that
-  // still has something to do.
+  // still has something to do, or back when they skipped past what the quest
+  // still needs.
   const catchUpIndex = isTutorialActive(userData)
-    ? getTutorialCatchUpStepIndex(TUTORIAL_STEPS, stepNumber, userData)
+    ? (getTutorialCatchUpStepIndex(TUTORIAL_STEPS, stepNumber, userData) ??
+      getTutorialRewindStepIndex(TUTORIAL_STEPS, stepNumber, userData))
     : undefined;
   const catchUpRef = React.useRef<string>("");
   useEffect(() => {
@@ -1522,8 +1526,10 @@ const PlayerTutorialAssistant: React.FC<
 
   const isQuestOverlay = !!dynamicQuestStep;
   // Fights end on their own; skipping a step mid-battle would lose the lesson.
+  // The quest cannot go on without Sonic Slash, so its lesson has no skip either.
   const isStuck =
     !isQuestOverlay &&
+    !isTutorialJutsuPickStep(currentTutorialStep) &&
     stuckStepId === currentTutorialStep.id &&
     !currentTutorialStep.showNextButton &&
     !currentTutorialStep.onCombatWin &&

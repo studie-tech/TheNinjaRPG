@@ -16,6 +16,7 @@ import {
   getStarterQuestProgress,
   getTutorialBattleReturnPage,
   getTutorialCatchUpStepIndex,
+  getTutorialRewindStepIndex,
   hasOutgrownTutorial,
   getTutorialChapterProgress,
   getTutorialCombatGuidance,
@@ -359,7 +360,6 @@ describe("TUTORIAL_STEPS", () => {
     // A step that waits for a purchase or training can fail for reasons the
     // lesson does not cover (no ryo, a full slot), so it carries Next as well.
     for (const stepId of [
-      TUTORIAL_JUTSU_PICK_STEP_ID,
       TUTORIAL_ITEM_BUY_STEP_ID,
       "tools-train-stat",
       "tools-buy-ramen",
@@ -368,6 +368,16 @@ describe("TUTORIAL_STEPS", () => {
     ]) {
       expect(stepBlock(stepId)).toContain("showNextButton: true");
     }
+  });
+
+  it("has no Next past Sonic Slash, which the starter quest cannot go on without", () => {
+    expect(stepBlock(TUTORIAL_JUTSU_PICK_STEP_ID)).not.toContain("showNextButton");
+    expect(stepBlock(TUTORIAL_JUTSU_PICK_STEP_ID)).toContain(
+      "objectiveId: STARTER_QUEST_OBJECTIVES.jutsu",
+    );
+    expect(stepBlock("tools-claim-jutsu")).toContain(
+      "objectiveStepId: TUTORIAL_JUTSU_PICK_STEP_ID",
+    );
   });
 
   it("never sends a player to a page outside the game shell", () => {
@@ -522,6 +532,53 @@ describe("hasOutgrownTutorial", () => {
     expect(
       hasOutgrownTutorial({ ...graduate, tutorialStep: TUTORIAL_STEPS_COUNT }),
     ).toBe(false);
+  });
+});
+
+describe("getTutorialRewindStepIndex", () => {
+  const O = STARTER_QUEST_OBJECTIVES;
+  const steps = [
+    { id: "pick", objectiveId: O.jutsu },
+    { id: "claim", objectiveId: O.jutsu, objectiveStepId: "pick" },
+    { id: "after" },
+  ];
+  const activeQuest = { questId: TUTORIAL_STARTER_QUEST_ID, completed: 0, endAt: null };
+  const withGoals = (goals: object[]) => ({
+    userQuests: [activeQuest],
+    questData: [{ id: TUTORIAL_STARTER_QUEST_ID, goals }] as never,
+  });
+  const reachedJutsu = [
+    { id: O.accept, done: true, selectedNextObjectiveId: O.arena },
+    { id: O.arena, done: true, collected: true, selectedNextObjectiveId: O.jutsu },
+  ];
+
+  it("sends a player who skipped the lesson back from the empty claim step", () => {
+    const user = withGoals([
+      ...reachedJutsu,
+      { id: O.jutsu, done: false, value: 0, selectedNextObjectiveId: O.brief },
+    ]);
+    expect(getTutorialRewindStepIndex(steps, 1, user)).toBe(0);
+    expect(getTutorialCatchUpStepIndex(steps, 1, user)).toBeUndefined();
+  });
+
+  it("stays on the claim step once there is something to claim", () => {
+    const user = withGoals([...reachedJutsu, { id: O.jutsu, done: true }]);
+    expect(getTutorialRewindStepIndex(steps, 1, user)).toBeUndefined();
+  });
+
+  it("does not bounce a player the quest has not brought this far", () => {
+    const user = withGoals([{ id: O.accept, done: true }, { id: O.arena }]);
+    expect(getTutorialRewindStepIndex(steps, 1, user)).toBeUndefined();
+  });
+
+  it("leaves steps without a lesson to return to, and finished quests, alone", () => {
+    const user = withGoals([...reachedJutsu, { id: O.jutsu, done: false }]);
+    expect(getTutorialRewindStepIndex(steps, 0, user)).toBeUndefined();
+    expect(getTutorialRewindStepIndex(steps, 2, user)).toBeUndefined();
+    expect(
+      getTutorialRewindStepIndex(steps, 1, { userQuests: [], questData: [] }),
+    ).toBeUndefined();
+    expect(getTutorialRewindStepIndex(steps, 1, {})).toBeUndefined();
   });
 });
 

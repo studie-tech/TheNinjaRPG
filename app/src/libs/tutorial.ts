@@ -440,6 +440,31 @@ export const getTutorialCatchUpStepIndex = (
   return index !== stepIndex ? index : undefined;
 };
 
+/**
+ * Index of the step a player should be sent back to because the starter quest
+ * is still waiting on the objective the current step pays out, or undefined to
+ * stay put. The quest cannot go on without that objective, so a claim step
+ * reached by skipping it has nothing to offer and must not be skipped as well.
+ */
+export const getTutorialRewindStepIndex = (
+  steps: readonly {
+    id: string;
+    objectiveId?: TutorialObjectiveRef;
+    objectiveStepId?: string;
+  }[],
+  stepIndex: number,
+  user?: StarterQuestTutorialUser | null,
+) => {
+  const { objectiveId, objectiveStepId } = steps[stepIndex] ?? {};
+  if (!objectiveId || !objectiveStepId) return undefined;
+  const starter = getStarterQuestProgress(user);
+  if (!starter || starter.finished) return undefined;
+  const activeId = STARTER_QUEST_ORDER[starter.activeIndex];
+  if (!activeId || !toObjectiveIds(objectiveId).includes(activeId)) return undefined;
+  const index = steps.findIndex((step) => step.id === objectiveStepId);
+  return index === -1 ? undefined : index;
+};
+
 /** One action a player could take this turn, as the combat lesson sees it. */
 export type TutorialCombatOption = {
   id: string;
