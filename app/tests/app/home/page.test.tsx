@@ -93,7 +93,14 @@ beforeEach(() => {
     access: true,
     ownVillage: true,
   } as never);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "USER" } } as never);
+  // Storage controls require the authenticated profile independently of village access.
+  const profile = {
+    data: { userId: "home-test-user", role: "USER" },
+    prepareUserUpdate: vi.fn(),
+    updateUser: vi.fn(),
+  };
+  vi.spyOn(UserContext, "useUserData").mockReturnValue(profile as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue(profile as never);
   vi.spyOn(sleep, "useSleepToggle").mockReturnValue({
     toggleSleep: vi.fn(),
     isTogglingSleep: false,
