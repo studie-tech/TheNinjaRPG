@@ -178,7 +178,22 @@ const Combat: React.FC<CombatProps> = (props) => {
       !!battleState.battle &&
       battleState.battle.createdAt.getTime() > Date.now() - timeDiff,
   );
-  const { updateLogs, startAction, settleAction } = useCombatUpdates(battleState);
+  // Departed players and their summons can retain auto flags; only humans still
+  // fighting keep optional auto combat active, matching the server's batch gate.
+  const hasAutoCombat =
+    !!battleState.battle &&
+    (AutoBattleTypes.includes(battleState.battle.battleType) ||
+      battleState.battle.usersState.some(
+        (user) =>
+          !user.isAi &&
+          !user.isSummon &&
+          user.isAutoCombat &&
+          !user.leftBattle &&
+          stillInBattle(user),
+      ));
+
+  const { updateLogs, startAction, settleAction, canDrive, publishBattle } =
+    useCombatUpdates(battleState, !result && (isPageActive || hasAutoCombat));
   const suid = userData?.userId;
   // The actor the human drives right now: themselves on their turn, or their
   // piloted summon on the summon's turn. Resolved by page.tsx from the same
@@ -371,6 +386,13 @@ const Combat: React.FC<CombatProps> = (props) => {
       );
     },
     onSuccess: async (data, _variables, context) => {
+      // A peer can finish while this tab still awaits an earlier action response.
+      if (resultRef.current) {
+        setBattleState((current) =>
+          current ? { ...current, isPending: false } : current,
+        );
+        return;
+      }
       if (data.result && data.battleUpdate) {
         completionRevisionRef.current = { battleId: data.battleUpdate.id, ...context };
       }
@@ -417,6 +439,11 @@ const Combat: React.FC<CombatProps> = (props) => {
           isPending: false,
         });
         setBattleAtom(data.battleUpdate);
+        publishBattle({
+          battle: data.battleUpdate,
+          result: data.result,
+          logEntries: data.logEntries,
+        });
       }
       if (data?.result?.notifications.length !== 0) {
         data?.result?.notifications.forEach((notification) => {
@@ -723,30 +750,23 @@ const Combat: React.FC<CombatProps> = (props) => {
     const wasActive = wasPageActiveRef.current;
     wasPageActiveRef.current = isPageActive;
     combat.scene.current?.refresh();
-    if (!isPageActive || wasActive) return;
+    if (!isPageActive || wasActive || result) return;
     void utils.combat.getBattle.invalidate();
   }, [isPageActive, result, utils]);
-
-  // Departed players and their summons can retain auto flags; only humans still
-  // fighting keep optional auto combat active, matching the server's batch gate.
-  const hasAutoCombat =
-    !!battleState.battle &&
-    (AutoBattleTypes.includes(battleState.battle.battleType) ||
-      battleState.battle.usersState.some(
-        (user) =>
-          !user.isAi &&
-          !user.isSummon &&
-          user.isAutoCombat &&
-          !user.leftBattle &&
-          stillInBattle(user),
-      ));
 
   // Hidden manual battles catch up on resume; keep driving auto combat in the
   // background so AI actions and idle opponent timeouts can still advance it.
   useEffect(() => {
     if (!isPageActive && !hasAutoCombat) return;
     const interval = setInterval(() => {
-      if (suid && battleRef.current && userIdRef.current && !isPending && !result) {
+      if (
+        suid &&
+        battleRef.current &&
+        userIdRef.current &&
+        !isPending &&
+        !result &&
+        canDrive()
+      ) {
         const { actor, changedActor } = calcActiveUser(
           battleRef.current,
           suid,
@@ -797,6 +817,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     result,
     suid,
     controlledActorId,
+    canDrive,
   ]);
 
   useEffect(() => {

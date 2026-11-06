@@ -638,7 +638,19 @@ export const combatRouter = createTRPCRouter({
           fetchBattle(db, input.battleId),
           ctx.waitForRateLimit(),
         ]);
-        if (!battle) return { updateClient: true };
+        if (!battle) {
+          // A terminal recovery response reuses this action request; it performs no game processing or writes.
+          const completed = await combatCompletionStore().recover(suid, input.battleId);
+          return completed
+            ? {
+                updateClient: true,
+                battleUpdate: completed.battle,
+                result: completed.result,
+                logEntries: [],
+                updatedQuestIds: [],
+              }
+            : { updateClient: true };
+        }
         // Manual choices belong to the displayed snapshot, including requests from older tabs.
         if (input.actionId !== undefined && input.version !== battle.version) {
           return {

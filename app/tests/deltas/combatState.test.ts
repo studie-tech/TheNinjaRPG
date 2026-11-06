@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import superjson from "superjson";
-import { buildCombatStateUpdate, captureCombatStateUpdate, getCombatEventUpdate } from "@/deltas/combat";
+import { buildCombatStateUpdate, captureCombatStateUpdate, getCombatEventUpdate, getCombatStateUpdate } from "@/deltas/combat";
 import { maskBattle } from "@/libs/combat/util";
 import { makeBattleUser, makeCompleteBattle, makeEffect } from "../libs/combat/helpers/battleScenario";
 
@@ -86,4 +87,25 @@ describe("public combat state updates", () => {
     const battle = fixture();
     expect(buildCombatStateUpdate(captureCombatStateUpdate(battle), battle)).toBeUndefined();
   });
+});
+
+const state = (version: number, result = false) => ({
+  battle: { id: "shared", version }, result: result ? { outcome: "Won" } : null,
+}) as RouterOutputs["combat"]["getBattle"];
+
+it("accepts a complete snapshot before an initial read or after a missing-row response", () => {
+  const confirmed = state(3, true);
+  expect(getCombatStateUpdate({ battle: null, result: null }, confirmed, "shared")).toEqual(confirmed);
+});
+
+it("preserves a terminal result when a late action or peer snapshot arrives", () => {
+  const confirmed = state(3, true);
+  expect(getCombatStateUpdate(confirmed, state(4), "shared")).toBe(confirmed);
+});
+
+it("rejects mismatched battles and preserves newer versions", () => {
+  const confirmed = state(3);
+  expect(getCombatStateUpdate(confirmed, state(2), "shared")).toBe(confirmed);
+  expect(getCombatStateUpdate(confirmed, state(4), "other")).toBeUndefined();
+  expect(getCombatStateUpdate({ ...confirmed, battle: { ...confirmed.battle!, id: "other" } }, state(4), "shared")).toBeUndefined();
 });

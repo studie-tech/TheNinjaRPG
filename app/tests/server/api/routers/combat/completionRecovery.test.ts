@@ -6,17 +6,20 @@ import * as completion from "@/server/utils/combatCompletion";
 
 afterEach(() => vi.restoreAllMocks());
 
-it("recovers a deleted arena battle only for the authenticated viewer without settling it again", async () => {
+it.each(["getBattle", "performAction"] as const)("%s recovers a deleted arena battle through the same request without settling it again", async (procedure) => {
   const read = vi.spyOn(queries, "fetchBattle").mockResolvedValue(null);
   const saved = { battle: { id: "finished-arena" }, result: { outcome: "Won" } } as RouterOutputs["combat"]["getBattle"];
   const recover = vi.fn(async () => saved);
   vi.spyOn(completion, "combatCompletionStore").mockReturnValue({ recover, save: vi.fn() } as never);
-  const resolver = (combatRouter.getBattle._def as unknown as {
-    resolver: (args: unknown) => Promise<RouterOutputs["combat"]["getBattle"]>;
+  const resolver = (combatRouter[procedure]._def as unknown as {
+    resolver: (args: unknown) => Promise<unknown>;
   }).resolver;
   // No writable database surface is supplied: receipt recovery must be display-only.
   const database = {};
-  expect(await resolver({ ctx: { userId: "viewer", drizzle: database }, input: { battleId: "finished-arena" } })).toBe(saved);
+  const response = await resolver({ ctx: { userId: "viewer", drizzle: database, waitForRateLimit: async () => {} }, input: { battleId: "finished-arena" } });
+  expect(response).toEqual(procedure === "getBattle" ? saved : {
+    updateClient: true, battleUpdate: saved.battle, result: saved.result, logEntries: [], updatedQuestIds: [],
+  });
   expect(read).toHaveBeenCalledTimes(1);
   expect(read).toHaveBeenCalledWith(database, "finished-arena");
   expect(recover).toHaveBeenCalledTimes(1);

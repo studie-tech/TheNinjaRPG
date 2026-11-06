@@ -261,11 +261,6 @@ export default function CombatPage() {
     router,
   ]);
 
-  useEffect(() => {
-    if (!userData?.battleId && requestedBattleId && !results)
-      void utils.combat.getBattle.invalidate({ battleId: requestedBattleId });
-  }, [userData?.battleId, requestedBattleId, results, utils]);
-
   // Redirect to profile if not in battle
   useEffect(() => {
     if (data?.battle) {
@@ -295,7 +290,7 @@ export default function CombatPage() {
     if (userId && !results && (!requestedBattleId || isBattleMissing)) {
       setBattleAtom((current) => (current?.id === battle?.id ? undefined : current));
     }
-    if (isBattleMissing) {
+    if (isBattleMissing && !results) {
       if (userData?.battleId) void utils.profile.getUser.invalidate();
       if (battle?.id === userData?.battleId && battle?.extraState.dungeon && !results) {
         router.push("/dungeon");

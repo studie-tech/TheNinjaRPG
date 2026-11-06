@@ -5,6 +5,7 @@ import superjson from "superjson";
 import { api, type RouterInputs } from "@/app/_trpc/client";
 import { type CombatStateUpdate, mergeBattleEntries } from "@/deltas/combat";
 import type { BattleAction } from "@/drizzle/schema";
+import { type CombatTabState, useCombatTabs } from "@/hooks/combatTabs";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useBattleCacheUpdate } from "@/hooks/useBattleCacheUpdate";
 import { type BattleMaps, computeBattleMaps } from "@/libs/combat/battleMaps";
@@ -34,13 +35,18 @@ export const useBattleMaps = (battle: ReturnedBattle | null): BattleMaps => {
  * Complete saved logs reuse committed rows; gaps, filters and pending reads recover.
  * Confirmed actions and eligible public events update exact battle baselines; gaps still read.
  */
-export const useCombatUpdates = (state: BattleState) => {
+export const useCombatUpdates = (state: BattleState, isDriverEnabled = true) => {
   const { pusher, data: userData } = useUserData();
   const utils = api.useUtils();
   const queryClient = useQueryClient();
   const battleId = state.battle?.id;
-  const { prepareBattleUpdate, updateBattle, updateBattleEvent, refreshBattle } =
-    useBattleCacheUpdate(battleId, userData?.userId);
+  const {
+    prepareBattleUpdate,
+    updateBattle,
+    acceptBattle,
+    updateBattleEvent,
+    refreshBattle,
+  } = useBattleCacheUpdate(battleId, userData?.userId);
   // Keep the subscription stable while its handler reads the latest battle/result.
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -92,6 +98,7 @@ export const useCombatUpdates = (state: BattleState) => {
         response.battle?.id === id ? response.battle.version : battle.version;
       responseVersionRef.current = { battle, version };
       // Held results outlive deleted battle rows; do not start recovery reads for them.
+      if (response.result && response.battle) void acceptBattle(id, response);
       if (result || response.result) return;
       // Compare with the response being applied, even if an independent poll
       // already rendered a newer state that onSuccess is about to replace.
@@ -105,7 +112,7 @@ export const useCombatUpdates = (state: BattleState) => {
         void updateBattle(id, response, pending.snapshot);
       }
     },
-    [updateBattle, refreshBattle],
+    [updateBattle, acceptBattle, refreshBattle],
   );
 
   /** Merge committed history rows, retaining recovery for incomplete or filtered cache pages. */
@@ -238,6 +245,26 @@ export const useCombatUpdates = (state: BattleState) => {
     [queryClient, utils],
   );
 
+  const receiveBattle = useCallback(
+    (next: CombatTabState) => {
+      if (next.logEntries !== undefined)
+        void updateLogs(
+          next.battle.id,
+          next.battle.version,
+          next.logEntries,
+          !!next.result,
+        );
+      void acceptBattle(next.battle.id, next);
+    },
+    [acceptBattle, updateLogs],
+  );
+  const { canDrive, publish } = useCombatTabs(
+    battleId,
+    userData?.userId,
+    receiveBattle,
+    isDriverEnabled,
+  );
+
   useEffect(() => {
     if (!battleId || !pusher) return;
     const channel = pusher.subscribe(battleId);
@@ -282,7 +309,7 @@ export const useCombatUpdates = (state: BattleState) => {
       pusher.unsubscribe(battleId);
     };
   }, [battleId, pusher, refreshBattle, updateLogs, updateBattleEvent]);
-  return { updateLogs, startAction, settleAction };
+  return { updateLogs, startAction, settleAction, canDrive, publishBattle: publish };
 };
 
 /**
