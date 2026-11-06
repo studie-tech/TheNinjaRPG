@@ -283,6 +283,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { commitBattleAdmission } from "@/server/utils/battleAdmission";
+import { combatCompletionStore } from "@/server/utils/combatCompletion";
 import { settleCookingExperience } from "@/server/utils/cooking";
 import {
   commitDungeonEntryBattle,
@@ -349,7 +350,12 @@ export const combatRouter = createTRPCRouter({
         // Distinguish between public and non-public user state
         const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
         if (!userBattle) {
-          return { battle: null, result: null };
+          return (
+            (await combatCompletionStore().recover(ctx.userId, input.battleId)) ?? {
+              battle: null,
+              result: null,
+            }
+          );
         }
         const stateBaseline = captureCombatStateUpdate(userBattle);
 
@@ -484,6 +490,9 @@ export const combatRouter = createTRPCRouter({
 
         // Hide private state of non-session user
         const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
+
+        // Cache only the settled, viewer-masked response; recovery never reruns reward writes.
+        await combatCompletionStore().save(ctx.userId, newMaskedBattle, result);
 
         // Return the new battle + result state if applicable
         return { battle: newMaskedBattle, result: result };
@@ -903,6 +912,8 @@ export const combatRouter = createTRPCRouter({
               finishBattle(),
             ]);
             const newMaskedBattle = maskBattle(newBattle, suid);
+
+            await combatCompletionStore().save(suid, newMaskedBattle, result);
 
             // Notify after logs are persisted, including the terminal action.
             // Polling clients may have read the claimed state before its log insert.

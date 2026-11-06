@@ -364,7 +364,11 @@ const Combat: React.FC<CombatProps> = (props) => {
       );
     },
     onError: () => {
-      setBattleState({ battle: battleRef.current, result: null, isPending: false });
+      setBattleState((current) =>
+        current?.result
+          ? { ...current, isPending: false }
+          : { battle: battleRef.current, result: null, isPending: false },
+      );
     },
     onSuccess: async (data, _variables, context) => {
       if (data.result && data.battleUpdate) {
@@ -397,8 +401,22 @@ const Combat: React.FC<CombatProps> = (props) => {
         showMutationToast({ success: false, message: data.notification });
       }
       if (!data.battleUpdate) {
-        setBattleState({ battle: battleRef.current, result: null, isPending: false });
+        setBattleState((current) =>
+          current?.result
+            ? { ...current, isPending: false }
+            : { battle: battleRef.current, result: null, isPending: false },
+        );
         return;
+      }
+      if (data.updateClient) {
+        // Display committed outcomes before history recovery or tutorial navigation can suspend this handler.
+        battleRef.current = data.battleUpdate;
+        setBattleState({
+          battle: data.battleUpdate,
+          result: data.result,
+          isPending: false,
+        });
+        setBattleAtom(data.battleUpdate);
       }
       if (data?.result?.notifications.length !== 0) {
         data?.result?.notifications.forEach((notification) => {
@@ -454,15 +472,6 @@ const Combat: React.FC<CombatProps> = (props) => {
         } else if (currentStep?.onCombatLoss && data.result?.outcome !== "Won") {
           await handleNextStepAsync(currentStep.onCombatLoss);
         }
-      }
-      if (data.updateClient && data.battleUpdate) {
-        battleRef.current = data.battleUpdate;
-        setBattleState({
-          battle: data.battleUpdate,
-          result: data.result,
-          isPending: false,
-        });
-        setBattleAtom(data.battleUpdate);
       }
     },
   });

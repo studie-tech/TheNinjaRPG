@@ -94,3 +94,36 @@ it("still drives live auto combat while its scene is paused in the background", 
   drive();
   expect(actions).toBe(1);
 });
+
+it.each([false, true])("displays committed rewards before history recovery and retains them if recovery fails=%s", async (fails) => {
+  const handlers = sourceBetween("  // User Action\n", "\n  const performAction = ");
+  const battle = { id: "settled-arena", version: 2 };
+  const result = { outcome: "Won", notifications: [] };
+  let state: { battle: typeof battle; result: typeof result | null; isPending: boolean } = { battle, result: null, isPending: true };
+  let options!: { onSuccess: (data: object, input: object, context: object) => Promise<void>; onError: () => void };
+  let finish!: () => void;
+  const held = new Promise<void>((resolve) => { finish = resolve; });
+  const events: string[] = [];
+  new Function("scope", `with (scope) { ${transpiler.transformSync(handlers)} }`)({
+    api: { combat: { performAction: { useMutation: (value: typeof options) => { options = value; return {}; } } } },
+    battleRef: { current: battle }, completionRevisionRef: { current: null }, suid: "player",
+    resolveControlledActorId: () => "player", haptics: { notify() {} },
+    setBattleState: (update: typeof state | ((current: typeof state) => typeof state)) => { state = typeof update === "function" ? update(state) : update; events.push("result"); },
+    setBattleAtom() {}, currentStep: { onCombatWin: "next-step" },
+    updateLogs: async () => { events.push("history"); await held; if (fails) throw new Error("History unavailable"); },
+    handleNextStepAsync: async () => { events.push("tutorial"); },
+  });
+  const pending = options.onSuccess({ updateClient: true, battleUpdate: battle, result, logEntries: [], updatedQuestIds: [] }, { battleId: battle.id }, {});
+  expect(state.result).toBe(result);
+  expect(state.isPending).toBe(false);
+  expect(events).toEqual(["result", "history"]);
+  finish();
+  if (fails) {
+    await expect(pending).rejects.toThrow("History unavailable");
+    options.onError();
+    expect(state.result).toBe(result);
+  } else {
+    await pending;
+    expect(events).toEqual(["result", "history", "tutorial"]);
+  }
+});
