@@ -163,15 +163,16 @@ export const stealthRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query (parallel)
-      let [{ user, settings }, stealthedUsers, alliances, fetchedWars] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        listUserDataForUseSensory(ctx.drizzle, input, ctx),
-        selectVillageAllianceForUseSensory(ctx.drizzle),
-        listWarForGetSectorData(ctx.drizzle),
-      ]);
+      let [{ user, settings }, stealthedUsers, alliances, fetchedWars] =
+        await Promise.all([
+          fetchUpdatedUser({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+          }),
+          listUserDataForUseSensory(ctx.drizzle, input, ctx),
+          selectVillageAllianceForUseSensory(ctx.drizzle),
+          listWarForGetSectorData(ctx.drizzle),
+        ]);
 
       // Guard
       if (!user) return errorResponse("User not found");

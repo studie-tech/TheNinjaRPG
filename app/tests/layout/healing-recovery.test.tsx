@@ -44,6 +44,8 @@ it.each(["ASLEEP", "HOSPITALIZED"] as const)("applies recovered %s pools and the
     hospital: { userHeal: { useMutation: (options: typeof callbacks) => { callbacks = options; return { mutate: heal, isPending: false }; } } },
   });
   vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    data: user,
+    timeDiff: 0,
     prepareUserUpdate: () => prepareUserUpdate(cache, key),
     updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) => updateUserCache(cache, key, patch, options),
   } as never);
@@ -56,7 +58,7 @@ it.each(["ASLEEP", "HOSPITALIZED"] as const)("applies recovered %s pools and the
   const complete = vi.fn();
   try {
     const target = { userId: "target", username: "Target", avatar: "", curHealth: 0, maxHealth: 100 } as SectorUser;
-    const view = render(<HealingPopover userData={user} targetUser={target} timeDiff={0} open onHealComplete={complete} trigger={<button type="button">Heal target</button>} />);
+    const view = render(<HealingPopover targetUser={target} open onHealComplete={complete} trigger={<button type="button">Heal target</button>} />);
     await act(async () => fireEvent.click(view.getByRole("button", { name: "25%" })));
     expect(heal).toHaveBeenCalledTimes(1);
     expect(read).not.toHaveBeenCalled();
