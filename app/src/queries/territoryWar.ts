@@ -29,8 +29,10 @@ import {
   userData,
   village,
 } from "@/drizzle/schema";
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
 /** Latest scheduled event, including closed/expired results; does not advance its lifecycle. */
 export const fetchLatestTerritoryWar = (client: DrizzleClient) =>
@@ -394,14 +396,15 @@ export const executeClaimedForJoinTeam = (
     villageId: null | string;
   },
   memberId: string,
+  readiness?: ActionReadinessWrite,
 ) =>
   client.execute(sql`
-      UPDATE UserData u INNER JOIN MpvpBattleUser m ON m.userId = u.userId
+      UPDATE UserData INNER JOIN MpvpBattleUser m ON m.userId = UserData.userId
       INNER JOIN MpvpBattleQueue q ON q.id = m.clanBattleId
       INNER JOIN TerritoryWar w ON w.id = q.territoryWarId
-      SET u.status = 'QUEUED', q.createdAt = q.createdAt
-      WHERE u.userId = ${user.userId} AND m.id = ${memberId} AND q.battleId IS NULL
-        AND u.status = 'AWAKE' AND u.isBanned = false AND u.sector = ${user.sector}
-        AND u.isOutlaw = ${user.isOutlaw} AND u.clanId <=> ${user.clanId} AND u.villageId <=> ${user.villageId}
+      SET ${actionReadinessSqlSet(readiness)} UserData.status = 'QUEUED', q.createdAt = q.createdAt
+      WHERE UserData.userId = ${user.userId} AND m.id = ${memberId} AND q.battleId IS NULL
+        AND ${readiness?.where ?? eq(userData.status, "AWAKE")} AND UserData.isBanned = false AND UserData.sector = ${user.sector}
+        AND UserData.isOutlaw = ${user.isOutlaw} AND UserData.clanId <=> ${user.clanId} AND UserData.villageId <=> ${user.villageId}
         AND w.resolvedAt IS NULL AND w.endsAt > NOW(3)
     `);

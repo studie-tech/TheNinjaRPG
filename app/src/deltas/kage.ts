@@ -1,3 +1,9 @@
+/** Check-in changes attendance only; readiness carries any confirmed character recovery. */
+export const getKageDefenseCheckInUserUpdate = () => ({
+  userPatch: {},
+  userDelta: {},
+});
+
 /**
  * Project the saved village leader, revision and cleared schedule. A nominated caller moving
  * from elder leadership receives the confirmed Jonin rank.

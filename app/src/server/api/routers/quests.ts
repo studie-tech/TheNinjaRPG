@@ -50,6 +50,7 @@ import {
   userData,
   userPet,
 } from "@/drizzle/schema";
+import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   deletedReason,
   editedReason,
@@ -270,6 +271,11 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  type ActionReadiness,
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { claimUserSnapshot, runRewardTasks } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import {
@@ -319,6 +325,7 @@ import {
 } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
+import type { UserRecoveryActivity } from "@/validators/base";
 import {
   type InventoryQuantityChange,
   inventoryQuantityChangeSchema,
@@ -614,8 +621,11 @@ export const questsRouter = createTRPCRouter({
         // after the user refresh, so this query can run alongside it.
         selectQuestForStartRandom(ctx.drizzle, ctx, input),
       ]);
-      const { user } = updatedUser;
-      if (!user) return errorResponse("User does not exist");
+      const { user: initialUser } = updatedUser;
+      if (!initialUser) return errorResponse("User does not exist");
+      const readiness = prepareActionReadiness(initialUser, updatedUser.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       // For certain quest types, we fallback to lower ranks if the user does not have the required rank
       const { rankInfo } = fallbackQuestsFilter(results, user, input.type);
 
@@ -696,8 +706,15 @@ export const questsRouter = createTRPCRouter({
           : null;
 
       // Reserve the slot before delivering a quest, including when another start races us.
-      if (quota && !(await claimDailyQuestSlot(ctx.drizzle, user, input.type))) {
-        return errorResponse(questDailyLimitMessage(input.type, quota.limit));
+      if (
+        quota &&
+        !(await claimDailyQuestSlot(ctx.drizzle, user, input.type, readiness))
+      ) {
+        return errorResponse(
+          readiness.where
+            ? "Your activity or daily quest quota changed. Please try again."
+            : questDailyLimitMessage(input.type, quota.limit),
+        );
       }
       const assignment = await upsertQuestEntry(
         ctx.drizzle,
@@ -705,19 +722,27 @@ export const questsRouter = createTRPCRouter({
         result,
         "random_assignment",
         prevEntry,
+        false,
+        quota ? undefined : readiness,
       );
-      return {
-        success: true,
-        message: `Quest started: ${result.name}${rankInfo}`,
-        ...(assignment.userCacheEligible && !updatedUser.requiresProgressionRefresh
-          ? getQuestStartUserUpdate(
-              user,
-              updatedUser.publishedAchievementIds,
-              await consumeUserAnnouncements(ctx.drizzle, user),
-              [],
-            )
-          : {}),
-      };
+      if (!assignment.recoveryCommitted)
+        return errorResponse("Your activity changed. Please try again.");
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Quest started: ${result.name}${rankInfo}`,
+          ...(assignment.userCacheEligible && !updatedUser.requiresProgressionRefresh
+            ? getQuestStartUserUpdate(
+                user,
+                updatedUser.publishedAchievementIds,
+                await consumeUserAnnouncements(ctx.drizzle, user),
+                [],
+              )
+            : {}),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   startQuest: protectedProcedure
     .meta({ mcp: { description: "Start a specific quest by ID" } })
@@ -748,9 +773,17 @@ export const questsRouter = createTRPCRouter({
       ]);
 
       // Cheap pre-fetch guards (UI-only)
-      const { user } = updatedUser;
-      if (!user) return errorResponse("User does not exist");
+      const { user: initialUser } = updatedUser;
+      if (!initialUser) return errorResponse("User does not exist");
       if (!questData) return errorResponse("Quest does not exist");
+      const requiresAwake =
+        MISSION_HALL_QUEST_TYPES.includes(questData.questType) ||
+        isManagedQuestRun(questData);
+      const readiness = requiresAwake
+        ? prepareActionReadiness(initialUser, updatedUser.settings)
+        : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
       if (user.isBanned) return errorResponse("You are banned");
       const asleepBlock = missionHallStartBlockedMessage(
@@ -767,21 +800,27 @@ export const questsRouter = createTRPCRouter({
           source: "ui",
           sectorVillage,
           prevAttempt,
+          readiness,
         });
-      return {
-        ...result,
-        ...(result.success &&
-        userCacheEligible === true &&
-        !updatedUser.requiresProgressionRefresh &&
-        questData.questType !== "war"
-          ? getQuestStartUserUpdate(
-              user,
-              updatedUser.publishedAchievementIds,
-              await consumeUserAnnouncements(ctx.drizzle, user),
-              inventoryChanges,
-            )
-          : {}),
-      };
+      return actionReadinessResponse(
+        {
+          ...result,
+          ...(result.success &&
+          userCacheEligible === true &&
+          !updatedUser.requiresProgressionRefresh &&
+          questData.questType !== "war"
+            ? getQuestStartUserUpdate(
+                user,
+                updatedUser.publishedAchievementIds,
+                await consumeUserAnnouncements(ctx.drizzle, user),
+                inventoryChanges,
+              )
+            : {}),
+        },
+        result.success ? readiness : undefined,
+        ctx.drizzle,
+        result.success ? { status: user.status, battleId: user.battleId } : undefined,
+      );
     }),
   abandon: protectedProcedure
     .meta({ mcp: { description: "Abandon an active quest" } })
@@ -1240,7 +1279,10 @@ export const questsRouter = createTRPCRouter({
         return { success: false, message: `Not allowed to delete quest` };
       }
     }),
-  /** Return the accepted task even when its content disappeared, so cancellation stays available. */
+  /**
+   * Return the accepted task and recovery-capable availability without changing activity.
+   * Missing content still leaves cancellation available.
+   */
   getPetTask: protectedProcedure
     .input(petSelectionSchema.optional())
     .query(async ({ ctx, input }) => {
@@ -1259,10 +1301,16 @@ export const questsRouter = createTRPCRouter({
         petName: pet?.name ?? "Companion",
         questName: contract?.name ?? "Unavailable contract",
         blockMessage: task
-          ? petTaskReturnBlockMessage(owner, task, contract, history, pet)
+          ? petTaskReturnBlockMessage(
+              actionPrerequisiteUser(owner),
+              task,
+              contract,
+              history,
+              pet,
+            )
           : null,
         dispatchBlockMessage: petTaskDispatchBlockMessage(
-          owner,
+          actionPrerequisiteUser(owner),
           owner.pets.find((entry) => entry.id === input?.petId),
         ),
       };
@@ -1279,8 +1327,11 @@ export const questsRouter = createTRPCRouter({
         fetchUserQuestByQuestId(ctx.drizzle, ctx.userId, input.questId),
         findOwnedUserPet(ctx.drizzle, input.petId, ctx.userId),
       ]);
-      const { user } = snapshot;
-      if (!user) return errorResponse("User not found");
+      const { user: initialUser } = snapshot;
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, snapshot.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const blocked = petTaskDispatchBlockMessage(user, pet);
       if (blocked || !pet) return errorResponse(blocked ?? "Companion not found");
       if (!contract || !isPetTaskContract(contract))
@@ -1341,9 +1392,9 @@ export const questsRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
           updatedAt: user.updatedAt,
+          readiness,
           where: [
             isNull(userData.petTask),
-            eq(userData.status, "AWAKE"),
             isNull(userData.battleId),
             eq(userData.isBanned, false),
             eq(userData.isAi, false),
@@ -1384,19 +1435,23 @@ export const questsRouter = createTRPCRouter({
         snapshot.requiresProgressionRefresh === false && !consumedWornItem
           ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
           : undefined;
-      return {
-        success: true,
-        message: `${pet.name} left to complete ${contract.name}.`,
-        ...(projection
-          ? {
-              ...projection,
-              ...getStartPetTaskUserUpdate({
-                projectionUserPatch: projection.userPatch,
-                task,
-              }),
-            }
-          : {}),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `${pet.name} left to complete ${contract.name}.`,
+          ...(projection
+            ? {
+                ...projection,
+                ...getStartPetTaskUserUpdate({
+                  projectionUserPatch: projection.userPatch,
+                  task,
+                }),
+              }
+            : {}),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   /** Claim only the final configured reward through the normal quest completion guards. */
@@ -1409,8 +1464,11 @@ export const questsRouter = createTRPCRouter({
         findQuestHistoryForCollectPetTask(ctx.drizzle, input, ctx),
         findOwnedUserPet(ctx.drizzle, input.petId, ctx.userId),
       ]);
-      const { user, settings } = snapshot;
-      if (!user) return errorResponse("User not found");
+      const { user: initialUser, settings } = snapshot;
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const task = user.petTask;
       if (
         !task ||
@@ -1451,6 +1509,7 @@ export const questsRouter = createTRPCRouter({
         ...reward,
         existingHistory: history,
         petTask: task,
+        readiness,
       });
       if (claim.outcome !== "claimed")
         return errorResponse(
@@ -1480,22 +1539,27 @@ export const questsRouter = createTRPCRouter({
         getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
           ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
           : undefined;
-      return {
-        ...(projection
-          ? {
-              ...projection,
-              ...getCollectPetTaskUserUpdate({
-                projectionUserPatch: projection.userPatch,
-                claimUserDelta: claim.userDelta,
-              }),
-            }
-          : {}),
-        success: true,
-        message: `${pet.name} returned from ${history.quest.name}.${claim.rewardChoicePending ? " Choose your rewards in the Logbook." : ""}`,
-        rewards: claim.rewards,
-        notifications: claim.postNotifications,
-        rewardChoicePending: claim.rewardChoicePending,
-      };
+      return actionReadinessResponse(
+        {
+          ...(projection
+            ? {
+                ...projection,
+                ...getCollectPetTaskUserUpdate({
+                  projectionUserPatch: projection.userPatch,
+                  claimUserDelta: claim.userDelta,
+                }),
+              }
+            : {}),
+          success: true,
+          message: `${pet.name} returned from ${history.quest.name}.${claim.rewardChoicePending ? " Choose your rewards in the Logbook." : ""}`,
+          rewards: claim.rewards,
+          notifications: claim.postNotifications,
+          rewardChoicePending: claim.rewardChoicePending,
+        },
+        readiness,
+        ctx.drizzle,
+        claim.committedActivity,
+      );
     }),
 
   /** Return safely without rewards, including deleted content and a missing/restarted attempt. */
@@ -1564,7 +1628,7 @@ export const questsRouter = createTRPCRouter({
       // Reward payout follows the history/account claim; isolated runs publish both together.
       const [
         {
-          user,
+          user: initialUser,
           toastMessages,
           settings,
           requiresProgressionRefresh,
@@ -1582,9 +1646,15 @@ export const questsRouter = createTRPCRouter({
       ]);
 
       // Guards
-      if (!user) {
+      if (!initialUser) {
         return errorResponse("User does not exist");
       }
+      const readiness =
+        initialUser.status === "BATTLE"
+          ? undefined
+          : prepareActionReadiness(initialUser, settings);
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       if (user.petTask?.questId === input.questId)
         return errorResponse(
           "Your companion is completing this contract. Collect its results from the companion Tasks tab.",
@@ -1641,6 +1711,7 @@ export const questsRouter = createTRPCRouter({
         consequences,
         existingHistory: questHistoryPrefetch ?? null,
         rewardChoice,
+        readiness,
         requiresDiscoveryRefresh: requiresUserRefresh,
         ...(resolved && isolatedRun?.questId === input.questId
           ? {
@@ -1694,34 +1765,39 @@ export const questsRouter = createTRPCRouter({
 
       const refreshedTrackers = getNewTrackers(user, [{ task: "any" }]);
       user.questData = refreshedTrackers.trackers;
-      return {
-        success: true,
-        message: "Quest progress updated",
-        notifications: finalNotifications,
-        rewards: claim.rewards,
-        userQuest: userQuest
-          ? {
-              questId: userQuest.questId,
-              quest: {
-                name: userQuest.quest.name,
-                successDescription: userQuest.quest.successDescription,
-              },
-            }
-          : null,
-        resolved,
-        badges: claim.badges,
-        rewardChoicePending: claim.rewardChoicePending,
-        questCacheUpdate: claim.questCacheUpdate,
-        ...getQuestRewardProjectionUpdate({
-          user: user,
-          requiresProgressionRefresh,
-          userCacheEligible: claim.userCacheEligible,
-          delta: claim.userDelta,
-          consequences: refreshedTrackers.consequences,
-          progressionQuestCandidates,
-          publishedAchievementIds,
-        }),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: "Quest progress updated",
+          notifications: finalNotifications,
+          rewards: claim.rewards,
+          userQuest: userQuest
+            ? {
+                questId: userQuest.questId,
+                quest: {
+                  name: userQuest.quest.name,
+                  successDescription: userQuest.quest.successDescription,
+                },
+              }
+            : null,
+          resolved,
+          badges: claim.badges,
+          rewardChoicePending: claim.rewardChoicePending,
+          questCacheUpdate: claim.questCacheUpdate,
+          ...getQuestRewardProjectionUpdate({
+            user: user,
+            requiresProgressionRefresh,
+            userCacheEligible: claim.userCacheEligible,
+            delta: claim.userDelta,
+            consequences: refreshedTrackers.consequences,
+            progressionQuestCandidates,
+            publishedAchievementIds,
+          }),
+        },
+        readiness,
+        ctx.drizzle,
+        claim.committedActivity,
+      );
     }),
   getPendingRewardChoices: protectedProcedure
     .meta({
@@ -2030,9 +2106,15 @@ export const questsRouter = createTRPCRouter({
         userId: ctx.userId,
         hideInformation: false,
       });
-      const { user } = snapshot;
+      const { user: initialUser } = snapshot;
       // Guard
-      if (!user) return errorResponse("User does not exist");
+      if (!initialUser) return errorResponse("User does not exist");
+      const readiness =
+        initialUser.status === "BATTLE"
+          ? undefined
+          : prepareActionReadiness(initialUser, snapshot.settings);
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       const tracker = user.questData?.find((t) => t.id === input.questId);
       if (!tracker?.goals.some((goal) => canRetryQuestBattle(goal))) {
         return errorResponse("There is no lost battle to retry in this quest");
@@ -2060,7 +2142,14 @@ export const questsRouter = createTRPCRouter({
         claimed,
         battleAttempted,
         battleUserUpdate,
-      } = await handleQuestConsequences(ctx.drizzle, user, consequences, notifications);
+        committedActivity,
+      } = await handleQuestConsequences(
+        ctx.drizzle,
+        user,
+        consequences,
+        notifications,
+        { readiness },
+      );
       // Return information
       const canProject =
         claimed &&
@@ -2079,21 +2168,26 @@ export const questsRouter = createTRPCRouter({
         canProject && (!battleAttempted || committedBattlePatch)
           ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
           : undefined;
-      return {
-        success: true,
-        message: [...snapshot.toastMessages, ...finalNotification].join("\n"),
-        ...(projection
-          ? {
-              ...projection,
-              ...getRetryBattleUserUpdate({
-                projectionUserPatch: projection.userPatch,
-                committedBattlePatch,
-                battleAttempted,
-                battleUserUpdateUserDelta: battleUserUpdate?.userDelta,
-              }),
-            }
-          : {}),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: [...snapshot.toastMessages, ...finalNotification].join("\n"),
+          ...(projection
+            ? {
+                ...projection,
+                ...getRetryBattleUserUpdate({
+                  projectionUserPatch: projection.userPatch,
+                  committedBattlePatch,
+                  battleAttempted,
+                  battleUserUpdateUserDelta: battleUserUpdate?.userDelta,
+                }),
+              }
+            : {}),
+        },
+        claimed ? readiness : undefined,
+        ctx.drizzle,
+        committedActivity,
+      );
     }),
 });
 
@@ -2721,11 +2815,12 @@ export const upsertQuestEntries = async (
   return true;
 };
 
-/** Reserve a daily assignment before delivery; SQL enforces the cap across stale callers. */
+/** Reserve a daily assignment and its recovery before publishing quest history. */
 export const claimDailyQuestSlot = async (
   client: DrizzleClient,
   user: UserData,
   questType: string,
+  readiness?: ActionReadiness,
 ) => {
   const quota = questDailyQuota(questType, user);
   if (!quota) return true;
@@ -2738,6 +2833,7 @@ export const claimDailyQuestSlot = async (
     questType,
     user,
     quota,
+    readiness,
   );
   if (result.rowsAffected === 0) return false;
   user[field] += 1;
@@ -2814,6 +2910,8 @@ export const assignQuestToUser = async (args: {
   source: "ui" | "pet_task" | "overworld_npc" | "item";
   /** Reuse the item receipt's transaction; do not open another assignment transaction. */
   inTransaction?: boolean;
+  /** Explicit actor recovery is composed into assignment's existing account write. */
+  readiness?: ActionReadiness;
   /** Required for NPC-only quests so their placement assignment can be verified server-side. */
   overworldPlacementId?: string;
   sectorVillage?: Awaited<ReturnType<typeof fetchSectorVillage>>;
@@ -2936,6 +3034,9 @@ export const assignQuestToUser = async (args: {
   const dailyLimitMessage = quota
     ? questDailyLimitMessage(questData.questType, quota.limit)
     : "";
+  const dailyClaimMessage = args.readiness?.where
+    ? "Your activity or daily quest quota changed. Please try again."
+    : dailyLimitMessage;
   if (quota && quota.current >= quota.limit) return errorResponse(dailyLimitMessage);
 
   // Entry items are checked and paid when the run starts, not at its first battle, so a
@@ -3032,7 +3133,14 @@ export const assignQuestToUser = async (args: {
         const database = tx as unknown as DrizzleClient;
         // A rolled-back attempt must not leave its tracker changes on the caller's user.
         const warUser = { ...user };
-        if (!(await claimDailyQuestSlot(database, warUser, questData.questType)))
+        if (
+          !(await claimDailyQuestSlot(
+            database,
+            warUser,
+            questData.questType,
+            args.readiness,
+          ))
+        )
           throw dailyLimitReached;
         const result = await upsertQuestEntry(
           database,
@@ -3062,14 +3170,16 @@ export const assignQuestToUser = async (args: {
       if (error === entryRejected) return null;
       throw error;
     });
-    if (paid === undefined) return errorResponse(dailyLimitMessage);
+    if (paid === undefined) return errorResponse(dailyClaimMessage);
     if (paid === null)
       return errorResponse("Your entry items changed. Please try again.");
     Object.assign(user, paid.user);
     assignment = paid.result;
   } else if (questData.questType === "war") {
-    if (!(await claimDailyQuestSlot(client, user, questData.questType))) {
-      return errorResponse(dailyLimitMessage);
+    if (
+      !(await claimDailyQuestSlot(client, user, questData.questType, args.readiness))
+    ) {
+      return errorResponse(dailyClaimMessage);
     }
     assignment = await upsertQuestEntry(
       client,
@@ -3077,6 +3187,7 @@ export const assignQuestToUser = async (args: {
       questData,
       source,
       prevAttempt ?? null,
+      false,
     );
   } else if (isManagedQuestRun(questData)) {
     // Publish the account claim and new history together: another request must not see
@@ -3089,8 +3200,9 @@ export const assignQuestToUser = async (args: {
           client: database,
           userId: user.userId,
           updatedAt: user.updatedAt,
+          readiness: args.readiness,
           where: [
-            eq(userData.status, "AWAKE"),
+            args.readiness ? undefined : eq(userData.status, "AWAKE"),
             ...(questData.questType === "battlepyramid"
               ? [notExists(selectQuestHistoryForWhere(database, user))]
               : []),
@@ -3141,16 +3253,20 @@ export const assignQuestToUser = async (args: {
     Object.assign(user, assigned.user);
     assignment = assigned.result;
   } else {
-    if (!(await claimDailyQuestSlot(client, user, questData.questType)))
-      return errorResponse(dailyLimitMessage);
+    if (!(await claimDailyQuestSlot(client, user, questData.questType, args.readiness)))
+      return errorResponse(dailyClaimMessage);
     assignment = await upsertQuestEntry(
       client,
       user,
       questData,
       source,
       prevAttempt ?? null,
+      false,
+      quota ? undefined : args.readiness,
     );
   }
+  if (!assignment.recoveryCommitted)
+    return errorResponse("Your activity changed. Please try again.");
   return {
     success: true,
     message: `Quest started: ${questData.name}`,
@@ -3182,7 +3298,9 @@ export const upsertQuestEntry = async (
   source: QuestAcquisitionSource,
   prevEntry?: Awaited<ReturnType<typeof fetchUserQuestByQuestId>> | null,
   inTransaction = false,
+  readiness?: ActionReadiness,
 ): Promise<{
+  recoveryCommitted: boolean;
   entry: NonNullable<Awaited<ReturnType<typeof fetchUserQuestByQuestId>>>;
   userCacheEligible: boolean;
 }> => {
@@ -3241,6 +3359,7 @@ export const upsertQuestEntry = async (
           source,
           entry ?? null,
           true,
+          readiness,
         );
         return { result, user: claimedUser };
       }),
@@ -3373,22 +3492,27 @@ export const upsertQuestEntry = async (
     );
     if (maps) snapQuestTargetsToReachable(user, trackers, maps);
   }
-  promises.push(
-    updateUserDataForUpsertQuestEntry(
-      client,
-      trackers,
-      user,
-      recoveryUpdate,
-      entry,
-      professionContract,
-      quest,
-    ),
+  const accountWrite = updateUserDataForUpsertQuestEntry(
+    client,
+    trackers,
+    user,
+    recoveryUpdate,
+    entry,
+    professionContract,
+    quest,
+    readiness,
   );
+  promises.push(accountWrite);
+  let accountResult: { rowsAffected: number } | undefined;
   // Drizzle builders are lazy; await them in order on PlanetScale's shared transaction session.
   if (inTransaction) {
-    for (const promise of promises) await promise;
+    for (const promise of promises) {
+      const result = await promise;
+      if (promise === accountWrite) accountResult = result as { rowsAffected: number };
+    }
   } else {
-    await Promise.all(promises);
+    const results = await Promise.all(promises);
+    accountResult = results[results.length - 1] as { rowsAffected: number };
   }
   Object.assign(user, recovery);
   user.questData = trackers;
@@ -3414,6 +3538,7 @@ export const upsertQuestEntry = async (
       JSON.stringify(reconciled.trackers) === JSON.stringify(trackers);
   }
   return {
+    recoveryCommitted: !readiness || (accountResult?.rowsAffected ?? 0) > 0,
     entry,
     userCacheEligible,
   };
@@ -3548,6 +3673,7 @@ type CommitQuestObjectiveRewardsResult =
       rewardChoicePending: boolean;
       userDelta: UserDelta | undefined;
       userCacheEligible: boolean;
+      committedActivity?: UserRecoveryActivity;
       questCacheUpdate?: ReturnType<typeof getQuestRewardCacheUpdate>;
     }
   /** Resolved completion lost the CAS and the row is already completed (idempotent re-claim). */
@@ -3602,6 +3728,8 @@ export const commitQuestObjectiveRewards = async (info: {
   petTask?: PetTask;
   /** Initial profile settlement can change discovery eligibility before the reward claim. */
   requiresDiscoveryRefresh?: boolean;
+  /** Recovery shares the objective's account/history claim before irreversible rewards. */
+  readiness?: ActionReadiness;
 }): Promise<CommitQuestObjectiveRewardsResult> => {
   const {
     client,
@@ -3652,6 +3780,7 @@ export const commitQuestObjectiveRewards = async (info: {
           rewardChoicePending: false,
           userCacheEligible: false,
           userDelta: undefined,
+          committedActivity: helperClaim.committedActivity,
         }
       : { outcome: "state_changed" };
   }
@@ -3795,7 +3924,7 @@ export const commitQuestObjectiveRewards = async (info: {
       // the loaded history and guard those values instead of rereading a changed column.
       const startsNewPeriod =
         cps && (!managedRun.periodStartAt || managedRun.periodStartAt < cps);
-      claimManagedCompletion = async ({ set, where = [] }) => {
+      claimManagedCompletion = async ({ set, where = [], readiness }) => {
         // Drizzle has no joined UPDATE builder. This single guarded write closes the run
         // and removes its tracker atomically; no payout can precede a successful claim.
         const result = await retryOnDeadlock(() =>
@@ -3813,6 +3942,7 @@ export const commitQuestObjectiveRewards = async (info: {
             completionConditions,
 
             where,
+            readiness,
           ),
         );
         return { success: result.rowsAffected > 0, claimedAt: completedAt };
@@ -3848,50 +3978,49 @@ export const commitQuestObjectiveRewards = async (info: {
     }
   }
 
-  const { notifications: postNotifications, claimed } = await handleQuestConsequences(
-    client,
-    user,
-    consequences,
-    notifications,
-    {
-      alwaysClaimUserState: true,
-      claimUserState: claimManagedCompletion,
-      partyTrackers: trackers,
-      progressionUpdate: milestonePatch,
-      // Unresolved objectives have no completion CAS; guard their payout at the snapshot claim.
-      claimConditions: [
-        liveQuestCondition,
-        // Recheck earned progression and exam caps at the guarded account write.
-        ...(milestonePatch || rewards.reward_rank === "ELITE JONIN"
-          ? [
-              eq(userData.level, user.level),
-              eq(userData.rank, user.rank),
-              ...(rewards.reward_rank === "ELITE JONIN"
-                ? [
-                    gte(userData.offence, getUserCaps("JONIN").stats_cap),
-                    gte(userData.defence, getUserCaps("JONIN").stats_cap),
-                    ...(
-                      ["strength", "speed", "intelligence", "willpower"] as const
-                    ).map((stat) => gte(userData[stat], getUserCaps("JONIN").gens_cap)),
-                  ]
-                : []),
-            ]
-          : []),
-        ...(isolatedRun && !petTask
-          ? [
-              eq(userData.status, "BATTLE"),
-              isNull(userData.battleId),
-              isolatedRun.questId === userQuest?.questId ? undefined : sql`FALSE`,
-            ]
-          : []),
-        ...(!resolved && userQuest && userQuest.quest.questType !== "achievement"
-          ? [
-              sql`EXISTS (SELECT 1 FROM ${questHistory} WHERE ${questHistory.questId} = ${userQuest.questId} AND ${questHistory.userId} = ${userId} AND ${questHistory.completed} = 0 AND ${questHistory.endAt} IS NULL)`,
-            ]
-          : []),
-      ],
-    },
-  );
+  const {
+    notifications: postNotifications,
+    claimed,
+    committedActivity,
+  } = await handleQuestConsequences(client, user, consequences, notifications, {
+    alwaysClaimUserState: true,
+    readiness: info.readiness,
+    claimUserState: claimManagedCompletion,
+    partyTrackers: trackers,
+    progressionUpdate: milestonePatch,
+    // Unresolved objectives have no completion CAS; guard their payout at the snapshot claim.
+    claimConditions: [
+      liveQuestCondition,
+      // Recheck earned progression and exam caps at the guarded account write.
+      ...(milestonePatch || rewards.reward_rank === "ELITE JONIN"
+        ? [
+            eq(userData.level, user.level),
+            eq(userData.rank, user.rank),
+            ...(rewards.reward_rank === "ELITE JONIN"
+              ? [
+                  gte(userData.offence, getUserCaps("JONIN").stats_cap),
+                  gte(userData.defence, getUserCaps("JONIN").stats_cap),
+                  ...(["strength", "speed", "intelligence", "willpower"] as const).map(
+                    (stat) => gte(userData[stat], getUserCaps("JONIN").gens_cap),
+                  ),
+                ]
+              : []),
+          ]
+        : []),
+      ...(isolatedRun && !petTask
+        ? [
+            eq(userData.status, "BATTLE"),
+            isNull(userData.battleId),
+            isolatedRun.questId === userQuest?.questId ? undefined : sql`FALSE`,
+          ]
+        : []),
+      ...(!resolved && userQuest && userQuest.quest.questType !== "achievement"
+        ? [
+            sql`EXISTS (SELECT 1 FROM ${questHistory} WHERE ${questHistory.questId} = ${userQuest.questId} AND ${questHistory.userId} = ${userId} AND ${questHistory.completed} = 0 AND ${questHistory.endAt} IS NULL)`,
+          ]
+        : []),
+    ],
+  });
 
   if (!claimed) {
     if (claimManagedCompletion && userQuest) {
@@ -4143,6 +4272,7 @@ export const commitQuestObjectiveRewards = async (info: {
     rewardChoicePending: !!rewardChoice,
     questCacheUpdate,
     userDelta,
+    committedActivity,
     userCacheEligible:
       userCacheEligible &&
       (!needsConfirmedSkillPoints || confirmedSkillPoints !== undefined) &&
@@ -4179,6 +4309,8 @@ const executeClaimedQuestConsequences = async ({
 }) => {
   user.updatedAt = claimedAt;
   let battleUserUpdate: Pick<UserDeltaResponse, "userPatch" | "userDelta"> | undefined;
+  let questActivity: UserRecoveryActivity | undefined;
+  let battleActivity: UserRecoveryActivity | undefined;
   const collectedItems = collected.flatMap(({ ids }) => ids);
   // Combat preloads trackers without the live party relation; both carry receipt ownership.
   const partyQuestId =
@@ -4269,6 +4401,10 @@ const executeClaimedQuestConsequences = async ({
                   continue;
                 }
                 Object.assign(user, assigned);
+                questActivity = {
+                  status: assigned.status,
+                  battleId: assigned.battleId,
+                };
               } else {
                 await upsertQuestEntry(client, user, nextQuest, "quest_objective");
               }
@@ -4294,6 +4430,8 @@ const executeClaimedQuestConsequences = async ({
                 ambush: opponent,
               });
               if (!result.success) notifications.push(result.message);
+              else if (result.battleId)
+                battleActivity = { status: "BATTLE", battleId: result.battleId };
               return;
             }
             const result = await initiateBattle(
@@ -4327,17 +4465,21 @@ const executeClaimedQuestConsequences = async ({
               opponent.scaleGains ?? 1,
             );
             if (!result.success) notifications.push(result.message);
-            else if (result.userPatch && !result.requiresUserRefresh)
-              battleUserUpdate = {
-                userPatch: result.userPatch,
-                userDelta: result.userDelta,
-              };
+            else {
+              battleActivity = { status: "BATTLE", battleId: result.battleId };
+              if (result.userPatch && !result.requiresUserRefresh)
+                battleUserUpdate = {
+                  userPatch: result.userPatch,
+                  userDelta: result.userDelta,
+                };
+            }
           })()
         : Promise.resolve(),
     ],
   ]);
   return {
     battleUserUpdate,
+    committedActivity: battleActivity ?? questActivity,
     itemsRemoved: (await itemRemoval).rowsAffected === removedUserItemIds.length,
   };
 };
@@ -4356,6 +4498,8 @@ export const handleQuestConsequences = async (
   notifications: string[],
   options?: {
     alwaysClaimUserState?: boolean;
+    /** Endpoint-local recovery joins the same account snapshot as these consequences. */
+    readiness?: ActionReadiness;
     /** Isolated terminal runs claim history and the account in one joined statement. */
     claimUserState?: typeof claimUserSnapshot;
     partyTrackers?: QuestTrackerType[];
@@ -4372,6 +4516,7 @@ export const handleQuestConsequences = async (
   battleAttempted: boolean;
   inventoryChanges?: InventoryQuantityChange[];
   battleUserUpdate?: Pick<UserDeltaResponse, "userPatch" | "userDelta">;
+  committedActivity?: UserRecoveryActivity;
 }> => {
   // Quests reset
   const resetQuests = consequences.filter(
@@ -4460,6 +4605,7 @@ export const handleQuestConsequences = async (
   }
   // Database updates
   const shouldClaimUserState =
+    options?.readiness?.notice ||
     options?.alwaysClaimUserState ||
     notifications.length > 0 ||
     consequences.length > 0;
@@ -4469,6 +4615,7 @@ export const handleQuestConsequences = async (
       client,
       userId: user.userId,
       updatedAt: user.updatedAt,
+      readiness: options?.readiness,
       where: [
         ...(options?.claimConditions ?? []),
         ...(user.questParty ? [eq(userData.questPartyId, user.questParty.id)] : []),
@@ -4503,17 +4650,18 @@ export const handleQuestConsequences = async (
         });
         notifications.push("Quest team progress will update on your next request.");
       }
-      const { battleUserUpdate, itemsRemoved } = await executeClaimedQuestConsequences({
-        client,
-        user,
-        claimedAt: claimResult.claimedAt,
-        notifications,
-        startedQuestIds,
-        endedQuestIds,
-        collected,
-        removedUserItemIds,
-        opponent,
-      });
+      const { battleUserUpdate, itemsRemoved, committedActivity } =
+        await executeClaimedQuestConsequences({
+          client,
+          user,
+          claimedAt: claimResult.claimedAt,
+          notifications,
+          startedQuestIds,
+          endedQuestIds,
+          collected,
+          removedUserItemIds,
+          opponent,
+        });
 
       return {
         notifications,
@@ -4526,6 +4674,7 @@ export const handleQuestConsequences = async (
         ),
         battleAttempted: !!opponent,
         ...(battleUserUpdate ? { battleUserUpdate } : {}),
+        ...(committedActivity ? { committedActivity } : {}),
       };
     }
   }

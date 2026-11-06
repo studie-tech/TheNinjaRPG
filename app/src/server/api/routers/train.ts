@@ -15,12 +15,14 @@ import {
   type TimedMasteryName,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { activeTrainedElement } from "@/libs/elementalMastery";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
   getEnergyQueue,
   getMasteryQueue,
+  isOrderedSubsequence,
   liveQueueRows,
   queueHeadAfter,
   toMasteryEntries,
@@ -38,7 +40,8 @@ import {
   statTrainingBlockMessage,
   trainingEnergyMessage,
 } from "@/libs/train";
-import { findUserWithBloodline } from "@/queries/profile";
+import { fetchActionUser } from "@/queries/actionReadiness";
+import { fetchAllGameSettings } from "@/queries/profile";
 import {
   insertTrainingLog,
   listTrainingLogForGetTrainingLog,
@@ -53,6 +56,10 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import {
   elementalSnapshotConditions,
@@ -80,10 +87,13 @@ export const trainRouter = createTRPCRouter({
     .input(selectTrainedElementSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = await findUserWithBloodline(ctx.drizzle, ctx);
-      if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE")
-        return errorResponse("Must be awake to change your trained element");
+      const [initialUser, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       if (
         input.element &&
         !activeTrainedElement({ ...user, activeTrainedElement: input.element })
@@ -95,31 +105,46 @@ export const trainRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         set: { activeTrainedElement: input.element },
-        where: [...elementalSnapshotConditions(user), eq(userData.status, "AWAKE")],
+        where: elementalSnapshotConditions(initialUser),
       });
-      return result.success
-        ? {
-            success: true,
-            message: "Active trained element updated",
-            ...getSelectTrainedElementUserUpdate({
-              inputElement: input.element,
-              resultClaimedAt: result.claimedAt,
-            }),
-          }
-        : errorResponse("Your elements changed. Please try again");
+      return actionReadinessResponse(
+        result.success
+          ? {
+              success: true,
+              message: "Active trained element updated",
+              ...getSelectTrainedElementUserUpdate({
+                inputElement: input.element,
+                resultClaimedAt: result.claimedAt,
+              }),
+            }
+          : errorResponse("Your elements changed. Please try again"),
+        result.success ? readiness : undefined,
+        ctx.drizzle,
+      );
     }),
   updateEnergyTrainingQueue: protectedProcedure
     .input(updateEnergyTrainingQueueInputSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, requiresProgressionRefresh, publishedAchievementIds } =
-        await fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        });
-      if (!user) return errorResponse("User not found");
+      const {
+        user: initialUser,
+        settings,
+        requiresProgressionRefresh,
+        publishedAchievementIds,
+      } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+      });
+      if (!initialUser) return errorResponse("User not found");
+      // Pure removals preserve the current activity without preparing an action recovery.
+      const readiness = !isOrderedSubsequence(input.entries, input.expectedEntries)
+        ? prepareActionReadiness(initialUser, settings)
+        : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       const result = await editTrainingQueue({
         client: ctx.drizzle,
         user,
@@ -136,7 +161,8 @@ export const trainRouter = createTRPCRouter({
             return "Queued Energy cannot exceed your capacity";
           return await trainingCaptchaMessage(ctx.drizzle, user, input.guess);
         },
-        where: [eq(userData.status, user.status)],
+        readiness,
+        where: [readiness ? undefined : eq(userData.status, initialUser.status)],
         messages: {
           stale: "Your training queue changed. Please refresh and try again",
           conflict: "Your training queue changed. Please try again",
@@ -144,11 +170,15 @@ export const trainRouter = createTRPCRouter({
           cleared: "Training queue cleared",
         },
       });
-      return withSavedQueue(
-        result,
-        user,
-        requiresProgressionRefresh,
-        publishedAchievementIds,
+      return actionReadinessResponse(
+        withSavedQueue(
+          result,
+          user,
+          requiresProgressionRefresh,
+          publishedAchievementIds,
+        ),
+        result.success ? readiness : undefined,
+        ctx.drizzle,
       );
     }),
 
@@ -159,13 +189,23 @@ export const trainRouter = createTRPCRouter({
     .input(updateMasteryTrainingQueueInputSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, requiresProgressionRefresh, publishedAchievementIds } =
-        await fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        });
-      if (!user) return errorResponse("User not found");
+      const {
+        user: initialUser,
+        settings,
+        requiresProgressionRefresh,
+        publishedAchievementIds,
+      } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+      });
+      if (!initialUser) return errorResponse("User not found");
+      // Pure removals preserve the current activity without preparing an action recovery.
+      const readiness = !isOrderedSubsequence(input.entries, input.expectedEntries)
+        ? prepareActionReadiness(initialUser, settings)
+        : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       const session = getMasteryTrainingState(user, input.kind);
       const label = input.kind === "ELEMENT" ? "Elemental" : "Mastery";
       if (
@@ -184,7 +224,7 @@ export const trainRouter = createTRPCRouter({
         entries: input.entries,
         // Adding or changing an entry needs an active session to queue behind.
         validate: () => {
-          if (user.status !== "AWAKE") return "Must be awake to train";
+          if (user.status !== "AWAKE") return actionStatusMessage(user.status);
           if (!session.stat) return "Start training in this queue before queueing more";
           if (input.entries.length > getQueueWaitingSlots(user))
             return `${label} queue is full`;
@@ -202,7 +242,11 @@ export const trainRouter = createTRPCRouter({
               .find(Boolean) ?? null
           );
         },
-        where: [eq(userData.status, user.status), ...elementalSnapshotConditions(user)],
+        readiness,
+        where: [
+          readiness ? undefined : eq(userData.status, initialUser.status),
+          ...elementalSnapshotConditions(user),
+        ],
         messages: {
           stale: `Your ${label.toLowerCase()} queue changed. Please refresh and try again`,
           conflict: `Your ${label.toLowerCase()} queue changed. Please try again`,
@@ -210,11 +254,15 @@ export const trainRouter = createTRPCRouter({
           cleared: `${label} queue cleared`,
         },
       });
-      return withSavedQueue(
-        result,
-        user,
-        requiresProgressionRefresh,
-        publishedAchievementIds,
+      return actionReadinessResponse(
+        withSavedQueue(
+          result,
+          user,
+          requiresProgressionRefresh,
+          publishedAchievementIds,
+        ),
+        result.success ? readiness : undefined,
+        ctx.drizzle,
       );
     }),
 
@@ -223,14 +271,21 @@ export const trainRouter = createTRPCRouter({
     .input(startTrainingInputSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, settings, requiresProgressionRefresh, publishedAchievementIds } =
-        await fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          userIp: ctx.userIp,
-          forceRegen: true,
-        });
-      if (!user) return errorResponse("User not found");
+      const {
+        user: initialUser,
+        settings,
+        requiresProgressionRefresh,
+        publishedAchievementIds,
+      } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        userIp: ctx.userIp,
+        forceRegen: true,
+      });
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const block =
         statTrainingBlockMessage(user) ??
         trainingEnergyMessage(input.energy, user.curEnergy);
@@ -252,18 +307,24 @@ export const trainRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         set: {
-          curEnergy: sql`${userData.curEnergy} - ${spent}`,
+          curEnergy: readiness.notice
+            ? user.curEnergy - spent
+            : sql`${userData.curEnergy} - ${spent}`,
           [input.stat]: sql`${userData[input.stat]} + ${amount}`,
           experience: sql`${userData.experience} + ${amount}`,
           petExperience: petExperienceGainSql(amount),
           questData: filterQuestTrackersForDbPersist(trackers, user),
         },
         where: [
-          eq(userData.status, "AWAKE"),
-          gte(userData.curEnergy, spent),
+          readiness.notice
+            ? eq(userData.curEnergy, initialUser.curEnergy)
+            : gte(userData.curEnergy, spent),
           // Reject amounts lost to floating-point precision in the stored balance.
-          sql`${userData.curEnergy} - ${spent} < ${userData.curEnergy}`,
+          readiness.notice
+            ? sql`${user.curEnergy} - ${spent} < ${user.curEnergy}`
+            : sql`${userData.curEnergy} - ${spent} < ${userData.curEnergy}`,
           sql`${userData[input.stat]} + ${amount} <= ${cap}`,
         ],
       });
@@ -288,37 +349,50 @@ export const trainRouter = createTRPCRouter({
           await flushSafe();
         }
       });
-      return {
-        success: true,
-        message: `You gained ${amount.toFixed(2)} ${input.stat}`,
-        ...(!requiresProgressionRefresh && !consequences.length && !notifications.length
-          ? getUserProgressionUpdate(
-              {
-                ...user,
-                experience: Math.round(user.experience + amount),
-                [input.stat]: user[input.stat] + amount,
-                curEnergy: user.curEnergy - spent,
-                questData: trackers,
-                updatedAt: claim.claimedAt,
-              },
-              publishedAchievementIds,
-            )
-          : {}),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `You gained ${amount.toFixed(2)} ${input.stat}`,
+          ...(!requiresProgressionRefresh &&
+          !consequences.length &&
+          !notifications.length
+            ? getUserProgressionUpdate(
+                {
+                  ...user,
+                  experience: Math.round(user.experience + amount),
+                  [input.stat]: user[input.stat] + amount,
+                  curEnergy: user.curEnergy - spent,
+                  questData: trackers,
+                  updatedAt: claim.claimedAt,
+                },
+                publishedAchievementIds,
+              )
+            : {}),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   startMasteryTraining: protectedProcedure
     .meta({ mcp: { description: "Start training a mastery" } })
     .input(startMasteryTrainingInputSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, requiresProgressionRefresh, publishedAchievementIds } =
-        await fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          userIp: ctx.userIp,
-          forceRegen: true,
-        });
-      if (!user) return errorResponse("User not found");
+      const {
+        user: initialUser,
+        settings,
+        requiresProgressionRefresh,
+        publishedAchievementIds,
+      } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        userIp: ctx.userIp,
+        forceRegen: true,
+      });
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const kind = isInArray(input.stat, BasicElementName) ? "ELEMENT" : "MASTERY";
       const fields = masteryTrainingFields[kind];
       const session = getMasteryTrainingState(user, kind);
@@ -340,26 +414,30 @@ export const trainRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         set: data,
         where: [
           ...elementalSnapshotConditions(user),
           isNull(userData[fields.stat]),
-          eq(userData.status, "AWAKE"),
           sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`,
         ],
       });
       if (!claim.success)
         return errorResponse("Your training changed. Please try again");
-      return {
-        success: true,
-        message: `Started ${kind === "ELEMENT" ? "elemental" : "mastery"} training`,
-        ...(!requiresProgressionRefresh
-          ? getUserProgressionUpdate(
-              { ...user, ...data, updatedAt: claim.claimedAt },
-              publishedAchievementIds,
-            )
-          : {}),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Started ${kind === "ELEMENT" ? "elemental" : "mastery"} training`,
+          ...(!requiresProgressionRefresh
+            ? getUserProgressionUpdate(
+                { ...user, ...data, updatedAt: claim.claimedAt },
+                publishedAchievementIds,
+              )
+            : {}),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   stopMasteryTraining: protectedProcedure
     .meta({
@@ -368,14 +446,20 @@ export const trainRouter = createTRPCRouter({
     .input(stopTrainingInputSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, settings, requiresProgressionRefresh, publishedAchievementIds } =
-        await fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        });
-      if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake");
+      const {
+        user: initialUser,
+        settings,
+        requiresProgressionRefresh,
+        publishedAchievementIds,
+      } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+      });
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const kind = isInArray(input.stat, BasicElementName) ? "ELEMENT" : "MASTERY";
       const fields = masteryTrainingFields[kind];
       const { stat: trained, startedAt, speed } = getMasteryTrainingState(user, kind);
@@ -451,6 +535,7 @@ export const trainRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         set: {
           ...sessionUpdate,
           ...(gained > 0
@@ -473,7 +558,6 @@ export const trainRouter = createTRPCRouter({
           sql`${userData.masteryRanks} = CAST(${JSON.stringify(user.masteryRanks)} AS JSON)`,
           eq(userData[fields.stat], trained),
           eq(userData[fields.startedAt], startedAt),
-          eq(userData.status, "AWAKE"),
         ],
       });
       if (!result.success) {
@@ -502,25 +586,29 @@ export const trainRouter = createTRPCRouter({
       const capNote =
         gained < trainingAmount ? " (training cap or eligibility reached)" : "";
       const nextNote = startsNext ? `. Started queued ${next.stat} training` : "";
-      return {
-        success: true,
-        message: `You gained ${gained.toFixed(2)} ${trained}${capNote}${nextNote}`,
-        ...(!requiresProgressionRefresh &&
-        !trackerResult?.consequences.length &&
-        !trackerResult?.notifications.length
-          ? getUserProgressionUpdate(
-              {
-                ...user,
-                ...balances,
-                dailyTrainings: user.dailyTrainings + (gained > 0 ? 1 : 0),
-                ...sessionUpdate,
-                questData: trackers,
-                updatedAt: result.claimedAt,
-              },
-              publishedAchievementIds,
-            )
-          : {}),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `You gained ${gained.toFixed(2)} ${trained}${capNote}${nextNote}`,
+          ...(!requiresProgressionRefresh &&
+          !trackerResult?.consequences.length &&
+          !trackerResult?.notifications.length
+            ? getUserProgressionUpdate(
+                {
+                  ...user,
+                  ...balances,
+                  dailyTrainings: user.dailyTrainings + (gained > 0 ? 1 : 0),
+                  ...sessionUpdate,
+                  questData: trackers,
+                  updatedAt: result.claimedAt,
+                },
+                publishedAchievementIds,
+              )
+            : {}),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   updateTrainingSpeed: protectedProcedure
     .meta({ mcp: { description: "Update training speed interval" } })

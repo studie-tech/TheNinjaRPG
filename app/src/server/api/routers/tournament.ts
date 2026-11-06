@@ -5,8 +5,9 @@ import { TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchClan } from "@/queries/clan";
-import { fetchUser, findUserById } from "@/queries/profile";
+import { fetchAllGameSettings, fetchUser, findUserById } from "@/queries/profile";
 import {
   deleteTournamentForCleanupCompletedTournament,
   deleteTournamentMatches,
@@ -38,11 +39,16 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { secondsFromDate } from "@/utils/time";
 import { checkCoLeader } from "@/validators/clan";
 import { ObjectiveReward } from "@/validators/rewards";
 import { tournamentCreateSchema } from "@/validators/tournament";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { eventTournamentProcedures, syncEventTournament } from "./tournamentEvents";
 
 const TOURNAMENT_FINALIZATION_INCOMPLETE =
@@ -146,15 +152,29 @@ export const tournamentRouter = createTRPCRouter({
     }),
   joinMatch: protectedProcedure
     .meta({ mcp: { description: "Join a tournament match" } })
-    .input(z.object({ matchId: z.string(), tournamentId: z.string() }))
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .input(
+      z.object({
+        matchId: z.string(),
+        tournamentId: z.string(),
+        originSocketId: z.string().max(128).optional(),
+      }),
+    )
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, matchData, tournamentData] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      let [user, matchData, tournamentData, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchMatch(ctx.drizzle, input.matchId),
         fetchTournament(ctx.drizzle, input.tournamentId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      // Receiving a bye starts no activity and preserves a live dungeon reservation.
+      const readiness =
+        !matchData?.userId2 && user.status === "QUEUED"
+          ? undefined
+          : prepareActionReadiness(user, settings);
+      if (readiness?.error) return errorResponse(readiness.error);
+      user = readiness?.user ?? user;
       // General guards
       if (!matchData) return errorResponse("Match not found.");
       if (!tournamentData) return errorResponse("Tournament not found.");
@@ -170,7 +190,14 @@ export const tournamentRouter = createTRPCRouter({
         return errorResponse("Not in this match.");
       }
       // Ensure all users are awake
-      await updateUserDataForJoinMatch(ctx.drizzle, matchData);
+      const admitted = await updateUserDataForJoinMatch(
+        ctx.drizzle,
+        matchData,
+        ctx.userId,
+        readiness,
+      );
+      if (readiness?.notice && !admitted.rowsAffected)
+        return errorResponse("Your status changed. Please try joining again.");
       // Start the battle
       let result: Awaited<ReturnType<typeof initiateBattle>> | undefined;
       if (matchData.userId2) {
@@ -179,6 +206,8 @@ export const tournamentRouter = createTRPCRouter({
             userIds: [matchData.userId2],
             targetIds: [matchData.userId1],
             client: ctx.drizzle,
+            actionUserId: ctx.userId,
+            originSocketId: input.originSocketId,
             biome: "arena",
           },
           "TOURNAMENT",
@@ -193,12 +222,28 @@ export const tournamentRouter = createTRPCRouter({
           "NO_SHOW",
         );
         if (!awarded)
-          return errorResponse(
-            result?.message ?? "Match participants are unavailable. Try again.",
+          return actionReadinessResponse(
+            errorResponse(
+              result?.message ?? "Match participants are unavailable. Try again.",
+            ),
+            readiness,
+            ctx.drizzle,
           );
       }
       // Return
-      return { success: true, message: "Joined Match", battleId: result?.battleId };
+      return actionReadinessResponse(
+        {
+          ...result,
+          success: true,
+          message: "Joined Match",
+          battleId: result?.battleId,
+        },
+        readiness,
+        ctx.drizzle,
+        result?.success && result.battleId
+          ? { status: "BATTLE", battleId: result.battleId }
+          : undefined,
+      );
     }),
 });
 

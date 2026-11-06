@@ -40,6 +40,7 @@ import { getElementImg } from "@/layout/ElementImage";
 import Image from "@/layout/Image";
 import NavTabs from "@/layout/NavTabs";
 import SliderField from "@/layout/SliderField";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { providedElements } from "@/libs/elementalMastery";
 import { withCappedStats } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
@@ -313,7 +314,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   // All presets share offence/defence, so treating a single capped combat stat as
   // "maxed" would hide every Simple option.
   const isSpecializationDisabled = (option: (typeof specializationOptions)[number]) => {
-    if (isInArray(option.id, BasicElementName) && userData.status !== "AWAKE")
+    if (isInArray(option.id, BasicElementName) && !canAttemptAwakeAction(userData))
       return true;
     return option.stats.every((stat) => {
       const maxValue = maxValues[stat];
@@ -421,7 +422,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
                 {isDisabled && (
                   <p className="mt-1 text-center font-semibold text-red-500 text-xs">
                     {isInArray(option.id, BasicElementName)
-                      ? userData.status !== "AWAKE"
+                      ? !canAttemptAwakeAction(userData)
                         ? "Must be awake"
                         : providedElements(userData).includes(option.id)
                           ? "Already provided"
@@ -556,7 +557,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   } else if (isDefault) {
     buttonText = "Nothing changed";
   } else if (
-    userData.status !== "AWAKE" &&
+    !canAttemptAwakeAction(userData) &&
     BasicElementName.some((element) => Number(formValues[element]) >= 1)
   ) {
     buttonText = "Must be awake to assign elemental XP";

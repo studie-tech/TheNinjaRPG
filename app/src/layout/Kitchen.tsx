@@ -14,6 +14,7 @@ import ContentImage from "@/layout/ContentImage";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { TimedQueue } from "@/layout/TimedQueue";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import {
   describeMealEffect,
@@ -66,6 +67,7 @@ export default function Kitchen({ image }: { image?: string }) {
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
+      if (result.userRecovery && !result.success) void updateUser(result, { revision });
       setMessage(result.message);
       if (result.success) {
         setSelectedId("");
@@ -113,20 +115,19 @@ export default function Kitchen({ image }: { image?: string }) {
   const cookingReductionPercent = user
     ? getActivityBonuses(user).cookingReductionPercent
     : 0;
-  const blocked =
-    user?.status !== "AWAKE"
-      ? "You must be awake to cook"
-      : isFull
-        ? "Your shared Crafting and Cooking queue is full"
-        : !selected
-          ? "Select a recipe"
-          : level < selected.cookingMinLevel
-            ? `Cooking level ${selected.cookingMinLevel} required`
-            : !validQuantity
-              ? `Choose 1–${MAX_COOKING_BATCHES} batches`
-              : !hasIngredients
-                ? "Missing ingredients"
-                : null;
+  const blocked = !canAttemptAwakeAction(user)
+    ? "You must be awake to cook"
+    : isFull
+      ? "Your shared Crafting and Cooking queue is full"
+      : !selected
+        ? "Select a recipe"
+        : level < selected.cookingMinLevel
+          ? `Cooking level ${selected.cookingMinLevel} required`
+          : !validQuantity
+            ? `Choose 1–${MAX_COOKING_BATCHES} batches`
+            : !hasIngredients
+              ? "Missing ingredients"
+              : null;
   const filtered =
     recipes.data?.filter((recipe) =>
       recipe.name.toLowerCase().includes(search.toLowerCase()),

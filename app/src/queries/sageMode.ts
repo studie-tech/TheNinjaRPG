@@ -5,6 +5,7 @@ import type { SQL } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { sageMode } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadiness } from "@/server/utils/actionReadiness";
 import type { ZodSageModeType } from "@/validators/combat";
 
 /**
@@ -152,10 +153,12 @@ export const updateUserDataForUpdateSageMode = (
   client: Pick<DrizzleClient, "update">,
   repCost: number,
   user: { userId: string; sageModeId: null | string },
+  readiness?: ActionReadiness,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       sageModeId: null,
       reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
       // Advance the whole-user version so a concurrent claimUserSnapshot CAS detects this write.
@@ -164,7 +167,7 @@ export const updateUserDataForUpdateSageMode = (
     .where(
       and(
         eq(userData.userId, user.userId),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         gte(userData.reputationPoints, repCost),
         // Compare-and-swap on the current mode: if another request already changed
         // it, rowsAffected is 0 and we abort rather than double-debit reputation.

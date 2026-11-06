@@ -4,7 +4,9 @@
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { STEALTH_SENSORY_CAP } from "@/drizzle/constants";
 import { userData, villageAlliance } from "@/drizzle/schema";
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
 /**
  * Build the `userData` update for `activateStealth`, setting `stealthActive` and
@@ -14,14 +16,16 @@ export const updateUserDataForActivateStealth = (
   client: Pick<DrizzleClient, "update">,
   stealthActivatedAt: Date,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       stealthActive: true,
       stealthActivatedAt,
     })
-    .where(eq(userData.userId, ctx.userId));
+    .where(and(eq(userData.userId, ctx.userId), readiness?.where));
 
 /**
  * Build the `userData` update for `deactivateStealth`, setting `stealthActive` and
@@ -72,13 +76,22 @@ export const selectVillageAllianceForUseSensory = (
   client: Pick<DrizzleClient, "select">,
 ) => client.select().from(villageAlliance);
 
-/** Build the `userData` update for `useSensory`, setting `lastSensoryAt`, using predicates on `userId`. */
+/** Claim the scan and reveal its targets in one guarded statement so a lost recovery cannot reveal other players. */
 export const updateUserDataForUseSensory = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "execute">,
   lastSensoryAt: Date,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
+  detectedUserIds: string[] = [],
 ) =>
-  client.update(userData).set({ lastSensoryAt }).where(eq(userData.userId, ctx.userId));
+  client.execute(sql`
+  UPDATE ${userData} LEFT JOIN ${userData} AS detected
+    ON detected.userId IN (${sql.join(detectedUserIds.length ? detectedUserIds.map((id) => sql`${id}`) : [sql`NULL`], sql`, `)})
+  SET ${actionReadinessSqlSet(readiness, [])} ${userData.lastSensoryAt} = ${lastSensoryAt},
+    detected.stealthActive = false, detected.stealthActivatedAt = NULL
+  WHERE ${userData.userId} = ${ctx.userId}
+    AND ${readiness?.where ?? eq(userData.status, "AWAKE")}
+`);
 
 /** Build the update that clears active stealth and its activation time for the selected users. */
 export const clearStealthForUsers = (
@@ -95,10 +108,12 @@ export const updateUserDataForTrainCovert = (
   client: Pick<DrizzleClient, "update">,
   input: { type: "stealth" | "sensory"; minutes: number },
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       covertTrainingType: input.type,
       covertTrainingStartedAt: new Date(),
       covertTrainingMinutes: input.minutes,
@@ -107,7 +122,7 @@ export const updateUserDataForTrainCovert = (
       and(
         eq(userData.userId, ctx.userId),
         isNull(userData.covertTrainingType),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
       ),
     );
 

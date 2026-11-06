@@ -26,7 +26,11 @@ import {
   isSeriesAwaitingBegin,
 } from "@/libs/tournament/events";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
-import { findUserById, findUserRoleById } from "@/queries/profile";
+import {
+  fetchAllGameSettings,
+  findUserById,
+  findUserRoleById,
+} from "@/queries/profile";
 import { deleteTournamentMatches } from "@/queries/tournament";
 import {
   deleteTournamentForMaintainEventTournaments,
@@ -58,11 +62,17 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadiness } from "@/server/utils/actionReadiness";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { shuffle } from "@/utils/array";
 import { canManageTournaments } from "@/utils/permissions";
+import type { UserRecoveryActivity } from "@/validators/base";
 import {
   type EventParticipant,
   type EventTournamentState,
@@ -125,7 +135,7 @@ export const eventTournamentProcedures = {
         (initial.eventData.status === "DRAFT" && !canManageTournaments(user.role))
       )
         return null;
-      const needsRefresh = await syncEventTournament(
+      const { needsRefresh } = await syncEventTournament(
         ctx.drizzle,
         input.tournamentId,
         initial,
@@ -347,94 +357,122 @@ export const eventTournamentProcedures = {
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchEventUser(ctx.drizzle, ctx.userId);
+      let [user, settings] = await Promise.all([
+        fetchEventUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
       if (!user || user.isAi || user.isBanned)
         return errorResponse("An active player account is required");
+      const readiness = ["WITHDRAW", "DECLINE", "NOT_READY"].includes(input.action)
+        ? undefined
+        : prepareActionReadiness(user, settings);
+      if (readiness?.error) return errorResponse(readiness.error);
+      if (readiness) user = readiness.user;
       await syncEventTournament(ctx.drizzle, input.tournamentId);
-      const result = await editEvent(ctx.drizzle, input.tournamentId, (event) => {
-        const now = Date.now();
-        const seat = event.participants.find(
-          (p) => p.userId === user.userId && !p.withdrawn,
-        );
-        if (["DRAFT", "COMPLETED", "CANCELLED"].includes(event.status))
-          return "Tournament is not accepting player actions";
-        if (input.action === "JOIN") {
-          if (
-            event.status !== "REGISTRATION" ||
-            now >= event.config.registrationClosesAt
-          )
-            return "Registration is closed";
-          if (user.sector !== MAP_WAKE_ISLAND_SECTOR || user.status !== "AWAKE")
-            return "Register while awake at Wake Island";
-          if (seat?.accepted) return "Already registered";
-          if (event.config.registration === "INVITE_ONLY" && !seat?.invited)
-            return "A staff invitation is required";
-          const failure = eligibilityError(event.config, snapshotFor(user));
-          if (failure) return failure;
-          if (seat) {
-            seat.accepted = true;
-            seat.snapshot = snapshotFor(user);
-          } else {
-            if (occupiedSeats(event) >= event.config.capacity)
-              return "Tournament is full, including reserved invitations";
-            event.participants = event.participants.filter(
-              (p) => p.userId !== user.userId,
+      const result = await editEvent(
+        ctx.drizzle,
+        input.tournamentId,
+        (event) => {
+          const now = Date.now();
+          const seat = event.participants.find(
+            (p) => p.userId === user.userId && !p.withdrawn,
+          );
+          if (["DRAFT", "COMPLETED", "CANCELLED"].includes(event.status))
+            return "Tournament is not accepting player actions";
+          if (input.action === "JOIN") {
+            if (
+              event.status !== "REGISTRATION" ||
+              now >= event.config.registrationClosesAt
+            )
+              return "Registration is closed";
+            if (user.sector !== MAP_WAKE_ISLAND_SECTOR || user.status !== "AWAKE")
+              return "Register while awake at Wake Island";
+            if (seat?.accepted) return "Already registered";
+            if (event.config.registration === "INVITE_ONLY" && !seat?.invited)
+              return "A staff invitation is required";
+            const failure = eligibilityError(event.config, snapshotFor(user));
+            if (failure) return failure;
+            if (seat) {
+              seat.accepted = true;
+              seat.snapshot = snapshotFor(user);
+            } else {
+              if (occupiedSeats(event) >= event.config.capacity)
+                return "Tournament is full, including reserved invitations";
+              event.participants = event.participants.filter(
+                (p) => p.userId !== user.userId,
+              );
+              event.participants.push(makeParticipant(user, false, true));
+            }
+          } else if (input.action === "WITHDRAW" || input.action === "DECLINE") {
+            if (!seat) return "No registration or invitation found";
+            seat.withdrawn = true;
+          } else if (input.action === "READY" || input.action === "NOT_READY") {
+            const series = event.series.find((s) => s.id === input.seriesId);
+            if (
+              !seat?.accepted ||
+              !series ||
+              !isSeriesAwaitingBegin(series, currentEventRound(event)) ||
+              !series.seats.includes(seat.id)
+            )
+              return "This series is not waiting for staff to begin";
+            // Players can cancel readiness anywhere; marking ready requires availability.
+            if (input.action === "READY" && !isReadyAtWakeIsland(user))
+              return "Be awake and available at Wake Island to mark yourself ready";
+            series.readyUserIds = (series.readyUserIds ?? []).filter(
+              (id) => id !== user.userId,
             );
-            event.participants.push(makeParticipant(user, false, true));
+            if (input.action === "READY") series.readyUserIds.push(user.userId);
+          } else {
+            const series = event.series.find(
+              (s) => s.id === input.seriesId && !s.complete,
+            );
+            const game = series?.games.at(-1);
+            if (!seat || !series || !game || !series.seats.includes(seat.id))
+              return "Ready check not found";
+            if (game.status !== "READY" || now < game.opensAt || now >= game.deadline)
+              return "Ready check is not open";
+            if (!isReadyAtWakeIsland(user))
+              return "Ready check failed: be awake and available at Wake Island, outside combat, travel, hospital or queues";
+            if (!game.accepted.includes(user.userId)) game.accepted.push(user.userId);
           }
-        } else if (input.action === "WITHDRAW" || input.action === "DECLINE") {
-          if (!seat) return "No registration or invitation found";
-          seat.withdrawn = true;
-        } else if (input.action === "READY" || input.action === "NOT_READY") {
-          const series = event.series.find((s) => s.id === input.seriesId);
-          if (
-            !seat?.accepted ||
-            !series ||
-            !isSeriesAwaitingBegin(series, currentEventRound(event)) ||
-            !series.seats.includes(seat.id)
-          )
-            return "This series is not waiting for staff to begin";
-          // Players can cancel readiness anywhere; marking ready requires availability.
-          if (input.action === "READY" && !isReadyAtWakeIsland(user))
-            return "Be awake and available at Wake Island to mark yourself ready";
-          series.readyUserIds = (series.readyUserIds ?? []).filter(
-            (id) => id !== user.userId,
-          );
-          if (input.action === "READY") series.readyUserIds.push(user.userId);
-        } else {
-          const series = event.series.find(
-            (s) => s.id === input.seriesId && !s.complete,
-          );
-          const game = series?.games.at(-1);
-          if (!seat || !series || !game || !series.seats.includes(seat.id))
-            return "Ready check not found";
-          if (game.status !== "READY" || now < game.opensAt || now >= game.deadline)
-            return "Ready check is not open";
-          if (!isReadyAtWakeIsland(user))
-            return "Ready check failed: be awake and available at Wake Island, outside combat, travel, hospital or queues";
-          if (!game.accepted.includes(user.userId)) game.accepted.push(user.userId);
-        }
-      });
+        },
+        readiness,
+      );
+      let activity: UserRecoveryActivity | null | undefined;
       if (result.success) {
-        await syncEventTournament(ctx.drizzle, input.tournamentId);
+        const { activities } = await syncEventTournament(
+          ctx.drizzle,
+          input.tournamentId,
+        );
+        activity = activities.find((entry) =>
+          entry.userIds.includes(ctx.userId),
+        )?.activity;
         // The action's local invalidation does not refresh this player's other tabs.
         if (["JOIN", "WITHDRAW", "DECLINE"].includes(input.action))
           await notifyEventParticipant(ctx.userId, input.originSocketId);
       }
-      return result;
+      return result.success
+        ? actionReadinessResponse(result, readiness, ctx.drizzle, activity)
+        : result;
     }),
 };
 
 type EventRow = NonNullable<Awaited<ReturnType<typeof fetchEvent>>>;
+type EventSyncResult = {
+  needsRefresh: boolean;
+  /** Null withholds activity while a matching launch or competing save is unresolved. */
+  activities: { userIds: string[]; activity: UserRecoveryActivity | null }[];
+};
 
 /** Whole-event CAS serializes roster, bracket and score changes without missing-row locks. */
 const saveEventState = async (
   client: DrizzleClient,
   row: EventRow,
   event: EventTournamentState,
+  readiness?: ActionReadiness,
 ) => {
-  const saved = await updateTournamentForSaveEventState(client, event, row);
-  return saved.rowsAffected === 1;
+  const saved = await updateTournamentForSaveEventState(client, event, row, readiness);
+  return saved.rowsAffected > 0;
 };
 
 /** Retry a roster or bracket edit against the latest event when another writer wins its CAS. */
@@ -442,6 +480,7 @@ const editEvent = async (
   client: DrizzleClient,
   id: string,
   edit: (event: EventTournamentState) => string | undefined,
+  readiness?: ActionReadiness,
 ) => {
   for (let attempt = 0; attempt < 4; attempt++) {
     const row = await fetchEvent(client, id);
@@ -449,7 +488,7 @@ const editEvent = async (
     const event = structuredClone(row.eventData);
     const message = edit(event);
     if (message) return errorResponse(message);
-    if (await saveEventState(client, row, event))
+    if (await saveEventState(client, row, event, readiness))
       return { success: true, message: "Tournament updated" };
   }
   return errorResponse("Tournament changed; please try again");
@@ -459,25 +498,26 @@ const editEvent = async (
  * Reconcile combat results, recover abandoned launches (never relaunching a battle with the
  * same ID) and apply scheduled starts or event expiry. Terminal events retry unpaid rewards;
  * unscheduled rounds remain under staff control.
- * Return whether a write or competing claim requires readers to refresh their loaded snapshot.
+ * Return whether writes or competing claims require a snapshot refresh, plus observed or
+ * newly committed player activity. Reserved launches withhold activity until combat commits.
  */
 export const syncEventTournament = async (
   client: DrizzleClient,
   id: string,
   loadedRow?: EventRow,
-) => {
+): Promise<EventSyncResult> => {
   const row = loadedRow ?? (await fetchEvent(client, id));
-  if (!row?.eventData) return false;
+  if (!row?.eventData) return { needsRefresh: false, activities: [] };
   const event = structuredClone(row.eventData);
   const now = Date.now();
   if (["COMPLETED", "CANCELLED"].includes(event.status)) {
-    return payEventRewards(client, row);
+    return { needsRefresh: await payEventRewards(client, row), activities: [] };
   }
   if (
     event.status === "DRAFT" ||
     (event.status === "REGISTRATION" && now < event.config.endsAt)
   )
-    return false;
+    return { needsRefresh: false, activities: [] };
   for (const series of event.series.filter((s) => !s.complete)) {
     const game = series.games.at(-1);
     if (!game) continue;
@@ -573,22 +613,41 @@ export const syncEventTournament = async (
   if (now < event.config.endsAt)
     for (const s of event.series)
       if (s.scheduledAt && now >= s.scheduledAt) beginEventRound(event, now, s.id);
+  const activeGames = event.series.flatMap((series) => {
+    const game = series.games.at(-1);
+    return !series.complete &&
+      game &&
+      (isGameInFlight(game) ||
+        (game.status === "READY" && game.accepted.length === 2 && now >= game.opensAt))
+      ? [{ seriesId: series.id, game }]
+      : [];
+  });
+  const activities: EventSyncResult["activities"] = activeGames.map(({ game }) => ({
+    userIds: game.userIds,
+    // FIGHTING is published only after combat commits; STARTING is only a reservation.
+    activity:
+      game.status === "FIGHTING" ? { status: "BATTLE", battleId: game.battleId } : null,
+  }));
   const changed = JSON.stringify(event) !== JSON.stringify(row.eventData);
-  if (changed && !(await saveEventState(client, row, event))) return true;
+  if (changed && !(await saveEventState(client, row, event)))
+    return {
+      needsRefresh: true,
+      activities: activities.map((entry) => ({ ...entry, activity: null })),
+    };
   if (["COMPLETED", "CANCELLED"].includes(event.status)) {
     const paid = await payEventRewards(client, { ...row, eventData: event });
-    return changed || paid;
+    return { needsRefresh: changed || paid, activities: [] };
   }
   let needsRefresh = changed;
   // Each launch first claims the event version. Acceptance never starts a second battle.
-  for (const series of event.series.filter((s) => !s.complete)) {
-    const game = series.games.at(-1);
-    if (game?.status === "READY" && game.accepted.length === 2 && now >= game.opensAt) {
-      await launchEventGame(client, id, series.id);
+  for (const [index, { seriesId, game }] of activeGames.entries()) {
+    if (game.status === "READY") {
+      const launched = await launchEventGame(client, id, seriesId);
+      if (launched) activities[index] = launched;
       needsRefresh = true;
     }
   }
-  return needsRefresh;
+  return { needsRefresh, activities };
 };
 
 /** Claim the current ready roster once, then publish the revocable token combat must claim. */
@@ -700,6 +759,10 @@ const launchEventGame = async (client: DrizzleClient, id: string, seriesId: stri
       ?.games.find((g) => g.id === game.id);
     if (g?.status === "STARTING") g.status = "FIGHTING";
   });
+  return {
+    userIds: game.userIds,
+    activity: { status: "BATTLE" as const, battleId: game.battleId },
+  };
 };
 
 /** Revoke an unclaimed launch and record player absence or a repairable setup failure. */

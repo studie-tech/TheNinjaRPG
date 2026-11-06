@@ -17,6 +17,7 @@ import * as map from "@/hooks/map";
 import * as building from "@/layout/Building";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
+import * as GlobalMap from "@/layout/Map";
 import * as panel from "@/layout/ObjectiveWarPanel";
 import * as toast from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
@@ -114,6 +115,14 @@ const originalEvent = globalThis.Event;
 const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
+  // Isolate globe rendering when another page has already loaded WarSystem.
+  vi.spyOn(GlobalMap, "default").mockImplementation((props) => (
+    <>
+      <button type="button" onClick={() => props.onTileClick?.(102)}>Target tile</button>
+      <button type="button" onClick={() => props.onTileClick?.(103)}>Alliance tile</button>
+      <button type="button" onClick={() => props.onTileClick?.(105)}>Sector tile</button>
+    </>
+  ));
   globalThis.Event = window.Event;
   globalThis.CustomEvent = window.CustomEvent;
   vi.clearAllMocks();

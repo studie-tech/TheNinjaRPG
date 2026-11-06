@@ -820,3 +820,14 @@ it.each([true, false])(
     expect(capture).not.toHaveBeenCalled();
   },
 );
+
+it("leaves endpoint recovery feedback to the feature callback", async () => {
+  const notice = "This action checked you out of the hospital for free.";
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json([
+    { result: { data: superjson.serialize({ success: true, message: notice, actionNotice: notice }) } },
+  ]));
+  const { attack } = mountArenaMutation(session("a"));
+  await act(async () => { await attack(); });
+  expect(toastMessages()).toEqual([]);
+  expect(queryClient.isMutating()).toBe(0);
+});

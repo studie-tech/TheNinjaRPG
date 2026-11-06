@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getInventoryQuantities } from "@/deltas/item";
+import type { UserUpdateOptions } from "@/deltas/profile";
 import {
   IMG_AVATAR_DEFAULT,
   IMG_ICON_MOVE,
@@ -53,6 +54,8 @@ import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
 import { expandedWorldAtom } from "@/libs/expandedWorld";
 import type { TerrainHex } from "@/libs/hexgrid";
@@ -912,7 +915,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     walkAnimatingRef.current = true;
     const heading = worldMotionHeading(first, last);
     for (const tile of path) {
-      if (!mountedRef.current || userRef.current?.status !== "AWAKE") break;
+      if (!mountedRef.current || !canAttemptAwakeAction(userRef.current)) break;
       const before = animatedPositionRef.current ?? {
         x: userData.longitude,
         y: userData.latitude,
@@ -991,7 +994,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const heading = worldMotionHeading(first, last);
     // Keep the origin for heading, but only animate tiles ahead of the actor.
     for (const unifiedTile of unifiedPath.slice(1)) {
-      if (!mountedRef.current || userRef.current?.status !== "AWAKE") break;
+      if (!mountedRef.current || !canAttemptAwakeAction(userRef.current)) break;
       const before = {
         sector: sectorRef.current,
         ...(animatedPositionRef.current ?? {
@@ -1049,6 +1052,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       location: string;
     },
     walk: Promise<void>,
+    mutation: UserUpdateOptions,
   ): Promise<void> => {
     if (!userData || !mountedRef.current) return;
     // The crossing round trip is fired while the steps animate. When the
@@ -1093,6 +1097,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         crossDest,
         { x: data.longitude, y: data.latitude },
         data.location,
+        mutation,
       );
       return;
     }
@@ -1100,12 +1105,15 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     snapMovementPosition(data);
     // Update all state only once at the end to avoid excessive re-renders
     setPosition({ x: data.longitude, y: data.latitude });
-    await updateUser({
-      location: data.location,
-      updatedAt: new Date(),
-      longitude: data.longitude,
-      latitude: data.latitude,
-    });
+    await updateUser(
+      {
+        location: data.location,
+        updatedAt: new Date(),
+        longitude: data.longitude,
+        latitude: data.latitude,
+      },
+      mutation,
+    );
     // Update surrounding users state at the end
     if (publishSurroundingsRef.current)
       setSorrounding(usersRef.current.filter((u) => u.userId));
@@ -1120,6 +1128,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     mutationFn: (input: RouterInputs["travel"]["moveInSector"]) =>
       utils.client.travel.moveInSector.mutate(input),
     meta: { handlesTransportError: true },
+    onSuccess: async (result) => {
+      if (result.success && result.data) showActionReadinessToast(result);
+    },
   });
 
   /**
@@ -1204,14 +1215,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
    * at the border entry tile, then animate the server-committed remainder of
    * the walk to the landing tile - all client-side, no further round trips.
    */
-  const applyCrossing = async (data: {
-    sector: number;
-    longitude: number;
-    latitude: number;
-    location: string;
-    entryLongitude?: number | null;
-    entryLatitude?: number | null;
-  }) => {
+  const applyCrossing = async (
+    data: {
+      sector: number;
+      longitude: number;
+      latitude: number;
+      location: string;
+      entryLongitude?: number | null;
+      entryLatitude?: number | null;
+    },
+    mutation: UserUpdateOptions,
+  ) => {
     if (!userData) return;
     pendingCrossRef.current = null;
     sectorRef.current = data.sector;
@@ -1288,13 +1302,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     } else {
       setTarget({ x: data.longitude, y: data.latitude });
     }
-    await updateUser({
-      sector: data.sector,
-      longitude: data.longitude,
-      latitude: data.latitude,
-      location: data.location,
-      updatedAt: new Date(),
-    });
+    await updateUser(
+      {
+        sector: data.sector,
+        longitude: data.longitude,
+        latitude: data.latitude,
+        location: data.location,
+        updatedAt: new Date(),
+      },
+      mutation,
+    );
     // Walk the committed remainder from the entry tile to the landing tile
     const hasRemainder = data.longitude !== entry.x || data.latitude !== entry.y;
     if (anchored && hasRemainder && originRef.current) {
@@ -1343,6 +1360,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     crossDest: { sector: number; x: number; y: number } | null,
     edge: SectorPoint,
     location: string,
+    mutation: UserUpdateOptions,
   ) => {
     const nav = windowNavRef.current;
     // Every cylindrical-grid neighbor is aligned, so a click into an adjacent
@@ -1359,17 +1377,20 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         routeTargetRef.current = crossDest;
         pendingWorldTargetRef.current = null;
         await animateWindowPath(navPath, location);
-        await reconcileCrossing(await crossingPromise);
+        await reconcileCrossing(await crossingPromise, mutation);
         return;
       }
     }
     // Server-driven fallback: wait for the crossing, then re-anchor
     const crossingRes = await crossingPromise;
     if (crossingRes.success && crossingRes.data) {
-      await applyCrossing(crossingRes.data);
+      await applyCrossing(crossingRes.data, {
+        ...mutation,
+        userRecovery: crossingRes.userRecovery ?? mutation.userRecovery,
+      });
       return;
     }
-    await reconcileCrossing(crossingRes);
+    await reconcileCrossing(crossingRes, mutation);
   };
 
   /** Restore every movement ref together so the next request uses the server tile. */
@@ -1411,20 +1432,26 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   };
 
   /** Commit the server result after an optimistic client walk. */
-  const reconcileCrossing = async (res: Awaited<ReturnType<typeof moveStepAsync>>) => {
+  const reconcileCrossing = async (
+    res: Awaited<ReturnType<typeof moveStepAsync>>,
+    mutation: UserUpdateOptions,
+  ) => {
     if (res.success && res.data) {
       const d = res.data;
       snapMovementPosition(d);
       // Clear the completed route before a queued request uses the new sector's grid.
       setTarget(null);
       setPosition({ x: d.longitude, y: d.latitude });
-      await updateUser({
-        sector: d.sector,
-        longitude: d.longitude,
-        latitude: d.latitude,
-        location: d.location,
-        updatedAt: new Date(),
-      });
+      await updateUser(
+        {
+          sector: d.sector,
+          longitude: d.longitude,
+          latitude: d.latitude,
+          location: d.location,
+          updatedAt: new Date(),
+        },
+        { ...mutation, userRecovery: res.userRecovery ?? mutation.userRecovery },
+      );
       if (publishSurroundingsRef.current)
         setSorrounding(usersRef.current.filter((u) => u.userId));
       // runQuestTriggers with forceCheck already issues checkQuest(), so calling
@@ -1434,6 +1461,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     } else {
       // Attacked (success without data) or rejected: re-sync from the server
       showMutationToast(res);
+      if (res.userRecovery) await updateUser(res, { ...mutation, refetch: false });
       await refreshMovementPosition();
     }
   };
@@ -1472,19 +1500,25 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         ? animateWalk(path, userRef.current?.location ?? "")
         : Promise.resolve();
       void walk.catch(() => undefined);
-      return { walk, sector: prepareSectorUpdate() };
+      return { walk, sector: prepareSectorUpdate(), userRevision: prepareUserUpdate() };
     },
     onSuccess: async (res, input, context) => {
+      if (res.success && res.data) showActionReadinessToast(res);
       const walk = context?.walk ?? Promise.resolve();
+      const mutation = {
+        revision: context?.userRevision,
+        refetch: false,
+        userRecovery: res.userRecovery,
+      };
       const data = res.data;
       if (!res.success || !data) {
         await walk;
-        if (mountedRef.current) await reconcileCrossing(res);
+        if (mountedRef.current) await reconcileCrossing(res, mutation);
         return;
       }
       if (data.sector !== input.sector) {
         await walk;
-        if (mountedRef.current) await applyCrossing(data);
+        if (mountedRef.current) await applyCrossing(data, mutation);
         return;
       }
       if (data.longitude !== input.longitude || data.latitude !== input.latitude) {
@@ -1492,11 +1526,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         if (mountedRef.current) {
           pendingCrossRef.current = null;
           pendingWorldTargetRef.current = null;
-          await reconcileCrossing(res);
+          await reconcileCrossing(res, mutation);
         }
         return;
       }
-      await runJourneySegment(data, walk);
+      await runJourneySegment(data, walk, mutation);
       // Crossings retain their destination read; ordinary movement keeps this exact key current.
       if (userRef.current?.sector === input.sector && context?.sector) {
         await updateSector(true, context.sector);
@@ -1585,31 +1619,24 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const { mutate: rob, isPending: isRobbing } = api.travel.robPlayer.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
-      if (result?.battleId || typeof result?.money === "number") {
-        await updateUser(
-          {
-            ...(typeof result.money === "number" ? { money: result.money } : {}),
-            ...(result.battleId
-              ? { battleId: result.battleId, updatedAt: new Date() }
-              : {}),
-          },
-          { revision },
-        );
-      }
+      if (result.success || result.battleId || result.userRecovery)
+        await updateUser(result, { revision, refetch: false });
       showMutationToast(result);
+    },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
     },
   });
 
   const { mutate: attack, isPending: isAttacking } = api.combat.attackUser.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       document.body.style.cursor = "default";
       if (data.success) {
-        await updateUser({
-          status: "BATTLE",
-          battleId: data.battleId,
-          updatedAt: new Date(),
-        });
+        showActionReadinessToast(data);
+        await updateUser(data, { revision, refetch: false });
       } else {
+        if (data.userRecovery) await updateUser(data, { revision, refetch: false });
         showMutationToast({
           success: false,
           message: data.message,
@@ -1814,18 +1841,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     }
     const longitude = userData?.longitude;
     const latitude = userData?.latitude;
-    const status = userData?.status;
     if (longitude === undefined || latitude === undefined) return;
 
-    // Suppression gates first: never stack on an in-flight interaction, an open dialog, or a
-    // blocking global popup (e.g. daily rewards, which auto-opens on login and would otherwise
-    // sit on top of this prompt), and only prompt when the interaction can actually succeed —
-    // interactWithOverworldAi rejects every non-AWAKE status (BATTLE, HOSPITALIZED, ASLEEP,
-    // TRAVEL, QUEUED, …), so gate on `!== "AWAKE"` rather than BATTLE alone to avoid showing a
-    // modal whose CTA would immediately error. The gate runs before `arrivalPromptDecision`
-    // arms `lastPromptedPlacementIdRef`, so a suppressed prompt is not consumed — once the popup
-    // closes, `isBlockingPopupOpen` flips and this effect re-runs to fire the prompt.
-    if (isInteracting || status !== "AWAKE" || npcDialog || isBlockingPopupOpen) return;
+    // Keep arrival prompts behind other dialogs and permit explicit recovery-capable
+    // interactions. Only the player's chosen action wakes or checks out the character.
+    if (
+      isInteracting ||
+      !canAttemptAwakeAction(userRef.current) ||
+      npcDialog ||
+      isBlockingPopupOpen
+    )
+      return;
 
     const decision = arrivalPromptDecision({
       playerLongitude: longitude,
@@ -1939,6 +1965,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           // Update last attack time and attack
           lastAutoAttackTimeRef.current = now;
           attack({
+            originSocketId: pusher?.connection.socket_id,
             userId: closestEnemy.userId,
             longitude: closestEnemy.longitude,
             latitude: closestEnemy.latitude,
@@ -1976,7 +2003,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const destination = routeTargetRef.current;
     const user = userRef.current;
     if (!destination || !originRef.current || !pathFinderRef.current || !user) return;
-    if (user.status !== "AWAKE") {
+    if (!canAttemptAwakeAction(user)) {
       routeTargetRef.current = null;
       return;
     }
@@ -2209,6 +2236,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             document.body.style.cursor = "wait";
             setTargetUser(target);
             attack({
+              originSocketId: pusher?.connection.socket_id,
               userId: target.userId,
               longitude: target.longitude,
               latitude: target.latitude,
@@ -2290,7 +2318,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     friendlyAttack: allyAttack,
     structureObjectiveIds: structureObjectiveIdsRef.current,
     nav: windowNavRef.current,
-    enabled: !props.showSorrounding && userData?.status === "AWAKE",
+    enabled: !props.showSorrounding && canAttemptAwakeAction(userData),
     brightness: 1,
     lightDate: null,
     decorations: mergedDecorations,
@@ -2332,7 +2360,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             row: animatedPositionRef.current?.y ?? userRef.current?.latitude ?? 0,
             nav: windowNavRef.current,
             enabled:
-              userRef.current?.status === "AWAKE" &&
+              canAttemptAwakeAction(userRef.current) &&
               !showSorroundingRef.current &&
               performance.now() >= ignoreMapClicksUntilRef.current,
             lightDate,
@@ -2374,7 +2402,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (travel.isReady) travel.scene.current?.recenter();
   }, [travel.isReady, props.cameraFocusRevision, profile?.status]);
   useEffect(() => {
-    if (!travel.isReady || profile?.status !== "AWAKE") return;
+    if (!travel.isReady || !canAttemptAwakeAction(profile)) return;
     travelCallbacks.current.onReady();
     continueMovement();
     document.addEventListener("keydown", onDocumentKeyDown);
@@ -2648,6 +2676,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             const target = sorrounding.find((u) => u.userId === userId);
             if (target && !isAttacking && !movePendingRef.current) {
               attack({
+                originSocketId: pusher?.connection.socket_id,
                 userId: target.userId,
                 longitude: target.longitude,
                 latitude: target.latitude,
@@ -2660,6 +2689,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             const target = sorrounding.find((u) => u.userId === userId);
             if (target && !isRobbing && !movePendingRef.current) {
               rob({
+                originSocketId: pusher?.connection.socket_id,
                 userId: target.userId,
                 longitude: target.longitude,
                 latitude: target.latitude,

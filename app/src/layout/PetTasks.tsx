@@ -15,6 +15,7 @@ import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
+import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import { isPetTaskContract, petTaskDispatchBlockMessage } from "@/libs/pets/tasks";
 import { formatQuestEntryCost } from "@/libs/questRun";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
@@ -193,8 +194,9 @@ export const PetTaskDispatch = ({
   });
   const start = api.quests.startPetTask.useMutation(feedback.handlers);
   const eligible = user
-    ? (collection.data?.pets.filter((pet) => !petTaskDispatchBlockMessage(user, pet)) ??
-      [])
+    ? (collection.data?.pets.filter(
+        (pet) => !petTaskDispatchBlockMessage(actionPrerequisiteUser(user), pet),
+      ) ?? [])
     : [];
   const selected =
     eligible.find((pet) => pet.id === petId) ??
@@ -326,12 +328,7 @@ const usePetTaskFeedback = () => {
           showRewardToast(data.notifications ?? [], data.rewards, data.message);
         else showMutationToast(data);
         if (data.rewardChoicePending) void openRewardChoice();
-        await Promise.all([
-          refresh(),
-          data.success
-            ? updateUser(data, { revision })
-            : utils.profile.getUser.invalidate(),
-        ]);
+        await Promise.all([refresh(), updateUser(data, { revision })]);
       },
       onError: async (error: { message: string }) => {
         setMessage(error.message);

@@ -43,11 +43,14 @@ import {
 import type { JutsuCapFlags, JutsuEquipCap } from "@/libs/jutsu";
 import { JUTSU_FREE_TRANSFER_MARKER } from "@/libs/jutsu";
 import type { getJutsuReskinMechanics } from "@/libs/jutsu/reskins";
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadiness } from "@/server/utils/actionReadiness";
 import { clampActionLogText } from "@/utils/actionLog";
 import { calculateContentDiff } from "@/utils/diff";
 import { DAY_S, getNextUserSnapshotAt, secondsFromDate } from "@/utils/time";
 import type { jutsuReskinBaseSchema } from "@/validators/jutsu";
+import type { QuestTrackerType } from "@/validators/objectives";
 
 /** Fetch the stable slot order used for both display and allowance checks. */
 export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) => {
@@ -534,36 +537,39 @@ export const findJutsuReskinForEvolveJutsu = (
     columns: { id: true },
   });
 
-/** Build the `userJutsu` update for `evolveJutsu`, including predicates on `id`, `userId`, `jutsuId`. */
+/** Evolve the owned jutsu, persist its quest progress and recover its actor in one guarded update. */
 export const updateUserJutsuForEvolveJutsu = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "execute">,
   input: { evolutionJutsuId: string; userJutsuId: string },
-  isRestrictedEquipType: false | true,
+  isRestrictedEquipType: boolean,
   userJutsuObj: { reskinId: null | string; jutsu: { id: string }; level: number },
-  conflictingReskin: undefined | Pick<import("@/drizzle/schema").DungeonRun, "id">,
+  conflictingReskin: { id: string } | undefined,
   ctx: { userId: string },
+  readiness: ActionReadiness,
+  questDataForDb: QuestTrackerType[],
 ) =>
-  client
-    .update(userJutsu)
-    .set({
-      jutsuId: input.evolutionJutsuId,
-      level: 1,
-      experience: 0,
-      finishTraining: null,
-      updatedAt: new Date(),
-      ...(isRestrictedEquipType ? { equipped: false } : {}),
-      ...(userJutsuObj.reskinId && conflictingReskin
-        ? { reskinId: conflictingReskin.id }
-        : {}),
-    })
-    .where(
-      and(
-        eq(userJutsu.id, input.userJutsuId),
-        eq(userJutsu.userId, ctx.userId),
-        eq(userJutsu.jutsuId, userJutsuObj.jutsu.id),
-        eq(userJutsu.level, userJutsuObj.level),
-      ),
-    );
+  client.execute(sql`
+  UPDATE ${userData}
+  INNER JOIN ${userJutsu} ON ${eq(userJutsu.userId, userData.userId)}
+  SET ${actionReadinessSqlSet(readiness, [])}
+      ${userData.questData} = CAST(${JSON.stringify(questDataForDb)} AS JSON),
+      ${userData.updatedAt} = ${getNextUserSnapshotAt(readiness.initial.updatedAt)},
+      ${userJutsu.jutsuId} = ${input.evolutionJutsuId},
+      ${userJutsu.level} = 1,
+      ${userJutsu.experience} = 0,
+      ${userJutsu.finishTraining} = NULL,
+      ${isRestrictedEquipType ? sql`${userJutsu.equipped} = FALSE,` : sql``}
+      ${userJutsuObj.reskinId && conflictingReskin ? sql`${userJutsu.reskinId} = ${conflictingReskin.id},` : sql``}
+      ${userJutsu.updatedAt} = NOW(3)
+  WHERE ${and(
+    eq(userData.userId, ctx.userId),
+    eq(userData.updatedAt, readiness.initial.updatedAt),
+    readiness.where ?? eq(userData.status, "AWAKE"),
+    eq(userJutsu.id, input.userJutsuId),
+    eq(userJutsu.jutsuId, userJutsuObj.jutsu.id),
+    eq(userJutsu.level, userJutsuObj.level),
+  )}
+`);
 
 /** Build the jutsu order update for one loadout. */
 export const updateJutsuLoadoutIds = (

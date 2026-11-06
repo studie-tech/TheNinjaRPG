@@ -17,6 +17,7 @@ import {
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { activeTrainedElement, providedElements } from "@/libs/elementalMastery";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -34,9 +35,7 @@ export const ElementalMastery = () => {
     setMessage(result.message);
     showMutationToast(result);
     await Promise.all([
-      ...(result.success
-        ? [updateUser(result, { revision })]
-        : [utils.profile.getUser.invalidate()]),
+      updateUser(result, { revision }),
       utils.profile.getPublicUser.invalidate(),
     ]);
   };
@@ -79,7 +78,7 @@ export const ElementalMastery = () => {
         </label>
         <Select
           value={active ?? "none"}
-          disabled={isPending || user.status !== "AWAKE"}
+          disabled={isPending || !canAttemptAwakeAction(user)}
           onValueChange={(value) =>
             select.mutate({
               element: value === "none" ? null : (value as BasicElement),

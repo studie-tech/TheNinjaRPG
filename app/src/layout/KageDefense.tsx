@@ -31,12 +31,13 @@ import type { UserWithRelations } from "@/routers/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { type KageWindow, kageScheduleSchema } from "@/validators/kage";
 import type { UserSearchResult } from "@/validators/register";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Public UTC defenses with role-specific scheduling, attendance and optional early-fight consent. */
 export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) => {
   const utils = api.useUtils();
   const router = useRouter();
-  const { updateUser, timeDiff } = useRequiredUserData();
+  const { pusher, prepareUserUpdate, updateUser, timeDiff } = useRequiredUserData();
   const [draft, setDraft] = useState<KageWindow[] | null>(null);
   const nomineeForm = useForm<{ username: string; users: UserSearchResult[] }>({
     defaultValues: { username: "", users: [] },
@@ -58,12 +59,14 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
     return () => clearInterval(interval);
   }, []);
   /** Keep action feedback visible and refresh leadership before entering an admitted battle. */
-  const onSuccess = async (result: {
-    success: boolean;
-    message: string;
-    battleId?: string;
-  }) => {
+  const onSuccess = async (
+    result: UserDeltaResponse & { battleId?: string },
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
     showMutationToast(result);
+    if (result.userRecovery || result.battleId)
+      await updateUser(result, { revision, refetch: false });
     setMessage(result);
     if (result.success) {
       setDraft(null);
@@ -72,7 +75,6 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
         utils.village.get.invalidate(),
       ]);
       if (result.battleId) {
-        await updateUser({ status: "BATTLE", battleId: result.battleId });
         router.push("/combat");
       }
     }
@@ -85,8 +87,18 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
   const withdraw = api.kage.withdrawDefense.useMutation({ onSuccess, onError });
   const reschedule = api.kage.rescheduleDefense.useMutation({ onSuccess, onError });
   const ai = api.kage.setDefenseAi.useMutation({ onSuccess, onError });
-  const checkIn = api.kage.checkInDefense.useMutation({ onSuccess, onError });
-  const start = api.kage.startDefense.useMutation({ onSuccess, onError });
+  const checkIn = api.kage.checkInDefense.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess,
+    onError,
+  });
+  const start = api.kage.startDefense.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess,
+    onError: (error) => {
+      onError(error);
+    },
+  });
   const requestInstant = api.kage.requestInstantDefense.useMutation({
     onSuccess,
     onError,
@@ -491,7 +503,12 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
                           disabled={
                             pending || !ready || !m.checkedInAt || !at || now < at
                           }
-                          onClick={() => start.mutate({ id: m.id })}
+                          onClick={() =>
+                            start.mutate({
+                              id: m.id,
+                              originSocketId: pusher?.connection.socket_id,
+                            })
+                          }
                         >
                           Start title fight
                         </Button>

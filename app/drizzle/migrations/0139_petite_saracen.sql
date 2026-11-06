@@ -1,0 +1,1 @@
+ALTER TABLE `UserData` ADD `autoWakeUp` boolean DEFAULT true NOT NULL;

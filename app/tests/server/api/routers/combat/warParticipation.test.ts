@@ -13,7 +13,7 @@ import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { defaultWarRules } from "@/validators/war";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
-import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 
 const pusher = { trigger: vi.fn(async () => {}) } as unknown as PusherClient;
 const attackerId = "war-attacker";
@@ -142,6 +142,26 @@ describeWithDatabase("war participation requires deliberate war activity", () =>
     const claimed = (await readUser())!;
     expect(claimed.warParticipantUntil.getTime() > Date.now()).toBe(questType === "war");
     expect(claimed.bracketImmunityLiftedUntil.getTime() > Date.now()).toBe(questType === "war");
+  });
+
+  it.each([0, 1, 2])("requires exactly one current prerequisite completion for war missions (completed=%s)", async (completed) => {
+    const db = await getTestDatabase();
+    await insertQuests([
+      { id: "war-prerequisite", name: "War prerequisite", questType: "mission" },
+      { id: "prerequisite-spy", name: "Prerequisite spy", questType: "war", questRank: "C", prerequisiteQuestId: "war-prerequisite", content: {
+        objectives: [SimpleObjective.parse({ id: "spy", task: "espionage", durationSeconds: 30, value: 10 })],
+        reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+      } },
+    ]);
+    await insertQuestHistory([{ userId: attackerId, questId: "war-prerequisite", questType: "mission", completed, previousCompletes: 1 }]);
+    await db.update(userData).set({ sector: 2 }).where(eq(userData.userId, attackerId));
+    const measured = await recordQueries(() => callerForDatabase(warRouter, attackerId, db)
+      .startWarMission({ warId: "active-war", questId: "prerequisite-spy", objectiveId: "spy" }));
+    expect(measured.result.success).toBe(completed === 1);
+    // The isolation guard reads quest IDs; prerequisite history is already on the actor.
+    expect(measured.statements.filter((statement) => statement.startsWith("select") && statement.includes("from `QuestHistory`") && !statement.includes("from `UserData`"))).toHaveLength(1);
+    expect((await readUser())?.warMission !== null).toBe(completed === 1);
+    if (completed !== 1) expect(measured.result.message).toContain("prerequisite quest");
   });
 
   it.each(["espionage", "sabotage"] as const)("starting %s still flags participation and removes immunity", async (task) => {

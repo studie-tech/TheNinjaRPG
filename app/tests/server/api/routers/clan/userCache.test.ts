@@ -1,3 +1,4 @@
+import { beforeStatements } from "../../../../setup/statements";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -86,6 +87,31 @@ describeWithDatabase("clan village membership progression", () => {
       expect(result.userPatch).toBeUndefined();
       expect(result.achievementProgress).toBeUndefined();
     } finally { unsubscribe(); client.clear(); }
+  });
+
+  it("does not publish clan cleanup when the departure's recovery claim loses", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "ASLEEP", autoWakeUp: true }).where(eq(userData.userId, userId));
+    await db.update(clan).set({ leaderId: userId }).where(eq(clan.id, clanId));
+    const raced = beforeStatements(db, userData, [async () => {
+      await db.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, userId));
+    }]);
+    const result = await callerForDatabase(clanRouter, userId, raced).leaveClan({ clanId });
+    expect(result.success).toBe(false);
+    expect(result.actionNotice).toBeUndefined();
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ status: "ASLEEP", clanId });
+    expect(await db.query.clan.findFirst({ where: eq(clan.id, clanId) })).toMatchObject({ leaderId: userId });
+    expect(await db.query.actionLog.findMany()).toHaveLength(0);
+  });
+
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)("recovers a %s member with the departure and then finishes clan cleanup", async (status) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status, autoWakeUp: true, regenAt: new Date(Date.now() - 24 * 60 * 60 * 1000) }).where(eq(userData.userId, userId));
+    const result = await callerForDatabase(clanRouter, userId, db).leaveClan({ clanId });
+    expect(result.success).toBe(true);
+    expect(result.actionNotice).toContain(status === "ASLEEP" ? "woke you up" : "hospital for free");
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ status: "AWAKE", clanId: null, villageId: VILLAGE_SYNDICATE_ID });
+    expect(await db.query.actionLog.findMany()).toHaveLength(1);
   });
 
   it("keeps a clan-only departure projection narrow when the village stays the same", async () => {

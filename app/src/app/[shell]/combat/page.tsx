@@ -35,6 +35,8 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { PyramidRun } from "@/layout/PyramidRunBoundary";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { battleActionGrid } from "@/libs/combat/actionGrid";
 import {
   actionPointsAfterAction,
@@ -109,7 +111,12 @@ export default function CombatPage() {
     [setBattleAtom],
   );
   const utils = api.useUtils();
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const { data, isLoading, isSuccess, isError, isFetching, refetch } =
     api.combat.getBattle.useQuery(
       { battleId: userData?.battleId },
@@ -171,7 +178,7 @@ export default function CombatPage() {
       results.curStamina < userData.maxStamina ||
       results.curChakra < userData.maxChakra);
   const canAffordArenaHealing = (userData?.money ?? 0) >= BATTLE_ARENA_HEAL_COST;
-  const canHealFromCurrentStatus = userData?.status === "AWAKE";
+  const canHealFromCurrentStatus = canAttemptAwakeAction(userData);
   const showNextMatch =
     results?.outcome === "Won" &&
     (battle?.battleType === "ARENA" || battle?.battleType === "TRAINING");
@@ -302,11 +309,15 @@ export default function CombatPage() {
   // Mutation for healing before starting another arena fight
   const { mutate: battleArenaHealAndGo, isPending: isArenaHealPending } =
     api.combat.battleArenaHeal.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success || data.userRecovery)
+          await updateUser(data, { revision, refetch: false });
         if (data.success) {
           setArenaHealSettledBattleId(arenaHealBattleKey);
         }
         if (data.success && arenaOpponentId) {
+          showActionReadinessToast(data);
           handleStartArenaBattle("post-heal");
         } else {
           showMutationToast(data);
@@ -323,18 +334,18 @@ export default function CombatPage() {
   // Mutation for starting a fight
   const { mutate: startArenaBattle, isPending: isStartingArenaBattle } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: (result) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (result, _variables, revision) => {
         if (result.success && result.battleId) {
+          showActionReadinessToast(result);
           setBattleAtom(undefined);
           // The finished battle and its result stay in place until the next battle
           // loads, so the battlefield keeps its reserved size and nothing turns live.
-          void updateUser({
-            status: "BATTLE",
-            battleId: result.battleId,
-            updatedAt: new Date(),
-          });
+          await updateUser(result, { revision, refetch: false });
           void utils.combat.getBattle.invalidate();
         } else {
+          if (result.userRecovery)
+            await updateUser(result, { revision, refetch: false });
           showMutationToast(result);
         }
       },
@@ -359,6 +370,7 @@ export default function CombatPage() {
     arenaStartInFlightRef.current = true;
     startArenaBattle({
       aiId: arenaOpponentId,
+      originSocketId: pusher?.connection.socket_id,
       stats: battle?.battleType === "TRAINING" ? statDistribution : undefined,
       autoCombat,
     });

@@ -4,8 +4,11 @@
 import { and, eq, ne, type SQL } from "drizzle-orm";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
 const matchUsers = {
   user1: { columns: { userId: true, username: true, avatar: true } },
@@ -133,23 +136,43 @@ export const insertTournamentMatchForJoinTournament = (
     startedAt: tournamentData.startedAt,
   });
 
-/** Wake tournament participants without releasing live dungeon reservations. */
+/** Reset scheduled participants while claiming any actor recovery atomically and preserving live dungeon reservations. */
 export const updateUserDataForJoinMatch = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "execute">,
   matchData: { userId1: string; userId2: null | string },
+  actorId?: string,
+  readiness?: ActionReadinessWrite,
 ) =>
-  client
-    .update(userData)
-    .set({
-      status: "AWAKE",
-      curHealth: sql`CASE WHEN ${userData.curHealth} < 0 THEN 1 ELSE ${userData.curHealth} END`,
-    })
-    .where(
-      and(
-        inArray(userData.userId, [matchData.userId1 ?? "", matchData.userId2 ?? ""]),
-        withoutDungeonReservation(),
-      ),
-    );
+  readiness?.where && actorId
+    ? client.execute(sql`
+  UPDATE ${userData} LEFT JOIN ${userData} AS opponent
+    ON opponent.userId = ${matchData.userId1 === actorId ? matchData.userId2 : matchData.userId1}
+      AND ${withoutDungeonReservation(sql`opponent.userId`)}
+  SET ${actionReadinessSqlSet(readiness, ["status", "curHealth"])}
+    ${userData.status} = 'AWAKE',
+    ${userData.curHealth} = ${readiness.set.curHealth ?? sql`GREATEST(1, ${userData.curHealth})`},
+    ${userData.updatedAt} = ${nextSnapshotSql(userData.updatedAt)},
+    opponent.status = 'AWAKE',
+    opponent.curHealth = CASE WHEN opponent.curHealth < 0 THEN 1 ELSE opponent.curHealth END,
+    opponent.updatedAt = NOW(3)
+  WHERE ${userData.userId} = ${actorId} AND ${readiness.where}
+    AND ${withoutDungeonReservation()}
+`)
+    : client
+        .update(userData)
+        .set({
+          status: "AWAKE",
+          curHealth: sql`CASE WHEN ${userData.curHealth} < 0 THEN 1 ELSE ${userData.curHealth} END`,
+        })
+        .where(
+          and(
+            inArray(userData.userId, [
+              matchData.userId1 ?? "",
+              matchData.userId2 ?? "",
+            ]),
+            withoutDungeonReservation(),
+          ),
+        );
 
 /** Build deletion of all matches in a tournament. */
 export const deleteTournamentMatches = (

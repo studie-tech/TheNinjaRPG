@@ -14,9 +14,12 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { PartyRoster } from "@/layout/PartyRoster";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
+import { actionStatusMessage, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
  * Manage shared quest progress and roster in quests or on the team page.
@@ -31,7 +34,7 @@ export const QuestTeams = ({
   teamEnabled?: boolean;
   compact?: boolean;
 }) => {
-  const { data: user, updateUser } = useRequiredUserData();
+  const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const [isPublic, setIsPublic] = useState(false);
   const [username, setUsername] = useState("");
@@ -48,8 +51,16 @@ export const QuestTeams = ({
     refetchInterval: (query) => (query.state.data?.current ? 5000 : 30000),
   });
   /** Keep rejections beside the controls; successful changes refresh shared and personal progress. */
-  const refresh = async (result: { success: boolean; message: string }) => {
+  const refresh = async (
+    result: UserDeltaResponse,
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
     setMessage(result.success ? "" : result.message);
+    if (!result.success && (result.actionNotice || result.userRecovery)) {
+      showActionReadinessToast(result);
+      await updateUser(result, { revision, refetch: false });
+    }
     if (result.success) {
       setEndAction(null);
       setUsername("");
@@ -58,22 +69,24 @@ export const QuestTeams = ({
         utils.coop.quest.overview.invalidate(),
         utils.quests.specificQuests.invalidate(),
         utils.quests.getPendingRewardChoices.invalidate(),
-        updateUser(undefined, { revision: undefined }),
+        updateUser(result, { revision }),
       ]);
     }
   };
   /** Mutation and background refresh failures retain controls and show a recoverable message. */
   const onError = (error: { message: string }) => setMessage(error.message);
-  const create = api.coop.quest.create.useMutation({ onSuccess: refresh, onError });
-  const join = api.coop.quest.join.useMutation({ onSuccess: refresh, onError });
-  const leave = api.coop.quest.leave.useMutation({ onSuccess: refresh, onError });
-  const invite = api.coop.quest.invite.useMutation({ onSuccess: refresh, onError });
-  const remove = api.coop.quest.remove.useMutation({ onSuccess: refresh, onError });
-  const disband = api.coop.quest.disband.useMutation({ onSuccess: refresh, onError });
-  const start = api.coop.quest.startEncounter.useMutation({
+  const mutationOptions = {
+    onMutate: prepareUserUpdate,
     onSuccess: refresh,
     onError,
-  });
+  };
+  const create = api.coop.quest.create.useMutation(mutationOptions);
+  const join = api.coop.quest.join.useMutation(mutationOptions);
+  const leave = api.coop.quest.leave.useMutation(mutationOptions);
+  const invite = api.coop.quest.invite.useMutation(mutationOptions);
+  const remove = api.coop.quest.remove.useMutation(mutationOptions);
+  const disband = api.coop.quest.disband.useMutation(mutationOptions);
+  const start = api.coop.quest.startEncounter.useMutation(mutationOptions);
   const busy =
     remove.isPending ||
     disband.isPending ||
@@ -134,7 +147,9 @@ export const QuestTeams = ({
   const canEncounter = current?.hasEncounter && !current.completed && !current.failed;
   const missingMembers = current?.members.filter(
     (member) =>
-      member.status !== "AWAKE" ||
+      (member.userId === user.userId && current.leaderId === user.userId
+        ? !canAttemptAwakeAction(user)
+        : member.status !== "AWAKE") ||
       !location ||
       member.sector !== location.sector ||
       member.longitude !== location.longitude ||
@@ -144,8 +159,8 @@ export const QuestTeams = ({
     <section
       className={
         questId
-          ? "space-y-3 rounded-lg border bg-popover p-3 text-popover-foreground"
-          : "space-y-4 p-3 text-foreground sm:p-4"
+          ? "bg-popover text-popover-foreground space-y-3 rounded-lg border p-3"
+          : "text-foreground space-y-4 p-3 sm:p-4"
       }
       aria-label="Quest teams"
     >
@@ -232,6 +247,17 @@ export const QuestTeams = ({
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm"
         >
           {message || error?.message}
+          {(message || error?.message) === actionStatusMessage("HOSPITALIZED") && (
+            <>
+              {" "}
+              <Link
+                href="/hospital"
+                className="font-medium underline underline-offset-4"
+              >
+                Go to hospital
+              </Link>
+            </>
+          )}
         </p>
       )}
       {!current && questId && (
@@ -305,8 +331,8 @@ export const QuestTeams = ({
               </p>
               <p>
                 {missingMembers?.length
-                  ? `Waiting for: ${missingMembers.map((member) => member.username).join(", ")}. Everyone must be awake at the encounter location.`
-                  : "Everyone is ready at the encounter location."}
+                  ? `Waiting for: ${missingMembers.map((member) => member.username).join(", ")}. They must be awake at the encounter location.`
+                  : "Ready to attempt the team encounter."}
               </p>
               {!atEncounter && (
                 <Button asChild variant="secondary" size="sm">

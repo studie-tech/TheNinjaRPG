@@ -2,7 +2,6 @@ import { eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { QUEST_PARTY_TYPES } from "@/drizzle/constants";
 import { type Quest, questParty, userData } from "@/drizzle/schema";
-
 import { questCoopParty, transitionCoopParty } from "@/libs/coop";
 import { isQuestComplete } from "@/libs/objectives";
 import { getServerPusher } from "@/libs/pusher";
@@ -51,6 +50,11 @@ import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
 import { assignQuestToUser } from "@/routers/quests";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  type ActionReadiness,
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import {
   cleanupCoopBattleStart,
@@ -136,13 +140,17 @@ export const questPartyRouter = createTRPCRouter({
   startEncounter: protectedProcedure
     .input(questPartyIdSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user } = await fetchUpdatedUser({
+      const { user: initialUser, settings } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
       return startQuestPartyEncounter({
         client: ctx.drizzle,
-        user,
+        user: readiness.user,
+        readiness,
         userId: ctx.userId,
         partyId: input.partyId,
       });
@@ -252,12 +260,15 @@ export const questPartyRouter = createTRPCRouter({
   create: protectedProcedure
     .input(questPartyCreateSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, definition, history] = await Promise.all([
+      const [{ user: initialUser, settings }, definition, history] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchQuest(ctx.drizzle, input.questId),
         fetchUserQuestByQuestId(ctx.drizzle, ctx.userId, input.questId),
       ]);
-      if (!user) return errorResponse("User not found");
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       if (!definition) return errorResponse("Quest not found");
       const block = teamQuestBlock(user, definition);
       if (block) return errorResponse(block);
@@ -266,8 +277,9 @@ export const questPartyRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         set: { questPartyId: partyId },
-        where: [isNull(userData.questPartyId), eq(userData.status, "AWAKE")],
+        where: [isNull(userData.questPartyId)],
       });
       if (!reserved.success)
         return errorResponse("You already have a quest team or your status changed");
@@ -277,7 +289,7 @@ export const questPartyRouter = createTRPCRouter({
         const result = await acceptTeamQuest(ctx.drizzle, user, definition, history);
         if (!result.success) {
           await releaseTeamSlot(ctx.drizzle, ctx.userId, partyId);
-          return result;
+          return actionReadinessResponse(result, readiness, ctx.drizzle);
         }
         const personal =
           user.questData?.find((tracker) => tracker.id === definition.id) ??
@@ -308,7 +320,11 @@ export const questPartyRouter = createTRPCRouter({
             ctx.userId,
           ),
         ]);
-        return { success: true, message: "Quest team formed" };
+        return actionReadinessResponse(
+          { success: true, message: "Quest team formed" },
+          readiness,
+          ctx.drizzle,
+        );
       } catch (error) {
         await releaseTeamSlot(ctx.drizzle, ctx.userId, partyId);
         await deleteQuestPartyForCreate(ctx.drizzle, partyId);
@@ -319,11 +335,14 @@ export const questPartyRouter = createTRPCRouter({
   join: protectedProcedure
     .input(questPartyIdSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, loaded] = await Promise.all([
+      const [{ user: initialUser, settings }, loaded] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         findQuestPartyForDisband(ctx.drizzle, input),
       ]);
-      if (!user || !loaded) return errorResponse("Quest team not found");
+      if (!initialUser || !loaded) return errorResponse("Quest team not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const block = teamQuestBlock(user, loaded.quest);
       if (block) return errorResponse(block);
       const party = await synchronizeQuestParty(ctx.drizzle, loaded);
@@ -345,8 +364,9 @@ export const questPartyRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
           updatedAt: user.updatedAt,
+          readiness,
           set: { questPartyId: party.id },
-          where: [isNull(userData.questPartyId), eq(userData.status, "AWAKE")],
+          where: [isNull(userData.questPartyId)],
         }),
       ]);
       if (!reserved.success)
@@ -362,15 +382,17 @@ export const questPartyRouter = createTRPCRouter({
       );
       if (joined.rowsAffected !== 1) {
         await releaseTeamSlot(ctx.drizzle, ctx.userId, party.id);
-        return errorResponse(
-          "The team changed or is full. Please refresh and try again",
+        return actionReadinessResponse(
+          errorResponse("The team changed or is full. Please refresh and try again"),
+          readiness,
+          ctx.drizzle,
         );
       }
       try {
         const result = await acceptTeamQuest(ctx.drizzle, user, party.quest, history);
         if (!result.success) {
           await removeMember(ctx.drizzle, party.id, ctx.userId, joinClaimId);
-          return result;
+          return actionReadinessResponse(result, readiness, ctx.drizzle);
         }
         await Promise.all([
           saveQuestPartyMember(ctx.drizzle, party, ctx.userId),
@@ -382,10 +404,14 @@ export const questPartyRouter = createTRPCRouter({
           ),
         ]);
         await releaseQuestPartyBattleClaim(ctx.drizzle, party.id, joinClaimId);
-        return {
-          success: true,
-          message: "Joined quest team. All objectives are shared",
-        };
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: "Joined quest team. All objectives are shared",
+          },
+          readiness,
+          ctx.drizzle,
+        );
       } catch (error) {
         await removeMember(ctx.drizzle, party.id, ctx.userId, joinClaimId);
         throw error;
@@ -682,6 +708,7 @@ export const startQuestPartyEncounter = async ({
   objectiveId,
   atPlacementIds,
   ambush,
+  readiness,
 }: {
   client: DrizzleClient;
   user: UserWithRelations;
@@ -693,6 +720,8 @@ export const startQuestPartyEncounter = async ({
   atPlacementIds?: ReadonlySet<string>;
   /** Authored quest attackers rolled by the server's travel consequence handler. */
   ambush?: QuestConsequence;
+  /** Only the actor of an explicit action may recover while joining this encounter. */
+  readiness?: ActionReadiness;
 }) => {
   const party = user?.questParty;
   if (!user || !party || party.id !== partyId || party.leaderId !== userId)
@@ -748,7 +777,9 @@ export const startQuestPartyEncounter = async ({
     party.members.length !== party.memberIds.length ||
     party.members.some(
       (member) =>
-        member.status !== "AWAKE" ||
+        (member.userId === readiness?.initial.userId
+          ? readiness.user.status
+          : member.status) !== "AWAKE" ||
         member.sector !== user.sector ||
         member.longitude !== user.longitude ||
         member.latitude !== user.latitude,
@@ -772,6 +803,7 @@ export const startQuestPartyEncounter = async ({
         {
           client: client,
           cacheUserId: userId,
+          actionReadiness: readiness,
           userIds: party.memberIds,
           targetIds: ambush?.ids ?? expandAiCopies(objective?.opponentAIs ?? []),
           allyAiIds:

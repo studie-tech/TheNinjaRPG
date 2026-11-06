@@ -43,6 +43,7 @@ import {
 } from "@/drizzle/schema";
 import { activeWarAllyWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
 /**
  * Build the `villageStructure` update for `clearExpiredStructureBonuses`, setting
@@ -382,10 +383,12 @@ export const updateUserDataForBuyFood = (
   newStamina: number,
   newChakra: number,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       money: sql`${userData.money} - ${cost}`,
       curStamina: newStamina,
       curChakra: newChakra,
@@ -393,7 +396,7 @@ export const updateUserDataForBuyFood = (
     .where(
       and(
         eq(userData.userId, ctx.userId),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         gte(userData.money, cost),
       ),
     );
@@ -403,17 +406,24 @@ export const updateUserDataForLeaveVillage = (
   client: Pick<DrizzleClient, "update">,
   user: { villagePrestige: number; rank: UserRank },
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       villageId: VILLAGE_SYNDICATE_ID,
       villagePrestige: Math.abs(user.villagePrestige), // Converted to notoriety
       isOutlaw: true,
       joinedVillageAt: new Date(),
       ...villageChangeFields(user),
     })
-    .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
+      ),
+    );
 
 /** Build the `userData` update for `joinVillage`, using predicates on `userId` and `status`. */
 export const updateUserDataForJoinVillage = (
@@ -421,17 +431,24 @@ export const updateUserDataForJoinVillage = (
   village: { id: string },
   user: { rank: UserRank },
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       villageId: village.id,
       villagePrestige: 0,
       isOutlaw: false,
       joinedVillageAt: new Date(),
       ...villageChangeFields(user),
     })
-    .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
+      ),
+    );
 
 /** Build the `userData` update for `joinVillage`, setting `senseiId`, using predicates on `senseiId` and `rank`. */
 export const updateUserDataForJoinVillage2 = (
@@ -454,10 +471,12 @@ export const updateUserDataForSwapVillage = (
   user: { rank: UserRank },
   cost: number,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       villageId: village.id,
       reputationPoints: sql`${userData.reputationPoints} - ${cost}`,
       isOutlaw: village.type === "OUTLAW",
@@ -470,7 +489,7 @@ export const updateUserDataForSwapVillage = (
       and(
         eq(userData.userId, ctx.userId),
         gte(userData.reputationPoints, cost),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
       ),
     );
 

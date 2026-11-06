@@ -18,6 +18,8 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 import { WarMercenaries } from "@/layout/WarMercenaries";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import {
   getObjectiveWarDeadline,
   getWarEspionage,
@@ -45,7 +47,13 @@ export const ObjectiveWarPanel = ({
     success: boolean;
     message: string;
   } | null>(null);
-  const { data: user, updateUser, prepareUserUpdate, timeDiff } = useRequiredUserData();
+  const {
+    data: user,
+    pusher,
+    updateUser,
+    prepareUserUpdate,
+    timeDiff,
+  } = useRequiredUserData();
   const router = useRouter();
   const utils = api.useUtils();
   const { data, error, isPending, refetch } = api.war.getObjectiveWarInfo.useQuery(
@@ -63,24 +71,23 @@ export const ObjectiveWarPanel = ({
     _variables: unknown,
     revision: number | undefined,
   ) => {
-    if (result.success || result.userPatch) await updateUser(result, { revision });
+    if (result.success || result.userPatch || result.userRecovery)
+      await updateUser(result, { revision });
     setFeedback(result);
     void utils.war.getObjectiveWarInfo.invalidate({ warId });
     void utils.war.getActiveWars.invalidate();
   };
   /** Publish the claimed battle locally before navigation so route guards see BATTLE. */
-  const onBattleSuccess = async (result: {
-    success: boolean;
-    message: string;
-    battleId?: string;
-  }) => {
+  const onBattleSuccess = async (
+    result: UserDeltaResponse & { battleId?: string },
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
     setFeedback(result);
+    showActionReadinessToast(result);
+    if (result.userRecovery || (result.success && result.battleId))
+      await updateUser(result, { revision, refetch: false });
     if (result.success && result.battleId) {
-      await updateUser({
-        status: "BATTLE",
-        battleId: result.battleId,
-        updatedAt: new Date(),
-      });
       pushToCombat(router, result.battleId);
     }
   };
@@ -108,12 +115,16 @@ export const ObjectiveWarPanel = ({
   });
   const attack = api.combat.startShrineBattle.useMutation({
     onSuccess: onBattleSuccess,
-    onError,
+    onError: (error) => {
+      onError(error);
+    },
     onMutate,
   });
   const camp = api.war.attackWarCamp.useMutation({
     onSuccess: onBattleSuccess,
-    onError,
+    onError: (error) => {
+      onError(error);
+    },
     onMutate,
   });
   const endsAt =
@@ -218,7 +229,22 @@ export const ObjectiveWarPanel = ({
           role={feedback.success ? "status" : "alert"}
         >
           <AlertDescription>
-            <p className="text-foreground">{feedback.message}</p>
+            <p className="text-foreground">
+              {feedback.message}
+              {!feedback.success &&
+                feedback.message === actionStatusMessage("HOSPITALIZED") && (
+                  <>
+                    {" "}
+                    <Link
+                      href="/hospital"
+                      onNavigate={onNavigate}
+                      className="font-medium underline underline-offset-4"
+                    >
+                      Go to hospital
+                    </Link>
+                  </>
+                )}
+            </p>
           </AlertDescription>
         </Alert>
       )}
@@ -388,7 +414,12 @@ export const ObjectiveWarPanel = ({
                       <Button
                         size="sm"
                         disabled={user.sector !== objective.sector || busy}
-                        onClick={() => attack.mutate({ sector: objective.sector })}
+                        onClick={() =>
+                          attack.mutate({
+                            sector: objective.sector,
+                            originSocketId: pusher?.connection.socket_id,
+                          })
+                        }
                       >
                         {attack.isPending &&
                         attack.variables?.sector === objective.sector
@@ -541,7 +572,12 @@ export const ObjectiveWarPanel = ({
                 <Button
                   size="sm"
                   disabled={hasEnded || isNotice || busy || user.sector !== c.sector}
-                  onClick={() => camp.mutate({ campId: c.id })}
+                  onClick={() =>
+                    camp.mutate({
+                      campId: c.id,
+                      originSocketId: pusher?.connection.socket_id,
+                    })
+                  }
                 >
                   {camp.isPending && camp.variables?.campId === c.id
                     ? "Starting battle..."

@@ -57,8 +57,11 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   });
 
   const consumeToken = api.item.consumeVariantToken.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
+      if (result.success || result.userRecovery)
+        await updateUser(result, { revision, refetch: false });
       if (result.success) {
         setIsOpen(false);
         onClose();
@@ -108,7 +111,7 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
         {/* Base look */}
         <button
           type="button"
-          className={`cursor-pointer rounded border p-2 ${!activeVariantId ? "ring-2 ring-primary" : ""}`}
+          className={`cursor-pointer rounded border p-2 ${!activeVariantId ? "ring-primary ring-2" : ""}`}
           onClick={() => select.mutate({ userItemId: userItem.id, variantId: null })}
         >
           <Image
@@ -149,7 +152,7 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
           return (
             <div
               key={v.id}
-              className={`rounded border p-2 ${isActive ? "ring-2 ring-primary" : ""} ${!isUnlocked ? "opacity-60" : "cursor-pointer"}`}
+              className={`rounded border p-2 ${isActive ? "ring-primary ring-2" : ""} ${!isUnlocked ? "opacity-60" : "cursor-pointer"}`}
             >
               <Image
                 src={v.image}

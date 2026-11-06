@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { applyFarmMutationPatch, getFarmBulkMutationUpdate, getFarmMutationUpdate } from "@/deltas/farming";
+import { applyFarmMutationPatch, getFarmBulkMutationUpdate, getFarmMutationUpdate, getFarmProfileUpdate } from "@/deltas/farming";
 import { getFarmingLevel } from "@/libs/farming";
+import { AllObjectives, QuestTracker } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
 const emptyPlot: FarmPlotState = {
@@ -168,4 +170,30 @@ it("patches bulk harvest quantities by stack identity and recovers new collectio
   expect(getFarmBulkMutationUpdate(current, { ...result, inventoryChanges: undefined }, "harvest")).toBeUndefined();
   expect(getFarmBulkMutationUpdate({ ...current, collectionLog: { ...current.collectionLog, items: [] } }, result, "harvest")).toBeUndefined();
   expect(getFarmBulkMutationUpdate({ ...current, sellableCrops: [{ ...crop, quantity: 9 }], extractableCrops: [] }, result, "harvest")).toBeUndefined();
+});
+
+
+it("projects confirmed farm counters independently of feature inventory and plot metadata", () => {
+  expect(getFarmProfileUpdate({ farmingExperienceDelta: 5, farmCurrencyDelta: -10,
+    farmPlotsPurchasedDelta: 1, farmExtractorsOwnedDelta: 1 })).toEqual({
+    userPatch: {}, userDelta: { farmingExperience: 5, farmCurrency: -10, farmPlotsPurchased: 1, farmExtractorsOwned: 1 },
+  });
+  expect(getFarmProfileUpdate({})).toEqual({ userPatch: {}, userDelta: {} });
+});
+
+
+it("masks hidden quest targets without mutating the committed farming trackers", () => {
+  const source = { role: "USER" as const, sector: 1,
+    questData: [QuestTracker.parse({ id: "hidden", goals: [{ id: "target", sector: 2, longitude: 4, latitude: 5 }] })],
+    userQuests: [{ quest: { id: "hidden", content: {
+      objectives: [AllObjectives.parse({ id: "target", task: "move_to_location", sector: 2, longitude: 4, latitude: 5,
+        sectorType: "specific", locationType: "specific", hideLocation: true })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } } }],
+  };
+  const before = structuredClone(source);
+  const patch = getFarmProfileUpdate({ farmingExperienceDelta: 1 }, source);
+  expect(patch.userPatch.questData?.[0]?.goals[0]?.sector).toBeUndefined();
+  expect(patch.userPatch.questData?.[0]?.goals[0]?.longitude).toBeUndefined();
+  expect(source).toEqual(before);
 });

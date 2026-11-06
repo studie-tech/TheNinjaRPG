@@ -1,3 +1,5 @@
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import type { ActionReadiness } from "@/server/utils/actionReadiness";
 import { clampActionLogText } from "@/utils/actionLog";
 /**
  * Database access for kage defense; authorization and transaction scopes stay in callers.
@@ -137,14 +139,22 @@ export const findVillageForSetDefenseAi = (
 
 /** Build the `kageDefendedChallenges` update for `checkInDefense`, setting `checkedInAt`, using predicates on `id`. */
 export const updateKageDefendedChallengesForCheckInDefense = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "execute">,
   hall: { now: Date },
   input: { id: string },
+  readiness?: ActionReadiness,
 ) =>
-  client
-    .update(kageDefendedChallenges)
-    .set({ checkedInAt: hall.now })
-    .where(eq(kageDefendedChallenges.id, input.id));
+  readiness?.notice
+    ? client.execute(sql`
+    UPDATE ${kageDefendedChallenges}
+    INNER JOIN ${userData} ON ${userData.userId} = ${kageDefendedChallenges.userId}
+    SET ${actionReadinessSqlSet(readiness, [])} ${kageDefendedChallenges.checkedInAt} = ${hall.now}
+    WHERE ${kageDefendedChallenges.id} = ${input.id} AND ${readiness.where}
+  `)
+    : client
+        .update(kageDefendedChallenges)
+        .set({ checkedInAt: hall.now })
+        .where(eq(kageDefendedChallenges.id, input.id));
 
 /** Execute the database statement for `requestInstantDefense`. */
 export const executeResultForRequestInstantDefense = (

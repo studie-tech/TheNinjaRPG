@@ -35,6 +35,7 @@ import {
   updateUserItemForUpdateUserItemQuantityAtomically,
 } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { getNextUserSnapshotAt } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 
@@ -44,24 +45,27 @@ type ClaimUserSnapshotParams = {
   updatedAt: Date;
   where?: QueryCondition[];
   set?: Record<string, unknown>;
+  /** Recovery is committed atomically with the endpoint's existing account claim. */
+  readiness?: ActionReadinessWrite;
 };
 
-/** CAS on `user.updatedAt`: bumps `updatedAt` and merges optional `set` columns when still fresh. */
+/** CAS on `user.updatedAt`; endpoint-supplied recovery shares the same guarded write and final action fields take precedence. */
 export const claimUserSnapshot = async ({
   client,
   userId,
   updatedAt,
   where = [],
   set = {},
+  readiness,
 }: ClaimUserSnapshotParams) => {
   const claimedAt = getNextUserSnapshotAt(updatedAt);
   const result = await updateUserDataForClaimUserSnapshot(
     client,
     claimedAt,
-    set,
+    { ...readiness?.set, ...set },
     userId,
     updatedAt,
-    where,
+    [...where, readiness?.where],
   );
 
   return {

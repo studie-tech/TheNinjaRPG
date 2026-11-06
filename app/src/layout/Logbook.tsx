@@ -23,6 +23,8 @@ import { EventTimer, Objective, Reward } from "@/layout/Objective";
 import { QuestTeams } from "@/layout/QuestTeams";
 import { PendingRewardChoices, useOpenRewardChoice } from "@/layout/RewardChoice";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
   getActiveObjective,
@@ -438,7 +440,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
       hasQuestContentChanged(userQuest));
   const canProgress =
     !isPaused &&
-    (userData?.status === "AWAKE" ||
+    (canAttemptAwakeAction(userData) ||
       (isBetweenPyramidBattles(userData) &&
         getIsolatedPyramid(userData)?.questId === quest.id));
   const utils = api.useUtils();
@@ -732,7 +734,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         )}
         {!hideTitle && (
           <div className={cn(showScene ? "px-3 pt-3" : "")}>
-            <div className={"font-bold text-xl"}>
+            <div className={"text-xl font-bold"}>
               Current {capitalizeFirstLetter(quest.questType)}
             </div>
             <div className="font-bold text-sm">{quest.name}</div>
@@ -905,7 +907,10 @@ export const useCheckRewards = () => {
         // If there is a userQuest, show the rewards
         if (data.userQuest && data.rewards) {
           const { rewards, userQuest, resolved } = data;
-          const notifications = data.notifications ?? [];
+          const notifications = [
+            ...(data.notifications ?? []),
+            ...(data.actionNotice ? [data.actionNotice] : []),
+          ];
           const badges = data.badges ?? [];
           const quest = userQuest.quest;
           const showToast =
@@ -934,6 +939,8 @@ export const useCheckRewards = () => {
           if (resolved || showToast)
             showRewardToast(notifications, rewards, message, resolved, quest, badges);
         }
+        if (data.success && !(data.userQuest && data.rewards))
+          showActionReadinessToast(data);
         // Only the academy tutorial needs refreshed quest lists before its next highlight.
         const questRefresh = updateQuestRewards(data, context.quests, profileApplied);
         // Reconcile other views without holding reward feedback or the collection loader.

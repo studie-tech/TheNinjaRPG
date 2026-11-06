@@ -23,7 +23,7 @@ export function useFarmController() {
   const farmCache = useQueryCacheUpdate<RouterOutputs["farming"]["getFarmState"]>(
     getQueryKey(api.farming.getFarmState, undefined, "query"),
   );
-  const { timeDiff } = useRequiredUserData();
+  const { timeDiff, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [pendingPlotSlots, setPendingPlotSlots] = useState<Set<number>>(new Set());
   const pendingPlotSlotsRef = useRef<Set<number>>(new Set());
@@ -44,17 +44,28 @@ export function useFarmController() {
   const query = api.farming.getFarmState.useQuery(undefined, {
     refetchInterval: 30_000,
   });
-  const plantMutation = api.farming.plantSeed.useMutation();
-  const waterMutation = api.farming.waterPlot.useMutation();
-  const fertilizeMutation = api.farming.applyFertilizer.useMutation();
-  const harvestMutation = api.farming.harvestPlot.useMutation();
-  const plantAllMutation = api.farming.plantAllEmpty.useMutation();
-  const waterAllMutation = api.farming.waterAll.useMutation();
-  const fertilizeAllMutation = api.farming.fertilizeAll.useMutation();
-  const harvestAllMutation = api.farming.harvestAll.useMutation();
-  const buyMutation = api.farming.buyShopItem.useMutation();
-  const sellMutation = api.farming.sellCrop.useMutation();
-  const extractMutation = api.farming.extractSeeds.useMutation();
+  const mutationOptions = {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (
+      result: FarmMutationResponse,
+      _input: unknown,
+      revision: number | undefined,
+    ) => {
+      if (result.success || result.userRecovery || result.userDelta !== undefined)
+        await updateUser(result, { revision, refetch: false });
+    },
+  };
+  const plantMutation = api.farming.plantSeed.useMutation(mutationOptions);
+  const waterMutation = api.farming.waterPlot.useMutation(mutationOptions);
+  const fertilizeMutation = api.farming.applyFertilizer.useMutation(mutationOptions);
+  const harvestMutation = api.farming.harvestPlot.useMutation(mutationOptions);
+  const plantAllMutation = api.farming.plantAllEmpty.useMutation(mutationOptions);
+  const waterAllMutation = api.farming.waterAll.useMutation(mutationOptions);
+  const fertilizeAllMutation = api.farming.fertilizeAll.useMutation(mutationOptions);
+  const harvestAllMutation = api.farming.harvestAll.useMutation(mutationOptions);
+  const buyMutation = api.farming.buyShopItem.useMutation(mutationOptions);
+  const sellMutation = api.farming.sellCrop.useMutation(mutationOptions);
+  const extractMutation = api.farming.extractSeeds.useMutation(mutationOptions);
 
   useEffect(() => {
     const interval = window.setInterval(() => setClockNow(Date.now()), 5_000);
@@ -115,7 +126,11 @@ export function useFarmController() {
         const result = await request();
         showMutationToast(result);
         setAnnouncement(result.message);
-        if (!result.success) return;
+        if (!result.success) {
+          if (result.userRecovery || result.userDelta !== undefined)
+            await farmCache.updateCache(undefined, snapshot);
+          return;
+        }
         await farmCache.updateCache(
           (current) =>
             current
@@ -230,7 +245,11 @@ export function useFarmController() {
       try {
         const result = await request();
         showResult(result);
-        if (!result.success) return false;
+        if (!result.success) {
+          if (result.userRecovery || result.userDelta !== undefined)
+            await farmCache.updateCache(undefined, snapshot);
+          return false;
+        }
         await farmCache.updateCache(
           (current) =>
             current

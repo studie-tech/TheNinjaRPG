@@ -80,7 +80,9 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
     misc: { getAllGameAssetNames: { prefetch: prefetchAssets } },
   };
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({ data: profile }) as never);
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({
+    data: profile, prepareUserUpdate: () => 0, updateUser: async () => true,
+  }) as never);
   vi.spyOn(userContext, "useUserData").mockImplementation(() => ({ data: profile, timeDiff: 0 }) as never);
   let combatConfig = {
     useTabs: false, layoutOrder: ["battlefield"], showTimeline: false, showBattleLog: false, ...config,
@@ -498,6 +500,18 @@ it("preserves the selected action while settings controls handle battle keys", a
   fireEvent.keyDown(document, { key: "a" });
   expect(store.get(userContext.combatActionIdAtom)).toBeUndefined();
 });
+
+for (const [status, autoWakeUp, expected] of [["AWAKE", true, true], ["ASLEEP", true, true], ["HOSPITALIZED", true, true], ["ASLEEP", false, false], ["BATTLE", true, false], ["TRAVEL", true, false], ["QUEUED", true, false]] as const) {
+  it(`arena heal result ${status} auto=${autoWakeUp}`, async () => {
+    const battle = makeCompleteBattle({ id: `arena-heal-${status}`, battleType: "ARENA", usersState: [makeUser({ userId: "player" }), makeUser({ userId: "opponent", isAi: true, controllerId: "arena-opponent" })] });
+    const { view, changeProfile } = mount(battle.id, async () => ({ battle, result: { outcome: "Won", curHealth: 50, curStamina: 50, curChakra: 50 } }) as unknown as Response);
+    await view.findByText("Finished battle result");
+    changeProfile({ status, autoWakeUp, battleId: null } as never);
+    const button = view.container.querySelector<HTMLButtonElement>("#heal-return")!;
+    expect(button).toBeTruthy();
+    expect(button.disabled).toBe(!expected);
+  });
+}
 
 it("uses stun-adjusted AP for action feedback, deselection and keyboard selection", async () => {
   const battle = makeCompleteBattle({

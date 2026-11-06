@@ -4,7 +4,7 @@ import { and, eq, gt, isNotNull, lt, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
-import { getFinishGlobalMoveUserUpdate } from "@/deltas/travel";
+import { getFinishGlobalMoveUserUpdate, getRobPlayerUserUpdate } from "@/deltas/travel";
 import {
   ANBU_STEALTH_BASE_CHANCE_PERC,
   ANBU_STEALTH_CHANGE_PER_LEVEL,
@@ -66,6 +66,7 @@ import {
   findLandingNear,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   fetchAllGameSettings,
   fetchUser,
@@ -76,7 +77,6 @@ import { fetchIsolatedPyramid } from "@/queries/quests";
 import {
   fetchSectorWindowData,
   findUserDataForGetSectorData,
-  findUserDataForMoveInSector,
   findUserForGlobalTravelFinish,
   findVillageForMoveInSector,
   insertActionLogForRobPlayer,
@@ -107,6 +107,10 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isTransientDatabaseError } from "@/server/dbRetry";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
@@ -148,26 +152,30 @@ export const travelRouter = createTRPCRouter({
         latitude: sectorLatitudeSchema,
         sector: sectorIdSchema,
         userId: z.string(),
+        originSocketId: z.string().max(128).optional(),
       }),
     )
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         battleId: z.string().optional(),
         money: z.number().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       // Query
-      const [user, target, sectorData, pvpAverage] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      let [user, target, sectorData, pvpAverage, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.userId),
         findVillageBySector(ctx.drizzle, input.sector),
         fetchPvpExperienceAverage(ctx.drizzle),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
 
       // Guard
       if (!user.isOutlaw) return errorResponse("Only outlaws can rob other players");
-      if (user.status !== "AWAKE") return errorResponse("You are not awake");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (user.isBanned) return errorResponse("You are banned");
       if (target.isBanned) return errorResponse("Target is banned");
       if (target.status !== "AWAKE")
@@ -260,13 +268,14 @@ export const travelRouter = createTRPCRouter({
           return errorResponse("Target can no longer be robbed");
         }
 
-        // Victim debit succeeded — now credit the robber and clan in parallel
-        const [robberUpdate] = await Promise.all([
-          updateUserDataForRobPlayer2(ctx.drizzle, stolenAmount, prestigeGain, ctx),
-          ...(user.clanId
-            ? [updateClanForRobPlayer(ctx.drizzle, { clanId: user.clanId })]
-            : []),
-        ]);
+        // Recovery and credit share the guarded account write; clan rewards follow only a win.
+        const robberUpdate = await updateUserDataForRobPlayer2(
+          ctx.drizzle,
+          stolenAmount,
+          prestigeGain,
+          ctx,
+          readiness,
+        );
 
         if (robberUpdate.rowsAffected === 0) {
           // Return the stolen ryo since the robber could not be credited
@@ -274,8 +283,13 @@ export const travelRouter = createTRPCRouter({
           return errorResponse("Failed to update robber's data");
         }
 
-        // Log the action
-        await insertActionLogForRobPlayer(ctx.drizzle, user, stolenAmount);
+        // Independent post-credit writes retain the existing mutation phase.
+        await Promise.all([
+          insertActionLogForRobPlayer(ctx.drizzle, user, stolenAmount),
+          ...(user.clanId
+            ? [updateClanForRobPlayer(ctx.drizzle, { clanId: user.clanId })]
+            : []),
+        ]);
 
         // Notify the target after the response; the robbery is already committed
         after(() =>
@@ -285,11 +299,20 @@ export const travelRouter = createTRPCRouter({
           }),
         );
 
-        return {
-          success: true,
-          message: `Successfully robbed ${stolenAmount} money from ${target.username}!`,
-          money: user.money + stolenAmount,
-        };
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: `Successfully robbed ${stolenAmount} money from ${target.username}!`,
+            money: user.money + stolenAmount,
+            ...getRobPlayerUserUpdate({
+              user: readiness.initial,
+              stolenAmount,
+              prestigeGain,
+            }),
+          },
+          readiness,
+          ctx.drizzle,
+        );
       } else {
         // Failed rob attempt - initiate combat
         const battle = await initiateBattle(
@@ -298,6 +321,9 @@ export const travelRouter = createTRPCRouter({
             latitude: input.latitude,
             sector: input.sector,
             userIds: [ctx.userId],
+            actionReadiness: readiness,
+            actionUserId: ctx.userId,
+            originSocketId: input.originSocketId,
             targetIds: [input.userId],
             client: ctx.drizzle,
             biome: "default",
@@ -306,16 +332,17 @@ export const travelRouter = createTRPCRouter({
         );
 
         if (battle.success) {
-          return {
-            success: false,
-            message: "Rob attempt failed! Prepare for combat!",
-            battleId: battle.battleId,
-          };
+          return actionReadinessResponse(
+            {
+              ...battle,
+              success: false,
+              message: "Rob attempt failed! Prepare for combat!",
+              battleId: battle.battleId,
+            },
+            { notice: battle.actionNotice },
+          );
         } else {
-          return {
-            success: false,
-            message: battle.message,
-          };
+          return battle;
         }
       }
     }),
@@ -547,10 +574,11 @@ export const travelRouter = createTRPCRouter({
       }
       // Fetch the user, destination and camp admission in parallel. Global travel can begin
       // from any local tile; the target map only determines a safe landing.
-      let [user, targetSectorMap, warCampEntry] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      let [user, targetSectorMap, warCampEntry, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchPublishedSectorMap(ctx.drizzle, input.sector).catch(() => null),
         fetchWarCampEntry(ctx.drizzle, ctx.userId, input.sector),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
       if (!targetSectorMap) {
         return errorResponse("The destination sector has no published map yet");
@@ -563,9 +591,9 @@ export const travelRouter = createTRPCRouter({
       if (user.sector === input.sector) {
         return errorResponse("You are already in that sector");
       }
-      if (user.status !== "AWAKE") {
-        return { success: false, message: `Status is: ${user.status.toLowerCase()}` };
-      }
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (!canEnterWarCamp(warCampEntry, user, input.sector))
         return errorResponse(
           "This sector is reserved for participants in an active war camp.",
@@ -614,6 +642,7 @@ export const travelRouter = createTRPCRouter({
         ctx,
         departureSector,
         user,
+        readiness,
       );
       if (result.rowsAffected === 1) {
         user.sector = input.sector;
@@ -630,25 +659,29 @@ export const travelRouter = createTRPCRouter({
             after(() => updateUserOnMap(pusher, departureSector, user));
           }
         }
-        return {
-          success: true,
-          message: "OK",
-          data: {
-            sector: input.sector,
-            longitude: destination.x,
-            latitude: destination.y,
-            travelFinishAt: endTime,
-            status: "TRAVEL",
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: "OK",
+            data: {
+              sector: input.sector,
+              longitude: destination.x,
+              latitude: destination.y,
+              travelFinishAt: endTime,
+              status: "TRAVEL" as const,
+            },
           },
-        };
+          readiness,
+          ctx.drizzle,
+        );
       } else {
-        user = await fetchUser(ctx.drizzle, ctx.userId);
-        if (user.status !== "AWAKE") {
+        const latest = await fetchUser(ctx.drizzle, ctx.userId);
+        if (latest.status !== "AWAKE") {
           return {
             success: false,
-            message: `Status is: ${user.status.toLowerCase()}`,
+            message: `Status is: ${latest.status.toLowerCase()}`,
           };
-        } else if (user.sector !== departureSector) {
+        } else if (latest.sector !== departureSector) {
           return {
             success: false,
             message: "Your location changed; please try again",
@@ -883,20 +916,23 @@ export const travelRouter = createTRPCRouter({
       // Larger maps can keep a predicted crossing local. Failed admission
       // prefetches are retried below only when the move actually crosses.
       const prefetchedCampSector = sectorsToPrefetch[1];
-      const [maps, originalUser, warCampEntry, isolated] = await Promise.all([
+      const [maps, originalUser, warCampEntry, isolated, settings] = await Promise.all([
         fetchPublishedSectorMaps(ctx.drizzle, sectorsToPrefetch).catch(() => null),
-        findUserDataForMoveInSector(ctx.drizzle, userId),
+        fetchActionUser(ctx.drizzle, userId),
         prefetchedCampSector === undefined
           ? undefined
           : fetchWarCampEntry(ctx.drizzle, userId, prefetchedCampSector).catch(
               () => undefined,
             ),
         fetchIsolatedPyramid(ctx.drizzle, userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
       if (isolated) return errorResponse(ISOLATED_PYRAMID_MESSAGE);
       if (!originalUser) return errorResponse("User not found");
       if (!maps) return errorResponse("Connection hiccup, please try moving again");
-      let moveUser = originalUser;
+      let readiness = prepareActionReadiness(originalUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      let moveUser = readiness.user;
       const sectorMap = maps.get(sector);
       if (!sectorMap) return errorResponse("This sector has no published map yet");
       // If a republish blocked the tile the player is standing on, snap them to
@@ -941,11 +977,16 @@ export const travelRouter = createTRPCRouter({
         ]);
         if (needsSettlement) {
           if (!settled) return errorResponse("User not found");
-          moveUser = {
-            ...originalUser,
-            ...settled,
-            anbuSquad: originalUser.anbuSquad,
-          };
+          readiness = prepareActionReadiness(
+            {
+              ...originalUser,
+              ...settled,
+              anbuSquad: originalUser.anbuSquad,
+            },
+            settings,
+          );
+          if (readiness.error) return errorResponse(readiness.error);
+          moveUser = readiness.user;
         }
         // Settlement can change village membership, so use the settled user for admission.
         if (!canEnterWarCamp(campEntry, moveUser, targetSector))
@@ -1019,6 +1060,7 @@ export const travelRouter = createTRPCRouter({
           moveUser,
           input,
           villageId,
+          readiness,
         ),
         isVillage ? findVillageForMoveInSector(ctx.drizzle, targetSector) : undefined,
       ]).catch((error: unknown) => {
@@ -1052,10 +1094,14 @@ export const travelRouter = createTRPCRouter({
                   (user?.anbuSquad?.stealthLevel ?? 0) * ANBU_STEALTH_CHANGE_PER_LEVEL
                 : 0;
               if (Math.random() < anbuChance / 100) {
-                return {
-                  success: true,
-                  message: "ANBU stealth prevented guard attack",
-                };
+                return actionReadinessResponse(
+                  {
+                    success: true,
+                    message: "ANBU stealth prevented guard attack",
+                  },
+                  readiness,
+                  ctx.drizzle,
+                );
               }
               // Attack village protector
               const battle = await initiateBattle(
@@ -1073,7 +1119,16 @@ export const travelRouter = createTRPCRouter({
                 "VILLAGE_PROTECTOR",
               );
               if (battle.success) {
-                return { success: true, message: "Attacked by village protector" };
+                return actionReadinessResponse(
+                  {
+                    ...battle,
+                    success: true,
+                    message: "Attacked by village protector",
+                  },
+                  readiness,
+                  ctx.drizzle,
+                  { status: "BATTLE", battleId: battle.battleId },
+                );
               }
             }
           }
@@ -1106,7 +1161,11 @@ export const travelRouter = createTRPCRouter({
             after(() => updateUserOnMap(pusher, sector, broadcast));
           }
         }
-        return { success: true, message: "OK", data: output };
+        return actionReadinessResponse(
+          { success: true, message: "OK", data: output },
+          readiness,
+          ctx.drizzle,
+        );
       } else {
         // The read above raced the update, so it can predate whatever made the guard
         // miss and would then explain the failure wrongly - or not at all, leaving the

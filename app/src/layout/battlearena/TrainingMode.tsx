@@ -39,7 +39,12 @@ export function TrainingMode({
   statDistribution,
   setStatDistribution,
 }: TrainingModeProps) {
-  const { data: userData, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const router = useRouter();
   const { toggleSleep, isTogglingSleep } = useSleepToggle();
   const [autoCombat] = useAutoCombatSetting();
@@ -47,16 +52,14 @@ export function TrainingMode({
 
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         if (data.success && data.battleId) {
-          void updateUser({
-            status: "BATTLE",
-            battleId: data.battleId,
-            updatedAt: new Date(),
-          });
+          await updateUser(data, { revision, refetch: false });
           pushToCombat(router, data.battleId);
           showMutationToast({ ...data, message: "Entering the Training" });
         } else {
+          if (data.userRecovery) await updateUser(data, { revision, refetch: false });
           attackInFlightRef.current = false;
           showMutationToast(data);
         }
@@ -85,12 +88,17 @@ export function TrainingMode({
     if (attackInFlightRef.current || isAttacking) return;
     attackInFlightRef.current = true;
     setStatDistribution(data);
-    attack({ aiId: TRAINING_DUMMY_ID, stats: data, autoCombat });
+    attack({
+      aiId: TRAINING_DUMMY_ID,
+      stats: data,
+      autoCombat,
+      originSocketId: pusher?.connection.socket_id,
+    });
   };
 
   if (!userData) return <Loader explanation="Loading userdata" />;
 
-  const isAsleep = userData.status === "ASLEEP";
+  const isAsleep = userData.status === "ASLEEP" && userData.autoWakeUp === false;
   const statNames = (Object.keys(maxValues) as (keyof typeof maxValues)[]).filter(
     // The dummy never attacks, so it has no offence to set.
     (stat) => stat !== "offence",

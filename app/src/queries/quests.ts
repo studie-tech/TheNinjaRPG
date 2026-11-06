@@ -1,3 +1,5 @@
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 /**
  * Database access for quests; authorization and transaction scopes stay in callers.
  */
@@ -1466,10 +1468,12 @@ export const updateUserDataForClaimDailyQuestSlot = (
   questType: string,
   user: { userId: string },
   quota: { limit: number },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       [field]: sql`${counter} + 1`,
       ...(questType === "war"
         ? {
@@ -1479,7 +1483,9 @@ export const updateUserDataForClaimDailyQuestSlot = (
           }
         : {}),
     })
-    .where(and(eq(userData.userId, user.userId), lt(counter, quota.limit)));
+    .where(
+      and(eq(userData.userId, user.userId), lt(counter, quota.limit), readiness?.where),
+    );
 
 /**
  * Build the `overworldAiPlacementQuest` lookup for `assignQuestToUser`, selecting only
@@ -1634,10 +1640,12 @@ export const updateUserDataForUpsertQuestEntry = (
   entry: { isolated: false | true },
   professionContract: false | true,
   quest: { id: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       questData: filterQuestTrackersForDbPersist(trackers, user),
       ...recoveryUpdate,
       ...(entry.isolated ? { status: "BATTLE" as const } : {}),
@@ -1645,6 +1653,7 @@ export const updateUserDataForUpsertQuestEntry = (
     .where(
       and(
         eq(userData.userId, user.userId),
+        readiness?.where,
         professionContract
           ? sql`COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${userData.petTask}, '$.questId')), '') <> ${quest.id}`
           : undefined,
@@ -1745,11 +1754,12 @@ export const executeResultForCommitQuestObjectiveRewards = (
   completionConditions: undefined | SQL<unknown>,
 
   where: import("@/utils/typeutils").QueryCondition[],
+  readiness?: ActionReadinessWrite,
 ) =>
   client.execute(sql`
             UPDATE ${userData}
             INNER JOIN ${questHistory} ON ${questHistory.userId} = ${userData.userId}
-            SET ${userData.updatedAt} = ${completedAt},
+            SET ${readiness ? actionReadinessSqlSet(readiness, []) : sql``} ${userData.updatedAt} = ${completedAt},
                 ${userData.questData} = CAST(${JSON.stringify(set?.questData ?? [])} AS JSON),
                 ${petTask ? sql`${userData.petTask} = NULL,` : sql``}
                 ${questHistory.completed} = 1,
@@ -1766,9 +1776,9 @@ export const executeResultForCommitQuestObjectiveRewards = (
               AND ${userData.updatedAt} = ${user.updatedAt}
               AND ${questHistory.id} = ${managedRun.id}
               AND ${completionConditions}
-              ${petTask ? sql`AND ${petTaskReceiptCondition(petTask)} AND ${questHistory.startedAt} = ${new Date(petTask.startedAt)} AND ${questHistory.questVersion} = ${new Date(petTask.questVersion)} AND ${petTaskOwnerReturnCondition(userId, petTask)}` : sql``}
+              ${petTask ? sql`AND ${petTaskReceiptCondition(petTask)} AND ${questHistory.startedAt} = ${new Date(petTask.startedAt)} AND ${questHistory.questVersion} = ${new Date(petTask.questVersion)} AND ${petTaskOwnerReturnCondition(userId, petTask, readiness?.where)}` : sql``}
               ${cps ? sql`AND ${questHistory.periodCompletes} = ${managedRun.periodCompletes ?? 0} AND ${questHistory.periodStartAt} <=> ${managedRun.periodStartAt ?? null}` : sql``}
-              AND ${and(...where.filter(Boolean)) ?? sql`TRUE`}
+              AND ${and(...where.filter(Boolean), readiness?.where) ?? sql`TRUE`}
           `);
 
 /** Build the `questHistory` update for `commitQuestObjectiveRewards`, using the configured predicates. */
@@ -2288,9 +2298,13 @@ const sageQuestFilters = (
  * Guard return and terminal history in the same account claim; occupation may change
  * while away. As at dispatch, accepted current-rank art remains usable during redraws.
  */
-const petTaskOwnerReturnCondition = (userId: string, task: PetTask) =>
+const petTaskOwnerReturnCondition = (
+  userId: string,
+  task: PetTask,
+  statusGuard?: SQL,
+) =>
   sql`${and(
-    eq(userData.status, "AWAKE"),
+    statusGuard ?? eq(userData.status, "AWAKE"),
     isNull(userData.battleId),
     eq(userData.isBanned, false),
     eq(userData.isAi, false),

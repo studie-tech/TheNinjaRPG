@@ -1,15 +1,20 @@
 import { randomInt as secureRandomInt } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
-import { eq, inArray, ne, notInArray, or, sql } from "drizzle-orm";
+import { eq, inArray, ne, notInArray, or, SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
 import {
+  getActionRecoveryActivity,
+  getActionRecoveryUpdate,
+} from "@/deltas/actionReadiness";
+import {
   buildCombatStateUpdate,
   type CombatStateUpdate,
   captureCombatCacheSnapshot,
   captureCombatStateUpdate,
+  getArenaHealUserUpdate,
   getAutoCombatPreferencePatch,
   getCombatAdmissionUserUpdate,
 } from "@/deltas/combat";
@@ -55,12 +60,14 @@ import {
   type Jutsu,
   type RankedLoadout,
   type TerritoryWar,
+  type UserData,
   type UserQuest,
   userData,
   type Village,
   type VillageAlliance,
   type WarCamp,
 } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getReskinnedBloodline } from "@/libs/bloodline";
 import {
@@ -180,6 +187,7 @@ import {
 } from "@/libs/quest";
 import { projectPartyTracker, questPartyHelperAttemptId } from "@/libs/questParty";
 import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
+import { hasTrainingInProgress } from "@/libs/queue";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
@@ -199,6 +207,7 @@ import {
 } from "@/libs/train";
 import { getBiomeFromGlobalTile } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   deleteBattleById,
   deleteBattleHistoryByBattleId,
@@ -247,7 +256,7 @@ import {
   fetchJutsuLoadouts,
   listJutsuByIds,
 } from "@/queries/jutsu";
-import { fetchAchievementCatalogue, fetchUser } from "@/queries/profile";
+import { fetchAchievementCatalogue, fetchAllGameSettings } from "@/queries/profile";
 import { fetchQuestEntryInventory, listVisibleRaidQuests } from "@/queries/quests";
 import { findSectorWithVillage } from "@/queries/shrine";
 import { fetchUserSkills } from "@/queries/skillTree";
@@ -260,7 +269,6 @@ import {
 } from "@/server/api/routers/item";
 import { fetchUserJutsus, selectJutsuLoadout } from "@/server/api/routers/jutsu";
 import {
-  baseServerResponse,
   createTRPCRouter,
   deferredRatelimitMiddleware,
   errorResponse,
@@ -269,6 +277,11 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  type ActionReadiness,
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { commitBattleAdmission } from "@/server/utils/battleAdmission";
 import { settleCookingExperience } from "@/server/utils/cooking";
 import {
@@ -308,6 +321,7 @@ import {
   sectorLongitudeSchema,
 } from "@/validators/travel";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUpdatedUser, type UserWithRelations } from "./profile";
 
 // Pusher instance
@@ -923,22 +937,35 @@ export const combatRouter = createTRPCRouter({
     }),
   battleArenaHeal: protectedProcedure
     .meta({ mcp: { description: "Heal in battle arena for ryo" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [initial, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      const readiness = prepareActionReadiness(initial, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       // Guard
       if (user.money < BATTLE_ARENA_HEAL_COST)
         return errorResponse("You don't have enough money");
       if (user.isBanned) return errorResponse("You are banned");
-      if (user.status !== "AWAKE")
-        return errorResponse("You must be awake to heal in the Battle Arena");
       // Mutate with guard
-      const result = await updateUserDataForBattleArenaHeal(ctx.drizzle, user, ctx);
+      const result = await updateUserDataForBattleArenaHeal(
+        ctx.drizzle,
+        user,
+        ctx,
+        readiness,
+      );
       if (result.rowsAffected === 0) {
         return errorResponse("Error trying to heal and continue. Try again.");
       } else {
-        return { success: true, message: "You've healed" };
+        return actionReadinessResponse(
+          { success: true, message: "You've healed", ...getArenaHealUserUpdate(user) },
+          readiness,
+          ctx.drizzle,
+        );
       }
     }),
   startArenaBattle: protectedProcedure
@@ -951,12 +978,13 @@ export const combatRouter = createTRPCRouter({
         aiId: z.string(),
         stats: statSchema.nullish(),
         autoCombat: z.boolean().nullish(),
+        originSocketId: z.string().max(128).optional(),
       }),
     )
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information
-      const [{ user }, selectedAI] = await Promise.all([
+      const [{ user, requiresProgressionRefresh }, selectedAI] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -984,6 +1012,9 @@ export const combatRouter = createTRPCRouter({
             userIds: [user.userId],
             targetIds: [selectedAI.userId],
             client: ctx.drizzle,
+            actionUserId: ctx.userId,
+            requiresUserRefresh: requiresProgressionRefresh,
+            originSocketId: input.originSocketId,
             targetStatDistribution: input.stats ?? undefined,
             biome: "default",
             // Callers that do not state a preference (e.g. MCP) fall back to
@@ -1012,9 +1043,10 @@ export const combatRouter = createTRPCRouter({
         sector: sectorIdSchema,
         userId: z.string(),
         asset: z.enum(COMBAT_BIOMES).optional(),
+        originSocketId: z.string().max(128).optional(),
       }),
     )
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       return await initiateBattle(
         {
@@ -1024,6 +1056,8 @@ export const combatRouter = createTRPCRouter({
           userIds: [ctx.userId],
           targetIds: [input.userId],
           client: ctx.drizzle,
+          actionUserId: ctx.userId,
+          originSocketId: input.originSocketId,
           biome: input.asset || "default",
         },
         "COMBAT",
@@ -1602,11 +1636,22 @@ export const combatRouter = createTRPCRouter({
   startShrineBattle: protectedProcedure
     .meta({ mcp: { description: "Start battle at war shrine" } })
     .use(ratelimitMiddleware)
-    .input(z.object({ sector: sectorIdSchema }))
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .input(
+      z.object({
+        sector: sectorIdSchema,
+        originSocketId: z.string().max(128).optional(),
+      }),
+    )
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information (use fetchActiveWars to get village relations with sectors)
-      const [{ user }, activeWars, sectorData, shrineAis, isHome] = await Promise.all([
+      const [
+        { user, requiresProgressionRefresh },
+        activeWars,
+        sectorData,
+        shrineAis,
+        isHome,
+      ] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -1670,6 +1715,9 @@ export const combatRouter = createTRPCRouter({
           targetIds: targetIds,
           forceDefenderVillageId: shrineOwnerVillageId,
           client: ctx.drizzle,
+          actionUserId: ctx.userId,
+          requiresUserRefresh: requiresProgressionRefresh,
+          originSocketId: input.originSocketId,
           biome: "default",
         },
         "SHRINE_WAR",
@@ -1778,6 +1826,14 @@ export const initiateBattle = async (
     client: DrizzleClient;
     /** Session actor whose bounded admission update may be returned to the caller. */
     cacheUserId?: string;
+    /** Explicit actor eligible for recovery, prepared from the existing participant preload. */
+    actionUserId?: string;
+    /** The initiating tab reconciles its mutation response; other tabs still receive admission. */
+    originSocketId?: string;
+    /** A caller plan opts this actor into recovery; admission revalidates the fresh snapshot. */
+    actionReadiness?: ActionReadiness;
+    /** Prior hydration can settle effects outside the bounded battle admission projection. */
+    requiresUserRefresh?: boolean;
     /** Shared launch contract; each activity keeps its own progress and settlement policy. */
     coop?: CoopEncounter;
     /** Current rules, guarded session/allowance versions and rewards preloaded for settlement. */
@@ -1974,7 +2030,10 @@ export const initiateBattle = async (
   );
   // Settlement can change resources and receipts outside the combat cache projection,
   // including partial writes before an optional settlement failure.
-  let requiresUserRefresh = queueOwners.length > 0;
+  let requiresUserRefresh =
+    queueOwners.length > 0 ||
+    !!info.requiresUserRefresh ||
+    !!info.actionReadiness?.userRecovery?.requiresUserRefresh;
   if (queueOwners.length > 0) {
     try {
       await settleDueTimedQueues(client, queueOwners);
@@ -2052,8 +2111,7 @@ export const initiateBattle = async (
           (pet) => pet.id === selected.id && pet.userId === owner.userId,
         );
         return (
-          !pet ||
-          !pet.species ||
+          !pet?.species ||
           pet.generationStatus !== "READY" ||
           owner.petTask?.petId === pet.id ||
           !canUsePet(pet, owner)
@@ -2114,13 +2172,19 @@ export const initiateBattle = async (
   }
 
   const cacheActor = fetchedUsers.find(
-    (user) => user.userId === info.cacheUserId && !user.isAi && !user.isSummon,
+    (user) =>
+      user.userId ===
+        (info.cacheUserId ??
+          info.actionUserId ??
+          info.actionReadiness?.initial.userId) &&
+      !user.isAi &&
+      !user.isSummon,
   );
 
-  const profileCacheSnapshots = Object.fromEntries(
+  const participantsWithTraining = new Set(
     fetchedUsers
-      .filter((user) => !user.isAi && !user.isSummon)
-      .map((user) => [user.userId, captureCombatCacheSnapshot(user)]),
+      .filter((user) => !user.isAi && !user.isSummon && hasTrainingInProgress(user))
+      .map((user) => user.userId),
   );
 
   // Hunting settlement writes the battle's item quantities and durability back.
@@ -2195,6 +2259,21 @@ export const initiateBattle = async (
     }
   }
 
+  // Recovery is explicit to the requesting actor; opponents and scheduled participants retain strict status checks.
+  const actionActorId = info.actionUserId ?? info.actionReadiness?.initial.userId;
+  const actionActor =
+    actionActorId && [...userIds, ...targetIds].includes(actionActorId)
+      ? fetchedUsers.find((user) => user.userId === actionActorId && !user.isAi)
+      : undefined;
+  const actionReadiness =
+    actionActor && ["AWAKE", "ASLEEP", "HOSPITALIZED"].includes(actionActor.status)
+      ? prepareActionReadiness(
+          { ...actionActor, maxEnergy: calcMaxEnergy(actionActor) },
+          settings,
+        )
+      : undefined;
+  if (actionReadiness?.error) return errorResponse(actionReadiness.error);
+
   // Capture real awake recovery before combat normalizes stats or changes loadouts.
   const energyRegeneration = Object.fromEntries(
     fetchedUsers.map((user) => [
@@ -2262,7 +2341,7 @@ export const initiateBattle = async (
       mastery?.completed.reduce((sum, entry) => sum + entry.minutes, 0) ?? 0;
     if (energy) {
       for (const stat of CombatStatNames) user[stat] += energy.gains[stat] ?? 0;
-      user.experience += amount;
+      user.experience = Math.round(user.experience + amount);
       user.curEnergy = energy.curEnergy;
       user.energyQueueHead = energy.head;
     }
@@ -2298,6 +2377,55 @@ export const initiateBattle = async (
       },
     ];
   });
+
+  if (actionActor && actionReadiness?.notice) {
+    // Queue settlement owns spent Energy; recovery must not refund training completed in this admission.
+    const queued = queuedTraining.find(
+      (entry) => entry.user.userId === actionActor.userId,
+    );
+    if (queued?.energy) actionReadiness.set.curEnergy = queued.energy.curEnergy;
+    if (queued && actionReadiness.initial.status === "HOSPITALIZED") {
+      // Hospital recovery preserves the queue gains committed by the participant claim.
+      if (queued.energy || info.tournamentGame) {
+        for (const pool of PoolTypes) {
+          const { cur, max } = getPoolKeys(pool);
+          actionActor[cur] = Math.round(
+            Math.min(queued.original[cur] + queued.regen, queued.original[max]),
+          );
+        }
+      }
+      Object.assign(actionActor, actionReadiness.set);
+      actionActor.maxEnergy = calcMaxEnergy(actionActor);
+      actionReadiness.set.maxEnergy = actionActor.maxEnergy;
+      actionReadiness.user = { ...actionActor };
+      actionReadiness.userRecovery = getActionRecoveryUpdate(
+        actionReadiness.initial,
+        actionReadiness.user,
+        [
+          ...Object.keys(actionReadiness.set),
+          ...Object.keys(queued.mastery?.update ?? {}),
+          ...(queued.amount > 0 ? ["petExperience"] : []),
+        ] as (keyof UserData)[],
+        settings,
+        actionActor.regenAt,
+      );
+    } else {
+      Object.assign(actionActor, actionReadiness.user);
+    }
+  }
+
+  // Settlement starts from committed recovery before combat normalizes stats or loadouts.
+  const profileCacheSnapshots = Object.fromEntries(
+    fetchedUsers
+      .filter((user) => !user.isAi && !user.isSummon)
+      .map((user) => [
+        user.userId,
+        {
+          ...captureCombatCacheSnapshot(user),
+          hadTrainingQueue: participantsWithTraining.has(user.userId),
+        },
+      ]),
+  );
 
   // Completed training can unlock worn gear; capture yield before combat mutates its sources.
   if (info.hunting) {
@@ -2637,7 +2765,13 @@ export const initiateBattle = async (
                 getIsolatedPyramid(user)?.id === info.questAttempt.id &&
                 info.questBattleSource?.questId === info.questAttempt.questId);
       if (!isOk) {
-        return { success: false, message: `User ${user.username} is not awake` };
+        return {
+          success: false,
+          message: actionStatusMessage(
+            user.status,
+            userIds.includes(user.userId) ? "You" : user.username,
+          ),
+        };
       }
     }
 
@@ -3250,6 +3384,18 @@ export const initiateBattle = async (
     }
   }
 
+  if (actionReadiness?.notice && actionActor) {
+    // The existing participant claim commits recovery together with BATTLE; no standalone wake can overwrite it.
+    for (const [key, value] of Object.entries(actionReadiness.set)) {
+      if (key === "status") continue;
+      const column = userData[key as keyof typeof userData.$inferSelect];
+      const fallback = queueUpdate[key] ?? column;
+      queueUpdate[key] =
+        sql`CASE WHEN ${userData.userId} = ${actionActor.userId} THEN ${value instanceof SQL ? value : sql.param(value, column)} ELSE ${fallback} END`;
+    }
+    queueUpdate.updatedAt = sql`CASE WHEN ${userData.userId} = ${actionActor.userId} THEN ${nextSnapshotSql(userData.updatedAt)} ELSE ${queueUpdate.updatedAt ?? userData.updatedAt} END`;
+  }
+
   // Capture injectable jutsu availability for the controller's action prediction.
   for (const user of usersState) {
     user.skillLockedJutsuIds =
@@ -3337,7 +3483,7 @@ export const initiateBattle = async (
         client,
         queueUpdate,
         battleId,
-        info,
+        { ...info, actionReadiness },
         battleType,
         userIds,
         stealthBreakUserIds,
@@ -3527,15 +3673,68 @@ export const initiateBattle = async (
 
   // Undo only this battle's claims and rows, including successful siblings of a failed write.
   if (result.failed || result.claimedUsers?.rowsAffected !== expectedRows) {
-    await Promise.all([
-      updateUserDataForInitiateBattle(client, info, battleType, battleId),
+    const recoveryActorId = actionReadiness?.userRecovery?.userId;
+    // A separate actor receipt proves recovery committed and compensation still owns its activity.
+    const [actorCompensation] = await Promise.all([
+      updateUserDataForInitiateBattle(
+        client,
+        info,
+        battleType,
+        battleId,
+        recoveryActorId ? eq(userData.userId, recoveryActorId) : undefined,
+      ),
+      recoveryActorId
+        ? updateUserDataForInitiateBattle(
+            client,
+            info,
+            battleType,
+            battleId,
+            ne(userData.userId, recoveryActorId),
+          )
+        : undefined,
       deleteBattleById(client, battleId),
       deleteBattleHistoryByBattleId(client, battleId),
     ]);
     if (result.failed) throw result.failed.reason;
-    return { success: false, message: "Attack failed, did the target move?" };
+    const failure = { success: false, message: "Attack failed, did the target move?" };
+    if (!recoveryActorId || !actionReadiness) return failure;
+    if (actorCompensation.rowsAffected !== 1) {
+      // Neither an aggregate claim nor a lost compensation guard proves the actor recovered.
+      return {
+        ...failure,
+        userRecovery: { userId: recoveryActorId, requiresUserRefresh: true },
+      };
+    }
+    const isolatedActor =
+      info.questAttempt?.isolated && info.questAttempt.userId === recoveryActorId;
+    const activity =
+      !isolatedActor &&
+      (battleType === "RANKED_PVP" ||
+        (battleType === "TERRITORY_WAR" && info.clanBattle))
+        ? null
+        : getActionRecoveryActivity(actionReadiness.user, {
+            status: isolatedActor ? "BATTLE" : "AWAKE",
+            battleId: null,
+          });
+    return actionReadinessResponse(
+      failure,
+      {
+        ...actionReadiness,
+        // Participant claims publish training history and can settle fields beyond recovery.
+        trainingLogs: [],
+        userRecovery: { userId: recoveryActorId, requiresUserRefresh: true },
+      },
+      client,
+      activity,
+    );
   }
 
+  if (actionReadiness?.userRecovery) {
+    actionReadiness.userRecovery.activity = getActionRecoveryActivity(
+      actionReadiness.user,
+      { status: "BATTLE", battleId },
+    );
+  }
   try {
     // Push websockets message to target
     notifyBattleDefenders(client, {
@@ -3545,7 +3744,6 @@ export const initiateBattle = async (
       users,
     });
     const pusher = getServerPusher();
-
     // Keep human fighters on the sector map as combat markers so nearby players
     // can see who is fighting. AI templates are not sector-map entities and must
     // not be broadcast. Auto-battles stay off this broadcast.
@@ -3553,7 +3751,16 @@ export const initiateBattle = async (
       await Promise.all(
         users.map(async (user) => {
           await Promise.all([
-            pusher.trigger(user.userId, "event", { type: "battle", battleId }),
+            pusher.trigger(user.userId, "event", {
+              type: "battle",
+              battleId,
+              ...(user.userId === actionActorId && info.originSocketId
+                ? { originSocketId: info.originSocketId }
+                : {}),
+              ...(user.userId === actionActorId && actionReadiness?.userRecovery
+                ? { userRecovery: superjson.serialize(actionReadiness.userRecovery) }
+                : {}),
+            }),
             ...(!user.isAi
               ? [
                   updateUserOnMap(pusher, user.sector, {
@@ -3586,14 +3793,26 @@ export const initiateBattle = async (
     battleId,
     stealthBreakUserIds,
     isTournament: !!info.tournamentGame,
+    hasRecoveryProjection: !!actionReadiness?.userRecovery?.userPatch,
+    recoveredEnergy:
+      typeof actionReadiness?.set.curEnergy === "number"
+        ? actionReadiness.set.curEnergy
+        : undefined,
+    isAttacker: userIds.includes(cacheActor?.userId ?? ""),
   });
-  return {
-    success: true,
-    message: "You have attacked",
-    battleId,
-    requiresUserRefresh,
-    ...userUpdate,
-  };
+  return actionReadinessResponse(
+    {
+      success: true,
+      message: "You have attacked",
+      battleId,
+      requiresUserRefresh,
+      ...userUpdate,
+    },
+    // Participant settlement publishes training history; recovery only ends the hospital activity here.
+    actionReadiness ? { ...actionReadiness, trainingLogs: [] } : undefined,
+    client,
+    actionReadiness?.userRecovery?.activity,
+  );
 };
 
 const summonCycleCause = Symbol("summonCycle");

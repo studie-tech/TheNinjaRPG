@@ -1,9 +1,41 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 import type { UserQueueState } from "@/deltas/profile";
+import { getSavedTrainingQueueUserUpdate } from "@/deltas/train";
+import type { UserQueue } from "@/drizzle/schema";
 import { hasEnergyQueue } from "@/libs/queue";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { UserJutsuFilteringSchema } from "@/validators/jutsu";
-import type { UserCachePatch } from "@/validators/userCache";
+import type { QuestTrackerType } from "@/validators/objectives";
+import type { UserCachePatch, UserDeltaResponse } from "@/validators/userCache";
+
+/** Project confirmed training charges, generated queue rows and public quest progress from the loaded actor. */
+export const getStartedJutsuUserUpdate = ({
+  user,
+  cost,
+  queue,
+  questData,
+  requiresProgressionRefresh,
+  publishedAchievementIds,
+}: {
+  user: Parameters<typeof getSavedTrainingQueueUserUpdate>[0]["user"];
+  cost: number;
+  queue: UserQueue[];
+  questData: QuestTrackerType[] | null;
+  requiresProgressionRefresh: boolean;
+  publishedAchievementIds: readonly string[];
+}) => {
+  const projection: Pick<UserDeltaResponse, "userPatch" | "achievementProgress"> =
+    getSavedTrainingQueueUserUpdate({
+      user,
+      saved: { queue: [...(user.queue ?? []), ...queue], questData },
+      requiresProgressionRefresh,
+      publishedAchievementIds,
+    });
+  return {
+    ...projection,
+    userDelta: projection.userPatch ? { money: -cost } : undefined,
+  };
+};
 
 /** Debit reputation when required by a level transfer; queued energy work withholds the delta. */
 export const getTransferLevelUserUpdate = ({

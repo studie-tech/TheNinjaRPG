@@ -51,6 +51,7 @@ export const findUserDataForGetBoard = (
       huntingExperience: true,
       sector: true,
       status: true,
+      autoWakeUp: true,
     },
   });
 

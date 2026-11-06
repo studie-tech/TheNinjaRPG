@@ -44,7 +44,7 @@ const raid = (
   } satisfies QuestContentType,
 });
 
-describe("raid list/join slim user fetches", () => {
+describe("raid list and action snapshots", () => {
   it("loads only villageId and owned sectors for the list", async () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     await fetchRaidListUser({ query: { userData: { findFirst } } } as never, "user-1");
@@ -61,28 +61,14 @@ describe("raid list/join slim user fetches", () => {
     );
   });
 
-  it("loads only the join guard fields", async () => {
+  it("loads the actor recovery snapshot and village hospital structures in one query", async () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     await fetchRaidJoinUser({ query: { userData: { findFirst } } } as never, "user-1");
-    expect(findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        columns: {
-          villageId: true,
-          sector: true,
-          status: true,
-          isBanned: true,
-        },
-      }),
-    );
-    const columns = findFirst.mock.calls[0]?.[0]?.columns as Record<string, boolean>;
-    expect(Object.keys(columns).sort()).toEqual(
-      [
-        "isBanned",
-        "sector",
-        "status",
-        "villageId",
-      ].sort(),
-    );
+    expect(findFirst).toHaveBeenCalledTimes(1);
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      with: expect.objectContaining({ village: expect.objectContaining({ with: expect.objectContaining({ structures: true }) }) }),
+    }));
+    expect(findFirst.mock.calls[0]?.[0]?.columns).toBeUndefined();
   });
 });
 

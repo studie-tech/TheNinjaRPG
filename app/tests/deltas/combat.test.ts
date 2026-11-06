@@ -2,7 +2,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "bun:test";
 import { CombatStatNames, ELEMENTAL_MASTERY_CAP, MasteryNames } from "@/drizzle/constants";
 import { battle } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatCacheIntegerDelta, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate } from "@/deltas/combat";
+import { getCombatAdmissionUserUpdate, captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatCacheIntegerDelta, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate } from "@/deltas/combat";
 import { calcMaxEnergy } from "@/libs/profile";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -124,6 +124,38 @@ describe("confirmed combat profile reconciliation", () => {
     close(); client.clear();
   });
 
+  it("applies confirmed admission and completion through the same profile cache without fetching", async () => {
+    const { current, update } = fixture();
+    const initial = { ...current, status: "AWAKE" as const, battleId: null };
+    const client = new QueryClient();
+    client.setQueryData(key, { userData: initial });
+    let reads = 0;
+    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
+      queryFn: async () => { reads++; return { userData: { ...current, ...update.userPatch } }; } });
+    const close = observer.subscribe(() => {});
+    try {
+      const admission = getCombatAdmissionUserUpdate({
+        cacheActor: { userId: current.userId, bracketImmunityLiftedUntil: new Date(0) },
+        requiresUserRefresh: false, allParticipantIds: [current.userId], queuedParticipants: [],
+        battleType: "ARENA", warAggressorIds: [], bracketImmunityAggressorIds: [],
+        now: new Date(), battleId: update.battleId, stealthBreakUserIds: [], isTournament: false,
+      });
+      await updateUserCache(client, key, { success: true, ...admission }, {
+        revision: prepareUserUpdate(client, key), refetch: false,
+      });
+      expect(client.getQueryData<{ userData: typeof current }>(key)?.userData).toMatchObject({
+        status: "BATTLE", battleId: update.battleId, pveFights: update.baseline.pveFights + 1,
+      });
+      await updateUserCache(client, key, (user) => combatProfilePatch(user, update), {
+        revision: prepareUserUpdate(client, key), delta: update.userDelta,
+      });
+      expect(reads).toBe(0);
+      expect(client.getQueryData<{ userData: typeof current }>(key)?.userData).toMatchObject({
+        status: "AWAKE", battleId: null, pveFights: update.userPatch.pveFights, money: 120,
+      });
+    } finally { close(); client.clear(); }
+  });
+
   it("adds the Assign XP notification when combat grants the first unassigned points", async () => {
     const { current, update } = fixture();
     current.earnedExperience = 0;
@@ -181,7 +213,7 @@ describe("confirmed combat profile reconciliation", () => {
     for (const changed of [
       { userId: "someone-else" }, { battleId: "new-fight" }, { ninjutsuMastery: 101 },
       { money: 101 }, { experience: 201 }, { seichiSilver: 1 },
-      { pveFights: 11 }, { pveFights: 12 },
+      { pveFights: 12 },
       { energyQueueTail: 1 },
       { items: current.items.map((item) => ({ ...item, durability: 99 })) },
       { regenAt: new Date(current.regenAt.getTime() + 1) },

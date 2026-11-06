@@ -28,6 +28,7 @@ export const userDeltaSchema = z.object({
       bank: z.number().optional(),
       repTreasury: z.number().optional(),
       points: z.number().optional(),
+      activityPoints: z.number().optional(),
     })
     .optional(),
   village: z
@@ -62,11 +63,16 @@ export const userDeltaSchema = z.object({
   sageMastery: z.number().optional(),
   dailyArenaFights: z.number().optional(),
   pveFights: z.number().optional(),
+  pvpFights: z.number().optional(),
   dailyOverworldQuestRolls: z.number().optional(),
   dailySageActivations: z.number().optional(),
 
   bank: z.number().optional(),
   money: z.number().optional(),
+  farmingExperience: z.number().optional(),
+  farmCurrency: z.number().optional(),
+  farmPlotsPurchased: z.number().optional(),
+  farmExtractorsOwned: z.number().optional(),
   petExperience: z.number().optional(),
   earnedExperience: z.number().optional(),
   reputationPoints: z.number().optional(),

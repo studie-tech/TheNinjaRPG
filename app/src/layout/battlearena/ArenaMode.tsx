@@ -18,13 +18,19 @@ import Image from "@/layout/Image";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** The arena: fight an AI opponent picked for your level. */
 export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
-  const { data: userData, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const router = useRouter();
 
   // The tutorial teaches fighting by hand, so its fights never start on auto.
@@ -59,17 +65,17 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
 
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: (result) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (result, _variables, revision) => {
         if (result.success && result.battleId) {
-          void updateUser({
-            status: "BATTLE",
-            battleId: result.battleId,
-            updatedAt: new Date(),
-          });
+          showActionReadinessToast(result);
+          await updateUser(result, { revision, refetch: false });
           pushToCombat(router, result.battleId);
           sendGTMEvent({ event: "enter_arena" });
           void completeTutorialAction("arenaStart");
         } else {
+          if (result.userRecovery)
+            await updateUser(result, { revision, refetch: false });
           attackInFlightRef.current = false;
           showMutationToast(result);
         }
@@ -83,14 +89,18 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
   const handleAttack = () => {
     if (attackInFlightRef.current || isAttacking || !aiId) return;
     attackInFlightRef.current = true;
-    attack({ aiId, autoCombat: autoCombat && !isTutorialFight });
+    attack({
+      aiId,
+      autoCombat: autoCombat && !isTutorialFight,
+      originSocketId: pusher?.connection.socket_id,
+    });
   };
 
   if (!userData) return <Loader explanation="Loading userdata" />;
 
   const fightsUsed = userData.dailyArenaFights;
   const canDoArena = fightsUsed < BATTLE_ARENA_DAILY_LIMIT;
-  const isAsleep = userData.status === "ASLEEP";
+  const isAsleep = userData.status === "ASLEEP" && userData.autoWakeUp === false;
   const bestMatchId = opponents?.[0]?.userId;
   const selected = opponents?.find((opponent) => opponent.userId === aiId);
 

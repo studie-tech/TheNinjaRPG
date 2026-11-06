@@ -1,6 +1,7 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import {
   applyUserChanges,
+  applyUserRecoveryActivity,
   type UserCache,
   type UserPatch,
   type UserUpdate,
@@ -21,7 +22,7 @@ export const updateUserCache = async (
   key: QueryKey,
   update: UserUpdate | undefined,
   mutation?: UserUpdateOptions,
-) => {
+): Promise<boolean> => {
   let patch: UserPatch | undefined;
   const response =
     update &&
@@ -35,6 +36,7 @@ export const updateUserCache = async (
     mutation = {
       ...mutation,
       revision: mutation?.revision,
+      userRecovery: response.userRecovery ?? mutation?.userRecovery,
       // An explicitly withheld delta must keep authoritative recovery even with a patch.
       ...("userDelta" in response ? { delta: response.userDelta } : {}),
       expected: response.userExpected ?? mutation?.expected,
@@ -43,6 +45,9 @@ export const updateUserCache = async (
       userNotifications: response.userNotifications ?? mutation?.userNotifications,
     };
   } else patch = update as UserPatch | undefined;
+
+  // Recovery extends existing actions without creating new profile reads on conflicts or unknown effects.
+  if (mutation?.userRecovery) mutation = { ...mutation, refetch: false };
 
   const delta =
     mutation && "delta" in mutation
@@ -60,15 +65,26 @@ export const updateUserCache = async (
     !mutation?.expected &&
     !mutation?.expectedAfter &&
     !mutation?.userNotifications &&
-    !mutation?.notifications
+    !mutation?.notifications &&
+    !mutation?.userRecovery
   )
     return false;
-  return updateQueryCache<UserCache>(
+  let complete = false;
+  const applied = await updateQueryCache<UserCache>(
     client,
     key,
-    delta === undefined
+    delta === undefined && !mutation?.userRecovery?.activity
       ? undefined
-      : (current) => applyUserChanges(current, patch, delta, mutation),
+      : (current) => {
+          const next =
+            delta === undefined
+              ? undefined
+              : applyUserChanges(current, patch, delta, mutation);
+          complete = next !== undefined && !mutation?.userRecovery?.requiresUserRefresh;
+          return next ?? applyUserRecoveryActivity(current, mutation?.userRecovery);
+        },
     mutation,
   );
+  // Known recovery fields may apply while unmodelled effects remain for ordinary refreshes.
+  return applied && complete;
 };

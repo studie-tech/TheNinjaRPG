@@ -130,16 +130,14 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     onMutate: prepareUserUpdate,
     onSuccess: (data, _variables, revision) => {
       showMutationToast(data);
+      if (data.userRecovery && !data.success) void updateUser(data, { revision });
       if (data.success) {
         setSelectedItem(null);
         setCraftQuantity(1);
         void Promise.allSettled([
           utils.item.getUserItems.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
-          updateUser(data.userPatch, {
-            revision,
-            achievementProgress: data.achievementProgress,
-          }),
+          updateUser(data, { revision }),
           utils.occupation.getCraftingQueue.invalidate(),
         ]);
       }
@@ -475,7 +473,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                     {isBusy ? "Estimated Crafting Time:" : "Total Crafting Time:"}
                   </span>
                   <span
-                    className={`font-semibold text-sm ${requiredRankLabel ? "text-red-600" : ""}`}
+                    className={`text-sm font-semibold ${requiredRankLabel ? "text-red-600" : ""}`}
                   >
                     {requiredRankLabel ?? craftingTimeDisplay}
                   </span>
@@ -522,7 +520,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                           {required}x {req.requirementItem?.name || "Unknown Item"}
                         </span>
                         <div
-                          className={`shrink-0 font-medium text-sm ${
+                          className={`shrink-0 text-sm font-medium ${
                             hasEnough ? "text-green-600" : "text-red-600"
                           }`}
                         >

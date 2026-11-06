@@ -9,6 +9,7 @@ import { observable } from "@trpc/server/observable";
 import * as navigation from "next/navigation";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
+import * as toastUi from "@/components/ui/use-toast";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import PetProfilePage from "@/app/[shell]/profile/pet/page";
 import { MAP_WAKE_ISLAND_SECTOR, PET_ABILITY_SLOTS_BY_RARITY, PET_BATTLE_CONFIG, PET_FEED_COOLDOWN_HOURS, PET_FEED_EXPERIENCE_BY_RARITY, PET_RANKS, PetRarities } from "@/drizzle/constants";
@@ -24,6 +25,7 @@ import * as StatsDistributionForm from "@/layout/StatsDistributionForm";
 import { getPetAbilityCapacity } from "@/libs/pets/abilities";
 import { getDailyPetOptions, PET_PALETTES } from "@/libs/pets/catalogue";
 import * as toast from "@/libs/toast";
+import { actionStatusMessage, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import * as UserContext from "@/utils/UserContext";
 import type { UserPatch } from "@/deltas/profile";
 import { prepareUserUpdate as captureUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -31,6 +33,7 @@ import { petSpeciesFixture } from "../libs/pets/helpers/species";
 import { petJutsuFixture, petSkillFixture } from "../libs/pets/helpers/abilities";
 import { IncreaseStatTag } from "@/validators/combat";
 import type { PetTask } from "@/validators/petTasks";
+import { actualShowMutationToast } from "../setup/preload";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
@@ -38,6 +41,7 @@ setDefaultTimeout(20_000);
 const testApi = createTRPCReact<AppRouter>();
 type PetView = RouterOutputs["pets"]["getPet"];
 let owner: {
+  autoWakeUp?: boolean;
   userId: string; role: string; status: string; rank: string; reputationPoints: number; seichiSilver: number;
   sector: number; battleId: string | null; isOutlaw: boolean;
   updatedAt: Date; experience: number; earnedExperience: number; petExperience: number;
@@ -473,6 +477,48 @@ it.each([1, 7])("regenerates a rank %s companion with its saved traits and no co
   expect(await view.findByRole("alert")).toHaveProperty("textContent", "Please retry your image.");
   expect(view.getByRole("img", { name: "Miso" })).toBeTruthy();
   expect((view.getByRole("button", { name: "Regenerate appearance" }) as HTMLButtonElement).disabled).toBe(false);
+});
+
+it.each(["hospital", "rejection", "success"] as const)("keeps redraw %s feedback actionable without losing companion context", async (outcome) => {
+  owner.status = "HOSPITALIZED";
+  const success = outcome === "success";
+  const message = outcome === "hospital" ? actionStatusMessage("HOSPITALIZED") : success ? "Appearance ready" : "Please retry your image.";
+  const result = { success, message, ...(outcome === "hospital" ? {} : { actionNotice: AUTO_WAKE_MESSAGE }) };
+  let finishGeneration: (value: typeof result) => void = () => undefined;
+  generate.mockImplementation(() => new Promise<typeof result>((resolve) => { finishGeneration = resolve; }));
+  vi.spyOn(toast, "showMutationToast").mockImplementation(actualShowMutationToast);
+  const shown = vi.spyOn(toastUi, "toast").mockImplementation(Object.assign(() => "pet-redraw", { dismiss: () => "pet-redraw" }));
+  const view = mount();
+  try {
+    await view.findByRole("tab", { name: "Settings" });
+    selectTab(view, "Settings");
+    const redraw = view.getByRole("button", { name: "Regenerate appearance" }) as HTMLButtonElement;
+    expect(redraw.disabled).toBe(false);
+    fireEvent.click(redraw);
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    const pending = view.getByRole("button", { name: "Creating appearance..." }) as HTMLButtonElement;
+    expect(pending.disabled).toBe(true);
+    fireEvent.click(pending);
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(shown).not.toHaveBeenCalled();
+    await act(async () => { finishGeneration(result); });
+    await waitFor(() => expect(shown).toHaveBeenCalledTimes(1));
+    const feedback = shown.mock.calls[0]![0];
+    expect(feedback.description).toBe(outcome === "hospital" ? message : `Miso: ${message} ${AUTO_WAKE_MESSAGE}`);
+    const action = render(feedback.action);
+    if (outcome === "hospital") {
+      expect(action.getByRole("link", { name: "Go to hospital" }).getAttribute("href")).toBe("/hospital");
+    } else {
+      expect(action.queryByRole("link", { name: "Go to hospital" })).toBeNull();
+      expect(action.getByRole("button", { name: "OK" })).toBeDefined();
+    }
+    expect((await view.findByRole("button", { name: "Regenerate appearance" }) as HTMLButtonElement).disabled).toBe(false);
+    if (success) expect(view.queryByRole("alert")).toBeNull();
+    else expect(view.getByRole("alert").textContent).toBe(message);
+    expect(getUser).not.toHaveBeenCalled();
+  } finally {
+    finishGeneration(result);
+  }
 });
 
 it("waits for the server retry time before offering another redraw", async () => {
@@ -1035,6 +1081,7 @@ it("targets the owner's home village when cooking is elsewhere", async () => {
 
 it.each(["ASLEEP", "BATTLE"])("explains unavailable travel without leaving a working link while %s", async (status) => {
   owner.status = status;
+  owner.autoWakeUp = false;
   owner.sector = 2;
   data = { ...data, feedMeals: [] };
   const view = mount();
@@ -1097,7 +1144,7 @@ it("refreshes rejected allocation snapshots without erasing the error and allows
   await view.findByText("90 training points available");
   await waitFor(() => expect(cachedOwner()?.petExperience).toBe(90));
   expect(getUser).toHaveBeenCalledTimes(1);
-  expect(updateUser).not.toHaveBeenCalled();
+  expect(updateUser).toHaveBeenCalledWith({ success: false, message: rejection }, { revision: expect.any(Number) });
   expect(view.getByRole("alert").textContent).toBe(rejection);
   expect(view.getByRole("img", { name: "Updated Miso" })).toBeTruthy();
   await waitFor(() => expect((view.getByRole("button", { name: "Assign experience" }) as HTMLButtonElement).disabled).toBe(false));

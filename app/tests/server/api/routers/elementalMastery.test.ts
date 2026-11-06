@@ -174,7 +174,7 @@ describeWithDatabase("elemental mastery guarded progression", () => {
 
   it("enforces awake, banned interval and daily training limits", async () => {
     const caller = await api();
-    await patch({ status: "ASLEEP" });
+    await patch({ status: "ASLEEP", autoWakeUp: false });
     expect((await caller.startMasteryTraining({ stat: "Wind" })).success).toBe(false);
     expect((await assign("Wind", 1)).success).toBe(false);
     expect((await caller.selectTrainedElement({ element: null })).success).toBe(false);

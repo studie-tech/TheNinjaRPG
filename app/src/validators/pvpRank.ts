@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { baseServerResponse } from "@/validators/base";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { ObjectiveReward } from "./rewards";
 
 export const divisionRewardSchema = z.object({
@@ -29,7 +29,7 @@ export const rankedLoadoutSchema = z.object({
 });
 export type RankedLoadoutSchema = z.infer<typeof rankedLoadoutSchema>;
 
-export const rankedQueueResponseSchema = baseServerResponse.extend({
+export const rankedQueueResponseSchema = userDeltaResponseSchema.extend({
   battleId: z.string().optional(),
   removedJutsuIds: z.array(z.string()).optional(),
   removedItemIds: z.array(z.string()).optional(),

@@ -2,7 +2,7 @@
  * Database access for gamesettings; authorization and transaction scopes stay in callers.
  */
 import { and, eq, inArray, lt } from "drizzle-orm";
-import { DMG_SETTING_NAMES, PET_ART_PROVIDER_SETTING } from "@/drizzle/constants";
+import { DMG_SETTING_NAMES } from "@/drizzle/constants";
 import { gameSetting } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
@@ -50,14 +50,6 @@ export const updateGameSettingForUpdate = (
     .update(gameSetting)
     .set({ value, time })
     .where(and(eq(gameSetting.id, timer.id), eq(gameSetting.time, now)));
-
-/** Build the `gameSetting` lookup for `fetchPetArtProvider`, using predicates on `name`. */
-export const findGameSettingForFetchPetArtProvider = (
-  client: Pick<DrizzleClient, "query">,
-) =>
-  client.query.gameSetting.findFirst({
-    where: eq(gameSetting.name, PET_ART_PROVIDER_SETTING),
-  });
 
 /** Build the `gameSetting` selection for `fetchDmgConfig`, using predicates on `name`. */
 export const selectGameSettingForFetchDmgConfig = (

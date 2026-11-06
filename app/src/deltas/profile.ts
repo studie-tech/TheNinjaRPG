@@ -16,10 +16,7 @@ import { getPublicQuestUser, getQuestMaxLevel } from "@/libs/quest";
 import { hasEnergyQueue } from "@/libs/queue";
 import { getReducedGainsDays } from "@/libs/train";
 import { getUserFactionNotifications } from "@/libs/userNotifications";
-import type {
-  fetchUser,
-  findUserDataForUseUnusedExperiencePoints,
-} from "@/queries/profile";
+import type { fetchUser, findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import type { fetchQuestBootstrap } from "@/routers/profile";
 import type {
   AchievementProgress,
@@ -28,6 +25,7 @@ import type {
 } from "@/server/api/routers/profile";
 import { mergeQueryChanges, type QueryPatch } from "@/utils/queryCache";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
+import type { UserRecovery } from "@/validators/base";
 import type {
   TavernColorChangeSchema,
   UpdateUserPreferencesSchema,
@@ -57,7 +55,12 @@ export type UserPatch =
 /** Standard mutation responses carry their confirmed profile fields and metadata together. */
 type UserResponse = Pick<
   UserDeltaResponse,
-  "success" | "userDelta" | "userExpected" | "achievementProgress" | "userNotifications"
+  | "success"
+  | "userDelta"
+  | "userExpected"
+  | "achievementProgress"
+  | "userNotifications"
+  | "userRecovery"
 > & {
   userPatch?: KnownUserPatch;
 };
@@ -67,8 +70,12 @@ export type UserUpdate = UserPatch | UserResponse;
 
 /** Cache metadata bound to the profile revision captured before a mutation. */
 export type UserUpdateOptions = {
-  /** The prepareUserUpdate result; undefined forces authoritative recovery. */
-  revision: number | undefined;
+  /** Omit for local patches; pass the captured revision for confirmed mutation results. */
+  revision?: number;
+  /** Leave unknown or superseded results to existing refreshes instead of starting another read. */
+  refetch?: boolean;
+  /** Apply committed waking/checkout before evaluating the action's own projection. */
+  userRecovery?: UserRecovery;
   // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
   delta?: UserDelta;
   achievementProgress?: AchievementProgress[];
@@ -82,6 +89,15 @@ export type UserUpdateOptions = {
   ) => NavBarDropdownLink[] | undefined;
 };
 
+/** Apply only a confirmed recovery activity when the action's other cache effects are unavailable. */
+export const applyUserRecoveryActivity = (
+  current: UserCache,
+  recovery: UserRecovery | undefined,
+): UserCache | undefined => {
+  if (!recovery?.activity || current.userData?.userId !== recovery.userId) return;
+  return applyUserChanges(current, recovery.activity);
+};
+
 /**
  * Apply confirmed fields, numeric deltas and scalar guards, then refresh derived navigation
  * and notices. Return undefined when missing data, mismatched guards or unsafe relation
@@ -93,6 +109,19 @@ export const applyUserChanges = (
   delta: UserDelta = {},
   mutation?: UserUpdateOptions,
 ): UserCache | undefined => {
+  if (mutation?.userRecovery) {
+    const recovery = mutation.userRecovery;
+    // Non-refetching actions can apply the known snapshot fields; unmodelled effects stay untouched.
+    if (
+      current.userData?.userId !== recovery.userId ||
+      !recovery.userPatch ||
+      (recovery.requiresUserRefresh && mutation.refetch !== false)
+    )
+      return;
+    const recovered = applyUserChanges(current, recovery.userPatch);
+    if (!recovered) return;
+    current = recovered;
+  }
   if (!current.userData) return;
   if (
     mutation &&
@@ -424,6 +453,16 @@ export const getUpdatePreferencesUserUpdate = ({
   userPatch: resultRowsAffected > 0 ? input : undefined,
 });
 
+/** Project only the confirmed automatic-wake choice for the character that saved it. */
+export const getActionPreferenceUserUpdate = (
+  current: User,
+  userId: string | undefined,
+  autoWakeUp: boolean | undefined,
+) =>
+  current.userId === userId && typeof autoWakeUp === "boolean"
+    ? { autoWakeUp }
+    : undefined;
+
 /** Project the saved cosmetic sprite body style. */
 export const getUpdateSpriteBodyUserUpdate = ({
   inputBody,
@@ -472,9 +511,7 @@ export const getUseUnusedExperiencePointsUserUpdate = ({
 }: {
   data: AssignedExperiencePatch;
   resultClaimedAt: Date;
-  user: NonNullable<
-    Awaited<ReturnType<typeof findUserDataForUseUnusedExperiencePoints>>
-  >;
+  user: NonNullable<Awaited<ReturnType<typeof findUserDataForQueryUpdatedUser>>>;
 }) => {
   if (hasEnergyQueue(user)) return {};
   return {

@@ -38,6 +38,7 @@ import {
   completedQuestHistoryRelation,
   userQuestHistoryRelation,
 } from "@/server/utils/achievementObjectives";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { buildSectorWindowLayout } from "@/server/utils/sectorMap";
 import { secondsFromNow } from "@/utils/time";
 
@@ -189,14 +190,16 @@ export const updateUserDataForRobPlayer2 = (
   stolenAmount: number,
   prestigeGain: number,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       money: sql`${userData.money} + ${stolenAmount}`,
       villagePrestige: sql`${userData.villagePrestige} + ${prestigeGain}`,
     })
-    .where(eq(userData.userId, ctx.userId));
+    .where(and(eq(userData.userId, ctx.userId), readiness?.where));
 
 /** Build the `clan` update for `robPlayer`, setting `points` and `activityPoints`, using predicates on `id`. */
 export const updateClanForRobPlayer = (
@@ -316,10 +319,12 @@ export const updateUserDataForStartGlobalMove = (
   ctx: { userId: string },
   departureSector: number,
   user: { updatedAt: Date },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       warMission: null,
       sector: input.sector,
       longitude: destination.x,
@@ -330,7 +335,7 @@ export const updateUserDataForStartGlobalMove = (
     .where(
       and(
         eq(userData.userId, ctx.userId),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         eq(userData.sector, departureSector),
         eq(userData.updatedAt, user.updatedAt),
       ),
@@ -345,16 +350,6 @@ export const listSectorForGetAllSectors = (client: Pick<DrizzleClient, "query">)
     },
   });
 
-/** Build the `userData` lookup for `moveInSector`, using predicates on `userId`. */
-export const findUserDataForMoveInSector = (
-  client: Pick<DrizzleClient, "query">,
-  userId: string,
-) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    with: { anbuSquad: true },
-  });
-
 /** Build the `userData` update for `moveInSector`, including predicates on `userId`, `status`, `sector`. */
 export const updateUserDataForMoveInSector = (
   client: Pick<DrizzleClient, "update">,
@@ -367,10 +362,12 @@ export const updateUserDataForMoveInSector = (
   moveUser: { updatedAt: Date },
   input: { curLongitude: number; curLatitude: number },
   villageId: undefined | null | string,
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       ...(targetSector !== originalUser.sector ? { warMission: null } : {}),
       sector: targetSector,
       longitude: destination.x,
@@ -380,7 +377,7 @@ export const updateUserDataForMoveInSector = (
     .where(
       and(
         eq(userData.userId, userId),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         eq(userData.sector, sector),
         eq(userData.updatedAt, moveUser.updatedAt),
         // Guard on the player's ACTUAL stored position (the raw input),

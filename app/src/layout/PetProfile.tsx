@@ -60,6 +60,7 @@ import Modal from "@/layout/Modal";
 import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
 import { PetTasks } from "@/layout/PetTasks";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
+import { actionStatusMessage, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import {
   getPetJutsuCost,
   getPetSkillCost,
@@ -217,12 +218,7 @@ export function PetProfile() {
   ) => {
     setMessage(result.success ? null : result.message);
     showMutationToast(result);
-    await Promise.all([
-      invalidatePetData(),
-      result.success
-        ? updateUser(result, { revision })
-        : utils.profile.getUser.invalidate(),
-    ]);
+    await Promise.all([invalidatePetData(), updateUser(result, { revision })]);
   };
   const failMutation = async (cause: { message: string }) => {
     setMessage(cause.message);
@@ -237,6 +233,7 @@ export function PetProfile() {
   const generate = api.pets.generateAppearance.useMutation({
     // Capture the name before the player can rename or switch companions.
     onMutate: ({ petId }) => ({
+      revision: prepareUserUpdate(),
       name: data?.pets.find((entry) => entry.id === petId)?.name,
     }),
     onSuccess: async (result, { petId }, context) => {
@@ -246,9 +243,17 @@ export function PetProfile() {
       }));
       showMutationToast({
         ...result,
-        message: `${context?.name ?? "Companion"}: ${result.message}`,
+        message:
+          !result.success && result.message === actionStatusMessage("HOSPITALIZED")
+            ? result.message
+            : `${context?.name ?? "Companion"}: ${result.message}`,
       });
-      await invalidatePetData();
+      await Promise.all([
+        invalidatePetData(),
+        result.success || result.userRecovery
+          ? updateUser(result, { revision: context?.revision, refetch: false })
+          : undefined,
+      ]);
     },
     onError: async (cause, { petId }, context) => {
       // A dropped connection says nothing about the server: the image may still be accepted.
@@ -287,7 +292,10 @@ export function PetProfile() {
         ];
         await updateUser(result, { revision: context.user });
       } else {
-        await Promise.all([invalidatePetData(), utils.profile.getUser.invalidate()]);
+        await Promise.all([
+          invalidatePetData(),
+          updateUser(result, { revision: context.user }),
+        ]);
       }
     },
     onError: failMutation,
@@ -418,7 +426,7 @@ export function PetProfile() {
     );
   // Send players through the existing destination picker instead of a location-gated page.
   const isAtSanctuary = userData.sector === MAP_WAKE_ISLAND_SECTOR;
-  const cannotTravel = userData.status !== "AWAKE" || !!userData.battleId;
+  const cannotTravel = !canAttemptAwakeAction(userData) || !!userData.battleId;
   const travelReason = cannotTravel
     ? "Return to the awake state outside battle to travel."
     : "";
@@ -465,7 +473,7 @@ export function PetProfile() {
   const slotCurrencyLabel =
     slotCurrency === "SEICHI_SILVER" ? "Seichi Silver" : "reputation";
   const slotBlockMessage =
-    userData.status !== "AWAKE" || userData.battleId
+    !canAttemptAwakeAction(userData) || userData.battleId
       ? "You must be awake and out of combat to unlock a slot."
       : slotBalance < slotCost
         ? `You need ${(slotCost - slotBalance).toLocaleString()} more ${slotCurrencyLabel} to unlock this slot.`
@@ -661,7 +669,7 @@ export function PetProfile() {
   const appearanceReady = isPetAppearanceReady(pet);
   const rankAllowed = pet.rank <= data.maxRank;
   const isAway = userData.petTask?.petId === pet.id;
-  const settingsDisabled = isBusy || isAway || userData.status !== "AWAKE";
+  const settingsDisabled = isBusy || isAway || !canAttemptAwakeAction(userData);
   const nextRank = data.nextRank;
   const canEvolve = data.canRankUp && !settingsDisabled && !isGenerating;
   const retryAt = data.generationRetryAt ? new Date(data.generationRetryAt) : null;
@@ -995,7 +1003,7 @@ export function PetProfile() {
             training and evolution.
           </p>
         )}
-        {userData.status !== "AWAKE" && (
+        {!canAttemptAwakeAction(userData) && (
           <p className="mt-4 text-sm" role="status">
             Return to the awake state to change your pet's settings or allocate
             experience.
@@ -1180,7 +1188,7 @@ export function PetProfile() {
                 data.unusedExperience < 1
               }
               title="Assign Pet Experience"
-              subtitle={`${formatStat(data.unusedExperience)} points available for your companion${isAway ? " · Collect its return in Tasks before training" : !rankAllowed ? " · Your shinobi rank must support this pet" : !appearanceReady ? " · Finish its appearance to allocate points" : userData.status !== "AWAKE" ? " · You must be awake to allocate points" : data.unusedExperience < 1 ? " · Earn player experience with an eligible active companion to allocate points" : ""}`}
+              subtitle={`${formatStat(data.unusedExperience)} points available for your companion${isAway ? " · Collect its return in Tasks before training" : !rankAllowed ? " · Your shinobi rank must support this pet" : !appearanceReady ? " · Finish its appearance to allocate points" : !canAttemptAwakeAction(userData) ? " · You must be awake to allocate points" : data.unusedExperience < 1 ? " · Earn player experience with an eligible active companion to allocate points" : ""}`}
               isPending={assign.isPending}
             />
           </div>

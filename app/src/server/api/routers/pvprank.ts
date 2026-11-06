@@ -1,6 +1,9 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getEnterRankedSeasonUserUpdate } from "@/deltas/pvprank";
+import {
+  getEnterRankedSeasonUserUpdate,
+  getRankedQueueUserUpdate,
+} from "@/deltas/pvprank";
 import { getRewardUserUpdate } from "@/deltas/quests";
 import {
   RANKED_ENTRY_COST,
@@ -17,9 +20,10 @@ import {
   validateJutsuLoadout,
 } from "@/libs/ranked_pvp";
 import { hasRequiredRank } from "@/libs/train";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { listJutsuByIds } from "@/queries/jutsu";
 import { fetchJutsuEquipCaps, fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
-import { fetchUser, wakeQueuedUser } from "@/queries/profile";
+import { fetchAllGameSettings, fetchUser, wakeQueuedUser } from "@/queries/profile";
 import {
   countRankedPvpQueueForGetRankedQueueCount,
   deleteRankedPvpQueueForCheckRankedPvpMatches,
@@ -62,6 +66,10 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
   cleanRankedProhibitedSelections,
@@ -448,19 +456,28 @@ export const pvpRankRouter = createTRPCRouter({
     .output(rankedQueueResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [existingQueue, user, currentLoadout, currentSeason, jutsuEquipLimits] =
-        await Promise.all([
-          fetchUserRankedQueue(ctx.drizzle, ctx.userId),
-          fetchUser(ctx.drizzle, ctx.userId),
-          findRankedLoadoutByUserId(ctx.drizzle, ctx.userId),
-          fetchCurrentSeason(ctx.drizzle),
-          fetchJutsuEquipLimits(ctx.drizzle),
-        ]);
+      let [
+        existingQueue,
+        user,
+        currentLoadout,
+        currentSeason,
+        jutsuEquipLimits,
+        settings,
+      ] = await Promise.all([
+        fetchUserRankedQueue(ctx.drizzle, ctx.userId),
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        findRankedLoadoutByUserId(ctx.drizzle, ctx.userId),
+        fetchCurrentSeason(ctx.drizzle),
+        fetchJutsuEquipLimits(ctx.drizzle),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
       // Guard
       if (existingQueue) {
         return errorResponse("Already in queue");
       }
-      if (user.status !== "AWAKE") return errorResponse("Need to be awake to queue");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (!hasRequiredRank(user.rank, RANKED_REQUIRED_RANK)) {
         return errorResponse(
           `You need to be a ${capitalizeFirstLetter(RANKED_REQUIRED_RANK)} to queue`,
@@ -509,7 +526,7 @@ export const pvpRankRouter = createTRPCRouter({
         // purchase delivery, one parameterized UPDATE makes ownership durable with
         // the status claim. Removing this exact provisional row makes the claim fail.
         const result = await retryOnDeadlock(() =>
-          executeResultForQueueForRankedPvp(ctx.drizzle, user, queueId),
+          executeResultForQueueForRankedPvp(ctx.drizzle, user, queueId, readiness),
         );
         hasClaimedQueue = result.rowsAffected > 0;
       } finally {
@@ -523,15 +540,23 @@ export const pvpRankRouter = createTRPCRouter({
       }
       if (!hasClaimedQueue) return errorResponse("Need to be awake to queue");
       await notifyRankedQueueChanged(1);
-      return {
-        success: true,
-        message:
-          removedJutsuIds.length > 0 || removedItemIds.length > 0
-            ? "Ranked loadout updated because some selections are not allowed in ranked. Queued with the remaining loadout."
-            : "Queued for ranked PvP",
-        removedJutsuIds: removedJutsuIds.length > 0 ? removedJutsuIds : undefined,
-        removedItemIds: removedItemIds.length > 0 ? removedItemIds : undefined,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message:
+            removedJutsuIds.length > 0 || removedItemIds.length > 0
+              ? "Ranked loadout updated because some selections are not allowed in ranked. Queued with the remaining loadout."
+              : "Queued for ranked PvP",
+          ...getRankedQueueUserUpdate(
+            removedJutsuIds.length > 0 || removedItemIds.length > 0,
+          ),
+          removedJutsuIds: removedJutsuIds.length > 0 ? removedJutsuIds : undefined,
+          removedItemIds: removedItemIds.length > 0 ? removedItemIds : undefined,
+        },
+        readiness,
+        ctx.drizzle,
+        { status: "QUEUED" },
+      );
     }),
 
   // Leave the ranked PvP queue

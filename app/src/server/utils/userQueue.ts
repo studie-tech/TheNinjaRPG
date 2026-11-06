@@ -78,6 +78,7 @@ import {
 } from "@/queries/train";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
@@ -279,6 +280,7 @@ export const claimAndReplaceTrainingQueue = async ({
   kind,
   entries,
   where = [],
+  readiness,
 }: {
   client: DrizzleClient;
   user: Pick<
@@ -293,6 +295,7 @@ export const claimAndReplaceTrainingQueue = async ({
   kind: "MASTERY" | "ELEMENT" | "ENERGY";
   entries: readonly (EnergyTrainingQueueEntry | MasteryTrainingQueueEntry)[];
   where?: Parameters<typeof claimUserSnapshot>[0]["where"];
+  readiness?: ActionReadinessWrite;
 }) => {
   const existing = user.queue.filter((row) => row.kind === kind);
   const head = Math.max(
@@ -312,6 +315,7 @@ export const claimAndReplaceTrainingQueue = async ({
         userId: user.userId,
         updatedAt: user.updatedAt,
         where,
+        readiness,
         set: heads,
       });
       if (!claim.success) return null;
@@ -344,6 +348,7 @@ export const editTrainingQueue = async <
   validate,
   where,
   messages,
+  readiness,
 }: {
   client: DrizzleClient;
   user: Parameters<typeof claimAndReplaceTrainingQueue>[0]["user"];
@@ -354,6 +359,7 @@ export const editTrainingQueue = async <
   /** Checks for adding or changing entries; returns an error message or null */
   validate: () => string | null | Promise<string | null>;
   where?: Parameters<typeof claimUserSnapshot>[0]["where"];
+  readiness?: ActionReadinessWrite;
   messages: { stale: string; conflict: string; saved: string; cleared: string };
 }) => {
   if (JSON.stringify(current) !== JSON.stringify(expected)) {
@@ -369,6 +375,7 @@ export const editTrainingQueue = async <
     kind,
     entries,
     where,
+    readiness,
   });
   if (!saved) return { success: false as const, message: messages.conflict };
   return {
@@ -427,6 +434,8 @@ export const planJutsuLevels = ({
  * Reserve the ryo for planned levels and insert them as waiting rows. The guarded debit
  * fails without enough ryo; the insert fails when a concurrent enqueue took the same
  * positions, and the ryo is then refunded. `user.queue` holds the rows just read.
+ * Return generated row identities with the confirmed charge for profile cache projection.
+ * A refunded append still reports recovery committed with the debit so the caller can show it.
  */
 export const enqueueJutsuLevels = async (
   client: DrizzleClient,
@@ -436,19 +445,23 @@ export const enqueueJutsuLevels = async (
   },
   jutsuId: string,
   entries: ReturnType<typeof planJutsuLevels>,
-): Promise<{ success: true; cost: number } | { success: false; message: string }> => {
-  if (entries.length === 0) return { success: true, cost: 0 };
+  readiness?: ActionReadinessWrite & { notice?: string },
+): Promise<
+  | { success: true; cost: number; queue: UserQueue[] }
+  | { success: false; message: string; actionNotice?: string }
+> => {
+  if (entries.length === 0) return { success: true, cost: 0, queue: [] };
   const waiting = user.queue.filter((row) => row.kind === "JUTSU");
   if (waiting.length + entries.length > getQueueTotalCapacity(user) - 1) {
     return { success: false, message: "Your jutsu training queue is full" };
   }
   const cost = entries.reduce((sum, entry) => sum + entry.reservedRyo, 0);
-  const reserved = await debitUserMoney(client, cost, user);
+  const reserved = await debitUserMoney(client, cost, user, readiness);
   if (reserved.rowsAffected !== 1) {
     return { success: false, message: "You don't have enough money" };
   }
   try {
-    await appendQueueEntries(
+    const queue = await appendQueueEntries(
       client,
       user.userId,
       "JUTSU",
@@ -461,17 +474,18 @@ export const enqueueJutsuLevels = async (
       })),
       lastQueuePosition(waiting, "JUTSU"),
     );
+    return { success: true, cost, queue };
   } catch (error) {
     await refundRyo(client, user.userId, cost);
     if (isMysqlDuplicateKeyError(error)) {
       return {
         success: false,
         message: "Your jutsu training queue changed. Please try again",
+        actionNotice: readiness?.notice,
       };
     }
     throw error;
   }
-  return { success: true, cost };
 };
 
 /**

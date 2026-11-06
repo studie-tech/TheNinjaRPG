@@ -105,6 +105,10 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 // Pusher instance
 import { findRelationship } from "@/utils/alliance";
@@ -642,8 +646,8 @@ export const shrineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch user and sector data
-      const [
-        { user, requiresUserRefresh },
+      let [
+        { user, requiresUserRefresh, settings },
         targetSector,
         activeWars,
         relationships,
@@ -683,7 +687,9 @@ export const shrineRouter = createTRPCRouter({
 
       // Guards
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to challenge");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       const attackerSide = userWar
         ? getWarSide(userWar, user.villageId, user.userId)
         : user.villageId;
@@ -733,7 +739,7 @@ export const shrineRouter = createTRPCRouter({
       // Create new shrine battle queue with rollback on failure
       const shrineBattleId = nanoid();
       const createdAt = new Date();
-      const result = await queueAwakeUser(ctx.drizzle, user);
+      const result = await queueAwakeUser(ctx.drizzle, user, readiness);
       if (result.rowsAffected === 0) return errorResponse("Was not awake?");
 
       try {
@@ -775,19 +781,24 @@ export const shrineRouter = createTRPCRouter({
         routeText: "Go to Map",
       });
 
-      return {
-        success: true,
-        ...getChallengeShrineUserUpdate({
-          requiresUserRefresh,
-          user,
-          attackerSide,
-          targetSectorVillageId: targetSector.villageId,
-          shrineBattleId,
-          createdAt,
-          inputSectorNumber: input.sectorNumber,
-        }),
-        message: `Shrine attack party created! Waiting for more attackers (min ${SHRINE_BATTLE_MIN_ATTACKERS})`,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getChallengeShrineUserUpdate({
+            requiresUserRefresh,
+            user,
+            attackerSide,
+            targetSectorVillageId: targetSector.villageId,
+            shrineBattleId,
+            createdAt,
+            inputSectorNumber: input.sectorNumber,
+          }),
+          message: `Shrine attack party created! Waiting for more attackers (min ${SHRINE_BATTLE_MIN_ATTACKERS})`,
+        },
+        readiness,
+        ctx.drizzle,
+        { status: "QUEUED" },
+      );
     }),
 
   // Join a shrine battle queue
@@ -804,8 +815,8 @@ export const shrineRouter = createTRPCRouter({
       const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
 
       // Fetch user and battle data
-      const [
-        { user, requiresUserRefresh },
+      let [
+        { user, requiresUserRefresh, settings },
         shrineBattle,
         existingUserBattles,
         activeWars,
@@ -826,7 +837,9 @@ export const shrineRouter = createTRPCRouter({
 
       // Guards
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to join");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (!user.villageId && !isWarMercenary(activeWars, ctx.userId))
         return errorResponse("You must be in a village or serving as a mercenary");
       if (!shrineBattle) return errorResponse("Shrine battle not found");
@@ -882,7 +895,7 @@ export const shrineRouter = createTRPCRouter({
       }
 
       // Update user status
-      const result = await queueAwakeUser(ctx.drizzle, user);
+      const result = await queueAwakeUser(ctx.drizzle, user, readiness);
       if (result.rowsAffected === 0) return errorResponse("Was not awake?");
 
       // Try to insert with slot - unique constraint prevents race conditions
@@ -902,24 +915,39 @@ export const shrineRouter = createTRPCRouter({
           findUserDataForJoinShrineBattle(ctx.drizzle, user),
           findMpvpBattleUserForJoinShrineBattle(ctx.drizzle, user, input),
         ]);
+        let committedStatus: "AWAKE" | "QUEUED" | undefined =
+          currentUser?.status === "QUEUED" && existingEntry ? "QUEUED" : undefined;
 
         // Only revert if user is still QUEUED and not in this battle
         if (currentUser?.status === "QUEUED" && !existingEntry) {
-          await wakeQueuedUser(ctx.drizzle, user.userId);
+          const reverted = await wakeQueuedUser(ctx.drizzle, user.userId);
+          if (reverted.rowsAffected > 0) committedStatus = "AWAKE";
         }
 
         if (isDuplicateError) {
-          return errorResponse("Slot was taken by another player. Please try again.");
+          // A concurrent activity change can defeat compensation; status alone cannot project it safely.
+          const response = actionReadinessResponse(
+            errorResponse("Slot was taken by another player. Please try again."),
+            readiness,
+            ctx.drizzle,
+            committedStatus ? { status: committedStatus } : undefined,
+          );
+          return committedStatus ? response : { ...response, userRecovery: undefined };
         }
         // For other errors, rethrow after status revert
         throw error;
       }
 
-      return {
-        success: true,
-        ...getJoinShrineBattleUserUpdate({ requiresUserRefresh }),
-        message: `Joined shrine battle as ${input.side.toLowerCase()}`,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getJoinShrineBattleUserUpdate({ requiresUserRefresh }),
+          message: `Joined shrine battle as ${input.side.toLowerCase()}`,
+        },
+        readiness,
+        ctx.drizzle,
+        { status: "QUEUED" },
+      );
     }),
 
   // Leave a shrine battle queue (DB-guarded writes to prevent races)

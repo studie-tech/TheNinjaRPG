@@ -11,6 +11,8 @@ import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { SearchSelect } from "@/layout/SearchSelect";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
+import { actionStatusMessage, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getHuntingRank, getHuntingRankProgress } from "@/libs/hunting";
 import {
   huntingAllowance,
@@ -38,7 +40,7 @@ export function HuntingBoard({
 }) {
   const router = useRouter();
   const utils = api.useUtils();
-  const { updateUser, prepareUserUpdate } = useUserData();
+  const { updateUser, prepareUserUpdate, pusher } = useUserData();
   const [habitatId, setHabitatId] = useState("");
   const [creature, setCreature] = useState("");
   const [rank, setRank] = useState("");
@@ -56,7 +58,17 @@ export function HuntingBoard({
     _variables: unknown,
     revision: number | undefined,
   ) => {
-    if (result.success || result.userPatch) await updateUser(result, { revision });
+    showActionReadinessToast(result);
+    if (
+      result.success ||
+      result.userPatch ||
+      result.actionNotice ||
+      result.userRecovery
+    )
+      await updateUser(result, {
+        revision,
+        refetch: !!(result.success || result.userPatch),
+      });
     setMessage(result.message);
     if (result.success)
       await Promise.all([board.refetch(), utils.hunting.getSession.invalidate()]);
@@ -74,6 +86,7 @@ export function HuntingBoard({
   const start = api.hunting.start.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
+      showActionReadinessToast(result);
       setMessage(result.message);
       if (result.success && "battleId" in result && result.battleId) {
         // Clear the previous result before publishing the new battle, as arena starts do.
@@ -85,9 +98,14 @@ export function HuntingBoard({
           utils.combat.getBattle.invalidate(),
         ]);
         if (!onStarted) router.push("/combat");
-      } else await board.refetch();
+      } else {
+        if (result.userRecovery) await updateUser(result, { revision, refetch: false });
+        await board.refetch();
+      }
     },
-    onError: (e) => setMessage(e.message),
+    onError: (e) => {
+      setMessage(e.message);
+    },
   });
   const pending = accept.isPending || action.isPending || start.isPending;
   const data = board.data;
@@ -144,6 +162,19 @@ export function HuntingBoard({
         {(message || board.error) && (
           <p role="status" className="rounded border p-3">
             {message || board.error?.message}
+            {(message || board.error?.message) ===
+              actionStatusMessage("HOSPITALIZED") &&
+              !(session && user?.status === "HOSPITALIZED") && (
+                <>
+                  {" "}
+                  <Link
+                    href="/hospital"
+                    className="font-medium underline underline-offset-4"
+                  >
+                    Go to hospital
+                  </Link>
+                </>
+              )}
           </p>
         )}
         {!sessionOnly && user && (
@@ -200,7 +231,7 @@ export function HuntingBoard({
                       disabled={
                         pending ||
                         user?.sector !== session.sector ||
-                        user?.status !== "AWAKE"
+                        !canAttemptAwakeAction(user)
                       }
                       onClick={() =>
                         action.mutate({
@@ -221,7 +252,7 @@ export function HuntingBoard({
                         preparing ||
                         !allowance?.remaining ||
                         allowance.cooling ||
-                        user?.status !== "AWAKE" ||
+                        !canAttemptAwakeAction(user) ||
                         user?.sector !== session.sector ||
                         !huntingEligibility(
                           user?.occupation ?? null,
@@ -229,7 +260,12 @@ export function HuntingBoard({
                           active,
                         )
                       }
-                      onClick={() => start.mutate({ id: session.id })}
+                      onClick={() =>
+                        start.mutate({
+                          id: session.id,
+                          originSocketId: pusher?.connection.socket_id,
+                        })
+                      }
                     >
                       {receipt?.outcome === "Won" ? "Hunt Again" : "Fight creature"}
                     </Button>
@@ -425,7 +461,7 @@ export function HuntingBoard({
                                 available.cooling ||
                                 !available.remaining ||
                                 !!session?.battleId ||
-                                user?.status !== "AWAKE" ||
+                                !canAttemptAwakeAction(user) ||
                                 session?.contractId === c.id
                               }
                               onClick={() =>

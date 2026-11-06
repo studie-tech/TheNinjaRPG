@@ -47,6 +47,8 @@ import { maintainEventTournaments, syncEventTournament } from "@/server/api/rout
 import type { DrizzleClient } from "@/server/db";
 import { eventTournamentConfigSchema, type EventParticipant } from "@/validators/tournament";
 import { ObjectiveReward } from "@/validators/rewards";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { withAfterTasks } from "../../../setup/after";
 import { insertItems, insertUsers } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements } from "../../../setup/statements";
@@ -165,16 +167,23 @@ describeWithDatabase("event tournament persistence", () => {
     const seriesId = (await fetchEvent(database, tournamentId))!.eventData!.series[0]!.id;
     expect((await outsider.participateEvent({ tournamentId, seriesId, action: "READY" })).success).toBe(false);
     expect((await first.participateEvent({ tournamentId, seriesId: "other", action: "READY" })).success).toBe(false);
-    await database.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, "first"));
+    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: false }).where(eq(userData.userId, "first"));
     expect((await first.participateEvent({ tournamentId, seriesId, action: "READY" })).success).toBe(false);
-    await database.update(userData).set({ status: "AWAKE" }).where(eq(userData.userId, "first"));
+    await database.update(userData).set({ autoWakeUp: true }).where(eq(userData.userId, "first"));
+    const recovered = await first.participateEvent({ tournamentId, seriesId, action: "READY" });
+    expect(recovered.success).toBe(true);
+    expect(recovered.actionNotice).toContain("woke you up");
+    expect((await database.query.userData.findFirst({ where: eq(userData.userId, "first") }))?.status).toBe("AWAKE");
     const marked = await Promise.all([first, second].map((player) => player.participateEvent({ tournamentId, seriesId, action: "READY" })));
     expect(marked.every((result) => result.success)).toBe(true);
     let event = (await fetchEvent(database, tournamentId))!.eventData!;
     expect(event.status).toBe("PREPARED");
     expect(event.series[0]!.readyUserIds?.sort()).toEqual(["first", "second"]);
     expect(event.series[0]!.games).toEqual([]);
-    await first.participateEvent({ tournamentId, seriesId, action: "NOT_READY" });
+    await database.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, "first"));
+    const removedReadiness = await first.participateEvent({ tournamentId, seriesId, action: "NOT_READY" });
+    expect(removedReadiness.actionNotice).toBeUndefined();
+    expect((await database.query.userData.findFirst({ where: eq(userData.userId, "first") }))?.status).toBe("ASLEEP");
     expect((await fetchEvent(database, tournamentId))!.eventData!.series[0]!.readyUserIds).toEqual(["second"]);
     const seatId = event.participants.find((p) => p.userId === "second")!.id;
     expect((await staff.manageEvent({ tournamentId, action: "SUBSTITUTE", seatId, userId: "replacement", originSocketId: "1.1" })).success).toBe(true);
@@ -526,10 +535,10 @@ describeWithDatabase("event tournament persistence", () => {
       },
     });
 
-  const readyEvent = async (rules: "OPEN" | "RANKED" = "OPEN") => {
+  const readyEvent = async (rules: "OPEN" | "RANKED" = "OPEN", userIds = ["hero", "foe"]) => {
     const database = await getTestDatabase();
     await insertUsers(
-      ["hero", "foe"].map((userId) => ({
+      userIds.map((userId) => ({
         userId,
         username: userId,
         status: "AWAKE",
@@ -550,7 +559,7 @@ describeWithDatabase("event tournament persistence", () => {
     );
     await database.insert(aiProfile).values({ id: "Default", userId: "ai", rules: [] });
     const event = createEventState({ ...eventConfig("Launch race"), rules });
-    event.participants = ["hero", "foe"].map((userId, i) => ({
+    event.participants = userIds.map((userId, i) => ({
       id: `seat-${i}`,
       userId,
       username: userId,
@@ -634,6 +643,137 @@ describeWithDatabase("event tournament persistence", () => {
       expect(response).not.toHaveProperty("userPatch");
     } finally { unsubscribe(); cache.clear(); }
   });
+
+  for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+    it.each([false, true])(`preserves committed ${status} acceptance activity without a profile read (launch: %s)`, async (launches) => {
+      const { database, game, accept } = await readyEvent();
+      const userId = game.userIds[launches ? 1 : 0]!;
+      if (!launches) {
+        const row = (await fetchEvent(database, "launch"))!;
+        row.eventData!.series[0]!.games[0]!.accepted = [];
+        await database.update(tournament).set({ eventData: row.eventData }).where(eq(tournament.id, "launch"));
+      }
+      await database.update(userData).set({ status, autoWakeUp: true, regenAt: new Date(0) }).where(eq(userData.userId, userId));
+      const profile = await callerFor(profileRouter, userId);
+      const initial = await profile.getUser();
+      const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const key = ["event-recovery-profile"];
+      const read = vi.fn(() => profile.getUser());
+      cache.setQueryData(key, initial);
+      const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+      const unsubscribe = observer.subscribe(() => {});
+      try {
+        const revision = prepareUserUpdate(cache, key);
+        const response = await withAfterTasks({ accept: () => accept(userId) }).accept();
+        expect(response.success).toBe(true);
+        const activity = { status: launches ? "BATTLE" : "AWAKE", battleId: launches ? game.battleId : null };
+        const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
+        expect(saved).toMatchObject(activity);
+        expect(response.userRecovery?.activity).toMatchObject(activity);
+        await updateUserCache(cache, key, response, { revision });
+        expect(cache.getQueryData<typeof initial>(key)?.userData).toMatchObject(activity);
+        expect(read).not.toHaveBeenCalled();
+        expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+      } finally { unsubscribe(); cache.clear(); }
+    });
+  }
+  for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+    it.each(["FIGHTING", "STARTING", "CONTENTION"] as const)(`reconciles ${status} acceptance when an opponent poll wins the launch (%s)`, async (phase) => {
+      const { database, game, accept } = await readyEvent();
+      const userId = game.userIds[1]!;
+      await database.update(userData).set({ status, autoWakeUp: true, regenAt: new Date(0) }).where(eq(userData.userId, userId));
+      const profile = await callerFor(profileRouter, userId);
+      const initial = await profile.getUser();
+      const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const key = ["event-competing-poll-profile"];
+      const read = vi.fn(() => profile.getUser());
+      cache.setQueryData(key, initial);
+      const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+      const unsubscribe = observer.subscribe(() => {});
+      const reserved = deferred();
+      const release = deferred();
+      const opponent = callerForDatabase(tournamentRouter, game.userIds[0]!, phase === "STARTING"
+        ? beforeTransactionalWrite(database, battle, async () => { reserved.resolve(); await release.promise; })
+        : database);
+      const original = eventQueries.updateTournamentForSaveEventState;
+      let competing: ReturnType<typeof opponent.getEvent> | undefined;
+      let lostClaim = false;
+      vi.spyOn(eventQueries, "updateTournamentForSaveEventState").mockImplementation(async (...args) => {
+        if (phase === "CONTENTION" && !competing && args[1].series[0]?.games[0]?.status === "STARTING") {
+          competing = opponent.getEvent({ tournamentId: "launch" });
+          await competing;
+          const claim = await original(...args);
+          lostClaim = claim.rowsAffected === 0;
+          return claim;
+        }
+        const committed = await original(...args);
+        if (phase !== "CONTENTION" && args[3]?.notice && committed.rowsAffected > 0) {
+          competing = opponent.getEvent({ tournamentId: "launch" });
+          if (phase === "STARTING") await reserved.promise;
+          else await competing;
+        }
+        return committed;
+      });
+      try {
+        const revision = prepareUserUpdate(cache, key);
+        const response = await withAfterTasks({ accept: () => accept(userId) }).accept();
+        const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
+        expect(response.success).toBe(true);
+        expect((await fetchEvent(database, "launch"))!.eventData!.series[0]!.games[0]!.status).toBe(phase === "STARTING" ? "STARTING" : "FIGHTING");
+        if (phase === "STARTING") {
+          expect(await database.query.tournamentMatch.findMany()).toMatchObject([{ id: game.id, state: "WAITING" }]);
+          expect(await database.query.battle.findMany()).toHaveLength(0);
+        }
+        expect(saved).toMatchObject(phase === "STARTING"
+          ? { status: "AWAKE", battleId: null }
+          : { status: "BATTLE", battleId: game.battleId });
+        await updateUserCache(cache, key, response, { revision });
+        const cached = cache.getQueryData<typeof initial>(key)?.userData;
+        if (phase === "FIGHTING") {
+          expect(response.userRecovery?.activity).toMatchObject({ status: "BATTLE", battleId: game.battleId });
+          expect(cached).toMatchObject({ status: "BATTLE", battleId: game.battleId });
+          expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+        } else {
+          expect(response.userRecovery).toEqual({ userId, requiresUserRefresh: true });
+          expect(cached?.status).toBe(initial.userData?.status);
+          expect(cached?.battleId).toBe(initial.userData?.battleId);
+          expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+          if (phase === "CONTENTION") expect(lostClaim).toBe(true);
+        }
+        expect(read).not.toHaveBeenCalled();
+        const synchronized = await recordQueries(() => syncEventTournament(database, "launch"));
+        expect(synchronized.result).toEqual({
+          needsRefresh: false,
+          activities: [{ userIds: game.userIds, activity: phase === "STARTING" ? null : { status: "BATTLE", battleId: game.battleId } }],
+        });
+        expect(synchronized.statements).toHaveLength(1);
+      } finally {
+        release.resolve();
+        await competing;
+        unsubscribe();
+        cache.clear();
+      }
+    });
+  }
+
+  it("keeps recovery awake when a different series is fighting", async () => {
+    const { database, game, accept } = await readyEvent("OPEN", ["hero", "foe", "other", "last"]);
+    expect((await accept(game.userIds[1]!)).success).toBe(true);
+    const row = (await fetchEvent(database, "launch"))!;
+    const event = row.eventData!;
+    const series = event.series.find((s) => s.round === 1 && s.games[0]?.id !== game.id)!;
+    const userId = series.games[0]!.userIds[0]!;
+    series.begun = false;
+    series.games = [];
+    await database.update(tournament).set({ eventData: event }).where(eq(tournament.id, "launch"));
+    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: true, regenAt: new Date(0) }).where(eq(userData.userId, userId));
+    const response = await withAfterTasks({ ready: () => callerForDatabase(tournamentRouter, userId, database).participateEvent({ tournamentId: "launch", seriesId: series.id, action: "READY" }) }).ready();
+    expect(response.success).toBe(true);
+    expect(response.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
+    expect(await database.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ status: "AWAKE", battleId: null });
+    expect(await database.query.battle.findMany()).toMatchObject([{ id: game.battleId }]);
+  });
+
   it("blocks open-world attacks on registered entrants until they withdraw", async () => {
     const database = await getTestDatabase();
     await insertUsers(
@@ -751,7 +891,7 @@ describeWithDatabase("event tournament persistence", () => {
         },
       ]),
     );
-    let recovering: Promise<boolean> | undefined;
+    let recovering: ReturnType<typeof syncEventTournament> | undefined;
     try {
       await inserting.promise;
       expect(await database.query.tournamentMatch.findMany()).toHaveLength(0);
@@ -823,7 +963,7 @@ describeWithDatabase("event tournament persistence", () => {
         ],
       ),
     );
-    let recovering: Promise<boolean> | undefined;
+    let recovering: ReturnType<typeof syncEventTournament> | undefined;
     try {
       await inserting.promise;
       vi.spyOn(Date, "now").mockReturnValue(
@@ -1105,7 +1245,7 @@ describeWithDatabase("event tournament persistence", () => {
         await release.promise;
       });
       const launching = accept(game.userIds[1]!, stalled);
-      let recovering: Promise<boolean> | undefined;
+      let recovering: ReturnType<typeof syncEventTournament> | undefined;
       try {
         await reached.promise;
         // Let independently dispatched siblings settle before checking atomic visibility.

@@ -36,7 +36,6 @@ export default function Hospital() {
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
   // Current interest
-  const utils = api.useUtils();
   const boost = getStrucBoost("hospitalSpeedupPerLvl", userData?.village?.structures);
 
   // Mutations
@@ -175,9 +174,11 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
+      if (data.userRecovery && (!data.success || !data.healer))
+        await updateUser(data, { revision });
       void utils.hospital.getHospitalizedUsers.invalidate();
       if (data.success && data.healer) {
-        await updateUser(data.healer, { revision });
+        await updateUser(data.healer, { revision, userRecovery: data.userRecovery });
       }
     },
   });

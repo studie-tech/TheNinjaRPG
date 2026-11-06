@@ -44,10 +44,11 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.userRecovery && !data.success) void updateUser(data, { revision });
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
+            updateUser(data, { revision }),
           ]);
         }
       },
@@ -58,10 +59,11 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.userRecovery && !data.success) void updateUser(data, { revision });
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
+            updateUser(data, { revision }),
           ]);
         }
       },
@@ -76,7 +78,7 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
         await Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),
           utils.item.getUserItems.invalidate(),
-          updateUser(data.userPatch, { revision, delta: data.userDelta }),
+          updateUser(data, { revision }),
           utils.item.getItemLoadouts.invalidate(),
         ]);
       },

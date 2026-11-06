@@ -115,6 +115,7 @@ export default function OccupationCrafting() {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
+      if (data.userRecovery && !data.success) void updateUser(data, { revision });
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
@@ -128,6 +129,7 @@ export default function OccupationCrafting() {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
+      if (data.userRecovery && !data.success) void updateUser(data, { revision });
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
@@ -283,12 +285,15 @@ export default function OccupationCrafting() {
     imbueInFlightRef.current = true;
     setPendingImbueRequest(request);
 
+    const revision = prepareUserUpdate();
     try {
       const data = await imbueItemMutation.mutateAsync({
         userItemId: request.userItemId,
         userCrystalItemId: request.userCrystalItemId,
       });
       showMutationToast(data);
+      if (data.success || ("userRecovery" in data && data.userRecovery))
+        await updateUser(data, { revision, refetch: false });
       if (!data.success) return;
 
       // Commit local truth before closing or refreshing. A failed/stale refetch cannot expose a

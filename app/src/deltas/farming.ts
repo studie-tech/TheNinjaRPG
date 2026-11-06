@@ -6,7 +6,41 @@ import {
   mapPlotToState,
   patchFarmPlot,
 } from "@/libs/farming";
+import { getPublicQuestUser } from "@/libs/quest";
 import type { FarmMutationResponse, FarmStateResponse } from "@/validators/farming";
+import type { UserCachePatch, UserDelta } from "@/validators/userCache";
+
+/** Project confirmed farm counters and the public tracker snapshot saved by its successful claim. */
+export const getFarmProfileUpdate = (
+  result: Pick<
+    FarmMutationResponse,
+    | "farmingExperienceDelta"
+    | "farmCurrencyDelta"
+    | "farmPlotsPurchasedDelta"
+    | "farmExtractorsOwnedDelta"
+  >,
+  questUser?: Parameters<typeof getPublicQuestUser>[0],
+  updatedAt?: Date,
+): { userPatch: UserCachePatch; userDelta: UserDelta } => ({
+  userPatch: {
+    ...(questUser ? { questData: getPublicQuestUser(questUser).questData } : {}),
+    ...(updatedAt ? { updatedAt } : {}),
+  },
+  userDelta: {
+    ...(result.farmingExperienceDelta !== undefined
+      ? { farmingExperience: result.farmingExperienceDelta }
+      : {}),
+    ...(result.farmCurrencyDelta !== undefined
+      ? { farmCurrency: result.farmCurrencyDelta }
+      : {}),
+    ...(result.farmPlotsPurchasedDelta !== undefined
+      ? { farmPlotsPurchased: result.farmPlotsPurchasedDelta }
+      : {}),
+    ...(result.farmExtractorsOwnedDelta !== undefined
+      ? { farmExtractorsOwned: result.farmExtractorsOwnedDelta }
+      : {}),
+  },
+});
 
 /** Publish only plots whose water CAS succeeded, together with their pre-write timelines. */
 export const getWateredFarmPlots = (

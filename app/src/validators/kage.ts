@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { KAGE_DEFENSE_MIN_DAYS, KAGE_DEFENSE_WINDOW_HOURS } from "@/drizzle/constants";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const kageVillageSchema = z.object({ villageId: z.string().min(1) });
 /** Weekly UTC window start; Sunday is day zero and the full window must fit within its day. */
@@ -47,9 +48,7 @@ export const kageNominationSchema = kageVillageSchema.extend({
   voteId: z.string().min(1).optional(),
   userId: z.string().min(1),
 });
-export const kageBattleResponseSchema = z.object({
-  success: z.boolean(),
-  message: z.string(),
+export const kageBattleResponseSchema = userDeltaResponseSchema.extend({
   battleId: z.string().optional(),
 });
 

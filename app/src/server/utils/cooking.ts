@@ -17,6 +17,7 @@ import {
   insertUserRaidBuffForConsumeMeal,
 } from "@/queries/item";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getNextUserSnapshotAt } from "@/utils/time";
 
@@ -77,6 +78,7 @@ export const consumeMeal = async ({
   user,
   owned,
   expectedQuantity,
+  readiness,
 }: {
   client: DrizzleClient;
   user: UserData & {
@@ -86,6 +88,7 @@ export const consumeMeal = async ({
   };
   owned: UserItem & { item: Item };
   expectedQuantity?: number;
+  readiness?: ActionReadinessWrite;
 }) => {
   const now = new Date();
   if (user.status !== "AWAKE" || user.battleId)
@@ -136,6 +139,7 @@ export const consumeMeal = async ({
       expiresAt,
       extendsMeal ? previous.createdAt : now,
       id,
+      readiness,
     ),
   );
   if (consumed.rowsAffected === 0)

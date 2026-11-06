@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
+import superjson from "superjson";
 import { getDefaultStore } from "jotai";
 import type { PropsWithChildren, ReactElement } from "react";
 import type { AppRouter } from "@/api/root";
+import type { UserCache } from "@/deltas/profile";
+import type { UserWithRelations } from "@/server/api/routers/profile";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import * as client from "@/app/_trpc/client";
 import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
@@ -162,4 +166,111 @@ it("keeps the notification list when a battle event finds the derived combat ent
   // UserContext replays toast entries when this array changes identity.
   expect(cached?.notifications).toBe(notifications);
   expect(pushToCombat).toHaveBeenCalledWith(expect.anything(), "battle-1");
+});
+
+
+it.each([
+  { outcome: "confirmed", eventAfterResponse: false, abandon: "none", recovery: false },
+  { outcome: "confirmed", eventAfterResponse: true, abandon: "none", recovery: false },
+  { outcome: "lost-response", eventAfterResponse: false, abandon: "none", recovery: false },
+  { outcome: "lost-response", eventAfterResponse: true, abandon: "none", recovery: false },
+  { outcome: "lost-response", eventAfterResponse: false, abandon: "unmount", recovery: false },
+  { outcome: "lost-response", eventAfterResponse: false, abandon: "account-change", recovery: false },
+  { outcome: "confirmed", eventAfterResponse: false, abandon: "none", recovery: true },
+  { outcome: "confirmed", eventAfterResponse: true, abandon: "none", recovery: true },
+  { outcome: "lost-response", eventAfterResponse: false, abandon: "none", recovery: true },
+  { outcome: "lost-response", eventAfterResponse: true, abandon: "none", recovery: true },
+])("settles own battle admission without profile reads (%s)", async ({ outcome, eventAfterResponse, abandon, recovery }) => {
+  let receiveEvent!: (data: UserEvent) => Promise<void>;
+  vi.spyOn(Pusher, "default").mockImplementation(function () {
+    return {
+      connection: { socket_id: "own-tab" },
+      subscribe: () => ({ bind: (_event: string, handler: typeof receiveEvent) => { receiveEvent = handler; } }),
+      unsubscribe: vi.fn(), disconnect: vi.fn(),
+    };
+  } as never);
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/battlearena");
+  const navigate = vi.spyOn(routing, "pushToCombat").mockImplementation(() => undefined);
+  navigate.mockClear();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClients.push(queryClient);
+  const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+  const profile: UserCache = { userData: { userId: "player", status: "ASLEEP", battleId: null,
+    rank: "GENIN", titles: [], items: [], pveFights: 2, curHealth: 1, curEnergy: 10, regenAt: new Date(0),
+  } as unknown as NonNullable<UserWithRelations>, notifications: [] };
+  const userRecovery = { userId: "player", userPatch: { status: "AWAKE" as const,
+    curHealth: 100, curEnergy: 80, regenAt: new Date("2026-01-01T00:00:00Z") } };
+  const packet = JSON.parse(JSON.stringify({ type: "battle", battleId: "battle", originSocketId: "own-tab",
+    ...(recovery ? { userRecovery: superjson.serialize(userRecovery) } : {}) })) as UserEvent;
+  const canonical: UserCache = { ...profile, userData: { ...profile.userData!, status: "BATTLE", battleId: "battle", curHealth: 100, pveFights: 3 } };
+  queryClient.setQueryData(profileKey, profile);
+  const read = vi.fn(async () => canonical);
+  const observer = new QueryObserver(queryClient, { queryKey: profileKey, staleTime: Infinity,
+    queryFn: read });
+  const unsubscribe = observer.subscribe(() => {});
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <testApi.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </testApi.Provider>
+  );
+  const view = renderHook(() => usePusherHandler("player"), { wrapper });
+  try {
+    let settle!: () => void;
+    const responseReady = new Promise<void>((resolve) => { settle = resolve; });
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      mutationFn: async (_variables: { originSocketId: string }) => {
+        await responseReady;
+        if (outcome === "lost-response") throw new Error("Response lost after commit");
+        return { success: true, userPatch: { status: "BATTLE" as const, battleId: "battle" },
+          userDelta: { pveFights: 1 },
+          userRecovery };
+      },
+      onMutate: () => prepareUserUpdate(queryClient, profileKey),
+      onSuccess: async (result, _variables, revision) => {
+        await updateUserCache(queryClient, profileKey, result, { revision, refetch: false });
+      },
+    });
+    const execution = mutation.execute({ originSocketId: "own-tab" }).catch(() => undefined);
+    const revision = queryClient.getQueryState(profileKey)?.dataUpdateCount;
+    if (!eventAfterResponse) {
+      // Admission precedes HTTP completion without consuming its captured cache revision.
+      await act(async () => receiveEvent(packet));
+      expect(queryClient.getQueryState(profileKey)?.dataUpdateCount).toBe(revision);
+      expect(navigate).not.toHaveBeenCalled();
+    }
+    if (abandon === "unmount") view.unmount();
+    if (abandon === "account-change") queryClient.setQueryData(profileKey, {
+      ...profile, userData: { ...profile.userData!, userId: "another-player" },
+    });
+    await act(async () => { settle(); await execution; });
+    if (abandon !== "none") {
+      expect(queryClient.getQueryData<UserCache>(profileKey)?.userData).toMatchObject({
+        userId: abandon === "account-change" ? "another-player" : "player",
+        status: "ASLEEP", battleId: null, pveFights: 2, curHealth: 1,
+      });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(read).not.toHaveBeenCalled();
+      return;
+    }
+    if (eventAfterResponse)
+      await act(async () => receiveEvent(packet));
+    expect(read).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData<UserCache>(profileKey)?.userData).toMatchObject({
+      status: "BATTLE", battleId: "battle",
+      curHealth: outcome === "confirmed" || recovery ? 100 : 1,
+      curEnergy: outcome === "confirmed" || recovery ? 80 : 10,
+      regenAt: outcome === "confirmed" || recovery ? userRecovery.userPatch.regenAt : new Date(0),
+      pveFights: outcome === "confirmed" ? 3 : 2,
+    });
+    expect(navigate).toHaveBeenCalledTimes(outcome === "confirmed" ? 0 : 1);
+    // Replayed own events are idempotent once admission is visible.
+    await act(async () => receiveEvent(packet));
+    expect(navigate).toHaveBeenCalledTimes(outcome === "confirmed" ? 0 : 1);
+    expect(read).not.toHaveBeenCalled();
+    // The actor's other tabs and other fighters still receive authoritative navigation.
+    await act(async () => receiveEvent({ type: "battle", battleId: "another-battle", originSocketId: "another-tab" }));
+    expect(queryClient.getQueryData<UserCache>(profileKey)?.userData?.battleId).toBe("another-battle");
+    expect(navigate).toHaveBeenCalledWith(expect.anything(), "another-battle");
+  } finally { unsubscribe(); }
 });

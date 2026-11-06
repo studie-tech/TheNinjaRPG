@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { baseServerResponse } from "@/validators/base";
+import { userPatchSchema } from "@/validators/userCache";
 
 export const userHealInputSchema = z.object({
   userId: z.string(),
@@ -15,6 +16,7 @@ export const healerAfterHealSchema = z.object({
   maxEnergy: z.number(),
   medicalExperience: z.number(),
   regenAt: z.date(),
+  questData: userPatchSchema.shape.questData,
 });
 
 export const userHealOutputSchema = baseServerResponse.extend({

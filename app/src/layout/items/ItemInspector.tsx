@@ -38,6 +38,7 @@ import {
 } from "@/layout/items/ItemRepair";
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
 import Loader from "@/layout/Loader";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
@@ -116,7 +117,8 @@ export function ItemInspector({
   // Derived
   const structures = userData?.village?.structures;
   const isMeal = useritem.item.itemType === "MEAL";
-  const canEatMeal = !isLoading && userData.status === "AWAKE" && !userData.battleId;
+  const canEatMeal =
+    !isLoading && canAttemptAwakeAction(userData) && !userData.battleId;
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
   const repairItems = getRepairKits(allUserItems, userData).map(
     ({ userItem }) => userItem,
@@ -205,7 +207,7 @@ export function ItemInspector({
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-foreground text-lg">{look.name}</h2>
           <p
-            className={cn("font-medium text-sm", rarityTextClass[useritem.item.rarity])}
+            className={cn("text-sm font-medium", rarityTextClass[useritem.item.rarity])}
           >
             {rarityLabel[useritem.item.rarity]} {useritem.item.itemType.toLowerCase()}
             {useritem.item.slot !== "NONE" && ` · fits ${slotLabel(useritem)}`}
@@ -378,7 +380,7 @@ export function ItemInspector({
                   evo,
                 );
                 const canEvolve =
-                  userData.status === "AWAKE" &&
+                  canAttemptAwakeAction(userData) &&
                   useritem.level >= ITEM_LEVEL_CAP &&
                   useritem.quantity === 1 &&
                   !useritem.isInAuction &&
@@ -430,7 +432,7 @@ export function ItemInspector({
                         </b>
                       </p>
                     )}
-                    {userData.status !== "AWAKE" && (
+                    {!canAttemptAwakeAction(userData) && (
                       <p className="text-destructive text-sm">
                         Must be awake to evolve an item (current:{" "}
                         {userData.status.toLowerCase()}).

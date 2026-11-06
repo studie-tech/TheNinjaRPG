@@ -1,3 +1,5 @@
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 /**
  * Database access for hospital; authorization and transaction scopes stay in callers.
  */
@@ -69,13 +71,14 @@ export const executeResultForUserHeal = (
   questDataForDb: import("@/validators/objectives").QuestTrackerType[],
   pools: ("Health" | "Chakra" | "Stamina")[],
   toHeal: number,
+  readiness?: ActionReadinessWrite,
 ) =>
   client.execute(sql`
             UPDATE ${userData}
             INNER JOIN ${userData} AS recipient ON ${recipient.userId} = ${t.userId}
-            SET ${userData.updatedAt} = ${getNextUserSnapshotAt(u.updatedAt, healedAt)},
+            SET ${actionReadinessSqlSet(readiness, ["status", "curChakra"])} ${userData.status} = 'AWAKE', ${userData.updatedAt} = ${getNextUserSnapshotAt(u.updatedAt, healedAt)},
                 ${userData.medicalExperience} = LEAST(${userData.medicalExperience} + ${expGain}, ${MEDNIN_EXP_CAP}),
-                ${userData.curChakra} = ${userData.curChakra} - ${chakraCost},
+                ${userData.curChakra} = ${readiness?.set.curChakra ?? userData.curChakra} - ${chakraCost},
                 ${userData.questData} = CAST(${JSON.stringify(questDataForDb)} AS JSON),
                 ${pools.includes("Health") ? sql`${recipient.curHealth} = LEAST(${recipient.curHealth} + ${toHeal}, ${recipient.maxHealth}),` : sql``}
                 ${pools.includes("Chakra") ? sql`${recipient.curChakra} = LEAST(${recipient.curChakra} + ${toHeal}, ${recipient.maxChakra}),` : sql``}
@@ -91,7 +94,7 @@ export const executeResultForUserHeal = (
             WHERE ${and(
               eq(userData.userId, u.userId),
               eq(userData.updatedAt, u.updatedAt),
-              eq(userData.status, "AWAKE"),
+              readiness?.where ?? eq(userData.status, "AWAKE"),
               gte(userData.curChakra, chakraCost),
               eq(recipient.updatedAt, t.updatedAt),
               inArray(recipient.status, MEDNIN_HEALABLE_STATES),
@@ -116,7 +119,7 @@ export const updateUserDataForUserHeal = (
       ),
     );
 
-/** Build the `userData` update for `npcHeal`, using predicates on `userId` and `status`. */
+/** Build free checkout after the caller verifies eligibility. */
 export const updateUserDataForNpcHeal = (
   client: Pick<DrizzleClient, "update">,
   user: { maxHealth: number; maxEnergy: number },

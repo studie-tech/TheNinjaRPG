@@ -1,22 +1,28 @@
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import * as client from "@/app/_trpc/client";
 import * as ContentBox from "@/layout/ContentBox";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import * as Modal from "@/layout/Modal";
+import { actionStatusMessage, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import * as toast from "@/libs/toast";
 import { optimisticGlobalTravelStart } from "@/libs/travel";
 import * as UserContext from "@/utils/UserContext";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { huntingContract, huntingHabitatContent } from "../setup/hunting";
 
 const now = new Date();
 const session = { content: huntingHabitatContent(), id: "session", habitatId: "forest", contractId: "contract", sector: 1, readyAt: null, battleId: null, version: 0 };
-let user: { userId: string; occupation: string; sector: number; status: string };
+let user: { userId: string; occupation: string; sector: number; status: string; huntingExperience?: number };
 let currentSession: typeof session | null;
 let boardSession: typeof session | null;
 let boardProgress: { contractId: string; used: number; cooldownUntil: Date | null }[];
+let respond: (result: UserDeltaResponse) => Promise<void>;
+const updateUser = vi.fn(async () => undefined);
 
 beforeEach(() => {
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
@@ -44,19 +50,56 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     hunting: {
-      getBoard: { useQuery: () => ({ data: { ...board, session: boardSession, progress: boardProgress }, isLoading: false }) },
+      getBoard: { useQuery: () => ({ data: { ...board, user: { ...board.user, ...user }, session: boardSession, progress: boardProgress }, isLoading: false }) },
       getSession: { useQuery: () => ({ data: currentSession ? { session: currentSession, contract: huntingContract() } : null }) },
-      accept: { useMutation: () => ({}) }, sessionAction: { useMutation: () => ({}) }, start: { useMutation: () => ({}) },
+      accept: { useMutation: (options: { onSuccess: (result: UserDeltaResponse, variables: unknown, revision: number | undefined) => Promise<void> }) => {
+        const [isPending, setPending] = useState(false);
+        respond = async (result) => { await options.onSuccess(result, undefined, 7); setPending(false); };
+        return { isPending, mutate: () => setPending(true) };
+      } }, sessionAction: { useMutation: () => ({}) }, start: { useMutation: () => ({}) },
     },
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ updateUser: vi.fn() } as never);
+  updateUser.mockClear();
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({ updateUser } as never);
+  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: user }) as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
   vi.spyOn(Modal, "default").mockImplementation(({ isOpen, children, setIsOpen }: { isOpen: boolean; children: ReactNode; setIsOpen: (open: boolean) => void }) => isOpen ? <div role="dialog"><button onClick={() => setIsOpen(false)}>Dismiss</button>{children}</div> : null);
 });
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+it.each([false, true])("offers one hospital shortcut after rejection with active session: %s", async (hasSession) => {
+  user.status = "HOSPITALIZED";
+  user.huntingExperience = 999999;
+  boardSession = hasSession ? session : null;
+  const view = render(<HuntingBoard />);
+  fireEvent.click(view.getAllByRole("button", { name: /Accept contract|Switch contract/i })[0]!);
+  await act(() => respond({ success: false, message: actionStatusMessage("HOSPITALIZED") }));
+  expect(view.getByText(actionStatusMessage("HOSPITALIZED"))).toBeTruthy();
+  expect(view.getAllByRole("link").filter((link) => link.getAttribute("href") === "/hospital")).toHaveLength(1);
+  expect((view.getAllByRole("button", { name: /Accept contract|Switch contract/i })[0] as HTMLButtonElement).disabled).toBe(false);
+  expect(updateUser).not.toHaveBeenCalled();
+  expect(toast.showMutationToast).not.toHaveBeenCalled();
+});
+
+it("keeps ordinary hunting rejections inline and retains a merged recovery notice once", async () => {
+  const view = render(<HuntingBoard />);
+  fireEvent.click(view.getAllByRole("button", { name: "Accept contract" })[0]!);
+  await act(() => respond({ success: false, message: "Not enough experience" }));
+  expect(view.getByRole("status").textContent).toBe("Not enough experience");
+  expect(view.queryByRole("link", { name: "Go to hospital" })).toBeNull();
+  expect(updateUser).not.toHaveBeenCalled();
+  expect(toast.showMutationToast).not.toHaveBeenCalled();
+  fireEvent.click(view.getAllByRole("button", { name: "Accept contract" })[0]!);
+  await act(() => respond({ success: false, message: `Not enough experience ${AUTO_WAKE_MESSAGE}`, actionNotice: AUTO_WAKE_MESSAGE }));
+  expect(view.getByRole("status").textContent).toBe(`Not enough experience ${AUTO_WAKE_MESSAGE}`);
+  expect(view.queryByRole("link", { name: "Go to hospital" })).toBeNull();
+  expect((view.getAllByRole("button", { name: "Accept contract" })[0] as HTMLButtonElement).disabled).toBe(false);
+  expect(updateUser).toHaveBeenCalledWith(expect.objectContaining({ actionNotice: AUTO_WAKE_MESSAGE }), { revision: 7, refetch: false });
+  expect(toast.showMutationToast).toHaveBeenCalledTimes(1);
+});
 
 it("hides nonmatching habitats and combines rank, creature and material filters", () => {
   const view = render(<HuntingBoard />);

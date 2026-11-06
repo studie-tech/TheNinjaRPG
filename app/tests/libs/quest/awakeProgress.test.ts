@@ -15,7 +15,7 @@ describe("awake-only quest actions", () => {
   it("blocks only daily Mission Hall assignments while not awake", () => {
     for (const type of ["mission", "crime", "errand", "medical", "pvp", "war"] as const) {
       expect(missionHallStartBlockedMessage(type, "AWAKE")).toBeNull();
-      expect(missionHallStartBlockedMessage(type, "ASLEEP")).toContain("must be awake");
+      expect(missionHallStartBlockedMessage(type, "ASLEEP")).toContain("asleep");
     }
     for (const type of ["story", "event", "achievement", "hunting"] as const) {
       expect(missionHallStartBlockedMessage(type, "ASLEEP")).toBeNull();

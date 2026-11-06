@@ -12,6 +12,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { beforeStatements } from "../../../setup/statements";
 import { queueEnergy } from "../../../setup/queues";
 
 const userId = "sage-cache-player";
@@ -23,6 +24,8 @@ const snapshot = {
 };
 
 describe("sage removal cache response", () => {
+  beforeEach(() => stubProfile("fetchAllGameSettings", async () => []));
+  afterEach(() => resetServerModuleStubs());
   for (const pendingQueue of [false, true]) {
     it(`returns a confirmed charge without a post-read, pending queue=${pendingQueue}`, async () => {
       const read = vi
@@ -70,17 +73,11 @@ describeWithDatabase("sage removal committed balances", () => {
   afterEach(() => resetServerModuleStubs());
   it("clears the mode and charges exactly the response cost while retaining an independent grant", async () => {
     const db = await getTestDatabase();
-    stubProfile("fetchUser", async () => {
-      const user = await db.query.userData.findFirst({
-        where: eq(userData.userId, userId),
-      });
-      await db
-        .update(userData)
-        .set({ reputationPoints: sql`${userData.reputationPoints} + 7` })
+    const raced = beforeStatements(db, userData, [async () => {
+      await db.update(userData).set({ reputationPoints: sql`${userData.reputationPoints} + 7` })
         .where(eq(userData.userId, userId));
-      return user;
-    });
-    const result = await (await callerFor(sageModeRouter, userId)).removeSageMode();
+    }]);
+    const result = await callerForDatabase(sageModeRouter, userId, raced).removeSageMode();
     const stored = await db.query.userData.findFirst({
       where: eq(userData.userId, userId),
     });

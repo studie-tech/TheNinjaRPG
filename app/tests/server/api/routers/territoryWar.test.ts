@@ -6,7 +6,8 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { aiProfile, battle, battleHistory, clan, mpvpBattleQueue, mpvpBattleUser, territoryWar, userCookingJob, userData, userVote, village } from "@/drizzle/schema";
+import { aiProfile, battle, battleHistory, clan, quest, questHistory, item, userItem, userQueue, trainingLog, mpvpBattleQueue, mpvpBattleUser, territoryWar, userCookingJob, userData, userVote, village } from "@/drizzle/schema";
+import { calcEnergy } from "@/libs/profile";
 import { Pusher } from "@/libs/pusher";
 import { fetchBattle } from "@/queries/combat";
 import { clanRouter } from "@/server/api/routers/clan";
@@ -17,7 +18,11 @@ import { cleanupTerritoryWarTeams } from "@/server/utils/territoryWar";
 
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { UserDeltaResponse } from "@/validators/userCache";
-import { insertUsers } from "../../../setup/factories";
+import { IncreaseMaxPoolsTag } from "@/validators/combat";
+import { SimpleObjective } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
+import { insertItems, insertUserItems, insertUsers, insertQuests, insertQuestHistory } from "../../../setup/factories";
+import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
@@ -52,7 +57,7 @@ const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
 
 describeWithDatabase("Territory War participation", () => {
   beforeEach(async () => {
-    await resetTables(battleHistory, battle, mpvpBattleUser, mpvpBattleQueue, territoryWar, clan, village, userCookingJob, userVote, userData, aiProfile);
+    await resetTables(questHistory, quest, userQueue, trainingLog, userItem, item, battleHistory, battle, mpvpBattleUser, mpvpBattleQueue, territoryWar, clan, village, userCookingJob, userVote, userData, aiProfile);
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "home", name: "Home", sector: 1, kageId: "leader" },
@@ -66,6 +71,70 @@ describeWithDatabase("Territory War participation", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => { subscriptions.splice(0).forEach((stop) => stop()); clients.splice(0).forEach((client) => client.clear()); vi.restoreAllMocks(); });
+
+  for (const operation of ["createTeam", "joinTeam"] as const) {
+    it.each(["capacity", "training"] as const)(`loads the complete recovery actor for ${operation}: %s`, async (scenario) => {
+      const db = await getTestDatabase();
+      if (operation === "joinTeam") expect((await (await caller()).createTeam({ eventId: "event" })).success).toBe(true);
+      const actorId = operation === "createTeam" ? "leader" : "ally";
+      await db.update(village).set({ sector: 100 }).where(eq(village.id, "home"));
+      const capacity = calcEnergy(50) + 200;
+      await db.update(userData).set({ status: "ASLEEP", autoWakeUp: true, curEnergy: scenario === "capacity" ? capacity : 100, maxEnergy: capacity }).where(eq(userData.userId, actorId));
+      await insertItems([{ id: "capacity-armor", itemType: "ARMOR", maxDurability: 100, effects: [IncreaseMaxPoolsTag.parse({ poolsAffected: ["Energy"], power: 200, calculation: "static" })] }]);
+      await insertUserItems([{ id: "armor", userId: actorId, itemId: "capacity-armor", equipped: "CHEST", durability: 100, level: 1 }]);
+      if (scenario === "training") {
+        await queueEnergy(actorId, [{ stat: "offence", energy: 100 }]);
+        await insertQuests([{ id: "queued-stat-quest", questType: "daily", content: { objectives: [SimpleObjective.parse({ id: "queued-stat-goal", task: "stats_trained", value: 1000, description: "Train stats", successDescription: "Done" })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+        await insertQuestHistory([{ userId: actorId, questId: "queued-stat-quest", questType: "daily" }]);
+        await db.update(userData).set({ questData: [{ id: "queued-stat-quest", startAt: new Date().toISOString(), goals: [{ id: "queued-stat-goal", value: 0, done: false, collected: false, recentlyDied: false }] }] }).where(eq(userData.userId, actorId));
+      }
+      const before = (await db.query.userData.findFirst({ where: eq(userData.userId, actorId) }))!;
+      const actor = callerForDatabase(territoryWarRouter, actorId, db);
+      const teamId = (await team())?.id;
+      const { result, statements } = await recordQueries(() => operation === "createTeam" ? actor.createTeam({ eventId: "event" }) : actor.joinTeam({ teamId: teamId! }));
+      expect(result).toMatchObject({ success: true, actionNotice: "This action woke you up." });
+      const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, actorId) }))!;
+      expect(saved).toMatchObject({ status: "QUEUED", maxEnergy: capacity, curEnergy: scenario === "capacity" ? capacity : 0 });
+      if (scenario === "training") {
+        expect(saved.offence).toBeGreaterThan(before.offence);
+        expect(saved.questData?.find((tracker) => tracker.id === "queued-stat-quest")?.goals[0]?.value).toBeCloseTo(saved.offence - before.offence);
+        expect(saved.energyQueueHead).toBeGreaterThan(before.energyQueueHead);
+        expect(await db.query.trainingLog.findMany()).toMatchObject([{ userId: actorId, stat: "offence" }]);
+      }
+      expect(statements.filter((statement) => /^select /i.test(statement) && /from `UserData`/i.test(statement) && /[`"]userId[`"]/.test(statement))).toHaveLength(1);
+    });
+
+    it(`preserves the recovery preference guard for ${operation}`, async () => {
+      const db = await getTestDatabase();
+      if (operation === "joinTeam") expect((await (await caller()).createTeam({ eventId: "event" })).success).toBe(true);
+      const actorId = operation === "createTeam" ? "leader" : "ally";
+      await db.update(village).set({ sector: 100 }).where(eq(village.id, "home"));
+      const teamId = (await team())?.id;
+      await db.update(userData).set({ status: "ASLEEP", autoWakeUp: true, curEnergy: 100 }).where(eq(userData.userId, actorId));
+      await queueEnergy(actorId, [{ stat: "offence", energy: 100 }]);
+      const before = (await db.query.userData.findFirst({ where: eq(userData.userId, actorId) }))!;
+      let interposed = false;
+      const raced = new Proxy(db, {
+        get(target, key, receiver) {
+          if (key !== "execute") return Reflect.get(target, key, receiver);
+          return async (statement: Parameters<typeof db.execute>[0]) => {
+            if (!interposed) {
+              interposed = true;
+              await db.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, actorId));
+            }
+            return target.execute(statement);
+          };
+        },
+      });
+      const actor = callerForDatabase(territoryWarRouter, actorId, raced);
+      const result = operation === "createTeam" ? await actor.createTeam({ eventId: "event" }) : await actor.joinTeam({ teamId: teamId! });
+      expect(result.success).toBe(false);
+      expect(result.actionNotice).toBeUndefined();
+      expect(await db.query.userData.findFirst({ where: eq(userData.userId, actorId) })).toMatchObject({ status: "ASLEEP", autoWakeUp: false, curEnergy: 100, offence: before.offence, energyQueueHead: before.energyQueueHead });
+      expect(await db.query.trainingLog.findMany()).toEqual([]);
+      expect((await db.query.mpvpBattleUser.findMany()).some((member) => member.userId === actorId)).toBe(false);
+    });
+  }
 
   it("reads the notice and durable next opening without synchronizing or writing", async () => {
     const db = await getTestDatabase();
@@ -101,7 +170,7 @@ describeWithDatabase("Territory War participation", () => {
     expect(new Set(Object.values(snapshot.extraState.territoryWar!.competitors).map(comp => comp.id))).toEqual(new Set(["village:home"]));
   });
 
-  it.each(["missing", "expired", "resolved"] as const)("confirms a read-only unavailable event rejection without a profile read: %s", async (scenario) => {
+  it.each(["missing", "expired", "resolved"] as const)("confirms a read-only unavailable event rejection without profile hydration: %s", async (scenario) => {
     const db = await getTestDatabase();
     if (scenario === "expired") await db.update(territoryWar).set({ endsAt: new Date(0) });
     if (scenario === "resolved") await db.update(territoryWar).set({ resolvedAt: new Date() });
@@ -112,7 +181,8 @@ describeWithDatabase("Territory War participation", () => {
     await db.insert(userCookingJob).values({ id: "unsettled-cooking", userId: "leader", experience: 23, finishesAt: new Date(0) });
     const measured = await recordQueries(() => callerForDatabase(territoryWarRouter, "leader", db).createTeam({ eventId: scenario === "missing" ? "missing" : "event" }));
     expect(measured.result).toMatchObject({ success: false, message: "This Territory War has ended", userDelta: {} });
-    expect(measured.statements).toHaveLength(3);
+    // Isolation, event, actor relations and recovery settings are independent reads.
+    expect(measured.statements).toHaveLength(4);
     expect(measured.statements.every((statement) => /^select /i.test(statement))).toBe(true);
     await cache.onSuccess(measured.result, undefined, revision);
     expect(cache.refetch).not.toHaveBeenCalled();

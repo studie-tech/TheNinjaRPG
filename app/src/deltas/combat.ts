@@ -2,6 +2,7 @@ import superjson from "superjson";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import type { BattleType } from "@/drizzle/constants";
 import {
+  BATTLE_ARENA_HEAL_COST,
   CombatStatNames,
   ManualStartBattleTypes,
   MasteryNames,
@@ -175,8 +176,13 @@ export const combatProfilePatch = (
     current.status !== "BATTLE"
   )
     return;
+  // Admission increments PvE fights before settlement; socket-only tabs retain the pre-claim count.
   if (
-    baselineFields.some((field) => current[field] !== update.baseline[field]) ||
+    baselineFields.some(
+      (field) =>
+        current[field] !== update.baseline[field] &&
+        (field !== "pveFights" || current.pveFights !== update.baseline.pveFights + 1),
+    ) ||
     current.regenAt.getTime() !== new Date(update.baseline.regenAt).getTime()
   )
     return;
@@ -376,8 +382,9 @@ export const combatCacheIntegerDelta = (
   ) as Pick<UserDelta, "money" | "experience" | "earnedExperience" | "seichiSilver">;
 
 /**
- * Project battle admission, stealth breaks and the non-tournament PvE counter for a settled
- * actor. Withhold both fields when queues, PvP or immunity changes require a profile refresh.
+ * Project battle admission, stealth breaks and fight counters for a settled actor.
+ * Queued training needs a recovery baseline and PvP needs a known participant role;
+ * unsettled receipts and immunity changes require a profile refresh.
  */
 export const getCombatAdmissionUserUpdate = ({
   cacheActor,
@@ -391,6 +398,9 @@ export const getCombatAdmissionUserUpdate = ({
   battleId,
   stealthBreakUserIds,
   isTournament,
+  hasRecoveryProjection = false,
+  recoveredEnergy,
+  isAttacker,
 }: {
   cacheActor: Pick<UserData, "userId" | "bracketImmunityLiftedUntil"> | undefined;
   requiresUserRefresh: boolean;
@@ -403,13 +413,18 @@ export const getCombatAdmissionUserUpdate = ({
   battleId: string;
   stealthBreakUserIds: string[];
   isTournament: boolean;
+  hasRecoveryProjection?: boolean;
+  recoveredEnergy?: number;
+  isAttacker?: boolean;
 }): { userPatch: UserCachePatch | undefined; userDelta: UserDelta | undefined } => {
   const canProject =
     !!cacheActor &&
     !requiresUserRefresh &&
     allParticipantIds.includes(cacheActor.userId) &&
-    !queuedParticipants.some((entry) => entry.user.userId === cacheActor.userId) &&
-    !["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType) &&
+    (hasRecoveryProjection ||
+      !queuedParticipants.some((entry) => entry.user.userId === cacheActor.userId)) &&
+    (!["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType) ||
+      isAttacker !== undefined) &&
     !warAggressorIds.includes(cacheActor.userId) &&
     !bracketImmunityAggressorIds.includes(cacheActor.userId) &&
     cacheActor.bracketImmunityLiftedUntil <= now;
@@ -417,7 +432,13 @@ export const getCombatAdmissionUserUpdate = ({
     ? {
         status: "BATTLE",
         battleId,
+        ...(recoveredEnergy !== undefined ? { curEnergy: recoveredEnergy } : {}),
         bracketImmunityPausedAt: null,
+        ...(!isTournament &&
+        isAttacker &&
+        ["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType)
+          ? { immunityUntil: now }
+          : {}),
         ...(stealthBreakUserIds.includes(cacheActor.userId)
           ? { stealthActive: false, stealthActivatedAt: null }
           : {}),
@@ -425,9 +446,27 @@ export const getCombatAdmissionUserUpdate = ({
     : undefined;
   return {
     userPatch,
-    userDelta: userPatch ? (isTournament ? {} : { pveFights: 1 }) : undefined,
+    userDelta: userPatch
+      ? isTournament
+        ? {}
+        : ["SPARRING", "COMBAT"].includes(battleType)
+          ? { pvpFights: 1 }
+          : { pveFights: 1 }
+      : undefined,
   };
 };
+
+/** Apply the confirmed arena healing pools and configured payment without a profile reload. */
+export const getArenaHealUserUpdate = (
+  user: Pick<UserData, "maxHealth" | "maxChakra" | "maxStamina">,
+) => ({
+  userPatch: {
+    curHealth: user.maxHealth,
+    curChakra: user.maxChakra,
+    curStamina: user.maxStamina,
+  },
+  userDelta: { money: -BATTLE_ARENA_HEAL_COST },
+});
 
 /** Project the auto-combat preference only for battle types that support automatic starts. */
 export const getAutoCombatPreferencePatch = (

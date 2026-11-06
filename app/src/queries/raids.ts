@@ -40,8 +40,10 @@ import {
   RAID_CHAT_CONVERSATION_LIKE_PATTERN,
 } from "@/libs/raids";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import { activeWarAllyWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
 /** Queue rows with no live battle: open, or held by a start claim. */
 const battleOpenOrClaimed = sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE ${BATTLE_CLAIM_LIKE_PATTERN})`;
@@ -376,11 +378,21 @@ export const updateUserDataForReadyToQueue = (
 export const updateUserDataForReadyToQueue2 = (
   client: Pick<DrizzleClient, "update">,
   userId: string,
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
-    .set({ travelFinishAt: null, battleId: null })
-    .where(and(eq(userData.userId, userId), eq(userData.status, "AWAKE")));
+    .set({
+      ...readiness?.set,
+      travelFinishAt: null,
+      battleId: null,
+    })
+    .where(
+      and(
+        eq(userData.userId, userId),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
+      ),
+    );
 
 /** Build the `mpvpBattleUser` deletion for `readyToQueue`, using predicates on `userId` and `id`. */
 export const deleteMpvpBattleUserForReadyToQueue = (
@@ -948,19 +960,6 @@ export const fetchRaidListUser = async (client: DrizzleClient, userId: string) =
   });
 };
 
-/**
- * Fields required by joinRaidQueue guards (ban, AWAKE status, current sector,
- * village, pending training). Does not persist regen or rewrite quests — the later status CAS
- * and rollback pairing remain the source of truth for queue transitions.
- */
-export const fetchRaidJoinUser = async (client: DrizzleClient, userId: string) => {
-  return client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: {
-      villageId: true,
-      sector: true,
-      status: true,
-      isBanned: true,
-    },
-  });
-};
+/** Load the actor's profile relations for local recovery without running profile hydration or settlement reads. */
+export const fetchRaidJoinUser = (client: DrizzleClient, userId: string) =>
+  findUserDataForQueryUpdatedUser(client, userId);

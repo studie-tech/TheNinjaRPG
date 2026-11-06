@@ -88,6 +88,7 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import Tournament from "@/layout/Tournament";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import { WarRoom } from "@/layout/WarSystem";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -423,7 +424,10 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   // Mutations
   const { mutateAsync: challenge, isPending: isChallenging } =
     api.clan.challengeClan.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
+        if (data.success || data.userRecovery)
+          void updateUser(data, { revision, refetch: false });
         showMutationToast(data);
       },
       onError: (error) => {
@@ -434,7 +438,8 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const { mutateAsync: join } = api.clan.joinClanBattle.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch) await updateUser(data, { revision });
+      if (data.success || data.userPatch || data.userRecovery)
+        await updateUser(data, { revision });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -616,7 +621,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   ) => {
     const canJoin =
       clan.id === userClanId &&
-      (userData?.status === "AWAKE" || leftBattleIds.has(battleId)) &&
+      (canAttemptAwakeAction(userData) || leftBattleIds.has(battleId)) &&
       !joinedBattleId;
     const crewLength = Math.max(CLAN_MPVP_MAX_USERS_PER_SIDE, queue.length);
     const empties = Array.from(
@@ -1249,7 +1254,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success || data.userPatch) await updateUser(data, { revision });
+        if (data.success || data.userPatch || data.userRecovery)
+          await updateUser(data, { revision });
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });

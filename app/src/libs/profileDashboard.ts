@@ -1,6 +1,7 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
+import { actionPrerequisiteUser, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { craftingStartBlockMessage } from "@/libs/crafting";
 import { huntingSessionStage } from "@/libs/hunting/contracts";
 import {
@@ -67,18 +68,23 @@ export const dashboardTrainingAction = (
     return {
       href: "/travel",
       action: "Go home",
-      disabled: user.status !== "AWAKE",
-      reason: `Return to ${user.village?.name ?? "your village"} to ${hasTraining ? "view your training" : "train"}.${user.status !== "AWAKE" ? " You must be awake to travel." : ""}`,
+      disabled: !canAttemptAwakeAction(user),
+      reason: `Return to ${user.village?.name ?? "your village"} to ${hasTraining ? "view your training" : "train"}.${!canAttemptAwakeAction(user) ? " You must be awake to travel." : ""}`,
     };
   }
+  const trainingUser = actionPrerequisiteUser(user);
   return {
     href: "/traininggrounds",
     disabled: false,
-    action: hasTraining ? "View" : canStartStatTraining(user) ? "Train" : "View",
+    action: hasTraining
+      ? "View"
+      : canStartStatTraining(trainingUser)
+        ? "Train"
+        : "View",
     reason:
-      hasTraining || canStartStatTraining(user)
+      hasTraining || canStartStatTraining(trainingUser)
         ? null
-        : (statTrainingBlockMessage(user) ??
+        : (statTrainingBlockMessage(trainingUser) ??
           "All stats are at their rank cap. You can still browse jutsu training."),
   };
 };
@@ -301,11 +307,13 @@ export const raidContinueHref = (
 /** Resolve raid routing and preserve participation restrictions before offering travel. */
 export const dashboardRaidAction = (
   raidSector: number | null,
-  user: Pick<NonNullable<UserWithRelations>, "sector" | "status" | "isBanned">,
+  user: Pick<NonNullable<UserWithRelations>, "sector" | "status" | "isBanned"> & {
+    autoWakeUp?: boolean;
+  },
 ) => {
   const block = user.isBanned
     ? "You are banned"
-    : user.status !== "AWAKE"
+    : !canAttemptAwakeAction(user)
       ? "Must be awake to join a raid"
       : null;
   if (block) return { href: "/globalanbuhq", action: "View raid", reason: block };
@@ -374,7 +382,9 @@ export const describeOccupationLine = ({
   trackers: QuestTrackerType[] | null | undefined;
   /** Undefined while the crafting timer is still loading. */
   craftingItemName?: string | null;
-  craftingUser?: Parameters<typeof craftingStartBlockMessage>[0];
+  craftingUser?: Parameters<typeof craftingStartBlockMessage>[0] & {
+    autoWakeUp?: boolean;
+  };
   /** A personal encounter takes precedence over legacy hunting quests when present. */
   hunting?: RouterOutputs["hunting"]["getSession"];
 }): OccupationProgressLine => {
@@ -422,7 +432,9 @@ export const describeOccupationLine = ({
         craftTimer: true,
       };
     }
-    const craftingBlock = craftingUser ? craftingStartBlockMessage(craftingUser) : null;
+    const craftingBlock = craftingUser
+      ? craftingStartBlockMessage(actionPrerequisiteUser(craftingUser))
+      : null;
     return {
       label: meta.label,
       title: meta.emptyTitle,
@@ -629,9 +641,8 @@ export const resolveDashboardContent = (
             ? ("blocked" as const)
             : ("available" as const),
         availabilityReason:
-          requiresVillageTravel &&
-          (user.isBanned || (!!user.status && user.status !== "AWAKE"))
-            ? `Travel to ${location} to begin${user.isBanned ? ". You are banned and cannot start quests" : ""}${user.status && user.status !== "AWAKE" ? ". You must be awake to travel" : ""}`
+          requiresVillageTravel && (user.isBanned || !canAttemptAwakeAction(user))
+            ? `Travel to ${location} to begin${user.isBanned ? ". You are banned and cannot start quests" : ""}${!canAttemptAwakeAction(user) ? ". You must be awake to travel" : ""}`
             : user.isBanned
               ? "You are banned and cannot start quests"
               : null,

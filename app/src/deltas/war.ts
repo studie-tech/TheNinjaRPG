@@ -1,3 +1,10 @@
+import type { UserData } from "@/drizzle/schema";
+
+/** Publish the exact guarded war-mission attempt so its countdown starts immediately. */
+export const getStartWarMissionUserUpdate = (attempt: UserData["warMission"]) => ({
+  userPatch: { warMission: attempt },
+});
+
 /** Confirm that a mercenary invitation leaves the caller's profile unchanged. */
 export const getInviteMercenaryUserUpdate = () => ({
   userPatch: {},

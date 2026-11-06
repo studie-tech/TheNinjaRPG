@@ -1,12 +1,18 @@
 
 import { eq, sql } from "drizzle-orm";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import type { UserCache } from "@/deltas/profile";
+import { fetchActionUser } from "@/queries/actionReadiness";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
+  HOSPITAL_BASE_HEAL_SECONDS,
   MEDNIN_REQUIRED_EXP,
   REGEN_SECONDS,
   SENSEI_GENIN_MED_EXP_SHARE_PERC,
 } from "@/drizzle/constants";
 import { bloodline, quest, questHistory, title, userData, userTitle } from "@/drizzle/schema";
+import { AUTO_CHECKOUT_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { hospitalRouter } from "@/server/api/routers/hospital";
@@ -168,6 +174,46 @@ describeWithDatabase("hospital self-healing", () => {
     const saved = await readHealer();
     expect(saved?.curHealth).toBe(1000);
     expect(saved?.curChakra).toBe(6965);
+  });
+
+  it("preserves free checkout health while self-healing missing stamina", async () => {
+    await insertLegendaryHealer({
+      status: "HOSPITALIZED",
+      curHealth: 1,
+      curStamina: 60,
+      regenAt: new Date(Date.now() - (HOSPITAL_BASE_HEAL_SECONDS + 5) * 1000),
+    });
+    const initial = await fetchActionUser(await getTestDatabase(), USER_ID);
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["profile", USER_ID];
+    cache.setQueryData(key, { userData: initial, notifications: [] });
+    let reads = 0;
+    const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity,
+      queryFn: async () => { reads++; return { userData: initial, notifications: [] }; } });
+    const unsubscribe = observer.subscribe(() => {});
+    const revision = prepareUserUpdate(cache, key);
+    const api = await callerFor(hospitalRouter, USER_ID);
+    const result = await api.userHeal({ userId: USER_ID, healPercentage: 100 });
+    try {
+      await updateUserCache(cache, key, result.healer, { revision, userRecovery: result.userRecovery });
+      expect(reads).toBe(0);
+      const saved = await readHealer();
+      expect(cache.getQueryData<UserCache>(key)?.userData).toMatchObject({ status: "AWAKE",
+        curHealth: saved?.curHealth, curChakra: saved?.curChakra, curStamina: saved?.curStamina,
+        curEnergy: saved?.curEnergy, medicalExperience: saved?.medicalExperience, questData: saved?.questData });
+    } finally { unsubscribe(); cache.clear(); }
+
+    expect(result).toMatchObject({ success: true, actionNotice: AUTO_CHECKOUT_MESSAGE });
+    const saved = await readHealer();
+    expect(saved).toMatchObject({ status: "AWAKE", curHealth: 1000, curStamina: 100 });
+    expect(saved?.curChakra).toBeCloseTo(8000 - (result.chakraCost ?? 0));
+    expect(result.healer).toMatchObject({
+      curHealth: saved?.curHealth,
+      curChakra: saved?.curChakra,
+      curStamina: saved?.curStamina,
+      medicalExperience: saved?.medicalExperience,
+    });
+    expect(result.healer?.regenAt.getTime()).toBe(saved?.regenAt.getTime());
   });
 
   it("rejects a self-heal when only chakra is missing", async () => {

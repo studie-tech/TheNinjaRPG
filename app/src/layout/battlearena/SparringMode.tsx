@@ -17,7 +17,12 @@ import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Sparring: exam progress, challenges to and from you, and players to challenge. */
 export function SparringMode() {
-  const { data: userData, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const utils = api.useUtils();
   const router = useRouter();
   const [useRankedRules, setUseRankedRules] = useState(false);
@@ -38,20 +43,21 @@ export function SparringMode() {
 
   const { mutate: accept, isPending: isAccepting } =
     api.sparring.acceptChallenge.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.userRecovery || (data.success && data.battleId))
+          await updateUser(data, { revision, refetch: false });
         if (data.success && data.battleId) {
-          await updateUser({
-            status: "BATTLE",
-            battleId: data.battleId,
-            updatedAt: new Date(),
-          });
           await Promise.all([
             utils.sparring.getUserChallenges.invalidate(),
             utils.pvpRank.getRankedLoadout.invalidate(),
           ]);
           pushToCombat(router, data.battleId);
         }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
       },
     });
 
@@ -149,7 +155,12 @@ export function SparringMode() {
                         <Button
                           className="h-11"
                           disabled={isAnswering}
-                          onClick={() => accept({ id: challenge.id })}
+                          onClick={() =>
+                            accept({
+                              id: challenge.id,
+                              originSocketId: pusher?.connection.socket_id,
+                            })
+                          }
                         >
                           <Check className="mr-1 h-4 w-4" aria-hidden /> Accept
                         </Button>

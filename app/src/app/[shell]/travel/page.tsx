@@ -87,6 +87,8 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { WarFieldActions } from "@/layout/WarFieldActions";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
 import {
   finishItemConsumeRequest,
@@ -220,6 +222,7 @@ function Travel() {
   // Data from database
   const {
     data: profile,
+    pusher,
     timeDiff,
     prepareUserUpdate,
     updateUser,
@@ -537,7 +540,7 @@ function Travel() {
     }
   }, [userData?.status, router]);
 
-  useAwake(userData);
+  useAwake(userData, { allowActionRecovery: true });
 
   // Tutorial step
   const { currentStep, completeTutorialAction } = useTutorialStep();
@@ -590,15 +593,19 @@ function Travel() {
           ? calcGlobalTravelTime(userData.sector, destinationSector, globe)
           : 0;
         await updateUser(optimisticGlobalTravelStart(travelTime));
-        return previous;
+        return { ...previous, revision: prepareUserUpdate() };
       },
       onError: async (_error, _variables, previous) => {
         setAutoDestination(null);
-        if (!previous) return;
-        await updateUser({
-          status: previous.status,
-          travelFinishAt: previous.travelFinishAt,
-        });
+        if (previous) {
+          await updateUser(
+            {
+              status: previous.status,
+              travelFinishAt: previous.travelFinishAt,
+            },
+            { revision: previous.revision, refetch: false },
+          );
+        }
       },
       onSuccess: async (result, _variables, previous) => {
         showMutationToast(result);
@@ -611,19 +618,29 @@ function Travel() {
           setTargetSector(null);
           setShowModal(false);
 
-          await updateUser(result.data);
+          await updateUser(result.data, {
+            revision: previous?.revision,
+            refetch: false,
+            userRecovery: result.userRecovery,
+          });
           if (globe) {
             const tile = globe.tiles[result.data.sector];
             if (tile) {
               setCurrentTile(tile);
             }
           }
+        } else if (result.userRecovery) {
+          setAutoDestination(null);
+          await updateUser(result, { revision: previous?.revision, refetch: false });
         } else if (previous) {
           setAutoDestination(null);
-          await updateUser({
-            status: previous.status,
-            travelFinishAt: previous.travelFinishAt,
-          });
+          await updateUser(
+            {
+              status: previous.status,
+              travelFinishAt: previous.travelFinishAt,
+            },
+            { revision: previous.revision, refetch: false },
+          );
         }
       },
     });
@@ -662,11 +679,10 @@ function Travel() {
 
   const { mutate: joinVillage, isPending: isJoining } =
     api.village.joinVillage.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success) {
-          await utils.profile.getUser.invalidate();
-        }
+        if (data.success || data.userRecovery) await updateUser(data, { revision });
       },
     });
 
@@ -740,21 +756,23 @@ function Travel() {
 
   const { mutate: attackRevealedUser, isPending: isAttackingRevealed } =
     api.combat.attackUser.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         if (data.success) {
+          showActionReadinessToast(data);
           setShowRevealedPlayersModal(false);
           setRevealedPlayers([]);
-          await updateUser({
-            status: "BATTLE",
-            battleId: data.battleId,
-            updatedAt: new Date(),
-          });
+          await updateUser(data, { revision, refetch: false });
         } else {
+          if (data.userRecovery) await updateUser(data, { revision, refetch: false });
           showMutationToast({
             success: false,
             message: data.message,
           });
         }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
       },
     });
 
@@ -782,9 +800,9 @@ function Travel() {
     (sector: number | undefined) =>
       Number.isFinite(sector) &&
       sector !== userData?.sector &&
-      userData?.status === "AWAKE" &&
+      canAttemptAwakeAction(userData) &&
       !isStartingTravel,
-    [userData?.sector, userData?.status, isStartingTravel],
+    [userData?.sector, userData?.status, userData?.autoWakeUp, isStartingTravel],
   );
 
   // Stable identity for the globe click path: MapComponent is memoized to avoid
@@ -838,6 +856,7 @@ function Travel() {
       !isAttackingRevealed
     ) {
       attackRevealedUser({
+        originSocketId: pusher?.connection.socket_id,
         userId: pendingAttackTarget.userId,
         longitude: pendingAttackTarget.longitude,
         latitude: pendingAttackTarget.latitude,
@@ -945,7 +964,7 @@ function Travel() {
     if (
       !autoDestination ||
       !userData ||
-      userData.status !== "AWAKE" ||
+      !canAttemptAwakeAction(userData) ||
       userData.sector !== autoDestination.sector ||
       !currentSectorMap ||
       isStartingTravel
@@ -1026,9 +1045,9 @@ function Travel() {
           isOpen={true}
           setIsOpen={() => setLocationRequest(null)}
           proceed_label="Travel"
-          proceedDisabled={userData.status !== "AWAKE" || isStartingTravel}
+          proceedDisabled={!canAttemptAwakeAction(userData) || isStartingTravel}
           onAccept={() => {
-            if (userData.status !== "AWAKE" || isStartingTravel) return;
+            if (!canAttemptAwakeAction(userData) || isStartingTravel) return;
             setAutoDestination(locationRequest);
             if (locationRequest.sector !== userData.sector)
               handleGlobalMove(locationRequest.sector);
@@ -1243,7 +1262,7 @@ function Travel() {
                         size="sm"
                         variant="outline"
                         className="h-auto min-w-0 flex-1 flex-col items-start whitespace-normal text-left"
-                        disabled={isStartingTravel || userData.status !== "AWAKE"}
+                        disabled={isStartingTravel || !canAttemptAwakeAction(userData)}
                         onClick={() => setLocationRequest(pin)}
                       >
                         <span>{pin.label}</span>
@@ -1274,7 +1293,7 @@ function Travel() {
                     disabled={
                       !pinLabel.trim() ||
                       pins.length >= MAX_TRAVEL_PINS ||
-                      userData.status !== "AWAKE"
+                      !canAttemptAwakeAction(userData)
                     }
                     onClick={() => {
                       const next = pins.filter(
@@ -1575,6 +1594,7 @@ function Travel() {
                 isAttackingRevealed={isAttackingRevealed}
                 pendingAttackTarget={pendingAttackTarget}
                 attackRevealedUser={attackRevealedUser}
+                originSocketId={pusher?.connection.socket_id}
                 setPendingAttackTarget={setPendingAttackTarget}
                 setTargetPosition={setTargetPosition}
                 setShowRevealedPlayersModal={setShowRevealedPlayersModal}
@@ -1608,6 +1628,7 @@ const StealthControls: React.FC<{
   const {
     data: userData,
     timeDiff,
+    prepareUserUpdate,
     updateUser,
   } = useRequiredUserDataSelector(selectUserWithoutPosition);
   const utils = api.useUtils();
@@ -1645,13 +1666,19 @@ const StealthControls: React.FC<{
 
   const { mutate: activateStealth, isPending: isActivatingStealth } =
     api.stealth.activateStealth.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success && data.data) {
-          await updateUser({
-            stealthActive: true,
-            stealthActivatedAt: data.data.stealthActivatedAt,
-          });
+          await updateUser(
+            {
+              stealthActive: true,
+              stealthActivatedAt: data.data.stealthActivatedAt,
+            },
+            { revision, refetch: false, userRecovery: data.userRecovery },
+          );
+        } else if (data.userRecovery) {
+          await updateUser(data, { revision, refetch: false });
         }
       },
       onSettled: () => {
@@ -1674,7 +1701,8 @@ const StealthControls: React.FC<{
 
   const { mutate: scanSensory, isPending: isScanningSensory } =
     activateSensory.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success && data.data) {
           lastSuccessfulSensoryAtRef.current = data.data.lastSensoryAt;
@@ -1686,9 +1714,14 @@ const StealthControls: React.FC<{
           // The server has already consumed the scan. Keep cache maintenance best-effort so a
           // client refresh failure cannot hide results or make the Radar appear retryable.
           void Promise.allSettled([
-            updateUser({ lastSensoryAt: data.data.lastSensoryAt }),
+            updateUser(
+              { lastSensoryAt: data.data.lastSensoryAt },
+              { revision, refetch: false, userRecovery: data.userRecovery },
+            ),
             utils.travel.getSectorData.invalidate(),
           ]);
+        } else if (data.userRecovery) {
+          void updateUser(data, { revision, refetch: false });
         }
       },
       onSettled: () => {
@@ -1859,6 +1892,7 @@ const RevealedPlayerCard = ({
   isAttackingRevealed,
   pendingAttackTarget,
   attackRevealedUser,
+  originSocketId,
   setPendingAttackTarget,
   setTargetPosition,
   setShowRevealedPlayersModal,
@@ -1874,7 +1908,9 @@ const RevealedPlayerCard = ({
     longitude: number;
     latitude: number;
   } | null;
+  originSocketId?: string;
   attackRevealedUser: (params: {
+    originSocketId?: string;
     userId: string;
     longitude: number;
     latitude: number;
@@ -1922,6 +1958,7 @@ const RevealedPlayerCard = ({
             size="sm"
             onClick={() =>
               attackRevealedUser({
+                originSocketId,
                 userId: player.userId,
                 longitude: player.longitude,
                 latitude: player.latitude,

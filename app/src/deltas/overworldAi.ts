@@ -1,3 +1,4 @@
+import type { UserRecovery } from "@/validators/base";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 /**
@@ -24,8 +25,10 @@ export const getOverworldBattleResponseUpdate = ({
         requiresUserRefresh?: boolean;
         userPatch?: UserCachePatch;
         userDelta?: UserDelta;
+        userRecovery?: UserRecovery;
       });
 }) => ({
+  userRecovery: "userRecovery" in battle ? battle.userRecovery : undefined,
   userPatch:
     !requiresUserRefresh && !requiresProgressionRefresh && "userPatch" in battle
       ? battle.userPatch

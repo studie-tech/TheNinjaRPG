@@ -7,7 +7,6 @@ import {
   bloodlineCachePatch,
   getPurchaseBloodlineUserUpdate,
 } from "@/deltas/bloodline";
-
 import {
   BLOODLINE_COST,
   BLOODLINE_SWAP_COOLDOWN_HOURS,
@@ -36,8 +35,8 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { validateUserUpdateReason } from "@/libs/moderator";
-
 import { callDiscordContent } from "@/libs/socials";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   deleteBloodlineForDelete,
   deleteBloodlineReskinForDeleteReskin,
@@ -104,6 +103,10 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import {
   claimUserSnapshot,
   removeBloodlineFromPoolAtomically,
@@ -693,23 +696,26 @@ export const bloodlineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, prevRoll, allBloodlines, registrationRoll, settings, progression] =
-        await Promise.all([
-          fetchBloodlineProgressionUser(ctx.drizzle, ctx.userId),
-          fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
-          fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
-          findBloodlineRollsForRoll(ctx.drizzle, ctx),
-          fetchAllGameSettings(ctx.drizzle),
-          fetchBloodlineProgression(ctx.drizzle, ctx.userId),
-        ]);
+      const [
+        initialUser,
+        prevRoll,
+        allBloodlines,
+        registrationRoll,
+        settings,
+        progression,
+      ] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
+        fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
+        findBloodlineRollsForRoll(ctx.drizzle, ctx),
+        fetchAllGameSettings(ctx.drizzle),
+        fetchBloodlineProgression(ctx.drizzle, ctx.userId),
+      ]);
       // Guard
-      if (!user) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       if (prevRoll) return errorResponse("You have already rolled a bloodline");
-      if (user.status !== "AWAKE") {
-        return errorResponse(
-          `Cannot roll bloodline while ${user.status.toLowerCase()}`,
-        );
-      }
       if (user.rank === "STUDENT") {
         return errorResponse(
           "Academy students cannot roll for bloodlines. You must graduate first.",
@@ -730,8 +736,8 @@ export const bloodlineRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         where: [
-          eq(userData.status, "AWAKE"),
           ne(userData.rank, "STUDENT"),
           starterBloodlineId
             ? eq(userData.bloodlineId, starterBloodlineId)
@@ -813,7 +819,7 @@ export const bloodlineRouter = createTRPCRouter({
             "After thorough examination, the doctors conclude you have no bloodline",
         };
       };
-      return doRoll();
+      return actionReadinessResponse(await doRoll(), readiness, ctx.drizzle);
     }),
   // Pity Roll a bloodline
   pityRoll: protectedProcedure

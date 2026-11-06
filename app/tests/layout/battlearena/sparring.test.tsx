@@ -1,3 +1,9 @@
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import type { ZodType } from "zod";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
+import { sparringRouter } from "@/server/api/routers/sparring";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
@@ -222,4 +228,37 @@ it("replaces a failed player portrait with the avatar fallback", async () => {
   fireEvent.error(within(card).getByRole("img", { name: "Sora" }));
   expect(within(card).queryByRole("img", { name: "Sora" })).toBeNull();
   expect(within(card).getByRole("img", { name: "Sora avatar unavailable" })).toBeDefined();
+});
+
+
+it.each(["AWAKE", "ASLEEP", "HOSPITALIZED"] as const)("retains the actual unrated spar output projection for %s without fetching the profile", async (status) => {
+  const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = [["profile", "getUser"], { type: "query" }];
+  const initial = { userData: { userId: "me", status, battleId: null, level: 30, villageId: "v-1", userQuests: [], questData: [], curHealth: 5, curChakra: 6, curStamina: 7 }, notifications: [] };
+  cache.setQueryData(key, initial);
+  const read = vi.fn(async () => initial);
+  const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity, queryFn: read });
+  const unsubscribe = observer.subscribe(() => {});
+  const output = (sparringRouter.acceptChallenge._def as unknown as { output: ZodType<UserDeltaResponse & { battleId?: string }> }).output;
+  const response = output.parse({ success: true, message: "Battle started", battleId: "spar",
+    userPatch: { status: "BATTLE", battleId: "spar" }, userDelta: {},
+    ...(status !== "AWAKE" ? { actionNotice: "Recovered", userRecovery: { userId: "me", userPatch: { status: "AWAKE", curHealth: 100, curChakra: 90, curStamina: 80 } } } : {}),
+  });
+  let callbacks!: { onMutate: () => number | undefined; onSuccess: (result: typeof response, input: unknown, revision: number | undefined) => Promise<void> };
+  Object.assign(client.api.sparring.acceptChallenge, { useMutation: (options: typeof callbacks) => {
+    callbacks = options;
+    return { mutate: async () => callbacks.onSuccess(response, { id: "c-in" }, callbacks.onMutate()), isPending: false };
+  } });
+  Object.assign(client.api.sparring.getUserChallenges, { useQuery: () => ({ data: challenges.map((challenge) => ({ ...challenge, useRankedRules: false })) }) });
+  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ data: initial.userData,
+    prepareUserUpdate: () => prepareUserUpdate(cache, key),
+    updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) => updateUserCache(cache, key, patch, options),
+  } as never);
+  try {
+    const view = render(<SparringMode />);
+    await act(async () => fireEvent.click(within(view.getByRole("list", { name: "Challenges" })).getByRole("button", { name: "Accept" })));
+    expect(read).not.toHaveBeenCalled();
+    expect(cache.getQueryData(key)).toMatchObject({ userData: { status: "BATTLE", battleId: "spar",
+      curHealth: status === "AWAKE" ? 5 : 100, curChakra: status === "AWAKE" ? 6 : 90, curStamina: status === "AWAKE" ? 7 : 80 } });
+  } finally { unsubscribe(); cache.clear(); }
 });

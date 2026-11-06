@@ -2,9 +2,10 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
 import { ELEMENTAL_MASTERY_CAP, getUserCaps, MAX_MASTERY_CAP } from "@/drizzle/constants";
-import { userData } from "@/drizzle/schema";
+import { userData, userQueue } from "@/drizzle/schema";
 import { profileRouter } from "@/server/api/routers/profile";
 import { insertUsers } from "../../../../setup/factories";
+import { queueEnergy } from "../../../../setup/queues";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
@@ -55,7 +56,7 @@ const assign = (offence: number, defence: number) => ({
 
 describeWithDatabase("profile useUnusedExperiencePoints against a real MySQL", () => {
   beforeEach(async () => {
-    await resetTables(userData);
+    await resetTables(userQueue, userData);
   });
 
   it("rejects Elite Jonin assignment without spending XP or changing stats", async () => {
@@ -107,12 +108,24 @@ describeWithDatabase("profile useUnusedExperiencePoints against a real MySQL", (
     expect(result.userPatch).toMatchObject({ elementalMastery: { Wind: ELEMENTAL_MASTERY_CAP }, earnedExperience: 69 });
   });
 
+  it("preserves queued training gains when elemental allocation wakes the owner", async () => {
+    await assigner({ status: "ASLEEP", autoWakeUp: true, curEnergy: 50, regeneration: 0, isOutlaw: true, primaryElement: "Fire", secondaryElement: "Water" });
+    await queueEnergy(USER_ID, [{stat: "offence", energy: 40}]);
+    const before = await readUser();
+    const result = await (await callerFor(profileRouter, USER_ID)).useUnusedExperiencePoints({offence: 10, Wind: 1});
+    expect(result).toMatchObject({success: true, actionNotice: "This action woke you up."});
+    const after = await readUser();
+    expect(after).toMatchObject({status: "AWAKE", curEnergy: 10, elementalMastery: {Wind: 1}, earnedExperience: 89});
+    expect(after.offence).toBeGreaterThan(before.offence + 10);
+    expect(after.experience - before.experience).toBe(Math.round(after.offence - before.offence));
+  });
+
   it("keeps combat and discipline allocation available asleep while rejecting mixed elemental allocation", async () => {
-    await assigner({ status: "ASLEEP" });
+    await assigner({ status: "ASLEEP", autoWakeUp: false });
     const api = await callerFor(profileRouter, USER_ID);
     const rejected = await api.useUnusedExperiencePoints({ offence: 10, ninjutsuMastery: 10, Wind: 10 });
     expect(rejected.success).toBe(false);
-    expect(rejected.message).toContain("awake");
+    expect(rejected.message).toContain("asleep");
     expect(rejected.userPatch).toBeUndefined();
     expect(await readUser()).toMatchObject({ offence: 1000, ninjutsuMastery: 10, elementalMastery: {}, earnedExperience: 100, experience: 5000 });
     expect((await api.useUnusedExperiencePoints({ offence: 10, ninjutsuMastery: 10 })).success).toBe(true);

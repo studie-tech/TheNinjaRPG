@@ -38,13 +38,14 @@ import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { parseHtml } from "@/utils/parse";
 import { prettyNumber } from "@/utils/string";
-import { useRequireInVillage } from "@/utils/UserContext";
+import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { MutateContentSchema } from "@/validators/comments";
 import { mutateContentSchema } from "@/validators/comments";
 
 export default function VillageOverview() {
   // State
   const { userData, sectorVillage } = useRequireInVillage();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const { currentStep } = useTutorialStep();
 
   // Queries
@@ -94,9 +95,10 @@ export default function VillageOverview() {
 
   const { mutate: leaveVillage, isPending: isLeaving } =
     api.village.leaveVillage.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success) await utils.profile.getUser.invalidate();
+        if (data.success || data.userRecovery) await updateUser(data, { revision });
       },
     });
 

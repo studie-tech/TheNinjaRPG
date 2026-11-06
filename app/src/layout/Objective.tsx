@@ -11,6 +11,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Modal from "@/layout/Modal";
 import StatusBar from "@/layout/StatusBar";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
 import {
   canRetryQuestBattle,
@@ -89,7 +90,12 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         timeDiff={timeDiff}
         targetDate={getCollectDeadline(status, collectTimeMinutes)!}
         onFinish={async () => {
-          checkRewards();
+          if (
+            userData?.status === "AWAKE" ||
+            (isBetweenPyramidBattles(userData) &&
+              getIsolatedPyramid(userData)?.questId === tracker.id)
+          )
+            checkRewards();
         }}
       />
     ) : null;
@@ -110,7 +116,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
           {hasReward(parsed) &&
             (canCollect &&
             !props.grayedOut &&
-            (userData?.status === "AWAKE" ||
+            (canAttemptAwakeAction(userData) ||
               (isBetweenPyramidBattles(userData) &&
                 getIsolatedPyramid(userData)?.questId === tracker.id)) ? (
               <Gift

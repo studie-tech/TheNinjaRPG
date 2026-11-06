@@ -8,6 +8,7 @@ import { getInventoryQuantities } from "@/deltas/item";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import Confirm from "@/layout/Confirm";
 import { showMutationToast } from "@/libs/toast";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 interface MergeAllStacksButtonProps {
   storedAtHome: boolean;
@@ -21,19 +22,24 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
   compact = false,
   onMerged,
 }) => {
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
     useInventoryCacheUpdate();
 
   const { mutate: mergeAllStacks, isPending } = api.item.mergeAllStacks.useMutation({
-    onMutate: prepareInventoryUpdate,
+    onMutate: () => ({
+      inventory: prepareInventoryUpdate(),
+      user: prepareUserUpdate(),
+    }),
     onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
+      if (data.userRecovery) await updateUser(data, { revision: snapshot.user });
       // Partial failures can already have changed stacks and require authoritative recovery.
       await updateInventory(
         data.success
           ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
           : undefined,
-        snapshot,
+        snapshot.inventory,
       );
       if (data.success) {
         onMerged?.();

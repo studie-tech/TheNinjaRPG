@@ -378,7 +378,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "tools",
     title: "Home",
     description:
-      "At <b>Home</b> you can sleep to regenerate faster, safe from attacks, and cook meals in your kitchen.",
+      "At <b>Home</b> you can sleep to regenerate faster, safe from attacks, and cook meals in your kitchen. Actions that need you awake wake you automatically by default; you can change this in your profile settings.",
     elementIds: ["tutorial-home"],
     page: "/village",
     showNextButton: true,

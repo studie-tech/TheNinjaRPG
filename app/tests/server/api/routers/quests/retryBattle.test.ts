@@ -10,7 +10,7 @@ const makeCaller = (goals: Goal[] | null) => {
   const user =
     goals === null
       ? undefined
-      : { userId: "u1", questData: [{ id: "quest-1", startAt: new Date(), goals }] };
+      : { userId: "u1", status: "AWAKE", questData: [{ id: "quest-1", startAt: new Date(), goals }] };
   const fetchUpdatedUser = vi.fn().mockResolvedValue({ user });
   stubProfile("fetchUpdatedUser", fetchUpdatedUser as never);
   const drizzle = new Proxy(

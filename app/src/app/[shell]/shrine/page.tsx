@@ -28,7 +28,12 @@ import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Shrine() {
   // Data from database
-  const { data: userData, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const { data: sectorData } = api.travel.getSectorData.useQuery(
     { sector: userData?.sector || 0 },
     { enabled: !!userData, refetchInterval: 10000 },
@@ -40,18 +45,20 @@ export default function Shrine() {
   // Mutation for starting a fight
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startShrineBattle.useMutation({
-      onSuccess: async (result) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (result, _variables, revision) => {
         if (result.success && result.battleId) {
-          await updateUser({
-            status: "BATTLE",
-            battleId: result.battleId,
-            updatedAt: new Date(),
-          });
+          await updateUser(result, { revision, refetch: false });
           pushToCombat(router, result.battleId);
           showMutationToast({ ...result, message: "Attacking the Shrine" });
         } else {
+          if (result.userRecovery)
+            await updateUser(result, { revision, refetch: false });
           showMutationToast(result);
         }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
       },
     });
 
@@ -375,7 +382,12 @@ export default function Shrine() {
                     war={war}
                     sideVillageId={getWarSide(war, userData.villageId, userData.userId)}
                     sector={userData.sector}
-                    onAttack={() => attack({ sector: userData.sector })}
+                    onAttack={() =>
+                      attack({
+                        sector: userData.sector,
+                        originSocketId: pusher?.connection.socket_id,
+                      })
+                    }
                     isAttacking={isAttacking}
                     isProtected={isProtected}
                     hasActiveExclusiveRaid={!!activeExclusiveRaid}
@@ -465,7 +477,12 @@ export default function Shrine() {
                 war={war}
                 sideVillageId={getWarSide(war, userData.villageId, userData.userId)}
                 sector={userData.sector}
-                onAttack={() => attack({ sector: userData.sector })}
+                onAttack={() =>
+                  attack({
+                    sector: userData.sector,
+                    originSocketId: pusher?.connection.socket_id,
+                  })
+                }
                 isAttacking={isAttacking}
                 isProtected={isProtected}
                 hasActiveExclusiveRaid={!!activeExclusiveRaid}

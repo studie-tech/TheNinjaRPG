@@ -1,10 +1,13 @@
 import { getInventoryQuantities } from "@/deltas/item";
 import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import { item, userData, userItem } from "@/drizzle/schema";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { itemRouter } from "@/server/api/routers/item";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { beforeStatements } from "../../../setup/statements";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 describeWithDatabase("consumable merges across ownership levels", () => {
   beforeEach(async () => {
@@ -56,5 +59,40 @@ describeWithDatabase("consumable merges across ownership levels", () => {
     const rows = await database.select().from(userItem).where(eq(userItem.userId, "merge-user"));
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => row.quantity)).toEqual([3, 3]);
+  });
+
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)("reports confirmed %s recovery when only one item type merges", async (status) => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({
+      status,
+      curHealth: 1,
+      maxHealth: 1000,
+      regeneration: 0,
+      regenAt: new Date(Date.now() - (HOSPITAL_BASE_HEAL_SECONDS + 5) * 1000),
+    }).where(eq(userData.userId, "merge-user"));
+    await insertUserItems([
+      { id: "a1", userId: "merge-user", itemId: "consumable", quantity: 3 },
+      { id: "a2", userId: "merge-user", itemId: "consumable", quantity: 3 },
+      { id: "b1", userId: "merge-user", itemId: "weapon", quantity: 3 },
+      { id: "b2", userId: "merge-user", itemId: "weapon", quantity: 3 },
+    ]);
+    // Change one group after preload so its atomic claim fails while the other group merges.
+    const raced = beforeStatements(database, userItem, [async () => {}, async () => {}, async () => {
+      await database.update(userItem).set({ quantity: 4 }).where(eq(userItem.id, "a1"));
+    }]);
+    const result = await callerForDatabase(itemRouter, "merge-user", raced).mergeAllStacks({ storedAtHome: false });
+
+    expect(result).toMatchObject({
+      success: false,
+      message: expect.stringContaining("Merged 1 item type"),
+      actionNotice: status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE,
+    });
+    expect(result.inventoryChanges).toBeUndefined();
+    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "merge-user") })).toMatchObject({ status: "AWAKE" });
+    const rows = await database.select().from(userItem).where(eq(userItem.userId, "merge-user"));
+    expect(rows.filter((row) => row.itemId === "consumable").sort((a, b) => a.id.localeCompare(b.id))).toMatchObject([
+      { id: "a1", quantity: 4 }, { id: "a2", quantity: 3 },
+    ]);
+    expect(rows.filter((row) => row.itemId === "weapon")).toMatchObject([{ quantity: 6 }]);
   });
 });

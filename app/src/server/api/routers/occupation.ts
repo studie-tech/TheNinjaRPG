@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   getCancelQueuedCraftUserUpdate,
   getCraftingUserUpdate,
+  getImbuedItemUserUpdate,
   getSelectOccupationUserUpdate,
 } from "@/deltas/occupation";
 import {
@@ -72,6 +73,10 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import {
   claimUserSnapshot,
   updateUserItemQuantityAtomically,
@@ -191,7 +196,11 @@ export const occupationRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
-      const { user, settings } = updatedUser;
+      const { user: initialUser, settings } = updatedUser;
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const [itemWithRequirements, useritems, waiting] = await Promise.all([
         fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId),
         fetchUserItems(ctx.drizzle, ctx.userId),
@@ -202,7 +211,6 @@ export const occupationRouter = createTRPCRouter({
         (item) => item.craftingFinishedAt && item.craftingFinishedAt > new Date(),
       );
       // Guards
-      if (!user) return errorResponse("User not found");
       const craftingBlock = craftingStartBlockMessage(user);
       if (craftingBlock) return errorResponse(craftingBlock);
       if (itemWithRequirements?.itemType !== "MEAL" && user.occupation !== "CRAFTING") {
@@ -413,8 +421,8 @@ export const occupationRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
           updatedAt: user.updatedAt,
+          readiness,
           where: [
-            eq(userData.status, "AWAKE"),
             or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
           ],
         });
@@ -436,8 +444,12 @@ export const occupationRouter = createTRPCRouter({
             ctx.userId,
             materials.filter((_, index) => taken[index]),
           );
-          return errorResponse(
-            "Could not start crafting — materials changed, please try again",
+          return actionReadinessResponse(
+            errorResponse(
+              "Could not start crafting — materials changed, please try again",
+            ),
+            readiness,
+            ctx.drizzle,
           );
         }
         try {
@@ -462,21 +474,29 @@ export const occupationRouter = createTRPCRouter({
           await returnCraftMaterials(ctx.drizzle, ctx.userId, materials);
           // Concurrent appends can claim the same unique slot; the losing craft is refunded.
           if (isMysqlDuplicateKeyError(error))
-            return errorResponse("Your crafting queue changed. Please try again.");
+            return actionReadinessResponse(
+              errorResponse("Your crafting queue changed. Please try again."),
+              readiness,
+              ctx.drizzle,
+            );
           throw error;
         }
-        return {
-          success: true,
-          message: `Queued ${outputQuantity}x ${itemWithRequirements.name}. Starts in ${formatSecondsToTimeDisplay(Math.max(0, Math.round((queueSchedule.startsAt.getTime() - Date.now()) / 1000)))}.`,
-          finishTime: queueSchedule.finishesAt.toISOString(),
-          ...getCraftingUserUpdate({
-            user,
-            updatedUser,
-            consequences,
-            questIdsUpdated,
-            allConsumptions,
-          }),
-        };
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: `Queued ${outputQuantity}x ${itemWithRequirements.name}. Starts in ${formatSecondsToTimeDisplay(Math.max(0, Math.round((queueSchedule.startsAt.getTime() - Date.now()) / 1000)))}.`,
+            finishTime: queueSchedule.finishesAt.toISOString(),
+            ...getCraftingUserUpdate({
+              user,
+              updatedUser,
+              consequences,
+              questIdsUpdated,
+              allConsumptions,
+            }),
+          },
+          readiness,
+          ctx.drizzle,
+        );
       }
       const cookingJob = isMeal
         ? {
@@ -497,6 +517,7 @@ export const occupationRouter = createTRPCRouter({
             questDataForDb,
             ctx,
             craftedAt,
+            readiness,
           );
           if (claimResult.rowsAffected !== 1) return false;
 
@@ -528,18 +549,22 @@ export const occupationRouter = createTRPCRouter({
       user.craftingExperience += expGain;
       user.questData = trackers;
       if (cookingJob) user.cookingJobs.push(cookingJob);
-      return {
-        success: true,
-        message: `Started ${isMeal ? "cooking" : "crafting"} ${outputQuantity}x ${itemWithRequirements.name}. ${expGain > 0 ? `+${expGain} EXP.` : ""} Ready in ${formatSecondsToTimeDisplay(craftSeconds)}.`,
-        finishTime: finishTime.toISOString(),
-        ...getCraftingUserUpdate({
-          user,
-          updatedUser,
-          consequences,
-          questIdsUpdated,
-          allConsumptions,
-        }),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Started ${isMeal ? "cooking" : "crafting"} ${outputQuantity}x ${itemWithRequirements.name}. ${expGain > 0 ? `+${expGain} EXP.` : ""} Ready in ${formatSecondsToTimeDisplay(craftSeconds)}.`,
+          finishTime: finishTime.toISOString(),
+          ...getCraftingUserUpdate({
+            user,
+            updatedUser,
+            consequences,
+            questIdsUpdated,
+            allConsumptions,
+          }),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   getCraftingQueue: protectedProcedure
@@ -630,11 +655,11 @@ export const occupationRouter = createTRPCRouter({
       ]);
 
       // Guards
-      const user = updatedUserResult.user;
-      if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") {
-        return errorResponse("User is not awake");
-      }
+      const initialUser = updatedUserResult.user;
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, updatedUserResult.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
         return errorResponse("Cannot imbue items on Wake Island");
       }
@@ -743,8 +768,8 @@ export const occupationRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         where: [
-          eq(userData.status, "AWAKE"),
           or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
         ],
       });
@@ -763,8 +788,12 @@ export const occupationRouter = createTRPCRouter({
         ctx,
       );
       if (notInAuctionGuard.rowsAffected === 0) {
-        return errorResponse(
-          "You cannot imbue an item that is listed for auction or direct sale",
+        return actionReadinessResponse(
+          errorResponse(
+            "You cannot imbue an item that is listed for auction or direct sale",
+          ),
+          readiness,
+          ctx.drizzle,
         );
       }
 
@@ -777,7 +806,11 @@ export const occupationRouter = createTRPCRouter({
         where: [eq(userItem.isInAuction, false)],
       });
       if (!consumeCrystal) {
-        return errorResponse("Crystal no longer available");
+        return actionReadinessResponse(
+          errorResponse("Crystal no longer available"),
+          readiness,
+          ctx.drizzle,
+        );
       }
 
       const createImbuement = insertUserItemImbuementForImbueItem(
@@ -796,7 +829,7 @@ export const occupationRouter = createTRPCRouter({
         getPvpBoost(user, updatedUserResult.settings).totalPercent,
       );
       // Update trackers with crafting experience gained
-      const { trackers } = getNewTrackers(user, [
+      const { trackers, consequences, questIdsUpdated } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
@@ -809,16 +842,34 @@ export const occupationRouter = createTRPCRouter({
 
       const [, expResult] = await Promise.all([createImbuement, expUpdate]);
       if (expResult?.rowsAffected !== 1) {
-        return errorResponse(
-          "Could not start imbuing — you must be awake and not on Wake Island",
+        return actionReadinessResponse(
+          errorResponse(
+            "Could not start imbuing — you must be awake and not on Wake Island",
+          ),
+          readiness,
+          ctx.drizzle,
         );
       }
 
-      return {
-        success: true,
-        message: `Started imbuing ${targetUserItem.item.name} with ${crystalItem.name}. It will be ready in ${imbuingTime} minutes.`,
-        finishTime: finishTime.toISOString(),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getImbuedItemUserUpdate({
+            user,
+            updatedUser: updatedUserResult,
+            trackers,
+            consequences,
+            questIdsUpdated,
+            crystalUserItemId: crystalUserItem.id,
+            experience: expGain,
+            claimedAt: imbueClaimResult.claimedAt,
+          }),
+          message: `Started imbuing ${targetUserItem.item.name} with ${crystalItem.name}. It will be ready in ${imbuingTime} minutes.`,
+          finishTime: finishTime.toISOString(),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   finishCraftingImmediately: protectedProcedure

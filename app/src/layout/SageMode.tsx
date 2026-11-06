@@ -7,6 +7,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { isAvailableUserQuests } from "@/libs/quest";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -39,6 +40,8 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (result, _variables, revision) => {
         showMutationToast(result);
+        if (!result.success && result.userRecovery)
+          await updateUser(result, { revision });
         if (result.success) {
           await updateUser(
             (current) => {
@@ -73,14 +76,14 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
               }
               return patch;
             },
-            { revision, delta: result.userDelta },
+            { revision, delta: result.userDelta, userRecovery: result.userRecovery },
           );
         }
       },
     });
 
   const canAfford = (userData?.reputationPoints ?? 0) >= REMOVAL_COST;
-  const canRemove = userData?.status === "AWAKE";
+  const canRemove = canAttemptAwakeAction(userData);
   const canProceed = canAfford && canRemove;
   const repsNeeded = Math.max(0, REMOVAL_COST - (userData?.reputationPoints ?? 0));
 

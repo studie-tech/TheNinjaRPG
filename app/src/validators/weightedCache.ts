@@ -131,6 +131,7 @@ export type CacheRewardDisplay = z.infer<typeof cacheRewardDisplaySchema>;
 export const cacheConsumptionResponseSchema = z.object({
   success: z.literal(true),
   message: z.string(),
+  actionNotice: z.string().optional(),
   notifications: z.array(z.string()),
   rewards: PostProcessedRewardSchema.nullable(),
   cacheRewards: z.array(cacheRewardDisplaySchema),

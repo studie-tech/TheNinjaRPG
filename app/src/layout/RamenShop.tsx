@@ -57,19 +57,16 @@ export const RamenMenu = ({ showImage }: RamenMenuProps) => {
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (!data.success) setPurchaseError(data.message);
+      if (!data.success && data.userRecovery) await updateUser(data, { revision });
       if (data.success && userData) {
-        await updateUser(data.userPatch, {
-          revision,
-          delta: data.userDelta,
-          achievementProgress: data.achievementProgress,
-        });
+        await updateUser(data, { revision });
         void completeTutorialAction("buyRamen");
       }
     },
     onError: (error) => setPurchaseError(error.message),
   });
 
-  useAwake(userData);
+  useAwake(userData, { allowActionRecovery: true });
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (userData.isBanned) return <BanInfo />;

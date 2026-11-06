@@ -10,6 +10,7 @@ import {
 } from "@/hooks/localstorage";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import Modal from "@/layout/Modal";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { blockingPopupOpenAtom, useUserDataSelector } from "@/utils/UserContext";
 
 /**
@@ -21,6 +22,7 @@ export function HuntingArrival({ blocked = false }: { blocked?: boolean }) {
     userId: user.userId,
     occupation: user.occupation,
     status: user.status,
+    autoWakeUp: user.autoWakeUp,
     sector: user.sector,
   }));
   const isBlockingPopupOpen = useAtomValue(blockingPopupOpenAtom);
@@ -41,7 +43,7 @@ export function HuntingArrival({ blocked = false }: { blocked?: boolean }) {
     refetchOnMount: "always",
   });
   const session = encounter.data?.session;
-  const isAtEncounter = user?.status === "AWAKE" && user.sector === session?.sector;
+  const isAtEncounter = canAttemptAwakeAction(user) && user?.sector === session?.sector;
   useEffect(() => {
     const saved = safeSessionStorageGetItem(storageKey);
     // Optimistic travel keeps the current sector until admission succeeds. Store

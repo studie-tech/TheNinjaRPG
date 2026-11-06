@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { FARM_SHOP_ENTRY_TYPES } from "@/drizzle/constants";
+import { userRecoverySchema } from "@/validators/base";
 import { inventoryQuantityChangeSchema } from "@/validators/inventory";
+import {
+  userDeltaSchema,
+  userExpectedSchema,
+  userPatchSchema,
+} from "@/validators/userCache";
 
 export const dayNightCycleStateSchema = z.object({
   phase: z.enum(["day", "night"]),
@@ -181,6 +187,11 @@ export const farmInventoryDeltaSchema = z.object({
 export const farmMutationResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
+  actionNotice: z.string().optional(),
+  userRecovery: userRecoverySchema,
+  userPatch: userPatchSchema.optional(),
+  userDelta: userDeltaSchema.optional(),
+  userExpected: userExpectedSchema.optional(),
   updatedPlot: farmPlotStateSchema.nullable().optional(),
   updatedPlots: z
     .array(

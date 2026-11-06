@@ -19,6 +19,10 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { getAlliedVillageIds } from "@/utils/alliance";
 
 const pusher = getServerPusher();
@@ -60,15 +64,16 @@ export const stealthRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx }) => {
       // Query
-      let { user } = await fetchUpdatedUser({
+      let { user, settings } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
 
       // Guard
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE")
-        return errorResponse("Must be awake to activate stealth");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
 
       // Clean up expired stealth before the "already active" guard
       if (
@@ -94,6 +99,7 @@ export const stealthRouter = createTRPCRouter({
         ctx.drizzle,
         stealthActivatedAt,
         ctx,
+        readiness,
       );
 
       if (result.rowsAffected === 0) {
@@ -104,11 +110,15 @@ export const stealthRouter = createTRPCRouter({
       void broadcastStealth(user, true);
 
       const duration = calcStealthDuration(user.stealth);
-      return {
-        success: true,
-        message: `Stealth activated for ${Math.floor(duration / 60)} minutes`,
-        data: { stealthActivatedAt },
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Stealth activated for ${Math.floor(duration / 60)} minutes`,
+          data: { stealthActivatedAt },
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   // Deactivate stealth mode
@@ -150,7 +160,7 @@ export const stealthRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query (parallel)
-      const [{ user }, stealthedUsers, alliances] = await Promise.all([
+      let [{ user, settings }, stealthedUsers, alliances] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -161,7 +171,9 @@ export const stealthRouter = createTRPCRouter({
 
       // Guard
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to use sensory");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (user.sector !== input.sector)
         return errorResponse("You are not in this sector");
       if (!isSensoryReady(user.lastSensoryAt, user.sensory)) {
@@ -186,16 +198,16 @@ export const stealthRouter = createTRPCRouter({
       const detectedUserIds = detectedUsers.map((u) => u.userId);
       const lastSensoryAt = new Date();
 
-      // Mutation
-      const updates: Promise<unknown>[] = [
-        updateUserDataForUseSensory(ctx.drizzle, lastSensoryAt, ctx),
-      ];
-
-      if (detectedUserIds.length > 0) {
-        updates.push(clearStealthForUsers(ctx.drizzle, detectedUserIds));
-      }
-
-      await Promise.all(updates);
+      // Claim availability and reveal targets together before broadcasting them.
+      const result = await updateUserDataForUseSensory(
+        ctx.drizzle,
+        lastSensoryAt,
+        ctx,
+        readiness,
+        detectedUserIds,
+      );
+      if (!result.rowsAffected)
+        return errorResponse("Your status changed. Please try again.");
 
       // Broadcast map updates and notifications for detected users
       if (detectedUsers.length > 0) {
@@ -213,24 +225,28 @@ export const stealthRouter = createTRPCRouter({
       }
 
       const cooldown = calcSensoryCooldown(user.sensory);
-      return {
-        success: true,
-        message:
-          detectedUsers.length > 0
-            ? `Revealed ${detectedUsers.length} stealthed player(s)!`
-            : `No stealthed players detected. Next scan available in ${Math.floor(cooldown)} seconds`,
-        data: {
-          detectedUsers: detectedUsers.map((u) => ({
-            userId: u.userId,
-            username: u.username,
-            longitude: u.longitude,
-            latitude: u.latitude,
-            villageId: u.villageId,
-            level: u.level,
-          })),
-          lastSensoryAt,
+      return actionReadinessResponse(
+        {
+          success: true,
+          message:
+            detectedUsers.length > 0
+              ? `Revealed ${detectedUsers.length} stealthed player(s)!`
+              : `No stealthed players detected. Next scan available in ${Math.floor(cooldown)} seconds`,
+          data: {
+            detectedUsers: detectedUsers.map((u) => ({
+              userId: u.userId,
+              username: u.username,
+              longitude: u.longitude,
+              latitude: u.latitude,
+              villageId: u.villageId,
+              level: u.level,
+            })),
+            lastSensoryAt,
+          },
         },
-      };
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   // Start covert training (stealth or sensory)
@@ -244,14 +260,16 @@ export const stealthRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query
-      const { user, settings } = await fetchUpdatedUser({
+      let { user, settings } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
 
       // Guard
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (user.covertTrainingType) {
         return errorResponse("Already training covert skills");
       }
@@ -281,21 +299,30 @@ export const stealthRouter = createTRPCRouter({
       const finishAt = new Date(Date.now() + input.minutes * 60 * 1000);
 
       // Mutation
-      const result = await updateUserDataForTrainCovert(ctx.drizzle, input, ctx);
+      const result = await updateUserDataForTrainCovert(
+        ctx.drizzle,
+        input,
+        ctx,
+        readiness,
+      );
 
       if (result.rowsAffected === 0) {
         return errorResponse(`Failed to start ${input.type} training`);
       }
 
-      return {
-        success: true,
-        message: `Started ${input.minutes} minute ${input.type} training`,
-        data: {
-          covertTrainingType: input.type as CovertTrainingType,
-          covertTrainingFinishAt: finishAt,
-          covertTrainingGain: expectedGain,
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Started ${input.minutes} minute ${input.type} training`,
+          data: {
+            covertTrainingType: input.type as CovertTrainingType,
+            covertTrainingFinishAt: finishAt,
+            covertTrainingGain: expectedGain,
+          },
         },
-      };
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   // Stop covert training and collect rewards

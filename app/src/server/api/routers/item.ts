@@ -1,5 +1,7 @@
+import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import {
+  and,
   eq,
   exists,
   gt,
@@ -18,9 +20,11 @@ import {
   getBuyUserUpdate,
   getConsumedItemUserUpdate,
   getConsumedMealUserUpdate,
+  getEvolvedItemUserUpdate,
   getInventoryEquipmentChanges,
   getInventoryQuantityChanges,
   getLoadoutInventoryChanges,
+  getMergedStacksUserUpdate,
   getPurchaseVariantUserUpdate,
   getRepairedEquipmentUpdate,
   getSelectItemLoadoutUserUpdate,
@@ -140,10 +144,15 @@ import {
   isWeightedCacheEffect,
   resolveWeightedCache,
 } from "@/libs/weightedCache";
+import {
+  fetchActionUser,
+  updateUserForActionReadiness,
+} from "@/queries/actionReadiness";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/queries/bloodline";
 import { listHuntingHabitats } from "@/queries/hunting";
 import type { UserItemMergeBucketRow } from "@/queries/item";
 import {
+  consumeVariantTokenForAction,
   deleteCraftingRequirementForUpdate,
   deleteEmptyUserItem,
   deleteItemForDelete,
@@ -268,6 +277,7 @@ import { findLpcDesignForSelection } from "@/queries/lpc";
 import { insertUserPet, listVisiblePetJutsu } from "@/queries/pets";
 import {
   debitUserMoney,
+  fetchAllGameSettings,
   fetchLoadoutUser,
   fetchUser,
   fetchViewerRole,
@@ -295,6 +305,11 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  type ActionReadiness,
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import {
   cacheReceiptId,
   commitCacheConsumption,
@@ -327,7 +342,7 @@ import {
 } from "@/utils/permissions";
 import { sanitizeVariantText } from "@/utils/sanitize";
 import { validateUrlForSsrf } from "@/utils/ssrf";
-import { getUtcDayKey } from "@/utils/time";
+import { getNextUserSnapshotAt, getUtcDayKey } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import {
   HealTag,
@@ -924,17 +939,24 @@ export const itemRouter = createTRPCRouter({
   evolveItem: protectedProcedure
     .meta({ mcp: { description: "Evolve an item into its evolution" } })
     .input(evolveItemSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, userItems, evolutionItem, loadouts] = await Promise.all([
+      const [
+        { user: initialUser, settings, requiresProgressionRefresh },
+        userItems,
+        evolutionItem,
+        loadouts,
+      ] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
         fetchItem(ctx.drizzle, input.evolutionItemId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
       ]);
-      if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE")
-        return errorResponse("Must be awake to evolve an item");
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
+
       if (!evolutionItem) return errorResponse("Evolution item not found");
       const parentItemId = evolutionItem.parentItemId;
       if (!parentItemId) return errorResponse("Target item is not an evolution");
@@ -998,9 +1020,10 @@ export const itemRouter = createTRPCRouter({
           ctx,
           parentItemId,
           userItemObj,
+          readiness,
         );
 
-        didEvolveThisCall = evolveResult.rowsAffected === 1;
+        didEvolveThisCall = evolveResult.rowsAffected > 0;
         if (!didEvolveThisCall) {
           const evolvedNow = await findUserItemForEvolveItem(ctx.drizzle, input, ctx);
           if (!evolvedNow) {
@@ -1057,7 +1080,10 @@ export const itemRouter = createTRPCRouter({
           );
         });
 
-      await Promise.all([
+      const [recovery] = await Promise.all([
+        didEvolveThisCall
+          ? Promise.resolve({ rowsAffected: 1 })
+          : updateUserForActionReadiness(ctx.drizzle, readiness),
         ...cleanupWrites,
         ...(didEvolveThisCall
           ? [
@@ -1072,12 +1098,28 @@ export const itemRouter = createTRPCRouter({
           : []),
       ]);
 
-      return {
-        success: true,
-        message: didEvolveThisCall
-          ? `Evolved into ${evolutionItem.name}!`
-          : `Finished evolution cleanup for ${evolutionItem.name}`,
-      };
+      if (!recovery.rowsAffected)
+        return errorResponse("Your status changed. Please try again.");
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getEvolvedItemUserUpdate({
+            user,
+            owned: userItemObj,
+            evolution: evolutionItem,
+            canKeepEquipped,
+            removedImbuementIds: imbuementsToRemove.map((entry) => entry.id),
+            didEvolve: didEvolveThisCall,
+            canProject:
+              !requiresProgressionRefresh && (didEvolveThisCall || alreadyEvolved),
+          }),
+          message: didEvolveThisCall
+            ? `Evolved into ${evolutionItem.name}!`
+            : `Finished evolution cleanup for ${evolutionItem.name}`,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   getAll: publicProcedure
@@ -1487,29 +1529,30 @@ export const itemRouter = createTRPCRouter({
   // Consume a Variant Token item to unlock a VARIANT_TOKEN-gated variant
   consumeVariantToken: protectedProcedure
     .input(z.object({ tokenUserItemId: z.string(), variantId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query — ownership check runs in parallel (variantId known upfront). The
       // token only needs its base item (effects) and quantity, so fetchUserItem
       // (no variant join) suffices here.
-      const [user, tokenItem, variant, ownershipRows, existingUnlock] =
+      const [initialUser, tokenItem, variant, ownershipRows, existingUnlock, settings] =
         await Promise.all([
-          fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
+          fetchActionUser(ctx.drizzle, ctx.userId),
           fetchUserItem(ctx.drizzle, ctx.userId, input.tokenUserItemId),
           findItemVariantForPurchaseVariant(ctx.drizzle, input),
           fetchVariantOwnership(ctx.drizzle, ctx.userId, input.variantId),
           findUserItemVariantForPurchaseVariant(ctx.drizzle, ctx, input),
+          fetchAllGameSettings(ctx.drizzle),
         ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
 
       // Guards — mirror the consume mutation's state checks so a token cannot be
       // spent while the user is not AWAKE (covers TRAVEL/BATTLE/ASLEEP/etc.), while
       // the token stack is still crafting, or while it is tied to an active auction.
       // The atomic consumption below also rechecks auction and hunting availability.
-      if (!user) return errorResponse("User not found");
       if (user.isBanned) return errorResponse("You are banned");
-      if (user.status !== "AWAKE") {
-        return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
-      }
+
       if (!tokenItem) return errorResponse("Token item not found");
       if (!hasRequiredSkill(tokenItem.item, user))
         return errorResponse("Activate the required skill to use this token");
@@ -1545,15 +1588,10 @@ export const itemRouter = createTRPCRouter({
       // the canonical atomic helper (CAS on quantity, deletes the stack at zero).
       let consumed: boolean;
       try {
-        consumed = await retryOnDeadlock(() =>
-          consumeUserItemAtomically({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            userItemId: input.tokenUserItemId,
-            expectedQuantity: tokenItem.quantity,
-            where: [eq(userItem.isInAuction, false)],
-          }),
+        const result = await retryOnDeadlock(() =>
+          consumeVariantTokenForAction(ctx.drizzle, ctx.userId, tokenItem, readiness),
         );
+        consumed = result.rowsAffected > 0;
       } catch {
         return errorResponse("Could not consume Variant Token — please try again");
       }
@@ -1567,26 +1605,49 @@ export const itemRouter = createTRPCRouter({
       // (rowsAffected === 0, meaning a concurrent unlock won the race) are surfaced
       // to the user — the token cannot be refunded once spent.
       try {
-        const insertResult = await insertUserItemVariantForPurchaseVariant(
-          ctx.drizzle,
-          ctx,
-          input,
-        );
+        const [insertResult] = await Promise.all([
+          insertUserItemVariantForPurchaseVariant(ctx.drizzle, ctx, input),
+          tokenItem.quantity === 1
+            ? deleteEmptyUserItem(ctx.drizzle, tokenItem.id, ctx.userId).catch(
+                (error: unknown) => {
+                  // The debit is committed; hidden zero stacks can be reclaimed without repeating the unlock.
+                  Sentry.captureException(error, {
+                    tags: { source: "consumeVariantToken.cleanup" },
+                  });
+                },
+              )
+            : undefined,
+        ]);
         if (insertResult.rowsAffected === 0) {
-          return errorResponse(
-            "Variant was already unlocked — your token was consumed. Please contact support.",
+          return actionReadinessResponse(
+            errorResponse(
+              "Variant was already unlocked — your token was consumed. Please contact support.",
+            ),
+            readiness,
+            ctx.drizzle,
           );
         }
       } catch {
-        return errorResponse(
-          "Token consumed but variant unlock failed — please contact support",
+        return actionReadinessResponse(
+          errorResponse(
+            "Token consumed but variant unlock failed — please contact support",
+          ),
+          readiness,
+          ctx.drizzle,
         );
       }
 
-      return {
-        success: true,
-        message: `Variant "${variant.name}" unlocked with token!`,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getRepairedEquipmentUpdate(user, [
+            { before: tokenItem, quantity: tokenItem.quantity - 1 },
+          ]),
+          message: `Variant "${variant.name}" unlocked with token!`,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   getItemRelations: publicProcedure
     .meta({
@@ -1607,28 +1668,50 @@ export const itemRouter = createTRPCRouter({
     })
     .input(z.object({ itemId: z.string() }))
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (user.status !== "AWAKE") {
-        return errorResponse(`Cannot merge items while ${user.status.toLowerCase()}`);
-      }
-      const result = await executeMergeStacksForItem(
-        ctx.drizzle,
-        ctx.userId,
-        input.itemId,
-      );
+      const [initialUser, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
+
+      const recoveredAt = getNextUserSnapshotAt(user.updatedAt);
+      const ownerWhere = recoveryMergeOwnerWhere(readiness, recoveredAt);
+      const [result, recovery] = await Promise.all([
+        executeMergeStacksForItem(
+          ctx.drizzle,
+          ctx.userId,
+          input.itemId,
+          undefined,
+          ownerWhere,
+        ),
+        updateUserForActionReadiness(ctx.drizzle, readiness, recoveredAt),
+      ]);
+      if (!recovery.rowsAffected)
+        return errorResponse("Your status changed. Please try again.");
       if (!result.success) {
-        return { success: false, message: result.message };
+        return actionReadinessResponse(
+          { success: false, message: result.message },
+          readiness,
+          ctx.drizzle,
+        );
       }
-      return {
-        success: true,
-        message: result.didMerge ? result.message : "Nothing to merge",
-        inventoryChanges: result.inventoryChanges,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: result.didMerge ? result.message : "Nothing to merge",
+          inventoryChanges: result.inventoryChanges,
+          ...getMergedStacksUserUpdate(user, result.inventoryChanges),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   mergeAllStacks: protectedProcedure
@@ -1640,31 +1723,28 @@ export const itemRouter = createTRPCRouter({
     })
     .input(z.object({ storedAtHome: z.boolean().optional() }).nullish())
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const storedAtHome = input?.storedAtHome ?? false;
-      const [user, recovered] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [initialUser, recovered, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
-      if (user.status !== "AWAKE") {
-        return errorResponse(`Cannot merge items while ${user.status.toLowerCase()}`);
-      }
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
+      const recoveredAt = getNextUserSnapshotAt(user.updatedAt);
+      const ownerWhere = recoveryMergeOwnerWhere(readiness, recoveredAt);
+
       const userItemsAll = await listUserItemForMergeAllStacks(
         ctx.drizzle,
         ctx,
         storedAtHome,
       );
-      if (userItemsAll.length === 0) {
-        return {
-          success: true,
-          message: "Nothing to merge",
-          inventoryChanges: recovered ? undefined : [],
-        };
-      }
       const itemIds = [
         ...new Set(
           userItemsAll
@@ -1673,11 +1753,23 @@ export const itemRouter = createTRPCRouter({
         ),
       ];
       if (itemIds.length === 0) {
-        return {
-          success: true,
-          message: "Nothing to merge",
-          inventoryChanges: recovered ? undefined : [],
-        };
+        const recovery = await updateUserForActionReadiness(
+          ctx.drizzle,
+          readiness,
+          recoveredAt,
+        );
+        if (!recovery.rowsAffected)
+          return errorResponse("Your status changed. Please try again.");
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: "Nothing to merge",
+            inventoryChanges: recovered ? undefined : [],
+            ...getMergedStacksUserUpdate(user, recovered ? undefined : []),
+          },
+          readiness,
+          ctx.drizzle,
+        );
       }
       const itemById = new Map<string, ItemRowForMerge>();
       for (const row of userItemsAll) {
@@ -1694,36 +1786,65 @@ export const itemRouter = createTRPCRouter({
           userItemsByItemId.set(row.itemId, [row]);
         }
       }
-      const results = await Promise.all(
-        itemIds.map((itemId) =>
-          executeMergeStacksForItem(ctx.drizzle, ctx.userId, itemId, {
-            userItems: userItemsByItemId.get(itemId) ?? [],
-            item: itemById.get(itemId) ?? undefined,
-          }),
+      const [results, recovery] = await Promise.all([
+        Promise.all(
+          itemIds.map((itemId) =>
+            executeMergeStacksForItem(
+              ctx.drizzle,
+              ctx.userId,
+              itemId,
+              {
+                userItems: userItemsByItemId.get(itemId) ?? [],
+                item: itemById.get(itemId) ?? undefined,
+              },
+              ownerWhere,
+            ),
+          ),
         ),
-      );
+        updateUserForActionReadiness(ctx.drizzle, readiness, recoveredAt),
+      ]);
+      if (!recovery.rowsAffected)
+        return errorResponse("Your status changed. Please try again.");
       const failed = results.filter((r) => !r.success);
       const mergedTypes = results.filter((r) => r.success && r.didMerge).length;
 
       if (failed.length > 0 && mergedTypes === 0) {
-        return { success: false, message: failed[0]?.message ?? "Merge failed" };
+        return actionReadinessResponse(
+          { success: false, message: failed[0]?.message ?? "Merge failed" },
+          readiness,
+          ctx.drizzle,
+        );
       }
       if (failed.length > 0) {
-        return {
-          success: false,
-          message: `Merged ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}, but ${failed.length} other type${failed.length === 1 ? "" : "s"} did not complete (inventory may already show partial merges — try merge again).`,
-        };
+        return actionReadinessResponse(
+          {
+            success: false,
+            message: `Merged ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}, but ${failed.length} other type${failed.length === 1 ? "" : "s"} did not complete (inventory may already show partial merges — try merge again).`,
+          },
+          readiness,
+          ctx.drizzle,
+        );
       }
-      return {
-        success: true,
-        message:
-          mergedTypes === 0
-            ? "Nothing to merge"
-            : `Merged stacks for ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}`,
-        inventoryChanges: recovered
-          ? undefined
-          : results.flatMap((result) => result.inventoryChanges ?? []),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message:
+            mergedTypes === 0
+              ? "Nothing to merge"
+              : `Merged stacks for ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}`,
+          ...getMergedStacksUserUpdate(
+            user,
+            recovered
+              ? undefined
+              : results.flatMap((result) => result.inventoryChanges ?? []),
+          ),
+          inventoryChanges: recovered
+            ? undefined
+            : results.flatMap((result) => result.inventoryChanges ?? []),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   // Split item stack
   splitStack: protectedProcedure
@@ -1977,13 +2098,15 @@ export const itemRouter = createTRPCRouter({
         fetchUserSkills(ctx.drizzle, ctx.userId),
         receiptId ? findActionLogById(ctx.drizzle, receiptId) : undefined,
       ]);
-      const { user } = updatedUser;
-
       if (previousOpening)
         return readCacheReceipt(previousOpening.changes, input.userItemId);
+      const { user: initialUser } = updatedUser;
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, updatedUser.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
 
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!useritem) return errorResponse("User item not found");
       if (useritem.item.itemType === "MEAL") {
         const result = await consumeMeal({
@@ -1991,28 +2114,33 @@ export const itemRouter = createTRPCRouter({
           user,
           owned: useritem,
           expectedQuantity: input.expectedQuantity,
+          readiness,
         });
         if (!("userPatch" in result)) return result;
         const { userPatch, ...response } = result;
-        if (updatedUser.requiresProgressionRefresh !== false) return response;
+        if (updatedUser.requiresProgressionRefresh !== false)
+          return actionReadinessResponse(response, readiness, ctx.drizzle);
         const progression = getUserProgressionUpdate(
           user,
           updatedUser.publishedAchievementIds,
         );
-        return {
-          ...response,
-          ...progression,
-          ...getConsumedMealUserUpdate({
-            progressionUserPatch: progression.userPatch,
-            userPatch,
-          }),
-        };
+        return actionReadinessResponse(
+          {
+            ...response,
+            ...progression,
+            ...getConsumedMealUserUpdate({
+              progressionUserPatch: progression.userPatch,
+              userPatch,
+            }),
+          },
+          readiness,
+          ctx.drizzle,
+        );
       }
       if (useritem.isInAuction) {
         return errorResponse("Cannot consume an item listed in an auction");
       }
-      if (user.status !== "AWAKE")
-        return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
+
       if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
         return errorResponse("Cannot consume item that is being crafted");
       }
@@ -2483,6 +2611,7 @@ export const itemRouter = createTRPCRouter({
             grantedQuest,
             petCapacity,
             rewardSpeciesUpdatedAt,
+            readiness,
           );
         const consumeResult = await (inTransaction ? claim() : retryOnDeadlock(claim));
         if (consumeResult.rowsAffected === 0) {
@@ -2571,44 +2700,47 @@ export const itemRouter = createTRPCRouter({
         // A plain consumable changes only the claimed scalar fields and its equipped stack.
         // Grants that select content or reward relations retain profile reconciliation.
         // Return
-        return {
-          success: true as const,
-          message: grantedQuest
-            ? `Quest started: ${grantedQuest.name}`
-            : `You used ${useritem.item.name}`,
-          notifications: messages,
-          rewards: grantedRewards,
-          cacheRewards,
-          bloodlineRollsChanged: useritem.item.effects.some(
-            (effect) => effect.type === "rollbloodline",
-          ),
-          raidBuffsChanged: false,
-          ...getConsumedItemUserUpdate({
-            user,
-            updates,
-            useritem,
-            jutsuSlotIncrease,
-            requiresProgressionRefresh:
-              updatedUser.requiresProgressionRefresh !== false,
-            hasReward: !!grantedRewards,
-            hasPetReward: !!petReward,
-            hasQuestReward: !!grantedQuest,
-            hasBloodlineChange: changedBloodlineId !== undefined,
-            hasSageModeReward: !!grantedSageModeId,
-            publishedAchievementIds: updatedUser.publishedAchievementIds,
-          }),
-          ...(petReward
-            ? {
-                petRewards: [
-                  {
-                    id: petReward.id,
-                    speciesId: petReward.speciesId,
-                    name: petReward.name,
-                  },
-                ],
-              }
-            : {}),
-        };
+        return actionReadinessResponse(
+          {
+            success: true as const,
+            message: grantedQuest
+              ? `Quest started: ${grantedQuest.name}`
+              : `You used ${useritem.item.name}`,
+            notifications: messages,
+            rewards: grantedRewards,
+            cacheRewards,
+            bloodlineRollsChanged: useritem.item.effects.some(
+              (effect) => effect.type === "rollbloodline",
+            ),
+            raidBuffsChanged: false,
+            ...getConsumedItemUserUpdate({
+              user,
+              updates,
+              useritem,
+              jutsuSlotIncrease,
+              requiresProgressionRefresh:
+                updatedUser.requiresProgressionRefresh !== false,
+              hasReward: !!grantedRewards,
+              hasPetReward: !!petReward,
+              hasQuestReward: !!grantedQuest,
+              hasBloodlineChange: changedBloodlineId !== undefined,
+              hasSageModeReward: !!grantedSageModeId,
+              publishedAchievementIds: updatedUser.publishedAchievementIds,
+            }),
+            ...(petReward
+              ? {
+                  petRewards: [
+                    {
+                      id: petReward.id,
+                      speciesId: petReward.speciesId,
+                      name: petReward.name,
+                    },
+                  ],
+                }
+              : {}),
+          },
+          readiness,
+        );
       };
       // Quest history may need insertion, and entry costs/rewards can touch more rows.
       // These must commit with the scroll debit and replay receipt; one guarded UPDATE
@@ -2628,6 +2760,11 @@ export const itemRouter = createTRPCRouter({
             : petReward
               ? "CompanionRewardConsumption"
               : "WeightedCacheOpening",
+          onCommitted: (response) => {
+            // Reward receipts reconcile the profile; retain replayable feedback without stale recovery snapshots.
+            actionReadinessResponse(response, readiness, ctx.drizzle);
+            return response;
+          },
           consume: async (tx) => {
             const response = await commitConsumption(tx, true);
             return response.success
@@ -2640,7 +2777,10 @@ export const itemRouter = createTRPCRouter({
         });
       }
       // Ordinary consumables retain the existing guarded claim and parallel mutation path.
-      return commitConsumption(ctx.drizzle, false);
+      const response = await commitConsumption(ctx.drizzle, false);
+      return response.success
+        ? actionReadinessResponse(response, readiness, ctx.drizzle)
+        : response;
     }),
   // Repair user item
   repair: protectedProcedure
@@ -2649,19 +2789,20 @@ export const itemRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, useritem] = await Promise.all([
-        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
+      const [initialUser, useritem, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!useritem) return errorResponse("User item not found");
       if (user.occupation !== "CRAFTING") {
         return errorResponse("You must have the Crafting occupation to repair items");
       }
-      if (user.status !== "AWAKE") {
-        return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
-      }
+
       if (useritem.durability >= useritem.item.maxDurability) {
         return errorResponse("Item is already at full durability");
       }
@@ -2680,7 +2821,12 @@ export const itemRouter = createTRPCRouter({
         return errorResponse(`Insufficient funds. Repair costs ${repairCost} ryo`);
       }
       // Mutate - update money with conditional guard to prevent race conditions
-      const moneyUpdateResult = await debitUserMoney(ctx.drizzle, repairCost, ctx);
+      const moneyUpdateResult = await debitUserMoney(
+        ctx.drizzle,
+        repairCost,
+        ctx,
+        readiness,
+      );
       if (moneyUpdateResult.rowsAffected !== 1) {
         return errorResponse("Insufficient funds for this repair");
       }
@@ -2693,19 +2839,27 @@ export const itemRouter = createTRPCRouter({
       );
       if (!repaired) {
         await refundUserMoney(ctx.drizzle, ctx.userId, repairCost);
-        return errorResponse(
-          "Could not repair item — it may have been stored, auctioned, or already repaired",
+        return actionReadinessResponse(
+          errorResponse(
+            "Could not repair item — it may have been stored, auctioned, or already repaired",
+          ),
+          readiness,
+          ctx.drizzle,
         );
       }
-      return {
-        success: true,
-        ...getRepairedEquipmentUpdate(
-          user,
-          [{ before: useritem, durability: useritem.item.maxDurability }],
-          repairCost,
-        ),
-        message: `Repaired ${useritem.item.name} for ${repairCost} ryo`,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getRepairedEquipmentUpdate(
+            user,
+            [{ before: useritem, durability: useritem.item.maxDurability }],
+            repairCost,
+          ),
+          message: `Repaired ${useritem.item.name} for ${repairCost} ryo`,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   // Repair all user items
   repairAll: protectedProcedure
@@ -2713,18 +2867,19 @@ export const itemRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, useritems] = await Promise.all([
-        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
+      const [initialUser, useritems, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       // Guard
-      if (!user) return errorResponse("User not found");
       if (user.occupation !== "CRAFTING") {
         return errorResponse("You must have the Crafting occupation to repair items");
       }
-      if (user.status !== "AWAKE") {
-        return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
-      }
+
       // Filter items that need repair (carried inventory only — not home/auction)
       const itemsNeedingRepair = useritems.filter(needsInventoryRepair);
       if (itemsNeedingRepair.length === 0) {
@@ -2742,7 +2897,12 @@ export const itemRouter = createTRPCRouter({
       }
       // Mutate - repair all items and update money
       // Update money with conditional guard to prevent race conditions
-      const moneyUpdateResult = await debitUserMoney(ctx.drizzle, totalRepairCost, ctx);
+      const moneyUpdateResult = await debitUserMoney(
+        ctx.drizzle,
+        totalRepairCost,
+        ctx,
+        readiness,
+      );
       if (moneyUpdateResult.rowsAffected !== 1) {
         return errorResponse("Insufficient funds for this repair");
       }
@@ -2765,29 +2925,42 @@ export const itemRouter = createTRPCRouter({
         await refundUserMoney(ctx.drizzle, ctx.userId, refundAmount);
       }
       if (succeeded.length === 0) {
-        return errorResponse(
-          "Could not repair items — they may have been stored, auctioned, or already repaired",
+        return actionReadinessResponse(
+          errorResponse(
+            "Could not repair items — they may have been stored, auctioned, or already repaired",
+          ),
+          readiness,
+          ctx.drizzle,
         );
       }
       const charged = totalRepairCost - refundAmount;
       if (failed.length > 0) {
-        return {
-          success: true,
-          message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo (${failed.length} skipped — stored, auctioned, or changed)`,
-        };
+        // A failed target may have left cached gear; its unknown equipment state needs reconciliation with the net charge.
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo (${failed.length} skipped — stored, auctioned, or changed)`,
+          },
+          readiness,
+          ctx.drizzle,
+        );
       }
-      return {
-        success: true,
-        ...getRepairedEquipmentUpdate(
-          user,
-          succeeded.map(({ useritem }) => ({
-            before: useritem,
-            durability: useritem.item.maxDurability,
-          })),
-          charged,
-        ),
-        message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo`,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getRepairedEquipmentUpdate(
+            user,
+            succeeded.map(({ useritem }) => ({
+              before: useritem,
+              durability: useritem.item.maxDurability,
+            })),
+            charged,
+          ),
+          message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo`,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   // Use repair item on another item
   useRepairItem: protectedProcedure
@@ -2796,20 +2969,23 @@ export const itemRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, repairUserItem, targetUserItem] = await Promise.all([
-        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
-        fetchUserItem(ctx.drizzle, ctx.userId, input.repairItemId),
-        fetchUserItem(ctx.drizzle, ctx.userId, input.targetItemId),
-      ]);
+      const [initialUser, repairUserItem, targetUserItem, settings] = await Promise.all(
+        [
+          fetchActionUser(ctx.drizzle, ctx.userId),
+          fetchUserItem(ctx.drizzle, ctx.userId, input.repairItemId),
+          fetchUserItem(ctx.drizzle, ctx.userId, input.targetItemId),
+          fetchAllGameSettings(ctx.drizzle),
+        ],
+      );
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!repairUserItem) return errorResponse("Repair item not found");
       if (!hasRequiredSkill(repairUserItem.item, user))
         return errorResponse("Activate the required skill to use this repair item");
       if (!targetUserItem) return errorResponse("Target item not found");
-      if (user.status !== "AWAKE") {
-        return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
-      }
+
       if (repairUserItem.storedAtHome) {
         return errorResponse("Fetch the repair item from home storage first");
       }
@@ -2854,15 +3030,33 @@ export const itemRouter = createTRPCRouter({
       );
       const actualRepair = newDurability - targetUserItem.durability;
       // CAS target durability first — never consume a kit if the write fails
-      const repaired = await tryRepairUserItemDurability(
-        ctx.drizzle,
-        ctx.userId,
-        targetUserItem,
-        newDurability,
-      );
+      const [repaired, recovery] = await Promise.all([
+        tryRepairUserItemDurability(
+          ctx.drizzle,
+          ctx.userId,
+          targetUserItem,
+          newDurability,
+        ),
+        updateUserForActionReadiness(ctx.drizzle, readiness),
+      ]);
+      if (!recovery.rowsAffected) {
+        if (repaired)
+          await restoreUserItemDurability(
+            ctx.drizzle,
+            targetUserItem.durability,
+            targetUserItem.id,
+            ctx.userId,
+            newDurability,
+          );
+        return errorResponse("Your status changed. Please try again.");
+      }
       if (!repaired) {
-        return errorResponse(
-          "Could not repair item — it may have been stored, auctioned, or already repaired",
+        return actionReadinessResponse(
+          errorResponse(
+            "Could not repair item — it may have been stored, auctioned, or already repaired",
+          ),
+          readiness,
+          ctx.drizzle,
         );
       }
       // Consume repair item if it's consumable
@@ -2899,21 +3093,29 @@ export const itemRouter = createTRPCRouter({
             ctx.userId,
             newDurability,
           );
-          return errorResponse(
-            "Could not consume repair kit — inventory changed, please try again",
+          return actionReadinessResponse(
+            errorResponse(
+              "Could not consume repair kit — inventory changed, please try again",
+            ),
+            readiness,
+            ctx.drizzle,
           );
         }
       }
-      return {
-        success: true,
-        ...getRepairedEquipmentUpdate(user, [
-          { before: targetUserItem, durability: newDurability },
-          ...(repairUserItem.item.destroyOnUse
-            ? [{ before: repairUserItem, quantity: repairUserItem.quantity - 1 }]
-            : []),
-        ]),
-        message: `Repaired ${targetUserItem.item.name} by ${actualRepair} durability using ${repairUserItem.item.name}`,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getRepairedEquipmentUpdate(user, [
+            { before: targetUserItem, durability: newDurability },
+            ...(repairUserItem.item.destroyOnUse
+              ? [{ before: repairUserItem, quantity: repairUserItem.quantity - 1 }]
+              : []),
+          ]),
+          message: `Repaired ${targetUserItem.item.name} by ${actualRepair} durability using ${repairUserItem.item.name}`,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   // Use repair items to repair all items
   useRepairAll: protectedProcedure
@@ -2921,15 +3123,16 @@ export const itemRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, useritems] = await Promise.all([
-        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
+      const [initialUser, useritems, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       // Guard
-      if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") {
-        return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
-      }
+
       // Filter items that need repair (carried inventory only — not home/auction)
       const itemsNeedingRepair = useritems.filter(needsInventoryRepair);
       if (itemsNeedingRepair.length === 0) {
@@ -2962,21 +3165,25 @@ export const itemRouter = createTRPCRouter({
         .join(", ");
 
       // Apply repairs with CAS; roll back and abort if any target left inventory
-      const repairOutcomes = await Promise.all(
-        itemsNeedingRepair.map(async (useritem) => {
-          const repaired = await tryRepairUserItemDurability(
-            ctx.drizzle,
-            ctx.userId,
-            useritem,
-            useritem.item.maxDurability,
-          );
-          return { useritem, repaired };
-        }),
-      );
+      const [repairOutcomes, recovery] = await Promise.all([
+        Promise.all(
+          itemsNeedingRepair.map(async (useritem) => {
+            const repaired = await tryRepairUserItemDurability(
+              ctx.drizzle,
+              ctx.userId,
+              useritem,
+              useritem.item.maxDurability,
+            );
+            return { useritem, repaired };
+          }),
+        ),
+        updateUserForActionReadiness(ctx.drizzle, readiness),
+      ]);
+      const confirmedReadiness = recovery.rowsAffected > 0 ? readiness : undefined;
       const failedRepairs = repairOutcomes.filter((o) => !o.repaired);
       // A hunt may have captured a completed target write before compensation.
       // Its snapshot can retain the player's repaired durability; kit claims stay guarded.
-      if (failedRepairs.length > 0) {
+      if (!recovery.rowsAffected || failedRepairs.length > 0) {
         await Promise.all(
           repairOutcomes
             .filter((o) => o.repaired)
@@ -2990,8 +3197,12 @@ export const itemRouter = createTRPCRouter({
               ),
             ),
         );
-        return errorResponse(
-          "Could not repair all items — one or more were stored, auctioned, or changed. No kits were consumed.",
+        return actionReadinessResponse(
+          errorResponse(
+            "Could not repair all items — one or more were stored, auctioned, or changed. No kits were consumed.",
+          ),
+          confirmedReadiness,
+          ctx.drizzle,
         );
       }
 
@@ -3060,31 +3271,39 @@ export const itemRouter = createTRPCRouter({
               : [],
           ),
         ]);
-        return errorResponse(
-          "Could not consume repair kits — inventory changed, please try again",
+        return actionReadinessResponse(
+          errorResponse(
+            "Could not consume repair kits — inventory changed, please try again",
+          ),
+          confirmedReadiness,
+          ctx.drizzle,
         );
       }
 
-      return {
-        success: true,
-        ...getRepairedEquipmentUpdate(user, [
-          ...itemsNeedingRepair.map((row) => ({
-            before: row,
-            durability: row.item.maxDurability,
-          })),
-          ...kitConsumeResults.flatMap((result) =>
-            result
-              ? [
-                  {
-                    before: result.repairKitRow,
-                    quantity: result.repairKitRow.quantity - result.quantityConsumed,
-                  },
-                ]
-              : [],
-          ),
-        ]),
-        message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} using ${kitsUsedSummary}`,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getRepairedEquipmentUpdate(user, [
+            ...itemsNeedingRepair.map((row) => ({
+              before: row,
+              durability: row.item.maxDurability,
+            })),
+            ...kitConsumeResults.flatMap((result) =>
+              result
+                ? [
+                    {
+                      before: result.repairKitRow,
+                      quantity: result.repairKitRow.quantity - result.quantityConsumed,
+                    },
+                  ]
+                : [],
+            ),
+          ]),
+          message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} using ${kitsUsedSummary}`,
+        },
+        confirmedReadiness,
+        ctx.drizzle,
+      );
     }),
   // Authenticated and uncached: allowance changes after purchases and UTC resets.
   getPurchaseAllowance: protectedProcedure
@@ -4209,6 +4428,7 @@ async function executeMergeStacksForItemBucket(
   itemName: string,
   stackSize: number,
   bucketItems: UserItemMergeBucketRow[],
+  ownerWhere?: SQL,
 ): Promise<MergeStacksExecutionResult> {
   if (stackSize <= 1) {
     return { success: true, didMerge: false, message: "", inventoryChanges: [] };
@@ -4249,7 +4469,7 @@ async function executeMergeStacksForItemBucket(
   // Admission can change status after the endpoint's initial read. Both phases
   // must stop at combat entry; restoring our claims preserves the original stacks.
   const awakeOwner = exists(
-    selectUserDataForExecuteMergeStacksForItemBucket(drizzle, userId),
+    selectUserDataForExecuteMergeStacksForItemBucket(drizzle, userId, ownerWhere),
   );
 
   // Restores every row this attempt touched back to its original quantity in one UPDATE. The
@@ -4378,6 +4598,7 @@ async function executeMergeStacksForItem(
   userId: string,
   itemId: string,
   preloaded?: PreloadedStackMergePayload,
+  ownerWhere?: SQL,
 ): Promise<MergeStacksExecutionResult> {
   let canProject = true;
   let info: ItemRowForMerge | undefined;
@@ -4435,6 +4656,7 @@ async function executeMergeStacksForItem(
         info.name,
         info.stackSize,
         bucket,
+        ownerWhere,
       ),
     ),
   );
@@ -4454,3 +4676,12 @@ async function executeMergeStacksForItem(
       : undefined,
   };
 }
+
+/** A parallel merge accepts only its validated actor snapshot or its own committed wake revision. */
+const recoveryMergeOwnerWhere = (readiness: ActionReadiness, recoveredAt: Date) =>
+  readiness.notice
+    ? or(
+        readiness.where,
+        and(eq(userData.status, "AWAKE"), eq(userData.updatedAt, recoveredAt)),
+      )
+    : undefined;

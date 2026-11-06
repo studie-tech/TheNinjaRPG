@@ -641,7 +641,7 @@ describe("dashboard training access", () => {
 
   it("explains banned and non-awake states without offering to start", () => {
     expect(dashboardTrainingAction(user({ isBanned: true }), false, village)).toMatchObject({ action: "View", reason: "Cannot spend Energy while banned" });
-    expect(dashboardTrainingAction(user({ status: "ASLEEP" }), false, village)).toMatchObject({ action: "View", reason: "Must be awake to train" });
+    expect(dashboardTrainingAction(user({ status: "ASLEEP", autoWakeUp: false }), false, village)).toMatchObject({ action: "View", reason: "You are asleep. Wake up before taking this action." });
   });
 });
 
@@ -663,8 +663,8 @@ describe("dashboard level guidance", () => {
 it("keeps idle crafting viewable while explaining its state and location gates", () => {
   const input = { occupation: "CRAFTING", quests: [], trackers: [], craftingItemName: null };
   expect(describeOccupationLine({ ...input, craftingUser: { status: "AWAKE", sector: MAP_WAKE_ISLAND_SECTOR } })).toMatchObject({ action: "View", detail: "Cannot craft items on Wake Island" });
-  expect(describeOccupationLine({ ...input, craftingUser: { status: "ASLEEP", sector: 1 } })).toMatchObject({ action: "View", detail: "User is not awake" });
-  expect(describeOccupationLine({ ...input, craftingItemName: "Healing Salve", craftingUser: { status: "ASLEEP", sector: 1 } })).toMatchObject({ action: "View", detail: null, craftTimer: true });
+  expect(describeOccupationLine({ ...input, craftingUser: { status: "ASLEEP", autoWakeUp: false, sector: 1 } })).toMatchObject({ action: "View", detail: "You are asleep. Wake up before taking this action." });
+  expect(describeOccupationLine({ ...input, craftingItemName: "Healing Salve", craftingUser: { status: "ASLEEP", autoWakeUp: false, sector: 1 } })).toMatchObject({ action: "View", detail: null, craftTimer: true });
 });
 
 it("lets blocked players view raids without promising participation or sending them to travel", () => {
@@ -686,7 +686,7 @@ it("keeps remote raid cards actionable with their destination sector", () => {
   expect(entry).toMatchObject({ availability: "travel", travelSector: 0 });
   expect(dashboardContentHref(entry!)).toBe("/travel?sector=0");
   expect(entry?.availabilityReason).toBeNull();
-  expect(buildDashboardCatalogue([], { ...user, status: "ASLEEP" })[0]).toMatchObject({ availability: "blocked", destination: "/globalanbuhq" });
+  expect(buildDashboardCatalogue([], { ...user, status: "ASLEEP", autoWakeUp: false })[0]).toMatchObject({ availability: "blocked", destination: "/globalanbuhq" });
 });
 
 it("shows the personal hunting contract and its current stage ahead of legacy quests", () => {
@@ -707,4 +707,27 @@ it("shows the personal hunting contract and its current stage ahead of legacy qu
   hunting.session.battleId = "battle";
   expect(line().detail).toContain("Fighting");
   expect(describeOccupationLine({ occupation: "HUNTER", quests: [], trackers: [], hunting: { ...hunting, contract: null } }).title).toBe("Unavailable contract");
+});
+
+for (const [status, autoWakeUp, expected] of [["AWAKE", true, true], ["ASLEEP", true, true], ["HOSPITALIZED", true, true], ["ASLEEP", false, false], ["BATTLE", true, false], ["TRAVEL", true, false], ["QUEUED", true, false]] as const) {
+  const actor = { status, autoWakeUp, sector: 1, rank: "JONIN", dailyTrainings: 0, isBanned: false, isOutlaw: false, village: { id: "home", sector: 1, name: "Home", structures: [{ route: "/traininggrounds", allyAccess: 1 }], relationshipA: [], relationshipB: [] }, ...Object.fromEntries(CombatStatNames.map((stat) => [stat, 1])) } as unknown as Parameters<typeof dashboardTrainingAction>[0];
+  it(`dashboard local training ${status} auto=${autoWakeUp}`, () => {
+    const result = dashboardTrainingAction(actor, false, actor.village as Parameters<typeof dashboardTrainingAction>[2]);
+    expect(result.href).toBe("/traininggrounds");
+    expect(!result.reason).toBe(expected);
+  });
+  it(`dashboard crafting ${status} auto=${autoWakeUp}`, () => {
+    const result = describeOccupationLine({ occupation: "CRAFTING", quests: [], trackers: [], craftingItemName: null, craftingUser: actor });
+    expect(!result.detail).toBe(expected);
+  });
+  it(`dashboard remote raid ${status} auto=${autoWakeUp}`, () => {
+    const result = dashboardRaidAction(1539, actor);
+    expect(!result.reason).toBe(expected);
+    if (expected) expect(result.href).toBe("/travel?sector=1539");
+  });
+}
+it("dashboard preserves bans and Wake Island crafting restriction", () => {
+  const user = { sector: 1, status: "AWAKE", isBanned: true } as unknown as Parameters<typeof dashboardTrainingAction>[0];
+  expect(dashboardRaidAction(1539, user).reason).toContain("banned");
+  expect(describeOccupationLine({ occupation: "CRAFTING", quests: [], trackers: [], craftingItemName: null, craftingUser: { ...user, sector: MAP_WAKE_ISLAND_SECTOR } }).detail).toContain("Wake Island");
 });

@@ -1,8 +1,10 @@
+import * as liveActivity from "@/server/utils/push/liveActivity";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { KAGE_DEFENSE_INSTANT_REQUEST_MINUTES, KAGE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
 import { Pusher } from "@/libs/pusher";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import * as pusherModule from "@/libs/pusher";
 import { aiProfile, battle, battleHistory, kageDefendedChallenges, userData, village, villageElderVote, war } from "@/drizzle/schema";
 import * as combat from "@/server/api/routers/combat";
@@ -61,6 +63,64 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const invitation = (await defender.getDefenses({ villageId })).hall!.schedule!.instantChallenge!;
     return { m, invitation, defender, input: { id: m.id, instantRequestId: invitation.id } };
   };
+  /** Prepare the explicit actor's supported launch path with the other participant awake. */
+  const launchInput = async (actor: string) => {
+    if (actor === "first") return (await invite()).input;
+    const m = await due();
+    expect((await (await callerFor(kageRouter, "first")).checkInDefense({ id: m.id })).success).toBe(true);
+    setSystemTime(m.scheduledAt!);
+    return { id: m.id };
+  };
+  it.each(["defender", "first"].flatMap((actor) => [
+    { actor, status: "ASLEEP" as const, autoWakeUp: true, success: true },
+    { actor, status: "ASLEEP" as const, autoWakeUp: false, success: false },
+    { actor, status: "HOSPITALIZED" as const, autoWakeUp: true, success: true },
+    { actor, status: "HOSPITALIZED" as const, autoWakeUp: false, success: true },
+  ]))("recovers only an eligible explicit Kage launch actor: %j", async ({ actor, status, autoWakeUp, success }) => {
+    const input = await launchInput(actor); const db = await getTestDatabase();
+    await db.update(userData).set({ status, autoWakeUp, curHealth: 100, maxHealth: 100, money: 1234 }).where(eq(userData.userId, actor));
+    const result = await (await callerFor(kageRouter, actor)).startDefense(input);
+    expect(result.success).toBe(success);
+    const fights = await db.query.battle.findMany();
+    expect(fights).toHaveLength(success ? 1 : 0);
+    const stored = (await db.query.userData.findFirst({ where: eq(userData.userId, actor) }))!;
+    expect(stored).toMatchObject({ status: success ? "BATTLE" : status, money: 1234 });
+    if (success) {
+      expect(result.message).toContain(status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE);
+      expect(stored.battleId).toBe(fights[0]!.id);
+      expect((await db.query.userData.findFirst({ where: eq(userData.userId, actor === "first" ? "defender" : "first") }))?.status).toBe("BATTLE");
+    } else expect(result).not.toHaveProperty("actionNotice");
+  });
+  it.each(["defender", "first"].flatMap((actor) => ["ASLEEP", "HOSPITALIZED"].map((status) => ({ actor, status: status as "ASLEEP" | "HOSPITALIZED" }))))("keeps the other Kage participant unavailable: %j", async ({ actor, status }) => {
+    const input = await launchInput(actor); const db = await getTestDatabase();
+    const other = actor === "first" ? "defender" : "first";
+    await db.update(userData).set({ status, autoWakeUp: true, curHealth: 100, maxHealth: 100 }).where(eq(userData.userId, other));
+    expect((await (await callerFor(kageRouter, actor)).startDefense(input)).success).toBe(false);
+    expect(await db.query.battle.findMany()).toHaveLength(0);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, other) }))?.status).toBe(status);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, actor) }))?.status).toBe("AWAKE");
+  });
+  it.each(["defender", "first"])("rejects %s recovery when the preference changes after combat preload", async (actor) => {
+    const input = await launchInput(actor); const db = await getTestDatabase();
+    await db.update(userData).set({ status: "ASLEEP", autoWakeUp: true }).where(eq(userData.userId, actor));
+    let transactionCalls = 0;
+    const racing = new Proxy(db, { get(target, key, receiver) {
+      if (key !== "transaction") return Reflect.get(target, key, receiver);
+      return (callback: Parameters<typeof db.transaction>[0]) => db.transaction((tx) => {
+        const launch = ++transactionCalls === 2;
+        return callback(launch ? beforeStatements(tx as unknown as DrizzleClient, userData, [async () => {
+          await tx.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, actor));
+        }]) as typeof tx : tx);
+      });
+    } });
+    const result = await callerForDatabase(kageRouter, actor, racing).startDefense(input);
+    expect(result.success).toBe(false);
+    expect(result).not.toHaveProperty("actionNotice");
+    expect(await db.query.battle.findMany()).toHaveLength(0);
+    expect(await db.query.kageDefendedChallenges.findFirst()).toMatchObject({ status: actor === "first" ? "SCHEDULED" : "QUEUED", battleId: null, startedAt: null });
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, actor) }))?.status).toBe("ASLEEP");
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, actor === "first" ? "defender" : "first") }))?.status).toBe("AWAKE");
+  });
   it("restricts instant invitations to the current Kage and leaves the appointment untouched", async () => {
     const m = await join(); const db = await getTestDatabase();
     const first = await callerFor(kageRouter, "first");
@@ -425,6 +485,28 @@ describeWithDatabase("scheduled Kage defenses", () => {
     expect(await caller.setDefenseAi({ id: m.id, consent: true })).toEqual({ success: false, message: "Village not found" });
     expect((await db.query.kageDefendedChallenges.findFirst())?.status).toBe("SCHEDULED");
   });
+  it("publishes recovery only after the check-in transaction commits", async () => {
+    const match = await due();
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "HOSPITALIZED", regenAt: new Date(Date.now() - 24 * 60 * 60 * 1000) }).where(eq(userData.userId, "first"));
+    const publication = vi.spyOn(liveActivity, "pushActivityUpdate").mockResolvedValue(undefined);
+    const rejectedCommit = new Proxy(db, {
+      get(target, property, receiver) {
+        if (property === "transaction") {
+          return (callback: (tx: DrizzleClient) => Promise<unknown>) => target.transaction(async (tx) => {
+            await callback(tx as unknown as DrizzleClient);
+            throw new Error("Check-in commit rejected");
+          });
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    await expect(callerForDatabase(kageRouter, "first", rejectedCommit).checkInDefense({ id: match.id })).rejects.toThrow("Check-in commit rejected");
+    expect(publication).not.toHaveBeenCalled();
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "first") })).toMatchObject({ status: "HOSPITALIZED" });
+    expect(await db.query.kageDefendedChallenges.findFirst({ where: eq(kageDefendedChallenges.id, match.id) })).toMatchObject({ checkedInAt: null });
+  });
+
   it("defers hospital stays only when the scheduled match is due", async () => {
     const m = await join(); const db = await getTestDatabase();
     await db.update(userData).set({ status: "HOSPITALIZED" }).where(eq(userData.userId, "first"));

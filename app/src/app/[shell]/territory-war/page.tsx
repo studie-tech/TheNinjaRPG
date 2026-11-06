@@ -21,6 +21,7 @@ import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -169,7 +170,7 @@ export default function TerritoryWarPage() {
             )}
             {!ownTeam && (
               <Button
-                disabled={pending || !inSector || user?.status !== "AWAKE"}
+                disabled={pending || !inSector || !canAttemptAwakeAction(user)}
                 onClick={() => create.mutate({ eventId: event.id })}
               >
                 Create guardian team
@@ -223,7 +224,7 @@ export default function TerritoryWarPage() {
                               pending ||
                               !!ownTeam ||
                               !inSector ||
-                              user?.status !== "AWAKE" ||
+                              !canAttemptAwakeAction(user) ||
                               team.queue.length >= TERRITORY_WAR_TEAM_SIZE
                             }
                             onClick={() => join.mutate({ teamId: team.id })}

@@ -37,7 +37,7 @@ beforeEach(() => {
     useUtils: testApi.useUtils,
   });
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: owner, prepareUserUpdate: () => 1, updateUser: vi.fn(async () => {}) }) as never);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children, id }) => <div id={id}>{children}</div>);
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(Link, "default").mockImplementation(({ href, children }) => <a href={String(href)}>{children}</a>);
   vi.spyOn(Confirm, "default").mockImplementation(({ title, onAccept, disabled }) => <button type="button" disabled={disabled} onClick={onAccept}>Confirm {title}</button>);
@@ -92,6 +92,7 @@ it("keeps a successful adoption intact while its claimed species leaves the dail
       </testApi.Provider>,
     );
     await view.findByRole("group", { name: "Species" });
+    expect(view.container.querySelector("#tutorial-pet-acquisition")).not.toBeNull();
     for (const field of ["speciesId", "paletteIndex", "characteristicIndex", "auraIndex"]) {
       fireEvent.click(view.container.querySelector(`input[name="pet-${field}"]`)!);
       fireEvent.click(view.getByRole("button", { name: "Continue" }));
