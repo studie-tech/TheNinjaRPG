@@ -41,6 +41,22 @@ vec3 receiverPosition(vec2 screen, float height, vec3 normal, vec4 viewport, vec
 }
 `;
 
+/** Point-light receiver setup, shared by the fill and ray-traced fragments. */
+const pointLightSurface = `  vec4 data = texture2D(uReceiver, (vWorld - uViewport.xy) / uViewport.zw);
+  float height = receiverHeight(data);
+  vec3 normal = receiverNormal(data);
+  vec3 p = receiverPosition(vWorld, height, normal, uViewport, uReceiverSize);
+  vec3 delta = vLight.xyz - p;
+  vec3 scaledDelta = delta / max(vLight.w, 1.0);
+  float distanceToLight = length(scaledDelta) * vLight.w;
+  if (distanceToLight >= vLight.w) discard;
+  vec3 direction = scaledDelta / max(length(scaledDelta), 0.0001);
+  float diffuse = max(dot(normal, direction), 0.0);
+  if (diffuse <= 0.001) discard;
+`;
+const pointLightOutput = `float falloff = max(0.0, 1.0 - distanceToLight / vLight.w);
+  gl_FragColor = vec4(vColor * diffuse * falloff * falloff * visibility * uLightStrength, 1.0);`;
+
 /** Cropped point-light quads use the ground grid to find exact authored triangular prisms. */
 export const pointLightFragment = `precision highp float;
 precision highp sampler2D; // Preserve encoded bytes in texture results before numeric decoding.
@@ -279,18 +295,7 @@ float nextBoundary(float position, float delta, float origin, float cell) {
   return max(0.00001, (edge - position) / delta);
 }
 void main() {
-  vec4 data = texture2D(uReceiver, (vWorld - uViewport.xy) / uViewport.zw);
-  float height = receiverHeight(data);
-  vec3 normal = receiverNormal(data);
-  vec3 p = receiverPosition(vWorld, height, normal, uViewport, uReceiverSize);
-  vec3 delta = vLight.xyz - p;
-  vec3 scaledDelta = delta / max(vLight.w, 1.0);
-  float distanceToLight = length(scaledDelta) * vLight.w;
-  if (distanceToLight >= vLight.w) discard;
-  vec3 direction = scaledDelta / max(length(scaledDelta), 0.0001);
-  float diffuse = max(dot(normal, direction), 0.0);
-  if (diffuse <= 0.001) discard;
-  float visibility = 1.0;
+${pointLightSurface}  float visibility = 1.0;
   // Foot-centered fill lights bypass occlusion; sunlight and fixed fixtures own projected shadows.
   if (uShadows > 0.5 && vCastsShadows > 0.5) {
     float surface = mod(floor(data.r * 255.0 + 0.5), 4.0);
@@ -335,8 +340,26 @@ void main() {
       visibility *= 1.0 - directCasterHit(uDynamicPrisms, uDynamicTables.zw, instance, uDynamicGeometry.xy, origin, ray, directPose);
     }
   }
-  float falloff = max(0.0, 1.0 - distanceToLight / vLight.w);
-  gl_FragColor = vec4(vColor * diffuse * falloff * falloff * visibility * uLightStrength, 1.0);
+  ${pointLightOutput}
+}`;
+
+/**
+ * Shadowless pools need none of the ray traversal above. Direct3D compiles that traversal for
+ * seconds on the first draw, so scenes with only character fill lights must never request it.
+ */
+export const fillLightFragment = `precision highp float;
+precision highp sampler2D; // Preserve encoded bytes in texture results before numeric decoding.
+varying vec2 vWorld;
+varying vec4 vLight;
+varying vec3 vColor;
+uniform sampler2D uReceiver;
+uniform vec4 uViewport;
+uniform vec2 uReceiverSize;
+uniform float uLightStrength;
+${materialShader}
+void main() {
+${pointLightSurface}  float visibility = 1.0;
+  ${pointLightOutput}
 }`;
 
 /** A single filter shades physical albedo; interface artwork is drawn after this layer. */

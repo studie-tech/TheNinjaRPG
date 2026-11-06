@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { BufferImageSource, Rectangle, Texture } from "pixi.js";
 import { createCharacterMaterialFrame, worldMaterialFrame, type AuthoredMaterialFrame, type WorldMaterial } from "@/libs/rendering/worldMaterials";
-import { lightingFragment, pointLightFragment } from "@/libs/rendering/worldLightingShaders";
+import { fillLightFragment, lightingFragment, pointLightFragment } from "@/libs/rendering/worldLightingShaders";
 import { createWorldOcclusion, MAX_CELL_INSTANCES, MAX_DIRECT_INSTANCES, SHARED_POSE_FLAG, type Occluder } from "@/libs/rendering/worldOcclusion";
 import { MAX_SMALL_WORLD_WIND, MAX_WORLD_WIND } from "@/libs/rendering/worldWind";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
@@ -990,11 +990,21 @@ describe("retained exact occlusion fields", () => {
   });
 });
 
+it("keeps fill lighting free of the ray traversal Direct3D compiles for seconds", () => {
+  expect(fillLightFragment).not.toMatch(/\bfor\s*\(/);
+  expect(fillLightFragment).not.toContain("geometryHit");
+  // A shadowless pool shades exactly as the traced fragment's unoccluded path does.
+  for (const line of ["float diffuse = max(dot(normal, direction), 0.0);", "visibility * uLightStrength"]) {
+    expect(fillLightFragment).toContain(line);
+    expect(pointLightFragment).toContain(line);
+  }
+});
+
 it("keeps exact point lighting and the final composite within seven samplers each", () => {
   expect(pointLightFragment.match(/uniform sampler2D/g)).toHaveLength(7); expect(lightingFragment.match(/uniform sampler2D/g)).toHaveLength(7);
 });
 
-it.each([pointLightFragment, lightingFragment])("declares numeric sample precision before sampler uniforms and helper parameters", (fragment) => {
+it.each([fillLightFragment, pointLightFragment, lightingFragment])("declares numeric sample precision before sampler uniforms and helper parameters", (fragment) => {
   const precision = fragment.indexOf("precision highp sampler2D;");
   expect(precision).toBeGreaterThanOrEqual(0);
   expect(Array.from(fragment.matchAll(/precision\s+(\w+)\s+sampler2D\s*;/g), (match) => match[1])).toEqual(["highp"]);

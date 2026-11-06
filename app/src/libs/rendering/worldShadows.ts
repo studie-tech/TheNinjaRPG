@@ -24,6 +24,7 @@ import type { HexTerrainData } from "@/libs/rendering/terrainData";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import {
+  fillLightFragment,
   lightingFragment,
   lightingVertex,
   materialShader,
@@ -239,24 +240,39 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       aCastsShadows: { buffer: pointBuffer, format: "float32", stride: 40, offset: 36 },
     },
   });
-  const pointShader = Shader.from({
-    gl: { vertex: pointVertex, fragment: pointLightFragment },
-    resources: {
-      view,
-      lights: lightUniforms,
-      wind,
-      uReceiver: receiver.source,
-      uStaticField: staticField.texture.source,
-      uDynamicField: dynamicField.texture.source,
-      uStaticReferences: staticField.references.source,
-      uDynamicReferences: dynamicField.references.source,
-      uStaticPrisms: staticField.prisms.source,
-      uDynamicPrisms: dynamicField.prisms.source,
-    },
+  const fillShader = Shader.from({
+    gl: { vertex: pointVertex, fragment: fillLightFragment },
+    resources: { view, lights: lightUniforms, uReceiver: receiver.source },
   });
+  let tracedShader: Shader | null = null;
+  // Compiled only for a scene with a shadow-casting light. The fixed name keeps its source, and so
+  // the browser's compiled-program cache entry, identical whichever scenes the session opened first.
+  const pointShaderFor = (traced: boolean) => {
+    if (!traced) return fillShader;
+    tracedShader ??= Shader.from({
+      gl: {
+        name: "world-traced-lights",
+        vertex: pointVertex,
+        fragment: pointLightFragment,
+      },
+      resources: {
+        view,
+        lights: lightUniforms,
+        wind,
+        uReceiver: receiver.source,
+        uStaticField: staticField.texture.source,
+        uDynamicField: dynamicField.texture.source,
+        uStaticReferences: staticField.references.source,
+        uDynamicReferences: dynamicField.references.source,
+        uStaticPrisms: staticField.prisms.source,
+        uDynamicPrisms: dynamicField.prisms.source,
+      },
+    });
+    return tracedShader;
+  };
   const pointMesh = new Mesh({
     geometry: pointGeometry,
-    shader: pointShader,
+    shader: fillShader,
     blendMode: "add",
   });
   pointLayer.addChild(pointMesh);
@@ -330,7 +346,8 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     terrainLayer.destroy({ children: true });
     materialLayer.destroy({ children: true });
     pointGeometry.destroy(true);
-    pointShader.destroy();
+    fillShader.destroy();
+    tracedShader?.destroy();
     pointLayer.destroy({ children: true });
     filter.destroy();
     sun.dispose();
@@ -1387,6 +1404,9 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           pointBuffer.update();
           pointMesh.visible = vertices.length > 0;
         }
+        pointMesh.shader = pointShaderFor(
+          shadows && lights.some((entry) => entry.castsShadows),
+        );
         game.renderer.render({
           container: pointLayer,
           target: points,
