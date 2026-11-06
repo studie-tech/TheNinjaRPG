@@ -1550,7 +1550,7 @@ export const insertTrainingLogForInitiateBattle = (
   )[],
 ) => client.insert(trainingLog).values(logs);
 
-/** Build the `userData` update for `initiateBattle`, using predicates on `battleId`. */
+/** Restore this battle's participant claims; optional actor scope gives recovery its own write receipt. */
 export const updateUserDataForInitiateBattle = (
   client: DrizzleClient,
   info: {
@@ -1559,6 +1559,7 @@ export const updateUserDataForInitiateBattle = (
   },
   battleType: BattleType,
   battleId: string,
+  condition?: SQL,
 ) =>
   client
     .update(userData)
@@ -1570,7 +1571,7 @@ export const updateUserDataForInitiateBattle = (
       bracketImmunityPausedAt: null,
       battleId: null,
     })
-    .where(eq(userData.battleId, battleId));
+    .where(and(eq(userData.battleId, battleId), condition));
 
 /** Build the `battle` deletion, using predicates on `id`. */
 export const deleteBattleById = (

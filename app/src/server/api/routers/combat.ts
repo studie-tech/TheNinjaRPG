@@ -3675,13 +3675,60 @@ export const initiateBattle = async (
 
   // Undo only this battle's claims and rows, including successful siblings of a failed write.
   if (result.failed || result.claimedUsers?.rowsAffected !== expectedRows) {
-    await Promise.all([
-      updateUserDataForInitiateBattle(client, info, battleType, battleId),
+    const recoveryActorId = actionReadiness?.userRecovery?.userId;
+    // A separate actor receipt proves recovery committed and compensation still owns its activity.
+    const [actorCompensation] = await Promise.all([
+      updateUserDataForInitiateBattle(
+        client,
+        info,
+        battleType,
+        battleId,
+        recoveryActorId ? eq(userData.userId, recoveryActorId) : undefined,
+      ),
+      recoveryActorId
+        ? updateUserDataForInitiateBattle(
+            client,
+            info,
+            battleType,
+            battleId,
+            ne(userData.userId, recoveryActorId),
+          )
+        : undefined,
       deleteBattleById(client, battleId),
       deleteBattleHistoryByBattleId(client, battleId),
     ]);
     if (result.failed) throw result.failed.reason;
-    return { success: false, message: "Attack failed, did the target move?" };
+    const failure = { success: false, message: "Attack failed, did the target move?" };
+    if (!recoveryActorId || !actionReadiness) return failure;
+    if (actorCompensation.rowsAffected !== 1) {
+      // Neither an aggregate claim nor a lost compensation guard proves the actor recovered.
+      return {
+        ...failure,
+        userRecovery: { userId: recoveryActorId, requiresUserRefresh: true },
+      };
+    }
+    const isolatedActor =
+      info.questAttempt?.isolated && info.questAttempt.userId === recoveryActorId;
+    const activity =
+      !isolatedActor &&
+      (battleType === "RANKED_PVP" ||
+        (battleType === "TERRITORY_WAR" && info.clanBattle))
+        ? null
+        : getActionRecoveryActivity(actionReadiness.user, {
+            status: isolatedActor ? "BATTLE" : "AWAKE",
+            battleId: null,
+          });
+    return actionReadinessResponse(
+      failure,
+      {
+        ...actionReadiness,
+        // Participant claims publish training history and can settle fields beyond recovery.
+        trainingLogs: [],
+        userRecovery: { userId: recoveryActorId, requiresUserRefresh: true },
+      },
+      client,
+      activity,
+    );
   }
 
   if (actionReadiness?.userRecovery) {

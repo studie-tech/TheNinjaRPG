@@ -348,6 +348,70 @@ describeWithDatabase("arena readiness reads", () => {
       .toMatchObject({ status: "ASLEEP", battleId: null });
   });
 
+  for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+    it.each(["target moved", "actor moved", "actor entered another battle"] as const)(
+      `projects only confirmed ${status} recovery after a partial participant claim: %s`, async (race) => {
+        const client = await getTestDatabase();
+        const targetId = "partial-claim-target";
+        await client.update(userData).set({ status, sector: 100, longitude: 5, latitude: 5,
+          curHealth: 1, maxHealth: 1000, curEnergy: 100, regeneration: 0, autoWakeUp: true,
+          regenAt: new Date(0), immunityUntil: new Date(0) }).where(eq(userData.userId, userId));
+        await insertUsers([{ userId: targetId, username: targetId, rank: "JONIN", level: 50, status: "AWAKE",
+          sector: 100, longitude: 5, latitude: 5, immunityUntil: new Date(0) }]);
+        await queueEnergy(userId, [{ stat: "offence", energy: 100 }]);
+        const initial = await fetchActionUser(client, userId);
+        const raced = beforeStatements(client, userData, [
+          () => client.update(userData).set({ longitude: 6 })
+            .where(eq(userData.userId, race === "actor moved" ? userId : targetId)),
+          ...(race === "actor entered another battle" ? [() => client.update(userData)
+            .set({ status: "BATTLE", battleId: "later-battle" }).where(eq(userData.userId, userId))] : []),
+        ]);
+        const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const key = ["partial-battle-recovery", userId];
+        cache.setQueryData(key, { userData: initial, notifications: [] });
+        const read = vi.fn(async () => ({ userData: await fetchActionUser(client, userId), notifications: [] }));
+        const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity, queryFn: read });
+        const stop = observer.subscribe(() => {});
+        try {
+          const revision = prepareUserUpdate(cache, key);
+          const recorded = await recordQueries(() => withAfterTasks({ start: () => withRequestScope(() => initiateBattle({
+            client: raced, userIds: [userId], targetIds: [targetId], actionUserId: userId,
+            sector: 100, longitude: 5, latitude: 5,
+          }, "COMBAT")) }).start());
+          const result = recorded.result;
+          expect(result.success, result.message).toBe(false);
+          expect(result.message).toContain("Attack failed, did the target move?");
+          expect(result.userRecovery).toMatchObject({ userId, requiresUserRefresh: true });
+          expect(result.userRecovery?.userPatch).toBeUndefined();
+          await updateUserCache(cache, key, result, { revision });
+          expect(read).not.toHaveBeenCalled();
+          expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+          const saved = (await client.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
+          const target = (await client.query.userData.findFirst({ where: eq(userData.userId, targetId) }))!;
+          expect(target).toMatchObject({ status: "AWAKE", battleId: null });
+          expect(await client.query.battle.findMany()).toEqual([]);
+          expect(await client.query.battleHistory.findMany()).toEqual([]);
+          expect(await client.query.trainingLog.findMany()).toHaveLength(race === "actor moved" ? 0 : 1);
+          expect(saved.energyQueueHead).toBe(initial.energyQueueHead + (race === "actor moved" ? 0 : 1));
+          if (race === "target moved") {
+            expect(result.actionNotice).toBe(status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE);
+            expect(result.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
+            expect(saved).toMatchObject({ status: "AWAKE", battleId: null });
+            expect(cache.getQueryData<UserCache>(key)?.userData).toEqual({ ...initial, ...result.userRecovery?.activity });
+            expect(liveActivity.pushActivityUpdate).toHaveBeenCalledTimes(status === "HOSPITALIZED" ? 1 : 0);
+          } else {
+            expect(result.actionNotice).toBeUndefined();
+            expect(result.userRecovery?.activity).toBeUndefined();
+            expect(cache.getQueryData<UserCache>(key)?.userData).toEqual(initial);
+            expect(saved).toMatchObject(race === "actor moved" ? { status, battleId: null }
+              : { status: "BATTLE", battleId: "later-battle" });
+            expect(liveActivity.pushActivityUpdate).not.toHaveBeenCalled();
+          }
+        } finally { stop(); cache.clear(); }
+      },
+    );
+  }
+
   it.each([
     { isBanned: true },
   ])("preserves arena rejection for %j", async (patch) => {
