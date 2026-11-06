@@ -14,7 +14,8 @@ import { assignQuestToUser, questsRouter } from "@/routers/quests";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { beforeStatements } from "../../../../setup/statements";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const quotas = [
   { type: "mission", field: "dailyMissions", limit: MISSIONS_PER_DAY, rank: "A" },
@@ -74,6 +75,22 @@ describeWithDatabase("daily quest acquisition quotas", () => {
     expect(await api.startQuest({ questId: type, userSector: 0 })).toMatchObject({ success: false, message: expect.stringContaining("daily") });
     expect((await readUser())?.[field]).toBe(limit);
     expect(await database.query.questHistory.findFirst({ where: eq(questHistory.questId, type) })).toEqual(history);
+  });
+
+  it.each([...quotas])("commits recovery with the final $type slot before publishing history", async ({ type, field, limit, rank }) => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: true, [field]: limit - 1, isOutlaw: type === "crime" }).where(eq(userData.userId, "hero"));
+    const interleaved = beforeStatements(database, questHistory, [async () => {
+      expect(await readUser()).toMatchObject({ status: "AWAKE", [field]: limit });
+      await database.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, "hero"));
+    }]);
+    const result = await callerForDatabase(questsRouter, "hero", interleaved).startRandom({ type, rank, userLevel: 100, userSector: 0, userVillageId: "home" });
+    expect(result).toMatchObject({ success: true, actionNotice: "This action woke you up." });
+    expect(result.userPatch?.[field]).toBe(limit);
+    expect(result.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
+    expect(await readUser()).toMatchObject({ status: "AWAKE", autoWakeUp: false, [field]: limit });
+    expect((await readUser())?.questData).toMatchObject([{ id: type }]);
+    expect(await database.query.questHistory.findMany()).toMatchObject([{ questId: type, previousAttempts: 1 }]);
   });
 
   it("grants only one mission/crime when stale requests compete for the last shared slot", async () => {

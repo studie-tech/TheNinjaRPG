@@ -6,7 +6,8 @@ import { questsRouter } from "@/routers/quests";
 import { DialogObjective, InstantWinLoseObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { beforeStatements } from "../../../../setup/statements";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 // Medical missions are single-attempt dialog chains; dialog choices require an awake player.
 const content = {
@@ -65,5 +66,40 @@ describeWithDatabase("mission hall action recovery", () => {
     expect((await readUser())?.dailyMedicalMissions).toBe(1);
     expect((await api.checkRewards({ questId: "bloom", nextObjectiveId: "win" })).success).toBe(true);
     expect(await readHistory()).toMatchObject([{ questId: "bloom", completed: 1 }]);
+  });
+
+  it.each(["specific", "random"] as const)("rejects a changed recovery preference before the %s admission without spending an attempt", async (kind) => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ autoWakeUp: true }).where(eq(userData.userId, "medic"));
+    const interleaved = beforeStatements(database, userData, [async () => {
+      await database.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, "medic"));
+    }]);
+    const api = callerForDatabase(questsRouter, "medic", interleaved);
+    const result = kind === "specific"
+      ? await api.startQuest({ questId: "bloom", userSector: 0 })
+      : await api.startRandom({ type: "medical", rank: "D", userLevel: 50, userSector: 0, userVillageId: "home" });
+    expect(result).toMatchObject({ success: false, message: expect.stringContaining("activity") });
+    expect(result.actionNotice).toBeUndefined();
+    expect(await readUser()).toMatchObject({ status: "ASLEEP", autoWakeUp: false, dailyMedicalMissions: 0 });
+    expect((await readUser())?.questData ?? []).toHaveLength(0);
+    expect(await readHistory()).toHaveLength(0);
+  });
+
+  it.each(["specific", "random"] as const)("keeps an admitted %s quest when the recovery preference changes before history publication", async (kind) => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ autoWakeUp: true }).where(eq(userData.userId, "medic"));
+    const interleaved = beforeStatements(database, questHistory, [async () => {
+      expect(await readUser()).toMatchObject({ status: "AWAKE", dailyMedicalMissions: 1 });
+      await database.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, "medic"));
+    }]);
+    const api = callerForDatabase(questsRouter, "medic", interleaved);
+    const result = kind === "specific"
+      ? await api.startQuest({ questId: "bloom", userSector: 0 })
+      : await api.startRandom({ type: "medical", rank: "D", userLevel: 50, userSector: 0, userVillageId: "home" });
+    expect(result).toMatchObject({ success: true, actionNotice: "This action woke you up." });
+    expect(result.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
+    expect(await readUser()).toMatchObject({ status: "AWAKE", autoWakeUp: false, dailyMedicalMissions: 1 });
+    expect((await readUser())?.questData).toMatchObject([{ id: "bloom" }]);
+    expect(await readHistory()).toMatchObject([{ questId: "bloom", previousAttempts: 1 }]);
   });
 });

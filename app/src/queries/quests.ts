@@ -1468,10 +1468,12 @@ export const updateUserDataForClaimDailyQuestSlot = (
   questType: string,
   user: { userId: string },
   quota: { limit: number },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       [field]: sql`${counter} + 1`,
       ...(questType === "war"
         ? {
@@ -1481,7 +1483,9 @@ export const updateUserDataForClaimDailyQuestSlot = (
           }
         : {}),
     })
-    .where(and(eq(userData.userId, user.userId), lt(counter, quota.limit)));
+    .where(
+      and(eq(userData.userId, user.userId), lt(counter, quota.limit), readiness?.where),
+    );
 
 /**
  * Build the `overworldAiPlacementQuest` lookup for `assignQuestToUser`, selecting only

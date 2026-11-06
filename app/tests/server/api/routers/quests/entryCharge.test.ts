@@ -17,7 +17,7 @@ import {
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
-import { assignQuestToUser } from "@/server/api/routers/quests";
+import { assignQuestToUser, questsRouter } from "@/server/api/routers/quests";
 import { DialogObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
@@ -26,7 +26,9 @@ import {
   insertUserItems,
   insertUsers,
 } from "../../../../setup/factories";
+import { beforeStatements } from "../../../../setup/statements";
 import {
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -156,7 +158,12 @@ describeWithDatabase("quest entry items are paid at the start of a run", () => {
     expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(true);
   });
 
-  it("charges a war mission's entry items together with its daily slot", async () => {
+  it.each([
+    { ticketed: false, changed: false },
+    { ticketed: true, changed: false },
+    { ticketed: false, changed: true },
+    { ticketed: true, changed: true },
+  ])("admits recovery with a war slot (ticketed=$ticketed, changed=$changed)", async ({ ticketed, changed }) => {
     const client = await getTestDatabase();
     await client.insert(village).values(
       ["home", "enemy"].map((id, i) => ({
@@ -190,7 +197,7 @@ describeWithDatabase("quest entry items are paid at the start of a run", () => {
     );
     await client
       .update(userData)
-      .set({ villageId: "home" })
+      .set({ villageId: "home", status: "ASLEEP", autoWakeUp: true, immunityUntil: new Date(Date.now() + 3600000) })
       .where(eq(userData.userId, "hero"));
     await insertQuests([
       {
@@ -201,7 +208,7 @@ describeWithDatabase("quest entry items are paid at the start of a run", () => {
         maxAttempts: 100,
         maxCompletes: 100,
         content: {
-          entryItems: [{ ids: ["ticket"], number: 2 }],
+          entryItems: ticketed ? [{ ids: ["ticket"], number: 2 }] : [],
           objectives: [DialogObjective.parse({ id: "wait", task: "dialog" })],
           reward: ObjectiveReward.parse({}),
           sceneBackground: "",
@@ -211,12 +218,27 @@ describeWithDatabase("quest entry items are paid at the start of a run", () => {
     ]);
     await insertUserItems([{ id: "a", userId: "hero", itemId: "ticket", quantity: 3 }]);
 
-    const { result } = await start("warrun");
-    expect(result).toMatchObject({ success: true });
-    expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(true);
-    expect(await client.query.userItem.findMany()).toMatchObject([{ id: "a", quantity: 1 }]);
-    expect(
-      await client.query.userData.findFirst({ where: eq(userData.userId, "hero") }),
-    ).toMatchObject({ dailyWarMissions: 1 });
+    const interleaved = changed ? beforeStatements(client, userData, [async () => {
+      await client.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, "hero"));
+    }]) : client;
+    const result = await callerForDatabase(questsRouter, "hero", interleaved).startQuest({ questId: "warrun", userSector: 0 });
+    const saved = await client.query.userData.findFirst({ where: eq(userData.userId, "hero") });
+    expect(result.success).toBe(!changed);
+    expect(saved).toMatchObject({ status: changed ? "ASLEEP" : "AWAKE", dailyWarMissions: changed ? 0 : 1 });
+    expect(saved!.warParticipantUntil.getTime() > Date.now()).toBe(!changed);
+    expect(saved!.bracketImmunityLiftedUntil.getTime() > Date.now()).toBe(!changed);
+    expect(saved!.immunityUntil.getTime() > Date.now()).toBe(changed);
+    expect(await client.query.userItem.findMany()).toMatchObject([{ id: "a", quantity: ticketed && !changed ? 1 : 3 }]);
+    if (changed) {
+      expect(result.message).toContain("activity");
+      expect(result.actionNotice).toBeUndefined();
+      expect(await client.query.questHistory.findMany()).toHaveLength(0);
+      expect(saved?.questData ?? []).toHaveLength(0);
+    } else {
+      expect(result.actionNotice).toBe("This action woke you up.");
+      expect(result.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
+      expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(ticketed);
+      expect(saved?.questData).toMatchObject([{ id: "warrun" }]);
+    }
   });
 });

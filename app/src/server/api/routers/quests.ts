@@ -706,8 +706,15 @@ export const questsRouter = createTRPCRouter({
           : null;
 
       // Reserve the slot before delivering a quest, including when another start races us.
-      if (quota && !(await claimDailyQuestSlot(ctx.drizzle, user, input.type))) {
-        return errorResponse(questDailyLimitMessage(input.type, quota.limit));
+      if (
+        quota &&
+        !(await claimDailyQuestSlot(ctx.drizzle, user, input.type, readiness))
+      ) {
+        return errorResponse(
+          readiness.where
+            ? "Your activity or daily quest quota changed. Please try again."
+            : questDailyLimitMessage(input.type, quota.limit),
+        );
       }
       const assignment = await upsertQuestEntry(
         ctx.drizzle,
@@ -716,7 +723,7 @@ export const questsRouter = createTRPCRouter({
         "random_assignment",
         prevEntry,
         false,
-        readiness,
+        quota ? undefined : readiness,
       );
       if (!assignment.recoveryCommitted)
         return errorResponse("Your activity changed. Please try again.");
@@ -2808,11 +2815,12 @@ export const upsertQuestEntries = async (
   return true;
 };
 
-/** Reserve a daily assignment before delivery; SQL enforces the cap across stale callers. */
+/** Reserve a daily assignment and its recovery before publishing quest history. */
 export const claimDailyQuestSlot = async (
   client: DrizzleClient,
   user: UserData,
   questType: string,
+  readiness?: ActionReadiness,
 ) => {
   const quota = questDailyQuota(questType, user);
   if (!quota) return true;
@@ -2825,6 +2833,7 @@ export const claimDailyQuestSlot = async (
     questType,
     user,
     quota,
+    readiness,
   );
   if (result.rowsAffected === 0) return false;
   user[field] += 1;
@@ -3025,6 +3034,9 @@ export const assignQuestToUser = async (args: {
   const dailyLimitMessage = quota
     ? questDailyLimitMessage(questData.questType, quota.limit)
     : "";
+  const dailyClaimMessage = args.readiness?.where
+    ? "Your activity or daily quest quota changed. Please try again."
+    : dailyLimitMessage;
   if (quota && quota.current >= quota.limit) return errorResponse(dailyLimitMessage);
 
   // Entry items are checked and paid when the run starts, not at its first battle, so a
@@ -3121,7 +3133,14 @@ export const assignQuestToUser = async (args: {
         const database = tx as unknown as DrizzleClient;
         // A rolled-back attempt must not leave its tracker changes on the caller's user.
         const warUser = { ...user };
-        if (!(await claimDailyQuestSlot(database, warUser, questData.questType)))
+        if (
+          !(await claimDailyQuestSlot(
+            database,
+            warUser,
+            questData.questType,
+            args.readiness,
+          ))
+        )
           throw dailyLimitReached;
         const result = await upsertQuestEntry(
           database,
@@ -3130,7 +3149,6 @@ export const assignQuestToUser = async (args: {
           source,
           prevAttempt ?? null,
           true,
-          args.readiness,
         );
         if (
           !(await payQuestEntryAtStart({
@@ -3152,14 +3170,16 @@ export const assignQuestToUser = async (args: {
       if (error === entryRejected) return null;
       throw error;
     });
-    if (paid === undefined) return errorResponse(dailyLimitMessage);
+    if (paid === undefined) return errorResponse(dailyClaimMessage);
     if (paid === null)
       return errorResponse("Your entry items changed. Please try again.");
     Object.assign(user, paid.user);
     assignment = paid.result;
   } else if (questData.questType === "war") {
-    if (!(await claimDailyQuestSlot(client, user, questData.questType))) {
-      return errorResponse(dailyLimitMessage);
+    if (
+      !(await claimDailyQuestSlot(client, user, questData.questType, args.readiness))
+    ) {
+      return errorResponse(dailyClaimMessage);
     }
     assignment = await upsertQuestEntry(
       client,
@@ -3168,7 +3188,6 @@ export const assignQuestToUser = async (args: {
       source,
       prevAttempt ?? null,
       false,
-      args.readiness,
     );
   } else if (isManagedQuestRun(questData)) {
     // Publish the account claim and new history together: another request must not see
@@ -3234,8 +3253,8 @@ export const assignQuestToUser = async (args: {
     Object.assign(user, assigned.user);
     assignment = assigned.result;
   } else {
-    if (!(await claimDailyQuestSlot(client, user, questData.questType)))
-      return errorResponse(dailyLimitMessage);
+    if (!(await claimDailyQuestSlot(client, user, questData.questType, args.readiness)))
+      return errorResponse(dailyClaimMessage);
     assignment = await upsertQuestEntry(
       client,
       user,
@@ -3243,7 +3262,7 @@ export const assignQuestToUser = async (args: {
       source,
       prevAttempt ?? null,
       false,
-      args.readiness,
+      quota ? undefined : args.readiness,
     );
   }
   if (!assignment.recoveryCommitted)
