@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseHtml } from "@/utils/parse";
-import { needsHtmlSource, richTextInput, splitQuotedReply } from "@/utils/richText";
+import { buildQuoteHtml, needsHtmlSource, richTextInput, splitQuotedReply } from "@/utils/richText";
 import sanitize from "@/utils/sanitize";
 
 const render = (html: string) => renderToStaticMarkup(parseHtml(sanitize(html)));
@@ -82,5 +82,28 @@ describe("splitQuotedReply", () => {
       reply: "<p>plain</p><blockquote>typed quote</blockquote>",
       authors: [],
     });
+  });
+});
+
+describe("buildQuoteHtml", () => {
+  const quoted = {
+    id: "comment-1",
+    username: "Bob",
+    createdAt: new Date(2026, 10, 5, 12),
+    content: '<blockquote author="Ann">old</blockquote><p>See <img src="https://utfs.io/f/a.png"></p>',
+  };
+
+  it("attributes the quote and names the quoted message, without its own quotes", () => {
+    expect(buildQuoteHtml(quoted)).toBe(
+      '<blockquote author="Bob" date="11/05/2026" data-comment-id="comment-1"><p>See <img src="https://utfs.io/f/a.png" /></p></blockquote>',
+    );
+  });
+
+  it("keeps the quoted message's id through sanitizing", () => {
+    expect(sanitize(buildQuoteHtml(quoted))).toContain('data-comment-id="comment-1"');
+  });
+
+  it("names an unknown author", () => {
+    expect(buildQuoteHtml({ ...quoted, username: null })).toStartWith('<blockquote author="Unknown"');
   });
 });

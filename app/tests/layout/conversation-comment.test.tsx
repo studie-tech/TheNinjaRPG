@@ -219,6 +219,9 @@ describe("conversation comment row isolation", () => {
     expect(ids).toEqual(["1", "2", "3"]);
     const sentinel = setLastElement.mock.calls.find(([element]) => element)?.[0];
     expect(sentinel?.textContent).toContain("Message 1");
+    // Each row names its message, so a quote can jump to it.
+    const rows = Array.from(view.container.querySelectorAll("[data-comment-id]"));
+    expect(rows.map((element) => element.getAttribute("data-comment-id"))).toEqual(["1", "2", "3"]);
   });
 
   it("renders only changed cached rows in a 100-message history and reparses only changed content", () => {

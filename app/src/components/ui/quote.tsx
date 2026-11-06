@@ -1,11 +1,14 @@
 import { X } from "lucide-react";
 import type * as React from "react";
+import { QuoteJump } from "@/layout/QuoteJump";
 import { cn } from "@/libs/shadui";
 import { parseHtml } from "@/utils/parse";
 
 interface QuoteProps extends Omit<React.HTMLAttributes<HTMLQuoteElement>, "children"> {
   author?: string;
   date?: string;
+  /** The quoted message's id; its attribution then jumps to that message. */
+  commentId?: string;
   onRemove?: () => void;
   ref?: React.Ref<HTMLQuoteElement>;
   /**
@@ -21,6 +24,7 @@ const Quote = ({
   className,
   author,
   date,
+  commentId,
   children,
   onRemove,
   ...props
@@ -36,8 +40,17 @@ const Quote = ({
     >
       {author && (
         <div className="mb-2 font-semibold text-muted-foreground text-sm">
-          Quoted from {author}
-          {date && ` on ${date}`}
+          {commentId ? (
+            <QuoteJump commentId={commentId} author={author}>
+              Quoted from {author}
+              {date && ` on ${date}`}
+            </QuoteJump>
+          ) : (
+            <>
+              Quoted from {author}
+              {date && ` on ${date}`}
+            </>
+          )}
         </div>
       )}
       <div className="text-foreground italic">{parseHtml(children ?? "")}</div>

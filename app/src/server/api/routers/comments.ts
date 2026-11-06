@@ -92,8 +92,8 @@ import {
   isStaffRole,
 } from "@/utils/permissions";
 import { checkForBadWords, moderateUserText } from "@/utils/profanity";
-import { splitQuotedReply } from "@/utils/richText";
-import sanitize, { buildQuoteBlock } from "@/utils/sanitize";
+import { buildQuoteHtml, splitQuotedReply } from "@/utils/richText";
+import sanitize from "@/utils/sanitize";
 import {
   createConversationSchema,
   deleteCommentSchema,
@@ -547,7 +547,7 @@ export const commentsRouter = createTRPCRouter({
       let content = input.comment;
       if (quotes.length > 0) {
         const quoteContent = quotes
-          .map((q) => buildQuoteBlock({ ...q, username: q.user?.username }))
+          .map((q) => buildQuoteHtml({ ...q, username: q.user?.username }))
           .join("");
         content = `${quoteContent}\n\n${content}`;
       }

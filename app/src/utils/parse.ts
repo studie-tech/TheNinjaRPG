@@ -156,7 +156,11 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
 const VOID_TAGS = new Set(["br", "hr", "img"]);
 
 const escapeHtml = (text: string) =>
-  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 /** Serialize parsed nodes back to HTML, so a quote keeps its images and formatting. */
 const nodeToHtml = (node: HtmlNode): string => {
@@ -178,12 +182,14 @@ const transformBlockquoteNode = (blockquoteNode: HtmlNode): React.ReactElement =
 
   const author = blockquoteNode.attribs?.author || undefined;
   const date = blockquoteNode.attribs?.date || undefined;
+  const commentId = blockquoteNode.attribs?.["data-comment-id"] || undefined;
 
   return React.createElement(
     Quote,
     {
       author,
       date,
+      commentId,
       key: `quote-${author ?? ""}-${date ?? ""}-${content?.slice(0, 32) ?? ""}`,
     },
     content,

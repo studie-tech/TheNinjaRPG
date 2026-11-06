@@ -40,7 +40,11 @@ export const ConversationComments = ({
   return (
     <>
       {ordered?.map((comment, i) => (
-        <div key={comment.id} ref={i === sentinelIndex ? setLastElement : null}>
+        <div
+          key={comment.id}
+          data-comment-id={comment.id}
+          ref={i === sentinelIndex ? setLastElement : null}
+        >
           <ConversationCommentRow
             comment={comment}
             isQuoted={quoteIds?.includes(comment.id) ?? false}

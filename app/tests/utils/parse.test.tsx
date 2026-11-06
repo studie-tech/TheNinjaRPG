@@ -52,6 +52,15 @@ describe("parseHtml during server rendering", () => {
     expect(html).not.toContain("<b>");
   });
 
+  it("offers a jump to the quoted message when the quote names it", () => {
+    const html = render('<blockquote author="Bob" date="11/05/2026" data-comment-id="c1">hi</blockquote>');
+    expect(html).toMatch(/<button[^>]+aria-label="Jump to the quoted message from Bob"/);
+  });
+
+  it("shows an older quote without a jump", () => {
+    expect(render('<blockquote author="Bob" date="11/05/2026">hi</blockquote>')).not.toContain("<button");
+  });
+
   it("survives a blockquote nested inside a blockquote", () => {
     expect(() =>
       render("<blockquote>outer <blockquote>inner</blockquote></blockquote>"),

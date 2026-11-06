@@ -16,7 +16,7 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
     span: ["style"],
     h2: ["id"],
     h3: ["id"],
-    blockquote: ["author", "date"],
+    blockquote: ["author", "date", "data-comment-id"],
     iframe: [
       "src",
       "width",
