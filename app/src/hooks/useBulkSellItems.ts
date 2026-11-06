@@ -11,7 +11,8 @@ type BulkSellResult = RouterOutputs["item"]["sellUserItems"];
 /**
  * Sell or drop several backpack stacks in one request and reconcile the inventory and ryo.
  * Removed stacks leave the cached inventory and their ryo is credited; when any stack stayed
- * because it changed meanwhile, the inventory is read again instead.
+ * because it changed meanwhile, the inventory is read again instead. Unconfirmed sales
+ * also require an authoritative profile read because their proceeds are unknown.
  */
 export const useBulkSellItems = ({
   onSold,
@@ -40,9 +41,11 @@ export const useBulkSellItems = ({
               (rows) => getBulkSoldInventory(rows, sold),
               context.inventory,
             ),
-        ...(sold.length > 0
-          ? [updateUser(data, { revision: context.userRevision })]
-          : []),
+        data.userDelta === undefined
+          ? updateUser(undefined)
+          : sold.length > 0
+            ? updateUser(data, { revision: context.userRevision })
+            : undefined,
       ]);
     },
     onError: async (error) => {

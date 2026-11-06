@@ -157,6 +157,8 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(result.soldUserItemIds).toEqual([]);
     expect(result.ryo).toBe(0);
     expect(result.refused.map((entry) => entry.userItemId).sort()).toEqual(["blade-row", "potion-row"]);
+    expect(result.userDelta).toEqual({ money: 0 });
+    expect(result.message).toContain("Nothing was sold.");
     expect(await money()).toBe(startMoney);
     expect(await remaining(["potion-row", "blade-row"])).toEqual(["blade-row", "potion-row"]);
   });
@@ -216,8 +218,35 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(result.soldUserItemIds).toEqual(["potion-row"]);
     expect(result.ryo).toBe(60);
     expect(result.refused.map((entry) => entry.userItemId)).toEqual(["blade-row"]);
+    expect(result.userDelta).toBeUndefined();
+    expect(result.message).toContain("Sold 1 item for 60 ryo.");
+    expect(result.message).toContain("Could not confirm Blade.");
+    expect(result.message).not.toContain("stayed");
     expect(await money()).toBe(startMoney + 60);
     expect(await remaining(["potion-row", "blade-row"])).toEqual(["blade-row"]);
+  });
+
+  it.each([false, true])("withholds the profile projection when a committed sale loses its acknowledgement (other confirmed sale=%s)", async (includeConfirmed) => {
+    const execute = itemQueries.sellUserItemAtomically;
+    vi.spyOn(itemQueries, "sellUserItemAtomically").mockImplementation(async (...args) => {
+      const result = await execute(...args);
+      if (args[2].id === "blade-row") throw new Error("Connection lost after commit");
+      return result;
+    });
+    const result = await sell(includeConfirmed ? ["potion-row", "blade-row"] : ["blade-row"]);
+    expect(result.soldUserItemIds).toEqual(includeConfirmed ? ["potion-row"] : []);
+    expect(result.ryo).toBe(includeConfirmed ? 60 : 0);
+    expect(result.userDelta).toBeUndefined();
+    expect(result.refused).toEqual([{
+      userItemId: "blade-row", name: "Blade", reason: "sale could not be confirmed",
+    }]);
+    expect(result.message).toContain("Could not confirm Blade.");
+    expect(result.message).not.toContain("Nothing was sold");
+    expect(result.message).not.toContain("stayed");
+    expect(await money()).toBe(startMoney + 200 + (includeConfirmed ? 60 : 0));
+    const database = await getTestDatabase();
+    const [stack] = await database.select().from(userItem).where(eq(userItem.id, "blade-row"));
+    expect(stack?.quantity).toBe(0);
   });
 
   it("preserves the stack and its imbuements when payment is rejected", async () => {

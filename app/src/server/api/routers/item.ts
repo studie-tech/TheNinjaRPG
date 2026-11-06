@@ -1983,10 +1983,20 @@ export const itemRouter = createTRPCRouter({
           ),
         ),
       );
+      const unconfirmed: typeof refused = [];
       const sold = sellable.filter((useritem, index) => {
         const sale = sales[index];
         if (sale?.status === "fulfilled" && sale.value.rowsAffected > 0) {
           return true;
+        }
+        if (sale?.status === "rejected") {
+          // A lost acknowledgement can follow a committed sale, so its balance is unknown.
+          unconfirmed.push({
+            userItemId: useritem.id,
+            name: useritem.item.name,
+            reason: "sale could not be confirmed",
+          });
+          return false;
         }
         refused.push({
           userItemId: useritem.id,
@@ -2026,11 +2036,11 @@ export const itemRouter = createTRPCRouter({
       }
       return {
         success: sold.length > 0,
-        message: bulkSellMessage(prices, refused),
+        message: bulkSellMessage(prices, refused, unconfirmed),
         soldUserItemIds: sold.map((useritem) => useritem.id),
         ryo,
-        refused,
-        ...getBulkSellUserUpdate(ryo),
+        refused: [...refused, ...unconfirmed],
+        ...(unconfirmed.length > 0 ? {} : getBulkSellUserUpdate(ryo)),
       };
     }),
   // Use user item

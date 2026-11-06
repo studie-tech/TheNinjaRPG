@@ -280,10 +280,11 @@ export const bulkSellTotals = (
 export const warnedItems = (items: UserItemWithRelations[]) =>
   items.filter((ui) => BULK_SELL_WARN_RARITIES.includes(ui.item.rarity));
 
-/** One line for a bulk sell's result: what sold for how much, what dropped, what stayed. */
+/** Describe confirmed sales, refused stacks and sales that need authoritative reconciliation. */
 export const bulkSellMessage = (
   prices: number[],
   refused: { name: string; reason: string }[],
+  unconfirmed: { name: string }[] = [],
 ) => {
   const plural = (count: number) => `${count} item${count === 1 ? "" : "s"}`;
   const sold = prices.filter((price) => price > 0);
@@ -294,8 +295,17 @@ export const bulkSellMessage = (
       ? `Sold ${plural(sold.length)} for ${ryo.toLocaleString()} ryo${dropped > 0 ? ` and dropped ${dropped}` : ""}.`
       : dropped > 0
         ? `Dropped ${plural(dropped)}.`
-        : "Nothing was sold.";
-  if (refused.length === 0) return done;
+        : unconfirmed.length > 0
+          ? "No sales were confirmed."
+          : "Nothing was sold.";
   const stayed = refused.map(({ name, reason }) => `${name} ${reason}`).join("; ");
-  return `${done} ${refused.length} stayed: ${stayed}.`;
+  return [
+    done,
+    ...(refused.length > 0 ? [`${refused.length} stayed: ${stayed}.`] : []),
+    ...(unconfirmed.length > 0
+      ? [
+          `Could not confirm ${unconfirmed.map(({ name }) => name).join(", ")}. Your inventory and ryo will be refreshed.`,
+        ]
+      : []),
+  ].join(" ");
 };

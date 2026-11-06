@@ -95,6 +95,14 @@ describe("warnedItems", () => {
 });
 
 describe("bulkSellMessage", () => {
+  it("separates unknown sale outcomes from confirmed refusals and proceeds", () => {
+    expect(bulkSellMessage([], [], [{ name: "Blade" }])).toBe(
+      "No sales were confirmed. Could not confirm Blade. Your inventory and ryo will be refreshed.",
+    );
+    expect(bulkSellMessage([60], [{ name: "Seed", reason: "is equipped" }], [{ name: "Blade" }])).toBe(
+      "Sold 1 item for 60 ryo. 1 stayed: Seed is equipped. Could not confirm Blade. Your inventory and ryo will be refreshed.",
+    );
+  });
   it("says what sold, what dropped and what stayed", () => {
     expect(bulkSellMessage([60, 200, 0], [])).toBe("Sold 2 items for 260 ryo and dropped 1.");
     expect(bulkSellMessage([0], [])).toBe("Dropped 1 item.");
