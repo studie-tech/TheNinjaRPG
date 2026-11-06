@@ -131,10 +131,8 @@ it("renders the logbook entry of a climb without a saved tracker", () => {
   const climb = card("Skychain Monastery");
   expect(within(climb).getByText("Climbing now")).toBeDefined();
   expect(within(climb).getByText("Current objective")).toBeDefined();
-  expect(vi.mocked(logbook.LogbookEntry).mock.calls[0]?.[0].tracker).toMatchObject({
-    id: "t-capped",
-    goals: [],
-  });
+  const entry = logbook.LogbookEntry as unknown as ReturnType<typeof vi.fn>;
+  expect(entry.mock.calls[0]?.[0].tracker).toMatchObject({ id: "t-capped", goals: [] });
 });
 
 it("lists the tower being climbed first", () => {
