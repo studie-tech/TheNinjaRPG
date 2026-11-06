@@ -21,6 +21,20 @@ import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import * as visualEffects from "@/libs/visualEffects";
 
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
+/** Occlusion tables exist for every scene, whichever point-light shader samples them. */
+const spyOnOcclusionTables = () => {
+  const spy = vi.spyOn(worldFields, "createWorldOcclusion");
+  return {
+    tables: () => {
+      const [fixed, moving] = spy.mock.results.map((result) => result.value as ReturnType<typeof worldFields.createWorldOcclusion>);
+      return {
+        uStaticField: fixed!.texture.source, uStaticReferences: fixed!.references.source, uStaticPrisms: fixed!.prisms.source,
+        uDynamicField: moving!.texture.source, uDynamicReferences: moving!.references.source, uDynamicPrisms: moving!.prisms.source,
+      } as unknown as Record<string, BufferImageSource>;
+    },
+    restore: () => spy.mockRestore(),
+  };
+};
 const fixture = (instanced = false, resolution = 1) => {
   const cleanups: (() => void)[] = [];
   const world = new Container(), parent = new Container();
@@ -374,6 +388,7 @@ describe("physical world lighting", () => {
       points: new Float32Array(0),
       volumes: [{ vertices: new Float32Array([0, 0, 0, 0.5, 1, 0, 0, 0.5, 0, 0.25, 0, 0.5]), indices: new Uint16Array([0, 1, 2]) }],
     }));
+    const occlusion = spyOnOcclusionTables();
     const f = fixture(), source = materialSourceFixture();
     try {
       const sprite = new Sprite(source.texture);
@@ -382,9 +397,10 @@ describe("physical world lighting", () => {
         size: 20, x: 40, y: 40, groundY: 40, shadowCaster: "character" });
       await registration.ready; f.shadows.update(worldSunlight(), viewport);
       const pointMesh = f.render.mock.calls.at(-1)?.[0]?.container.children[0];
-      const resources = pointMesh.shader.resources;
+      const tables = occlusion.tables();
+      const resources = { ...tables, uDynamicReferences: tables.uDynamicReferences!, uDynamicPrisms: tables.uDynamicPrisms!, lights: pointMesh.shader.resources.lights };
       const keys = ["uStaticField", "uStaticReferences", "uStaticPrisms", "uDynamicField", "uDynamicReferences", "uDynamicPrisms"];
-      const sources = keys.map((key) => resources[key] as BufferImageSource);
+      const sources = keys.map((key) => occlusion.tables()[key]!);
       expect(sources.every((source) => source instanceof BufferImageSource)).toBe(true);
       expect(Array.from(resources.lights.uniforms.uDynamicTables)).toEqual([
         resources.uDynamicReferences.pixelWidth, resources.uDynamicReferences.pixelHeight,
@@ -394,9 +410,9 @@ describe("physical world lighting", () => {
       expect(resources.lights.uniforms.uFieldHeights[3]).toBeLessThan(0.01);
       expect((resources.uDynamicPrisms.resource as Uint8Array).some((value) => value !== 0)).toBe(true);
       f.shadows.update(worldSunlight(), viewport);
-      expect(keys.map((key) => resources[key])).toEqual(sources);
+      expect(keys.map((key) => occlusion.tables()[key])).toEqual(sources);
       registration(); f.dispose(); expect(sources.every((source) => source.destroyed)).toBe(true);
-    } finally { f.dispose(); frameSpy.mockRestore(); source.dispose(); }
+    } finally { f.dispose(); frameSpy.mockRestore(); occlusion.restore(); source.dispose(); }
   });
 
   it.each([[64, false], [64, true], [192, false], [192, true]] as const)("preserves packed %ipx LPC layers and their shared moving foot light (instanced: %s)", async (logicalSize, instanced) => {
@@ -462,6 +478,40 @@ describe("physical world lighting", () => {
       expect(Array.from(points()).filter((_, index) => index % 10 === 9)).toEqual([0, 0, 0, 0, 0, 0]);
       expect(Array.from(points().slice(2, 5))).toEqual([43, 84, 66]);
     } finally { for (const lease of leases) lease(); f.dispose(); for (const view of views) view.destroy(false); source.dispose(); fieldSpy.mockRestore(); }
+  });
+
+  it("compiles the ray-traced point shader only once a scene has a shadow-casting light", async () => {
+    const shaders = vi.spyOn(Shader, "from");
+    const traced = () => shaders.mock.calls.filter(([options]) => options.gl?.fragment.includes("geometryHit"));
+    const lastPointMesh = (f: ReturnType<typeof fixture>) => f.render.mock.calls.at(-1)?.[0]?.container.children[0];
+    const f = fixture(), source = materialSourceFixture();
+    const buildFrame = worldMaterials.worldMaterialFrame;
+    let frameSpy: { mockRestore: () => void } | undefined;
+    const registrations: (() => void)[] = [];
+    try {
+      const character = new Sprite(source.texture);
+      character.scale.set(20, -20); character.position.set(40, 40); f.parent.addChild(character);
+      const characterRegistration = f.shadows.register(character, { id: "fill-only", kind: "character", image: "fill-only-character.png",
+        size: 20, x: 40, y: 40, groundY: 40, shadowCaster: "character" });
+      registrations.push(characterRegistration);
+      await characterRegistration.ready;
+      f.shadows.update(worldSunlight(), viewport);
+      expect(lastPointMesh(f).geometry.getBuffer("aPosition").data.length).toBeGreaterThan(0);
+      expect(lastPointMesh(f).shader.glProgram.fragment).not.toContain("for (");
+      expect(traced()).toHaveLength(0);
+      frameSpy = vi.spyOn(worldMaterials, "worldMaterialFrame").mockImplementation((material, rect) => ({
+        ...buildFrame(material, rect), emitters: [{ x: 0.5, y: 0.5, height: 0.5 }],
+      }));
+      const lamp = new Sprite(source.texture);
+      lamp.scale.set(10, -20); lamp.position.set(60, 40); f.parent.addChild(lamp);
+      const registration = f.shadows.register(lamp, { id: "traced-lamp", kind: "structure", image: "traced-lamp.png",
+        size: 40, x: 60, y: 40, groundY: 40, shadowCaster: "column" });
+      registrations.push(registration);
+      await registration.ready;
+      f.shadows.update(worldSunlight(), viewport);
+      expect(traced()).toHaveLength(1);
+      expect(lastPointMesh(f).shader.glProgram.fragment).toContain("geometryHit");
+    } finally { for (const registration of registrations) registration(); f.dispose(); source.dispose(); frameSpy?.mockRestore(); shaders.mockRestore(); }
   });
 
   it("keeps lamp-post pools compact while buildings extend at night and character lights stay over the feet", async () => {
@@ -546,6 +596,11 @@ describe("physical world lighting", () => {
     } finally { registration(); art.dispose(); f.dispose(); source.dispose(); }
   });
   it.each([false, true])("shares foliage wind across receivers and shadow passes without uploading retained geometry (casts: %s)", async (castsShadow) => {
+    const buildFrame = worldMaterials.worldMaterialFrame;
+    const frameSpy = vi.spyOn(worldMaterials, "worldMaterialFrame").mockImplementation((material, rect) => ({
+      ...buildFrame(material, rect), emitters: [{ x: 0.5, y: 0.5, height: 0.5 }],
+    }));
+    const occlusion = spyOnOcclusionTables();
     const f = fixture(), source = materialSourceFixture();
     try {
       const art = await createWorldSprites(f.game, [{
@@ -561,7 +616,8 @@ describe("physical world lighting", () => {
       const upload = vi.spyOn(buffer, "update");
       const pointMesh = f.render.mock.calls.at(-1)![0]!.container.children[0];
       const pointUpload = vi.spyOn(pointMesh.geometry.getBuffer("aPosition"), "update");
-      const tables = [pointMesh.shader.resources.uStaticField, pointMesh.shader.resources.uStaticReferences, pointMesh.shader.resources.uStaticPrisms];
+      const { uStaticField, uStaticReferences, uStaticPrisms } = occlusion.tables();
+      const tables = [uStaticField!, uStaticReferences!, uStaticPrisms!];
       const tableUploads = tables.map((source) => vi.spyOn(source, "update"));
       const count = f.render.mock.calls.length;
       const gust = { ...still, large: new Float32Array([2, 0, 0, 0]), key: "gust" };
@@ -572,7 +628,7 @@ describe("physical world lighting", () => {
       expect(pointUpload).not.toHaveBeenCalled();
       expect(tableUploads.every((spy) => spy.mock.calls.length === 0)).toBe(true);
       expect(Array.from(mesh.shader.resources.wind.uniforms.uWind)).toEqual([2, 0, 0, 0]);
-      expect(Array.from(pointMesh.shader.resources.wind.uniforms.uWind)).toEqual([2, 0, 0, 0]);
+      if (castsShadow) expect(Array.from(pointMesh.shader.resources.wind.uniforms.uWind)).toEqual([2, 0, 0, 0]);
       const draws = f.render.mock.calls.slice(count).map(([draw]) => draw.container);
       expect(draws).toContain(layer);
       expect(draws).toContain(pointMesh.parent);
@@ -588,7 +644,7 @@ describe("physical world lighting", () => {
       f.shadows.update(worldSunlight(), { ...viewport, minX: 1, maxX: 101 }, gust);
       expect(pointUpload).not.toHaveBeenCalled();
       art.dispose();
-    } finally { f.dispose(); source.dispose(); }
+    } finally { f.dispose(); source.dispose(); frameSpy.mockRestore(); occlusion.restore(); }
   });
 
   it("keeps receiver sampling at screen density and transforms a sheared wall's normal", async () => {
@@ -858,6 +914,7 @@ describe("physical world lighting", () => {
   });
 
   it("refreshes receiver and occlusion data when same-sized animation images change", async () => {
+    const occlusion = spyOnOcclusionTables();
     const f = fixture();
     const a = new Uint8Array([128,128,128,255,128,128,128,255,128,128,128,255,128,128,128,255]);
     const b = new Uint8Array([128,128,128,0,128,128,128,0,128,128,128,0,128,128,128,255]);
@@ -876,14 +933,13 @@ describe("physical world lighting", () => {
       await registration.ready;
       f.shadows.update(worldSunlight(), viewport);
       const receiverLayer = f.render.mock.calls[1]?.[0]?.container;
-      const pointMesh = f.render.mock.calls.at(-1)?.[0]?.container.children[0];
-      const field = pointMesh.shader.resources.uDynamicPrisms as BufferImageSource;
+      const field = occlusion.tables().uDynamicPrisms!;
       const before = (field.resource as Uint8Array).slice();
       sprite.texture = textures[1];
       f.shadows.update(worldSunlight(), viewport);
       expect(f.render.mock.calls.filter(([call]) => call.container === receiverLayer)).toHaveLength(2);
       expect((field.resource as Uint8Array).some((value, index) => value !== before[index])).toBe(true);
-    } finally { registration(); f.dispose(); canvas.mockRestore(); load.mockRestore(); for (const texture of textures) texture.destroy(true); }
+    } finally { registration(); f.dispose(); canvas.mockRestore(); load.mockRestore(); occlusion.restore(); for (const texture of textures) texture.destroy(true); }
   });
   it("keeps the retained idle figure lit by the environment when optional movement artwork fails", async () => {
     const f = fixture(), source = materialSourceFixture("receiver-missing-motion.png");
