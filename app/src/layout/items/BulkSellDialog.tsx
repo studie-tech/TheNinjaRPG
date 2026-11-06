@@ -34,6 +34,7 @@ export function BulkSellDialog({
   onToggle,
   onConfirm,
   onClose,
+  onCloseAutoFocus,
 }: BulkSellDialogProps) {
   const [rareIds, setRareIds] = useState<string[] | null>(null);
   const structures = userData.village?.structures;
@@ -48,6 +49,8 @@ export function BulkSellDialog({
     <Dialog open onOpenChange={(open) => !open && !isSelling && onClose()}>
       <DialogContent
         aria-busy={isSelling}
+        closeDisabled={isSelling}
+        onCloseAutoFocus={onCloseAutoFocus}
         className="flex max-h-[85dvh] flex-col gap-3 sm:max-w-lg"
       >
         <DialogHeader>
@@ -75,7 +78,8 @@ export function BulkSellDialog({
               price={calcItemSellingPrice(userData, userItem, structures)}
               isTicked={selectedIds.includes(userItem.id)}
               isLarge={isRareStep}
-              onToggle={() => onToggle(userItem.id)}
+              disabled={isSelling}
+              onToggle={() => !isSelling && onToggle(userItem.id)}
             />
           ))}
         </ul>
@@ -92,7 +96,7 @@ export function BulkSellDialog({
           </Button>
           {!isRareStep && warned.length > 0 ? (
             <Button
-              disabled={ticked.length === 0}
+              disabled={ticked.length === 0 || isSelling}
               onClick={() => setRareIds(warned.map((ui) => ui.id))}
             >
               Continue
@@ -119,12 +123,14 @@ function BulkSellRow({
   price,
   isTicked,
   isLarge,
+  disabled,
   onToggle,
 }: {
   userItem: UserItemWithRelations;
   price: number;
   isTicked: boolean;
   isLarge: boolean;
+  disabled: boolean;
   onToggle: () => void;
 }) {
   const look = applyActiveVariant(userItem);
@@ -140,6 +146,7 @@ function BulkSellRow({
       <Checkbox
         id={id}
         checked={isTicked}
+        disabled={disabled}
         onCheckedChange={onToggle}
         aria-label={`Keep selling ${look.name}`}
         className="h-5 w-5"
@@ -191,4 +198,5 @@ interface BulkSellDialogProps {
   onToggle: (userItemId: string) => void;
   onConfirm: (userItemIds: string[]) => void;
   onClose: () => void;
+  onCloseAutoFocus: (event: Event) => void;
 }

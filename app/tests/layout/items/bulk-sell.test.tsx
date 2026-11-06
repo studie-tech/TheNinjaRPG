@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { MAX_BULK_SELL_ITEMS } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
@@ -18,6 +18,7 @@ const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDesc
 const originalResizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
 let sellMany: ReturnType<typeof vi.fn>;
+let isSelling = false;
 let finish: (result: { soldUserItemIds: string[]; refused: { userItemId: string }[] }) => void;
 
 beforeEach(() => {
@@ -30,12 +31,13 @@ beforeEach(() => {
     value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
   });
   sellMany = vi.fn();
+  isSelling = false;
   vi.spyOn(bulkSell, "useBulkSellItems").mockImplementation((({ onSold, onSettled }) => {
     finish = (result) => {
       onSold(result as never);
       onSettled();
     };
-    return { sellMany, isSelling: false };
+    return { sellMany, isSelling };
   }) as typeof bulkSell.useBulkSellItems);
   vi.spyOn(itemActions, "useItemActions").mockReturnValue({ equip: vi.fn(), merge: vi.fn(), isEquipping: false, isPending: false } as never);
   Object.defineProperty(globalThis, "ResizeObserver", {
@@ -186,6 +188,78 @@ it("sells straight from the review window when nothing rare is ticked", () => {
   openReview();
   act(() => fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Sell / drop" })));
   expect(sellMany).toHaveBeenCalledWith(["Chakra Pill"]);
+});
+
+it.each(["Back", "Close", "Escape"])("returns focus to the sell opener after %s", async (action) => {
+  renderWorkspace();
+  startSelecting();
+  act(() => fireEvent.click(card("Chakra Pill")));
+  const opener = within(bar()).getByRole("button", { name: "Sell / drop…" });
+  opener.focus();
+  openReview();
+  const review = screen.getByRole("dialog");
+  act(() => {
+    if (action === "Escape") fireEvent.keyDown(review, { key: "Escape" });
+    else fireEvent.click(within(review).getByRole("button", { name: action }));
+  });
+  await waitFor(() => expect(document.activeElement === opener).toBe(true));
+});
+
+it("returns focus to Select after a completed sale removes the opener", async () => {
+  renderWorkspace();
+  startSelecting();
+  act(() => fireEvent.click(card("Chakra Pill")));
+  openReview();
+  act(() => fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Sell / drop" })));
+  act(() => finish({ soldUserItemIds: ["Chakra Pill"], refused: [] }));
+  await waitFor(() => expect(document.activeElement === screen.getByRole("button", { name: "Select" })).toBe(true));
+});
+
+it("returns focus to Select after unticking every stack disables the opener", async () => {
+  renderWorkspace();
+  startSelecting();
+  act(() => fireEvent.click(card("Chakra Pill")));
+  openReview();
+  const review = screen.getByRole("dialog");
+  act(() => fireEvent.click(within(review).getByRole("checkbox")));
+  act(() => fireEvent.click(within(review).getByRole("button", { name: "Back" })));
+  await waitFor(() => expect(document.activeElement === screen.getByRole("button", { name: "Select" })).toBe(true));
+});
+
+it.each([false, true])("freezes the selection and controls while selling with rare step %s", (rare) => {
+  const { rerender } = renderWorkspace();
+  startSelecting();
+  act(() => fireEvent.click(card("Chakra Pill")));
+  if (rare) act(() => fireEvent.click(card("Storm Blade")));
+  openReview();
+  if (rare) act(() => fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" })));
+  const review = screen.getByRole("dialog");
+  const submitName = rare ? "Confirm" : "Sell / drop";
+  act(() => fireEvent.click(within(review).getByRole("button", { name: submitName })));
+  isSelling = true;
+  rerender([pill, scroll, token, blade]);
+  const summary = review.textContent;
+  for (const checkbox of within(review).getAllByRole("checkbox")) {
+    expect((checkbox as HTMLButtonElement).disabled).toBe(true);
+    act(() => fireEvent.click(checkbox));
+    expect(checkbox.getAttribute("aria-checked")).toBe("true");
+  }
+  for (const name of ["Back", "Close", submitName]) {
+    const button = within(review).getByRole("button", { name: new RegExp(`^${name}`) });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    act(() => fireEvent.click(button));
+  }
+  act(() => fireEvent.keyDown(review, { key: "Escape" }));
+  expect(screen.getByRole("dialog") === review).toBe(true);
+  expect(review.textContent).toBe(summary);
+  expect(sellMany).toHaveBeenCalledTimes(1);
+  isSelling = false;
+  rerender([pill, scroll, token, blade]);
+  expect((within(review).getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled).toBe(false);
+  const checkbox = within(review).getAllByRole("checkbox")[0]!;
+  expect((checkbox as HTMLButtonElement).disabled).toBe(false);
+  act(() => fireEvent.click(checkbox));
+  expect(checkbox.getAttribute("aria-checked")).toBe("false");
 });
 
 it("asks again for rare items, where unticking one keeps it", () => {

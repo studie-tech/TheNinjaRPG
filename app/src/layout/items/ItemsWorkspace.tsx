@@ -60,6 +60,8 @@ export function ItemsWorkspace({
   const panelRef = useRef<HTMLDivElement>(null);
   const backpackRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const sellTriggerRef = useRef<HTMLButtonElement>(null);
+  const selectRef = useRef<HTMLButtonElement>(null);
   // Toggling an equip twice reverses it on the server, so one change is sent at a time.
   const equipInFlight = useRef(false);
   const hasFinePointer = useMediaQuery("(any-pointer: fine)");
@@ -336,6 +338,7 @@ export function ItemsWorkspace({
             <h2 className="font-bold text-2xl text-foreground">Backpack</h2>
             <div className="flex items-center gap-1">
               <Button
+                ref={selectRef}
                 variant={isSelecting ? "default" : "outline"}
                 size="sm"
                 aria-pressed={isSelecting}
@@ -402,6 +405,7 @@ export function ItemsWorkspace({
                 Cancel
               </Button>
               <Button
+                ref={sellTriggerRef}
                 variant="destructive"
                 size="sm"
                 disabled={selectedItems.length === 0 || isOverLimit}
@@ -420,6 +424,16 @@ export function ItemsWorkspace({
               onToggle={toggleTicked}
               onConfirm={sellMany}
               onClose={() => setReviewIds(null)}
+              onCloseAutoFocus={(event) => {
+                // A completed sale removes the opener; Select remains available.
+                const target = sellTriggerRef.current?.disabled
+                  ? selectRef.current
+                  : (sellTriggerRef.current ?? selectRef.current);
+                if (target?.isConnected) {
+                  event.preventDefault();
+                  target.focus();
+                }
+              }}
             />
           )}
         </TabsContent>
