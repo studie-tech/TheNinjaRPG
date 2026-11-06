@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
@@ -7,6 +7,9 @@ import * as Pusher from "pusher-js";
 import { getDefaultStore } from "jotai";
 import type { PropsWithChildren, ReactElement } from "react";
 import type { AppRouter } from "@/api/root";
+import type { UserCache } from "@/deltas/profile";
+import type { UserWithRelations } from "@/server/api/routers/profile";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import * as client from "@/app/_trpc/client";
 import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
@@ -162,4 +165,57 @@ it("keeps the notification list when a battle event finds the derived combat ent
   // UserContext replays toast entries when this array changes identity.
   expect(cached?.notifications).toBe(notifications);
   expect(pushToCombat).toHaveBeenCalledWith(expect.anything(), "battle-1");
+});
+
+
+it.each(["confirmed", "lost-response"] as const)("keeps the originating battle revision for %s admission", async (outcome) => {
+  let receiveEvent!: (data: UserEvent) => Promise<void>;
+  vi.spyOn(Pusher, "default").mockImplementation(function () {
+    return {
+      connection: { socket_id: "own-tab" },
+      subscribe: () => ({ bind: (_event: string, handler: typeof receiveEvent) => { receiveEvent = handler; } }),
+      unsubscribe: vi.fn(), disconnect: vi.fn(),
+    };
+  } as never);
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/battlearena");
+  const navigate = vi.spyOn(routing, "pushToCombat").mockImplementation(() => undefined);
+  navigate.mockClear();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClients.push(queryClient);
+  const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+  const profile: UserCache = { userData: { userId: "player", status: "ASLEEP", battleId: null,
+    rank: "GENIN", titles: [], items: [], pveFights: 2, curHealth: 1,
+  } as unknown as NonNullable<UserWithRelations>, notifications: [] };
+  const canonical: UserCache = { ...profile, userData: { ...profile.userData!, status: "BATTLE", battleId: "battle", curHealth: 100, pveFights: 3 } };
+  queryClient.setQueryData(profileKey, profile);
+  let reads = 0;
+  const observer = new QueryObserver(queryClient, { queryKey: profileKey, staleTime: Infinity,
+    queryFn: async () => { reads++; return canonical; } });
+  const unsubscribe = observer.subscribe(() => {});
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <testApi.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </testApi.Provider>
+  );
+  renderHook(() => usePusherHandler("player"), { wrapper });
+  try {
+    const revision = prepareUserUpdate(queryClient, profileKey);
+    // Admission is published before its HTTP result; the originating tab must keep its mutation baseline.
+    await act(async () => receiveEvent({ type: "battle", battleId: "battle", originSocketId: "own-tab" }));
+    expect(queryClient.getQueryState(profileKey)?.dataUpdateCount).toBe(revision);
+    expect(navigate).not.toHaveBeenCalled();
+    await act(async () => updateUserCache(queryClient, profileKey, outcome === "confirmed" ? {
+      success: true, userPatch: { status: "BATTLE", battleId: "battle" }, userDelta: { pveFights: 1 },
+      userRecovery: { userId: "player", userPatch: { status: "AWAKE", curHealth: 100 } },
+    } : undefined, { revision }));
+    expect(reads).toBe(outcome === "confirmed" ? 0 : 1);
+    expect(queryClient.getQueryData<UserCache>(profileKey)?.userData).toMatchObject({
+      status: "BATTLE", battleId: "battle", curHealth: 100, pveFights: 3,
+    });
+    // The actor's other tabs and other fighters still receive authoritative navigation.
+    await act(async () => receiveEvent({ type: "battle", battleId: "another-battle", originSocketId: "another-tab" }));
+    expect(queryClient.getQueryData<UserCache>(profileKey)?.userData?.battleId).toBe("another-battle");
+    expect(navigate).toHaveBeenCalledWith(expect.anything(), "another-battle");
+  } finally { unsubscribe(); }
 });

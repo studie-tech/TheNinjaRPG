@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { and, eq, isNull, type SQL, sql } from "drizzle-orm";
 import { after } from "next/server";
+import { getActionRecoveryUpdate } from "@/deltas/actionReadiness";
 import { CombatStatNames, MasteryNames, REGEN_SECONDS } from "@/drizzle/constants";
 import { type GameSetting, type UserData, userData } from "@/drizzle/schema";
 import {
@@ -25,6 +26,7 @@ import {
 import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { getUserRegenerationGain } from "@/server/utils/regeneration";
 import { getStrucBoost } from "@/utils/village";
+import type { UserRecovery } from "@/validators/base";
 
 /** Recovery columns and predicates composed into an endpoint's existing account write. */
 export type ActionReadinessWrite = {
@@ -40,6 +42,8 @@ export type ActionReadiness<T extends UserData = UserData> = ActionReadinessWrit
   error?: string;
   /** Completed queue work is logged after the guarded recovery commits. */
   trainingLogs?: Parameters<typeof insertTrainingLogForInitiateBattle>[1];
+  /** Stable recovery-only cache fields, captured before the endpoint mutates its actor. */
+  userRecovery?: UserRecovery;
 };
 
 /**
@@ -234,6 +238,25 @@ export const prepareActionReadiness = <T extends UserData>(
       set.questData = user.questData;
     }
   }
+  const userRecovery = getActionRecoveryUpdate(
+    initial,
+    user,
+    Object.keys(set) as (keyof UserData)[],
+    settings,
+    now,
+  );
+  if (userRecovery.userPatch) {
+    // Feature builders consume the recovered actor too; keep their derived values on the same awake baseline.
+    Object.assign(user, {
+      baseRegeneration:
+        (related as typeof related & { baseRegeneration?: number }).baseRegeneration ??
+        initial.regeneration,
+      regeneration: userRecovery.userPatch.regeneration,
+      regenerationWithoutTimedBuffs:
+        userRecovery.userPatch.regenerationWithoutTimedBuffs,
+      effectiveMasteries: userRecovery.userPatch.effectiveMasteries,
+    });
+  }
   return {
     initial,
     user,
@@ -251,6 +274,7 @@ export const prepareActionReadiness = <T extends UserData>(
       ...trainingGuards,
     ),
     trainingLogs,
+    userRecovery,
     notice: wakes ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE,
   };
 };
@@ -264,11 +288,14 @@ export const prepareActionReadiness = <T extends UserData>(
 export const actionReadinessResponse = <T extends { message?: string }>(
   response: T,
   readiness:
-    | Pick<ActionReadiness, "notice" | "trainingLogs" | "initial" | "user">
+    | Pick<
+        ActionReadiness,
+        "notice" | "trainingLogs" | "initial" | "user" | "userRecovery"
+      >
     | Pick<ActionReadiness, "notice">
     | undefined,
   client?: DrizzleClient,
-): T & { actionNotice?: string } => {
+): T & { actionNotice?: string; userRecovery?: UserRecovery } => {
   if (!readiness?.notice) return response;
   if (client && "initial" in readiness && "user" in readiness) {
     const confirmed = readiness;
@@ -305,9 +332,6 @@ export const actionReadinessResponse = <T extends { message?: string }>(
           : `${response.message} ${readiness.notice}`
         : readiness.notice,
     actionNotice: readiness.notice,
-    // Recovery changes pools and activity beyond a feature-specific projection. Reconcile the profile.
-    userPatch: undefined,
-    userDelta: undefined,
-    userExpected: undefined,
+    ...("userRecovery" in readiness ? { userRecovery: readiness.userRecovery } : {}),
   };
 };

@@ -60,8 +60,9 @@ export function RankedMode() {
 
   const { mutate: queue, isPending: isQueuing } =
     api.pvpRank.queueForRankedPvp.useMutation({
-      onSuccess: (data) => {
-        if (data.actionNotice) void utils.profile.getUser.invalidate();
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
+        if (data.success || data.userRecovery) void updateUser(data, { revision });
         showMutationToast(data);
         if (data.success) {
           void utils.pvpRank.getRankedPvpQueue.invalidate();

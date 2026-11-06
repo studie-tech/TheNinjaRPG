@@ -50,7 +50,7 @@ export const MasteryTrainingQueue = ({
       },
       onError: (cause) => setError(cause.message),
       onSettled: (result, _error, _variables, context) =>
-        updateUser(result?.success ? result.userPatch : undefined, {
+        updateUser(result, {
           revision: context?.revision,
           achievementProgress: result?.achievementProgress,
         }),

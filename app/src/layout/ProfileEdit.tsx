@@ -1502,8 +1502,8 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
  */
 const SwapVillage: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const _utils = api.useUtils();
   const [village, setVillage] = useState<Village | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
@@ -1521,9 +1521,10 @@ const SwapVillage: React.FC = () => {
 
   // Mutations
   const { mutate: swap, isPending: isSwapping } = api.village.swapVillage.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
-      if (data.success) await utils.profile.getUser.invalidate();
+      if (data.success || data.userRecovery) await updateUser(data, { revision });
     },
     onSettled: () => {
       setIsOpen(false);

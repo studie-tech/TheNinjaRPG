@@ -135,6 +135,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const measured = await recordQueries(() => callerForDatabase(farmingRouter, "farm-user", database)
       .sellCrop({ userItemId: "sale-stack", quantity: 3 }));
     expect(measured.result.success).toBe(true);
+    expect(measured.result.userDelta).toEqual({ farmCurrency: 120 });
     expect(measured.result.actionNotice).toBe(status === "ASLEEP" ? AUTO_WAKE_MESSAGE
       : status === "HOSPITALIZED" ? AUTO_CHECKOUT_MESSAGE : undefined);
     expect(measured.statements.filter((statement) => /^\s*(update|delete)/i.test(statement))).toHaveLength(1);
@@ -252,13 +253,17 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       })));
       let experienceAfterClaim = 0;
       const guarded = beforeStatements(database, userData, [async () => {}, async () => {
-        experienceAfterClaim = (await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))!.experience;
-        await database.update(userData).set({ status: "BATTLE", battleId: "water-battle" })
+        const claimedUser = (await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))!;
+        experienceAfterClaim = claimedUser.experience;
+        // Battle admission advances the account revision together with its activity.
+        await database.update(userData).set({ status: "BATTLE", battleId: "water-battle", updatedAt: new Date(claimedUser.updatedAt.getTime() + 1) })
           .where(eq(userData.userId, "farm-user"));
       }]);
       const api = callerForDatabase(farmingRouter, "farm-user", guarded);
       const result = bulk ? await api.waterAll() : await api.waterPlot({ plotId: "water-claim-0" });
       expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
+      expect(result.userPatch).toBeUndefined();
+      expect(result.userDelta).toBeUndefined();
       expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
         .toMatchObject({ status: "BATTLE", battleId: "water-battle", farmingExperience: FARM_WATER_EXPERIENCE * plotCount,
           curEnergy: 10, energyQueueHead: 1, experience: experienceAfterClaim });
@@ -302,6 +307,10 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const goals = stored.questData?.find((entry) => entry.id === "recovery-goals")?.goals;
     expect(goals?.find((goal) => goal.id === "training-goal")?.value).toBeGreaterThan(0);
     expect(goals?.find((goal) => goal.id === "watering-goal")?.value).toBe(1);
+    expect(result.userPatch?.questData).toEqual(stored.questData);
+    expect(result.userPatch?.updatedAt).toEqual(stored.updatedAt);
+    expect(result.userDelta).toEqual({ farmingExperience: result.farmingExperienceDelta });
+    expect(result.userRecovery?.userPatch).toMatchObject({ status: "AWAKE", curEnergy: 10 });
   });
 
   it.each(["ASLEEP", "HOSPITALIZED"] as const)("recovers %s in the guarded farm purchase", async (status) => {
@@ -1037,6 +1046,9 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       ?.find((tracker) => tracker.id === "farm-quest")
       ?.goals.find((entry) => entry.id === "water-goal");
     expect(goal?.value).toBe(2);
+    expect(second.userPatch?.questData).toEqual(row?.questData);
+    expect(second.userDelta).toEqual({ farmingExperience: FARM_WATER_EXPERIENCE });
+    expect(row?.farmingExperience).toBe(FARM_WATER_EXPERIENCE * 2);
   });
 
   it("settles a finished extraction once when two reads race to award it", async () => {

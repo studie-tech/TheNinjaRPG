@@ -26,6 +26,7 @@ import { canManageTournaments } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import type { UserSearchResult } from "@/validators/register";
 import type { EventGame, EventTournamentState } from "@/validators/tournament";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 const TournamentEditor = dynamic(
   () =>
@@ -76,11 +77,12 @@ export const EventTournaments = ({
     },
   });
   const participate = api.tournament.participateEvent.useMutation({
+    onMutate: reconcile.prepare,
     onSettled: reconcile.settle,
-    onSuccess: async (result) => {
+    onSuccess: async (result, _variables, revision) => {
       setMessage(result.message);
       showMutationToast(result);
-      await Promise.all([refresh(), reconcile.apply()]);
+      await Promise.all([refresh(), reconcile.apply(result, revision)]);
     },
   });
   const event = details.data?.eventData;
@@ -809,11 +811,12 @@ const date = (value: number) => new Date(value).toLocaleString();
 
 /** Reconcile synchronized launches, rewards and participation through the profile query. */
 const useEventActionCache = () => {
-  const { pusher } = useUserData();
+  const { pusher, prepareUserUpdate, updateUser } = useUserData();
   const utils = api.useUtils();
   const { refreshEventTournamentNotices } = useEventTournamentNoticeCache();
   return {
     originSocketId: () => pusher?.connection.socket_id,
+    prepare: prepareUserUpdate,
     refreshNotices: refreshEventTournamentNotices,
     // Preserve the global error toast while recovering an action whose response was lost.
     settle: (_result: unknown, error: unknown) => {
@@ -825,6 +828,7 @@ const useEventActionCache = () => {
           refreshEventTournamentNotices(),
         ]);
     },
-    apply: () => utils.profile.getUser.invalidate(),
+    apply: (result?: UserDeltaResponse, revision?: number) =>
+      updateUser(result, { revision }),
   };
 };

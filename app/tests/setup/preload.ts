@@ -14,6 +14,7 @@ import ContentImageSelector from "@/layout/ContentImageSelector";
 import ContentBox from "@/layout/ContentBox";
 import { EmojiPicker } from "@/layout/EmojiPicker";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import { useFarmController } from "@/hooks/farm-controller";
 import * as gamesettings from "@/libs/gamesettings";
 import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
 import {
@@ -36,6 +37,8 @@ export const actualContentBox = ContentBox;
 export const actualEmojiPicker = EmojiPicker;
 export const actualShowMutationToast = toast.showMutationToast;
 export const actualUserContext = { ...userContext };
+// Layout suites replace the controller module; hook suites retain its real implementation.
+export const actualUseFarmController = useFarmController;
 
 // Cron SQL suites restore real timers after unit suites replace the module exports.
 export const actualGameSettings = { ...gamesettings };

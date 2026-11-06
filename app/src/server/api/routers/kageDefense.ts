@@ -1,4 +1,6 @@
 import { nanoid } from "nanoid";
+import { z } from "zod";
+import { getKageDefenseCheckInUserUpdate } from "@/deltas/kage";
 import {
   KAGE_CHALLENGER_DAILY_LIMIT,
   KAGE_CHALLENGER_WEEKLY_LIMIT,
@@ -60,6 +62,7 @@ import {
   kageStartSchema,
   kageVillageSchema,
 } from "@/validators/kage";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Authenticated title-defense scheduling, queue participation and battle admission. */
 export const kageDefenseProcedures = {
@@ -251,7 +254,7 @@ export const kageDefenseProcedures = {
   /** Record an awake challenger's attendance within the assigned match's check-in window. */
   checkInDefense: protectedProcedure
     .input(kageMatchSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [match, actionUser, settings] = await Promise.all([
         findKageDefendedChallengesForWithdrawDefense(ctx.drizzle, input),
@@ -307,6 +310,7 @@ export const kageDefenseProcedures = {
             message: hall.village.kage?.isAi
               ? "Checked in. Remain awake and start the title fight at the appointed time."
               : "Checked in. Remain awake; the Kage starts the battle.",
+            ...getKageDefenseCheckInUserUpdate(),
           };
         },
       );
@@ -403,7 +407,7 @@ export const kageDefenseProcedures = {
     }),
   /** Validate scheduled attendance or an accepted invitation, then recheck at atomic launch. */
   startDefense: protectedProcedure
-    .input(kageStartSchema)
+    .input(kageStartSchema.extend({ originSocketId: z.string().max(128).optional() }))
     .output(kageBattleResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [match, actionUser, settings] = await Promise.all([
@@ -507,6 +511,7 @@ export const kageDefenseProcedures = {
           {
             client: ctx.drizzle,
             actionUserId: ctx.userId,
+            originSocketId: input.originSocketId,
             userIds: [m.userId],
             targetIds: [m.kageId],
             biome: "arena",

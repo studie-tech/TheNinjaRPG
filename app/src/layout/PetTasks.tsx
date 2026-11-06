@@ -328,12 +328,7 @@ const usePetTaskFeedback = () => {
           showRewardToast(data.notifications ?? [], data.rewards, data.message);
         else showMutationToast(data);
         if (data.rewardChoicePending) void openRewardChoice();
-        await Promise.all([
-          refresh(),
-          data.success
-            ? updateUser(data, { revision })
-            : utils.profile.getUser.invalidate(),
-        ]);
+        await Promise.all([refresh(), updateUser(data, { revision })]);
       },
       onError: async (error: { message: string }) => {
         setMessage(error.message);

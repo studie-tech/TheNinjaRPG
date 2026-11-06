@@ -48,6 +48,7 @@ import { secondsFromDate } from "@/utils/time";
 import { checkCoLeader } from "@/validators/clan";
 import { ObjectiveReward } from "@/validators/rewards";
 import { tournamentCreateSchema } from "@/validators/tournament";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { eventTournamentProcedures, syncEventTournament } from "./tournamentEvents";
 
 const TOURNAMENT_FINALIZATION_INCOMPLETE =
@@ -151,8 +152,14 @@ export const tournamentRouter = createTRPCRouter({
     }),
   joinMatch: protectedProcedure
     .meta({ mcp: { description: "Join a tournament match" } })
-    .input(z.object({ matchId: z.string(), tournamentId: z.string() }))
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .input(
+      z.object({
+        matchId: z.string(),
+        tournamentId: z.string(),
+        originSocketId: z.string().max(128).optional(),
+      }),
+    )
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
       let [user, matchData, tournamentData, settings] = await Promise.all([
@@ -200,6 +207,7 @@ export const tournamentRouter = createTRPCRouter({
             targetIds: [matchData.userId1],
             client: ctx.drizzle,
             actionUserId: ctx.userId,
+            originSocketId: input.originSocketId,
             biome: "arena",
           },
           "TOURNAMENT",
@@ -224,7 +232,12 @@ export const tournamentRouter = createTRPCRouter({
       }
       // Return
       return actionReadinessResponse(
-        { success: true, message: "Joined Match", battleId: result?.battleId },
+        {
+          ...result,
+          success: true,
+          message: "Joined Match",
+          battleId: result?.battleId,
+        },
         readiness,
         ctx.drizzle,
       );

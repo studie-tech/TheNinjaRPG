@@ -23,9 +23,7 @@ export default function AssignExperience() {
     onMutate: () => ({ userRevision: prepareUserUpdate() }),
     onSuccess: async (result, _variables, context) => {
       showMutationToast(result);
-      if (result.success)
-        await updateUser(result.userPatch, { revision: context?.userRevision });
-      else await utils.profile.getUser.invalidate();
+      await updateUser(result, { revision: context?.userRevision });
     },
     onError: async () => {
       await utils.profile.getUser.invalidate();

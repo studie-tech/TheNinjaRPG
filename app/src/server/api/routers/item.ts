@@ -20,9 +20,11 @@ import {
   getBuyUserUpdate,
   getConsumedItemUserUpdate,
   getConsumedMealUserUpdate,
+  getEvolvedItemUserUpdate,
   getInventoryEquipmentChanges,
   getInventoryQuantityChanges,
   getLoadoutInventoryChanges,
+  getMergedStacksUserUpdate,
   getPurchaseVariantUserUpdate,
   getRepairedEquipmentUpdate,
   getSelectItemLoadoutUserUpdate,
@@ -937,15 +939,19 @@ export const itemRouter = createTRPCRouter({
   evolveItem: protectedProcedure
     .meta({ mcp: { description: "Evolve an item into its evolution" } })
     .input(evolveItemSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user: initialUser, settings }, userItems, evolutionItem, loadouts] =
-        await Promise.all([
-          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-          fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
-          fetchItem(ctx.drizzle, input.evolutionItemId),
-          fetchItemLoadouts(ctx.drizzle, ctx.userId),
-        ]);
+      const [
+        { user: initialUser, settings, requiresProgressionRefresh },
+        userItems,
+        evolutionItem,
+        loadouts,
+      ] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
+        fetchItem(ctx.drizzle, input.evolutionItemId),
+        fetchItemLoadouts(ctx.drizzle, ctx.userId),
+      ]);
       if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
@@ -1098,6 +1104,16 @@ export const itemRouter = createTRPCRouter({
       return actionReadinessResponse(
         {
           success: true,
+          ...getEvolvedItemUserUpdate({
+            user,
+            owned: userItemObj,
+            evolution: evolutionItem,
+            canKeepEquipped,
+            removedImbuementIds: imbuementsToRemove.map((entry) => entry.id),
+            didEvolve: didEvolveThisCall,
+            canProject:
+              !requiresProgressionRefresh && (didEvolveThisCall || alreadyEvolved),
+          }),
           message: didEvolveThisCall
             ? `Evolved into ${evolutionItem.name}!`
             : `Finished evolution cleanup for ${evolutionItem.name}`,
@@ -1514,7 +1530,7 @@ export const itemRouter = createTRPCRouter({
   // Consume a Variant Token item to unlock a VARIANT_TOKEN-gated variant
   consumeVariantToken: protectedProcedure
     .input(z.object({ tokenUserItemId: z.string(), variantId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query — ownership check runs in parallel (variantId known upfront). The
       // token only needs its base item (effects) and quantity, so fetchUserItem
@@ -1627,6 +1643,9 @@ export const itemRouter = createTRPCRouter({
       return actionReadinessResponse(
         {
           success: true,
+          ...getRepairedEquipmentUpdate(user, [
+            { before: tokenItem, quantity: tokenItem.quantity - 1 },
+          ]),
           message: `Variant "${variant.name}" unlocked with token!`,
         },
         readiness,
@@ -1652,7 +1671,7 @@ export const itemRouter = createTRPCRouter({
     })
     .input(z.object({ itemId: z.string() }))
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
       }),
     )
@@ -1693,6 +1712,7 @@ export const itemRouter = createTRPCRouter({
           success: true,
           message: result.didMerge ? result.message : "Nothing to merge",
           inventoryChanges: result.inventoryChanges,
+          ...getMergedStacksUserUpdate(user, result.inventoryChanges),
         },
         confirmedReadiness,
         ctx.drizzle,
@@ -1708,7 +1728,7 @@ export const itemRouter = createTRPCRouter({
     })
     .input(z.object({ storedAtHome: z.boolean().optional() }).nullish())
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
       }),
     )
@@ -1744,6 +1764,7 @@ export const itemRouter = createTRPCRouter({
             success: true,
             message: "Nothing to merge",
             inventoryChanges: recovered ? undefined : [],
+            ...getMergedStacksUserUpdate(user, recovered ? undefined : []),
           },
           readiness,
           ctx.drizzle,
@@ -1769,6 +1790,7 @@ export const itemRouter = createTRPCRouter({
             success: true,
             message: "Nothing to merge",
             inventoryChanges: recovered ? undefined : [],
+            ...getMergedStacksUserUpdate(user, recovered ? undefined : []),
           },
           readiness,
           ctx.drizzle,
@@ -1836,6 +1858,12 @@ export const itemRouter = createTRPCRouter({
             mergedTypes === 0
               ? "Nothing to merge"
               : `Merged stacks for ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}`,
+          ...getMergedStacksUserUpdate(
+            user,
+            recovered
+              ? undefined
+              : results.flatMap((result) => result.inventoryChanges ?? []),
+          ),
           inventoryChanges: recovered
             ? undefined
             : results.flatMap((result) => result.inventoryChanges ?? []),
@@ -2759,8 +2787,11 @@ export const itemRouter = createTRPCRouter({
             : petReward
               ? "CompanionRewardConsumption"
               : "WeightedCacheOpening",
-          onCommitted: (response) =>
-            actionReadinessResponse(response, readiness, ctx.drizzle),
+          onCommitted: (response) => {
+            // Reward receipts reconcile the profile; retain replayable feedback without stale recovery snapshots.
+            actionReadinessResponse(response, readiness, ctx.drizzle);
+            return response;
+          },
           consume: async (tx) => {
             const response = await commitConsumption(tx, true);
             return response.success
@@ -2935,6 +2966,7 @@ export const itemRouter = createTRPCRouter({
       }
       const charged = totalRepairCost - refundAmount;
       if (failed.length > 0) {
+        // A failed target may have left cached gear; its unknown equipment state needs reconciliation with the net charge.
         return actionReadinessResponse(
           {
             success: true,

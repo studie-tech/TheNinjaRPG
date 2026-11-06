@@ -488,6 +488,8 @@ export const showUserRank = (user?: { rank?: UserRank; isOutlaw?: boolean }) => 
  */
 export const calcActiveUserRegen = (
   user: UserData & {
+    /** Hydrated snapshots retain the stored rate to avoid applying boosts twice. */
+    baseRegeneration?: number;
     raidBuffs?: TimedBuff[];
     titles?: Pick<UserTitle, "effects" | "createdAt">[];
     clan?: Clan | null;
@@ -497,7 +499,7 @@ export const calcActiveUserRegen = (
   settings: GameSetting[],
   includeTimedBuffs = true,
 ) => {
-  let regeneration = user.regeneration;
+  let regeneration = user.baseRegeneration ?? user.regeneration;
 
   // Add home regeneration bonus when asleep
   if (user.status === "ASLEEP" && user.homeType !== "NONE") {

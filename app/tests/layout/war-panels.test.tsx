@@ -713,9 +713,9 @@ describe("war field objectives", () => {
       });
     });
     expect(updateUser).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "BATTLE", battleId: "battle-1" }),
-    );
-    expect(routing.pushToCombat).not.toHaveBeenCalled();
+      { success: true, message: "Battle ready", battleId: "battle-1" },
+      { revision: 7 },
+    );    expect(routing.pushToCombat).not.toHaveBeenCalled();
     await act(async () => {
       publishUser();
       await response;

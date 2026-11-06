@@ -1345,7 +1345,7 @@ export const clanRouter = createTRPCRouter({
   challengeClan: protectedProcedure
     .meta({ mcp: { description: "Challenge another clan to battle" } })
     .input(z.object({ challengerClanId: z.string(), targetClanId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       let [user, challenger, defender, queries, settings] = await Promise.all([
@@ -1433,7 +1433,11 @@ export const clanRouter = createTRPCRouter({
         });
       });
       return actionReadinessResponse(
-        { success: true, message: `${groupLabel} challenge initiated` },
+        {
+          success: true,
+          message: `${groupLabel} challenge initiated`,
+          ...getJoinClanBattleUserUpdate(),
+        },
         readiness,
         ctx.drizzle,
       );

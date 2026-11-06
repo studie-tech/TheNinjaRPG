@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import type { UserCache } from "@/deltas/profile";
+import { fetchActionUser } from "@/queries/actionReadiness";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { inferProcedureInput, inferProcedureOutput } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
@@ -6,7 +10,7 @@ import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness
 import { DMG_SETTING_DEFAULTS, HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import {
   aiProfile, battle, battleHistory, gameSetting, jutsu, quest, questHistory,
-  trainingLog, userCookingJob, userData, userJutsu, userQueue, userVote, village,
+  trainingLog, userCookingJob, userData, userJutsu, userPet, petSpecies, userQueue, userVote, village,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
@@ -19,7 +23,7 @@ import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { withAfterTasks } from "../../../../setup/after";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
-import { queueEnergy } from "../../../../setup/queues";
+import { queueEnergy, queueMasteries } from "../../../../setup/queues";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   describeWithDatabase, getTestDatabase, recordQueries, resetTables,
@@ -51,7 +55,7 @@ describeWithDatabase("arena readiness reads", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(liveActivity, "pushActivityUpdate").mockResolvedValue(undefined);
     await resetTables(battle, battleHistory, aiProfile, gameSetting, questHistory, quest,
-      trainingLog, userCookingJob, userQueue, userJutsu, jutsu, userVote, userData, village);
+      trainingLog, userCookingJob, userQueue, userJutsu, userPet, petSpecies, jutsu, userVote, userData, village);
     const client = await getTestDatabase();
     const now = new Date();
     await insertUsers([
@@ -67,6 +71,68 @@ describeWithDatabase("arena readiness reads", () => {
       ({ id: name, name, value, time: now })));
   });
   afterEach(() => vi.restoreAllMocks());
+
+  for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+    for (const queued of ["idle", "energy", "mastery", "both", "companion"] as const) {
+      it(`patches ${status} battle admission and ${queued} progression ${queued === "companion" && status === "HOSPITALIZED" ? "with unknown live companion reconciliation" : "without a getUser read"}`, async () => {
+        const database = await getTestDatabase();
+        await database.update(userData).set({ status, curHealth: 1, maxHealth: 1000,
+          curEnergy: 100, curChakra: 1, curStamina: 1, regeneration: 1, regenAt: new Date(0) })
+          .where(eq(userData.userId, userId));
+        if (["energy", "both", "companion"].includes(queued)) await queueEnergy(userId, [{ stat: "offence", energy: 100 }]);
+        if (["mastery", "both"].includes(queued)) {
+          await database.update(userData).set({ currentlyTrainingMastery: "ninjutsuMastery",
+            trainingSpeed: "15min", masteryTrainingStartedAt: new Date(Date.now() - 16 * 60_000) })
+            .where(eq(userData.userId, userId));
+          await queueMasteries(userId, [{ stat: "genjutsuMastery", speed: "1hr" }]);
+        }
+        if (queued === "companion") {
+          await database.insert(petSpecies).values({ id: "arena-companion-species", name: "Fox", description: "Fox" });
+          await database.insert(userPet).values({ id: "arena-companion", userId, name: "Fox", speciesId: "arena-companion-species",
+            paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, generationStatus: "READY", artRank: 1,
+            avatar: "https://uploadthing.b-cdn.net/f/arena-companion" });
+          await database.update(userData).set({ activePetId: "arena-companion", petExperience: 25 }).where(eq(userData.userId, userId));
+        }
+        const initial = await fetchActionUser(database, userId);
+        const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const key = ["profile", userId];
+        cache.setQueryData(key, { userData: initial, notifications: [] });
+        let reads = 0;
+        const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity,
+          queryFn: async () => { reads++; return { userData: await fetchActionUser(database, userId), notifications: [] }; } });
+        const unsubscribe = observer.subscribe(() => {});
+        try {
+          const revision = prepareUserUpdate(cache, key);
+          const result = await launch(database);
+          expect(result).toMatchObject({ success: true, userRecovery: { userId } });
+          await updateUserCache(cache, key, result, { revision });
+          const saved = (await database.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
+          expect(reads).toBe(status === "HOSPITALIZED" && queued === "companion" ? 1 : 0);
+          const projected = cache.getQueryData<UserCache>(key)?.userData;
+          expect(projected).toMatchObject({ status: "BATTLE", battleId: saved.battleId,
+            curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina,
+            curEnergy: saved.curEnergy, experience: saved.experience, petExperience: saved.petExperience, offence: saved.offence,
+            pveFights: saved.pveFights, energyQueueHead: saved.energyQueueHead,
+            masteryQueueHead: saved.masteryQueueHead, ninjutsuMastery: saved.ninjutsuMastery,
+            currentlyTrainingMastery: saved.currentlyTrainingMastery,
+            masteryTrainingStartedAt: saved.masteryTrainingStartedAt,
+            trainingSpeed: saved.trainingSpeed, dailyTrainings: saved.dailyTrainings });
+          expect(projected?.regenAt.getTime()).toBe(saved.regenAt.getTime());
+        } finally { unsubscribe(); cache.clear(); }
+      });
+    }
+  }
+
+  it("marks only the requesting fighter's originating socket", async () => {
+    const database = await getTestDatabase();
+    const trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    const result = await launch(database, { aiId, originSocketId: "origin-tab" });
+    expect(result.success).toBe(true);
+    const events = trigger.mock.calls.filter(([, event, data]) =>
+      event === "event" && typeof data === "object" && "type" in data && data.type === "battle");
+    expect(events.find(([channel]) => channel === userId)?.[2]).toMatchObject({ originSocketId: "origin-tab" });
+    expect(events.find(([channel]) => channel === aiId)?.[2]).not.toHaveProperty("originSocketId");
+  });
 
   it("omits display alerts and reads achievements once across readiness and battle preload", async () => {
     const client = await getTestDatabase();

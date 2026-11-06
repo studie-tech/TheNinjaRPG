@@ -1,6 +1,9 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getEnterRankedSeasonUserUpdate } from "@/deltas/pvprank";
+import {
+  getEnterRankedSeasonUserUpdate,
+  getRankedQueueUserUpdate,
+} from "@/deltas/pvprank";
 import { getRewardUserUpdate } from "@/deltas/quests";
 import {
   RANKED_ENTRY_COST,
@@ -544,6 +547,9 @@ export const pvpRankRouter = createTRPCRouter({
             removedJutsuIds.length > 0 || removedItemIds.length > 0
               ? "Ranked loadout updated because some selections are not allowed in ranked. Queued with the remaining loadout."
               : "Queued for ranked PvP",
+          ...getRankedQueueUserUpdate(
+            removedJutsuIds.length > 0 || removedItemIds.length > 0,
+          ),
           removedJutsuIds: removedJutsuIds.length > 0 ? removedJutsuIds : undefined,
           removedItemIds: removedItemIds.length > 0 ? removedItemIds : undefined,
         },

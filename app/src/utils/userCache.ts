@@ -35,6 +35,7 @@ export const updateUserCache = async (
     mutation = {
       ...mutation,
       revision: mutation?.revision,
+      userRecovery: response.userRecovery ?? mutation?.userRecovery,
       // An explicitly withheld delta must keep authoritative recovery even with a patch.
       ...("userDelta" in response ? { delta: response.userDelta } : {}),
       expected: response.userExpected ?? mutation?.expected,
@@ -60,7 +61,8 @@ export const updateUserCache = async (
     !mutation?.expected &&
     !mutation?.expectedAfter &&
     !mutation?.userNotifications &&
-    !mutation?.notifications
+    !mutation?.notifications &&
+    !mutation?.userRecovery
   )
     return false;
   return updateQueryCache<UserCache>(

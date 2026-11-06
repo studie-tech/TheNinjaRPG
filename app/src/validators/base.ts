@@ -1,10 +1,23 @@
 import { z } from "zod";
+import type { UserCachePatch } from "@/validators/userCache";
+
+/** Confirmed recovery precedes the action's own cache projection; a withheld patch requires reconciliation. */
+export type UserRecovery = {
+  userId: string;
+  userPatch?: UserCachePatch;
+  /** A live SQL-dependent effect is not fully represented by the known fields. */
+  requiresUserRefresh?: boolean;
+};
+
+/** Shared output metadata for endpoint-local recovery, including custom mutation envelopes. */
+export const userRecoverySchema = z.custom<UserRecovery>().optional();
 
 export const baseServerResponse = z.object({
   success: z.boolean(),
   message: z.string(),
   // Endpoints report only recovery committed by their guarded account write.
   actionNotice: z.string().optional(),
+  userRecovery: userRecoverySchema,
 });
 export type BaseServerResponse = z.infer<typeof baseServerResponse>;
 

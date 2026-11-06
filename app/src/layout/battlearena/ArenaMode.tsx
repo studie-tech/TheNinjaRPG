@@ -25,7 +25,12 @@ import { useRequiredUserData } from "@/utils/UserContext";
 
 /** The arena: fight an AI opponent picked for your level. */
 export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
-  const { data: userData, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const router = useRouter();
 
   // The tutorial teaches fighting by hand, so its fights never start on auto.
@@ -60,24 +65,22 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
 
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: async (result) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (result, _variables, revision) => {
         if (result.success && result.battleId) {
           showActionReadinessToast(result);
-          await updateUser({
-            status: "BATTLE",
-            battleId: result.battleId,
-            updatedAt: new Date(),
-          });
-          if (result.actionNotice) await updateUser(undefined, { revision: undefined });
+          await updateUser(result, { revision });
           pushToCombat(router, result.battleId);
           sendGTMEvent({ event: "enter_arena" });
           void completeTutorialAction("arenaStart");
         } else {
+          if (result.userRecovery) await updateUser(result, { revision });
           attackInFlightRef.current = false;
           showMutationToast(result);
         }
       },
       onError: (error) => {
+        void updateUser(undefined);
         attackInFlightRef.current = false;
         showMutationToast({ success: false, message: error.message });
       },
@@ -86,7 +89,11 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
   const handleAttack = () => {
     if (attackInFlightRef.current || isAttacking || !aiId) return;
     attackInFlightRef.current = true;
-    attack({ aiId, autoCombat: autoCombat && !isTutorialFight });
+    attack({
+      aiId,
+      autoCombat: autoCombat && !isTutorialFight,
+      originSocketId: pusher?.connection.socket_id,
+    });
   };
 
   if (!userData) return <Loader explanation="Loading userdata" />;

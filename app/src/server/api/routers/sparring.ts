@@ -29,6 +29,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
 
@@ -81,8 +82,8 @@ export const sparringRouter = createTRPCRouter({
     }),
   acceptChallenge: protectedProcedure
     .meta({ mcp: { description: "Accept a sparring challenge" } })
-    .input(idSchema)
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .input(idSchema.extend({ originSocketId: z.string().max(128).optional() }))
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
       let [challenge, user, jutsuEquipLimits, settings] = await Promise.all([
@@ -161,6 +162,7 @@ export const sparringRouter = createTRPCRouter({
           targetIds: [challenge.senderId],
           client: ctx.drizzle,
           actionUserId: ctx.userId,
+          originSocketId: input.originSocketId,
           biome: "arena",
           targetStatDistribution: useRankedRules ? RANKED_PVP_STATS : undefined,
           userStatDistribution: useRankedRules ? RANKED_PVP_STATS : undefined,

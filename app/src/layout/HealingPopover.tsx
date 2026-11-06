@@ -79,11 +79,11 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
   const { mutate: userHeal, isPending: isHealing } = api.hospital.userHeal.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.actionNotice) void utils.profile.getUser.invalidate();
       showMutationToast(data);
+      if (!data.success && data.userRecovery) await updateUser(data, { revision });
       if (data.success) {
         await Promise.all([
-          updateUser(data.healer, { revision }),
+          updateUser(data.healer, { revision, userRecovery: data.userRecovery }),
           utils.village.getAll.invalidate(),
         ]);
         onHealComplete?.();

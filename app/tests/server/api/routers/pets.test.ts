@@ -152,7 +152,8 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     expect(executed.statements.filter((statement) => /^\s*select/i.test(statement) && /from\s+[`"]?UserData[`"]?/i.test(statement) && !/\bavg\s*\(/i.test(statement))).toHaveLength(1);
     expect(await readOwner(database)).toMatchObject({ status: "AWAKE", money: 23 });
     expect(await readPet(database)).toMatchObject({ name: "Recovered companion", revision: 1 });
-    expect(executed.result.userPatch).toBeUndefined();
+    expect(executed.result.userPatch).toEqual({});
+    expect(executed.result.userRecovery?.userPatch).toMatchObject({ status: "AWAKE" });
   });
 
   it("does not recover or change a companion after the wake preference changes before commit", async () => {

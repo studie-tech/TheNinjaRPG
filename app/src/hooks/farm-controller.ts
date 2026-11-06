@@ -23,7 +23,7 @@ export function useFarmController() {
   const farmCache = useQueryCacheUpdate<RouterOutputs["farming"]["getFarmState"]>(
     getQueryKey(api.farming.getFarmState, undefined, "query"),
   );
-  const { timeDiff } = useRequiredUserData();
+  const { timeDiff, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [pendingPlotSlots, setPendingPlotSlots] = useState<Set<number>>(new Set());
   const pendingPlotSlotsRef = useRef<Set<number>>(new Set());
@@ -44,10 +44,15 @@ export function useFarmController() {
   const query = api.farming.getFarmState.useQuery(undefined, {
     refetchInterval: 30_000,
   });
-  // Plot and inventory cache deltas do not include the actor's recovered activity.
   const mutationOptions = {
-    onSuccess: (result: FarmMutationResponse) => {
-      if (result.actionNotice) return utils.profile.getUser.invalidate();
+    onMutate: prepareUserUpdate,
+    onSuccess: async (
+      result: FarmMutationResponse,
+      _input: unknown,
+      revision: number | undefined,
+    ) => {
+      if (result.success || result.userRecovery || result.userDelta !== undefined)
+        await updateUser(result, { revision });
     },
   };
   const plantMutation = api.farming.plantSeed.useMutation(mutationOptions);
@@ -121,7 +126,11 @@ export function useFarmController() {
         const result = await request();
         showMutationToast(result);
         setAnnouncement(result.message);
-        if (!result.success) return;
+        if (!result.success) {
+          if (result.userRecovery || result.userDelta !== undefined)
+            await farmCache.updateCache(undefined, snapshot);
+          return;
+        }
         await farmCache.updateCache(
           (current) =>
             current
@@ -236,7 +245,11 @@ export function useFarmController() {
       try {
         const result = await request();
         showResult(result);
-        if (!result.success) return false;
+        if (!result.success) {
+          if (result.userRecovery || result.userDelta !== undefined)
+            await farmCache.updateCache(undefined, snapshot);
+          return false;
+        }
         await farmCache.updateCache(
           (current) =>
             current

@@ -80,7 +80,9 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
     misc: { getAllGameAssetNames: { prefetch: prefetchAssets } },
   };
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({ data: profile }) as never);
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({
+    data: profile, prepareUserUpdate: () => 0, updateUser: async () => true,
+  }) as never);
   vi.spyOn(userContext, "useUserData").mockImplementation(() => ({ data: profile, timeDiff: 0 }) as never);
   let combatConfig = {
     useTabs: false, layoutOrder: ["battlefield"], showTimeline: false, showBattleLog: false, ...config,

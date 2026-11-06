@@ -4,6 +4,27 @@ import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { getPublicQuestUser } from "@/libs/quest";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
+/** Project confirmed robbery credits and faction counters when no live stealth roll can change the actor. */
+export const getRobPlayerUserUpdate = ({
+  user,
+  stolenAmount,
+  prestigeGain,
+}: {
+  user: Pick<UserData, "stealthActive" | "clanId">;
+  stolenAmount: number;
+  prestigeGain: number;
+}) => ({
+  userDelta: user.stealthActive
+    ? undefined
+    : {
+        money: stolenAmount,
+        villagePrestige: prestigeGain,
+        ...(user.clanId
+          ? { clan: { id: user.clanId, points: 1, activityPoints: 1 } }
+          : {}),
+      },
+});
+
 /**
  * Project awake arrival, cleared travel time and public quest trackers. Include the claimed
  * revision only after successful arrival ownership.

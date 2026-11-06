@@ -424,8 +424,9 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   // Mutations
   const { mutateAsync: challenge, isPending: isChallenging } =
     api.clan.challengeClan.useMutation({
-      onSuccess: (data) => {
-        if (data.actionNotice) void utils.profile.getUser.invalidate();
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
+        if (data.success || data.userRecovery) void updateUser(data, { revision });
         showMutationToast(data);
       },
       onError: (error) => {
@@ -436,7 +437,8 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const { mutateAsync: join } = api.clan.joinClanBattle.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch) await updateUser(data, { revision });
+      if (data.success || data.userPatch || data.userRecovery)
+        await updateUser(data, { revision });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -1251,7 +1253,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success || data.userPatch) await updateUser(data, { revision });
+        if (data.success || data.userPatch || data.userRecovery)
+          await updateUser(data, { revision });
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });

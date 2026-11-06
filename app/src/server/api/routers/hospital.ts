@@ -2,6 +2,7 @@ import type { ExecutedQuery } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
 import { gte, sql } from "drizzle-orm";
 import { after } from "next/server";
+import { getHealerUserPatch } from "@/deltas/hospital";
 import {
   MEDNIN_EXP_CAP,
   MEDNIN_HEALABLE_STATES,
@@ -282,7 +283,7 @@ export const hospitalRouter = createTRPCRouter({
           message: `You have healed ${isSelfHeal ? "yourself" : "the target user"}${expGain > 0 ? ` and gained ${expGain} medical experience` : ""}`,
           chakraCost,
           expGain,
-          healer,
+          healer: getHealerUserPatch(u, healer, questDataForDb),
         },
         readiness,
         ctx.drizzle,

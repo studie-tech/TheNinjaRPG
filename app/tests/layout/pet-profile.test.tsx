@@ -1099,7 +1099,7 @@ it("refreshes rejected allocation snapshots without erasing the error and allows
   await view.findByText("90 training points available");
   await waitFor(() => expect(cachedOwner()?.petExperience).toBe(90));
   expect(getUser).toHaveBeenCalledTimes(1);
-  expect(updateUser).not.toHaveBeenCalled();
+  expect(updateUser).toHaveBeenCalledWith({ success: false, message: rejection }, { revision: expect.any(Number) });
   expect(view.getByRole("alert").textContent).toBe(rejection);
   expect(view.getByRole("img", { name: "Updated Miso" })).toBeTruthy();
   await waitFor(() => expect((view.getByRole("button", { name: "Assign experience" }) as HTMLButtonElement).disabled).toBe(false));

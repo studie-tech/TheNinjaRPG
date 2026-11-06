@@ -165,8 +165,7 @@ const isRankedFavoritable = (j: Jutsu) =>
 
 export default function Training() {
   // Ensure user is in village
-  const { userData, timeDiff, access, updateUser } =
-    useRequireInVillage("/traininggrounds");
+  const { userData, timeDiff, access } = useRequireInVillage("/traininggrounds");
   const { currentStep } = useTutorialStep();
   // The tutorial selects the panel containing its highlighted training action.
   const focusJutsuTraining = isTutorialJutsuPickStep(currentStep);
@@ -262,11 +261,7 @@ export default function Training() {
         )}
         {activeSection === trainingSections.covertSection && (
           <>
-            <CovertTraining
-              userData={userData}
-              timeDiff={timeDiff}
-              updateUser={updateUser}
-            />
+            <CovertTraining userData={userData} timeDiff={timeDiff} />
             {showSenseiSystem && <SenseiSystem userData={userData} />}
           </>
         )}
@@ -570,7 +565,7 @@ const StatsTraining: React.FC<
         showMutationToast(result);
         await Promise.all([
           utils.misc.getCaptcha.invalidate(),
-          updateUser(result.success ? result.userPatch : undefined, {
+          updateUser(result, {
             revision: context?.revision,
             achievementProgress: result?.achievementProgress,
           }),
@@ -601,7 +596,7 @@ const StatsTraining: React.FC<
       onMutate: () => ({ revision: prepareUserUpdate() }),
       onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
-        await updateUser(result.success ? result.userPatch : undefined, {
+        await updateUser(result, {
           revision: context?.revision,
           achievementProgress: result?.achievementProgress,
         });
@@ -617,7 +612,7 @@ const StatsTraining: React.FC<
       onMutate: () => ({ revision: prepareUserUpdate() }),
       onSuccess: (result) => showMutationToast(result),
       onSettled: (result, _error, _variables, context) =>
-        updateUser(result?.success ? result.userPatch : undefined, {
+        updateUser(result, {
           revision: context?.revision,
           achievementProgress: result?.achievementProgress,
         }),
@@ -630,7 +625,7 @@ const StatsTraining: React.FC<
         showMutationToast(result);
         await Promise.all([
           utils.misc.getCaptcha.invalidate(),
-          updateUser(result.success ? result.userPatch : undefined, {
+          updateUser(result, {
             revision: context?.revision,
             achievementProgress: result?.achievementProgress,
           }),
@@ -1199,10 +1194,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       }),
       onSuccess: async (result, variables, context) => {
         showMutationToast(result);
-        if (result.actionNotice) void utils.profile.getUser.invalidate();
+        if (!result.success && result.userRecovery)
+          await updateUser(result, { revision: context.revision });
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
-          await updateUser(result.data, { revision: context.revision });
+          await updateUser(result, { revision: context.revision });
           if (variables.jutsuId === TUTORIAL_JUTSU_ID) {
             void completeTutorialAction("trainJutsu");
           }
@@ -1642,13 +1638,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
  * @param props
  * @returns
  */
-const CovertTraining: React.FC<
-  TrainingProps & {
-    updateUser: (data: Partial<UserWithRelations>) => Promise<unknown>;
-  }
-> = (props) => {
-  const { userData, timeDiff, updateUser } = props;
-  const utils = api.useUtils();
+const CovertTraining: React.FC<TrainingProps> = (props) => {
+  const { userData, timeDiff } = props;
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // Stealth status derived from userData
   const stealthStatus = getStealthStatus(
@@ -1661,22 +1653,24 @@ const CovertTraining: React.FC<
   // Training mutation
   const { mutate: trainCovert, isPending: isTrainingCovert } =
     api.stealth.trainCovert.useMutation({
-      onSuccess: async (data, variables) => {
-        if (data.actionNotice) {
-          showActionReadinessToast(data);
-          void utils.profile.getUser.invalidate();
-        }
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, variables, revision) => {
+        showActionReadinessToast(data);
         if (data.success && data.data) {
           // Derive start time from server-provided finish time to avoid clock-skew issues
           const covertTrainingStartedAt = new Date(
             data.data.covertTrainingFinishAt.getTime() - variables.minutes * 60_000,
           );
-          await updateUser({
-            covertTrainingType: variables.type,
-            covertTrainingStartedAt,
-            covertTrainingMinutes: variables.minutes,
-          });
+          await updateUser(
+            {
+              covertTrainingType: variables.type,
+              covertTrainingStartedAt,
+              covertTrainingMinutes: variables.minutes,
+            },
+            { revision, userRecovery: data.userRecovery },
+          );
         } else {
+          if (data.userRecovery) await updateUser(data, { revision });
           showMutationToast(data);
         }
       },

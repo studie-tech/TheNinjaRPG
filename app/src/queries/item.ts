@@ -725,7 +725,7 @@ export const updateUserItemForEvolveItem = (
   canKeepEquipped: boolean,
   ctx: { userId: string },
   parentItemId: string,
-  userItemObj: { level: number },
+  userItemObj: Pick<UserItem, "level" | "durability" | "equipped" | "updatedAt">,
   readiness: ActionReadiness,
 ) =>
   client.execute(sql`
@@ -746,6 +746,10 @@ export const updateUserItemForEvolveItem = (
     eq(userItem.id, input.userItemId),
     eq(userItem.itemId, parentItemId),
     eq(userItem.level, userItemObj.level),
+    // Pin the row used by the equipment projection; a concurrent repair or swap must retry.
+    eq(userItem.updatedAt, userItemObj.updatedAt),
+    eq(userItem.durability, userItemObj.durability),
+    eq(userItem.equipped, userItemObj.equipped),
     eq(userItem.quantity, 1),
     eq(userItem.isInAuction, false),
     or(

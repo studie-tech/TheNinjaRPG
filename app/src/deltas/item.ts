@@ -2,7 +2,7 @@ import type { RouterOutputs } from "@/app/_trpc/client";
 import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import { VARIANT_CURRENCY_FIELD, type VariantCurrency } from "@/drizzle/constants";
-import type { UserData, UserItem, UserItemWithRelations } from "@/drizzle/schema";
+import type { Item, UserData, UserItem, UserItemWithRelations } from "@/drizzle/schema";
 import {
   effectiveMasteries,
   type MasteryBuffUser,
@@ -33,6 +33,82 @@ export const getUserEquipmentPatch = (user: EquipmentSnapshot) => {
     maxEnergy: calcMaxEnergy(user),
     effectiveMasteries: effectiveMasteries(user),
   };
+};
+
+/** Project a confirmed evolution and its retained crystals from the loaded equipment snapshot. */
+export const getEvolvedItemUserUpdate = ({
+  user,
+  owned,
+  evolution,
+  canKeepEquipped,
+  removedImbuementIds,
+  didEvolve,
+  canProject,
+}: {
+  user: EquipmentSnapshot;
+  owned: UserItemWithRelations;
+  evolution: Item;
+  canKeepEquipped: boolean;
+  removedImbuementIds: string[];
+  didEvolve: boolean;
+  canProject: boolean;
+}) => {
+  const original = user.items.find((entry) => entry.id === owned.id);
+  if (
+    !canProject ||
+    (owned.equipped !== "NONE" &&
+      (!original ||
+        original.itemId !== owned.itemId ||
+        original.level !== owned.level ||
+        original.quantity !== owned.quantity ||
+        original.experience !== owned.experience ||
+        original.durability !== owned.durability ||
+        original.equipped !== owned.equipped)) ||
+    (owned.equipped === "NONE" && original !== undefined)
+  )
+    return {};
+  if (owned.equipped === "NONE") return getUnchangedEquipmentUserUpdate({ user });
+  const items = user.items.flatMap((entry) =>
+    entry.id !== owned.id
+      ? [entry]
+      : !didEvolve || canKeepEquipped
+        ? [
+            {
+              ...entry,
+              ...(didEvolve
+                ? {
+                    itemId: evolution.id,
+                    item: evolution,
+                    level: 1,
+                    experience: 0,
+                    activeVariantId: null,
+                    activeVariant: null,
+                    durability: Math.min(entry.durability, evolution.maxDurability),
+                  }
+                : {}),
+              imbuements: entry.imbuements.filter(
+                (imbuement) => !removedImbuementIds.includes(imbuement.id),
+              ),
+            },
+          ]
+        : [],
+  );
+  const userPatch = getUserEquipmentPatch({ ...user, items });
+  return { userPatch, userDelta: userPatch ? {} : undefined };
+};
+
+/** Apply confirmed stack quantities to cached gear without inventing restored or contended inventory rows. */
+export const getMergedStacksUserUpdate = (
+  user: EquipmentSnapshot,
+  changes: InventoryQuantityChange[] | undefined,
+) => {
+  const equipmentChanges = changes?.filter((change) =>
+    user.items.some((entry) => entry.id === change.id),
+  );
+  if (equipmentChanges?.length === 0) return getUnchangedEquipmentUserUpdate({ user });
+  const items = getInventoryQuantities(user.items, equipmentChanges);
+  const userPatch = items ? getUserEquipmentPatch({ ...user, items }) : undefined;
+  return { userPatch, userDelta: userPatch ? {} : undefined };
 };
 
 /**

@@ -111,7 +111,12 @@ export default function CombatPage() {
     [setBattleAtom],
   );
   const utils = api.useUtils();
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const { data, isLoading, isSuccess, isError, isFetching, refetch } =
     api.combat.getBattle.useQuery(
       { battleId: userData?.battleId },
@@ -304,7 +309,9 @@ export default function CombatPage() {
   // Mutation for healing before starting another arena fight
   const { mutate: battleArenaHealAndGo, isPending: isArenaHealPending } =
     api.combat.battleArenaHeal.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success || data.userRecovery) await updateUser(data, { revision });
         if (data.success) {
           setArenaHealSettledBattleId(arenaHealBattleKey);
         }
@@ -326,24 +333,22 @@ export default function CombatPage() {
   // Mutation for starting a fight
   const { mutate: startArenaBattle, isPending: isStartingArenaBattle } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: async (result) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (result, _variables, revision) => {
         if (result.success && result.battleId) {
           showActionReadinessToast(result);
           setBattleAtom(undefined);
           // The finished battle and its result stay in place until the next battle
           // loads, so the battlefield keeps its reserved size and nothing turns live.
-          await updateUser({
-            status: "BATTLE",
-            battleId: result.battleId,
-            updatedAt: new Date(),
-          });
-          if (result.actionNotice) await updateUser(undefined, { revision: undefined });
+          await updateUser(result, { revision });
           void utils.combat.getBattle.invalidate();
         } else {
+          if (result.userRecovery) await updateUser(result, { revision });
           showMutationToast(result);
         }
       },
       onError: (error) => {
+        void updateUser(undefined);
         showMutationToast({ success: false, message: error.message });
       },
       onSettled: () => {
@@ -364,6 +369,7 @@ export default function CombatPage() {
     arenaStartInFlightRef.current = true;
     startArenaBattle({
       aiId: arenaOpponentId,
+      originSocketId: pusher?.connection.socket_id,
       stats: battle?.battleType === "TRAINING" ? statDistribution : undefined,
       autoCombat,
     });

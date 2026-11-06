@@ -1,6 +1,6 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
-import { updateUserCache } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as dynamic from "next/dynamic";
@@ -256,13 +256,14 @@ it.each(["ASLEEP", "HOSPITALIZED", "missing snapshot"] as const)(
     const updateUser = (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>
       updateUserCache(cache, key, patch, options);
     vi.spyOn(UserContext, "useRequiredUserDataSelector").mockReturnValue({
-      data: actor, timeDiff: 0, prepareUserUpdate: () => 1, updateUser,
+      data: actor, timeDiff: 0, prepareUserUpdate: () => prepareUserUpdate(cache, key), updateUser,
     } as never);
-    type Previous = { status: typeof actor.status; travelFinishAt: Date | null } | undefined;
+    type Previous = { status: typeof actor.status; travelFinishAt: Date | null; revision: number | undefined } | undefined;
+    const recovery = { userId: String(actor.userId), userPatch: { status: "AWAKE" as const, curHealth: 100, curChakra: 100, curStamina: 100 } };
     let callbacks: {
       onMutate: (input: { sector: number }) => Promise<Previous>;
       onError: (error: Error, input: { sector: number }, previous: Previous) => Promise<void>;
-      onSuccess: (result: { success: boolean; actionNotice: string; data?: typeof canonical.userData }, input: { sector: number }, previous: Previous) => Promise<void>;
+      onSuccess: (result: { success: boolean; actionNotice: string; userRecovery: typeof recovery; data?: typeof canonical.userData }, input: { sector: number }, previous: Previous) => Promise<void>;
     };
     const endpoint = { useQuery: () => query, useMutation: () => mutation };
     Object.assign(client.api, {
@@ -282,12 +283,12 @@ it.each(["ASLEEP", "HOSPITALIZED", "missing snapshot"] as const)(
         if (outcome === "transport error") {
           await callbacks.onError(new Error("Response lost after commit"), { sector: 1539 }, context);
         } else {
-          await callbacks.onSuccess({ success: outcome === "success", actionNotice: "Recovered",
+          await callbacks.onSuccess({ success: outcome === "success", actionNotice: "Recovered", userRecovery: recovery,
             ...(outcome === "success" ? { data: canonical.userData } : {}) }, { sector: 1539 }, context);
         }
       });
-      expect(reads).toBe(1);
-      expect(cache.getQueryData(key)).toEqual(canonical);
+      expect(reads).toBe(outcome !== "success" || initialStatus === "missing snapshot" ? 1 : 0);
+      expect(cache.getQueryData(key)).toMatchObject(canonical);
       expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
     } finally {
       unsubscribe();

@@ -434,6 +434,7 @@ export const planJutsuLevels = ({
  * Reserve the ryo for planned levels and insert them as waiting rows. The guarded debit
  * fails without enough ryo; the insert fails when a concurrent enqueue took the same
  * positions, and the ryo is then refunded. `user.queue` holds the rows just read.
+ * Return generated row identities with the confirmed charge for profile cache projection.
  * A refunded append still reports recovery committed with the debit so the caller can show it.
  */
 export const enqueueJutsuLevels = async (
@@ -446,10 +447,10 @@ export const enqueueJutsuLevels = async (
   entries: ReturnType<typeof planJutsuLevels>,
   readiness?: ActionReadinessWrite & { notice?: string },
 ): Promise<
-  | { success: true; cost: number }
+  | { success: true; cost: number; queue: UserQueue[] }
   | { success: false; message: string; actionNotice?: string }
 > => {
-  if (entries.length === 0) return { success: true, cost: 0 };
+  if (entries.length === 0) return { success: true, cost: 0, queue: [] };
   const waiting = user.queue.filter((row) => row.kind === "JUTSU");
   if (waiting.length + entries.length > getQueueTotalCapacity(user) - 1) {
     return { success: false, message: "Your jutsu training queue is full" };
@@ -460,7 +461,7 @@ export const enqueueJutsuLevels = async (
     return { success: false, message: "You don't have enough money" };
   }
   try {
-    await appendQueueEntries(
+    const queue = await appendQueueEntries(
       client,
       user.userId,
       "JUTSU",
@@ -473,6 +474,7 @@ export const enqueueJutsuLevels = async (
       })),
       lastQueuePosition(waiting, "JUTSU"),
     );
+    return { success: true, cost, queue };
   } catch (error) {
     await refundRyo(client, user.userId, cost);
     if (isMysqlDuplicateKeyError(error)) {
@@ -484,7 +486,6 @@ export const enqueueJutsuLevels = async (
     }
     throw error;
   }
-  return { success: true, cost };
 };
 
 /**

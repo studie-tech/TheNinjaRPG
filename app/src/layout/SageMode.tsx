@@ -40,10 +40,8 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (result, _variables, revision) => {
         showMutationToast(result);
-        if (result.actionNotice) {
-          await utils.profile.getUser.invalidate();
-          return;
-        }
+        if (!result.success && result.userRecovery)
+          await updateUser(result, { revision });
         if (result.success) {
           await updateUser(
             (current) => {
@@ -78,7 +76,7 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
               }
               return patch;
             },
-            { revision, delta: result.userDelta },
+            { revision, delta: result.userDelta, userRecovery: result.userRecovery },
           );
         }
       },

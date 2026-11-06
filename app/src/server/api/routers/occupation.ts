@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   getCancelQueuedCraftUserUpdate,
   getCraftingUserUpdate,
+  getImbuedItemUserUpdate,
   getSelectOccupationUserUpdate,
 } from "@/deltas/occupation";
 import {
@@ -829,7 +830,7 @@ export const occupationRouter = createTRPCRouter({
         getPvpBoost(user, updatedUserResult.settings).totalPercent,
       );
       // Update trackers with crafting experience gained
-      const { trackers } = getNewTrackers(user, [
+      const { trackers, consequences, questIdsUpdated } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
@@ -854,6 +855,16 @@ export const occupationRouter = createTRPCRouter({
       return actionReadinessResponse(
         {
           success: true,
+          ...getImbuedItemUserUpdate({
+            user,
+            updatedUser: updatedUserResult,
+            trackers,
+            consequences,
+            questIdsUpdated,
+            crystalUserItemId: crystalUserItem.id,
+            experience: expGain,
+            claimedAt: imbueClaimResult.claimedAt,
+          }),
           message: `Started imbuing ${targetUserItem.item.name} with ${crystalItem.name}. It will be ready in ${imbuingTime} minutes.`,
           finishTime: finishTime.toISOString(),
         },

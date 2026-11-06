@@ -128,9 +128,7 @@ export function PetAcquisition() {
     await Promise.all([
       utils.pets.getPet.invalidate(),
       utils.pets.getCollection.invalidate(),
-      result.success
-        ? updateUser(result, { revision })
-        : utils.profile.getUser.invalidate(),
+      updateUser(result, { revision }),
     ]);
   };
   const failMutation = async (cause: { message: string }) => {
@@ -148,10 +146,11 @@ export function PetAcquisition() {
     onError: failMutation,
   });
   const generate = api.pets.generateAppearance.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       setMessage(result.success ? null : result.message);
       showMutationToast(result);
-      if (result.actionNotice) void utils.profile.getUser.invalidate();
+      if (result.success || result.userRecovery) await updateUser(result, { revision });
       await Promise.all([
         utils.pets.getPet.invalidate(),
         utils.pets.getCollection.invalidate(),

@@ -25,6 +25,7 @@ import type {
 } from "@/server/api/routers/profile";
 import { mergeQueryChanges, type QueryPatch } from "@/utils/queryCache";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
+import type { UserRecovery } from "@/validators/base";
 import type {
   TavernColorChangeSchema,
   UpdateUserPreferencesSchema,
@@ -54,7 +55,12 @@ export type UserPatch =
 /** Standard mutation responses carry their confirmed profile fields and metadata together. */
 type UserResponse = Pick<
   UserDeltaResponse,
-  "success" | "userDelta" | "userExpected" | "achievementProgress" | "userNotifications"
+  | "success"
+  | "userDelta"
+  | "userExpected"
+  | "achievementProgress"
+  | "userNotifications"
+  | "userRecovery"
 > & {
   userPatch?: KnownUserPatch;
 };
@@ -66,6 +72,8 @@ export type UserUpdate = UserPatch | UserResponse;
 export type UserUpdateOptions = {
   /** The prepareUserUpdate result; undefined forces authoritative recovery. */
   revision: number | undefined;
+  /** Apply committed waking/checkout before evaluating the action's own projection. */
+  userRecovery?: UserRecovery;
   // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
   delta?: UserDelta;
   achievementProgress?: AchievementProgress[];
@@ -90,6 +98,18 @@ export const applyUserChanges = (
   delta: UserDelta = {},
   mutation?: UserUpdateOptions,
 ): UserCache | undefined => {
+  if (mutation?.userRecovery) {
+    const recovery = mutation.userRecovery;
+    if (
+      current.userData?.userId !== recovery.userId ||
+      !recovery.userPatch ||
+      recovery.requiresUserRefresh
+    )
+      return;
+    const recovered = applyUserChanges(current, recovery.userPatch);
+    if (!recovered) return;
+    current = recovered;
+  }
   if (!current.userData) return;
   if (
     mutation &&

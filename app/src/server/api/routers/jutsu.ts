@@ -8,6 +8,7 @@ import {
   getImportJutsuLoadoutUserUpdate,
   getSelectJutsuLoadoutUserUpdate,
   getStartedJutsuTrainingUpdate,
+  getStartedJutsuUserUpdate,
   getTransferLevelUserUpdate,
   getUpdateUserJutsuOrderUserUpdate,
 } from "@/deltas/jutsu";
@@ -1283,7 +1284,7 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         data: z
           .object({ money: z.number(), questData: z.array(QuestTracker).nullable() })
           .optional(),
@@ -1412,6 +1413,14 @@ export const jutsuRouter = createTRPCRouter({
         return actionReadinessResponse(
           {
             success: true,
+            ...getStartedJutsuUserUpdate({
+              user,
+              cost: queued.cost,
+              queue: queued.queue,
+              questData: user.questData,
+              requiresProgressionRefresh: data.requiresProgressionRefresh,
+              publishedAchievementIds: data.publishedAchievementIds,
+            }),
             message: `Queued ${info.name} ${formatLevelRange(level + 1, level + levels)}`,
             data: {
               money: user.money - queued.cost,
@@ -1581,6 +1590,14 @@ export const jutsuRouter = createTRPCRouter({
       return actionReadinessResponse(
         {
           success: true,
+          ...getStartedJutsuUserUpdate({
+            user,
+            cost: trainCost + queuedCost,
+            queue: queued.success ? queued.queue : [],
+            questData: questDataFull,
+            requiresProgressionRefresh: data.requiresProgressionRefresh,
+            publishedAchievementIds: data.publishedAchievementIds,
+          }),
           message: queued.success
             ? followUps.length > 0
               ? `You started training: ${info.name}, and queued ${formatLevelRange(level + 2, level + 1 + followUps.length)}`

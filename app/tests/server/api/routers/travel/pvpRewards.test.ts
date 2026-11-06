@@ -1,3 +1,8 @@
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import type { ZodType } from "zod";
+import { getRobPlayerUserUpdate } from "@/deltas/travel";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -34,6 +39,7 @@ describeWithDatabase("robbery generated prestige PvP boost", () => {
     const result = await (await callerFor(travelRouter, ROBBER)).robPlayer({ userId: VICTIM, ...location });
     expect(result.success).toBe(true);
     expect(result.money).toBe(800);
+    expect(result.userDelta).toMatchObject({ money: 300, villagePrestige: prestige });
     expect(await readRobber()).toMatchObject({ money: 800, villagePrestige: prestige });
     expect(await readVictim()).toMatchObject({ money: 700 });
   });
@@ -75,4 +81,53 @@ describeWithDatabase("robbery generated prestige PvP boost", () => {
     expect(await readRobber()).toMatchObject({ money: 800 });
     expect(await readVictim()).toMatchObject({ money: 700 });
   });
+});
+
+
+it.each(["AWAKE", "ASLEEP", "HOSPITALIZED"] as const)("retains fractional robbery credits and faction counters through the actual %s output without a profile read", async (status) => {
+  const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = [["profile", "getUser"], { type: "query" }];
+  const initial = { userData: { userId: ROBBER, status, money: 500, villagePrestige: 20, clanId: "faction", clan: { id: "faction", points: 10, activityPoints: 12 }, curHealth: 5 }, notifications: [] };
+  cache.setQueryData(key, initial);
+  const read = vi.fn(async () => initial);
+  const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity, queryFn: read });
+  const unsubscribe = observer.subscribe(() => {});
+  const output = (travelRouter.robPlayer._def as unknown as { output: ZodType<UserDeltaResponse & { money?: number; battleId?: string }> }).output;
+  const response = output.parse({ success: true, message: "Robbed", money: 800,
+    ...getRobPlayerUserUpdate({ user: { stealthActive: false, clanId: "faction" }, stolenAmount: 300, prestigeGain: 5.75 }),
+    ...(status !== "AWAKE" ? { userRecovery: { userId: ROBBER, userPatch: { status: "AWAKE", curHealth: 100 } } } : {}),
+  });
+  try {
+    expect(await updateUserCache(cache, key, response, { revision: prepareUserUpdate(cache, key) })).toBe(true);
+    expect(read).not.toHaveBeenCalled();
+    expect(cache.getQueryData(key)).toMatchObject({ userData: { status: "AWAKE", money: 800, villagePrestige: 25.75,
+      clan: { id: "faction", points: 11, activityPoints: 13 } } });
+    expect(response.money).toBe(800);
+  } finally { unsubscribe(); cache.clear(); }
+});
+
+it("retains canonical recovery for a robbery whose stealth roll can change the actor", async () => {
+  const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = [["profile", "getUser"], { type: "query" }];
+  const initial = { userData: { userId: ROBBER, status: "AWAKE", money: 500, villagePrestige: 20, stealthActive: true }, notifications: [] };
+  const canonical = { ...initial, userData: { ...initial.userData, money: 800, villagePrestige: 25.75, stealthActive: false } };
+  cache.setQueryData(key, initial);
+  const read = vi.fn(async () => canonical);
+  const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity, queryFn: read });
+  const unsubscribe = observer.subscribe(() => {});
+  const output = (travelRouter.robPlayer._def as unknown as { output: ZodType<UserDeltaResponse> }).output;
+  try {
+    const response = output.parse({ success: true, message: "Robbed",
+      ...getRobPlayerUserUpdate({ user: { stealthActive: true, clanId: null }, stolenAmount: 300, prestigeGain: 5.75 }) });
+    expect(await updateUserCache(cache, key, response, { revision: prepareUserUpdate(cache, key) })).toBe(false);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(cache.getQueryData(key)).toEqual(canonical);
+  } finally { unsubscribe(); cache.clear(); }
+});
+
+it("preserves the battle projection when a failed robbery starts combat", () => {
+  const output = (travelRouter.robPlayer._def as unknown as { output: ZodType<UserDeltaResponse & { battleId?: string }> }).output;
+  const response = { success: false, message: "Prepare for combat", battleId: "rob-battle", userPatch: { status: "BATTLE" as const, battleId: "rob-battle" }, userDelta: {},
+    userRecovery: { userId: ROBBER, userPatch: { status: "AWAKE" as const, curHealth: 100 } } };
+  expect(output.parse(response)).toEqual(response);
 });

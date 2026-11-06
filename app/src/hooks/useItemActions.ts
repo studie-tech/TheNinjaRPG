@@ -44,15 +44,18 @@ export const useItemActions = ({
   };
 
   const { mutate: merge, isPending: isMerging } = api.item.mergeStacks.useMutation({
-    onMutate: prepareInventoryUpdate,
+    onMutate: () => ({
+      inventory: prepareInventoryUpdate(),
+      user: prepareUserUpdate(),
+    }),
     onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
-      if (data.actionNotice) void utils.profile.getUser.invalidate();
+      if (data.userRecovery) await updateUser(data, { revision: snapshot.user });
       await updateInventory(
         data.success
           ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
           : undefined,
-        snapshot,
+        snapshot.inventory,
       );
     },
     onError: async (error) => {
@@ -183,12 +186,12 @@ export const useItemActions = ({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.actionNotice && !data.success) void utils.profile.getUser.invalidate();
+        if (data.userRecovery && !data.success) void updateUser(data, { revision });
         if (data.success) {
           onDone();
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
+            updateUser(data, { revision }),
           ]);
         }
       },
@@ -199,21 +202,22 @@ export const useItemActions = ({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.actionNotice && !data.success) void utils.profile.getUser.invalidate();
+        if (data.userRecovery && !data.success) void updateUser(data, { revision });
         if (data.success) {
           onSettled();
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
+            updateUser(data, { revision }),
           ]);
         }
       },
     });
 
   const { mutate: evolve, isPending: isEvolving } = api.item.evolveItem.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
-      if (data.actionNotice) void utils.profile.getUser.invalidate();
+      if (data.success || data.userRecovery) await updateUser(data, { revision });
       if (data.success) {
         await Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),

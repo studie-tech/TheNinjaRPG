@@ -4,7 +4,7 @@ import { and, eq, gt, isNotNull, lt, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
-import { getFinishGlobalMoveUserUpdate } from "@/deltas/travel";
+import { getFinishGlobalMoveUserUpdate, getRobPlayerUserUpdate } from "@/deltas/travel";
 import {
   ANBU_STEALTH_BASE_CHANCE_PERC,
   ANBU_STEALTH_CHANGE_PER_LEVEL,
@@ -77,7 +77,6 @@ import { fetchIsolatedPyramid } from "@/queries/quests";
 import {
   fetchSectorWindowData,
   findUserDataForGetSectorData,
-  findUserDataForMoveInSector,
   findUserForGlobalTravelFinish,
   findVillageForMoveInSector,
   insertActionLogForRobPlayer,
@@ -153,10 +152,11 @@ export const travelRouter = createTRPCRouter({
         latitude: sectorLatitudeSchema,
         sector: sectorIdSchema,
         userId: z.string(),
+        originSocketId: z.string().max(128).optional(),
       }),
     )
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         battleId: z.string().optional(),
         money: z.number().optional(),
       }),
@@ -304,6 +304,11 @@ export const travelRouter = createTRPCRouter({
             success: true,
             message: `Successfully robbed ${stolenAmount} money from ${target.username}!`,
             money: user.money + stolenAmount,
+            ...getRobPlayerUserUpdate({
+              user: readiness.initial,
+              stolenAmount,
+              prestigeGain,
+            }),
           },
           readiness,
           ctx.drizzle,
@@ -318,6 +323,7 @@ export const travelRouter = createTRPCRouter({
             userIds: [ctx.userId],
             actionReadiness: readiness,
             actionUserId: ctx.userId,
+            originSocketId: input.originSocketId,
             targetIds: [input.userId],
             client: ctx.drizzle,
             biome: "default",
@@ -328,6 +334,7 @@ export const travelRouter = createTRPCRouter({
         if (battle.success) {
           return actionReadinessResponse(
             {
+              ...battle,
               success: false,
               message: "Rob attempt failed! Prepare for combat!",
               battleId: battle.battleId,

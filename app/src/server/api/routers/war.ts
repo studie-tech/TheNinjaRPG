@@ -5,6 +5,7 @@ import {
   getCancelWarMissionUserUpdate,
   getCompleteWarMissionUserUpdate,
   getInviteMercenaryUserUpdate,
+  getStartWarMissionUserUpdate,
 } from "@/deltas/war";
 import {
   ELDER_MIN_VOTING_COUNT,
@@ -516,6 +517,7 @@ export const warRouter = createTRPCRouter({
         {
           success: true,
           message: "War mission started. Remain in this sector until completion.",
+          ...getStartWarMissionUserUpdate(attempt),
         },
         readiness,
         ctx.drizzle,
@@ -627,7 +629,7 @@ export const warRouter = createTRPCRouter({
     }),
   /** Enter shrine combat with the camp snapshot preloaded for later score settlement. */
   attackWarCamp: protectedProcedure
-    .input(warCampSchema)
+    .input(warCampSchema.extend({ originSocketId: z.string().max(128).optional() }))
     .mutation(async ({ ctx, input }) => {
       let [camp, user, mercenaryWarId, activeWar, settings] = await Promise.all([
         findWarCampForAttackWarCamp(ctx.drizzle, input),
@@ -663,6 +665,7 @@ export const warRouter = createTRPCRouter({
           userIds: [user.userId],
           actionReadiness: readiness,
           actionUserId: ctx.userId,
+          originSocketId: input.originSocketId,
           targetIds: [camp.guardianId],
           client: ctx.drizzle,
           sector: camp.sector,

@@ -36,7 +36,7 @@ function testMocks(): QueueMocks {
     invalidate: vi.fn(async () => undefined),
     mutate: vi.fn(),
     updateUser: vi.fn(async (patch: unknown) => {
-      if (!patch) await testMocks().invalidate();
+      if (!patch || (typeof patch === "object" && "success" in patch && !("userPatch" in patch))) await testMocks().invalidate();
     }),
     callbacks: null,
   };
@@ -154,7 +154,7 @@ describe("Energy queue captcha recovery", () => {
         await mocks.callbacks?.onSettled(result, null, mocks.mutate.mock.lastCall?.[0], mocks.callbacks?.onMutate());
       });
       expect(refreshCaptcha).toHaveBeenCalledTimes(1);
-      expect(mocks.updateUser).toHaveBeenCalledWith(result.success ? result.userPatch : undefined, expect.objectContaining({ revision: 7 }));
+      expect(mocks.updateUser).toHaveBeenCalledWith(result, expect.objectContaining({ revision: 7 }));
       expect(mocks.invalidate).toHaveBeenCalledTimes(result.success ? 0 : 1);
       fireEvent.click(view.getByRole("button", { name: "Add to queue" }));
       expect(mocks.mutate).toHaveBeenLastCalledWith(
@@ -207,7 +207,7 @@ describe("Energy queue captcha recovery", () => {
       );
     });
     expect(refreshCaptcha).not.toHaveBeenCalled();
-    expect(mocks.updateUser).toHaveBeenCalledWith({ energyQueueHead: 1, energyQueueTail: 1, queue: [] }, expect.objectContaining({ revision: 7 }));
+    expect(mocks.updateUser).toHaveBeenCalledWith({ success: true, message: "Training queue cleared", userPatch: { energyQueueHead: 1, energyQueueTail: 1, queue: [] } }, expect.objectContaining({ revision: 7 }));
     expect(mocks.invalidate).not.toHaveBeenCalled();
   });
   it("refreshes when a successful save requires broader automatic reconciliation", async () => {
@@ -215,7 +215,7 @@ describe("Energy queue captcha recovery", () => {
     await act(async () => {
       await mocks.callbacks?.onSettled({ success: true, message: "Training queue saved" }, null, { entries: [] }, mocks.callbacks?.onMutate());
     });
-    expect(mocks.updateUser).toHaveBeenCalledWith(undefined, expect.objectContaining({ revision: 7 }));
+    expect(mocks.updateUser).toHaveBeenCalledWith({ success: true, message: "Training queue saved" }, expect.objectContaining({ revision: 7 }));
     expect(mocks.invalidate).toHaveBeenCalledTimes(1);
   });
 

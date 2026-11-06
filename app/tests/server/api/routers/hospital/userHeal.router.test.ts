@@ -1,5 +1,9 @@
 
 import { eq, sql } from "drizzle-orm";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import type { UserCache } from "@/deltas/profile";
+import { fetchActionUser } from "@/queries/actionReadiness";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   HOSPITAL_BASE_HEAL_SECONDS,
@@ -179,9 +183,25 @@ describeWithDatabase("hospital self-healing", () => {
       curStamina: 60,
       regenAt: new Date(Date.now() - (HOSPITAL_BASE_HEAL_SECONDS + 5) * 1000),
     });
+    const initial = await fetchActionUser(await getTestDatabase(), USER_ID);
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["profile", USER_ID];
+    cache.setQueryData(key, { userData: initial, notifications: [] });
+    let reads = 0;
+    const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity,
+      queryFn: async () => { reads++; return { userData: initial, notifications: [] }; } });
+    const unsubscribe = observer.subscribe(() => {});
+    const revision = prepareUserUpdate(cache, key);
     const api = await callerFor(hospitalRouter, USER_ID);
-
     const result = await api.userHeal({ userId: USER_ID, healPercentage: 100 });
+    try {
+      await updateUserCache(cache, key, result.healer, { revision, userRecovery: result.userRecovery });
+      expect(reads).toBe(0);
+      const saved = await readHealer();
+      expect(cache.getQueryData<UserCache>(key)?.userData).toMatchObject({ status: "AWAKE",
+        curHealth: saved?.curHealth, curChakra: saved?.curChakra, curStamina: saved?.curStamina,
+        curEnergy: saved?.curEnergy, medicalExperience: saved?.medicalExperience, questData: saved?.questData });
+    } finally { unsubscribe(); cache.clear(); }
 
     expect(result).toMatchObject({ success: true, actionNotice: AUTO_CHECKOUT_MESSAGE });
     const saved = await readHealer();

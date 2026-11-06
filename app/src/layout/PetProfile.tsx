@@ -218,12 +218,7 @@ export function PetProfile() {
   ) => {
     setMessage(result.success ? null : result.message);
     showMutationToast(result);
-    await Promise.all([
-      invalidatePetData(),
-      result.success
-        ? updateUser(result, { revision })
-        : utils.profile.getUser.invalidate(),
-    ]);
+    await Promise.all([invalidatePetData(), updateUser(result, { revision })]);
   };
   const failMutation = async (cause: { message: string }) => {
     setMessage(cause.message);
@@ -238,6 +233,7 @@ export function PetProfile() {
   const generate = api.pets.generateAppearance.useMutation({
     // Capture the name before the player can rename or switch companions.
     onMutate: ({ petId }) => ({
+      revision: prepareUserUpdate(),
       name: data?.pets.find((entry) => entry.id === petId)?.name,
     }),
     onSuccess: async (result, { petId }, context) => {
@@ -251,7 +247,9 @@ export function PetProfile() {
       });
       await Promise.all([
         invalidatePetData(),
-        result.actionNotice ? utils.profile.getUser.invalidate() : undefined,
+        result.success || result.userRecovery
+          ? updateUser(result, { revision: context?.revision })
+          : undefined,
       ]);
     },
     onError: async (cause, { petId }, context) => {
@@ -291,7 +289,10 @@ export function PetProfile() {
         ];
         await updateUser(result, { revision: context.user });
       } else {
-        await Promise.all([invalidatePetData(), utils.profile.getUser.invalidate()]);
+        await Promise.all([
+          invalidatePetData(),
+          updateUser(result, { revision: context.user }),
+        ]);
       }
     },
     onError: failMutation,

@@ -52,7 +52,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
   // Destructure
   const { userData, tournamentId, rewards } = props;
 
-  const { timeDiff } = useUserData();
+  const { timeDiff, pusher, prepareUserUpdate, updateUser } = useUserData();
   const syncedTime = Date.now() - timeDiff;
 
   const utils = api.useUtils();
@@ -82,13 +82,18 @@ const Tournament: React.FC<TournamentProps> = (props) => {
 
   const { mutate: joinMatch, isPending: isJoiningMatch } =
     api.tournament.joinMatch.useMutation({
-      onSuccess: async (data) => {
-        if (data.actionNotice) void utils.profile.getUser.invalidate();
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success || data.userRecovery) await updateUser(data, { revision });
         showMutationToast(data);
         await utils.tournament.getTournament.invalidate();
         // A match can be joined without a battle starting — the opponent no-showed and this
         // player took the round — so there is nothing to go to combat for
         if (data.success && data.battleId) pushToCombat(router, data.battleId);
+      },
+      onError: (error) => {
+        void updateUser(undefined);
+        showMutationToast({ success: false, message: error.message });
       },
     });
 
@@ -306,7 +311,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                     if (prevBlocks + newBlocks >= initialSeeds) {
                       emptyBlocks = initialSeeds - prevBlocks - 1;
                     }
-                    emptyBlocks = emptyBlocks < 0 ? 0 : emptyBlocks;
+                    emptyBlocks = Math.max(emptyBlocks, 0);
                     // DETERMINE IF BORDER ON EMPTY BLOCK
                     const isTopBlock = seedIndex % 2 === 0;
                     const isBottomBlock = seedIndex % 2 === 1;
@@ -341,7 +346,11 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                                   <Swords
                                     className="h-8 w-8 grow text-slate-300 hover:cursor-pointer hover:text-orange-200"
                                     onClick={() =>
-                                      joinMatch({ matchId: seed.id, tournamentId })
+                                      joinMatch({
+                                        matchId: seed.id,
+                                        tournamentId,
+                                        originSocketId: pusher?.connection.socket_id,
+                                      })
                                     }
                                   />
                                 )}
@@ -376,7 +385,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                         {[...Array(emptyBlocks).keys()].map((emptyIdx) => (
                           <div
                             key={`empty-${seed.id}-${emptyIdx}`}
-                            className={`h-32 ${isTopBlock && !isLastBlock && !isLastRound ? "border-black border-r-2" : ""}`}
+                            className={`h-32 ${isTopBlock && !isLastBlock && !isLastRound ? "border-r-2 border-black" : ""}`}
                           ></div>
                         ))}
                       </div>

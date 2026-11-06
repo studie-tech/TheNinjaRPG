@@ -39,7 +39,12 @@ export function TrainingMode({
   statDistribution,
   setStatDistribution,
 }: TrainingModeProps) {
-  const { data: userData, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const router = useRouter();
   const { toggleSleep, isTogglingSleep } = useSleepToggle();
   const [autoCombat] = useAutoCombatSetting();
@@ -47,22 +52,20 @@ export function TrainingMode({
 
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         if (data.success && data.battleId) {
-          await updateUser({
-            status: "BATTLE",
-            battleId: data.battleId,
-            updatedAt: new Date(),
-          });
-          if (data.actionNotice) await updateUser(undefined, { revision: undefined });
+          await updateUser(data, { revision });
           pushToCombat(router, data.battleId);
           showMutationToast({ ...data, message: "Entering the Training" });
         } else {
+          if (data.userRecovery) await updateUser(data, { revision });
           attackInFlightRef.current = false;
           showMutationToast(data);
         }
       },
       onError: (error) => {
+        void updateUser(undefined);
         attackInFlightRef.current = false;
         showMutationToast({ success: false, message: error.message });
       },
@@ -86,7 +89,12 @@ export function TrainingMode({
     if (attackInFlightRef.current || isAttacking) return;
     attackInFlightRef.current = true;
     setStatDistribution(data);
-    attack({ aiId: TRAINING_DUMMY_ID, stats: data, autoCombat });
+    attack({
+      aiId: TRAINING_DUMMY_ID,
+      stats: data,
+      autoCombat,
+      originSocketId: pusher?.connection.socket_id,
+    });
   };
 
   if (!userData) return <Loader explanation="Loading userdata" />;

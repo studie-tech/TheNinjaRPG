@@ -5,11 +5,13 @@ import { nanoid } from "nanoid";
 import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
+import { getActionRecoveryUpdate } from "@/deltas/actionReadiness";
 import {
   buildCombatStateUpdate,
   type CombatStateUpdate,
   captureCombatCacheSnapshot,
   captureCombatStateUpdate,
+  getArenaHealUserUpdate,
   getAutoCombatPreferencePatch,
   getCombatAdmissionUserUpdate,
 } from "@/deltas/combat";
@@ -55,6 +57,7 @@ import {
   type Jutsu,
   type RankedLoadout,
   type TerritoryWar,
+  type UserData,
   type UserQuest,
   userData,
   type Village,
@@ -262,7 +265,6 @@ import {
 } from "@/server/api/routers/item";
 import { fetchUserJutsus, selectJutsuLoadout } from "@/server/api/routers/jutsu";
 import {
-  baseServerResponse,
   createTRPCRouter,
   deferredRatelimitMiddleware,
   errorResponse,
@@ -315,6 +317,7 @@ import {
   sectorLongitudeSchema,
 } from "@/validators/travel";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUpdatedUser, type UserWithRelations } from "./profile";
 
 // Pusher instance
@@ -930,7 +933,7 @@ export const combatRouter = createTRPCRouter({
     }),
   battleArenaHeal: protectedProcedure
     .meta({ mcp: { description: "Heal in battle arena for ryo" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const [initial, settings] = await Promise.all([
@@ -957,7 +960,7 @@ export const combatRouter = createTRPCRouter({
         return errorResponse("Error trying to heal and continue. Try again.");
       } else {
         return actionReadinessResponse(
-          { success: true, message: "You've healed" },
+          { success: true, message: "You've healed", ...getArenaHealUserUpdate(user) },
           readiness,
           ctx.drizzle,
         );
@@ -973,9 +976,10 @@ export const combatRouter = createTRPCRouter({
         aiId: z.string(),
         stats: statSchema.nullish(),
         autoCombat: z.boolean().nullish(),
+        originSocketId: z.string().max(128).optional(),
       }),
     )
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information
       const [{ user }, selectedAI] = await Promise.all([
@@ -1007,6 +1011,7 @@ export const combatRouter = createTRPCRouter({
             targetIds: [selectedAI.userId],
             client: ctx.drizzle,
             actionUserId: ctx.userId,
+            originSocketId: input.originSocketId,
             targetStatDistribution: input.stats ?? undefined,
             biome: "default",
             // Callers that do not state a preference (e.g. MCP) fall back to
@@ -1035,9 +1040,10 @@ export const combatRouter = createTRPCRouter({
         sector: sectorIdSchema,
         userId: z.string(),
         asset: z.enum(COMBAT_BIOMES).optional(),
+        originSocketId: z.string().max(128).optional(),
       }),
     )
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       return await initiateBattle(
         {
@@ -1048,6 +1054,7 @@ export const combatRouter = createTRPCRouter({
           targetIds: [input.userId],
           client: ctx.drizzle,
           actionUserId: ctx.userId,
+          originSocketId: input.originSocketId,
           biome: input.asset || "default",
         },
         "COMBAT",
@@ -1626,8 +1633,13 @@ export const combatRouter = createTRPCRouter({
   startShrineBattle: protectedProcedure
     .meta({ mcp: { description: "Start battle at war shrine" } })
     .use(ratelimitMiddleware)
-    .input(z.object({ sector: sectorIdSchema }))
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .input(
+      z.object({
+        sector: sectorIdSchema,
+        originSocketId: z.string().max(128).optional(),
+      }),
+    )
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information (use fetchActiveWars to get village relations with sectors)
       const [{ user }, activeWars, sectorData, shrineAis, isHome] = await Promise.all([
@@ -1695,6 +1707,7 @@ export const combatRouter = createTRPCRouter({
           forceDefenderVillageId: shrineOwnerVillageId,
           client: ctx.drizzle,
           actionUserId: ctx.userId,
+          originSocketId: input.originSocketId,
           biome: "default",
         },
         "SHRINE_WAR",
@@ -1805,6 +1818,8 @@ export const initiateBattle = async (
     cacheUserId?: string;
     /** Explicit actor eligible for recovery, prepared from the existing participant preload. */
     actionUserId?: string;
+    /** The initiating tab reconciles its mutation response; other tabs still receive admission. */
+    originSocketId?: string;
     /** A caller plan opts this actor into recovery; admission revalidates the fresh snapshot. */
     actionReadiness?: ActionReadiness;
     /** Shared launch contract; each activity keeps its own progress and settlement policy. */
@@ -2142,7 +2157,13 @@ export const initiateBattle = async (
   }
 
   const cacheActor = fetchedUsers.find(
-    (user) => user.userId === info.cacheUserId && !user.isAi && !user.isSummon,
+    (user) =>
+      user.userId ===
+        (info.cacheUserId ??
+          info.actionUserId ??
+          info.actionReadiness?.initial.userId) &&
+      !user.isAi &&
+      !user.isSummon,
   );
 
   const profileCacheSnapshots = Object.fromEntries(
@@ -2237,7 +2258,6 @@ export const initiateBattle = async (
         )
       : undefined;
   if (actionReadiness?.error) return errorResponse(actionReadiness.error);
-  if (actionReadiness?.notice) requiresUserRefresh = true;
 
   // Capture real awake recovery before combat normalizes stats or changes loadouts.
   const energyRegeneration = Object.fromEntries(
@@ -2306,7 +2326,7 @@ export const initiateBattle = async (
       mastery?.completed.reduce((sum, entry) => sum + entry.minutes, 0) ?? 0;
     if (energy) {
       for (const stat of CombatStatNames) user[stat] += energy.gains[stat] ?? 0;
-      user.experience += amount;
+      user.experience = Math.round(user.experience + amount);
       user.curEnergy = energy.curEnergy;
       user.energyQueueHead = energy.head;
     }
@@ -2349,7 +2369,34 @@ export const initiateBattle = async (
       (entry) => entry.user.userId === actionActor.userId,
     );
     if (queued?.energy) actionReadiness.set.curEnergy = queued.energy.curEnergy;
-    Object.assign(actionActor, actionReadiness.user);
+    if (queued && actionReadiness.initial.status === "HOSPITALIZED") {
+      // Hospital recovery preserves the queue gains committed by the participant claim.
+      if (queued.energy || info.tournamentGame) {
+        for (const pool of PoolTypes) {
+          const { cur, max } = getPoolKeys(pool);
+          actionActor[cur] = Math.round(
+            Math.min(queued.original[cur] + queued.regen, queued.original[max]),
+          );
+        }
+      }
+      Object.assign(actionActor, actionReadiness.set);
+      actionActor.maxEnergy = calcMaxEnergy(actionActor);
+      actionReadiness.set.maxEnergy = actionActor.maxEnergy;
+      actionReadiness.user = { ...actionActor };
+      actionReadiness.userRecovery = getActionRecoveryUpdate(
+        actionReadiness.initial,
+        actionReadiness.user,
+        [
+          ...Object.keys(actionReadiness.set),
+          ...Object.keys(queued.mastery?.update ?? {}),
+          ...(queued.amount > 0 ? ["petExperience"] : []),
+        ] as (keyof UserData)[],
+        settings,
+        actionActor.regenAt,
+      );
+    } else {
+      Object.assign(actionActor, actionReadiness.user);
+    }
   }
 
   // Completed training can unlock worn gear; capture yield before combat mutates its sources.
@@ -3624,7 +3671,13 @@ export const initiateBattle = async (
       await Promise.all(
         users.map(async (user) => {
           await Promise.all([
-            pusher.trigger(user.userId, "event", { type: "battle", battleId }),
+            pusher.trigger(user.userId, "event", {
+              type: "battle",
+              battleId,
+              ...(user.userId === actionActorId && info.originSocketId
+                ? { originSocketId: info.originSocketId }
+                : {}),
+            }),
             ...(!user.isAi
               ? [
                   updateUserOnMap(pusher, user.sector, {
@@ -3657,6 +3710,12 @@ export const initiateBattle = async (
     battleId,
     stealthBreakUserIds,
     isTournament: !!info.tournamentGame,
+    hasRecoveryProjection: !!actionReadiness?.userRecovery?.userPatch,
+    recoveredEnergy:
+      typeof actionReadiness?.set.curEnergy === "number"
+        ? actionReadiness.set.curEnergy
+        : undefined,
+    isAttacker: userIds.includes(cacheActor?.userId ?? ""),
   });
   return actionReadinessResponse(
     {

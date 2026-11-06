@@ -125,6 +125,12 @@ export const usePusherHandler = (
       const channel = pusher.subscribe(userId);
       channel.bind("event", async (data: UserEvent) => {
         if (data.type === "battle") {
+          // The originating mutation applies admission, recovery and costs together; a socket patch would invalidate its revision.
+          if (
+            data.originSocketId &&
+            data.originSocketId === pusher.connection.socket_id
+          )
+            return;
           if (data?.battleId) {
             // UserContext's updateUser is not available here: this hook runs inside its
             // provider. Cancelling first applies the patch before navigating, without

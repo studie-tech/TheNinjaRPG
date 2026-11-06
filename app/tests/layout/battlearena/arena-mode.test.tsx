@@ -140,7 +140,7 @@ it("scrolls opponents in one row and gives the battle setup its own row below", 
 });
 
 it.each(["ASLEEP", "HOSPITALIZED"] as const)(
-  "reconciles recovered %s pools after the tutorial battle patch without crossing accounts",
+  "applies recovered %s pools and the tutorial battle without a profile fetch",
   async (initialStatus) => {
     status = initialStatus;
     tutorialStep = { advanceOn: "arenaStart" };
@@ -150,16 +150,15 @@ it.each(["ASLEEP", "HOSPITALIZED"] as const)(
     const initial = { userData: { userId: "me", status: initialStatus, autoWakeUp: true,
       level: 22, dailyArenaFights: 3, curHealth: 5, curChakra: 6, curStamina: 7 }, notifications: [] };
     const canonical = { ...initial, userData: { ...initial.userData, status: "BATTLE" as const,
-      battleId: "fight", dailyArenaFights: 4, curHealth: 100, curChakra: 100, curStamina: 100 } };
+      battleId: "fight", dailyArenaFights: 4, curHealth: 100, curChakra: 100, curStamina: 100 },
+      notifications: [{ color: "red", href: "/combat", name: "In combat" }] };
     const otherAccount = { ...initial, userData: { ...initial.userData, userId: "other", curHealth: 42 } };
     cache.setQueryData(key, initial);
     nextAccountCache.setQueryData(key, otherAccount);
     let reads = 0;
-    let observedStatus: unknown;
     const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity,
       queryFn: async () => {
         reads++;
-        observedStatus = cache.getQueryData<typeof canonical>(key)?.userData.status;
         return canonical;
       } });
     const unsubscribe = observer.subscribe(() => {});
@@ -167,9 +166,13 @@ it.each(["ASLEEP", "HOSPITALIZED"] as const)(
     const updateUser = (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>
       updateUserCache(cache, key, patch, options);
     vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
-      data: initial.userData, updateUser,
+      data: initial.userData, updateUser, prepareUserUpdate: () => prepareUserUpdate(cache, key),
     } as never);
-    let callbacks: { onSuccess: (result: { success: boolean; battleId: string; actionNotice: string }) => Promise<void> };
+    const response = { success: true, battleId: "fight", actionNotice: "Recovered",
+      userPatch: { status: "BATTLE" as const, battleId: "fight", dailyArenaFights: 4 },
+      userDelta: {},
+      userRecovery: { userId: "me", userPatch: { status: "AWAKE" as const, curHealth: 100, curChakra: 100, curStamina: 100 } } };
+    let callbacks: { onMutate: () => number | undefined; onSuccess: (result: typeof response, input: unknown, revision: number | undefined) => Promise<void> };
     Object.assign(client.api.combat.startArenaBattle, {
       useMutation: (options: typeof callbacks) => { callbacks = options; return { mutate, isPending: false }; },
     });
@@ -182,14 +185,14 @@ it.each(["ASLEEP", "HOSPITALIZED"] as const)(
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: /Fight/ }));
         expect(mutate).toHaveBeenCalledWith({ aiId: "tutorial-dummy", autoCombat: false });
-        await callbacks.onSuccess({ success: true, battleId: "fight", actionNotice: "Recovered" });
+        await callbacks.onSuccess(response, { aiId: "tutorial-dummy" }, callbacks.onMutate());
       });
-      expect(observedStatus).toBe("BATTLE");
-      expect(reads).toBe(1);
-      expect(cache.getQueryData(key)).toEqual(canonical);
+      expect(reads).toBe(0);
+      expect(cache.getQueryData(key)).toMatchObject(canonical);
       expect(completeTutorialAction).toHaveBeenCalledWith("arenaStart");
       // A callback captured by the former account retains its QueryClient after a session switch.
       await updateUserCache(cache, key, { curHealth: 1 }, { revision });
+      expect(reads).toBe(1);
       expect(cache.getQueryData(key)).toEqual(canonical);
       expect(nextAccountCache.getQueryData(key)).toEqual(otherAccount);
     } finally {

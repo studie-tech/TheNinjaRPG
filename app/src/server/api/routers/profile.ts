@@ -2678,7 +2678,11 @@ const fetchUpdatedUserOnce = async (
     };
   }
   let user:
-    | (NonNullable<typeof fetchedUser> & { regenerationWithoutTimedBuffs?: number })
+    | (NonNullable<typeof fetchedUser> & {
+        regenerationWithoutTimedBuffs?: number;
+        baseRegeneration?: number;
+        requiresPetExperienceRefresh?: boolean;
+      })
     | undefined = fetchedUser;
 
   // Start timed jobs (jutsu levels, crafts) whose turn has come, backdated to when it
@@ -2932,6 +2936,7 @@ const fetchUpdatedUserOnce = async (
   let regenerationAfterExpulsion: number | undefined;
   let accruedBaseRegeneration = 0;
   if (user) {
+    user.baseRegeneration = storedRegeneration;
     // Add bloodline, structure, etc.  regen to regeneration
     accruedBaseRegeneration = calcActiveUserRegen(user, settings, false);
     user.regenerationWithoutTimedBuffs = accruedBaseRegeneration;
@@ -3246,6 +3251,15 @@ const fetchUpdatedUserOnce = async (
           // Defer settlement to the next request; the winning state may have moved locations.
           settlement.hasRejectedPassiveRegen = true;
           return null;
+        }
+        if (
+          user.activePetId &&
+          queuedTraining?.completed.some((entry) => entry.amount > 0)
+        ) {
+          // Live companion eligibility is evaluated by SQL; the loaded pet XP bank is stale after this grant.
+          // Selecting a first companion advances the guarded owner snapshot, so a missing companion grants nothing.
+          user.requiresPetExperienceRefresh = true;
+          requiresProgressionRefresh = true;
         }
       } catch (error) {
         requiresProgressionRefresh = true;
@@ -3586,6 +3600,10 @@ export type UserWithRelations =
       territoryWarBoostWindows?: import("@/libs/territoryWar").TerritoryBoostWindow[];
       /** Derived regeneration before timed bonuses, retained for pending recovery ticks. */
       regenerationWithoutTimedBuffs?: number;
+      /** Persisted rate retained for status transitions without applying derived boosts twice. */
+      baseRegeneration?: number;
+      /** A live SQL companion grant needs an authoritative bank before projecting cached progression. */
+      requiresPetExperienceRefresh?: boolean;
       displayTitle?: string;
       dungeonsCompleted?: number;
       /** Current reservation, including a completed squad awaiting its claim. */

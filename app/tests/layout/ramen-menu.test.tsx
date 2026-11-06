@@ -1,3 +1,6 @@
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
+import { prepareUserUpdate as prepareCacheUpdate, updateUserCache } from "@/utils/userCache";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
@@ -96,7 +99,7 @@ describe("ramen menu", () => {
     await act(async () => fireEvent.click(view.getByRole("button", { name: /Small Bowl/ })));
     expect(purchase).toHaveBeenCalledWith({ ramen: "small" });
     expect(prepareUserUpdate).toHaveBeenCalledTimes(1);
-    expect(updateUser).toHaveBeenCalledWith(purchaseResult.userPatch, { revision: 17, delta: { money: -10 }, achievementProgress: undefined });
+    expect(updateUser).toHaveBeenCalledWith(purchaseResult, { revision: 17 });
     expect(completeTutorialAction).toHaveBeenCalledWith("buyRamen");
   });
 
@@ -131,5 +134,32 @@ it("applies a confirmed fractional-price debit without discarding the patch", as
   purchaseResult = { success: true, message: "Food purchased", userDelta: { money: -12 }, userPatch: { curStamina: 50, curChakra: 50, regenAt: new Date() } };
   const view = render(<RamenShop.RamenMenu />);
   await act(async () => fireEvent.click(view.getByRole("button", { name: /Small Bowl/ })));
-  expect(updateUser).toHaveBeenCalledWith(purchaseResult.userPatch, { revision: 17, delta: { money: -12 }, achievementProgress: undefined });
+  expect(updateUser).toHaveBeenCalledWith(purchaseResult, { revision: 17 });
+});
+
+
+it.each(["ASLEEP", "HOSPITALIZED"] as const)("applies confirmed %s recovery before the food projection without a profile read", async (status) => {
+  const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = [["profile", "getUser"], { type: "query" }];
+  const initial = { userData: { ...user, userId: "ramen-user", status, experience: 50 }, notifications: [] };
+  cache.setQueryData(key, initial);
+  let reads = 0;
+  const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity,
+    queryFn: async () => { reads++; return initial; } });
+  const unsubscribe = observer.subscribe(() => {});
+  purchaseResult = { success: true, message: "Food purchased", actionNotice: "Recovered",
+    userRecovery: { userId: "ramen-user", userPatch: { status: "AWAKE", curHealth: 100, curChakra: 100, curStamina: 100, experience: 75 } },
+    userPatch: { curHealth: 100, curChakra: 100, curStamina: 100 }, userDelta: { money: -10 } };
+  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: initial.userData,
+    prepareUserUpdate: () => prepareCacheUpdate(cache, key),
+    updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) => updateUserCache(cache, key, patch, options),
+  } as never);
+  try {
+    const view = render(<RamenShop.RamenMenu />);
+    await act(async () => fireEvent.click(view.getByRole("button", { name: /Small Bowl/ })));
+    expect(reads).toBe(0);
+    expect(cache.getQueryData(key)).toMatchObject({ userData: { status: "AWAKE", money: 990,
+      experience: 75, curHealth: 100, curChakra: 100, curStamina: 100 } });
+    expect(completeTutorialAction).toHaveBeenCalledWith("buyRamen");
+  } finally { unsubscribe(); cache.clear(); }
 });

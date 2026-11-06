@@ -2,7 +2,41 @@ import { getUserProgressionUpdate } from "@/deltas/profile";
 import type { QuestConsequence } from "@/libs/quest";
 import type { findCraftingQueueState } from "@/queries/occupation";
 import type { fetchUpdatedUser } from "@/routers/profile";
+import type { QuestTrackerType } from "@/validators/objectives";
 import type { CraftingQueueMaterial } from "@/validators/train";
+
+/** Project confirmed imbuing XP and public quest progress; consumed cached equipment still requires reconciliation. */
+export const getImbuedItemUserUpdate = ({
+  user,
+  updatedUser,
+  trackers,
+  consequences,
+  questIdsUpdated,
+  crystalUserItemId,
+  experience,
+  claimedAt,
+}: {
+  user: Parameters<typeof getCraftingUserUpdate>[0]["user"];
+  updatedUser: Parameters<typeof getCraftingUserUpdate>[0]["updatedUser"];
+  trackers: QuestTrackerType[];
+  consequences: QuestConsequence[];
+  questIdsUpdated: string[];
+  crystalUserItemId: string;
+  experience: number;
+  claimedAt: Date;
+}) =>
+  getCraftingUserUpdate({
+    user: {
+      ...user,
+      craftingExperience: Math.round(user.craftingExperience + experience),
+      questData: trackers,
+      updatedAt: claimedAt,
+    },
+    updatedUser,
+    consequences,
+    questIdsUpdated,
+    allConsumptions: [{ userItemId: crystalUserItemId }],
+  });
 
 /** Project the saved occupation and its signup timestamp. */
 export const getSelectOccupationUserUpdate = ({
