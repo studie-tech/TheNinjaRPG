@@ -7,6 +7,7 @@ import { MAX_MUTED_CONVERSATIONS } from "@/drizzle/constants";
 import {
   chatMutePendingAtom,
   isConversationMuted,
+  isTavernMuted,
   toggleMutedConversation,
 } from "@/libs/chatPanel";
 import { showMutationToast } from "@/libs/toast";
@@ -48,7 +49,12 @@ export const useChatMutes = () => {
       },
     });
 
-  const save = (patch: { chatMuted?: boolean; mutedConversationIds?: string[] }) => {
+  /** Serialize preference saves across chat controls and bind each save to its account. */
+  const save = (patch: {
+    chatMuted?: boolean;
+    mutedConversationIds?: string[];
+    unmutedTavernIds?: string[];
+  }) => {
     if (
       !userData ||
       pendingUserId.current ||
@@ -90,6 +96,25 @@ export const useChatMutes = () => {
           userData.mutedConversationIds,
           conversationId,
         ),
+      });
+    },
+    /** Taverns start muted (pings only); also muted by "mute all". */
+    isTavernSilenced: (tavernId: string) => isTavernMuted(userData, tavernId),
+    /** Unmute a tavern to count its new messages, or mute it back to pings only. */
+    toggleTavernMute: (tavernId: string) => {
+      if (!userData) return;
+      if (
+        !userData.unmutedTavernIds.includes(tavernId) &&
+        userData.unmutedTavernIds.length >= MAX_MUTED_CONVERSATIONS
+      ) {
+        showMutationToast({
+          success: false,
+          message: `You can unmute up to ${MAX_MUTED_CONVERSATIONS} taverns.`,
+        });
+        return;
+      }
+      save({
+        unmutedTavernIds: toggleMutedConversation(userData.unmutedTavernIds, tavernId),
       });
     },
     setChatMuted: (chatMuted: boolean) => save({ chatMuted }),

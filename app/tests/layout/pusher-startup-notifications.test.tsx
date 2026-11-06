@@ -62,11 +62,11 @@ afterEach(() => {
 });
 
 const muteSettings = [
-  { chatMuted: true, mutedConversationIds: [] },
-  { chatMuted: false, mutedConversationIds: ["global"] },
+  { chatMuted: true, mutedConversationIds: [], unmutedTavernIds: [] },
+  { chatMuted: false, mutedConversationIds: ["global"], unmutedTavernIds: [] },
 ];
 it.each(muteSettings)(
-  "waits for the profile before suppressing muted startup pings (%j)",
+  "waits for the profile, then delivers a ping whatever is muted (%j)",
   async (mute) => {
     const test = mount({ mute });
     await waitFor(() => expect(test.reads()).toBe(1));
@@ -85,8 +85,8 @@ it.each(muteSettings)(
       await pending;
     });
     await test.view.findByText("Profile loaded");
-    expect(test.showToast).not.toHaveBeenCalled();
-    expect(getDefaultStore().get(chatMentionsAtom)).toEqual({});
+    expect(test.showToast).toHaveBeenCalledTimes(1);
+    expect(getDefaultStore().get(chatMentionsAtom)).toEqual({ global: 1 });
   },
 );
 
@@ -290,7 +290,7 @@ it("settles failed initial profiles without rejecting the pending event handler"
 
 function mount(
   options: {
-    mute?: { chatMuted: boolean; mutedConversationIds: string[] };
+    mute?: { chatMuted: boolean; mutedConversationIds: string[]; unmutedTavernIds: string[] };
     initialCount?: number;
     deferredRefresh?: boolean;
     refreshCounts?: number[];
@@ -325,7 +325,7 @@ function mount(
       clanId: "clan",
       villageId: "village",
       chatMuted: false,
-      mutedConversationIds: [],
+      mutedConversationIds: [], unmutedTavernIds: [],
       ...options.mute,
     },
     notifications: count

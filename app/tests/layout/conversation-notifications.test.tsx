@@ -146,7 +146,7 @@ function mount(
       clanId: null,
       villageId: null,
       chatMuted: false,
-      mutedConversationIds: [],
+      mutedConversationIds: [], unmutedTavernIds: [],
     },
     notifications: [],
     serverTime: Date.now(),

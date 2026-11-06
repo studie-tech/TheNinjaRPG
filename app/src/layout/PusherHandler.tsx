@@ -45,6 +45,7 @@ export type UserEvent = {
   isPublic?: boolean;
 };
 
+/** Subscribe to the player's live game events and reconcile their notifications and caches. */
 export const usePusherHandler = (
   userId?: string | null,
   userData?: Pick<NonNullable<UserWithRelations>, "clanId" | "villageId">,
@@ -81,17 +82,25 @@ export const usePusherHandler = (
   useEffect(() => {
     if (userId) {
       const session = notificationSession.current;
-      const canNotifyConversation = (conversationId: string | undefined) => {
+      /** Keep notifications in the active account and unread conversation; pings bypass mutes. */
+      const canNotifyConversation = (
+        conversationId: string | undefined,
+        isPing = false,
+      ) => {
         const user = utils.profile.getUser.getData()?.userData;
         return (
           !!session &&
           notificationSession.current === session &&
           user?.userId === userId &&
-          !isConversationMuted(user, conversationId) &&
+          (isPing || !isConversationMuted(user, conversationId)) &&
           (!conversationId || !store.get(chatViewedConversationsAtom)[conversationId])
         );
       };
-      const resolveNotificationProfile = async (conversationId: string | undefined) => {
+      /** Wait for the initial profile before applying account, visibility and mute guards. */
+      const resolveNotificationProfile = async (
+        conversationId: string | undefined,
+        isPing = false,
+      ) => {
         if (!utils.profile.getUser.getData()?.userData) {
           try {
             // Join the initial profile request so its loading and error state can settle normally.
@@ -101,7 +110,7 @@ export const usePusherHandler = (
             return;
           }
         }
-        return canNotifyConversation(conversationId);
+        return canNotifyConversation(conversationId, isPing);
       };
       // Pusher Channel
       const pusher = new Pusher(
@@ -326,8 +335,8 @@ export const usePusherHandler = (
         } else if (data.type === "pinged") {
           const conversationId = data.conversationId;
           if (
-            (await resolveNotificationProfile(conversationId)) &&
-            canNotifyConversation(conversationId)
+            (await resolveNotificationProfile(conversationId, true)) &&
+            canNotifyConversation(conversationId, true)
           ) {
             if (conversationId && data.isPublic) {
               store.set(chatMentionsAtom, (old) =>

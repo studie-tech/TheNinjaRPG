@@ -112,6 +112,7 @@ export const useGameMenu = () => {
     autoWakeUp: user.autoWakeUp,
     chatMuted: user.chatMuted,
     mutedConversationIds: user.mutedConversationIds,
+    unmutedTavernIds: user.unmutedTavernIds,
   }));
   const pathname = usePublicPathname();
   const { notifications } = useUserInfo();

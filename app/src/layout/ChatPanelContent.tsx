@@ -41,6 +41,7 @@ import { useTaverns } from "@/hooks/useTaverns";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
 import { ChatConversation } from "@/layout/ChatConversation";
+import { ChatMuteButton } from "@/layout/ChatMuteButton";
 import Confirm from "@/layout/Confirm";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
@@ -54,11 +55,11 @@ import {
   chatMentionsAtom,
   chatPanelAtom,
   chatTavernActivityAtom,
-  combineChatCounts,
   countTavernUnread,
   getInboxNews,
-  isConversationMuted,
   isConversationUnread,
+  isTavernMuted,
+  unreadForTavern,
 } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -352,7 +353,11 @@ function TavernPane({
       toolbarEnd={
         <>
           {loadedConversation?.tavern === tavern && (
-            <MuteButton label={tavern} conversationId={loadedConversation.id} />
+            <ChatMuteButton
+              label={tavern}
+              conversationId={loadedConversation.id}
+              isTavern
+            />
           )}
           <TavernMoreMenu
             onOpenFullTavern={() => {
@@ -422,9 +427,7 @@ function TavernMoreMenu({ onOpenFullTavern }: { onOpenFullTavern: () => void }) 
               disabled={mutes.isPending}
             >
               {mutes.chatMuted ? <Bell /> : <BellOff />}
-              {mutes.chatMuted
-                ? "Unmute all chat notifications"
-                : "Mute all chat notifications"}
+              {mutes.chatMuted ? "Unmute chat notifications" : "Mute chat except pings"}
             </MenuButton>
             <MenuButton onClick={() => setShowBlocked(true)}>
               <Ban /> Blocked users
@@ -536,7 +539,7 @@ function InboxPane({
             }
             toolbarEnd={
               <>
-                <MuteButton
+                <ChatMuteButton
                   label={conversationTitle(selected, userData.userId)}
                   conversationId={selected.id}
                 />
@@ -820,59 +823,21 @@ function PhoneChatList({ onOpen }: { onOpen: (chat: PhoneChat) => void }) {
 }
 
 /**
- * Bell for one conversation. While all chat is muted it shows muted and turns
- * "mute all" off; otherwise it mutes or unmutes this conversation.
- */
-function MuteButton({
-  label,
-  conversationId,
-}: {
-  label: string;
-  conversationId: string;
-}) {
-  const mutes = useChatMutes();
-  const muted = mutes.isSilenced(conversationId);
-  const action = mutes.chatMuted
-    ? "Unmute all chat notifications"
-    : muted
-      ? `Unmute ${label}`
-      : `Mute ${label}`;
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="w-[32px]"
-      aria-pressed={muted}
-      aria-label={action}
-      title={action}
-      disabled={mutes.isPending}
-      onClick={() =>
-        mutes.chatMuted ? mutes.setChatMuted(false) : mutes.toggleMute(conversationId)
-      }
-    >
-      {muted ? (
-        <BellOff className="h-[16px] w-[16px]" />
-      ) : (
-        <Bell className="h-[16px] w-[16px]" />
-      )}
-    </Button>
-  );
-}
-
-/**
  * New messages per tavern name: its new messages or mentions, whichever is higher.
- * Muted taverns count nothing.
+ * Muted taverns keep only mentions and quotes.
  */
 function useTavernUnread() {
   const { data: userData } = useUserData();
   const taverns = useTavernIds(userData);
   const mentions = useAtomValue(chatMentionsAtom);
   const tavernActivity = useAtomValue(chatTavernActivityAtom);
-  const counts = combineChatCounts(mentions, tavernActivity);
   return (name: string) => {
     const id = taverns?.find((tavern) => tavern.title === name)?.id;
-    const muted = !!id && isConversationMuted(userData, id);
-    return { count: id && !muted ? (counts[id] ?? 0) : 0, muted };
+    const muted = !!id && isTavernMuted(userData, id);
+    return {
+      count: id ? unreadForTavern(userData, id, mentions, tavernActivity) : 0,
+      muted,
+    };
   };
 }
 

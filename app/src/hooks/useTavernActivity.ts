@@ -10,7 +10,7 @@ import { useTaverns } from "@/hooks/useTaverns";
 import {
   chatTavernActivityAtom,
   chatViewedConversationsAtom,
-  isConversationMuted,
+  isTavernMuted,
 } from "@/libs/chatPanel";
 import { subscribeConversation } from "@/libs/conversationEvents";
 import type { UserWithRelations } from "@/routers/profile";
@@ -32,7 +32,7 @@ export const useTavernIds = (userData: UserWithRelations | null | undefined) => 
 };
 
 /**
- * Count new messages from other players in every unmuted tavern the player is not
+ * Count new messages from other players in every tavern the player unmuted and is not
  * looking at. Only comments the server permits the player to read count.
  */
 export const useTavernActivity = (
@@ -46,7 +46,7 @@ export const useTavernActivity = (
   const userId = userData?.userId;
   const available = taverns?.map((tavern) => tavern.id).join(",");
   const followed = (taverns ?? [])
-    .filter((tavern) => !isConversationMuted(userData, tavern.id))
+    .filter((tavern) => !isTavernMuted(userData, tavern.id))
     .map((tavern) => tavern.id)
     .join(",");
 

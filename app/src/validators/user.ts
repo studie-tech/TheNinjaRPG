@@ -162,6 +162,10 @@ export const updateUserPreferencesSchema = z
       .array(z.string().max(191))
       .max(MAX_MUTED_CONVERSATIONS)
       .optional(),
+    unmutedTavernIds: z
+      .array(z.string().max(191))
+      .max(MAX_MUTED_CONVERSATIONS)
+      .optional(),
     tutorialOn: z.boolean().optional(),
     defaultAutoCombat: z.boolean().optional(),
     showPvpRecord: z.boolean().optional(),

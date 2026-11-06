@@ -52,24 +52,12 @@ export const chatMentionsAtom = atom<Record<string, number>>({});
 /** New tavern messages from other players since the page loaded, per tavern. */
 export const chatTavernActivityAtom = atom<Record<string, number>>({});
 
-/** One count per conversation: its new tavern messages, or its mentions when higher. */
-export const combineChatCounts = (
-  mentions: Record<string, number>,
-  activity: Record<string, number>,
-): Record<string, number> => {
-  const combined = { ...mentions };
-  for (const [conversationId, count] of Object.entries(activity)) {
-    combined[conversationId] = Math.max(combined[conversationId] ?? 0, count);
-  }
-  return combined;
-};
-
 type ChatMuteUser = Pick<
   NonNullable<UserWithRelations>,
-  "chatMuted" | "mutedConversationIds"
+  "chatMuted" | "mutedConversationIds" | "unmutedTavernIds"
 >;
 
-/** Whether a conversation's activity should stay out of counts and in-game pings. */
+/** Whether a conversation's ordinary activity stays out of counts and alerts; pings always arrive. */
 export const isConversationMuted = (
   user: ChatMuteUser | null | undefined,
   conversationId: string | undefined,
@@ -78,31 +66,60 @@ export const isConversationMuted = (
   (user.chatMuted ||
     (!!conversationId && user.mutedConversationIds.includes(conversationId)));
 
+/**
+ * Whether a tavern's ordinary messages stay out of counts. Taverns start muted, so only pings
+ * reach the player until they unmute one; muting all chat mutes every tavern.
+ */
+export const isTavernMuted = (
+  user: ChatMuteUser | null | undefined,
+  tavernId: string,
+) => !!user && (user.chatMuted || !user.unmutedTavernIds.includes(tavernId));
+
 /** Mute list after toggling one conversation. */
 export const toggleMutedConversation = (mutedIds: string[], conversationId: string) =>
   mutedIds.includes(conversationId)
     ? mutedIds.filter((id) => id !== conversationId)
     : [...mutedIds, conversationId];
 
-/** Unread inbox news plus unmuted tavern mentions, for the chat button badge. */
-export const countChatNotifications = (
+/**
+ * New messages for one tavern: its new messages or its pings, whichever is higher. Pings
+ * (mentions and quotes) always count; a muted tavern, or all chat muted, counts only them.
+ */
+export const unreadForTavern = (
   user: ChatMuteUser | null | undefined,
-  inboxNews: number,
+  conversationId: string,
   mentions: Record<string, number>,
+  activity: Record<string, number>,
 ) => {
-  if (!user || user.chatMuted) return 0;
-  const mentionCount = Object.entries(mentions)
-    .filter(([conversationId]) => !isConversationMuted(user, conversationId))
-    .reduce((sum, [, count]) => sum + count, 0);
-  return inboxNews + mentionCount;
+  if (!user) return 0;
+  const pings = mentions[conversationId] ?? 0;
+  return isTavernMuted(user, conversationId)
+    ? pings
+    : Math.max(pings, activity[conversationId] ?? 0);
 };
 
-/** New tavern messages and mentions across unmuted taverns, for the Tavern tab and menu entry. */
+/** New tavern messages and pings across taverns, for the Tavern tab and menu entry. */
 export const countTavernUnread = (
   user: ChatMuteUser | null | undefined,
   mentions: Record<string, number>,
   activity: Record<string, number>,
-) => countChatNotifications(user, 0, combineChatCounts(mentions, activity));
+) =>
+  Object.keys({ ...mentions, ...activity }).reduce(
+    (sum, conversationId) =>
+      sum + unreadForTavern(user, conversationId, mentions, activity),
+    0,
+  );
+
+/** Unread inbox news plus tavern counts, for the chat button badge; muted chat keeps only pings. */
+export const countChatNotifications = (
+  user: ChatMuteUser | null | undefined,
+  inboxNews: number,
+  mentions: Record<string, number>,
+  activity: Record<string, number>,
+) =>
+  !user
+    ? 0
+    : (user.chatMuted ? 0 : inboxNews) + countTavernUnread(user, mentions, activity);
 
 /** A conversation is unread when it changed after the player last opened it. */
 export const isConversationUnread = (convo: {
