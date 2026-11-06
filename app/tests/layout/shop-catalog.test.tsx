@@ -7,6 +7,7 @@ type Purchase = { itemId: string; stack: number; villageId?: string | null };
 type PurchaseResult = { success: boolean; message: string };
 type PurchaseOptions = {
   onSuccess: (result: PurchaseResult, input: Purchase, revision: unknown) => void;
+  onSettled?: () => void;
 };
 
 const item = (overrides: Record<string, unknown>) => ({
@@ -21,6 +22,7 @@ const catalog = [
   item({ id: "coat", name: "Coat", itemType: "ARMOR", slot: "CHEST", rarity: "RARE", cost: 200 }),
 ];
 
+let pageItems = catalog;
 let purchaseOptions: PurchaseOptions;
 let purchaseResult: PurchaseResult;
 let hasNextPage = false;
@@ -28,7 +30,10 @@ let isFetchNextPageError = false;
 let tutorialStep: { id: string; page: string } | null = null;
 const fetchNextPage = vi.fn();
 const completeTutorialAction = vi.fn(async () => {});
-const purchase = vi.fn((input: Purchase) => purchaseOptions.onSuccess(purchaseResult, input, undefined));
+const purchase = vi.fn((input: Purchase) => {
+  purchaseOptions.onSuccess(purchaseResult, input, undefined);
+  purchaseOptions.onSettled?.();
+});
 
 import * as client from "@/app/_trpc/client";
 import * as tutorial from "@/hooks/tutorial";
@@ -39,6 +44,7 @@ import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
 import * as ItemWithEffects from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
 import Shop from "@/layout/Shop";
+import * as shop from "@/libs/shop";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
@@ -69,6 +75,7 @@ beforeEach(() => {
   hasNextPage = false;
   isFetchNextPageError = false;
   tutorialStep = null;
+  pageItems = catalog;
   localStorage.clear();
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
@@ -77,7 +84,7 @@ beforeEach(() => {
     }),
     item: {
       get: { useQuery: () => ({ data: tutorialStep ? item({ id: TUTORIAL_ITEM_ID, name: "Shuriken", cost: 45 }) : undefined }) },
-      getAll: { useInfiniteQuery: () => ({ data: { pages: [{ data: catalog }] }, isFetching: false, hasNextPage, isFetchNextPageError, fetchNextPage }) },
+      getAll: { useInfiniteQuery: () => ({ data: { pages: [{ data: pageItems }] }, isFetching: false, hasNextPage, isFetchNextPageError, fetchNextPage }) },
       getBloodlineRollOdds: { useQuery: () => ({}) },
       getPurchaseAllowance: { useQuery: () => ({ data: { remaining: null, limit: null }, refetch: vi.fn() }) },
       buy: { useMutation: (options: PurchaseOptions) => {
@@ -236,6 +243,59 @@ describe("shop catalog", () => {
     fireEvent.click(view.container.querySelector("#tutorial-itemshop-buy") as HTMLElement);
     await act(async () => fireEvent.click(view.container.querySelector("#tutorial-itemshop-confirmPurchase-proceed") as HTMLElement));
     expect(completeTutorialAction).toHaveBeenCalledWith("buyItem");
+  });
+
+  it("sorts the Black Market by price in the currency it sells for", () => {
+    pageItems = [
+      item({ id: "a", name: "A", cost: 100, repsCost: 50 }),
+      item({ id: "b", name: "B", cost: 10, repsCost: 90 }),
+      item({ id: "c", name: "C", cost: 50, repsCost: 10 }),
+    ];
+    const view = renderShop({ minRepsCost: 1 });
+    fireEvent.change(view.getByRole("combobox"), { target: { value: "price" } });
+    expect(names(view)).toEqual(["C", "A", "B"]);
+  });
+
+  it("shows the ryo discount the price actually gets", () => {
+    vi.spyOn(shop, "getShopDiscounts").mockReturnValue([
+      { label: "village structures", value: 60 },
+      { label: "ANBU membership", value: 50 },
+    ]);
+    const view = renderShop();
+    fireEvent.click(view.getByRole("button", { name: /Bow/ }));
+    const inspector = view.getByRole("region", { name: "Bow" });
+    expect(inspector.textContent).toContain("Ryo discount −95%");
+    expect(inspector.textContent).toContain("Buy for 15 ryo");
+  });
+
+  it("sends one purchase however often the confirmation is pressed", () => {
+    purchase.mockImplementation(() => {});
+    const view = renderShop();
+    fireEvent.click(view.getByRole("button", { name: /Bow/ }));
+    fireEvent.click(view.container.querySelector("#tutorial-itemshop-buy") as HTMLElement);
+    const confirm = within(view.getByRole("dialog")).getByRole("button", { name: "Buy for 300 ryo" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(purchase).toHaveBeenCalledTimes(1);
+  });
+
+  it("measures the shop once the player wakes up", () => {
+    Object.defineProperty(globalThis, "ResizeObserver", {
+      configurable: true,
+      value: class {
+        constructor(private callback: ResizeObserverCallback) {}
+        observe() {
+          this.callback([{ contentRect: { width: 390 } } as never], this as never);
+        }
+        disconnect() {}
+      },
+    });
+    const awake = vi.spyOn(routing, "useAwake").mockReturnValue(false);
+    const view = renderShop();
+    awake.mockReturnValue(true);
+    view.rerender(<Shop userData={user} defaultType="WEAPON" />);
+    fireEvent.click(view.getByRole("button", { name: /Bow/ }));
+    expect(within(document.body).getByRole("dialog", { name: "Bow" })).toBeTruthy();
   });
 
   it("opens the item in a bottom sheet on narrow screens", () => {

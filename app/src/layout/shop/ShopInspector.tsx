@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
@@ -43,6 +43,8 @@ export function ShopInspector({
   const utils = api.useUtils();
   const [requestedQuantity, setQuantity] = useState(1);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  // Set as the purchase is sent, so a second press before the next render cannot buy twice.
+  const isPurchaseSent = useRef(false);
 
   const allowance = api.item.getPurchaseAllowance.useQuery(
     { id: item.id },
@@ -71,6 +73,9 @@ export function ShopInspector({
       }
     },
     onError: (error) => setPurchaseError(error.message),
+    onSettled: () => {
+      isPurchaseSent.current = false;
+    },
   });
 
   const maxQuantity = Math.min(
@@ -128,7 +133,8 @@ export function ShopInspector({
   const canBuy =
     missing.length === 0 && isQuantityValid && canReviewRollOdds && !isPurchasing;
   const hasRyoPrice = prices.some((price) => price.currency === "ryo");
-  const totalDiscount = discounts.reduce((sum, discount) => sum + discount.value, 0);
+  // The price floor caps the discounts, so show what the price actually gets.
+  const totalDiscount = Math.round((1 - ryoFactor) * 100);
   const buyLabel = isPurchasing
     ? "Buying…"
     : missing.length > 0
@@ -268,7 +274,8 @@ export function ShopInspector({
           }
           onAccept={(event) => {
             event.preventDefault();
-            if (!canBuy) return;
+            if (!canBuy || isPurchaseSent.current) return;
+            isPurchaseSent.current = true;
             setPurchaseError(null);
             purchase({
               itemId: item.id,

@@ -121,7 +121,7 @@ const Shop: React.FC<ShopProps> = (props) => {
     });
     observer.observe(root);
     return () => observer.disconnect();
-  }, []);
+  }, [isAwake]);
 
   if (!isAwake) return <Loader explanation="Redirecting because not awake" />;
 
@@ -146,6 +146,12 @@ const Shop: React.FC<ShopProps> = (props) => {
       canAfford: missingForPrices(prices, wallet).length === 0,
     };
   });
+  // Price sorting uses the currency this shop sells for; an item may also cost ryo.
+  const sortCurrency: ShopCurrency = minSeichiSilverCost
+    ? "silver"
+    : minRepsCost
+      ? "rep"
+      : "ryo";
   const chips = shopTypeChips(loaded);
   const affordableCount = rows.filter((row) => row.canAfford).length;
   const activeChip =
@@ -166,7 +172,7 @@ const Shop: React.FC<ShopProps> = (props) => {
         itemType: row.item.itemType,
       })),
     SHOP_SORTS.some((option) => option.value === sort) ? sort : "rarity",
-    (row) => row.prices[0]?.amount ?? 0,
+    (row) => row.prices.find((price) => price.currency === sortCurrency)?.amount ?? 0,
   );
   // The tutorial's item leads the list while its step is open.
   if (isItemBuyStep && tutorialItem) {
