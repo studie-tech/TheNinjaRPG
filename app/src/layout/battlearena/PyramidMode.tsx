@@ -14,7 +14,7 @@ import { QuestTeams } from "@/layout/QuestTeams";
 import { orderTowers, type TowerState, towerState } from "@/libs/battleArena";
 import { getRewardArray } from "@/libs/objectives";
 import { questTypeConcurrentBlockMessage } from "@/libs/quest";
-import { formatQuestEntryCost } from "@/libs/questRun";
+import { formatQuestEntryCost, getPyramidRunTracker } from "@/libs/questRun";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -90,7 +90,7 @@ export function PyramidMode() {
     ? { id: activeQuest.quest.id, name: activeQuest.quest.name }
     : null;
   const activeTracker = activeQuest
-    ? userData.questData?.find((q) => q.id === activeQuest.quest.id)
+    ? getPyramidRunTracker(activeQuest, userData.questData)
     : undefined;
   const ordered = orderTowers(towers, activeTower);
   const itemName = (itemId: string, fallback: string) =>

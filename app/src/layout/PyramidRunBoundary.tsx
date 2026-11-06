@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
-import { getIsolatedPyramid, hasQuestContentChanged } from "@/libs/questRun";
+import {
+  getIsolatedPyramid,
+  getPyramidRunTracker,
+  hasQuestContentChanged,
+} from "@/libs/questRun";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -53,10 +57,11 @@ export const PyramidRun = () => {
         entry.questType === "battlepyramid" && !entry.endAt && !entry.completed,
     );
   if (!run) return null;
-  const tracker = user?.questData?.find((entry) => entry.id === run.questId) ?? {
-    id: run.questId,
-    startAt: run.startedAt?.toISOString() ?? run.quest.createdAt.toISOString(),
-    goals: [],
-  };
-  return <LogbookEntry userQuest={run} tracker={tracker} showScene />;
+  return (
+    <LogbookEntry
+      userQuest={run}
+      tracker={getPyramidRunTracker(run, user?.questData)}
+      showScene
+    />
+  );
 };
