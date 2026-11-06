@@ -72,6 +72,7 @@ import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { shuffle } from "@/utils/array";
 import { canManageTournaments } from "@/utils/permissions";
+import type { UserRecoveryActivity } from "@/validators/base";
 import {
   type EventParticipant,
   type EventTournamentState,
@@ -437,28 +438,21 @@ export const eventTournamentProcedures = {
         },
         readiness,
       );
-      let launchedBattle: EventSyncResult["launchedBattles"][number] | undefined;
+      let activity: UserRecoveryActivity | null | undefined;
       if (result.success) {
-        const { launchedBattles } = await syncEventTournament(
+        const { activities } = await syncEventTournament(
           ctx.drizzle,
           input.tournamentId,
         );
-        launchedBattle = launchedBattles.find((battle) =>
-          battle.userIds.includes(ctx.userId),
-        );
+        activity = activities.find((entry) =>
+          entry.userIds.includes(ctx.userId),
+        )?.activity;
         // The action's local invalidation does not refresh this player's other tabs.
         if (["JOIN", "WITHDRAW", "DECLINE"].includes(input.action))
           await notifyEventParticipant(ctx.userId, input.originSocketId);
       }
       return result.success
-        ? actionReadinessResponse(
-            result,
-            readiness,
-            ctx.drizzle,
-            launchedBattle
-              ? { status: "BATTLE", battleId: launchedBattle.battleId }
-              : undefined,
-          )
+        ? actionReadinessResponse(result, readiness, ctx.drizzle, activity)
         : result;
     }),
 };
@@ -466,7 +460,8 @@ export const eventTournamentProcedures = {
 type EventRow = NonNullable<Awaited<ReturnType<typeof fetchEvent>>>;
 type EventSyncResult = {
   needsRefresh: boolean;
-  launchedBattles: { userIds: string[]; battleId: string }[];
+  /** Null withholds activity while a matching launch or competing save is unresolved. */
+  activities: { userIds: string[]; activity: UserRecoveryActivity | null }[];
 };
 
 /** Whole-event CAS serializes roster, bracket and score changes without missing-row locks. */
@@ -503,8 +498,8 @@ const editEvent = async (
  * Reconcile combat results, recover abandoned launches (never relaunching a battle with the
  * same ID) and apply scheduled starts or event expiry. Terminal events retry unpaid rewards;
  * unscheduled rounds remain under staff control.
- * Return whether writes or competing claims require a snapshot refresh, plus committed launches
- * for mutation activity responses.
+ * Return whether writes or competing claims require a snapshot refresh, plus observed or
+ * newly committed player activity. Reserved launches withhold activity until combat commits.
  */
 export const syncEventTournament = async (
   client: DrizzleClient,
@@ -512,17 +507,17 @@ export const syncEventTournament = async (
   loadedRow?: EventRow,
 ): Promise<EventSyncResult> => {
   const row = loadedRow ?? (await fetchEvent(client, id));
-  if (!row?.eventData) return { needsRefresh: false, launchedBattles: [] };
+  if (!row?.eventData) return { needsRefresh: false, activities: [] };
   const event = structuredClone(row.eventData);
   const now = Date.now();
   if (["COMPLETED", "CANCELLED"].includes(event.status)) {
-    return { needsRefresh: await payEventRewards(client, row), launchedBattles: [] };
+    return { needsRefresh: await payEventRewards(client, row), activities: [] };
   }
   if (
     event.status === "DRAFT" ||
     (event.status === "REGISTRATION" && now < event.config.endsAt)
   )
-    return { needsRefresh: false, launchedBattles: [] };
+    return { needsRefresh: false, activities: [] };
   for (const series of event.series.filter((s) => !s.complete)) {
     const game = series.games.at(-1);
     if (!game) continue;
@@ -618,25 +613,41 @@ export const syncEventTournament = async (
   if (now < event.config.endsAt)
     for (const s of event.series)
       if (s.scheduledAt && now >= s.scheduledAt) beginEventRound(event, now, s.id);
+  const activeGames = event.series.flatMap((series) => {
+    const game = series.games.at(-1);
+    return !series.complete &&
+      game &&
+      (isGameInFlight(game) ||
+        (game.status === "READY" && game.accepted.length === 2 && now >= game.opensAt))
+      ? [{ seriesId: series.id, game }]
+      : [];
+  });
+  const activities: EventSyncResult["activities"] = activeGames.map(({ game }) => ({
+    userIds: game.userIds,
+    // FIGHTING is published only after combat commits; STARTING is only a reservation.
+    activity:
+      game.status === "FIGHTING" ? { status: "BATTLE", battleId: game.battleId } : null,
+  }));
   const changed = JSON.stringify(event) !== JSON.stringify(row.eventData);
   if (changed && !(await saveEventState(client, row, event)))
-    return { needsRefresh: true, launchedBattles: [] };
+    return {
+      needsRefresh: true,
+      activities: activities.map((entry) => ({ ...entry, activity: null })),
+    };
   if (["COMPLETED", "CANCELLED"].includes(event.status)) {
     const paid = await payEventRewards(client, { ...row, eventData: event });
-    return { needsRefresh: changed || paid, launchedBattles: [] };
+    return { needsRefresh: changed || paid, activities: [] };
   }
   let needsRefresh = changed;
-  const launchedBattles: EventSyncResult["launchedBattles"] = [];
   // Each launch first claims the event version. Acceptance never starts a second battle.
-  for (const series of event.series.filter((s) => !s.complete)) {
-    const game = series.games.at(-1);
-    if (game?.status === "READY" && game.accepted.length === 2 && now >= game.opensAt) {
-      const launched = await launchEventGame(client, id, series.id);
-      if (launched) launchedBattles.push(launched);
+  for (const [index, { seriesId, game }] of activeGames.entries()) {
+    if (game.status === "READY") {
+      const launched = await launchEventGame(client, id, seriesId);
+      if (launched) activities[index] = launched;
       needsRefresh = true;
     }
   }
-  return { needsRefresh, launchedBattles };
+  return { needsRefresh, activities };
 };
 
 /** Claim the current ready roster once, then publish the revocable token combat must claim. */
@@ -748,7 +759,10 @@ const launchEventGame = async (client: DrizzleClient, id: string, seriesId: stri
       ?.games.find((g) => g.id === game.id);
     if (g?.status === "STARTING") g.status = "FIGHTING";
   });
-  return { userIds: game.userIds, battleId: game.battleId };
+  return {
+    userIds: game.userIds,
+    activity: { status: "BATTLE" as const, battleId: game.battleId },
+  };
 };
 
 /** Revoke an unclaimed launch and record player absence or a repairable setup failure. */
