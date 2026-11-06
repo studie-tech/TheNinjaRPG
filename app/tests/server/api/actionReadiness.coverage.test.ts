@@ -3,7 +3,6 @@ import { dirname, join, relative } from "node:path";
 import { describe, expect, it } from "bun:test";
 import { parse } from "@babel/parser";
 import type { Node } from "@babel/types";
-import { AWAKE_ACTIONS, shouldPrepareAction } from "@/libs/actionReadiness";
 import { appRouter } from "@/server/api/root";
 
 /**
@@ -47,6 +46,97 @@ const targetOnlyChecks = new Map([
 const isParticipantGuard = (path: string, guard: Guard) =>
   (participantLaunchers.includes(path) && participantGuards.has(guard.owner)) ||
   (guard.owner.endsWith(`#${path}`) && guard.status === targetOnlyChecks.get(path));
+
+/** Expected awake-only actions, audited against actor guards in every registered mutation. */
+const AWAKE_ACTIONS = new Set([
+  "bloodline.roll",
+  "clan.leaveClan",
+  "clan.fightLeader",
+  "clan.challengeClan",
+  "clan.joinClanBattle",
+  "combat.battleArenaHeal",
+  "combat.startArenaBattle",
+  "combat.attackUser",
+  "combat.startShrineBattle",
+  "coop.dungeon.create",
+  "farming.plantSeed",
+  "farming.waterPlot",
+  "farming.applyFertilizer",
+  "farming.harvestPlot",
+  "farming.plantAllEmpty",
+  "farming.waterAll",
+  "farming.fertilizeAll",
+  "farming.harvestAll",
+  "farming.sellCrop",
+  "farming.buyShopItem",
+  "farming.extractSeeds",
+  "hospital.userHeal",
+  "hunting.accept",
+  "hunting.start",
+  "item.evolveItem",
+  "item.consumeVariantToken",
+  "item.mergeStacks",
+  "item.mergeAllStacks",
+  "item.consume",
+  "item.repair",
+  "item.repairAll",
+  "item.useRepairItem",
+  "item.useRepairAll",
+  "jutsu.evolveJutsu",
+  "jutsu.startTraining",
+  "kage.checkInDefense",
+  "kage.startDefense",
+  "occupation.craftItem",
+  "occupation.imbueItem",
+  "overworldAi.interactWithOverworldAi",
+  "pets.unlockSlot",
+  "pets.activatePet",
+  "pets.updateAbilities",
+  "pets.feedPet",
+  "pets.acquirePet",
+  "pets.generateAppearance",
+  "pets.releasePet",
+  "pets.updatePet",
+  "pets.updateAiConfig",
+  "pets.assignExperience",
+  "pets.rankUp",
+  "coop.quest.create",
+  "coop.quest.join",
+  "coop.quest.startEncounter",
+  "quests.startRandom",
+  "quests.startPetTask",
+  "quests.collectPetTask",
+  "quests.checkRewards",
+  "quests.retryBattle",
+  "pvpRank.queueForRankedPvp",
+  "raids.readyToQueue",
+  "raids.joinRaidQueue",
+  "sageMode.removeSageMode",
+  "shrine.challengeShrine",
+  "shrine.joinShrineBattle",
+  "sparring.acceptChallenge",
+  "stealth.activateStealth",
+  "stealth.useSensory",
+  "stealth.trainCovert",
+  "territoryWar.createTeam",
+  "territoryWar.joinTeam",
+  "tournament.joinMatch",
+  "tournament.participateEvent",
+  "train.selectTrainedElement",
+  "train.startTraining",
+  "train.startMasteryTraining",
+  "train.stopMasteryTraining",
+  "travel.robPlayer",
+  "travel.startGlobalMove",
+  "travel.moveInSector",
+  "village.buyFood",
+  "village.leaveVillage",
+  "village.joinVillage",
+  "village.swapVillage",
+  "war.startWarMission",
+  "war.completeWarMission",
+  "war.attackWarCamp",
+]);
 
 // These endpoints have awake-only branches, rather than an unconditional contract.
 // Specific quest starts use the saved quest; endpoint SQL tests cover that case.
@@ -145,7 +235,7 @@ const inspectMutations = (overrides = new Map<string, string>()) => {
         return;
       }
       // Pure projections cannot establish mutation-phase recovery composition.
-      if (!["actionReadinessResponse", "shouldPrepareAction", "farmingQuestStateAfterClaim"].includes(callee?.name ?? "")) {
+      if (!["actionReadinessResponse", "farmingQuestStateAfterClaim"].includes(callee?.name ?? "")) {
         let composesRecovery = false;
         walk(child, (part) => {
           if (part.type === "ObjectProperty" && part.key.type === "Identifier" && ["readiness", "actionReadiness", "actionUserId"].includes(part.key.name)) composesRecovery = true;
@@ -232,8 +322,6 @@ describe("mutation awake prerequisites", () => {
 
   it("keeps automatic recovery aligned with actual actor prerequisites in both directions", () => {
     expect(policyDrift(mutations)).toEqual({ missing: [], stale: [] });
-    for (const path of mutations.keys())
-      if (!conditionalActions.has(path)) expect(shouldPrepareAction(path, {}), path).toBe(AWAKE_ACTIONS.has(path));
   });
 
   it("keeps conditional and participant-only exceptions tied to live awake checks", () => {
@@ -271,7 +359,7 @@ describe("mutation awake prerequisites", () => {
   it("keeps recovery out of tRPC and the global mutation provider", () => {
     for (const file of ["server/api/trpc.ts", "app/_trpc/Provider.tsx"]) {
       const source = readFileSync(join(sourceRoot, file), "utf8");
-      expect(source).not.toMatch(/fetchActionReadiness|prepareCharacterForAction|prepareActionReadiness|shouldPrepareAction|prepareActionFeedback|finishActionFeedback/);
+      expect(source).not.toMatch(/fetchActionReadiness|prepareCharacterForAction|prepareActionReadiness|prepareActionFeedback|finishActionFeedback/);
     }
   });
 

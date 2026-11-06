@@ -350,16 +350,6 @@ export const listSectorForGetAllSectors = (client: Pick<DrizzleClient, "query">)
     },
   });
 
-/** Build the `userData` lookup for `moveInSector`, using predicates on `userId`. */
-export const findUserDataForMoveInSector = (
-  client: Pick<DrizzleClient, "query">,
-  userId: string,
-) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    with: { anbuSquad: true, village: { with: { structures: true } } },
-  });
-
 /** Build the `userData` update for `moveInSector`, including predicates on `userId`, `status`, `sector`. */
 export const updateUserDataForMoveInSector = (
   client: Pick<DrizzleClient, "update">,

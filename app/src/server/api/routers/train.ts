@@ -15,13 +15,14 @@ import {
   type TimedMasteryName,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
-import { actionStatusMessage, shouldPrepareAction } from "@/libs/actionReadiness";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { activeTrainedElement } from "@/libs/elementalMastery";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
   getEnergyQueue,
   getMasteryQueue,
+  isOrderedSubsequence,
   liveQueueRows,
   queueHeadAfter,
   toMasteryEntries,
@@ -140,7 +141,7 @@ export const trainRouter = createTRPCRouter({
       });
       if (!initialUser) return errorResponse("User not found");
       // Pure removals preserve the current activity without preparing an action recovery.
-      const readiness = shouldPrepareAction("train.updateEnergyTrainingQueue", input)
+      const readiness = !isOrderedSubsequence(input.entries, input.expectedEntries)
         ? prepareActionReadiness(initialUser, settings)
         : undefined;
       if (readiness?.error) return errorResponse(readiness.error);
@@ -201,7 +202,7 @@ export const trainRouter = createTRPCRouter({
       });
       if (!initialUser) return errorResponse("User not found");
       // Pure removals preserve the current activity without preparing an action recovery.
-      const readiness = shouldPrepareAction("train.updateMasteryTrainingQueue", input)
+      const readiness = !isOrderedSubsequence(input.entries, input.expectedEntries)
         ? prepareActionReadiness(initialUser, settings)
         : undefined;
       if (readiness?.error) return errorResponse(readiness.error);

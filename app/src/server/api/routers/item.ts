@@ -1751,25 +1751,6 @@ export const itemRouter = createTRPCRouter({
         ctx,
         storedAtHome,
       );
-      if (userItemsAll.length === 0) {
-        const recovery = await updateUserForActionReadiness(
-          ctx.drizzle,
-          readiness,
-          recoveredAt,
-        );
-        if (!recovery.rowsAffected)
-          return errorResponse("Your status changed. Please try again.");
-        return actionReadinessResponse(
-          {
-            success: true,
-            message: "Nothing to merge",
-            inventoryChanges: recovered ? undefined : [],
-            ...getMergedStacksUserUpdate(user, recovered ? undefined : []),
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
       const itemIds = [
         ...new Set(
           userItemsAll
