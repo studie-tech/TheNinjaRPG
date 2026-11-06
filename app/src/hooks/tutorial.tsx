@@ -23,6 +23,7 @@ import {
   isTutorialActive,
   STARTER_QUEST_OBJECTIVES,
   TUTORIAL_CAPTURE_SECTOR,
+  TUTORIAL_JUTSU_PICK_STEP_ID,
   TUTORIAL_WAKE_SECTOR,
   type TutorialCombatGuidance,
   type TutorialObjectiveRef,
@@ -61,6 +62,8 @@ export interface TutorialStepConfig {
   relatedValue?: number | string;
   /** Quest objective this step works towards (or a group, any one of which counts); once it is behind the player the step is skipped. */
   objectiveId?: TutorialObjectiveRef;
+  /** Step that earns the objective; a player here without it is sent back to that step. */
+  objectiveStepId?: string;
   /** Shows the related quest's current objective text, for steps whose words come from the quest. */
   quoteObjective?: boolean;
   /** Label of a button that travels and walks to the related quest's current objective. */
@@ -294,8 +297,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       `tutorial-combat-action-${TUTORIAL_JUTSU_ID}`,
     ],
     page: "/traininggrounds",
+    objectiveId: STARTER_QUEST_OBJECTIVES.jutsu,
     advanceOn: "trainJutsu",
-    showNextButton: true,
   },
   {
     id: "tools-claim-jutsu",
@@ -307,6 +310,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/traininggrounds",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.jutsu,
+    objectiveStepId: TUTORIAL_JUTSU_PICK_STEP_ID,
     advanceOn: "questReward",
   },
   {

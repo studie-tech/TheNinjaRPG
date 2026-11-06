@@ -1,7 +1,9 @@
 import { buildBloodlineCollectionProgress } from "@/libs/bloodline";
-import { getUserQuests } from "@/libs/quest";
+import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
+import { getUserQuests, objectiveContentIds } from "@/libs/quest";
 import {
   fetchBloodlineCollectionRolls,
+  fetchOwnedObjectiveJutsus,
   queryBloodlineCollectionCatalogue,
 } from "@/queries/quests";
 import type { UserWithRelations } from "@/routers/profile";
@@ -11,7 +13,7 @@ import { queryInTransaction } from "@/server/utils/concurrency";
 import { getFarmCollectionCount } from "@/server/utils/farming";
 
 /**
- * Load collection snapshots only for unfinished collection goals of active quests.
+ * Load collection and owned-jutsu snapshots only for unfinished goals of active quests.
  * @param inTransaction - Await queries in order on a shared PlanetScale transaction session.
  * @param preloaded - Independent reads from the profile's opening query wave. Transactions
  * always read their own snapshot on the transaction session instead.
@@ -32,6 +34,13 @@ export const hydrateQuestCollections = async (
   );
   const hasFarming = objectives.some((o) => o.task === "farming_collection_log");
   const hasBloodlines = objectives.some((o) => o.task === "bloodline_collection");
+  const objectiveJutsuIds = [
+    ...new Set(
+      objectives
+        .filter((objective) => objective.task === "train_specific_jutsu")
+        .flatMap(objectiveContentIds),
+    ),
+  ];
   const snapshot = inTransaction ? undefined : preloaded;
   const queries = [
     hasFarming ? getFarmCollectionCount(client, user.userId, inTransaction) : undefined,
@@ -44,8 +53,11 @@ export const hydrateQuestCollections = async (
     hasBloodlines
       ? (snapshot?.rolls ?? fetchBloodlineCollectionRolls(client, user.userId))
       : undefined,
+    objectiveJutsuIds.length > 0
+      ? fetchOwnedObjectiveJutsus(client, user.userId, objectiveJutsuIds)
+      : undefined,
   ] as const;
-  const [farmingCollectionCount, catalogue, rolls] = inTransaction
+  const [farmingCollectionCount, catalogue, rolls, ownedJutsus] = inTransaction
     ? await queryInTransaction(queries)
     : await Promise.all(queries);
   return {
@@ -58,6 +70,10 @@ export const hydrateQuestCollections = async (
             ...(user.bloodlineId ? [user.bloodlineId] : []),
           ])
         : undefined,
+    ownedObjectiveJutsus: ownedJutsus?.map(({ jutsuId, jutsu }) => ({
+      jutsuId,
+      masteryTypes: jutsu ? jutsuMasteryTypes(jutsu) : [],
+    })),
   };
 };
 

@@ -142,4 +142,54 @@ describe("quest collection snapshots", () => {
     });
     expect(events).toEqual(["catalogue:start", "catalogue:end", "rolls:start", "rolls:end"]);
   });
+
+  describe("owned objective jutsu", () => {
+    const userWithObjective = (trainJutsuIds: string[], done = false) =>
+      ({
+        ...userWithCollection(),
+        questData: [{ id: "jutsu-quest", goals: [{ id: "learn", done }] }],
+        userQuests: [
+          {
+            id: "history",
+            questId: "jutsu-quest",
+            completed: 0,
+            quest: {
+              id: "jutsu-quest",
+              questType: "starter",
+              hidden: false,
+              retryDelay: "none",
+              content: {
+                objectives: [{ id: "learn", task: "train_specific_jutsu", trainJutsuIds }],
+                reward: {},
+              },
+            },
+          },
+        ],
+      }) as unknown as Parameters<typeof hydrateQuestCollections>[1];
+    const jutsuDatabase = () => {
+      const findOwned = mock(async () => [
+        { jutsuId: "listed", jutsu: { statClassification: "Ninjutsu" } },
+      ]);
+      const client = { query: { userJutsu: { findMany: findOwned } } };
+      return { client: client as unknown as DrizzleClient, findOwned };
+    };
+
+    it("reads ownership for an unfinished objective, disciplines included", async () => {
+      const { client, findOwned } = jutsuDatabase();
+      const result = await hydrateQuestCollections(client, userWithObjective(["listed"]));
+      expect(findOwned).toHaveBeenCalledTimes(1);
+      expect(result.ownedObjectiveJutsus).toEqual([
+        { jutsuId: "listed", masteryTypes: ["Ninjutsu"] },
+      ]);
+    });
+
+    it("costs nothing once done, or for mastery objectives without a jutsu list", async () => {
+      const { client, findOwned } = jutsuDatabase();
+      const done = await hydrateQuestCollections(client, userWithObjective(["listed"], true));
+      const unlisted = await hydrateQuestCollections(client, userWithObjective([]));
+      expect(findOwned).not.toHaveBeenCalled();
+      expect(done.ownedObjectiveJutsus).toBeUndefined();
+      expect(unlisted.ownedObjectiveJutsus).toBeUndefined();
+    });
+  });
 });
