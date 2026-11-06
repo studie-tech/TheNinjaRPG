@@ -117,10 +117,16 @@ export default function CombatPage() {
     prepareUserUpdate,
     updateUser,
   } = useRequiredUserData();
+  // Another tab can release the profile before this tab receives its completed battle.
+  const [lastBattleId, setLastBattleId] = useState(userData?.battleId);
+  useEffect(() => {
+    if (userData?.battleId) setLastBattleId(userData.battleId);
+  }, [userData?.battleId]);
+  const requestedBattleId = userData?.battleId ?? lastBattleId;
   const { data, isLoading, isSuccess, isError, isFetching, refetch } =
     api.combat.getBattle.useQuery(
-      { battleId: userData?.battleId },
-      { enabled: !!userData?.battleId },
+      { battleId: requestedBattleId },
+      { enabled: !!requestedBattleId },
     );
 
   // Mutation for handing turns to / taking them back from the user's AI profile
@@ -205,7 +211,9 @@ export default function CombatPage() {
   // After "Go Again" the finished battle is held in state until the next one's data is
   // applied; keep the scene back until then rather than remount the finished battle.
   const isBattleLoading =
-    isLoading || (!!data?.battle && data.battle.id !== battle?.id);
+    isLoading ||
+    (!!requestedBattleId && !userData?.battleId && !results && isFetching) ||
+    (!!data?.battle && data.battle.id !== battle?.id);
 
   // Calculate number of unread actions
   const unreadActions = battle?.version
@@ -237,12 +245,21 @@ export default function CombatPage() {
     if (
       userData?.status === "HOSPITALIZED" &&
       !userData?.battleId &&
+      (!requestedBattleId || isBattleMissing) &&
       !isLoading &&
       !results
     ) {
       router.push("/hospital");
     }
-  }, [userData?.status, userData?.battleId, isLoading, results, router]);
+  }, [
+    userData?.status,
+    userData?.battleId,
+    requestedBattleId,
+    isBattleMissing,
+    isLoading,
+    results,
+    router,
+  ]);
 
   // Redirect to profile if not in battle
   useEffect(() => {
@@ -270,10 +287,10 @@ export default function CombatPage() {
   // A different client can settle combat while this profile still holds its ID.
   // Reconcile from the server without clearing held results or a newer battle.
   useEffect(() => {
-    if (userId && !results && (!userData?.battleId || isBattleMissing)) {
+    if (userId && !results && (!requestedBattleId || isBattleMissing)) {
       setBattleAtom((current) => (current?.id === battle?.id ? undefined : current));
     }
-    if (isBattleMissing) {
+    if (isBattleMissing && !results) {
       if (userData?.battleId) void utils.profile.getUser.invalidate();
       if (battle?.id === userData?.battleId && battle?.extraState.dungeon && !results) {
         router.push("/dungeon");
@@ -283,6 +300,7 @@ export default function CombatPage() {
     isBattleMissing,
     userId,
     userData?.battleId,
+    requestedBattleId,
     battle?.id,
     battle?.extraState.dungeon,
     results,
@@ -855,7 +873,7 @@ export default function CombatPage() {
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (isBetweenPyramidBattles(userData) && !results) return <PyramidRun />;
-  if (!results && (!userData.battleId || isBattleMissing)) {
+  if (!results && (!requestedBattleId || isBattleMissing)) {
     return (
       <ContentBox title="Combat">
         <p>You are not in an active battle.</p>

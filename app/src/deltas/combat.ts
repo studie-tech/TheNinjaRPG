@@ -533,8 +533,13 @@ export const getCombatStateUpdate = (
   response: Pick<BattleState, "battle" | "result">,
   battleId: string,
 ): RouterOutputs["combat"]["getBattle"] | undefined => {
-  if (current.battle?.id !== battleId || response.battle?.id !== battleId) return;
-  return current.battle.version > response.battle.version
+  if (
+    response.battle?.id !== battleId ||
+    (current.battle && current.battle.id !== battleId)
+  )
+    return;
+  return current.battle &&
+    (current.result || current.battle.version > response.battle.version)
     ? current
     : { battle: response.battle, result: response.result ?? null };
 };

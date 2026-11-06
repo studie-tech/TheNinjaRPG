@@ -283,6 +283,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { commitBattleAdmission } from "@/server/utils/battleAdmission";
+import { combatCompletionStore } from "@/server/utils/combatCompletion";
 import { settleCookingExperience } from "@/server/utils/cooking";
 import {
   commitDungeonEntryBattle,
@@ -349,7 +350,12 @@ export const combatRouter = createTRPCRouter({
         // Distinguish between public and non-public user state
         const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
         if (!userBattle) {
-          return { battle: null, result: null };
+          return (
+            (await combatCompletionStore().recover(ctx.userId, input.battleId)) ?? {
+              battle: null,
+              result: null,
+            }
+          );
         }
         const stateBaseline = captureCombatStateUpdate(userBattle);
 
@@ -484,6 +490,9 @@ export const combatRouter = createTRPCRouter({
 
         // Hide private state of non-session user
         const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
+
+        // Cache only the settled, viewer-masked response; recovery never reruns reward writes.
+        await combatCompletionStore().save(ctx.userId, newMaskedBattle, result);
 
         // Return the new battle + result state if applicable
         return { battle: newMaskedBattle, result: result };
@@ -629,7 +638,19 @@ export const combatRouter = createTRPCRouter({
           fetchBattle(db, input.battleId),
           ctx.waitForRateLimit(),
         ]);
-        if (!battle) return { updateClient: true };
+        if (!battle) {
+          // A terminal recovery response reuses this action request; it performs no game processing or writes.
+          const completed = await combatCompletionStore().recover(suid, input.battleId);
+          return completed
+            ? {
+                updateClient: true,
+                battleUpdate: completed.battle,
+                result: completed.result,
+                logEntries: [],
+                updatedQuestIds: [],
+              }
+            : { updateClient: true };
+        }
         // Manual choices belong to the displayed snapshot, including requests from older tabs.
         if (input.actionId !== undefined && input.version !== battle.version) {
           return {
@@ -903,6 +924,8 @@ export const combatRouter = createTRPCRouter({
               finishBattle(),
             ]);
             const newMaskedBattle = maskBattle(newBattle, suid);
+
+            await combatCompletionStore().save(suid, newMaskedBattle, result);
 
             // Notify after logs are persisted, including the terminal action.
             // Polling clients may have read the claimed state before its log insert.

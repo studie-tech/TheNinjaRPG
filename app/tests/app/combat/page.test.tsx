@@ -76,7 +76,7 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
   });
   const utils = {
     profile: { getUser: { invalidate: refetchProfile } },
-    combat: { getBattle: { invalidate: vi.fn() } },
+    combat: { getBattle: { invalidate: vi.fn((input?: { battleId?: string }) => queryClient.invalidateQueries({ queryKey: input?.battleId ? ["combat", input.battleId] : ["combat"] })) } },
     misc: { getAllGameAssetNames: { prefetch: prefetchAssets } },
   };
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
@@ -274,7 +274,8 @@ it.each(["query", "profile"])("releases battle pools when the %s confirms combat
   const battle = makeCompleteBattle({ id: "externally-settled", usersState: [
     makeUser({ userId: "player", curHealth: 23, maxHealth: 100, curChakra: 31, maxChakra: 100, curStamina: 42, maxStamina: 100 }),
   ] });
-  const { view, queryClient, changeProfile } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response);
+  let ended = false;
+  const { view, queryClient, changeProfile } = mount(battle.id, async () => ended ? empty : ({ battle, result: null }) as unknown as Response);
   await view.findByText(`Active battle ${battle.id}`);
   const store = getDefaultStore();
   expect(store.get(userContext.userBattleAtom)?.id).toBe(battle.id);
@@ -283,8 +284,11 @@ it.each(["query", "profile"])("releases battle pools when the %s confirms combat
     await view.findByText("You are not in an active battle.");
     expect(store.get(userContext.userBattleAtom)).toBeUndefined();
   }
+  ended = true;
   changeProfile({ status: "AWAKE", battleId: null, curHealth: 90, curChakra: 91, curStamina: 92 });
-  expect(view.getByText("You are not in an active battle.")).toBeDefined();
+  if (source === "profile")
+    await act(async () => queryClient.setQueryData(["combat", battle.id], empty));
+  await view.findByText("You are not in an active battle.");
   expect(store.get(userContext.userBattleAtom)).toBeUndefined();
   vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => ({
     timeDiff: 0, data: select({ ...userContext.useRequiredUserData().data, level: 10, experience: 0, rank: "GENIN", regeneration: 7, raidBuffs: [], titles: [] } as never),
@@ -300,6 +304,34 @@ it.each(["query", "profile"])("releases battle pools when the %s confirms combat
   expect(sidebar.getByText("HP: 90; regen: 7")).toBeDefined();
   expect(sidebar.getByText("CP: 91; regen: 7")).toBeDefined();
   expect(sidebar.getByText("SP: 92; regen: 7")).toBeDefined();
+});
+
+it.each(["AWAKE", "HOSPITALIZED"])("applies another tab's arena result after the profile becomes %s without another lookup", async (status) => {
+  const battle = makeCompleteBattle({ id: "other-tab-finished", battleType: "ARENA", usersState: [makeUser({ userId: "player", isAutoCombat: true })] });
+  const read = vi.fn(async () => ({ battle, result: null }) as unknown as Response);
+  const { view, queryClient, changeProfile, push } = mount(battle.id, read);
+  await view.findByText(`Active battle ${battle.id}`);
+  changeProfile({ status, battleId: null });
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(view.queryByText("You are not in an active battle.")).toBeNull();
+  expect(push).not.toHaveBeenCalled();
+  await act(async () => queryClient.setQueryData(["combat", battle.id], { battle, result: { outcome: status === "AWAKE" ? "Won" : "Lost" } } as unknown as Response));
+  await view.findByText("Finished battle result");
+  expect(view.queryByText("You are not in an active battle.")).toBeNull();
+  expect(push).not.toHaveBeenCalled();
+  expect(read).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the requested battle while a profile refresh overtakes its initial response", async () => {
+  const battle = makeCompleteBattle({ id: "initial-result-race", battleType: "ARENA", usersState: [makeUser({ userId: "player" })] });
+  let finish!: (response: Response) => void;
+  const read = vi.fn((_id: string) => new Promise<Response>((resolve) => { finish = resolve; }));
+  const { view, changeProfile } = mount(battle.id, read);
+  changeProfile({ status: "AWAKE", battleId: null });
+  expect(view.queryByText("You are not in an active battle.")).toBeNull();
+  await act(async () => finish({ battle, result: { outcome: "Won" } } as unknown as Response));
+  await view.findByText("Finished battle result");
+  expect(read.mock.calls.every(([id]) => id === battle.id)).toBe(true);
 });
 
 it("preserves a newer shared battle snapshot when the rendered battle disappears", async () => {
@@ -363,7 +395,7 @@ it("keeps an already displayed result when a later lookup or profile loses its b
   const { view, queryClient, changeBattle, refetchProfile } = mount("finished", async () => finished);
   await waitFor(() => expect(view.getByText("Finished battle result")).toBeDefined());
   await act(async () => queryClient.setQueryData(["combat", "finished"], empty));
-  await waitFor(() => expect(refetchProfile).toHaveBeenCalledTimes(1));
+  expect(refetchProfile).not.toHaveBeenCalled();
   changeBattle(null);
   expect(view.getByText("Finished battle result")).toBeDefined();
   expect(view.queryByRole("link", { name: "Return to Profile" })).toBeNull();

@@ -104,7 +104,8 @@ export const createCombatScene = async (options: {
         : undefined;
     const lightingLayer = shadows?.container ?? new Container();
     const weather = createWorldWeather(game, options.lightLayout);
-    const groundLayer = new RenderLayer(),
+    const terrainLayer = new RenderLayer(),
+      groundLayer = new RenderLayer(),
       depthLayer = new RenderLayer({ sortableChildren: true }),
       uiLayer = new RenderLayer();
     const [terrain, emptyArt] = await Promise.all([
@@ -128,7 +129,7 @@ export const createCombatScene = async (options: {
     );
     terrain.container.sortableChildren = true;
     // Tile markings share the ground plane, beneath physical fighters and scenery.
-    lightingLayer.addChild(groundLayer, labels, depthLayer);
+    lightingLayer.addChild(terrainLayer, groundLayer, labels, depthLayer);
     const actors = createCombatActors(
       game,
       data.grid,
@@ -161,8 +162,9 @@ export const createCombatScene = async (options: {
     }
     // Physical fighters and scenery share painter ordering; meters and controls remain unlit.
     // Ambient terrain draws from its earlier owner so fallback contacts remain above its opaque faces.
-    if (shadows) groundLayer.attach(...terrain.container.children);
-    groundLayer.sortRenderLayerChildren();
+    // Terrain's face z-indices are local to its stack; ground props sort only against other ground art.
+    if (shadows) terrainLayer.attach(...terrain.container.children);
+    terrainLayer.sortRenderLayerChildren();
     art.attachLayers({ ground: groundLayer, world: depthLayer, ui: uiLayer });
     world.addChild(
       terrain.container,

@@ -52,6 +52,19 @@ export const useBattleCacheUpdate = (
     [cache.updateCache],
   );
 
+  /** A complete same-viewer snapshot replaces an obsolete read without scheduling another database query. */
+  const acceptBattle = useCallback(
+    async (id: string, response: Pick<BattleState, "battle" | "result">) => {
+      if (response.battle?.id !== id) return;
+      // Revision-based delta recovery cannot apply during an initial read; this snapshot is already complete.
+      await utils.combat.getBattle.cancel({ battleId: id });
+      utils.combat.getBattle.setData({ battleId: id }, (current) =>
+        getCombatStateUpdate(current ?? { battle: null, result: null }, response, id),
+      );
+    },
+    [utils],
+  );
+
   /** Apply eligible public changes; gaps, private changes and cache races retain one recovery. */
   const updateBattleEvent = useCallback(
     async (id: string, version: number, update: CombatStateUpdate) => {
@@ -85,5 +98,11 @@ export const useBattleCacheUpdate = (
     [prepareBattleUpdate, cache.updateCache, refreshBattle, userId, utils],
   );
 
-  return { prepareBattleUpdate, updateBattle, updateBattleEvent, refreshBattle };
+  return {
+    prepareBattleUpdate,
+    updateBattle,
+    acceptBattle,
+    updateBattleEvent,
+    refreshBattle,
+  };
 };

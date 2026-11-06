@@ -168,6 +168,27 @@ const startTravel = (snapshot: TravelSnapshot) => createTravelScene({
 });
 
 describe("world lighting precision fallback", () => {
+  it.each(["mediump", "highp"] as const)("draws combat ground cover above terrain and below upright art after ground sorting (%s)", async (precision) => {
+    vi.spyOn(pixi, "getMaxFragmentPrecision").mockReturnValue(precision);
+    const fixture = rendererFixture(), prepare = combatTerrain.prepareCombatTerrain;
+    const cover: WorldSpriteDescription = { id: "combat-ground-cover", kind: "decoration", image: "combat-ground-cover.png", size: 20, x: 40, y: 40, groundY: 30, small: true };
+    vi.spyOn(combatTerrain, "prepareCombatTerrain").mockImplementation((...args) => ({ ...prepare(...args), scenery: [...scenery, cover] }));
+    const battle = makeCompleteBattle({ background: "ground", width: 12, height: 10, usersEffects: [], usersState: [] }) as unknown as ReturnedBattle;
+    const snapshot: CombatSceneSnapshot = { battle, userId: "self", actions: [], timeDiff: 0,
+      assets: [], requestedIds: new Set(), active: false, sound: false, volume: 0, showGridNumbers: false, inspect: false };
+    const scene = await createCombatScene({ mount: document.createElement("div"), signal: new AbortController().signal,
+      getSnapshot: () => snapshot, onError: vi.fn(), onTap() {}, onHover() {}, onZoom() {}, play() {}, initialZoom: 1, lightLayout: false });
+    for (const time of [1000, 2000]) {
+      await scene.renderAt(time);
+      const drawn = drawOrder(fixture.game.stage);
+      const detail = fixture.game.stage.getChildByLabel(cover.id, true)!;
+      const body = fixture.game.stage.getChildByLabel("fixture-body", true)!;
+      const terrain = drawn.filter((view) => view instanceof Mesh && !!view.shader?.resources.animation);
+      expect(terrain.length).toBeGreaterThan(0);
+      expect(drawn.indexOf(detail)).toBeGreaterThan(Math.max(...terrain.map((view) => drawn.indexOf(view))));
+      expect(drawn.indexOf(detail)).toBeLessThan(drawn.indexOf(body));
+    }
+  });
   it("draws staff precipitation above scenery but below pins on mediump devices", async () => {
     const fixture = rendererFixture(), snapshot = travelSnapshot();
     snapshot.weather = { kind: "rain", intensity: .8 };
