@@ -2,12 +2,6 @@ import type React from "react";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 
-interface ImageLinkGridProps {
-  entries: { name: string; href: string; img: string }[];
-  /** Load the tiles eagerly, for grids at the top of the page. */
-  priority?: boolean;
-}
-
 /** Hub grid of captioned image tiles, in the order given. */
 export const ImageLinkGrid: React.FC<ImageLinkGridProps> = ({ entries, priority }) => (
   <div className="grid grid-cols-4 gap-4 text-center font-bold">
@@ -26,3 +20,9 @@ export const ImageLinkGrid: React.FC<ImageLinkGridProps> = ({ entries, priority 
     ))}
   </div>
 );
+
+interface ImageLinkGridProps {
+  entries: { name: string; href: string; img: string }[];
+  /** Load the tiles eagerly, for grids at the top of the page. */
+  priority?: boolean;
+}

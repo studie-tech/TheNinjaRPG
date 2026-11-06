@@ -252,5 +252,6 @@ function SingleEditAsset({
   );
 }
 
+/** Allow both direct content editors and staff who submit review suggestions. */
 const canOpenAssetEditor = (role: UserRole) =>
   canChangeContent(role) || canSuggestContent(role);

@@ -341,16 +341,7 @@ export default function SeasonForm({
   );
 }
 
-interface SeasonRewardDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  divisionIndex: number;
-  parentForm: UseFormReturn<FormValuesInput, unknown, FormValues>;
-  formData: FormEntry<keyof ObjectiveRewardType>[];
-  disabled: boolean;
-  pendingText: string;
-}
-
+/** Edit one division's watched reward value through the shared staged reward form. */
 const SeasonRewardDialog: React.FC<SeasonRewardDialogProps> = (props) => {
   const { divisionIndex, parentForm, ...dialogProps } = props;
   const parentReward = useWatch({
@@ -377,3 +368,13 @@ const SeasonRewardDialog: React.FC<SeasonRewardDialogProps> = (props) => {
     />
   );
 };
+
+interface SeasonRewardDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  divisionIndex: number;
+  parentForm: UseFormReturn<FormValuesInput, unknown, FormValues>;
+  formData: FormEntry<keyof ObjectiveRewardType>[];
+  disabled: boolean;
+  pendingText: string;
+}

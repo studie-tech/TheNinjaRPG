@@ -261,6 +261,7 @@ function ParentalSettingsForm({
   );
 }
 
+/** Collect a controlled, masked PIN without enabling browser credential autofill. */
 const PinField: React.FC<{
   id: string;
   label: string;

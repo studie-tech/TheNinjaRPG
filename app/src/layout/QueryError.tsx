@@ -3,24 +3,6 @@ import type React from "react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/libs/shadui";
 
-interface QueryErrorProps {
-  message: React.ReactNode;
-  onRetry: () => void;
-  /** Disables the retry control, typically while the query refetches. */
-  isRetrying?: boolean;
-  /**
-   * `inline` runs the control on from the message, `stacked` puts it below the message and
-   * `panel` is a bordered row that stands on its own between other cards.
-   */
-  layout?: "inline" | "stacked" | "panel";
-  retryLabel?: string;
-  retryVariant?: ButtonProps["variant"];
-  /** Classes for the alert wrapper. */
-  className?: string;
-  /** Classes for the message of a `stacked` error. */
-  messageClassName?: string;
-}
-
 /**
  * A failed query's message with a way to try again, announced as an alert. For a query
  * that failed outright or lost its refresh; keep Alert banners and messages that carry
@@ -83,3 +65,21 @@ export const QueryError: React.FC<QueryErrorProps> = ({
     </div>
   );
 };
+
+interface QueryErrorProps {
+  message: React.ReactNode;
+  onRetry: () => void;
+  /** Disables the retry control, typically while the query refetches. */
+  isRetrying?: boolean;
+  /**
+   * `inline` runs the control on from the message, `stacked` puts it below the message and
+   * `panel` is a bordered row that stands on its own between other cards.
+   */
+  layout?: "inline" | "stacked" | "panel";
+  retryLabel?: string;
+  retryVariant?: ButtonProps["variant"];
+  /** Classes for the alert wrapper. */
+  className?: string;
+  /** Classes for the message of a `stacked` error. */
+  messageClassName?: string;
+}

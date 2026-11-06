@@ -44,6 +44,7 @@ export const useLazyChart = (
   return !!failedDeps && isSameDeps(failedDeps, deps);
 };
 
+/** Match React's dependency equality so failures belong only to the inputs that failed. */
 const isSameDeps = (a: DependencyList, b: DependencyList) =>
   a.length === b.length && a.every((dep, index) => Object.is(dep, b[index]));
 

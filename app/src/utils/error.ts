@@ -178,6 +178,7 @@ const stackLineFromDomain = (domain: string, path = "[/?#]") =>
 
 /** The hosts the CSP lets serve PayPal scripts. */
 const PAYPAL_STACK_LINE = stackLineFromDomain("paypal(?:objects)?\\.com");
+/** Match consent scripts only on Cookiebot's domain or its subdomains. */
 const COOKIEBOT_STACK_LINE = stackLineFromDomain("cookiebot\\.com");
 /** Only gtag.js: GTM's own script can wrap our calls and sit on the stack of our errors. */
 const GOOGLE_TAG_STACK_LINE = stackLineFromDomain(

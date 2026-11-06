@@ -21,20 +21,6 @@ import {
   type ObjectiveRewardType,
 } from "@/validators/rewards";
 
-type RewardField = keyof ObjectiveRewardType;
-
-interface RewardDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  value: ObjectiveRewardType | ObjectiveRewardInputType | undefined;
-  /** Commit the validated rewards; the dialog then closes. */
-  onSave: (rewards: ObjectiveRewardType) => void;
-  formData: FormEntry<RewardField>[];
-  /** Locks the dialog open while the surrounding form submits. */
-  disabled?: boolean;
-  pendingText?: string;
-}
-
 /**
  * Staged reward editor: edits stay in the dialog until a valid save, so closing it
  * discards them and invalid input cannot reach the surrounding form.
@@ -168,3 +154,17 @@ export const useRewardDialogFormData = (amountFields: readonly RewardField[]) =>
   }
   return data;
 };
+
+type RewardField = keyof ObjectiveRewardType;
+
+interface RewardDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  value: ObjectiveRewardType | ObjectiveRewardInputType | undefined;
+  /** Commit the validated rewards; the dialog then closes. */
+  onSave: (rewards: ObjectiveRewardType) => void;
+  formData: FormEntry<RewardField>[];
+  /** Locks the dialog open while the surrounding form submits. */
+  disabled?: boolean;
+  pendingText?: string;
+}

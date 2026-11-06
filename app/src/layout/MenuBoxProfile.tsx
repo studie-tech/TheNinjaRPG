@@ -712,6 +712,7 @@ const useSecondsUntil = (
   return Math.min(secsAtSnapshot, Math.max(0, (untilMs - now) / 1000));
 };
 
+/** Wrap a remaining duration in the sidebar's bracketed clock notation. */
 const formatBracketedClock = (msLeft: number) => `[${formatClockTime(msLeft)}]`;
 
 type EffectCategory =

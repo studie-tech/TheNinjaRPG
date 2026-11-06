@@ -8,12 +8,6 @@ import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 
-interface ClearDataConfirmProps {
-  title: string;
-  onConfirm: () => void;
-  children: React.ReactNode;
-}
-
 /** Icon button asking for confirmation before a destructive statistics reset. */
 export const ClearDataConfirm: React.FC<ClearDataConfirmProps> = (props) => {
   return (
@@ -35,14 +29,6 @@ export const ClearDataConfirm: React.FC<ClearDataConfirmProps> = (props) => {
     </Confirm>
   );
 };
-
-interface ClearBattleDataButtonProps {
-  type: "jutsu" | "item" | "bloodline" | "ai";
-  /** Content name in the dialog copy, e.g. "jutsu". */
-  label: string;
-  /** Refresh the statistics shown behind the dialog. */
-  onCleared: () => Promise<unknown>;
-}
 
 /** Clear every battle statistic of one content type. */
 export const ClearBattleDataButton: React.FC<ClearBattleDataButtonProps> = (props) => {
@@ -72,14 +58,6 @@ export const ClearBattleDataButton: React.FC<ClearBattleDataButtonProps> = (prop
     </ClearDataConfirm>
   );
 };
-
-interface ClearContentBattleDataButtonProps {
-  id: string;
-  type: ClearBattleDataButtonProps["type"];
-  /** Content name in the dialog copy, e.g. "jutsu". */
-  label: string;
-  name: string;
-}
 
 /** Clear the battle statistics of one content entry. */
 export const ClearContentBattleDataButton: React.FC<
@@ -113,3 +91,25 @@ export const ClearContentBattleDataButton: React.FC<
     </ClearDataConfirm>
   );
 };
+
+interface ClearDataConfirmProps {
+  title: string;
+  onConfirm: () => void;
+  children: React.ReactNode;
+}
+
+interface ClearBattleDataButtonProps {
+  type: "jutsu" | "item" | "bloodline" | "ai";
+  /** Content name in the dialog copy, e.g. "jutsu". */
+  label: string;
+  /** Refresh the statistics shown behind the dialog. */
+  onCleared: () => Promise<unknown>;
+}
+
+interface ClearContentBattleDataButtonProps {
+  id: string;
+  type: ClearBattleDataButtonProps["type"];
+  /** Content name in the dialog copy, e.g. "jutsu". */
+  label: string;
+  name: string;
+}

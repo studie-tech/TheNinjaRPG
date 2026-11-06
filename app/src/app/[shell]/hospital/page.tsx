@@ -159,6 +159,7 @@ interface HealOthersComponentProps {
   timeDiff: number;
 }
 
+/** Heal eligible players with the healer's available chakra and reconcile confirmed costs. */
 export const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   // Settings
   const { userData, timeDiff } = props;

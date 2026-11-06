@@ -6,18 +6,6 @@ import Confirm from "@/layout/Confirm";
 import { formatQuestEntryCost } from "@/libs/questRun";
 import type { QuestContentType } from "@/validators/objectives";
 
-interface TakeQuestButtonProps {
-  quest: {
-    id: string;
-    name: string;
-    content: Pick<QuestContentType, "isolated">;
-  };
-  /** Named items consumed on entry; empty when the quest is free to enter. */
-  entryCost: readonly { quantity: number; name: string }[];
-  disabled?: boolean;
-  onStart: () => void;
-}
-
 /** The carried count of each item a quest consumes on entry. */
 export const QuestEntryStock: React.FC<{
   stock: readonly { itemId: string; name: string; owned: number; quantity: number }[];
@@ -66,3 +54,15 @@ export const TakeQuestButton: React.FC<TakeQuestButtonProps> = ({
     </Confirm>
   );
 };
+
+interface TakeQuestButtonProps {
+  quest: {
+    id: string;
+    name: string;
+    content: Pick<QuestContentType, "isolated">;
+  };
+  /** Named items consumed on entry; empty when the quest is free to enter. */
+  entryCost: readonly { quantity: number; name: string }[];
+  disabled?: boolean;
+  onStart: () => void;
+}

@@ -161,12 +161,6 @@ export const useDmgConfigForm = ({ enabled }: { enabled: boolean }) => {
   return form;
 };
 
-interface DmgConfigFieldsProps {
-  form: ReturnType<typeof useDmgConfigForm>;
-  /** Show readable labels and descriptions instead of the raw parameter names. */
-  detailed?: boolean;
-}
-
 /** Number inputs of the damage formula parameters; render inside the form provider. */
 export const DmgConfigFields: React.FC<DmgConfigFieldsProps> = ({ form, detailed }) =>
   DMG_FIELDS.map((f) => (
@@ -197,3 +191,9 @@ export const DmgConfigFields: React.FC<DmgConfigFieldsProps> = ({ form, detailed
       )}
     />
   ));
+
+interface DmgConfigFieldsProps {
+  form: ReturnType<typeof useDmgConfigForm>;
+  /** Show readable labels and descriptions instead of the raw parameter names. */
+  detailed?: boolean;
+}

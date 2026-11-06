@@ -572,6 +572,7 @@ export const UserRoles = [
 ] as const;
 export type UserRole = (typeof UserRoles)[number];
 
+/** Minimum progression rank for skill-tree access in UI and server guards. */
 export const SKILL_TREE_REQUIRED_RANK: UserRank = "CHUNIN";
 
 // Staff Applications
@@ -1272,6 +1273,7 @@ export const STATS_PER_ENERGY = 0.085;
 export const QueueKinds = ["JUTSU", "CRAFT", "MASTERY", "ENERGY", "ELEMENT"] as const;
 export const MasteryQueueKinds = ["MASTERY", "ELEMENT"] as const;
 export type MasteryQueueKind = (typeof MasteryQueueKinds)[number];
+/** Player-facing names for the two mastery training queue categories. */
 export const MASTERY_QUEUE_KIND_LABELS: Record<MasteryQueueKind, string> = {
   MASTERY: "Mastery",
   ELEMENT: "Elemental",
@@ -1772,6 +1774,7 @@ export const ANBU_STEALTH_CHANGE_PER_LEVEL = 5;
 export const ANBU_STEALTH_UPGRADE_COST = 200;
 
 // Sensei config
+/** Minimum progression rank for becoming a sensei. */
 export const SENSEI_REQUIRED_RANK: UserRank = "JONIN";
 export const SENSEI_STUDENT_RYO_PER_MISSION = 100;
 export const SENSEI_GENIN_TRAIN_EXP_BOOST_PERC = 5; // % extra stat training experience for Genin
@@ -2638,6 +2641,7 @@ export const FARM_PVP_LOSS_TIME_REDUCTION_SECONDS = 60;
 export const FARM_PVP_WIN_TIME_REDUCTION_SECONDS = 90;
 export const FARM_GOLD_FED_TIME_REDUCTION_PERCENT = 15;
 export const FARM_MAX_CROP_SELL_QUANTITY = 50;
+/** Maximum quantity per farm-shop purchase, shared by its controls and validator. */
 export const FARM_MAX_SHOP_PURCHASE_QUANTITY = 99;
 export const FARM_CROPS_PER_EXTRACTOR = 10;
 export const FARM_SEED_EXTRACTION_SECONDS_PER_CROP = 5 * 60;

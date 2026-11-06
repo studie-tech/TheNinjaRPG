@@ -5,22 +5,6 @@ import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
 
-export type CloneSource = { id: string; name: string };
-
-interface ConfirmedCloneControlProps {
-  source: CloneSource;
-  /** Content name in the dialog, e.g. "quest". */
-  label: string;
-  isPending: boolean;
-  clone: (id: string) => Promise<{ success: boolean; message: string }>;
-  /** Refresh and navigate; the dialog has already closed. */
-  onCloned: (cloneId: string) => void;
-  /** Dialog body describing the confirmed source. */
-  body: (source: CloneSource) => React.ReactNode;
-  /** Replaces the default copy icon. */
-  renderTrigger?: (open: () => void, isPending: boolean) => React.ReactNode;
-}
-
 /**
  * Clone behind a confirmation bound to the source it was opened on. Render it keyed by
  * the source id, so a parent reused for another entry discards the old snapshot instead
@@ -92,3 +76,19 @@ export const ConfirmedCloneControl: React.FC<ConfirmedCloneControlProps> = (prop
     </>
   );
 };
+
+export type CloneSource = { id: string; name: string };
+
+interface ConfirmedCloneControlProps {
+  source: CloneSource;
+  /** Content name in the dialog, e.g. "quest". */
+  label: string;
+  isPending: boolean;
+  clone: (id: string) => Promise<{ success: boolean; message: string }>;
+  /** Refresh and navigate; the dialog has already closed. */
+  onCloned: (cloneId: string) => void;
+  /** Dialog body describing the confirmed source. */
+  body: (source: CloneSource) => React.ReactNode;
+  /** Replaces the default copy icon. */
+  renderTrigger?: (open: () => void, isPending: boolean) => React.ReactNode;
+}

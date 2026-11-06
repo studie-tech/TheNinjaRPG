@@ -196,15 +196,6 @@ export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
   );
 };
 
-interface HelperSheetProps {
-  title: string;
-  heading: React.ReactNode;
-  summary?: React.ReactNode;
-  /** Take the full row instead of sitting inline in the toolbar. */
-  isBlock?: boolean;
-  children: React.ReactNode;
-}
-
 /** Non-modal help sheet that stays open on desktop and starts closed on mobile. */
 const HelperSheet: React.FC<HelperSheetProps> = (props) => {
   const { title, heading, summary, isBlock, children } = props;
@@ -251,6 +242,7 @@ const HelperSheet: React.FC<HelperSheetProps> = (props) => {
   );
 };
 
+/** Present one labeled value in a content helper's compact summary. */
 const SummaryField: React.FC<{ label: string; value: React.ReactNode }> = (props) => (
   <p className="text-gray-600 text-sm capitalize">
     {props.label}: <span className="font-medium">{props.value}</span>
@@ -274,13 +266,7 @@ const RelationRow: React.FC<{ name: string; href: string; className?: string }> 
   </div>
 );
 
-interface RelationSectionProps {
-  name: string;
-  data: { id: string; name: string }[];
-  route: string;
-  rowClassName?: string;
-}
-
+/** List related content with a count and direct links to its editors. */
 const RelationSection: React.FC<RelationSectionProps> = (props) => {
   const { name, data, route, rowClassName } = props;
   return (
@@ -1299,3 +1285,19 @@ const QUEST_TIPS: Partial<
   starter: renderStarterTips,
   raid: renderRaidTips,
 };
+
+interface HelperSheetProps {
+  title: string;
+  heading: React.ReactNode;
+  summary?: React.ReactNode;
+  /** Take the full row instead of sitting inline in the toolbar. */
+  isBlock?: boolean;
+  children: React.ReactNode;
+}
+
+interface RelationSectionProps {
+  name: string;
+  data: { id: string; name: string }[];
+  route: string;
+  rowClassName?: string;
+}

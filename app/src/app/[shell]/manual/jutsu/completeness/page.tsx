@@ -23,6 +23,7 @@ import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
 
+/** Inspect jutsu completeness and diversity with selectable content details. */
 export default function ManualJutsuCompleteness() {
   const details = useContentDetails();
 

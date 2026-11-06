@@ -68,8 +68,6 @@ export const layoutVariantClasses = {
   },
 };
 
-type Season = ReturnType<typeof getCurrentSeason>;
-
 const SEASON_WALLPAPERS: Record<Season, string> = {
   winter: IMG_WALLPAPER_WINTER,
   spring: IMG_WALLPAPER_SPRING,
@@ -78,6 +76,7 @@ const SEASON_WALLPAPERS: Record<Season, string> = {
   halloween: IMG_WALLPAPER_FALL,
 };
 
+/** Resolve seasonal frame artwork, allowing a selected wallpaper to override the season. */
 export const getImageSet = (
   wallpaperOverwrite?: string | null,
   season: Season = getCurrentSeason(),
@@ -89,3 +88,5 @@ export const getImageSet = (
     wallpaper: wallpaperOverwrite || SEASON_WALLPAPERS[season],
   };
 };
+
+type Season = ReturnType<typeof getCurrentSeason>;

@@ -77,6 +77,7 @@ const GLOBE_EDGE_BY_NAME: Record<SectorMapEdge, EdgeIndex> = {
   west: EDGE_WEST,
 };
 
+/** Translate a named map border through the globe's edge-to-renderer orientation. */
 const sectorMapEdgeIndex = (edge: SectorMapEdge) =>
   sectorMapEdgeForGlobeEdge(GLOBE_EDGE_BY_NAME[edge]);
 

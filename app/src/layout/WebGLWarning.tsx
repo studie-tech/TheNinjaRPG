@@ -3,10 +3,6 @@ import type React from "react";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 
-interface WebGLWarningProps {
-  onProceed: () => void;
-}
-
 /**
  * Component that displays a warning when WebGL is unavailable
  * Allows user to proceed anyway or refresh the page
@@ -84,3 +80,7 @@ export const WebGLWarningBanner: React.FC = () => {
 };
 
 export default WebGLWarning;
+
+interface WebGLWarningProps {
+  onProceed: () => void;
+}

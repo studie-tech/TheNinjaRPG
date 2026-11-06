@@ -398,6 +398,7 @@ const StreakCard: React.FC<{
   </Card>
 );
 
+/** Explain streak-day colors, including catch-up only when that option is available. */
 const StreakLegend: React.FC<{ showCatchUp: boolean }> = ({ showCatchUp }) => (
   <div className="flex flex-wrap gap-4 text-muted-foreground text-xs">
     <div className="flex items-center gap-1">

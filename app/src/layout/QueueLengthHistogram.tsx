@@ -41,6 +41,7 @@ export const QueueLengthHistogram: React.FC = () => {
   );
 };
 
+/** Adapt queue wait counts into the shared histogram's ranked-tier series. */
 const toPoint = (row: RouterOutputs["data"]["getQueueLengthStatistics"][number]) => ({
   group: row.rankedRank,
   x: row.ceiledMinutes,

@@ -246,9 +246,6 @@ export const useContentEditContext = (): ContentEditContext => {
   return { canEdit: Boolean(userData && canChangeContent(userData.role)) };
 };
 
-/** Read by `visibleIf`/`filterOptions` of fields reserved for content editors. */
-export type ContentEditContext = { canEdit: boolean };
-
 // ---------- Derived Types ----------
 
 // Compute the value type for a given field variant
@@ -963,3 +960,6 @@ export const ContentFiltering = <
     </Popover>
   );
 };
+
+/** Read by `visibleIf`/`filterOptions` of fields reserved for content editors. */
+export type ContentEditContext = { canEdit: boolean };

@@ -84,6 +84,7 @@ const bountyExpire = async () => {
   return expiredBounties;
 };
 
+/** Count the last day's active players without releasing the hourly job's claim. */
 const dailyActivePlayers = async () => {
   // Count users active in the last 24 hours (updatedAt within last 24 hours)
   const result = await countUsersActiveInLastDay(drizzleDB); // 24 hours = 3600 * 24 seconds

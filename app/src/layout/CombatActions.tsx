@@ -486,11 +486,6 @@ const actionHoverSummary = (item: ActionItemProps, actionCost: number | undefine
     .join(" · ");
 };
 
-type ActionCostSettings = Pick<
-  ActionSelectorSettingsProps,
-  "combatMode" | "battle" | "userId"
->;
-
 /** An action's AP cost: its effective cost in combat, otherwise its listed cost. */
 const getEffectiveActionCost = (
   item: ActionItemProps,
@@ -515,3 +510,8 @@ const lacksActionPoints = (
     settings.userActionPoints < cost
   );
 };
+
+type ActionCostSettings = Pick<
+  ActionSelectorSettingsProps,
+  "combatMode" | "battle" | "userId"
+>;

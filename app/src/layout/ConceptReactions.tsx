@@ -2,29 +2,11 @@ import { Loader2 } from "lucide-react";
 import type React from "react";
 import { cn } from "@/libs/shadui";
 
-export type ConceptEmotion = "like" | "love" | "laugh";
-
 const REACTIONS = [
   { type: "like", emoji: "❤️", count: "n_likes", name: "heart" },
   { type: "love", emoji: "👍", count: "n_loves", name: "thumbs-up" },
   { type: "laugh", emoji: "🤣", count: "n_laugh", name: "laugh" },
 ] as const;
-
-interface ConceptReactionsProps {
-  image: {
-    likes?: { userId: string; type: string }[] | null;
-    n_likes: number;
-    n_loves: number;
-    n_laugh: number;
-  };
-  userId: string | undefined;
-  pendingEmotion: ConceptEmotion | null | undefined;
-  disabled: boolean;
-  /** Layout classes of every button; the toggled state and icon are shared. */
-  buttonClassName: string;
-  firstButtonClassName?: string;
-  onToggle: (type: ConceptEmotion) => void;
-}
 
 /** Heart, thumbs-up and laugh toggles of a concept art image. */
 export const ConceptReactions: React.FC<ConceptReactionsProps> = (props) => {
@@ -64,3 +46,21 @@ export const ConceptReactions: React.FC<ConceptReactionsProps> = (props) => {
     );
   });
 };
+
+export type ConceptEmotion = "like" | "love" | "laugh";
+
+interface ConceptReactionsProps {
+  image: {
+    likes?: { userId: string; type: string }[] | null;
+    n_likes: number;
+    n_loves: number;
+    n_laugh: number;
+  };
+  userId: string | undefined;
+  pendingEmotion: ConceptEmotion | null | undefined;
+  disabled: boolean;
+  /** Layout classes of every button; the toggled state and icon are shared. */
+  buttonClassName: string;
+  firstButtonClassName?: string;
+  onToggle: (type: ConceptEmotion) => void;
+}

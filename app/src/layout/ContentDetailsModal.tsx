@@ -9,14 +9,6 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { capitalizeFirstLetter } from "@/utils/string";
 
-type ModalProps = Pick<ContentDetails, "id" | "isOpen" | "setIsOpen">;
-
-interface ContentDetailsModalProps extends ModalProps {
-  type: "jutsu" | "item" | "bloodline" | "skillTree";
-  /** Offer the edit shortcut on skill tree details. */
-  canEdit?: boolean;
-}
-
 /** Details dialog of one content row, loaded once `id` is selected. */
 export const ContentDetailsModal: React.FC<ContentDetailsModalProps> = (props) => {
   const { type, canEdit, ...modalProps } = props;
@@ -32,6 +24,7 @@ export const ContentDetailsModal: React.FC<ContentDetailsModalProps> = (props) =
   }
 };
 
+/** Bind the jutsu query and statistics view without dynamically selecting a query hook. */
 const JutsuDetails: React.FC<ModalProps> = (props) => {
   const { id } = props;
   const query = api.jutsu.get.useQuery({ id }, { enabled: !!id });
@@ -46,6 +39,7 @@ const JutsuDetails: React.FC<ModalProps> = (props) => {
   );
 };
 
+/** Load the selected item with its item-specific statistics view. */
 const ItemDetails: React.FC<ModalProps> = (props) => {
   const { id } = props;
   const query = api.item.get.useQuery({ id }, { enabled: !!id });
@@ -60,6 +54,7 @@ const ItemDetails: React.FC<ModalProps> = (props) => {
   );
 };
 
+/** Load the selected bloodline with its bloodline-specific statistics view. */
 const BloodlineDetails: React.FC<ModalProps> = (props) => {
   const { id } = props;
   const query = api.bloodline.get.useQuery({ id }, { enabled: !!id });
@@ -74,6 +69,7 @@ const BloodlineDetails: React.FC<ModalProps> = (props) => {
   );
 };
 
+/** Load the selected skill and expose its editor shortcut only when permitted. */
 const SkillTreeDetails: React.FC<ModalProps & { canEdit?: boolean }> = (props) => {
   const { id, canEdit, ...modalProps } = props;
   const query = api.skillTree.get.useQuery({ id }, { enabled: !!id });
@@ -90,6 +86,7 @@ const SkillTreeDetails: React.FC<ModalProps & { canEdit?: boolean }> = (props) =
   );
 };
 
+/** Keep loaded details visible while providing retry and settled not-found states. */
 const DetailsDialog = <T,>(props: DetailsDialogProps<T>) => {
   const { title, label, query, isOpen, setIsOpen, render } = props;
   const { data, isPending, isError, isFetching, refetch } = query;
@@ -117,6 +114,14 @@ const DetailsDialog = <T,>(props: DetailsDialogProps<T>) => {
     </Modal>
   );
 };
+
+type ModalProps = Pick<ContentDetails, "id" | "isOpen" | "setIsOpen">;
+
+interface ContentDetailsModalProps extends ModalProps {
+  type: "jutsu" | "item" | "bloodline" | "skillTree";
+  /** Offer the edit shortcut on skill tree details. */
+  canEdit?: boolean;
+}
 
 interface DetailsDialogProps<T> extends Pick<ModalProps, "isOpen" | "setIsOpen"> {
   title: string;

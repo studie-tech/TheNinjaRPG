@@ -2982,15 +2982,6 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
   );
 };
 
-interface RewardCatalogs {
-  items: FormDbValue[] | undefined;
-  jutsus: FormDbValue[] | undefined;
-  bloodlines: FormDbValue[] | undefined;
-  sageModes: FormDbValue[] | undefined;
-  titles: FormDbValue[] | undefined;
-  badges: FormDbValue[] | undefined;
-}
-
 /**
  * Entry of a catalog-backed reward field, or undefined for any other field and until
  * its catalog has loaded, so the caller falls through to its schema-based handling.
@@ -3796,3 +3787,12 @@ const ASSET_PICKER_FIELDS: readonly string[] = [
   "appearSfx",
   "disappearSfx",
 ];
+
+interface RewardCatalogs {
+  items: FormDbValue[] | undefined;
+  jutsus: FormDbValue[] | undefined;
+  bloodlines: FormDbValue[] | undefined;
+  sageModes: FormDbValue[] | undefined;
+  titles: FormDbValue[] | undefined;
+  badges: FormDbValue[] | undefined;
+}

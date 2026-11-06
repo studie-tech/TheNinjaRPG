@@ -1,18 +1,6 @@
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 
-interface EditorQueryFeedbackProps {
-  /** Lower-case content name used in the message, e.g. "jutsu". */
-  label: string;
-  subtitle: string;
-  backHref: string;
-  /** The editor is still rendered below this box from previously loaded data. */
-  hasCachedData?: boolean;
-  isError: boolean;
-  isFetching: boolean;
-  onRetry: () => unknown;
-}
-
 /** Settled failure of a staff editor's record query: not found, or failed with a retry. */
 export const EditorQueryFeedback: React.FC<EditorQueryFeedbackProps> = (props) => {
   const { label, subtitle, backHref, hasCachedData, isError, isFetching, onRetry } =
@@ -34,3 +22,15 @@ export const EditorQueryFeedback: React.FC<EditorQueryFeedbackProps> = (props) =
     </ContentBox>
   );
 };
+
+interface EditorQueryFeedbackProps {
+  /** Lower-case content name used in the message, e.g. "jutsu". */
+  label: string;
+  subtitle: string;
+  backHref: string;
+  /** The editor is still rendered below this box from previously loaded data. */
+  hasCachedData?: boolean;
+  isError: boolean;
+  isFetching: boolean;
+  onRetry: () => unknown;
+}

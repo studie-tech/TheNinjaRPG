@@ -13,22 +13,6 @@ import { LevelStats, UsageStats } from "@/layout/UsageStatistics";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
-interface ContentStatisticsProps {
-  type: "jutsu" | "item" | "bloodline" | "ai";
-  id: string;
-  /** Content name in the title, e.g. "Jutsu". */
-  label: string;
-  /** Heading of the intro shown to signed-out visitors. */
-  seoTitle: string;
-  seoText: (name: string) => React.ReactNode;
-  /** Subtitle of the first box. */
-  subtitle: (totals: { total: number; totalUsers: number }) => string;
-  /** Moves usage into its own box below this level chart. */
-  levelStats?: { title: string; xaxis: string };
-  /** Let content staff clear this entry's battle data. */
-  allowClearData?: boolean;
-}
-
 /** Public usage statistics of one content entry; only the clear action needs staff. */
 export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
   const { type, id, label, seoTitle, seoText, subtitle, levelStats } = props;
@@ -113,3 +97,19 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
     </>
   );
 };
+
+interface ContentStatisticsProps {
+  type: "jutsu" | "item" | "bloodline" | "ai";
+  id: string;
+  /** Content name in the title, e.g. "Jutsu". */
+  label: string;
+  /** Heading of the intro shown to signed-out visitors. */
+  seoTitle: string;
+  seoText: (name: string) => React.ReactNode;
+  /** Subtitle of the first box. */
+  subtitle: (totals: { total: number; totalUsers: number }) => string;
+  /** Moves usage into its own box below this level chart. */
+  levelStats?: { title: string; xaxis: string };
+  /** Let content staff clear this entry's battle data. */
+  allowClearData?: boolean;
+}

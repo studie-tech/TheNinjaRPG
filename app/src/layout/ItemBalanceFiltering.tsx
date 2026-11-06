@@ -13,6 +13,7 @@ interface ItemBalanceFilteringProps {
   state: ItemBalanceFilteringState;
 }
 
+/** Define the item balance filters and their initial battle sample. */
 const makeSchema = () =>
   defineFilteringSchema({
     fields: [

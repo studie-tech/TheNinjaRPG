@@ -10,6 +10,7 @@ import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { countMaintainedStructures } from "@/utils/village";
 
+/** Show village upkeep and pay outstanding maintenance with confirmed server feedback. */
 export const VillageStructureMaintenance = ({ villageId }: { villageId: string }) => {
   const utils = api.useUtils();
   const [message, setMessage] = useState("");

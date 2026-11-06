@@ -304,4 +304,5 @@ export const useConsumeItem = ({
   return { consume, isConsuming };
 };
 
+/** Subscribe item actions to account identity without observing unrelated profile fields. */
 const selectUserId = (user: NonNullable<UserWithRelations>) => user.userId;

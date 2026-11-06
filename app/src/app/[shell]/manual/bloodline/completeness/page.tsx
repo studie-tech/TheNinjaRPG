@@ -17,6 +17,7 @@ import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
 
+/** Inspect bloodline completeness and diversity with selectable content details. */
 export default function ManualBloodlineCompleteness() {
   const details = useContentDetails();
 

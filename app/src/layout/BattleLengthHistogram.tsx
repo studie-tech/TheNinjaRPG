@@ -41,6 +41,7 @@ export const BattleLengthHistogram: React.FC = () => {
   );
 };
 
+/** Adapt normalized round counts into the shared histogram's battle-type series. */
 const toPoint = (row: RouterOutputs["data"]["getBattleLengthStatistics"][number]) => ({
   group: row.battleType,
   x: row.rounds,

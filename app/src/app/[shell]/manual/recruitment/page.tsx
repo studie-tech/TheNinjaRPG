@@ -410,20 +410,6 @@ export default function ManualRecruitment() {
   );
 }
 
-type DeviceCounts = { mobile: number; desktop: number; unknown: number };
-
-interface RateCardProps {
-  title: string;
-  /** Loader text while the metrics load. */
-  explanation: string;
-  isFetching: boolean;
-  ratePct: number;
-  goalPct: number;
-  counts?: string;
-  numeratorsByDevice?: DeviceCounts | null;
-  denominatorsByDevice?: DeviceCounts | null;
-}
-
 /** One funnel rate against its goal, with its raw counts once loaded. */
 const RateCard: React.FC<RateCardProps> = (props) => {
   const { title, explanation, isFetching, ratePct, goalPct, counts } = props;
@@ -468,11 +454,27 @@ const DEVICE_ICONS = [
   ["❓", "unknown"],
 ] as const;
 
+/** Return a cohort share as a percentage, treating an empty cohort as zero. */
 const percentOf = (numerator = 0, denominator = 0) =>
   denominator > 0 ? (numerator / denominator) * 100 : 0;
 
+/** Mark met goals green, results within ten percent orange, and lower results red. */
 const getColorClass = (value: number, goal: number) => {
   if (value >= goal) return "text-green-600";
   if (value >= goal * 0.9) return "text-orange-500";
   return "text-red-600";
 };
+
+type DeviceCounts = { mobile: number; desktop: number; unknown: number };
+
+interface RateCardProps {
+  title: string;
+  /** Loader text while the metrics load. */
+  explanation: string;
+  isFetching: boolean;
+  ratePct: number;
+  goalPct: number;
+  counts?: string;
+  numeratorsByDevice?: DeviceCounts | null;
+  denominatorsByDevice?: DeviceCounts | null;
+}

@@ -12,6 +12,7 @@ interface JutsuBalanceFilteringProps {
   state: JutsuBalanceFilteringState;
 }
 
+/** Define the jutsu balance filters and their initial battle sample. */
 const makeSchema = () =>
   defineFilteringSchema({
     fields: [

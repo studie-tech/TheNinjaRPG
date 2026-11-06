@@ -310,16 +310,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
   );
 };
 
-interface QueueSideProps {
-  side: "attacker" | "defender";
-  icon: React.ReactNode;
-  label: string;
-  entries: ShrineBattleData["queue"];
-  canJoin: boolean;
-  onJoin: () => void;
-  children?: React.ReactNode;
-}
-
+/** Render one shrine battle roster with its optional join control and side-specific details. */
 const QueueSide: React.FC<QueueSideProps> = ({
   side,
   icon,
@@ -407,3 +398,13 @@ const EmptySlot: React.FC<EmptySlotProps> = ({ canJoin, onJoin }) => {
 };
 
 export default ShrineBattleLobby;
+
+interface QueueSideProps {
+  side: "attacker" | "defender";
+  icon: React.ReactNode;
+  label: string;
+  entries: ShrineBattleData["queue"];
+  canJoin: boolean;
+  onJoin: () => void;
+  children?: React.ReactNode;
+}

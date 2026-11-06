@@ -3575,6 +3575,7 @@ const BloodlinePoolManager: React.FC<BloodlinePoolManagerProps> = ({
 const TOOLBAR_BUTTON_CLASS =
   "cursor-pointer rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+/** Start a staff award draft for this profile with zero currency and an empty reason. */
 const awardDefaults = (userId: string) => ({
   reputationAmount: 0,
   moneyAmount: 0,

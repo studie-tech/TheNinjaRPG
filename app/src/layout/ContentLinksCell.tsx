@@ -4,16 +4,6 @@ import Link from "@/layout/Link";
 
 const ICON_CLASS = "h-4 w-4 text-muted-foreground hover:text-primary";
 
-interface ContentLinksCellProps {
-  /** Route segment under `/manual`. */
-  type: "jutsu" | "item" | "bloodline" | "ai" | "skillTree";
-  id: string;
-  canEdit: boolean;
-  /** Skill trees have no statistics route. */
-  hideStatistics?: boolean;
-  onInfo?: () => void;
-}
-
 /** Table cell linking a content row to its statistics, editor and details dialog. */
 export const ContentLinksCell: React.FC<ContentLinksCellProps> = (props) => {
   const { type, id, canEdit, hideStatistics, onInfo } = props;
@@ -35,3 +25,13 @@ export const ContentLinksCell: React.FC<ContentLinksCellProps> = (props) => {
     </div>
   );
 };
+
+interface ContentLinksCellProps {
+  /** Route segment under `/manual`. */
+  type: "jutsu" | "item" | "bloodline" | "ai" | "skillTree";
+  id: string;
+  canEdit: boolean;
+  /** Skill trees have no statistics route. */
+  hideStatistics?: boolean;
+  onInfo?: () => void;
+}

@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-/** Result of a mutation, shown next to the controls that sent it. */
-export type MutationFeedback = { success: boolean; message: string };
-
 /**
  * Announces a mutation result as a status or an alert. `foreground` lifts the message to
  * full foreground colour for panels where the muted alert text would sit too low. `children`
@@ -37,3 +34,6 @@ export const FeedbackAlert = ({
     </AlertDescription>
   </Alert>
 );
+
+/** Result of a mutation, shown next to the controls that sent it. */
+export type MutationFeedback = { success: boolean; message: string };

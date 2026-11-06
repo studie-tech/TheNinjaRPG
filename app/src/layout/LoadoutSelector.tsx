@@ -38,19 +38,6 @@ interface LoadoutSelectorConfig<T extends LoadoutData> {
   getSelectedId: (userData: UserData) => string | null;
 }
 
-export interface LoadoutSelectorDisplayProps {
-  size?: "small" | "large";
-  label?: string;
-  /** "sheet" lists named loadouts under a chip; "dropdown" uses a compact select */
-  variant?: "sheet" | "dropdown";
-  /** Sheet chip sized for a toolbar: icon instead of "Change", shorter name on mobile */
-  compact?: boolean;
-  /** Dropdown only: a pencil beside it renames the selected loadout */
-  renamable?: boolean;
-  onSelectOverride?: (loadoutId: string, displayName: string) => void;
-  selectedOverrideId?: string | null;
-}
-
 interface LoadoutSelectorProps<T extends LoadoutData>
   extends LoadoutSelectorDisplayProps {
   config: LoadoutSelectorConfig<T>;
@@ -315,4 +302,17 @@ function RenameInput({
       }}
     />
   );
+}
+
+export interface LoadoutSelectorDisplayProps {
+  size?: "small" | "large";
+  label?: string;
+  /** "sheet" lists named loadouts under a chip; "dropdown" uses a compact select */
+  variant?: "sheet" | "dropdown";
+  /** Sheet chip sized for a toolbar: icon instead of "Change", shorter name on mobile */
+  compact?: boolean;
+  /** Dropdown only: a pencil beside it renames the selected loadout */
+  renamable?: boolean;
+  onSelectOverride?: (loadoutId: string, displayName: string) => void;
+  selectedOverrideId?: string | null;
 }

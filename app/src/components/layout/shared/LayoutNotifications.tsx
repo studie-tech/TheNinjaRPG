@@ -277,6 +277,7 @@ export const MobileNotificationsPopover: React.FC<MobileNotificationsPopoverProp
   );
 };
 
+/** Render a status icon only for notification colors that have one. */
 const NotificationIcon: React.FC<{
   color: NavBarDropdownLink["color"];
   className: string;
@@ -285,5 +286,6 @@ const NotificationIcon: React.FC<{
   return Icon ? <Icon className={className} /> : null;
 };
 
+/** Resolve the notification badge color, with a neutral background when unspecified. */
 const notificationBg = (color: NavBarDropdownLink["color"]) =>
   color ? notificationColorMap[color] : "bg-slate-500";

@@ -669,7 +669,6 @@ const RecruitRewardsTab: React.FC = () => {
   );
 };
 
-type RecruitSummary = RouterOutputs["profile"]["getRecruitMilestones"][number];
 type RecruitEligibility = RecruitSummary["eligibility"];
 type RecruitMilestone = RecruitSummary["milestones"][number];
 
@@ -850,3 +849,5 @@ const ELIGIBILITY_EXPLANATION: Record<RecruitEligibility, string> = {
   UNVERIFIED:
     "Eligibility could not be verified for this recruit. Still counts as your recruit, but rank milestones are not paid.",
 };
+
+type RecruitSummary = RouterOutputs["profile"]["getRecruitMilestones"][number];

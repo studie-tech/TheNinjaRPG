@@ -113,6 +113,7 @@ export interface ItemWithEffectsProps {
   folderName?: string;
 }
 
+/** Clone the confirmed quest, refresh its listing, and open the saved copy's editor. */
 const QuestCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
   const router = useRouter();
   const utils = api.useUtils();
@@ -145,6 +146,7 @@ const QuestCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
   );
 };
 
+/** Clone the confirmed AI, refresh its listing, and open the saved copy's editor. */
 const AiCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
   const router = useRouter();
   const utils = api.useUtils();
@@ -177,6 +179,7 @@ const AiCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
   );
 };
 
+/** Clone the confirmed item, refresh its listing, and open the saved copy's editor. */
 const ItemCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
   const router = useRouter();
   const utils = api.useUtils();
@@ -210,6 +213,7 @@ const ItemCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
   );
 };
 
+/** Clone the confirmed jutsu, refresh its listing, and open the saved copy's editor. */
 const JutsuCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
   const router = useRouter();
   const utils = api.useUtils();

@@ -18,6 +18,7 @@ type FarmMarketProps = {
   section?: "market" | "upgrades";
 };
 
+/** Omit absent durations and format supplied farm timings in hours and minutes. */
 const duration = (seconds?: number) => (seconds ? formatHoursMinutes(seconds) : null);
 
 /** Farm shop rows with quantity, total price and purchase in one line per item. */

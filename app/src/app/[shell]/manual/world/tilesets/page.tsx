@@ -285,22 +285,6 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   );
 };
 
-interface LibraryCardProps {
-  name: string;
-  assetKey: string;
-  dataAttributes: Record<string, string>;
-  preview: React.ReactNode;
-  /** Falsy entries are skipped, so a tag can be listed with its condition. */
-  tags: (string | false)[];
-  canEdit: boolean;
-  editHref: string;
-  isDeleting: boolean;
-  deleteTitle: string;
-  deleteText: string;
-  /** Omit for entries that cannot be deleted. */
-  onDelete?: () => void;
-}
-
 /** Gallery tile of one shared map asset or terrain with its edit and delete actions. */
 const LibraryCard: React.FC<LibraryCardProps> = (props) => {
   const { name, assetKey, dataAttributes, preview, tags, canEdit, editHref } = props;
@@ -387,3 +371,19 @@ const LibraryCard: React.FC<LibraryCardProps> = (props) => {
     </div>
   );
 };
+
+interface LibraryCardProps {
+  name: string;
+  assetKey: string;
+  dataAttributes: Record<string, string>;
+  preview: React.ReactNode;
+  /** Falsy entries are skipped, so a tag can be listed with its condition. */
+  tags: (string | false)[];
+  canEdit: boolean;
+  editHref: string;
+  isDeleting: boolean;
+  deleteTitle: string;
+  deleteText: string;
+  /** Omit for entries that cannot be deleted. */
+  onDelete?: () => void;
+}

@@ -4,30 +4,6 @@ import ContentBox from "@/layout/ContentBox";
 import { EffectFormWrapper } from "@/layout/EditContent";
 import { tagTypes, type ZodAllTags } from "@/validators/combat";
 
-type EffectFormProps = ComponentProps<typeof EffectFormWrapper>;
-
-interface EffectTagListEditorProps
-  extends Omit<
-    EffectFormProps,
-    "idx" | "tag" | "effects" | "availableTags" | "setEffects"
-  > {
-  /** Raw form value; useWatch types it as form input and it can hold undefined. */
-  effects: readonly (object | undefined)[] | undefined;
-  setEffects: (effects: ZodAllTags[]) => void;
-  /** Placeholder appended by the add icon. */
-  newTag: () => ZodAllTags;
-  /** Per-tag box title, rendered as `<tagTitle> #<n>`. */
-  tagTitle: string;
-  tagSubtitle?: string;
-  emptyTitle: string;
-  emptySubtitle?: string;
-  emptyText: ReactNode;
-  /** Dim the add and remove icons and ignore their clicks. */
-  disabled?: boolean;
-  /** Hide add, remove and the empty state, leaving only the existing tags to edit. */
-  lockStructure?: boolean;
-}
-
 /** Editable list of effect tags with add/remove icons and an empty state. */
 export const EffectTagListEditor: React.FC<EffectTagListEditorProps> = (props) => {
   const {
@@ -106,3 +82,27 @@ export const EffectTagListEditor: React.FC<EffectTagListEditorProps> = (props) =
     </>
   );
 };
+
+type EffectFormProps = ComponentProps<typeof EffectFormWrapper>;
+
+interface EffectTagListEditorProps
+  extends Omit<
+    EffectFormProps,
+    "idx" | "tag" | "effects" | "availableTags" | "setEffects"
+  > {
+  /** Raw form value; useWatch types it as form input and it can hold undefined. */
+  effects: readonly (object | undefined)[] | undefined;
+  setEffects: (effects: ZodAllTags[]) => void;
+  /** Placeholder appended by the add icon. */
+  newTag: () => ZodAllTags;
+  /** Per-tag box title, rendered as `<tagTitle> #<n>`. */
+  tagTitle: string;
+  tagSubtitle?: string;
+  emptyTitle: string;
+  emptySubtitle?: string;
+  emptyText: ReactNode;
+  /** Dim the add and remove icons and ignore their clicks. */
+  disabled?: boolean;
+  /** Hide add, remove and the empty state, leaving only the existing tags to edit. */
+  lockStructure?: boolean;
+}
