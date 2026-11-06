@@ -217,7 +217,8 @@ export const useItemActions = ({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
-      if (data.success || data.userRecovery) await updateUser(data, { revision });
+      if (data.success || data.userRecovery)
+        await updateUser(data, { revision, refetch: false });
       if (data.success) {
         await Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),

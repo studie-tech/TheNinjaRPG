@@ -176,8 +176,13 @@ export const combatProfilePatch = (
     current.status !== "BATTLE"
   )
     return;
+  // Admission increments PvE fights before settlement; socket-only tabs retain the pre-claim count.
   if (
-    baselineFields.some((field) => current[field] !== update.baseline[field]) ||
+    baselineFields.some(
+      (field) =>
+        current[field] !== update.baseline[field] &&
+        (field !== "pveFights" || current.pveFights !== update.baseline.pveFights + 1),
+    ) ||
     current.regenAt.getTime() !== new Date(update.baseline.regenAt).getTime()
   )
     return;

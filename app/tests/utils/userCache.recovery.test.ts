@@ -61,19 +61,36 @@ it("retains nested hospital payment/pool results and committed recovery on faile
   } finally { test.close(); }
 });
 
-it.each(["feature", "recovery", "revision", "identity"] as const)("reconciles genuinely unknown %s state instead of publishing an unsafe partial patch", async (reason) => {
+it.each(["feature", "revision", "identity"] as const)("preserves unknown %s state without an extra read or unsafe partial patch", async (reason) => {
   const test = setup();
   try {
     const revision = prepareUserUpdate(test.client, key);
     if (reason === "revision") test.client.setQueryData(key, { ...test.initial, notifications: [] });
+    const before = test.value();
     await updateUserCache(test.client, key, {
       success: true,
       userPatch: reason === "feature" ? undefined : { status: "BATTLE", battleId: "battle" },
       userDelta: reason === "feature" ? undefined : {},
-      userRecovery: reason === "recovery" ? { ...recovery, requiresUserRefresh: true }
-        : reason === "identity" ? { ...recovery, userId: "another-user" } : recovery,
+      userRecovery: reason === "identity" ? { ...recovery, userId: "another-user" } : recovery,
     }, { revision });
-    expect(test.reads()).toBe(1);
-    expect(test.value()).toEqual(test.canonical);
+    expect(test.reads()).toBe(0);
+    expect(test.value()).toBe(before);
+    expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+  } finally { test.close(); }
+});
+
+
+it("applies known recovery and final action fields while leaving unmodelled balances intact", async () => {
+  const test = setup();
+  try {
+    const applied = await updateUserCache(test.client, key, {
+      success: true, userPatch: { status: "BATTLE", battleId: "battle" }, userDelta: {},
+      userRecovery: { ...recovery, requiresUserRefresh: true },
+    }, { revision: prepareUserUpdate(test.client, key) });
+    expect(applied).toBe(false);
+    expect(test.reads()).toBe(0);
+    expect(test.value()?.userData).toMatchObject({ status: "BATTLE", battleId: "battle",
+      curHealth: 100, curChakra: 90, curStamina: 80, curEnergy: 70, money: 100, pveFights: 2 });
+    expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
   } finally { test.close(); }
 });

@@ -69,18 +69,18 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
       onSuccess: async (result, _variables, revision) => {
         if (result.success && result.battleId) {
           showActionReadinessToast(result);
-          await updateUser(result, { revision });
+          await updateUser(result, { revision, refetch: false });
           pushToCombat(router, result.battleId);
           sendGTMEvent({ event: "enter_arena" });
           void completeTutorialAction("arenaStart");
         } else {
-          if (result.userRecovery) await updateUser(result, { revision });
+          if (result.userRecovery)
+            await updateUser(result, { revision, refetch: false });
           attackInFlightRef.current = false;
           showMutationToast(result);
         }
       },
       onError: (error) => {
-        void updateUser(undefined, { revision: undefined });
         attackInFlightRef.current = false;
         showMutationToast({ success: false, message: error.message });
       },

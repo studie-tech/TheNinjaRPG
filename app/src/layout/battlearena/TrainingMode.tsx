@@ -55,17 +55,16 @@ export function TrainingMode({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         if (data.success && data.battleId) {
-          await updateUser(data, { revision });
+          await updateUser(data, { revision, refetch: false });
           pushToCombat(router, data.battleId);
           showMutationToast({ ...data, message: "Entering the Training" });
         } else {
-          if (data.userRecovery) await updateUser(data, { revision });
+          if (data.userRecovery) await updateUser(data, { revision, refetch: false });
           attackInFlightRef.current = false;
           showMutationToast(data);
         }
       },
       onError: (error) => {
-        void updateUser(undefined, { revision: undefined });
         attackInFlightRef.current = false;
         showMutationToast({ success: false, message: error.message });
       },

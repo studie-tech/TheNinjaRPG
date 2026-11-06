@@ -293,7 +293,7 @@ export default function OccupationCrafting() {
       });
       showMutationToast(data);
       if (data.success || ("userRecovery" in data && data.userRecovery))
-        await updateUser(data, { revision });
+        await updateUser(data, { revision, refetch: false });
       if (!data.success) return;
 
       // Commit local truth before closing or refreshing. A failed/stale refetch cannot expose a

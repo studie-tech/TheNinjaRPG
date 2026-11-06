@@ -598,13 +598,14 @@ function Travel() {
       onError: async (_error, _variables, previous) => {
         setAutoDestination(null);
         if (previous) {
-          await updateUser({
-            status: previous.status,
-            travelFinishAt: previous.travelFinishAt,
-          });
+          await updateUser(
+            {
+              status: previous.status,
+              travelFinishAt: previous.travelFinishAt,
+            },
+            { revision: previous.revision, refetch: false },
+          );
         }
-        // The journey may have committed before its response was lost.
-        await utils.profile.getUser.invalidate();
       },
       onSuccess: async (result, _variables, previous) => {
         showMutationToast(result);
@@ -619,6 +620,7 @@ function Travel() {
 
           await updateUser(result.data, {
             revision: previous?.revision,
+            refetch: false,
             userRecovery: result.userRecovery,
           });
           if (globe) {
@@ -629,7 +631,7 @@ function Travel() {
           }
         } else if (result.userRecovery) {
           setAutoDestination(null);
-          await updateUser(result, { revision: previous?.revision });
+          await updateUser(result, { revision: previous?.revision, refetch: false });
         } else if (previous) {
           setAutoDestination(null);
           await updateUser(
@@ -637,7 +639,7 @@ function Travel() {
               status: previous.status,
               travelFinishAt: previous.travelFinishAt,
             },
-            { revision: previous.revision },
+            { revision: previous.revision, refetch: false },
           );
         }
       },
@@ -760,9 +762,9 @@ function Travel() {
           showActionReadinessToast(data);
           setShowRevealedPlayersModal(false);
           setRevealedPlayers([]);
-          await updateUser(data, { revision });
+          await updateUser(data, { revision, refetch: false });
         } else {
-          if (data.userRecovery) await updateUser(data, { revision });
+          if (data.userRecovery) await updateUser(data, { revision, refetch: false });
           showMutationToast({
             success: false,
             message: data.message,
@@ -770,7 +772,6 @@ function Travel() {
         }
       },
       onError: (error) => {
-        void updateUser(undefined, { revision: undefined });
         showMutationToast({ success: false, message: error.message });
       },
     });
@@ -1674,7 +1675,7 @@ const StealthControls: React.FC<{
               stealthActive: true,
               stealthActivatedAt: data.data.stealthActivatedAt,
             },
-            { revision, userRecovery: data.userRecovery },
+            { revision, refetch: false, userRecovery: data.userRecovery },
           );
         }
       },
@@ -1713,7 +1714,7 @@ const StealthControls: React.FC<{
           void Promise.allSettled([
             updateUser(
               { lastSensoryAt: data.data.lastSensoryAt },
-              { revision, userRecovery: data.userRecovery },
+              { revision, refetch: false, userRecovery: data.userRecovery },
             ),
             utils.travel.getSectorData.invalidate(),
           ]);

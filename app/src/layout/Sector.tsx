@@ -1506,6 +1506,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       const walk = context?.walk ?? Promise.resolve();
       const mutation = {
         revision: context?.userRevision,
+        refetch: false,
         userRecovery: res.userRecovery,
       };
       const data = res.data;
@@ -1618,11 +1619,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
       if (result.success || result.battleId || result.userRecovery)
-        await updateUser(result, { revision });
+        await updateUser(result, { revision, refetch: false });
       showMutationToast(result);
     },
     onError: (error) => {
-      void updateUser(undefined, { revision: undefined });
       showMutationToast({ success: false, message: error.message });
     },
   });
@@ -1633,9 +1633,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       document.body.style.cursor = "default";
       if (data.success) {
         showActionReadinessToast(data);
-        await updateUser(data, { revision });
+        await updateUser(data, { revision, refetch: false });
       } else {
-        if (data.userRecovery) await updateUser(data, { revision });
+        if (data.userRecovery) await updateUser(data, { revision, refetch: false });
         showMutationToast({
           success: false,
           message: data.message,
@@ -1643,7 +1643,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }
     },
     onError: () => {
-      void updateUser(undefined, { revision: undefined });
       document.body.style.cursor = "default";
     },
   });

@@ -1,7 +1,12 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { isPlainObject } from "@/utils/typeutils";
 
-export type QueryUpdateOptions = { revision: number | undefined };
+export type QueryUpdateOptions = {
+  /** Omit for local patches; an explicitly unknown mutation revision cannot be projected. */
+  revision?: number;
+  /** Preserve existing data and pending reads when a projection cannot be applied. */
+  refetch?: boolean;
+};
 export type QueryCacheUpdate<T> = (current: T) => T | undefined;
 
 /** Capture only settled data; pending reads may reconcile another mutation. */
@@ -24,7 +29,7 @@ export const prepareQueryUpdate = <T>(
 
 /**
  * Apply a local change or reconcile a confirmed mutation against its captured revision.
- * Returning undefined from the updater requests an authoritative refresh.
+ * Returning undefined requests a refresh unless refetch is disabled; then existing data stays intact.
  * Resolve true only when cached data was updated without requesting recovery.
  */
 export const updateQueryCache = async <T>(
@@ -34,7 +39,8 @@ export const updateQueryCache = async <T>(
   mutation?: QueryUpdateOptions,
 ) => {
   const filter = { queryKey: key, exact: true };
-  if (!mutation) {
+  const canRefetch = mutation?.refetch !== false;
+  if (!mutation || !("revision" in mutation)) {
     if (!update) return false;
     const before = client.getQueryState(key);
     let applied = false;
@@ -42,7 +48,10 @@ export const updateQueryCache = async <T>(
       before?.status === "error" ||
       !!before?.isInvalidated ||
       before?.fetchStatus !== "idle";
-    if (before?.fetchStatus !== "idle") await client.cancelQueries(filter);
+    if (before?.fetchStatus !== "idle") {
+      if (!canRefetch) return false;
+      await client.cancelQueries(filter);
+    }
     client.setQueryData<T>(key, (old) => {
       const state = client.getQueryState(key);
       needsRefresh ||=
@@ -56,16 +65,18 @@ export const updateQueryCache = async <T>(
       return next;
     });
     // A local patch must preserve reconciliation of unrelated fields.
-    if (needsRefresh) await client.invalidateQueries(filter);
+    if (needsRefresh && canRefetch) await client.invalidateQueries(filter);
     return applied && !needsRefresh;
   }
   if (!update || mutation.revision === undefined) {
+    if (!canRefetch) return false;
     // An initial fetch may contain a snapshot taken before the mutation.
     await client.cancelQueries(filter);
     await client.invalidateQueries(filter);
     return false;
   }
   const wasFetching = client.getQueryState(key)?.fetchStatus !== "idle";
+  if (wasFetching && !canRefetch) return false;
   // An idle query can be patched in this turn; cancellation is only needed for an unfinished read.
   if (wasFetching) await client.cancelQueries(filter);
   // Another action may depend on this unfinished read for reconciliation.
@@ -90,7 +101,7 @@ export const updateQueryCache = async <T>(
     applied = next !== undefined;
     return next;
   });
-  if (!applied) await client.invalidateQueries(filter);
+  if (!applied && canRefetch) await client.invalidateQueries(filter);
   return applied;
 };
 

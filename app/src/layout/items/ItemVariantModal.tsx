@@ -60,7 +60,8 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
-      if (result.success || result.userRecovery) await updateUser(result, { revision });
+      if (result.success || result.userRecovery)
+        await updateUser(result, { revision, refetch: false });
       if (result.success) {
         setIsOpen(false);
         onClose();

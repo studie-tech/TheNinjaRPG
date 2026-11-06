@@ -52,7 +52,7 @@ export function useFarmController() {
       revision: number | undefined,
     ) => {
       if (result.success || result.userRecovery || result.userDelta !== undefined)
-        await updateUser(result, { revision });
+        await updateUser(result, { revision, refetch: false });
     },
   };
   const plantMutation = api.farming.plantSeed.useMutation(mutationOptions);

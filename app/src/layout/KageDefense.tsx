@@ -65,7 +65,8 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
     revision: number | undefined,
   ) => {
     showMutationToast(result);
-    if (result.userRecovery || result.battleId) await updateUser(result, { revision });
+    if (result.userRecovery || result.battleId)
+      await updateUser(result, { revision, refetch: false });
     setMessage(result);
     if (result.success) {
       setDraft(null);
@@ -95,7 +96,6 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
     onMutate: prepareUserUpdate,
     onSuccess,
     onError: (error) => {
-      void updateUser(undefined, { revision: undefined });
       onError(error);
     },
   });

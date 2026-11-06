@@ -45,6 +45,9 @@ export const updateUserCache = async (
     };
   } else patch = update as UserPatch | undefined;
 
+  // Recovery extends existing actions without creating new profile reads on conflicts or unknown effects.
+  if (mutation?.userRecovery) mutation = { ...mutation, refetch: false };
+
   const delta =
     mutation && "delta" in mutation
       ? mutation.delta
@@ -65,7 +68,7 @@ export const updateUserCache = async (
     !mutation?.userRecovery
   )
     return false;
-  return updateQueryCache<UserCache>(
+  const applied = await updateQueryCache<UserCache>(
     client,
     key,
     delta === undefined
@@ -73,4 +76,6 @@ export const updateUserCache = async (
       : (current) => applyUserChanges(current, patch, delta, mutation),
     mutation,
   );
+  // Known recovery fields may apply while unmodelled effects remain for ordinary refreshes.
+  return applied && !mutation?.userRecovery?.requiresUserRefresh;
 };

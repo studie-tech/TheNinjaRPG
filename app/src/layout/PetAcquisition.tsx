@@ -150,7 +150,8 @@ export function PetAcquisition() {
     onSuccess: async (result, _variables, revision) => {
       setMessage(result.success ? null : result.message);
       showMutationToast(result);
-      if (result.success || result.userRecovery) await updateUser(result, { revision });
+      if (result.success || result.userRecovery)
+        await updateUser(result, { revision, refetch: false });
       await Promise.all([
         utils.pets.getPet.invalidate(),
         utils.pets.getCollection.invalidate(),

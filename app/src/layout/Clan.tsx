@@ -426,7 +426,8 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     api.clan.challengeClan.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
-        if (data.success || data.userRecovery) void updateUser(data, { revision });
+        if (data.success || data.userRecovery)
+          void updateUser(data, { revision, refetch: false });
         showMutationToast(data);
       },
       onError: (error) => {

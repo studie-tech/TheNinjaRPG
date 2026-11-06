@@ -2577,7 +2577,7 @@ export const fetchUpdatedUser = async (
         result.requiresProgressionRefresh = true;
       }
       if (result.user)
-        result.user.requiresProgressionRefresh = result.requiresProgressionRefresh;
+        result.user.requiresProgressionRefresh ||= result.requiresProgressionRefresh;
       return { isPyramidIsolated: false, ...result };
     }
   }
@@ -3261,7 +3261,7 @@ const fetchUpdatedUserOnce = async (
         ) {
           // Live companion eligibility is evaluated by SQL; the loaded pet XP bank is stale after this grant.
           // Selecting a first companion advances the guarded owner snapshot, so a missing companion grants nothing.
-          requiresProgressionRefresh = true;
+          user.requiresProgressionRefresh = true;
         }
       } catch (error) {
         requiresProgressionRefresh = true;

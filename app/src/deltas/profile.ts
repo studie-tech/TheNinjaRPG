@@ -70,8 +70,10 @@ export type UserUpdate = UserPatch | UserResponse;
 
 /** Cache metadata bound to the profile revision captured before a mutation. */
 export type UserUpdateOptions = {
-  /** The prepareUserUpdate result; undefined forces authoritative recovery. */
-  revision: number | undefined;
+  /** Omit for local patches; pass the captured revision for confirmed mutation results. */
+  revision?: number;
+  /** Leave unknown or superseded results to existing refreshes instead of starting another read. */
+  refetch?: boolean;
   /** Apply committed waking/checkout before evaluating the action's own projection. */
   userRecovery?: UserRecovery;
   // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
@@ -100,10 +102,11 @@ export const applyUserChanges = (
 ): UserCache | undefined => {
   if (mutation?.userRecovery) {
     const recovery = mutation.userRecovery;
+    // Non-refetching actions can apply the known snapshot fields; unmodelled effects stay untouched.
     if (
       current.userData?.userId !== recovery.userId ||
       !recovery.userPatch ||
-      recovery.requiresUserRefresh
+      (recovery.requiresUserRefresh && mutation.refetch !== false)
     )
       return;
     const recovered = applyUserChanges(current, recovery.userPatch);

@@ -1195,10 +1195,10 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       onSuccess: async (result, variables, context) => {
         showMutationToast(result);
         if (!result.success && result.userRecovery)
-          await updateUser(result, { revision: context.revision });
+          await updateUser(result, { revision: context.revision, refetch: false });
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
-          await updateUser(result, { revision: context.revision });
+          await updateUser(result, { revision: context.revision, refetch: false });
           if (variables.jutsuId === TUTORIAL_JUTSU_ID) {
             void completeTutorialAction("trainJutsu");
           }
@@ -1667,7 +1667,7 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
               covertTrainingStartedAt,
               covertTrainingMinutes: variables.minutes,
             },
-            { revision, userRecovery: data.userRecovery },
+            { revision, refetch: false, userRecovery: data.userRecovery },
           );
         } else {
           if (data.userRecovery) await updateUser(data, { revision });

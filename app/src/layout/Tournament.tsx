@@ -84,7 +84,8 @@ const Tournament: React.FC<TournamentProps> = (props) => {
     api.tournament.joinMatch.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userRecovery) await updateUser(data, { revision });
+        if (data.success || data.userRecovery)
+          await updateUser(data, { revision, refetch: false });
         showMutationToast(data);
         await utils.tournament.getTournament.invalidate();
         // A match can be joined without a battle starting — the opponent no-showed and this
@@ -92,7 +93,6 @@ const Tournament: React.FC<TournamentProps> = (props) => {
         if (data.success && data.battleId) pushToCombat(router, data.battleId);
       },
       onError: (error) => {
-        void updateUser(undefined, { revision: undefined });
         showMutationToast({ success: false, message: error.message });
       },
     });

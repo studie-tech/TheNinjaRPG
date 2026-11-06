@@ -74,7 +74,7 @@ describeWithDatabase("arena readiness reads", () => {
 
   for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
     for (const queued of ["idle", "energy", "mastery", "both", "companion"] as const) {
-      it(`patches ${status} battle admission and ${queued} progression ${queued === "companion" ? "with unknown live companion reconciliation" : "without a getUser read"}`, async () => {
+      it(`patches ${status} battle admission and ${queued} progression ${queued === "companion" ? "while preserving unknown companion state" : "without a getUser read"}`, async () => {
         const database = await getTestDatabase();
         await database.update(userData).set({ status, curHealth: 1, maxHealth: 1000,
           curEnergy: 100, curChakra: 1, curStamina: 1, regeneration: 1, regenAt: new Date(0) })
@@ -105,13 +105,17 @@ describeWithDatabase("arena readiness reads", () => {
           const revision = prepareUserUpdate(cache, key);
           const result = await launch(database);
           expect(result).toMatchObject({ success: true, userRecovery: { userId } });
-          await updateUserCache(cache, key, result, { revision });
+          const applied = await updateUserCache(cache, key, result, { revision });
           const saved = (await database.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
-          expect(reads).toBe(queued === "companion" ? 1 : 0);
+          expect(reads).toBe(0);
+          expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
           const projected = cache.getQueryData<UserCache>(key)?.userData;
+          expect(applied).toBe(!(queued === "companion" && status === "HOSPITALIZED"));
           expect(projected).toMatchObject({ status: "BATTLE", battleId: saved.battleId,
             curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina,
-            curEnergy: saved.curEnergy, experience: saved.experience, petExperience: saved.petExperience, offence: saved.offence,
+            curEnergy: saved.curEnergy, experience: saved.experience,
+            petExperience: queued === "companion" && status === "HOSPITALIZED" ? initial.petExperience : saved.petExperience,
+            offence: saved.offence,
             pveFights: saved.pveFights, energyQueueHead: saved.energyQueueHead,
             masteryQueueHead: saved.masteryQueueHead, ninjutsuMastery: saved.ninjutsuMastery,
             currentlyTrainingMastery: saved.currentlyTrainingMastery,
@@ -134,7 +138,7 @@ describeWithDatabase("arena readiness reads", () => {
     expect(events.find(([channel]) => channel === aiId)?.[2]).not.toHaveProperty("originSocketId");
   });
 
-  it("retains reconciliation when outer arena hydration drops a due job and refunds its reservation", async () => {
+  it("preserves loaded cache state without a read when outer arena hydration refunds a dropped job", async () => {
     const database = await getTestDatabase();
     await database.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, userId));
     await database.insert(userQueue).values({ id: "deleted-arena-job", userId, kind: "JUTSU", position: 1,
@@ -154,8 +158,12 @@ describeWithDatabase("arena readiness reads", () => {
       expect(result.userPatch).toBeUndefined();
       expect(result.userDelta).toBeUndefined();
       await updateUserCache(cache, key, result, { revision });
-      expect(read).toHaveBeenCalledTimes(1);
-      expect(cache.getQueryData<UserCache>(key)?.userData).toMatchObject({ status: "BATTLE", money: initial.money + 30, queue: [] });
+      expect(read).not.toHaveBeenCalled();
+      expect(cache.getQueryData<UserCache>(key)?.userData).toEqual(initial);
+      expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+      expect(await database.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({
+        status: "BATTLE", money: initial.money + 30,
+      });
     } finally { stop(); cache.clear(); }
   });
 
@@ -229,6 +237,7 @@ describeWithDatabase("arena readiness reads", () => {
       expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
       expect(await client.query.trainingLog.findMany({ where: eq(trainingLog.userId, userId) }))
         .toEqual([expect.objectContaining({ userId, stat: "offence" })]);
+      if (direct) expect((await client.query.battle.findFirst())?.extraState.profileCacheSnapshots?.[userId]?.hadTrainingQueue).toBe(true);
       expect(liveActivity.pushActivityUpdate).not.toHaveBeenCalled();
     });
   }

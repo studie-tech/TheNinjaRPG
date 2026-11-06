@@ -48,16 +48,16 @@ export default function Shrine() {
       onMutate: prepareUserUpdate,
       onSuccess: async (result, _variables, revision) => {
         if (result.success && result.battleId) {
-          await updateUser(result, { revision });
+          await updateUser(result, { revision, refetch: false });
           pushToCombat(router, result.battleId);
           showMutationToast({ ...result, message: "Attacking the Shrine" });
         } else {
-          if (result.userRecovery) await updateUser(result, { revision });
+          if (result.userRecovery)
+            await updateUser(result, { revision, refetch: false });
           showMutationToast(result);
         }
       },
       onError: (error) => {
-        void updateUser(undefined, { revision: undefined });
         showMutationToast({ success: false, message: error.message });
       },
     });

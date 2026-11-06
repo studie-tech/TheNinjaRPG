@@ -5,6 +5,8 @@ import { getQueryKey } from "@trpc/react-query";
 import { useStore } from "jotai";
 import Pusher from "pusher-js";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import type { SuperJSONResult } from "superjson";
+import superjson from "superjson";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
@@ -23,11 +25,13 @@ import {
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat, usePublicPathname } from "@/utils/routing";
 import { updateUserCache } from "@/utils/userCache";
+import type { UserRecovery } from "@/validators/base";
 
 // Events sent to the user from websockets
 export type UserEvent = {
   type: string;
   originSocketId?: string;
+  userRecovery?: SuperJSONResult;
   message?: string;
   /** Toast display duration in milliseconds. */
   duration?: number;
@@ -121,29 +125,74 @@ export const usePusherHandler = (
             },
       );
       setPusher(pusher);
+      const pendingBattleSubscriptions = new Set<() => void>();
+      const applyBattleEvent = async (
+        battleId: string,
+        ownOrigin: boolean,
+        userRecovery?: UserRecovery,
+      ) => {
+        const canApply = () => {
+          const user = utils.profile.getUser.getData()?.userData;
+          return (
+            !!session &&
+            notificationSession.current === session &&
+            user?.userId === userId &&
+            (!ownOrigin || user.battleId !== battleId)
+          );
+        };
+        if (!canApply()) return;
+        // UserContext obtains its socket from this hook; patch known admission before navigation.
+        await utils.profile.getUser.cancel();
+        if (!canApply()) return;
+        await updateUserCache(
+          queryClient,
+          getQueryKey(api.profile.getUser, undefined, "query"),
+          { status: "BATTLE", battleId, updatedAt: new Date() },
+          { refetch: false, userRecovery },
+        );
+        pushToCombat(router, battleId);
+        void utils.combat.getBattle.invalidate();
+      };
       // Listening on userId channel
       const channel = pusher.subscribe(userId);
       channel.bind("event", async (data: UserEvent) => {
         if (data.type === "battle") {
-          // The originating mutation applies admission, recovery and costs together; a socket patch would invalidate its revision.
-          if (
-            data.originSocketId &&
-            data.originSocketId === pusher.connection.socket_id
-          )
-            return;
-          if (data?.battleId) {
-            // UserContext's updateUser is not available here: this hook runs inside its
-            // provider. Cancelling first applies the patch before navigating, without
-            // waiting on the refetch updateUserCache runs for an unfinished read.
-            await utils.profile.getUser.cancel();
-            void updateUserCache(
-              queryClient,
-              getQueryKey(api.profile.getUser, undefined, "query"),
-              { status: "BATTLE", battleId: data.battleId, updatedAt: new Date() },
-            );
-            pushToCombat(router, data.battleId);
-            void utils.combat.getBattle.invalidate();
+          if (!data.battleId) return;
+          const battleId = data.battleId;
+          const userRecovery = data.userRecovery
+            ? superjson.deserialize<UserRecovery>(data.userRecovery)
+            : undefined;
+          const ownOrigin =
+            !!data.originSocketId &&
+            data.originSocketId === pusher.connection.socket_id;
+          if (ownOrigin) {
+            // Preserve the admission mutation's revision until its recovery and costs settle.
+            const mutationCache = queryClient.getMutationCache();
+            const pending = mutationCache
+              .findAll({ status: "pending" })
+              .filter((mutation) => {
+                const variables = mutation.state.variables;
+                return (
+                  !!variables &&
+                  typeof variables === "object" &&
+                  "originSocketId" in variables &&
+                  variables.originSocketId === data.originSocketId
+                );
+              });
+            if (pending.length) {
+              const unsubscribe = mutationCache.subscribe(() => {
+                if (pending.some((mutation) => mutation.state.status === "pending"))
+                  return;
+                unsubscribe();
+                pendingBattleSubscriptions.delete(unsubscribe);
+                // The socket confirms admission even when the response with costs is lost.
+                void applyBattleEvent(battleId, true, userRecovery);
+              });
+              pendingBattleSubscriptions.add(unsubscribe);
+              return;
+            }
           }
+          await applyBattleEvent(battleId, ownOrigin, userRecovery);
         } else if (data.type === "battleEnded") {
           // The deleting socket recovers through its mutation response or transport-error callback.
           if (
@@ -336,6 +385,7 @@ export const usePusherHandler = (
       }
       // Cleanup
       return () => {
+        for (const unsubscribe of pendingBattleSubscriptions) unsubscribe();
         pusher.unsubscribe(userId);
         if (clanId) pusher.unsubscribe(clanId);
         if (villageId) pusher.unsubscribe(`village-${villageId}`);

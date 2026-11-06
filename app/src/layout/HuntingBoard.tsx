@@ -60,7 +60,10 @@ export function HuntingBoard({
   ) => {
     showActionReadinessToast(result);
     if (result.success || result.userPatch || result.actionNotice)
-      await updateUser(result, { revision });
+      await updateUser(result, {
+        revision,
+        refetch: !!(result.success || result.userPatch),
+      });
     setMessage(result.message);
     if (result.success)
       await Promise.all([board.refetch(), utils.hunting.getSession.invalidate()]);
@@ -93,7 +96,6 @@ export function HuntingBoard({
       } else await board.refetch();
     },
     onError: (e) => {
-      void updateUser(undefined, { revision: undefined });
       setMessage(e.message);
     },
   });

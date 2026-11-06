@@ -9,7 +9,7 @@ export const ActionSettings = () => {
   const { mutate, isPending } = api.profile.updatePreferences.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _input, revision) => {
-      if (result.success) await updateUser(result, { revision });
+      if (result.success) await updateUser(result, { revision, refetch: false });
       showMutationToast(result);
     },
   });

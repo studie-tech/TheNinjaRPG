@@ -184,6 +184,7 @@ import {
 } from "@/libs/quest";
 import { projectPartyTracker, questPartyHelperAttemptId } from "@/libs/questParty";
 import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
+import { hasTrainingInProgress } from "@/libs/queue";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
@@ -2179,10 +2180,10 @@ export const initiateBattle = async (
       !user.isSummon,
   );
 
-  const profileCacheSnapshots = Object.fromEntries(
+  const participantsWithTraining = new Set(
     fetchedUsers
-      .filter((user) => !user.isAi && !user.isSummon)
-      .map((user) => [user.userId, captureCombatCacheSnapshot(user)]),
+      .filter((user) => !user.isAi && !user.isSummon && hasTrainingInProgress(user))
+      .map((user) => user.userId),
   );
 
   // Hunting settlement writes the battle's item quantities and durability back.
@@ -2411,6 +2412,19 @@ export const initiateBattle = async (
       Object.assign(actionActor, actionReadiness.user);
     }
   }
+
+  // Settlement starts from committed recovery before combat normalizes stats or loadouts.
+  const profileCacheSnapshots = Object.fromEntries(
+    fetchedUsers
+      .filter((user) => !user.isAi && !user.isSummon)
+      .map((user) => [
+        user.userId,
+        {
+          ...captureCombatCacheSnapshot(user),
+          hadTrainingQueue: participantsWithTraining.has(user.userId),
+        },
+      ]),
+  );
 
   // Completed training can unlock worn gear; capture yield before combat mutates its sources.
   if (info.hunting) {
@@ -3689,6 +3703,9 @@ export const initiateBattle = async (
               battleId,
               ...(user.userId === actionActorId && info.originSocketId
                 ? { originSocketId: info.originSocketId }
+                : {}),
+              ...(user.userId === actionActorId && actionReadiness?.userRecovery
+                ? { userRecovery: superjson.serialize(actionReadiness.userRecovery) }
                 : {}),
             }),
             ...(!user.isAi

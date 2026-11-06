@@ -92,7 +92,7 @@ it("retains confirmed recovery when a later plot step rejects", async () => {
   expect(test.profileReads()).toBe(0);
 });
 
-it("reconciles a stale profile revision instead of replaying recovery and XP", async () => {
+it("preserves a newer profile revision without reading or replaying recovery and XP", async () => {
   const test = harness({ success: true, message: "Watered", userRecovery: recovered,
     userPatch: { questData: [progress] }, userDelta: { farmingExperience: 1 }, farmingExperienceDelta: 1,
     updatedPlot: plot }, true);
@@ -101,16 +101,16 @@ it("reconciles a stale profile revision instead of replaying recovery and XP", a
   test.client.setQueryData(test.profileKey, { ...initial, userData: { ...initial.userData!, farmCurrency: 200 } });
   await act(async () => { test.release(); });
   await waitFor(() => expect(test.view.result.current.pendingPlotSlots.size).toBe(0));
-  expect(test.profileReads()).toBe(1);
-  expect(test.profile()).toMatchObject({ farmingExperience: 20, farmCurrency: 300 });
+  expect(test.profileReads()).toBe(0);
+  expect(test.profile()).toMatchObject({ status: "ASLEEP", farmingExperience: 0, farmCurrency: 200 });
 });
 
 
-it("reconciles explicitly unknown progress after committed recovery", async () => {
+it("preserves explicitly unknown progress without requesting the profile", async () => {
   const test = harness({ success: false, message: "Progress changed", userRecovery: recovered,
     userPatch: undefined, userDelta: undefined });
   await act(async () => { test.view.result.current.water(plot); });
   await waitFor(() => expect(test.view.result.current.pendingPlotSlots.size).toBe(0));
-  expect(test.profileReads()).toBe(1);
-  expect(test.profile()).toMatchObject({ farmingExperience: 20, farmCurrency: 300 });
+  expect(test.profileReads()).toBe(0);
+  expect(test.profile()).toMatchObject({ farmingExperience: 0, farmCurrency: 100 });
 });

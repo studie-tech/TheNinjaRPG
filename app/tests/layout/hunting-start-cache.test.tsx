@@ -126,12 +126,15 @@ it.each([false, true])("applies the hunting response without refetching the acto
   expect(routing.pushToCombat).toHaveBeenCalledTimes(1);
 });
 
-it("recovers a committed hunt when its response is lost", async () => {
-  const test = setup({ lostResponse: true });
+it.each([false, true])("recovers known hunting admission without reading the profile (event after failure: %s)", async (eventAfterResponse) => {
+  const test = setup({ lostResponse: true, eventAfterResponse });
   await test.click();
   await test.findByText("Response lost after commit");
-  await waitFor(() => expect(test.reads[0]).toHaveBeenCalledTimes(1));
-  expect(test.profile(0).userData).toMatchObject({ status: "BATTLE", battleId: "hunt", pveFights: 3 });
+  if (eventAfterResponse) await act(() => test.sendPacket());
+  await waitFor(() => expect(test.profile(0).userData).toMatchObject({ status: "BATTLE", battleId: "hunt", pveFights: 2 }));
+  expect(test.reads[0]).not.toHaveBeenCalled();
+  expect(test.reads[1]).not.toHaveBeenCalled();
+  expect(routing.pushToCombat).toHaveBeenCalledWith(expect.anything(), "hunt");
   await waitFor(() => expect((test.getByRole("button", { name: "Fight creature" }) as HTMLButtonElement).disabled).toBe(false));
 });
 

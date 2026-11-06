@@ -714,7 +714,7 @@ describe("war field objectives", () => {
     });
     expect(updateUser).toHaveBeenCalledWith(
       { success: true, message: "Battle ready", battleId: "battle-1" },
-      { revision: 7 },
+      { revision: 7, refetch: false },
     );    expect(routing.pushToCombat).not.toHaveBeenCalled();
     await act(async () => {
       publishUser();

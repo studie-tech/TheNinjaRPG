@@ -29,6 +29,50 @@ const setup = () => {
 };
 
 describe("query cache reconciliation", () => {
+  it.each(["missing revision", "stale revision", "unknown update", "rejected projection"] as const)(
+    "preserves %s without starting a read when refetch is disabled", async (reason) => {
+      const test = setup();
+      const revision = prepareQueryUpdate(test.client, key);
+      if (reason === "stale revision") test.client.setQueryData<Rows>(key, [{ id: "row", count: 12 }]);
+      const before = test.client.getQueryState(key);
+      expect(await updateQueryCache<Rows>(test.client, key,
+        reason === "unknown update" ? undefined : reason === "rejected projection" ? () => undefined
+          : (rows) => rows.map((row) => ({ ...row, count: row.count - 1 })),
+        { revision: reason === "missing revision" ? undefined : revision, refetch: false },
+      )).toBe(false);
+      expect(test.client.getQueryState(key)).toBe(before);
+      expect(test.reads()).toBe(0);
+    },
+  );
+
+  it("leaves an existing read running instead of cancelling or replacing it", async () => {
+    const test = setup();
+    const revision = prepareQueryUpdate(test.client, key);
+    let finish!: (rows: Rows) => void;
+    let signal!: AbortSignal;
+    const pending = test.client.fetchQuery({ queryKey: key, staleTime: 0,
+      queryFn: (context) => { signal = context.signal; return new Promise<Rows>((resolve) => { finish = resolve; }); },
+    });
+    const before = test.client.getQueryState(key);
+    expect(await updateQueryCache<Rows>(test.client, key, () => [{ id: "row", count: 9 }],
+      { revision, refetch: false })).toBe(false);
+    expect(test.client.getQueryState(key)).toBe(before);
+    expect(signal.aborted).toBe(false);
+    finish([{ id: "row", count: 8 }]);
+    await pending;
+    expect(test.value()).toEqual([{ id: "row", count: 8 }]);
+    expect(test.reads()).toBe(0);
+  });
+
+  it("applies a known local patch without opting into revision-bound reconciliation", async () => {
+    const test = setup();
+    expect(await updateQueryCache<Rows>(test.client, key, () => [{ id: "row", count: 9 }],
+      { refetch: false })).toBe(true);
+    expect(test.value()).toEqual([{ id: "row", count: 9 }]);
+    expect(test.reads()).toBe(0);
+    expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+  });
+
   it("updates array responses without fetching and leaves other inputs untouched", async () => {
     const test = setup();
     const otherKey = [["feature", "getRows"], { input: { category: "two" }, type: "query" }];

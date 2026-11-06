@@ -28,7 +28,7 @@ describeWithDatabase("hydrated recovery cache reconciliation", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["cooking", "queue", "elements", "elementInit", "daily"] as const)("reconciles %s settled before waking for stealth", async (scenario) => {
+  it.each(["cooking", "queue", "elements", "elementInit", "daily"] as const)("applies known %s recovery fields without reading the profile", async (scenario) => {
     const db = await getTestDatabase();
     if (scenario === "cooking") await db.insert(userCookingJob).values({ id: "meal", userId,
       experience: 30, finishesAt: new Date(Date.now() + 3600_000) });
@@ -54,12 +54,14 @@ describeWithDatabase("hydrated recovery cache reconciliation", () => {
       const result = await (await callerFor(stealthRouter, userId)).activateStealth();
       expect(result.success).toBe(true);
       expect(result.userRecovery).toBeDefined();
-      await updateUserCache(cache, key, { stealthActive: true, stealthActivatedAt: result.data!.stealthActivatedAt },
+      const applied = await updateUserCache(cache, key, { stealthActive: true, stealthActivatedAt: result.data!.stealthActivatedAt },
         { revision, userRecovery: result.userRecovery });
       const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
       const cached = cache.getQueryData<typeof initial>(key)!.userData!;
       expect(cached).toMatchObject({ status: "AWAKE", stealthActive: true, cookingExperience: saved.cookingExperience,
-        primaryElement: saved.primaryElement, secondaryElement: saved.secondaryElement, money: saved.money, ...counters });
+        primaryElement: saved.primaryElement, secondaryElement: saved.secondaryElement, money: scenario === "queue" ? initial!.userData!.money : saved.money, ...counters });
+      expect(read).not.toHaveBeenCalled();
+      expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
       expect(cached.cookingJobs).toHaveLength(0);
       expect(cached.queue).toHaveLength(0);
       if (scenario === "cooking") {
@@ -68,13 +70,13 @@ describeWithDatabase("hydrated recovery cache reconciliation", () => {
       } else if (scenario === "queue") {
         expect(saved.money).toBe(130);
         expect(result.userRecovery?.requiresUserRefresh).toBe(true);
-        expect(read).toHaveBeenCalledTimes(1);
+        expect(applied).toBe(false);
       } else if (scenario === "elementInit") {
         expect(saved.primaryElement).not.toBeNull();
         expect(saved.secondaryElement).not.toBeNull();
         expect(saved.secondaryElement).not.toBe(saved.primaryElement);
         expect(result.userRecovery?.requiresUserRefresh).toBe(true);
-        expect(read).toHaveBeenCalledTimes(1);
+        expect(applied).toBe(false);
       } else expect(read).not.toHaveBeenCalled();
     } finally { stop(); cache.clear(); }
   });

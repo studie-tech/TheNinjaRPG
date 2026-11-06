@@ -248,7 +248,7 @@ export function PetProfile() {
       await Promise.all([
         invalidatePetData(),
         result.success || result.userRecovery
-          ? updateUser(result, { revision: context?.revision })
+          ? updateUser(result, { revision: context?.revision, refetch: false })
           : undefined,
       ]);
     },

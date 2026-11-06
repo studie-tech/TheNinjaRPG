@@ -85,7 +85,7 @@ export const ObjectiveWarPanel = ({
     setFeedback(result);
     showActionReadinessToast(result);
     if (result.userRecovery || (result.success && result.battleId))
-      await updateUser(result, { revision });
+      await updateUser(result, { revision, refetch: false });
     if (result.success && result.battleId) {
       pushToCombat(router, result.battleId);
     }
@@ -115,7 +115,6 @@ export const ObjectiveWarPanel = ({
   const attack = api.combat.startShrineBattle.useMutation({
     onSuccess: onBattleSuccess,
     onError: (error) => {
-      void updateUser(undefined, { revision: undefined });
       onError(error);
     },
     onMutate,
@@ -123,7 +122,6 @@ export const ObjectiveWarPanel = ({
   const camp = api.war.attackWarCamp.useMutation({
     onSuccess: onBattleSuccess,
     onError: (error) => {
-      void updateUser(undefined, { revision: undefined });
       onError(error);
     },
     onMutate,

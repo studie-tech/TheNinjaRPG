@@ -311,7 +311,8 @@ export default function CombatPage() {
     api.combat.battleArenaHeal.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userRecovery) await updateUser(data, { revision });
+        if (data.success || data.userRecovery)
+          await updateUser(data, { revision, refetch: false });
         if (data.success) {
           setArenaHealSettledBattleId(arenaHealBattleKey);
         }
@@ -340,15 +341,15 @@ export default function CombatPage() {
           setBattleAtom(undefined);
           // The finished battle and its result stay in place until the next battle
           // loads, so the battlefield keeps its reserved size and nothing turns live.
-          await updateUser(result, { revision });
+          await updateUser(result, { revision, refetch: false });
           void utils.combat.getBattle.invalidate();
         } else {
-          if (result.userRecovery) await updateUser(result, { revision });
+          if (result.userRecovery)
+            await updateUser(result, { revision, refetch: false });
           showMutationToast(result);
         }
       },
       onError: (error) => {
-        void updateUser(undefined, { revision: undefined });
         showMutationToast({ success: false, message: error.message });
       },
       onSettled: () => {

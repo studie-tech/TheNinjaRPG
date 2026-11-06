@@ -47,7 +47,7 @@ export function SparringMode() {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.userRecovery || (data.success && data.battleId))
-          await updateUser(data, { revision });
+          await updateUser(data, { revision, refetch: false });
         if (data.success && data.battleId) {
           await Promise.all([
             utils.sparring.getUserChallenges.invalidate(),
@@ -57,7 +57,6 @@ export function SparringMode() {
         }
       },
       onError: (error) => {
-        void updateUser(undefined, { revision: undefined });
         showMutationToast({ success: false, message: error.message });
       },
     });
