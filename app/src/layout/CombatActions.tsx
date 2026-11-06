@@ -495,7 +495,10 @@ const getEffectiveActionCost = (
     : item.actionCostPerc;
 };
 
-/** In combat, whether the player cannot afford the supplied AP cost. */
+/**
+ * Check combat affordability using the resolved cost also shown on the action card.
+ * Unknown AP or cost leaves this UI-only guard inactive.
+ */
 const lacksActionPoints = (
   cost: number | undefined,
   settings: Pick<ActionSelectorSettingsProps, "combatMode" | "userActionPoints">,

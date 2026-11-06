@@ -132,6 +132,8 @@ export type CacheIssue = { path: PropertyKey[]; message: string };
 /**
  * Save blockers of a cache draft: the schema (the draft one while the cache is inactive),
  * plus, once the item catalog is ready, rewards missing or restricted in its lookup.
+ * Callers supply their catalog index so validation and item labels can share it.
+ * Until the catalog is ready, only schema checks run and the lookup is not read.
  */
 export const getWeightedCacheIssues = (
   cache: WeightedCache,
