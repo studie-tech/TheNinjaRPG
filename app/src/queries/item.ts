@@ -1594,17 +1594,17 @@ export const updateUserDataForCommitConsumption = (
     })
     .where(eq(userData.userId, ctx.userId));
 
-/** Build deletion of an empty inventory row guarded by its owner and zero quantity. */
+/** Build deletion of empty inventory rows guarded by their owner and zero quantity. */
 export const deleteEmptyUserItem = (
   client: Pick<DrizzleClient, "delete">,
-  userItemId: string,
+  userItemId: string | string[],
   userId: string,
 ) =>
   client
     .delete(userItem)
     .where(
       and(
-        eq(userItem.id, userItemId),
+        inArray(userItem.id, Array.isArray(userItemId) ? userItemId : [userItemId]),
         eq(userItem.userId, userId),
         eq(userItem.quantity, 0),
       ),

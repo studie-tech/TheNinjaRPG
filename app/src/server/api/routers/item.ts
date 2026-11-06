@@ -2017,8 +2017,10 @@ export const itemRouter = createTRPCRouter({
             ctx.drizzle,
             sold.map((useritem) => useritem.id),
           ),
-          ...sold.map((useritem) =>
-            deleteEmptyUserItem(ctx.drizzle, useritem.id, ctx.userId),
+          deleteEmptyUserItem(
+            ctx.drizzle,
+            sold.map((useritem) => useritem.id),
+            ctx.userId,
           ),
           ...sold.flatMap((useritem, index) =>
             useritem.item.cost >= 500000

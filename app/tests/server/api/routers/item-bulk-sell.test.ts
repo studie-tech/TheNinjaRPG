@@ -115,6 +115,18 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(logs.map((log) => log.relatedMsg)).toEqual(["Sold item: Relic"]);
   });
 
+  it("sells the maximum batch, pays every stack and removes the paid rows", async () => {
+    const ids = Array.from({ length: MAX_BULK_SELL_ITEMS }, (_, index) => `batch-${index}`);
+    await insertUserItems(ids.map((id) => ({ id, userId: seller, itemId: "potion" })));
+    const result = await sell(ids);
+    expect(result.success).toBe(true);
+    expect(result.soldUserItemIds.sort()).toEqual([...ids].sort());
+    expect(result.refused).toEqual([]);
+    expect(result.ryo).toBe(MAX_BULK_SELL_ITEMS * 20);
+    expect(await money()).toBe(startMoney + MAX_BULK_SELL_ITEMS * 20);
+    expect(await remaining(ids)).toEqual([]);
+  });
+
   it("refuses rows that are not the player's carried stock and pays nothing for them", async () => {
     const refusedIds = [
       "foreign-row",
