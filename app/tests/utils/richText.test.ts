@@ -106,4 +106,13 @@ describe("buildQuoteHtml", () => {
   it("names an unknown author", () => {
     expect(buildQuoteHtml({ ...quoted, username: null })).toStartWith('<blockquote author="Unknown"');
   });
+
+  it("keeps an author name with quotes and markup inside its attribute", () => {
+    const username = 'Ai "<b>" data-comment-id="other" & co';
+    const html = sanitize(buildQuoteHtml({ ...quoted, username }));
+    const quote = new DOMParser().parseFromString(html, "text/html").querySelector("blockquote");
+    expect(quote?.getAttribute("author")).toBe(username);
+    expect(quote?.getAttribute("data-comment-id")).toBe("comment-1");
+    expect(splitQuotedReply(`${html}<p>reply</p>`).authors).toEqual([username]);
+  });
 });

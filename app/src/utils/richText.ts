@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { decodeHTML, encodeXML } from "entities";
 import sanitize, { stripBlockquotes } from "@/utils/sanitize";
 
 /** Quill imports basic HTML; keep advanced documents in source mode until explicitly converted. */
@@ -24,7 +25,7 @@ export const splitQuotedReply = (html: string) => {
   let rest = html;
   let match = ATTACHED_QUOTE.exec(rest);
   while (match) {
-    authors.push(match[1] ?? "");
+    authors.push(decodeHTML(match[1] ?? ""));
     rest = rest.slice(match[0].length);
     match = ATTACHED_QUOTE.exec(rest);
   }
@@ -34,7 +35,8 @@ export const splitQuotedReply = (html: string) => {
 
 /**
  * The quote attached to a chat message for one quoted message, without that message's own
- * quotes. `data-comment-id` lets a reader jump to the quoted message.
+ * quotes. `data-comment-id` lets a reader jump to the quoted message. Attribute values are
+ * escaped, since AI names may hold quotes or markup.
  */
 export const buildQuoteHtml = (quoted: {
   id: string;
@@ -42,4 +44,4 @@ export const buildQuoteHtml = (quoted: {
   createdAt: Date;
   content: string;
 }) =>
-  `<blockquote author="${quoted.username || "Unknown"}" date="${format(quoted.createdAt, "MM/dd/yyyy")}" data-comment-id="${quoted.id}">${stripBlockquotes(quoted.content)}</blockquote>`;
+  `<blockquote author="${encodeXML(quoted.username || "Unknown")}" date="${format(quoted.createdAt, "MM/dd/yyyy")}" data-comment-id="${encodeXML(quoted.id)}">${stripBlockquotes(quoted.content)}</blockquote>`;

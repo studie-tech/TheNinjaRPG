@@ -33,7 +33,7 @@ export function QuoteJump({ commentId, author, children }: QuoteJumpProps) {
       type="button"
       aria-label={`Jump to the quoted message from ${author}`}
       onClick={jump}
-      className="inline-flex cursor-pointer items-center gap-1 text-left hover:text-foreground hover:underline"
+      className="hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-left hover:underline"
     >
       {children}
       <CornerLeftUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -49,6 +49,7 @@ const JUMP_OUTLINE = ["rounded-md", "ring-2", "ring-inset", "ring-primary"];
  * so the Tavern page and the chat panel each jump within their own list.
  */
 const findQuotedMessage = (from: HTMLElement, commentId: string) => {
+  // Comment ids are nanoids; any other value is not a message in this list and must not reach the selector.
   if (!/^[\w-]+$/.test(commentId)) return null;
   for (let node = from.parentElement; node; node = node.parentElement) {
     const match = node.querySelector<HTMLElement>(`[data-comment-id="${commentId}"]`);
