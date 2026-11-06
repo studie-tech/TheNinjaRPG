@@ -342,10 +342,7 @@ export const travelRouter = createTRPCRouter({
             { notice: battle.actionNotice },
           );
         } else {
-          return {
-            success: false,
-            message: battle.message,
-          };
+          return battle;
         }
       }
     }),
