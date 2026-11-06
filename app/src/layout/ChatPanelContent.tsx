@@ -826,7 +826,7 @@ function PhoneChatList({ onOpen }: { onOpen: (chat: PhoneChat) => void }) {
 
 /**
  * New messages per tavern name: its new messages or mentions, whichever is higher.
- * Muted taverns count nothing.
+ * Muted taverns keep only mentions and quotes.
  */
 function useTavernUnread() {
   const { data: userData } = useUserData();

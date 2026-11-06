@@ -49,6 +49,7 @@ export const useChatMutes = () => {
       },
     });
 
+  /** Serialize preference saves across chat controls and bind each save to its account. */
   const save = (patch: {
     chatMuted?: boolean;
     mutedConversationIds?: string[];

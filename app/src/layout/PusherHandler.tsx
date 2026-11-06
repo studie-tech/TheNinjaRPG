@@ -45,6 +45,7 @@ export type UserEvent = {
   isPublic?: boolean;
 };
 
+/** Subscribe to the player's live game events and reconcile their notifications and caches. */
 export const usePusherHandler = (
   userId?: string | null,
   userData?: Pick<NonNullable<UserWithRelations>, "clanId" | "villageId">,
@@ -81,7 +82,7 @@ export const usePusherHandler = (
   useEffect(() => {
     if (userId) {
       const session = notificationSession.current;
-      // Pings (mentions and quotes) arrive whatever the player muted; mutes quiet other chat.
+      /** Keep notifications in the active account and unread conversation; pings bypass mutes. */
       const canNotifyConversation = (
         conversationId: string | undefined,
         isPing = false,
@@ -95,6 +96,7 @@ export const usePusherHandler = (
           (!conversationId || !store.get(chatViewedConversationsAtom)[conversationId])
         );
       };
+      /** Wait for the initial profile before applying account, visibility and mute guards. */
       const resolveNotificationProfile = async (
         conversationId: string | undefined,
         isPing = false,

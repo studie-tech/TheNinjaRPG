@@ -1,0 +1,1 @@
+ALTER TABLE `UserData` ADD `unmutedTavernIds` json DEFAULT ('[]') NOT NULL;

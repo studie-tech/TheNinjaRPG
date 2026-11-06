@@ -21,6 +21,7 @@ import NavTabs from "@/layout/NavTabs";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+/** Full tavern conversation with channel selection and account notification controls. */
 export default function Tavern() {
   // State
   const [activeTab, setActiveTab] = useLocalStorage<string | undefined>(

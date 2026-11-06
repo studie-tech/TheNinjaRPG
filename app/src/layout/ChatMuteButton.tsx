@@ -1,5 +1,6 @@
 import { Bell, BellOff } from "lucide-react";
-import { Button, type ButtonProps } from "@/components/ui/button";
+import type { ButtonProps } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { useChatMutes } from "@/hooks/useChatMutes";
 import { cn } from "@/libs/shadui";
 
