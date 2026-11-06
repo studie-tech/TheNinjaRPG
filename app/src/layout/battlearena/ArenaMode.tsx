@@ -80,7 +80,7 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
         }
       },
       onError: (error) => {
-        void updateUser(undefined);
+        void updateUser(undefined, { revision: undefined });
         attackInFlightRef.current = false;
         showMutationToast({ success: false, message: error.message });
       },
