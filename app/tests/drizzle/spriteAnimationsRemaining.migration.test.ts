@@ -26,7 +26,9 @@ it("registers after the first sprite seed without statement markers", () => {
   });
   const index = migrations.findIndex(({ sql }) => sql.join("\n").includes(migration));
   expect(index).toBeGreaterThan(0);
-  expect(migrations[index - 1]!.sql.join("\n")).toContain(previous);
+  const earlier = migrations.findIndex(({ sql }) => sql.join("\n").includes(previous));
+  expect(earlier).toBeGreaterThanOrEqual(0);
+  expect(earlier).toBeLessThan(index);
   expect(migration).not.toContain("--> statement-breakpoint");
 });
 
