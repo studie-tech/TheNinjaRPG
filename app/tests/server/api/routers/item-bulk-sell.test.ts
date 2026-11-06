@@ -17,6 +17,7 @@ import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
+  runRawSql,
 } from "../../../setup/testDatabase";
 
 const seller = "bulk-seller";
@@ -140,7 +141,7 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(await remaining(refusedIds)).toEqual(refusedIds.filter((id) => id !== "missing-row").sort());
   });
 
-  it("pays nothing for a stack the guarded delete cannot remove", async () => {
+  it("pays nothing for a stack the guarded sale cannot consume", async () => {
     const database = await getTestDatabase();
     await database.insert(huntingSession).values({
       userId: seller,
@@ -180,12 +181,34 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(await remaining(["equipped-row", "home-row"])).toEqual(["equipped-row", "home-row"]);
   });
 
-  it("still pays for the removed stacks when another stack's delete fails", async () => {
-    const remove = itemQueries.deleteUserItemForSellUserItems;
-    vi.spyOn(itemQueries, "deleteUserItemForSellUserItems").mockImplementation(
-      (client, ctx, useritem) => {
+  it("refuses snapshots after quantity, auction, crafting or farm funds change", async () => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ farmCurrency: 50 }).where(eq(userData.userId, seller));
+    const snapshots = await itemQueries.listUserItemsForSellUserItems(
+      database, { userId: seller }, ["potion-row", "blade-row", "token-row", "seed-row"],
+    );
+    await Promise.all([
+      database.update(userItem).set({ quantity: 2 }).where(eq(userItem.id, "potion-row")),
+      database.update(userItem).set({ isInAuction: true }).where(eq(userItem.id, "blade-row")),
+      database.update(userItem).set({ craftingFinishedAt: new Date(Date.now() + 3_600_000) }).where(eq(userItem.id, "token-row")),
+      database.update(userData).set({ farmCurrency: 0 }).where(eq(userData.userId, seller)),
+    ]);
+    const sales = await Promise.all(snapshots.map((snapshot) =>
+      itemQueries.sellUserItemAtomically(database, { userId: seller }, snapshot, 200),
+    ));
+    expect(sales.map((sale) => sale.rowsAffected)).toEqual([0, 0, 0, 0]);
+    expect(await money()).toBe(startMoney);
+    expect(await remaining(snapshots.map((snapshot) => snapshot.id))).toEqual([
+      "blade-row", "potion-row", "seed-row", "token-row",
+    ]);
+  });
+
+  it("still pays for the sold stacks when another stack's sale fails", async () => {
+    const remove = itemQueries.sellUserItemAtomically;
+    vi.spyOn(itemQueries, "sellUserItemAtomically").mockImplementation(
+      (client, ctx, useritem, price) => {
         if (useritem.id === "blade-row") throw new Error("Connection lost");
-        return remove(client, ctx, useritem);
+        return remove(client, ctx, useritem, price);
       },
     );
     const result = await sell(["potion-row", "blade-row"]);
@@ -195,6 +218,42 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(result.refused.map((entry) => entry.userItemId)).toEqual(["blade-row"]);
     expect(await money()).toBe(startMoney + 60);
     expect(await remaining(["potion-row", "blade-row"])).toEqual(["blade-row"]);
+  });
+
+  it("preserves the stack and its imbuements when payment is rejected", async () => {
+    await runRawSql("CREATE TRIGGER reject_bulk_sale_payment BEFORE UPDATE ON UserData FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Payment rejected'");
+    try {
+      const result = await sell(["blade-row"]);
+      expect(result.success).toBe(false);
+      expect(result.soldUserItemIds).toEqual([]);
+      expect(result.ryo).toBe(0);
+      expect(await money()).toBe(startMoney);
+      const database = await getTestDatabase();
+      const [stack] = await database.select().from(userItem).where(eq(userItem.id, "blade-row"));
+      expect(stack?.quantity).toBe(1);
+      const imbuements = await database.select().from(userItemImbuement);
+      expect(imbuements.map((row) => row.id)).toEqual(["blade-imbuement"]);
+    } finally {
+      await runRawSql("DROP TRIGGER IF EXISTS reject_bulk_sale_payment");
+    }
+    const retry = await sell(["blade-row"]);
+    expect(retry.soldUserItemIds).toEqual(["blade-row"]);
+    expect(await money()).toBe(startMoney + 200);
+  });
+
+  it("pays each stack once across concurrent sales and a replay", async () => {
+    const results = await Promise.all([
+      sell(["potion-row", "blade-row", "token-row"]),
+      sell(["potion-row", "blade-row", "token-row"]),
+    ]);
+    expect(results.flatMap((result) => result.soldUserItemIds).sort()).toEqual([
+      "blade-row", "potion-row", "token-row",
+    ]);
+    expect(results.reduce((sum, result) => sum + result.ryo, 0)).toBe(260);
+    const replay = await sell(["potion-row", "blade-row", "token-row"]);
+    expect(replay.soldUserItemIds).toEqual([]);
+    expect(replay.ryo).toBe(0);
+    expect(await money()).toBe(startMoney + 260);
   });
 
   it("rejects repeated ids and more than the bulk limit", async () => {

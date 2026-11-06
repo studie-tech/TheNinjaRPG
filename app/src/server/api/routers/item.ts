@@ -164,7 +164,6 @@ import {
   deleteUserItemForDelete,
   deleteUserItemForExecuteMergeStacksForItemBucket,
   deleteUserItemForSellUserItem,
-  deleteUserItemForSellUserItems,
   deleteUserItemImbuementForDelete,
   deleteUserItemImbuementForEvolveItem,
   deleteUserItemImbuementForSellUserItem,
@@ -246,6 +245,7 @@ import {
   selectUserItemForSelectItemLoadout,
   selectUserItemVariantForGetUserUnlockedVariants,
   selectVillageStructureForSellUserItem,
+  sellUserItemAtomically,
   updateBloodlineRollsForConsume,
   updateItemForUpdate,
   updateItemLoadoutForEvolveItem,
@@ -1973,46 +1973,43 @@ export const itemRouter = createTRPCRouter({
           });
         }
       }
-      // Claim each stack before paying for it, exactly as a single sale does. A delete that
-      // fails is unconfirmed: that stack is not paid, and the others still are.
-      const deletions = await Promise.allSettled(
-        sellable.map((useritem) =>
+      const salePrices = sellable.map((useritem) =>
+        calcItemSellingPrice(user, useritem, structures),
+      );
+      const sales = await Promise.allSettled(
+        sellable.map((useritem, index) =>
           retryOnDeadlock(async () =>
-            deleteUserItemForSellUserItems(ctx.drizzle, ctx, useritem),
+            sellUserItemAtomically(ctx.drizzle, ctx, useritem, salePrices[index] ?? 0),
           ),
         ),
       );
       const sold = sellable.filter((useritem, index) => {
-        const deletion = deletions[index];
-        if (deletion?.status === "fulfilled" && deletion.value.rowsAffected === 1) {
+        const sale = sales[index];
+        if (sale?.status === "fulfilled" && sale.value.rowsAffected > 0) {
           return true;
         }
         refused.push({
           userItemId: useritem.id,
           name: useritem.item.name,
-          reason: "changed or is in use by a hunting battle",
+          reason: "changed, is in use by a hunting battle, or could not be sold",
         });
         return false;
       });
-      const prices = sold.map((useritem) =>
-        calcItemSellingPrice(user, useritem, structures),
-      );
+      const prices = salePrices.filter((_, index) => {
+        const sale = sales[index];
+        return sale?.status === "fulfilled" && sale.value.rowsAffected > 0;
+      });
       const ryo = prices.reduce((sum, price) => sum + price, 0);
-      // Mutate dependent state only for the stacks this request removed.
+      // Cleanup cannot make a paid stack sellable again, even if it needs retrying.
       if (sold.length > 0) {
         await Promise.all([
           deleteUserItemImbuementsForSellUserItems(
             ctx.drizzle,
             sold.map((useritem) => useritem.id),
           ),
-          // A deadlocked increment never applied, so retrying it cannot pay twice.
-          ...(ryo > 0
-            ? [
-                retryOnDeadlock(async () =>
-                  incrementUserMoney(ctx.drizzle, ryo, ctx.userId),
-                ),
-              ]
-            : []),
+          ...sold.map((useritem) =>
+            deleteEmptyUserItem(ctx.drizzle, useritem.id, ctx.userId),
+          ),
           ...sold.flatMap((useritem, index) =>
             useritem.item.cost >= 500000
               ? [

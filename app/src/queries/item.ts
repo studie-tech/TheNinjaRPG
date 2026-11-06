@@ -61,6 +61,7 @@ import {
   villageStructure,
 } from "@/drizzle/schema";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
+import { isFarmMarketSeed } from "@/libs/farming";
 import { getJutsuSlotIncreaseLimit } from "@/libs/jutsuSlots";
 import { collapseRewards } from "@/libs/quest";
 import { cacheItemIds, isRestrictedCacheReward } from "@/libs/weightedCache";
@@ -1268,28 +1269,38 @@ export const deleteUserItemForSellUserItem = (
     );
 
 /**
- * Build one stack's deletion for a bulk sell: the single sale's guards, and the stack must
- * still be carried and unequipped, since the bulk guard checked that on an earlier read.
+ * Atomically consume one eligible stack and credit its sale price, so a failed payment
+ * leaves the inventory intact. Call once per stack: a joined UPDATE changes the shared
+ * owner row only once. A zero-ryo drop can affect only the inventory row.
  */
-export const deleteUserItemForSellUserItems = (
-  client: Pick<DrizzleClient, "delete">,
+export const sellUserItemAtomically = (
+  client: Pick<DrizzleClient, "execute">,
   ctx: { userId: string },
-  useritem: { id: string; quantity: number },
+  useritem: Pick<UserItem, "id" | "itemId" | "quantity"> & {
+    item: Pick<Item, "isFarmSeed" | "inShop" | "hidden" | "farmSellValue">;
+  },
+  price: number,
 ) =>
-  client
-    .delete(userItem)
-    .where(
-      and(
-        eq(userItem.id, useritem.id),
-        eq(userItem.userId, ctx.userId),
-        eq(userItem.quantity, useritem.quantity),
-        gt(userItem.quantity, 0),
-        eq(userItem.isInAuction, false),
-        eq(userItem.equipped, "NONE"),
-        eq(userItem.storedAtHome, false),
-        hasNoHuntingBattle(ctx.userId),
+  client.execute(sql`UPDATE ${userItem} INNER JOIN ${userData} ON ${eq(userData.userId, userItem.userId)}
+    SET ${userItem.quantity} = 0, ${userData.money} = ${userData.money} + ${price}
+    WHERE ${and(
+      eq(userItem.id, useritem.id),
+      eq(userItem.itemId, useritem.itemId),
+      eq(userItem.userId, ctx.userId),
+      eq(userItem.quantity, useritem.quantity),
+      gt(userItem.quantity, 0),
+      eq(userItem.isInAuction, false),
+      eq(userItem.equipped, "NONE"),
+      eq(userItem.storedAtHome, false),
+      or(
+        isNull(userItem.craftingFinishedAt),
+        lte(userItem.craftingFinishedAt, new Date()),
       ),
-    );
+      isFarmMarketSeed(useritem.item)
+        ? gte(userData.farmCurrency, useritem.item.farmSellValue)
+        : undefined,
+      hasNoHuntingBattle(ctx.userId),
+    )}`);
 
 /** Load the owned positive-quantity rows a bulk sell names, with their items. */
 export const listUserItemsForSellUserItems = (
