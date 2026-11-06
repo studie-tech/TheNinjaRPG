@@ -62,7 +62,8 @@ beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
   updateUser.mockClear();
   vi.spyOn(UserContext, "useUserData").mockReturnValue({ updateUser } as never);
-  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  // Count this test's feedback independently of Bun's retained module mocks.
+  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined).mockClear();
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: user }) as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
   vi.spyOn(Modal, "default").mockImplementation(({ isOpen, children, setIsOpen }: { isOpen: boolean; children: ReactNode; setIsOpen: (open: boolean) => void }) => isOpen ? <div role="dialog"><button onClick={() => setIsOpen(false)}>Dismiss</button>{children}</div> : null);
