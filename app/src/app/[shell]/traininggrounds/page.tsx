@@ -1122,6 +1122,18 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     state.setRank(availableRanks(userData.rank));
   }, [userData.rank, state.setRank]);
 
+  // Favorites are shared with the ranked loadout builder (same stored list & star)
+  const { data: rankedLoadout, isError: isLoadoutUnavailable } =
+    api.pvpRank.getRankedLoadout.useQuery(undefined);
+  // The catalogue orders by the favorites it opened with; starring one later re-sorts the
+  // loaded rows here instead of reloading every page.
+  const [listFavoriteIds, setListFavoriteIds] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (listFavoriteIds !== null) return;
+    if (rankedLoadout) setListFavoriteIds(rankedLoadout.loadout.favoriteJutsuIds ?? []);
+    else if (isLoadoutUnavailable) setListFavoriteIds([]);
+  }, [listFavoriteIds, rankedLoadout, isLoadoutUnavailable]);
+
   // Jutsus
   const {
     data: jutsus,
@@ -1129,9 +1141,16 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     fetchNextPage,
     hasNextPage,
   } = api.jutsu.getAll.useInfiniteQuery(
-    // Learned jutsu come first, so later pages only add new ones below them.
-    { limit: 100, hideAi: true, ownedFirst: true, ...getFilter(state) },
+    // Favorites and learned jutsu come first, so later pages only add new ones below them.
     {
+      limit: 100,
+      hideAi: true,
+      ownedFirst: true,
+      favoriteIds: listFavoriteIds?.slice(0, 500),
+      ...getFilter(state),
+    },
+    {
+      enabled: listFavoriteIds !== null,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },
@@ -1239,8 +1258,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Mutation loading
   const isPending = isStartingTrain || isStoppingTrain || isCancellingQueued;
 
-  // Favorites are shared with the ranked loadout builder (same stored list & star)
-  const { data: rankedLoadout } = api.pvpRank.getRankedLoadout.useQuery(undefined);
   const favoriteJutsuIds = rankedLoadout?.loadout.favoriteJutsuIds ?? [];
   const { mutate: saveFavorites, isPending: isSavingFavorite } =
     api.pvpRank.updateRankedLoadout.useMutation({
@@ -1608,7 +1625,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           )}
         </div>
         {/* The list can be taller than the screen, so the loader sticks in view */}
-        {isFetching && (
+        {(isFetching || listFavoriteIds === null) && (
           <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
             <div className="sticky top-24 flex justify-center py-16">
               <Loader explanation="Loading jutsu" />

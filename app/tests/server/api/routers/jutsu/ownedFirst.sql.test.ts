@@ -36,7 +36,7 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
     ]);
   });
 
-  const pages = async (input: { ownedFirst?: boolean }) => {
+  const pages = async (input: { ownedFirst?: boolean; favoriteIds?: string[] }) => {
     const caller = await callerFor(jutsuRouter, USER);
     const seen: string[][] = [];
     let cursor: number | null | undefined;
@@ -50,6 +50,14 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
 
   it("pages the player's jutsu first, highest level first, then the rest without repeats", async () => {
     expect(await pages({ ownedFirst: true })).toEqual([["j5", "j4"], ["j1", "j2"], ["j3"]]);
+  });
+
+  it("pages favorites first, then the player's jutsu by level, then the rest", async () => {
+    expect(await pages({ ownedFirst: true, favoriteIds: ["j3", "j4"] })).toEqual([
+      ["j4", "j3"],
+      ["j5", "j1"],
+      ["j2"],
+    ]);
   });
 
   it("keeps the catalogue order when the option is off", async () => {

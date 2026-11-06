@@ -233,21 +233,24 @@ export const listJutsuForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
   });
 
 /**
- * Build the `jutsu` listing for `getAll`, using predicates on `jutsuType`. With an `ownerId`,
- * that player's jutsu come first by level, so every page arrives in its final order.
+ * Build the `jutsu` listing for `getAll`, using predicates on `jutsuType`. `favoriteIds` come
+ * first, then with an `ownerId` that player's jutsu by level, so every page arrives in its
+ * final order.
  */
 export const listJutsuForGetAll = (
   client: Pick<DrizzleClient, "query">,
   baseFilters: (undefined | SQL<unknown>)[],
   input: { hideAi?: undefined | false | true; limit: number },
   skip: number,
-  ownerId?: string,
+  priority: { ownerId?: string; favoriteIds?: string[] } = {},
 ) => {
+  const { ownerId, favoriteIds } = priority;
   const owned = sql.identifier("ownedJutsu");
   return client.query.jutsu.findMany({
     where: and(...baseFilters, ...(input.hideAi ? [ne(jutsu.jutsuType, "AI")] : [])),
     // The id breaks updatedAt ties, so offset pages never repeat or skip a row.
     orderBy: (table) => [
+      ...(favoriteIds?.length ? [desc(inArray(table.id, favoriteIds))] : []),
       ...(ownerId
         ? [
             desc(

@@ -433,6 +433,8 @@ export const jutsuRouter = createTRPCRouter({
         hideAi: z.boolean().optional(),
         /** List the signed-in player's jutsu first, highest level first. */
         ownedFirst: z.boolean().optional(),
+        /** Jutsu listed before all others, such as the player's favorites. */
+        favoriteIds: z.array(z.string()).max(500).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -442,13 +444,10 @@ export const jutsuRouter = createTRPCRouter({
       const baseFilters = jutsuDatabaseFilter(input);
 
       const ownerId = input.ownedFirst ? (ctx.userId ?? undefined) : undefined;
-      const results = await listJutsuForGetAll(
-        ctx.drizzle,
-        baseFilters,
-        input,
-        skip,
+      const results = await listJutsuForGetAll(ctx.drizzle, baseFilters, input, skip, {
         ownerId,
-      );
+        favoriteIds: input.favoriteIds,
+      });
 
       // Post-filter to ensure constraints are satisfied within the same effect
       const filtered = filterByEffectConstraints(results, input);
