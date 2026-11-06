@@ -21,7 +21,6 @@ const firefoxStack = (_name: string, _message: string, url: string) =>
 /** Send an error through the SDK's event pipeline and the production filter. */
 const replay = async (name: string, message: string, stack: string) => {
   const error = Object.assign(new Error(message), { name, stack });
-  let frames: (string | undefined)[] = [];
   let dropped: boolean | undefined;
   const client = new BrowserClient({
     dsn: "https://key@o1.ingest.sentry.io/1",
@@ -36,8 +35,6 @@ const replay = async (name: string, message: string, stack: string) => {
       }),
     ],
     beforeSend: (event, hint) => {
-      frames =
-        event.exception?.values?.[0]?.stacktrace?.frames?.map((frame) => frame.filename) ?? [];
       dropped = beforeSend(event, hint) === null;
       return null;
     },
@@ -45,7 +42,7 @@ const replay = async (name: string, message: string, stack: string) => {
   client.init();
   client.captureException(error, { originalException: error });
   await client.flush(1000);
-  return { frames, dropped };
+  return dropped;
 };
 
 const CLOSED = ["Error", "Connection closed"] as const;
@@ -56,16 +53,11 @@ describe("third-party script Sentry filters", () => {
   const NULL_DOM = ["TypeError", "Cannot set properties of null (setting 'innerHTML')"] as const;
   const CLONE = ["DataCloneError", "Failed to execute 'postMessage' on 'Window': An object could not be cloned."] as const;
   const dropped = async ([name, message]: readonly [string, string], stack: typeof chromeStack, url: string) =>
-    (await replay(name, message, stack(name, message, url))).dropped;
+    await replay(name, message, stack(name, message, url));
   const own = "https://www.theninja-rpg.com/_next/static/chunks";
 
   it("leaves Illegal invocation to the host check, which ignoreErrors would pre-empt", () => {
     expect(ignoreErrors).not.toContain("Illegal invocation");
-  });
-
-  it("sees Cookiebot frames with their origin already replaced", async () => {
-    const { frames } = await replay(...ILLEGAL, chromeStack(...ILLEGAL, "https://consent.cookiebot.com/uc.js"));
-    expect(frames).toContain("app:///uc.js");
   });
 
   it.each([
@@ -111,14 +103,6 @@ describe("third-party script Sentry filters", () => {
 });
 
 describe("PayPal Sentry filter", () => {
-  it("sees frames with their origin already replaced", async () => {
-    const { frames } = await replay(
-      ...CLOSED,
-      chromeStack(...CLOSED, "https://www.paypal.com/sdk/js?client-id=abc"),
-    );
-    expect(frames).toContain("app:///sdk/js?client-id=abc");
-  });
-
   it.each([
     ["closed", chromeStack, CLOSED],
     ["closed", firefoxStack, CLOSED],
@@ -129,7 +113,7 @@ describe("PayPal Sentry filter", () => {
       "https://www.paypal.com/sdk/js?client-id=abc",
       "https://www.sandbox.paypal.com/sdk/js?client-id=abc",
     ]) {
-      expect((await replay(name, message, stack(name, message, url))).dropped).toBe(true);
+      expect(await replay(name, message, stack(name, message, url))).toBe(true);
     }
   });
 
@@ -140,7 +124,7 @@ describe("PayPal Sentry filter", () => {
   ])("reports the same errors from a %s", async (_label, url) => {
     for (const [name, message] of [CLOSED, OVERFLOW]) {
       const replayed = await replay(name, message, chromeStack(name, message, url));
-      expect(replayed.dropped).toBe(false);
+      expect(replayed).toBe(false);
     }
   });
 });

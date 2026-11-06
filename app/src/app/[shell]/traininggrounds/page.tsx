@@ -78,6 +78,7 @@ import type { Jutsu } from "@/drizzle/schema";
 import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
+import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -97,10 +98,7 @@ import JutsuFiltering, {
 } from "@/layout/JutsuFiltering";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import {
-  MasteryTrainingQueue,
-  useMasteryTrainingQueue,
-} from "@/layout/MasteryTrainingQueue";
+import { MasteryTrainingQueue } from "@/layout/MasteryTrainingQueue";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";

@@ -1,15 +1,14 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
-import { api } from "@/app/_trpc/client";
+import type { ReactNode } from "react";
 import {
   MASTERY_QUEUE_KIND_LABELS,
   type MasteryQueueKind,
   type TimedMasteryName,
 } from "@/drizzle/constants";
+import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
 import { TimedQueue } from "@/layout/TimedQueue";
 import { getMasteryQueue } from "@/libs/queue";
-import { showMutationToast } from "@/libs/toast";
 import {
   getMasteryQueueSchedule,
   getMasteryTrainingState,
@@ -18,7 +17,6 @@ import {
 } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { getQueueTotalCapacity } from "@/utils/paypal";
-import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Masteries queued to start one after another behind the active mastery session. */
 export const MasteryTrainingQueue = ({
@@ -89,25 +87,4 @@ export const MasteryTrainingQueue = ({
       )}
     </TimedQueue>
   );
-};
-
-/** Save a mastery queue edit, toasting its outcome and keeping the last rejection for display. */
-export const useMasteryTrainingQueue = () => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
-  const [error, setError] = useState<string | null>(null);
-  const { mutate: saveQueue, isPending } =
-    api.train.updateMasteryTrainingQueue.useMutation({
-      onMutate: () => ({ revision: prepareUserUpdate() }),
-      onSuccess: (result) => {
-        showMutationToast(result);
-        setError(result.success ? null : result.message);
-      },
-      onError: (cause) => setError(cause.message),
-      onSettled: (result, _error, _variables, context) =>
-        updateUser(result, {
-          revision: context?.revision,
-          achievementProgress: result?.achievementProgress,
-        }),
-    });
-  return { saveQueue, isPending, error };
 };

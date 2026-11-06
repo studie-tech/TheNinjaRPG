@@ -3,6 +3,7 @@ import type React from "react";
 import { useEffect, useRef } from "react";
 import { ClearDataConfirm } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
+import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -106,10 +107,7 @@ export const GroupedBarHistogram = <Row,>(props: GroupedBarHistogramProps<Row>) 
  * distinct x values. An x missing from a group is a 0 bar; the first point of a duplicate wins.
  */
 export const buildGroupedBarData = (points: GroupedBarPoint[]) => {
-  const groups = new Map<string, GroupedBarPoint[]>();
-  for (const point of points) {
-    groups.set(point.group, [...(groups.get(point.group) ?? []), point]);
-  }
+  const groups = groupBy(points, "group");
   const labels = [...new Set(points.map((point) => point.x))].sort((a, b) => a - b);
   const datasets = [...groups.entries()].map(([group, items], index) => {
     const color = HISTOGRAM_COLORS[index % HISTOGRAM_COLORS.length];
