@@ -83,6 +83,34 @@ describe("content furniture image measurements", () => {
     expect(result.message).toContain("try again");
   });
 
+  it("stops reading an oversized upload that declares no length", async () => {
+    const chunk = new Uint8Array(1024 * 1024);
+    let sent = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent += 1;
+        controller.enqueue(chunk);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    vi.spyOn(http, "fetchWithTimeout").mockResolvedValue(new Response(body));
+    const result = await api().getFurnitureImageGeometry({ image, useFullFootprint: false });
+    expect(result).toMatchObject({ success: false, message: "Furniture image is too large to measure", geometry: null });
+    expect(cancelled).toBe(true);
+    expect(sent).toBeLessThanOrEqual(13);
+    expect(furnitureImage.measureFurnitureImage).not.toHaveBeenCalled();
+  });
+
+  it("measures an upload of exactly the size cap", async () => {
+    const bytes = new Uint8Array(furnitureImage.FURNITURE_IMAGE_MAX_BYTES);
+    vi.spyOn(http, "fetchWithTimeout").mockResolvedValue(new Response(bytes));
+    expect((await api().getFurnitureImageGeometry({ image, useFullFootprint: false })).success).toBe(true);
+    expect(furnitureImage.measureFurnitureImage).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects oversized uploads before decoding", async () => {
     vi.spyOn(http, "fetchWithTimeout").mockResolvedValue(new Response(null, { headers: { "content-length": String(11 * 1024 * 1024) } }));
     expect((await api().getFurnitureImageGeometry({ image, useFullFootprint: false })).success).toBe(false);

@@ -5,6 +5,30 @@ import {
   furnitureGeometrySchema,
 } from "@/validators/itemFurniture";
 
+/** Largest upload the server reads into memory to measure. */
+export const FURNITURE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Read an image body, abandoning the download as soon as it passes the size cap.
+ * @returns The bytes, or null for an oversized body.
+ */
+export const readFurnitureImageBody = async (response: Response) => {
+  const reader = response.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (reader) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > FURNITURE_IMAGE_MAX_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+};
+
 /** Measure the painted silhouette without cropping or changing the stored asset. */
 export const measureFurnitureImage = async (
   buffer: Buffer,

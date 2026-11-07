@@ -79,7 +79,11 @@ import {
   validateEvolutionGraph,
 } from "@/libs/evolution";
 import { canDropFarmSeed } from "@/libs/farming";
-import { measureFurnitureImage } from "@/libs/furnitureImage";
+import {
+  FURNITURE_IMAGE_MAX_BYTES,
+  measureFurnitureImage,
+  readFurnitureImageBody,
+} from "@/libs/furnitureImage";
 import {
   buildItemLoadoutData,
   calcItemRepairCost,
@@ -438,14 +442,14 @@ export const itemRouter = createTRPCRouter({
         const response = await fetchWithTimeout(url.toString(), { redirect: "error" });
         if (
           !response.ok ||
-          Number(response.headers.get("content-length")) > 10 * 1024 * 1024
+          Number(response.headers.get("content-length")) > FURNITURE_IMAGE_MAX_BYTES
         )
           return {
             ...errorResponse("Furniture image could not be measured"),
             geometry: null,
           };
-        const bytes = Buffer.from(await response.arrayBuffer());
-        if (bytes.length > 10 * 1024 * 1024)
+        const bytes = await readFurnitureImageBody(response);
+        if (!bytes)
           return {
             ...errorResponse("Furniture image is too large to measure"),
             geometry: null,
