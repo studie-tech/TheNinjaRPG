@@ -13,12 +13,11 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import { userItemToAction } from "@/libs/combat/actions";
-import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
+import type { UserEffect } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
-import { combatRouter, processUsersForBattle } from "@/server/api/routers/combat";
-import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
-import { fetchUserJutsus } from "@/server/api/routers/jutsu";
+import { combatRouter } from "@/server/api/routers/combat";
 import { getTagSchema } from "@/validators/combat";
+import { insertLobbyBattle, loadCombatant, preloadLobby } from "../../../../libs/combat/helpers/preload";
 import {
   insertItems,
   insertUserItems,
@@ -123,44 +122,10 @@ const seedBattle = async () => {
 
   const essentials = await fetchBattleEssentials(db);
   const users = await Promise.all(
-    USERS.map(async (userId) => {
-      const row = await db.query.userData.findFirst({
-        where: eq(userData.userId, userId),
-      });
-      if (!row) throw new Error(`Missing ${userId}`);
-      return {
-        ...row,
-        items: (await fetchUserItemsWithVariants(db, userId)).filter(
-          (ui) => ui.equipped !== "NONE",
-        ),
-        jutsus: (await fetchUserJutsus(db, userId)).filter((j) => j.equipped),
-        userSkills: [],
-        bloodline: null,
-        village: null,
-        aiProfile: essentials.defaultProfile,
-      } as CombatQueryUser;
-    }),
+    USERS.map((userId) => loadCombatant(db, userId, essentials, { equippedItemsOnly: true })),
   );
-  const processed = await processUsersForBattle(db, {
-    users,
-    ...essentials,
-    wars: essentials.activeWars,
-    battleType: "SPARRING",
-    hide: false,
-    isSummon: false,
-    width: 13,
-    height: 9,
-  });
-  await db.insert(battle).values({
-    id: BATTLE,
-    background: "default",
-    battleType: "SPARRING",
-    roundStartAt: new Date(Date.now() + 60_000),
-    usersState: processed.usersState,
-    usersEffects: processed.userEffects,
-    extraState: processed.extraState,
-    groundEffects: [],
-  });
+  const processed = await preloadLobby(db, users, essentials, "SPARRING");
+  await insertLobbyBattle(db, BATTLE, "SPARRING", processed);
 };
 
 const loadBattle = async () => {

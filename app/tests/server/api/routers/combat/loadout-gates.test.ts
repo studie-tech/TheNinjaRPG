@@ -5,15 +5,12 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
 import { aiProfile, battle, jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
-import type { CombatQueryUser } from "@/libs/combat/types";
-import { captureCombatCacheSnapshot } from "@/deltas/combat";
-import { refreshMasteries } from "@/libs/combat/util";
 import { effectiveMasteries } from "@/libs/mastery";
 import { Pusher } from "@/libs/pusher";
 import { battleJutsuGateFailure } from "@/libs/train";
-import { combatRouter, processUsersForBattle } from "@/server/api/routers/combat";
-import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
-import { fetchUserJutsus, jutsuRouter } from "@/server/api/routers/jutsu";
+import { combatRouter } from "@/server/api/routers/combat";
+import { jutsuRouter } from "@/server/api/routers/jutsu";
+import { insertSnapshotLobby, loadCombatant, preloadLobby } from "../../../../libs/combat/helpers/preload";
 import { insertDefaultAiProfile, insertJutsus, insertUsers } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -42,43 +39,25 @@ const seedJutsu = async () => {
 /** The combatant exactly as battle initiation receives it, with every owned jutsu equipped. */
 const rawUser = async (onlyEquipped: boolean) => {
   const db = await getTestDatabase();
-  const row = await db.query.userData.findFirst({ where: eq(userData.userId, USER) });
-  if (!row) throw new Error("Missing lobby user");
   const essentials = await fetchBattleEssentials(db);
-  const jutsus = await fetchUserJutsus(db, USER, undefined, { applyReskins: false });
-  const raw = {
-    ...row,
-    items: await fetchUserItemsWithVariants(db, USER),
-    jutsus: onlyEquipped ? jutsus.filter((owned) => owned.equipped) : jutsus,
-    userSkills: [],
-    bloodline: null,
-    village: null,
-    aiProfile: essentials.defaultProfile,
-  } as CombatQueryUser;
+  const raw = await loadCombatant(db, USER, essentials, {
+    applyReskins: false,
+    unequippedJutsus: !onlyEquipped,
+  });
   return { raw, essentials };
 };
 
 const processFor = async (battleType: BattleType, onlyEquipped = true) => {
   const db = await getTestDatabase();
   const { raw, essentials } = await rawUser(onlyEquipped);
-  const processed = await processUsersForBattle(db, {
-    users: [raw], ...essentials, wars: essentials.activeWars, battleType,
-    hide: false, isSummon: false, width: 13, height: 9,
-  });
+  const processed = await preloadLobby(db, [raw], essentials, battleType);
   return { raw, essentials, processed };
 };
 
 const seedLobby = async () => {
   const db = await getTestDatabase();
   const { raw, processed } = await processFor("COMBAT");
-  processed.extraState.profileCacheSnapshots = { [USER]: captureCombatCacheSnapshot(raw) };
-  refreshMasteries(processed.usersState, processed.userEffects);
-  await db.insert(battle).values({
-    id: BATTLE, background: "default", battleType: "COMBAT",
-    roundStartAt: new Date(Date.now() + 60_000),
-    usersState: processed.usersState, usersEffects: processed.userEffects,
-    extraState: processed.extraState, groundEffects: [],
-  });
+  await insertSnapshotLobby(db, BATTLE, "COMBAT", raw, processed);
 };
 
 const equippedIds = async () => {

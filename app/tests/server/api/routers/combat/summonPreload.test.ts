@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { getTableColumns, type SQL } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { aiProfile, battle, dungeon, dungeonMember, dungeonRun, jutsu, userData, userJutsu } from "@/drizzle/schema";
 import { prepareEncounterWaves } from "@/libs/combat/encounters";
@@ -8,18 +8,14 @@ import { Pusher } from "@/libs/pusher";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { initiateBattle, processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
-import { makeTag, makeUser } from "../../../../libs/combat/helpers/battleScenario";
-import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
+import { makeTag, makeUser, tableDefaults } from "../../../../libs/combat/helpers/battleScenario";
+import { insertFightingDungeonRun } from "../../../../setup/dungeon";
 import { insertUsers, insertDefaultAiProfile, insertJutsus } from "../../../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
 
 const participant = (userId: string, summons: string[] = []): CombatQueryUser => ({
-  ...Object.fromEntries(Object.entries(getTableColumns(userData)).map(([key, column]) => [
-    key,
-    column.default && typeof column.default === "object" && "queryChunks" in column.default
-      ? new Date() : (column.default ?? null),
-  ])),
+  ...tableDefaults(userData),
   ...makeUser({ userId, username: userId, isAi: true, rank: "JONIN", experience: 3339000, status: "AWAKE" }),
   items: [], jutsus: [], aiProfile: null, bloodline: null, village: null,
   userSkills: summons.map((aiId) => ({
@@ -167,19 +163,13 @@ describeWithDatabase("initiated wave summon preloads", () => {
     await insertDefaultAiProfile({ userId: "caster" });
     const reads = vi.spyOn(client.query.userData, "findMany");
     const waves = Array.from({ length: 5 }, (_, index) => ({ aiIds: ["caster"], delayRounds: index ? 1 : 0 }));
-    const meta = dungeonBattleState({ runState: { ...dungeonBattleState().runState, memberIds: members } });
-    const content = dungeonContent();
-    content.tiers[0]![0]!.waves = waves;
-    await client.insert(dungeon).values({ id: "preload-definition", content, updatedAt: new Date() });
-    await client.insert(dungeonRun).values({
-      id: meta.runId, dungeonId: "preload-definition", leaderId: members[0]!, content,
-      state: meta.runState, status: "FIGHTING", version: meta.runVersion,
-      battleId: "preload-battle", expiresAt: new Date(meta.expiresAt), createdAt: new Date(),
+    const { meta, coop } = await insertFightingDungeonRun({
+      dungeonId: "preload-definition", battleId: "preload-battle", members, waves,
     });
     await client.insert(dungeonMember).values(members.map((userId) => ({ runId: meta.runId, userId, activeUserId: userId })));
     const result = await initiateBattle({
       client, userIds: members, targetIds: waves.flatMap((wave) => wave.aiIds),
-      coop: { kind: "dungeon", ...meta, battleId: "preload-battle", waves },
+      coop,
     }, "QUEST");
     expect(result).toMatchObject({ success: true });
     // One participant query and one summon query, rather than a summon query per wave.

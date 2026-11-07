@@ -21,7 +21,7 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { ActionUseSpecificJutsu } from "@/validators/ai";
 import { makeTag } from "../../../../libs/combat/helpers/battleScenario";
-import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
+import { insertFightingDungeonRun } from "../../../../setup/dungeon";
 import {
   insertItems,
   insertUserItems,
@@ -55,14 +55,8 @@ describeWithDatabase("dungeon wave preparation", () => {
   it.each([[false, false], [true, false], [false, true]] as const)("ends an initiated dungeon only after three completed missed rounds (publication failure: %p, tickets: %p)", async (publicationFails, hasTickets) => {
     if (publicationFails) vi.spyOn(Pusher.prototype, "trigger").mockRejectedValue(new Error("Pusher unavailable"));
     const client = await getTestDatabase();
-    const meta = dungeonBattleState({
-      runState: { ...dungeonBattleState().runState, memberIds: MEMBERS },
-    });
-    const content = dungeonContent();
     const waves = [{ aiIds: [OPENER], delayRounds: 0 }];
     const liftedUntil = new Date(Date.now() + 1800000);
-    content.tiers[0]![0]!.waves = waves;
-    content.requirements.requiredItemId = hasTickets ? "wave-ticket" : null;
     await insertUsers([
       ...MEMBERS.map((userId) => ({ userId, username: userId, status: "QUEUED" as const, level: 50, rank: "JONIN" as const, bracketImmunityLiftedUntil: liftedUntil })),
       { userId: OPENER, username: "Enemy", isAi: true, level: 50, rank: "JONIN" as const },
@@ -72,16 +66,14 @@ describeWithDatabase("dungeon wave preparation", () => {
       await insertUserItems(MEMBERS.map((userId) => ({ id: `ticket-${userId}`, userId, itemId: "wave-ticket", quantity: 1, equipped: "ITEM_1" as const })));
     }
     await insertDefaultAiProfile({ userId: OPENER });
-    await client.insert(dungeon).values({ id: "wave-definition", content, updatedAt: new Date() });
-    await client.insert(dungeonRun).values({
-      id: meta.runId, dungeonId: "wave-definition", leaderId: MEMBERS[0]!, content,
-      state: meta.runState, status: "FIGHTING", version: meta.runVersion,
-      battleId: "wave-fight", expiresAt: new Date(meta.expiresAt), createdAt: new Date(),
+    const { meta, content, coop } = await insertFightingDungeonRun({
+      dungeonId: "wave-definition", battleId: "wave-fight", members: MEMBERS, waves,
+      requiredItemId: hasTickets ? "wave-ticket" : null,
     });
     await client.insert(dungeonMember).values(MEMBERS.map((userId) => ({ runId: meta.runId, userId, activeUserId: userId })));
     const admission = await initiateBattle({
       client, cacheUserId: MEMBERS[0], userIds: MEMBERS, targetIds: [OPENER],
-      coop: { kind: "dungeon", ...meta, content, battleId: "wave-fight", waves },
+      coop: { ...coop, content },
     }, "QUEST");
     expect(admission.success).toBe(true);
     expect(admission.requiresUserRefresh).toBe(hasTickets);
@@ -121,26 +113,17 @@ describeWithDatabase("dungeon wave preparation", () => {
     "schedules incoming enemies by %s initiative without interrupting the active turn",
     async (initiative) => {
       const client = await getTestDatabase();
-      const meta = dungeonBattleState({
-        runState: { ...dungeonBattleState().runState, memberIds: MEMBERS },
-        lastActionRound: Object.fromEntries(MEMBERS.map((id) => [id, 0])),
-      });
       const waves = [
         { aiIds: [OPENER], delayRounds: 0 },
         { aiIds: [MID, HIGH], delayRounds: 1 },
       ];
-      const content = dungeonContent();
-      content.tiers[0]![0]!.waves = waves;
       await insertDefaultAiProfile({ userId: OPENER });
       await insertUsers([
         ...MEMBERS.map((userId) => ({ userId, username: userId, status: "QUEUED" as const, level: 50, rank: "JONIN" as const })),
         ...[OPENER, MID, HIGH].map((userId) => ({ userId, username: userId, isAi: true, level: 50, rank: "JONIN" as const })),
       ]);
-      await client.insert(dungeon).values({ id: "wave-definition", content, updatedAt: new Date() });
-      await client.insert(dungeonRun).values({
-        id: meta.runId, dungeonId: "wave-definition", leaderId: MEMBERS[0]!, content,
-        state: meta.runState, status: "FIGHTING", version: meta.runVersion,
-        battleId: "wave-fight", expiresAt: new Date(meta.expiresAt), createdAt: new Date(),
+      const { meta, coop } = await insertFightingDungeonRun({
+        dungeonId: "wave-definition", battleId: "wave-fight", members: MEMBERS, waves,
       });
       await client.insert(dungeonMember).values(MEMBERS.map((userId) => ({ runId: meta.runId, userId, activeUserId: userId })));
       // The later wave is authored in ascending initiative order. Equal rolls
@@ -152,7 +135,7 @@ describeWithDatabase("dungeon wave preparation", () => {
       rolls.forEach((roll) => random.mockReturnValueOnce(roll));
       expect((await initiateBattle({
         client, userIds: MEMBERS, targetIds: waves.flatMap((wave) => wave.aiIds),
-        coop: { kind: "dungeon", ...meta, battleId: "wave-fight", waves },
+        coop,
       }, "QUEST")).success).toBe(true);
 
       const saved = (await client.query.battle.findFirst())!;
@@ -192,15 +175,9 @@ describeWithDatabase("dungeon wave preparation", () => {
     "summons a pristine creature after its %s wave combatant spends its loadout",
     async (wave) => {
       const client = await getTestDatabase();
-      const meta = dungeonBattleState({
-        runState: { ...dungeonBattleState().runState, memberIds: MEMBERS },
-        lastActionRound: Object.fromEntries(MEMBERS.map((id) => [id, 0])),
-      });
       const waves = wave === "opening"
         ? [{ aiIds: [CASTER, CREATURE], delayRounds: 0 }, { aiIds: [OPENER], delayRounds: 1 }]
         : [{ aiIds: [OPENER], delayRounds: 0 }, { aiIds: [CASTER, CREATURE], delayRounds: 1 }];
-      const content = dungeonContent();
-      content.tiers[0]![0]!.waves = waves;
       await insertDefaultAiProfile({
         userId: CREATURE,
         includeDefaultRules: false,
@@ -234,16 +211,13 @@ describeWithDatabase("dungeon wave preparation", () => {
         { id: "wave-owned-technique", userId: CREATURE, jutsuId: "wave-technique", equipped: true },
         { id: "wave-owned-summon", userId: CASTER, jutsuId: "wave-summon", equipped: true },
       ]);
-      await client.insert(dungeon).values({ id: "wave-definition", content, updatedAt: new Date() });
-      await client.insert(dungeonRun).values({
-        id: meta.runId, dungeonId: "wave-definition", leaderId: MEMBERS[0]!, content,
-        state: meta.runState, status: "FIGHTING", version: meta.runVersion,
-        battleId: "wave-fight", expiresAt: new Date(meta.expiresAt), createdAt: new Date(),
+      const { meta, coop } = await insertFightingDungeonRun({
+        dungeonId: "wave-definition", battleId: "wave-fight", members: MEMBERS, waves,
       });
       await client.insert(dungeonMember).values(MEMBERS.map((userId) => ({ runId: meta.runId, userId, activeUserId: userId })));
       expect((await initiateBattle({
         client, userIds: MEMBERS, targetIds: waves.flatMap((entry) => entry.aiIds),
-        coop: { kind: "dungeon", ...meta, battleId: "wave-fight", waves },
+        coop,
       }, "QUEST")).success).toBe(true);
 
       // Read the persisted preload, rather than constructing a template in the test.

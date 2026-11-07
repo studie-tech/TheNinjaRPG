@@ -1,3 +1,4 @@
+import { getTableColumns, type Table } from "drizzle-orm";
 import { z } from "zod";
 import type { Item, Jutsu } from "@/drizzle/schema";
 import { GenNames, StatNames } from "@/libs/combat/constants";
@@ -55,6 +56,17 @@ const num = (value = 0) => z.coerce.number().prefault(value);
 const bool = (value = false) => z.boolean().prefault(value);
 /** Builds a string schema with a test-fixture prefault. */
 const str = (value: string) => z.string().prefault(value);
+
+/** The row a table's column defaults produce; SQL defaults become the current time. */
+export const tableDefaults = (table: Table) =>
+  Object.fromEntries(
+    Object.entries(getTableColumns(table)).map(([key, column]) => [
+      key,
+      column.default && typeof column.default === "object" && "queryChunks" in column.default
+        ? new Date()
+        : (column.default ?? null),
+    ]),
+  );
 
 /**
  * Creates a record from a constant key list where every key has the same value.

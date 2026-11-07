@@ -11,7 +11,7 @@ import { updateWars } from "@/libs/combat/database";
 import { calcBattleResult, getBattleTeamWars } from "@/libs/combat/util";
 import { getWarSide } from "@/libs/objectiveWar";
 import { Pusher } from "@/libs/pusher";
-import { combatRouter, processUsersForBattle } from "@/server/api/routers/combat";
+import { combatRouter } from "@/server/api/routers/combat";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { travelRouter } from "@/server/api/routers/travel";
 import { fetchUpdatedUser, type UserWithRelations } from "@/server/api/routers/profile";
@@ -22,6 +22,7 @@ import { fetchActiveWars, warRouter } from "@/server/api/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { canEnterWarCampSector } from "@/server/utils/warMercenary";
 import { defaultWarRules } from "@/validators/war";
+import { insertLobbyBattle, preloadLobby } from "../../../libs/combat/helpers/preload";
 import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
@@ -346,19 +347,13 @@ describeWithDatabase("mercenary strategic participation", () => {
     const offer = await hireMerc(db, 1);
     const essentials = await fetchBattleEssentials(db);
     const users = await db.query.userData.findMany();
-    const processed = await processUsersForBattle(db, {
-      users: users.filter((user) => ["merc", "enemy"].includes(user.userId)).map((user) => ({
-        ...user, items: [], jutsus: [], userSkills: [], bloodline: null,
-        village: essentials.villages.find((village) => village.id === user.villageId) ?? null,
-        aiProfile: essentials.defaultProfile,
-      })) as CombatQueryUser[],
-      ...essentials, wars: essentials.activeWars, battleType: "COMBAT",
-      leftSideUserIds: ["merc"], hide: false, isSummon: false, width: 13, height: 9,
-    });
-    await db.insert(battle).values({
-      id: "lobby", background: "default", battleType: "COMBAT", roundStartAt: new Date(Date.now() + 60_000),
-      usersState: processed.usersState, usersEffects: processed.userEffects, extraState: processed.extraState, groundEffects: [],
-    });
+    const combatants = users.filter((user) => ["merc", "enemy"].includes(user.userId)).map((user) => ({
+      ...user, items: [], jutsus: [], userSkills: [], bloodline: null,
+      village: essentials.villages.find((village) => village.id === user.villageId) ?? null,
+      aiProfile: essentials.defaultProfile,
+    })) as CombatQueryUser[];
+    const processed = await preloadLobby(db, combatants, essentials, "COMBAT", { leftSideUserIds: ["merc"] });
+    await insertLobbyBattle(db, "lobby", "COMBAT", processed);
     const before = (await db.query.battle.findFirst({ where: eq(battle.id, "lobby") }))!;
     expect(getWarSide(before.extraState.wars.w!, "c", "merc")).toBe("a");
     expect((await kage.leaveMercenary({ contractId: offer.id })).success).toBe(true);

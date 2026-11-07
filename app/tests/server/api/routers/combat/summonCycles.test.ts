@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { eq, getTableColumns } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { aiProfile, battle, dungeon, dungeonRun, jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import type { CombatQueryUser } from "@/libs/combat/types";
@@ -7,24 +7,16 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle, processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { JutsuValidator } from "@/validators/combat";
-import { makeTag, makeUser } from "../../../../libs/combat/helpers/battleScenario";
-import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
+import { makeTag, makeUser, tableDefaults } from "../../../../libs/combat/helpers/battleScenario";
+import { insertFightingDungeonRun } from "../../../../setup/dungeon";
 import { insertUsers, insertDefaultAiProfile, insertJutsus } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
-const defaults = (table: typeof jutsu | typeof userData | typeof userJutsu) =>
-  Object.fromEntries(Object.entries(getTableColumns(table)).map(([key, column]) => [
-    key,
-    column.default && typeof column.default === "object" && "queryChunks" in column.default
-      ? new Date()
-      : (column.default ?? null),
-  ]));
-
 const summonJutsu = (id: string, targets: readonly string[]) => ({
-  ...defaults(jutsu),
+  ...tableDefaults(jutsu),
   id,
   ...JutsuValidator.parse({
-    ...defaults(jutsu), name: id, image: "/summon.png", description: "Summon",
+    ...tableDefaults(jutsu), name: id, image: "/summon.png", description: "Summon",
     battleDescription: "Summon", jutsuType: "AI", jutsuRank: "D",
     requiredRank: "STUDENT", requiredLevel: 1, target: "EMPTY_GROUND", range: 1,
     method: "SINGLE", jutsuWeapon: "NONE", actionCostPerc: 40,
@@ -36,7 +28,7 @@ const summonJutsu = (id: string, targets: readonly string[]) => ({
 }) as typeof jutsu.$inferSelect;
 
 const participant = (userId: string, targets: readonly string[]): CombatQueryUser => ({
-  ...defaults(userData),
+  ...tableDefaults(userData),
   ...makeUser({
     userId, username: userId, controllerId: userId, isAi: true, rank: "JONIN",
     level: 100, experience: 3339000, status: "AWAKE",
@@ -44,7 +36,7 @@ const participant = (userId: string, targets: readonly string[]): CombatQueryUse
   }),
   items: [],
   jutsus: targets.length ? [{
-    ...defaults(userJutsu), id: `owned-${userId}`, userId, jutsuId: `summon-${userId}`,
+    ...tableDefaults(userJutsu), id: `owned-${userId}`, userId, jutsuId: `summon-${userId}`,
     jutsu: summonJutsu(`summon-${userId}`, targets), level: 1, equipped: true,
   }] : [],
   userSkills: [], queue: [], cookingJobs: [], raidBuffs: [], userQuests: [],
@@ -143,22 +135,15 @@ describeWithDatabase("cyclic summon battle admission", () => {
   it.each(["ordinary", "later wave"] as const)("rejects a cycle in an %s preload before claiming participants", async (mode) => {
     const client = await getTestDatabase();
     const members = ["human", "teammate-a", "teammate-b"];
-    const meta = dungeonBattleState({ runState: { ...dungeonBattleState().runState, memberIds: members } });
     const waves = [{ aiIds: ["opener"], delayRounds: 0 }, { aiIds: ["A"], delayRounds: 1 }];
-    if (mode === "later wave") {
-      await client.update(userData).set({status: "QUEUED"});
-      const content = dungeonContent();
-      content.tiers[0]![0]!.waves = waves;
-      await client.insert(dungeon).values({ id: "definition", content, updatedAt: new Date() });
-      await client.insert(dungeonRun).values({
-        id: meta.runId, dungeonId: "definition", leaderId: "human", content,
-        state: meta.runState, status: "FIGHTING", version: meta.runVersion,
-        battleId: "cycle-battle", expiresAt: new Date(meta.expiresAt), createdAt: new Date(),
-      });
-    }
+    const laterWave = mode === "later wave";
+    if (laterWave) await client.update(userData).set({status: "QUEUED"});
+    const run = laterWave
+      ? await insertFightingDungeonRun({ dungeonId: "definition", battleId: "cycle-battle", members, waves })
+      : undefined;
     const result = await initiateBattle({
-      client, userIds: mode === "ordinary" ? ["human"] : members, targetIds: mode === "ordinary" ? ["A"] : ["opener", "A"],
-      ...(mode === "later wave" ? { coop: { kind: "dungeon" as const, ...meta, battleId: "cycle-battle", waves } } : {}),
+      client, userIds: laterWave ? members : ["human"], targetIds: laterWave ? ["opener", "A"] : ["A"],
+      ...(run ? { coop: run.coop } : {}),
     }, "QUEST");
     expect(result).toMatchObject({ success: false, message: expect.stringMatching(/cyclic summon.*report this to staff/i) });
     expect(await client.query.battle.findMany()).toHaveLength(0);

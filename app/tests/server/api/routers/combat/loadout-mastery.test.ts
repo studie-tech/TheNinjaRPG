@@ -6,7 +6,6 @@ import { type BattleType, MAX_PLAYER_LEVEL, RANKED_PVP_STATS, REGEN_SECONDS } fr
 import { userJutsuToAction } from "@/libs/combat/actions";
 import { applyEffects } from "@/libs/combat/process";
 import { refreshMasteries } from "@/libs/combat/util";
-import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import { effectiveMasteries } from "@/libs/mastery";
 import { jutsuRequirementWarning } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -30,11 +29,11 @@ import {
 } from "@/drizzle/schema";
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
-import { combatRouter, processUsersForBattle } from "@/server/api/routers/combat";
-import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
+import { combatRouter } from "@/server/api/routers/combat";
 import { fetchUserJutsus } from "@/server/api/routers/jutsu";
 import { getTagSchema } from "@/validators/combat";
 import { makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
+import { insertSnapshotLobby, loadCombatant, preloadLobby } from "../../../../libs/combat/helpers/preload";
 import {
   insertItems,
   insertUserItems,
@@ -121,46 +120,11 @@ const seedLobby = async (
     },
     { id: "without-armor", userId: USER, itemData: [] },
   ]);
-  const row = await db.query.userData.findFirst({ where: eq(userData.userId, USER) });
-  if (!row) throw new Error("Missing lobby user");
   const essentials = await fetchBattleEssentials(db);
-  const raw = {
-    ...row,
-    items: await fetchUserItemsWithVariants(db, USER),
-    jutsus: (await fetchUserJutsus(db, USER)).filter((j) => j.equipped),
-    userSkills: [],
-    bloodline: null,
-    village: null,
-    aiProfile: essentials.defaultProfile,
-    raidBuffs,
-    titles: options.titles,
-  } as CombatQueryUser;
-  const processed = await processUsersForBattle(db, {
-    users: [raw],
-    ...essentials,
-    wars: essentials.activeWars,
-    battleType: options.battleType ?? "COMBAT",
-    hide: false,
-    isSummon: false,
-    width: 13,
-    height: 9,
-  });
-  processed.extraState.profileCacheSnapshots = {
-    [USER]: captureCombatCacheSnapshot(raw),
-  };
-  refreshMasteries(processed.usersState, processed.userEffects);
-  await db
-    .insert(battle)
-    .values({
-      id: BATTLE,
-      background: "default",
-      battleType: options.battleType ?? "COMBAT",
-      roundStartAt: new Date(Date.now() + 60_000),
-      usersState: processed.usersState,
-      usersEffects: processed.userEffects,
-      extraState: processed.extraState,
-      groundEffects: [],
-    });
+  const raw = await loadCombatant(db, USER, essentials, { raidBuffs, titles: options.titles });
+  const battleType = options.battleType ?? "COMBAT";
+  const processed = await preloadLobby(db, [raw], essentials, battleType);
+  await insertSnapshotLobby(db, BATTLE, battleType, raw, processed);
   return { raw, essentials };
 };
 
@@ -296,10 +260,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
     }]);
     // Battle initialization receives relational rows without resolved variants.
     const owned = await db.query.userJutsu.findMany({ where: eq(userJutsu.userId, USER), with: { jutsu: true } });
-    const processed = await processUsersForBattle(db, {
-      users: [{ ...raw, bloodlineId: "blood", bloodlineReskinId: "scarlet", jutsus: owned.filter((row) => row.equipped) }],
-      ...essentials, wars: essentials.activeWars, battleType: "COMBAT", hide: false, isSummon: false, width: 13, height: 9,
-    });
+    const processed = await preloadLobby(db, [{ ...raw, bloodlineId: "blood", bloodlineReskinId: "scarlet", jutsus: owned.filter((row) => row.equipped) }], essentials, "COMBAT");
     await db.update(battle).set({ usersState: processed.usersState, extraState: processed.extraState }).where(eq(battle.id, BATTLE));
     const assertCosmetics = async () => {
       const stored = await db.query.battle.findFirst({ where: eq(battle.id, BATTLE) });
@@ -356,14 +317,10 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
     // Normal jutsu-page consumers still receive personalized data.
     expect((await fetchUserJutsus(db, USER)).find((uj) => uj.jutsuId === "usable")?.jutsu.name).toBe("Owner Phoenix");
     const opponentJutsus = await fetchUserJutsus(db, opponentId, undefined, { applyReskins: false });
-    const processed = await processUsersForBattle(db, {
-      users: [
+    const processed = await preloadLobby(db, [
         { ...raw, jutsus: ownerJutsus.filter((uj) => uj.equipped) },
         { ...raw, userId: opponentId, username: opponentId, jutsus: opponentJutsus },
-      ] as CombatQueryUser[],
-      ...essentials, wars: essentials.activeWars, battleType: "COMBAT",
-      hide: false, isSummon: false, width: 13, height: 9,
-    });
+    ] as CombatQueryUser[], essentials, "COMBAT");
     await db.update(battle).set({ usersState: processed.usersState, extraState: processed.extraState }).where(eq(battle.id, BATTLE));
     const switches = [{ userId: USER, loadout: "new-jutsus" }, { userId: opponentId, loadout: "opponent-loadout" }];
     if (!ownerFirst) switches.reverse();
@@ -426,16 +383,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
       expect(validateItemLoadout([gated.item, penalty.item]).check).toBe(true);
       manuallyAssignUserStats(raw, RANKED_PVP_STATS);
       raw.items = [gated, penalty, broken];
-      const result = await processUsersForBattle(await getTestDatabase(), {
-        users: [raw],
-        ...essentials,
-        wars: essentials.activeWars,
-        battleType,
-        hide: false,
-        isSummon: false,
-        width: 13,
-        height: 9,
-      });
+      const result = await preloadLobby(await getTestDatabase(), [raw], essentials, battleType);
       expect(result.usersState[0]).toMatchObject({
         level: MAX_PLAYER_LEVEL,
         offence: RANKED_PVP_STATS.offence,
@@ -466,16 +414,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
     raw.items = [chest, helm];
     expect(effectiveMasteries(raw).ninjutsuMastery).toBe(600);
     expect(jutsuRequirementWarning(raw.jutsus[0]!.jutsu, raw as unknown as NonNullable<UserWithRelations>, raw.items)).toBe("");
-    const result = await processUsersForBattle(await getTestDatabase(), {
-      users: [raw],
-      ...essentials,
-      wars: essentials.activeWars,
-      battleType: "COMBAT",
-      hide: false,
-      isSummon: false,
-      width: 13,
-      height: 9,
-    });
+    const result = await preloadLobby(await getTestDatabase(), [raw], essentials, "COMBAT");
     const actor = result.usersState[0]!;
     expect(actor.items.find((ui) => ui.id === chest.id)?.equipped).toBe("CHEST");
     expect(actor.items.find((ui) => ui.id === helm.id)?.equipped).toBe("HEAD");

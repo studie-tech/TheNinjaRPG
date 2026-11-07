@@ -1,31 +1,15 @@
-import { combatSharedCooldown, jutsuEquipLimit } from "@/drizzle/schema";
-import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { getTableColumns, type SQL } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { type BattleType, WAR_SECTORWAR_AI_SHRINE_REDUCE } from "@/drizzle/constants";
-import { battle, battleHistory, userData } from "@/drizzle/schema";
-import type { CompleteBattle } from "@/libs/combat/types";
+import { battle } from "@/drizzle/schema";
 import { calcBattleResult } from "@/libs/combat/util";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
-import type { DrizzleClient } from "@/server/db";
-import { makeUser } from "../../../../libs/combat/helpers/battleScenario";
+import { fakeInitiationClient, makeInitiationUser } from "../../../../libs/combat/helpers/preload";
 
-const participant = (userId: string, villageId: string, isAi = false) => ({
-  ...Object.fromEntries(
-    Object.entries(getTableColumns(userData)).map(([key, column]) => [
-      key,
-      column.default && typeof column.default === "object" && "queryChunks" in column.default
-        ? new Date()
-        : column.default ?? null,
-    ]),
-  ),
-  ...makeUser({ userId, username: userId, controllerId: userId, villageId, isAi, experience: 3339000, rank: "JONIN", status: "AWAKE", pvpStreak: 4, clanId: "clan" }),
-  items: [], jutsus: [], userSkills: [], queue: [], cookingJobs: [], raidBuffs: [], userQuests: [], completedQuests: [],
-  bounties: [], bountySignups: [], bloodline: null, sageMode: null, village: null, clan: null,
-  regenAt: new Date(), joinedVillageAt: new Date(),
-});
+const participant = (userId: string, villageId: string, isAi = false) =>
+  makeInitiationUser({ userId, villageId, isAi, pvpStreak: 4, clanId: "clan" });
 
 const startBattle = async (battleType: BattleType, repeats: number, defenderAi = false, team?: {
   users: ReturnType<typeof participant>[];
@@ -33,36 +17,15 @@ const startBattle = async (battleType: BattleType, repeats: number, defenderAi =
   targetIds: string[];
 }) => {
   const users = team?.users ?? [participant("attacker", "a"), participant("defender", "b", defenderAi)];
-  let saved: CompleteBattle | undefined;
   const historyReads: SQL[] = [];
   const phases: string[] = [];
-  const client = {
-    query: new Proxy({}, { get: (_target, key) => ({
-      findMany: async () => key === "userData" ? structuredClone(users) : [],
-      findFirst: async () => key === "aiProfile" ? { id: "Default", rules: [], includeDefaultRules: false } : undefined,
-    }) }),
-    select: () => ({ from: (table: object) => {
-        if (table === combatSharedCooldown) return { orderBy: async () => [] };
-        if (table === jutsuEquipLimit) return { orderBy: async () => equipLimitFixture };
-      const rows = table === battleHistory ? [{ count: repeats }] : table === userData ? [{ average: 0 }] : [];
-      const builder = {
-        innerJoin: () => builder,
-        where: (predicate: SQL) => {
-          if (table === battleHistory) { historyReads.push(predicate); phases.push("history"); }
-          return builder;
-        },
-        then: (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve),
-      };
-      return builder;
-    } }),
-    insert: (table: object) => ({ values: async (value: unknown) => {
-      phases.push("write");
-      if (table === battle) saved = value as CompleteBattle;
-      return { rowsAffected: 1 };
-    } }),
-    update: () => ({ set: () => ({ where: async () => ({ rowsAffected: users.filter((user) => !user.isAi).length }) }) }),
-  } as unknown as DrizzleClient;
+  const { client, saved: savedBattle } = fakeInitiationClient(users, {
+    historyCount: repeats,
+    onHistoryRead: (predicate) => { historyReads.push(predicate); phases.push("history"); },
+    onWrite: () => phases.push("write"),
+  });
   expect((await initiateBattle({ client, userIds: team?.userIds ?? ["attacker"], targetIds: team?.targetIds ?? ["defender"], biome: "default" }, battleType)).success).toBe(true);
+  const saved = savedBattle();
   if (!saved) throw new Error("Battle was not inserted");
   saved.groundEffects = [];
   return { saved, historyReads, phases };

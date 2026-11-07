@@ -8,55 +8,24 @@ import {
   PvpBattleTypes,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
-import { battle, combatSharedCooldown, jutsu, jutsuEquipLimit, userData } from "@/drizzle/schema";
-import type { CombatQueryUserJutsu, CompleteBattle } from "@/libs/combat/types";
+import { battle, jutsu } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
-import type { DrizzleClient } from "@/server/db";
 import { HealTag } from "@/validators/combat";
-import { makeUser } from "../../../../libs/combat/helpers/battleScenario";
+import { fakeInitiationClient, makeInitiationUser } from "../../../../libs/combat/helpers/preload";
 import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 
 const participant = (
   userId: string,
   opts: { isAi?: boolean; defaultAutoCombat?: boolean; villageId?: string } = {},
 ) => ({
-  ...Object.fromEntries(
-    Object.entries(getTableColumns(userData)).map(([key, column]) => [
-      key,
-      column.default && typeof column.default === "object" && "queryChunks" in column.default
-        ? new Date()
-        : (column.default ?? null),
-    ]),
-  ),
-  ...makeUser({
+  ...makeInitiationUser({
     userId,
-    username: userId,
-    controllerId: userId,
     villageId: opts.villageId ?? "a",
     isAi: opts.isAi ?? false,
-    experience: 3339000,
-    rank: "JONIN",
-    status: "AWAKE",
   }),
   defaultAutoCombat: opts.defaultAutoCombat ?? true,
   inArena: opts.isAi ?? false,
-  items: [],
-  jutsus: [] as CombatQueryUserJutsu[],
-  userSkills: [],
-  queue: [],
-  cookingJobs: [],
-  raidBuffs: [],
-  userQuests: [],
-  completedQuests: [],
-  bounties: [],
-  bountySignups: [],
-  bloodline: null,
-  sageMode: null,
-  village: null,
-  clan: null,
-  regenAt: new Date(),
-  joinedVillageAt: new Date(),
 });
 
 type Participant = ReturnType<typeof participant>;
@@ -67,46 +36,7 @@ const startBattle = async (
   info: Partial<Parameters<typeof initiateBattle>[0]>,
   equipLimits = equipLimitFixture,
 ) => {
-  let saved: CompleteBattle | undefined;
-  const readEquipLimits = vi.fn(async () => equipLimits);
-  const client = {
-    query: new Proxy(
-      {},
-      {
-        get: (_target, key) => ({
-          findMany: async () => (key === "userData" ? structuredClone(users) : []),
-          findFirst: async () =>
-            key === "aiProfile"
-              ? { id: "Default", rules: [], includeDefaultRules: false }
-              : undefined,
-        }),
-      },
-    ),
-    select: () => ({
-      from: (table: object) => {
-        if (table === combatSharedCooldown) return { orderBy: async () => [] };
-        if (table === jutsuEquipLimit) return { orderBy: readEquipLimits };
-        const rows = table === userData ? [{ average: 0 }] : [{ count: 0 }];
-        const builder = {
-          innerJoin: () => builder,
-          where: () => builder,
-          then: (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve),
-        };
-        return builder;
-      },
-    }),
-    insert: (table: object) => ({
-      values: async (value: unknown) => {
-        if (table === battle) saved = value as CompleteBattle;
-        return { rowsAffected: 1 };
-      },
-    }),
-    update: () => ({
-      set: () => ({
-        where: async () => ({ rowsAffected: users.filter((user) => !user.isAi).length }),
-      }),
-    }),
-  } as unknown as DrizzleClient;
+  const { client, saved: savedBattle, readEquipLimits } = fakeInitiationClient(users, { equipLimits });
   const humans = users.filter((user) => !user.isAi).map((user) => user.userId);
   const ais = users.filter((user) => user.isAi).map((user) => user.userId);
   const result = await initiateBattle(
@@ -114,6 +44,7 @@ const startBattle = async (
     battleType,
   );
   expect(result.success).toBe(true);
+  const saved = savedBattle();
   if (!saved) throw new Error("Battle was not inserted");
   return {
     auto: Object.fromEntries(
