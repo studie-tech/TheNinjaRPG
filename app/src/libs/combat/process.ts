@@ -302,7 +302,18 @@ export const expireGroundEffects = (battle: CompleteBattle, actionRounds: number
 };
 
 /**
- * Apply effects to users
+ * Resolve one action against the battle and return the next state. The phase order
+ * decides combat outcomes:
+ * 1. Ground effects become user effects on occupied tiles.
+ * 2. Mirror and copy add the effects they transfer.
+ * 3. Non-damage effects resolve; instant kills settle against Curse.
+ * 4. Consume and Siphon register, then Diffuse debts are repaid.
+ * 5. The damage pipeline rewrites packets; modifier tags log and carry forward.
+ * 6. Pierce, Parry and post-damage effects read the mitigated packets.
+ * 7. Parry returns and Diffuse split the packets, before deferred Absorb and heal adjustments.
+ * 8. Consequences are mitigated per source, collapsed per target and applied to pools.
+ * 9. Conversion shields are granted; pools and masteries refresh for the next action.
+ *
  * @param battle - Battle to apply effects to
  * @param actorId - ID of the actor
  * @param action - Action to apply effects to
@@ -313,7 +324,7 @@ export const applyEffects = (
   action?: CombatAction,
 ) => {
   // Destructure
-  const { usersState, usersEffects, groundEffects, round } = battle;
+  const { usersState, usersEffects, round } = battle;
   const actor = usersState.find((u) => u.userId === actorId);
 
   // Things we wish to return
@@ -329,125 +340,13 @@ export const applyEffects = (
   const newUsersEffects: UserEffect[] = [];
   const actionEffects: ActionEffect[] = [];
 
-  // Convert all ground effects to user effects on the users standing on the tile
-  let spawnGrid: ReturnType<typeof getBattleGrid> | undefined;
-  groundEffects.sort(sortEffects).forEach((e) => {
-    // Get the round information for the effect
-    const { startRound, curRound } = calcEffectRoundInfo(e, battle);
-    e.castThisRound = startRound === curRound;
-    // Ignore movement passives because no combat action selected their destination.
-    if (e.fromType === "skill" && e.type === "move") return;
-    if (
-      e.isNew &&
-      e.fromType === "skill" &&
-      (e.type === "clone" || e.type === "summon")
-    ) {
-      const creator = newUsersState.find((user) => user.userId === e.creatorId);
-      spawnGrid ??= getBattleGrid(1, battle);
-      const grid = spawnGrid;
-      const origin = grid.getHex({ col: e.longitude, row: e.latitude });
-      if (!creator || !origin) return;
-      // Innate casts originate on occupied cells; choose the nearest empty destination.
-      // Include earlier spawns in this pass when checking occupancy to prevent overlap.
-      const destination = grid
-        .toArray()
-        .filter(
-          (target) =>
-            !findUser(newUsersState, target.col, target.row) &&
-            !findBarrier(groundEffects, target.col, target.row),
-        )
-        .sort((a, b) => grid.distance(a, origin) - grid.distance(b, origin))[0];
-      if (!destination) return;
-      e.longitude = destination.col;
-      e.latitude = destination.row;
-    }
-    // Process special effects
-    let info: ActionEffect | undefined;
-    if (e.type === "move") {
-      move(e, usersEffects, newUsersState, newGroundEffects);
-    } else {
-      // Special handling of clone & summon ground-effects
-      if (e.type === "clone") {
-        info = clone(newUsersState, e, battle.extraState);
-      } else if (e.type === "summon") {
-        info = summon(newUsersState, e, newUsersEffects, battle);
-      } else if (e.type === "barrier") {
-        const user = findUser(newUsersState, e.longitude, e.latitude);
-        if (user) e.rounds = 0;
-      } else {
-        // Information on what was done
-        if (e.isNew && e.castThisRound && actor && e.type !== "visual" && e.rounds) {
-          const txt = `${actor.username} marked the ground with ${e.type} for the next ${e.rounds} rounds`;
-          if (!actionEffects.find((ae) => ae.txt === txt)) {
-            actionEffects.push({ txt, color: "blue" });
-          }
-        }
-        // Apply all other ground effects to user
-        const user = findUser(newUsersState, e.longitude, e.latitude);
-        if (user && e.type !== "visual") {
-          if (checkFriendlyFire(e, user, newUsersState)) {
-            const hasEffect = usersEffects.some((ue) => ue.id === e.id);
-            const isInstant = ["damage", "heal", "pierce"].includes(e.type);
-            if (!hasEffect) {
-              // NOTE:
-              // 1. If the effect is instant, it is applied immediately
-              // 2. User effects from Ground effects are not forwarded to the next round
-              usersEffects.push({
-                ...e,
-                rounds: isInstant ? 0 : 1,
-                targetId: user.userId,
-                createdRound: isInstant ? curRound : curRound - 1,
-                fromGround: true,
-              } as UserEffect);
-            }
-          }
-        }
-        // Forward any damage effects, which should be applied to barriers as well
-        if (!user && e.type === "damage") {
-          const barrier = findBarrier(groundEffects, e.longitude, e.latitude);
-          if (barrier) {
-            usersEffects.push({
-              ...e,
-              targetType: "barrier",
-              targetId: barrier.id,
-              fromGround: true,
-            } as UserEffect);
-          }
-        }
-      }
-
-      // Show once appearing visual/audio
-      if ((e.appearAnimation || e.appearSfx) && e.isNew && e.type !== "visual") {
-        newGroundEffects.push(
-          getVisualOrSound(
-            e.longitude,
-            e.latitude,
-            e.appearAnimation,
-            e.appearSfx,
-            round,
-          ),
-        );
-      }
-
-      // Process round reduction & tag removal
-      if (isEffectActive(e) || e.type === "visual") {
-        e.isNew = false;
-        newGroundEffects.push(e);
-      } else if (e.disappearAnimation || e.disappearSfx) {
-        newGroundEffects.push(
-          getVisualOrSound(
-            e.longitude,
-            e.latitude,
-            e.disappearAnimation,
-            e.disappearSfx,
-            round,
-          ),
-        );
-      }
-    }
-
-    // Add info to action effects if it exists
-    if (info) actionEffects.push(info);
+  applyGroundEffects({
+    battle,
+    actor,
+    newUsersState,
+    newUsersEffects,
+    newGroundEffects,
+    actionEffects,
   });
 
   // Book-keeping for damage and heal effects
@@ -540,49 +439,6 @@ export const applyEffects = (
     .sort(sortEffects)
     .forEach(resolve);
 
-  // Accumulate before collapseConsequences merges hits from different casters.
-  // Grant shields after damage resolves so they cannot absorb the generating action.
-  const accumulateShieldConversion = (
-    userId: string,
-    damage: number,
-    type: "consume" | "siphon",
-  ) => {
-    const conversion = shieldConversionsByUser.get(userId);
-    if (!conversion || damage <= 0) return;
-    conversion.shields.forEach((shield) => {
-      if (shield.type === type) {
-        shield.hp += damage * (shield.ratio / Math.max(1, conversion.ratio));
-      }
-    });
-  };
-
-  // Count each HP loss before any healing, after shields and Final Stand resolve.
-  const accumulateSiphonShield = (
-    consequence: Consequence,
-    key: EnmityDamageKey,
-    target: BattleUserState,
-  ) => {
-    if (
-      consequence.damageSource === "recoil" ||
-      !shieldConversionsByUser
-        .get(target.userId)
-        ?.shields.some((shield) => shield.type === "siphon")
-    )
-      return;
-    let remaining = Math.min(
-      Math.max(0, target.curHealth),
-      Math.max(0, consequence[key] ?? 0),
-    );
-    let incomingDamage = 0;
-    // Source attribution survives target-level collapse, including mixed self/enemy hits.
-    for (const source of consequence.enmitySources ?? [consequence]) {
-      const healthLost = Math.min(remaining, Math.max(0, source[key] ?? 0));
-      remaining -= healthLost;
-      if (source.userId !== target.userId) incomingDamage += healthLost;
-    }
-    accumulateShieldConversion(target.userId, incomingDamage, "siphon");
-  };
-
   // Resolve activation and prevention before Final Stand can protect debt repayment.
   repayDiffuseDamage(
     newUsersState,
@@ -601,8 +457,13 @@ export const applyEffects = (
         creditUserId,
       );
       if (userId !== targetId) {
-        accumulateShieldConversion(userId, damage, "consume");
-        accumulateShieldConversion(targetId, healthLost, "siphon");
+        accumulateShieldConversion(shieldConversionsByUser, userId, damage, "consume");
+        accumulateShieldConversion(
+          shieldConversionsByUser,
+          targetId,
+          healthLost,
+          "siphon",
+        );
       }
     },
   );
@@ -724,28 +585,7 @@ export const applyEffects = (
     .filter((e) => e.type === "parry")
     .sort(sortEffects)
     .forEach(resolve);
-  const parryReturns: [string, Consequence][] = [];
-  for (const [id, consequence] of consequences) {
-    if (!consequence.damage || !consequence.parryPercentage) continue;
-    const fraction = Math.min(PARRY_MAX_PERCENTAGE, consequence.parryPercentage) / 100;
-    const returned = consequence.damage * fraction;
-    consequence.damage -= returned;
-    parryReturns.push([
-      `parry-${id}`,
-      {
-        userId: consequence.targetId,
-        targetId: consequence.userId,
-        damage: returned,
-        damageSource: "parry",
-        diffuseSourceEffectId: id,
-        types: ["parry"],
-      },
-    ]);
-    actionEffects.push({
-      txt: `Parry redirects ${returned.toFixed(2)} damage to the attacker`,
-      color: "red",
-    });
-  }
+  const parryReturns = splitParriedDamage(consequences, actionEffects);
 
   // Apply post-damage-modifier effects (wound, afterburn, reflect, recoil, lifesteal, absorb)
   // These read consequence.damage to calculate their effect, so they must run after pierce
@@ -799,440 +639,10 @@ export const applyEffects = (
   // Apply consequences to users
   Array.from(consequences.values())
     // Before collapsing consequences, we process each consequence indicidually
-    .map((c) => {
-      // State
-      const user = newUsersState.find((u) => u.userId === c.userId);
-      const target = newUsersState.find((u) => u.userId === c.targetId);
-      const targetShields = newUsersEffects.filter(
-        (e) =>
-          e.type === "shield" &&
-          e.targetId === c.targetId &&
-          e.power > 0 &&
-          isEffectEnabled(e, usersEffects),
-      ) as ShieldTagType[];
-      /** Convenience method for reducing shields before applying damage */
-      const calcAdjustedDamage = (
-        target: BattleUserState,
-        originalDamage: number,
-        effectTypes?: string[],
-      ) => {
-        // For negative changes, first reduce shields
-        let remainingDamage = Math.abs(originalDamage);
-        // Bypass shield absorption for pierce, reflect, and wound effects
-        if (
-          !effectTypes?.includes("pierce") &&
-          !effectTypes?.includes("reflect") &&
-          !effectTypes?.includes("wound")
-        ) {
-          targetShields.forEach((shield) => {
-            if (remainingDamage > 0 && shield.power && shield.power > 0) {
-              const absorbed = Math.min(remainingDamage, shield.power);
-              shield.power -= absorbed;
-              remainingDamage -= absorbed;
-              if (shield.power > 0) {
-                actionEffects.push({
-                  txt: `${target.username}'s shield absorbs ${absorbed.toFixed(2)} damage. ${shield.power.toFixed(2)} remaining.`,
-                  color: "red",
-                });
-              } else {
-                actionEffects.push({
-                  txt: `${target.username}'s shield absorbs ${absorbed.toFixed(2)} damage and is destroyed`,
-                  color: "red",
-                });
-              }
-            }
-          });
-        } else if (effectTypes?.includes("pierce")) {
-          // Pierce effects destroy shields instead of absorbing damage
-          targetShields.forEach((shield) => {
-            if (shield.power && shield.power > 0) {
-              actionEffects.push({
-                txt: `${target.username}'s shield was pierced and destroyed!`,
-                color: "red",
-              });
-              shield.power = 0;
-              shield.rounds = 0;
-            }
-          });
-        }
-
-        return applyFinalStandDamage(
-          usersEffects,
-          target,
-          remainingDamage,
-          actionEffects,
-        );
-      };
-      // Store pre-shield damage for reflect/lifesteal/absorb calculations
-      const preShieldDamage = c.damage ?? 0;
-
-      if (target && user && c.userId !== c.targetId) {
-        if (c.damageSource !== "recoil") {
-          accumulateShieldConversion(
-            c.userId,
-            Math.max(0, preShieldDamage) +
-              Math.max(0, c.residual ?? 0) +
-              Math.max(0, c.wound ?? 0) +
-              Math.max(0, c.afterburn ?? 0) +
-              Math.max(0, c.drain_hp ?? 0) +
-              Math.max(0, c.poison ?? 0),
-            "consume",
-          );
-        }
-      }
-
-      // Adjust damages and reduce shields
-      if (target && user) {
-        // A Diffuse remainder is ordinary incoming damage, even when its original source bypassed shields.
-        const immediateTypes = c.diffuseImmediateDamage !== undefined ? [] : c.types;
-        if (c.damage && c.damage > 0) {
-          c.damage = calcAdjustedDamage(target, c.damage, immediateTypes);
-        }
-        if (c.residual && c.residual > 0) {
-          c.residual = calcAdjustedDamage(target, c.residual, immediateTypes);
-        }
-        if (c.wound && c.wound > 0) {
-          c.wound = calcAdjustedDamage(target, c.wound, immediateTypes);
-        }
-        if (c.diffuseImmediateDamage !== undefined) {
-          for (const key of ["afterburn", "drain_hp", "poison"] as const) {
-            const damage = c[key];
-            if (damage && damage > 0)
-              c[key] = calcAdjustedDamage(target, damage, immediateTypes);
-          }
-        }
-        if (c.reflect && c.reflect > 0) {
-          c.reflect = calcAdjustedDamage(user, c.reflect, c.types);
-        }
-        if (c.recoil && c.recoil > 0) {
-          c.recoil = calcAdjustedDamage(user, c.recoil, c.types);
-        }
-      }
-
-      // Store pre-shield damage for later use (preserve if already set, e.g. by vamp)
-      c.preShieldDamage = c.preShieldDamage ?? preShieldDamage;
-      c.diffuseImmediateDamage ??= preShieldDamage;
-      c.enmitySources = [
-        {
-          userId: c.userId,
-          damage: c.damage,
-          residual: c.residual,
-          wound: c.wound,
-          afterburn: c.afterburn,
-          drain_hp: c.drain_hp,
-          poison: c.poison,
-        },
-      ];
-      return c;
-    })
+    .map((c) => mitigateConsequence(resolution, shieldConversionsByUser, c))
     .reduce(collapseConsequences, [] as Consequence[])
     .forEach((c) => {
-      // Convenience variables & methods
-      const user = newUsersState.find((u) => u.userId === c.userId);
-      const target = newUsersState.find((u) => u.userId === c.targetId);
-
-      // Pools refill up to the effective max, so max-pool effects (e.g. armor pool
-      // bonuses) are not stripped by the first heal, absorb or lifesteal of the fight
-      const cap = (u: BattleUserState, pool: PoolType) =>
-        getEffectiveMaxPool(u, usersEffects, pool);
-
-      // Apply all the consequences
-      if (target && user) {
-        // Vamp + lifesteal share one 60%-of-damage budget per consequence. Declared
-        // before the damage block because lifesteal is applied later, outside it, and
-        // still needs the budget when a shield-reduced damage===0 was dropped in merge.
-        const leechBudget = Math.floor(
-          (c.preShieldDamage ?? c.damage ?? 0) * DAMAGE_LEECH_CAP_RATIO,
-        );
-        let leechConsumed = 0;
-        // damage_dealt tracker credit goes to the controller when the attacker is a
-        // summon/clone, matching creatures_hunted attribution (kills a summon secures
-        // already count for the summoner). Summons copy the summoner's direction at
-        // spawn, so the opponent predicate is evaluated from the controller too.
-        const damageCreditUser = resolveDamageCreditUser(newUsersState, user);
-        if (c.damage !== undefined && c.damage >= 0) {
-          accumulateCurseConsequence(
-            c,
-            "damage",
-            newUsersEffects,
-            newUsersState,
-            round,
-          );
-          creditConsequenceEnmity(c, "damage", newUsersState, usersEffects);
-          accumulateSiphonShield(c, "damage", target);
-          target.curHealth -= c.damage;
-          target.curHealth = Math.max(0, target.curHealth);
-          // Accumulate per-attacker damage dealt to real opponents (non-self, non-summon)
-          // for the damage_dealt quest tracker. Direct damage plus DoT/drain (residual,
-          // wound, afterburn, drain_hp, poison) each credit via creditDamageDealt below;
-          // reflect and recoil hit the attacker's own HP and are intentionally excluded.
-          if (!c.damageSource) creditDamageDealt(damageCreditUser, target, c.damage);
-          actionEffects.push({
-            txt: `${target.username} takes ${c.damage.toFixed(2)} ${c.damageSource ? `${c.damageSource} ` : ""}damage`,
-            color: "red",
-            types: c.types,
-          });
-          // Vamp: heal the attacker based on the full pre-shield damage dealt (post-boost,
-          // pre-shield; matches lifesteal, so a shield doesn't shrink the vamp heal).
-          // Intentional: this can trigger on killing blows (no target.curHealth > 0 guard).
-          // Fills the shared leech budget first; lifesteal later takes whatever remains.
-          const rawVampHeal = c.vampHeal ?? 0;
-          if (rawVampHeal > 0 && user.curHealth > 0 && !curseHolders.has(user.userId)) {
-            const vampHeal = Math.min(
-              Math.floor(rawVampHeal),
-              leechBudget - leechConsumed,
-            );
-            if (vampHeal > 0) {
-              leechConsumed += vampHeal;
-              user.curHealth = Math.min(cap(user, "Health"), user.curHealth + vampHeal);
-              actionEffects.push({
-                txt: `${user.username} vamps ${vampHeal} damage as health`,
-                color: "green",
-              });
-            }
-          }
-          wearArmor(battle, target);
-        }
-        for (const key of ["residual", "wound"] as const) {
-          const amount = c[key];
-          if (amount === undefined || amount < 0) continue;
-          accumulateCurseConsequence(c, key, newUsersEffects, newUsersState, round);
-          creditConsequenceEnmity(c, key, newUsersState, usersEffects);
-          accumulateSiphonShield(c, key, target);
-          target.curHealth -= amount;
-          target.curHealth = Math.max(0, target.curHealth);
-          creditDamageDealt(damageCreditUser, target, amount);
-          actionEffects.push({
-            txt: `${target.username} takes ${amount.toFixed(2)} ${key} damage`,
-            color: "red",
-            types: c.types,
-          });
-          wearArmor(battle, target);
-        }
-        if (c.heal_hp !== undefined && c.heal_hp >= 0 && target.curHealth > 0) {
-          target.curHealth += c.heal_hp;
-          target.curHealth = Math.min(cap(target, "Health"), target.curHealth);
-          actionEffects.push({
-            txt: `${target.username} heals ${c.heal_hp} HP`,
-            color: "green",
-          });
-        }
-        if (c.heal_sp !== undefined && c.heal_sp >= 0) {
-          target.curStamina += c.heal_sp;
-          target.curStamina = Math.min(cap(target, "Stamina"), target.curStamina);
-          actionEffects.push({
-            txt: `${target.username} heals ${c.heal_sp} SP`,
-            color: "green",
-          });
-        }
-        if (c.heal_cp !== undefined && c.heal_cp >= 0) {
-          target.curChakra += c.heal_cp;
-          target.curChakra = Math.min(cap(target, "Chakra"), target.curChakra);
-          actionEffects.push({
-            txt: `${target.username} heals ${c.heal_cp} CP`,
-            color: "green",
-          });
-        }
-        if (c.reflect !== undefined && c.reflect >= 0) {
-          // Reflect caps against the source hit before Diffuse and shields; leech uses the remainder.
-          const preShieldDamage = c.preDiffuseDamage ?? c.preShieldDamage ?? 0;
-          const maxReflect = preShieldDamage * 0.6;
-          const finalReflect = Math.min(c.reflect, maxReflect);
-          accumulateCurseDamage(
-            newUsersEffects,
-            newUsersState,
-            target.userId,
-            user.userId,
-            Math.min(user.curHealth, finalReflect),
-            round,
-          );
-          creditDamageEnmity(
-            target,
-            user,
-            Math.min(user.curHealth, finalReflect),
-            usersEffects,
-          );
-          // Reflect belongs to the defender and converts only its capped return.
-          if (target.userId !== user.userId) {
-            accumulateShieldConversion(target.userId, finalReflect, "consume");
-            accumulateShieldConversion(
-              user.userId,
-              Math.min(user.curHealth, finalReflect),
-              "siphon",
-            );
-          }
-          user.curHealth -= finalReflect;
-          user.curHealth = Math.max(0, user.curHealth);
-          actionEffects.push({
-            txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage`,
-            color: "red",
-          });
-        }
-        if (c.recoil !== undefined && c.recoil >= 0) {
-          user.curHealth -= c.recoil;
-          user.curHealth = Math.max(0, user.curHealth);
-          actionEffects.push({
-            txt: `${user.username} takes ${c.recoil.toFixed(2)} recoil damage`,
-            color: "red",
-          });
-        }
-        if (c.afterburn !== undefined && c.afterburn >= 0) {
-          accumulateCurseConsequence(
-            c,
-            "afterburn",
-            newUsersEffects,
-            newUsersState,
-            round,
-          );
-          creditConsequenceEnmity(c, "afterburn", newUsersState, usersEffects);
-          accumulateSiphonShield(c, "afterburn", target);
-          target.curHealth -= c.afterburn;
-          target.curHealth = Math.max(0, target.curHealth);
-          creditDamageDealt(damageCreditUser, target, c.afterburn);
-          actionEffects.push({
-            txt: `${target.username} takes ${c.afterburn.toFixed(2)} afterburn damage`,
-            color: "red",
-          });
-        }
-        // Lifesteal shares the leech budget with vamp: it takes whatever vamp left unused
-        // (both cap the combined heal at DAMAGE_LEECH_CAP_RATIO of the pre-shield damage).
-        // Still requires the target to have survived the whole tick and the attacker alive.
-        if (
-          c.lifesteal_hp !== undefined &&
-          c.lifesteal_hp >= 0 &&
-          !curseHolders.has(user.userId) &&
-          target.curHealth > 0 &&
-          user.curHealth > 0
-        ) {
-          const remaining = Math.max(0, leechBudget - leechConsumed);
-          const finalLifesteal = Math.min(c.lifesteal_hp, remaining);
-          if (finalLifesteal > 0) {
-            leechConsumed += finalLifesteal;
-            user.curHealth += finalLifesteal;
-            user.curHealth = Math.min(cap(user, "Health"), user.curHealth);
-            actionEffects.push({
-              txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
-              color: "green",
-            });
-          }
-        }
-        if (
-          c.absorb_hp !== undefined &&
-          c.absorb_hp >= 0 &&
-          target.curHealth > 0 &&
-          !curseHolders.has(target.userId)
-        ) {
-          // Use pre-shield damage for the 60% cap calculation to avoid shield interference
-          const preShieldDamage = c.preShieldDamage ?? 0;
-          const maxAbsorb = (c.diffuseImmediateDamage ?? preShieldDamage) * 0.6;
-          const absorbAmount = Math.min(c.absorb_hp, maxAbsorb);
-          target.curHealth += absorbAmount;
-          target.curHealth = Math.min(cap(target, "Health"), target.curHealth);
-          actionEffects.push({
-            txt: `${target.username} absorbs ${absorbAmount.toFixed(2)} damage and converts it to health`,
-            color: "green",
-          });
-        }
-        if (
-          c.absorb_sp !== undefined &&
-          c.absorb_sp >= 0 &&
-          !curseHolders.has(target.userId)
-        ) {
-          target.curStamina += c.absorb_sp;
-          target.curStamina = Math.min(cap(target, "Stamina"), target.curStamina);
-          actionEffects.push({
-            txt: `${target.username} absorbs ${c.absorb_sp.toFixed(2)} damage and converts it to stamina`,
-            color: "green",
-          });
-        }
-        if (
-          c.absorb_cp !== undefined &&
-          c.absorb_cp >= 0 &&
-          !curseHolders.has(target.userId)
-        ) {
-          target.curChakra += c.absorb_cp;
-          target.curChakra = Math.min(cap(target, "Chakra"), target.curChakra);
-          actionEffects.push({
-            txt: `${target.username} absorbs ${c.absorb_cp.toFixed(2)} damage and converts it to chakra`,
-            color: "green",
-          });
-        }
-        // Handle drain effects for each pool
-        if (c.drain_hp !== undefined && c.drain_hp >= 0 && target.curHealth > 0) {
-          accumulateCurseConsequence(
-            c,
-            "drain_hp",
-            newUsersEffects,
-            newUsersState,
-            round,
-          );
-          creditConsequenceEnmity(c, "drain_hp", newUsersState, usersEffects);
-          accumulateSiphonShield(c, "drain_hp", target);
-          target.curHealth = Math.max(0, target.curHealth - c.drain_hp);
-          creditDamageDealt(damageCreditUser, target, c.drain_hp);
-          actionEffects.push({
-            txt: `${target.username} loses ${c.drain_hp.toFixed(2)} HP to drain`,
-            color: "purple",
-          });
-        }
-        if (c.drain_cp !== undefined && c.drain_cp >= 0 && target.curChakra > 0) {
-          target.curChakra = Math.max(0, target.curChakra - c.drain_cp);
-          actionEffects.push({
-            txt: `${target.username} loses ${c.drain_cp.toFixed(2)} CP to drain`,
-            color: "purple",
-          });
-        }
-        if (c.drain_sp !== undefined && c.drain_sp >= 0 && target.curStamina > 0) {
-          target.curStamina = Math.max(0, target.curStamina - c.drain_sp);
-          actionEffects.push({
-            txt: `${target.username} loses ${c.drain_sp.toFixed(2)} SP to drain`,
-            color: "purple",
-          });
-        }
-        if (c.poison !== undefined && c.poison >= 0) {
-          accumulateCurseConsequence(
-            c,
-            "poison",
-            newUsersEffects,
-            newUsersState,
-            round,
-          );
-          creditConsequenceEnmity(c, "poison", newUsersState, usersEffects);
-          accumulateSiphonShield(c, "poison", target);
-          target.curHealth = Math.max(
-            0,
-            Math.min(cap(target, "Health"), target.curHealth - c.poison),
-          );
-          creditDamageDealt(damageCreditUser, target, c.poison);
-          actionEffects.push({
-            txt: `${target.username} takes ${c.poison.toFixed(2)} poison damage`,
-            color: "purple",
-          });
-        }
-        // Process disappear animation of characters
-        if (target.curHealth <= 0 && !target.isOriginal) {
-          newGroundEffects.push(
-            getVisualOrSound(
-              target.longitude,
-              target.latitude,
-              ID_ANIMATION_SMOKE,
-              undefined,
-              round,
-            ),
-          );
-        }
-        if (user.curHealth <= 0 && !user.isOriginal) {
-          newGroundEffects.push(
-            getVisualOrSound(
-              user.longitude,
-              user.latitude,
-              ID_ANIMATION_SMOKE,
-              undefined,
-              round,
-            ),
-          );
-        }
-      }
+      applyConsequence(resolution, shieldConversionsByUser, curseHolders, c);
     });
 
   // A newly cast Curse starts collecting on the next action, including within this round.
@@ -1240,24 +650,7 @@ export const applyEffects = (
     if (effect.type === "curse" && effect.curseState) effect.curseState.ready = true;
   }
 
-  // Grant shields after all damage, sharing each recipient's HP cap proportionally.
-  shieldConversionsByUser.forEach(({ shields }, userId) => {
-    const user = newUsersState.find((u) => u.userId === userId);
-    if (!user || user.curHealth <= 0) return;
-    const totalHp = shields.reduce((total, shield) => total + shield.hp, 0);
-    const scale = totalHp > SHIELD_MAX_HEALTH ? SHIELD_MAX_HEALTH / totalHp : 1;
-    shields.forEach(({ hp, type, rounds }) => {
-      const shieldHp = Math.floor(hp * scale);
-      if (shieldHp <= 0) return;
-      newUsersEffects.push(
-        createConversionShieldEffect(user, shieldHp, rounds, battle.round),
-      );
-      actionEffects.push({
-        txt: `${user.username} ${type === "siphon" ? "siphons" : "consumes"} ${shieldHp} damage as a shield for ${rounds} rounds`,
-        color: "blue",
-      });
-    });
-  });
+  grantConversionShields(resolution, shieldConversionsByUser);
 
   syncPoolAdjustments(newUsersState, newUsersEffects);
 
@@ -1277,6 +670,674 @@ export const applyEffects = (
     },
     actionEffects,
   };
+};
+
+/** Convert ground effects into user effects on the users standing on their tiles. */
+const applyGroundEffects = ({
+  battle,
+  actor,
+  newUsersState,
+  newUsersEffects,
+  newGroundEffects,
+  actionEffects,
+}: Pick<
+  EffectResolution,
+  "battle" | "newUsersState" | "newUsersEffects" | "newGroundEffects" | "actionEffects"
+> & { actor: BattleUserState | undefined }) => {
+  const { usersEffects, groundEffects, round } = battle;
+  let spawnGrid: ReturnType<typeof getBattleGrid> | undefined;
+  groundEffects.sort(sortEffects).forEach((e) => {
+    // Get the round information for the effect
+    const { startRound, curRound } = calcEffectRoundInfo(e, battle);
+    e.castThisRound = startRound === curRound;
+    // Ignore movement passives because no combat action selected their destination.
+    if (e.fromType === "skill" && e.type === "move") return;
+    if (
+      e.isNew &&
+      e.fromType === "skill" &&
+      (e.type === "clone" || e.type === "summon")
+    ) {
+      const creator = newUsersState.find((user) => user.userId === e.creatorId);
+      spawnGrid ??= getBattleGrid(1, battle);
+      const grid = spawnGrid;
+      const origin = grid.getHex({ col: e.longitude, row: e.latitude });
+      if (!creator || !origin) return;
+      // Innate casts originate on occupied cells; choose the nearest empty destination.
+      // Include earlier spawns in this pass when checking occupancy to prevent overlap.
+      const destination = grid
+        .toArray()
+        .filter(
+          (target) =>
+            !findUser(newUsersState, target.col, target.row) &&
+            !findBarrier(groundEffects, target.col, target.row),
+        )
+        .sort((a, b) => grid.distance(a, origin) - grid.distance(b, origin))[0];
+      if (!destination) return;
+      e.longitude = destination.col;
+      e.latitude = destination.row;
+    }
+    // Process special effects
+    let info: ActionEffect | undefined;
+    if (e.type === "move") {
+      move(e, usersEffects, newUsersState, newGroundEffects);
+    } else {
+      // Special handling of clone & summon ground-effects
+      if (e.type === "clone") {
+        info = clone(newUsersState, e, battle.extraState);
+      } else if (e.type === "summon") {
+        info = summon(newUsersState, e, newUsersEffects, battle);
+      } else if (e.type === "barrier") {
+        const user = findUser(newUsersState, e.longitude, e.latitude);
+        if (user) e.rounds = 0;
+      } else {
+        // Information on what was done
+        if (e.isNew && e.castThisRound && actor && e.type !== "visual" && e.rounds) {
+          const txt = `${actor.username} marked the ground with ${e.type} for the next ${e.rounds} rounds`;
+          if (!actionEffects.find((ae) => ae.txt === txt)) {
+            actionEffects.push({ txt, color: "blue" });
+          }
+        }
+        // Apply all other ground effects to user
+        const user = findUser(newUsersState, e.longitude, e.latitude);
+        if (user && e.type !== "visual") {
+          if (checkFriendlyFire(e, user, newUsersState)) {
+            const hasEffect = usersEffects.some((ue) => ue.id === e.id);
+            const isInstant = ["damage", "heal", "pierce"].includes(e.type);
+            if (!hasEffect) {
+              // NOTE:
+              // 1. If the effect is instant, it is applied immediately
+              // 2. User effects from Ground effects are not forwarded to the next round
+              usersEffects.push({
+                ...e,
+                rounds: isInstant ? 0 : 1,
+                targetId: user.userId,
+                createdRound: isInstant ? curRound : curRound - 1,
+                fromGround: true,
+              } as UserEffect);
+            }
+          }
+        }
+        // Forward any damage effects, which should be applied to barriers as well
+        if (!user && e.type === "damage") {
+          const barrier = findBarrier(groundEffects, e.longitude, e.latitude);
+          if (barrier) {
+            usersEffects.push({
+              ...e,
+              targetType: "barrier",
+              targetId: barrier.id,
+              fromGround: true,
+            } as UserEffect);
+          }
+        }
+      }
+
+      // Show once appearing visual/audio
+      if ((e.appearAnimation || e.appearSfx) && e.isNew && e.type !== "visual") {
+        newGroundEffects.push(
+          getVisualOrSound(
+            e.longitude,
+            e.latitude,
+            e.appearAnimation,
+            e.appearSfx,
+            round,
+          ),
+        );
+      }
+
+      // Process round reduction & tag removal
+      if (isEffectActive(e) || e.type === "visual") {
+        e.isNew = false;
+        newGroundEffects.push(e);
+      } else if (e.disappearAnimation || e.disappearSfx) {
+        newGroundEffects.push(
+          getVisualOrSound(
+            e.longitude,
+            e.latitude,
+            e.disappearAnimation,
+            e.disappearSfx,
+            round,
+          ),
+        );
+      }
+    }
+
+    // Add info to action effects if it exists
+    if (info) actionEffects.push(info);
+  });
+};
+
+/** Split parried direct hits and return the damage owed back to their attackers. */
+const splitParriedDamage = (
+  consequences: Map<string, Consequence>,
+  actionEffects: ActionEffect[],
+) => {
+  const parryReturns: [string, Consequence][] = [];
+  for (const [id, consequence] of consequences) {
+    if (!consequence.damage || !consequence.parryPercentage) continue;
+    const fraction = Math.min(PARRY_MAX_PERCENTAGE, consequence.parryPercentage) / 100;
+    const returned = consequence.damage * fraction;
+    consequence.damage -= returned;
+    parryReturns.push([
+      `parry-${id}`,
+      {
+        userId: consequence.targetId,
+        targetId: consequence.userId,
+        damage: returned,
+        damageSource: "parry",
+        diffuseSourceEffectId: id,
+        types: ["parry"],
+      },
+    ]);
+    actionEffects.push({
+      txt: `Parry redirects ${returned.toFixed(2)} damage to the attacker`,
+      color: "red",
+    });
+  }
+  return parryReturns;
+};
+
+// Accumulate before collapseConsequences merges hits from different casters.
+// Grant shields after damage resolves so they cannot absorb the generating action.
+const accumulateShieldConversion = (
+  shieldConversionsByUser: ShieldConversionsByUser,
+  userId: string,
+  damage: number,
+  type: "consume" | "siphon",
+) => {
+  const conversion = shieldConversionsByUser.get(userId);
+  if (!conversion || damage <= 0) return;
+  conversion.shields.forEach((shield) => {
+    if (shield.type === type) {
+      shield.hp += damage * (shield.ratio / Math.max(1, conversion.ratio));
+    }
+  });
+};
+
+// Count each HP loss before any healing, after shields and Final Stand resolve.
+const accumulateSiphonShield = (
+  shieldConversionsByUser: ShieldConversionsByUser,
+  consequence: Consequence,
+  key: EnmityDamageKey,
+  target: BattleUserState,
+) => {
+  if (
+    consequence.damageSource === "recoil" ||
+    !shieldConversionsByUser
+      .get(target.userId)
+      ?.shields.some((shield) => shield.type === "siphon")
+  )
+    return;
+  let remaining = Math.min(
+    Math.max(0, target.curHealth),
+    Math.max(0, consequence[key] ?? 0),
+  );
+  let incomingDamage = 0;
+  // Source attribution survives target-level collapse, including mixed self/enemy hits.
+  for (const source of consequence.enmitySources ?? [consequence]) {
+    const healthLost = Math.min(remaining, Math.max(0, source[key] ?? 0));
+    remaining -= healthLost;
+    if (source.userId !== target.userId) incomingDamage += healthLost;
+  }
+  accumulateShieldConversion(
+    shieldConversionsByUser,
+    target.userId,
+    incomingDamage,
+    "siphon",
+  );
+};
+
+/** Absorb one uncollapsed consequence with shields, Final Stand and conversion credit. */
+const mitigateConsequence = (
+  { newUsersState, newUsersEffects, actionEffects, battle }: EffectResolution,
+  shieldConversionsByUser: ShieldConversionsByUser,
+  c: Consequence,
+) => {
+  const { usersEffects } = battle;
+  // State
+  const user = newUsersState.find((u) => u.userId === c.userId);
+  const target = newUsersState.find((u) => u.userId === c.targetId);
+  const targetShields = newUsersEffects.filter(
+    (e) =>
+      e.type === "shield" &&
+      e.targetId === c.targetId &&
+      e.power > 0 &&
+      isEffectEnabled(e, usersEffects),
+  ) as ShieldTagType[];
+  /** Convenience method for reducing shields before applying damage */
+  const calcAdjustedDamage = (
+    target: BattleUserState,
+    originalDamage: number,
+    effectTypes?: string[],
+  ) => {
+    // For negative changes, first reduce shields
+    let remainingDamage = Math.abs(originalDamage);
+    // Bypass shield absorption for pierce, reflect, and wound effects
+    if (
+      !effectTypes?.includes("pierce") &&
+      !effectTypes?.includes("reflect") &&
+      !effectTypes?.includes("wound")
+    ) {
+      targetShields.forEach((shield) => {
+        if (remainingDamage > 0 && shield.power && shield.power > 0) {
+          const absorbed = Math.min(remainingDamage, shield.power);
+          shield.power -= absorbed;
+          remainingDamage -= absorbed;
+          if (shield.power > 0) {
+            actionEffects.push({
+              txt: `${target.username}'s shield absorbs ${absorbed.toFixed(2)} damage. ${shield.power.toFixed(2)} remaining.`,
+              color: "red",
+            });
+          } else {
+            actionEffects.push({
+              txt: `${target.username}'s shield absorbs ${absorbed.toFixed(2)} damage and is destroyed`,
+              color: "red",
+            });
+          }
+        }
+      });
+    } else if (effectTypes?.includes("pierce")) {
+      // Pierce effects destroy shields instead of absorbing damage
+      targetShields.forEach((shield) => {
+        if (shield.power && shield.power > 0) {
+          actionEffects.push({
+            txt: `${target.username}'s shield was pierced and destroyed!`,
+            color: "red",
+          });
+          shield.power = 0;
+          shield.rounds = 0;
+        }
+      });
+    }
+
+    return applyFinalStandDamage(usersEffects, target, remainingDamage, actionEffects);
+  };
+  // Store pre-shield damage for reflect/lifesteal/absorb calculations
+  const preShieldDamage = c.damage ?? 0;
+
+  if (target && user && c.userId !== c.targetId) {
+    if (c.damageSource !== "recoil") {
+      accumulateShieldConversion(
+        shieldConversionsByUser,
+        c.userId,
+        Math.max(0, preShieldDamage) +
+          Math.max(0, c.residual ?? 0) +
+          Math.max(0, c.wound ?? 0) +
+          Math.max(0, c.afterburn ?? 0) +
+          Math.max(0, c.drain_hp ?? 0) +
+          Math.max(0, c.poison ?? 0),
+        "consume",
+      );
+    }
+  }
+
+  // Adjust damages and reduce shields
+  if (target && user) {
+    // A Diffuse remainder is ordinary incoming damage, even when its original source bypassed shields.
+    const immediateTypes = c.diffuseImmediateDamage !== undefined ? [] : c.types;
+    if (c.damage && c.damage > 0) {
+      c.damage = calcAdjustedDamage(target, c.damage, immediateTypes);
+    }
+    if (c.residual && c.residual > 0) {
+      c.residual = calcAdjustedDamage(target, c.residual, immediateTypes);
+    }
+    if (c.wound && c.wound > 0) {
+      c.wound = calcAdjustedDamage(target, c.wound, immediateTypes);
+    }
+    if (c.diffuseImmediateDamage !== undefined) {
+      for (const key of ["afterburn", "drain_hp", "poison"] as const) {
+        const damage = c[key];
+        if (damage && damage > 0)
+          c[key] = calcAdjustedDamage(target, damage, immediateTypes);
+      }
+    }
+    if (c.reflect && c.reflect > 0) {
+      c.reflect = calcAdjustedDamage(user, c.reflect, c.types);
+    }
+    if (c.recoil && c.recoil > 0) {
+      c.recoil = calcAdjustedDamage(user, c.recoil, c.types);
+    }
+  }
+
+  // Store pre-shield damage for later use (preserve if already set, e.g. by vamp)
+  c.preShieldDamage = c.preShieldDamage ?? preShieldDamage;
+  c.diffuseImmediateDamage ??= preShieldDamage;
+  c.enmitySources = [
+    {
+      userId: c.userId,
+      damage: c.damage,
+      residual: c.residual,
+      wound: c.wound,
+      afterburn: c.afterburn,
+      drain_hp: c.drain_hp,
+      poison: c.poison,
+    },
+  ];
+  return c;
+};
+
+/** Apply one collapsed consequence to its target's and source's pools. */
+const applyConsequence = (
+  {
+    newUsersState,
+    newUsersEffects,
+    newGroundEffects,
+    actionEffects,
+    battle,
+  }: EffectResolution,
+  shieldConversionsByUser: ShieldConversionsByUser,
+  curseHolders: Set<string>,
+  c: Consequence,
+) => {
+  const { usersEffects, round } = battle;
+  // Convenience variables & methods
+  const user = newUsersState.find((u) => u.userId === c.userId);
+  const target = newUsersState.find((u) => u.userId === c.targetId);
+
+  // Pools refill up to the effective max, so max-pool effects (e.g. armor pool
+  // bonuses) are not stripped by the first heal, absorb or lifesteal of the fight
+  const cap = (u: BattleUserState, pool: PoolType) =>
+    getEffectiveMaxPool(u, usersEffects, pool);
+
+  // Apply all the consequences
+  if (target && user) {
+    // Vamp + lifesteal share one 60%-of-damage budget per consequence. Declared
+    // before the damage block because lifesteal is applied later, outside it, and
+    // still needs the budget when a shield-reduced damage===0 was dropped in merge.
+    const leechBudget = Math.floor(
+      (c.preShieldDamage ?? c.damage ?? 0) * DAMAGE_LEECH_CAP_RATIO,
+    );
+    let leechConsumed = 0;
+    // damage_dealt tracker credit goes to the controller when the attacker is a
+    // summon/clone, matching creatures_hunted attribution (kills a summon secures
+    // already count for the summoner). Summons copy the summoner's direction at
+    // spawn, so the opponent predicate is evaluated from the controller too.
+    const damageCreditUser = resolveDamageCreditUser(newUsersState, user);
+    if (c.damage !== undefined && c.damage >= 0) {
+      accumulateCurseConsequence(c, "damage", newUsersEffects, newUsersState, round);
+      creditConsequenceEnmity(c, "damage", newUsersState, usersEffects);
+      accumulateSiphonShield(shieldConversionsByUser, c, "damage", target);
+      target.curHealth -= c.damage;
+      target.curHealth = Math.max(0, target.curHealth);
+      // Accumulate per-attacker damage dealt to real opponents (non-self, non-summon)
+      // for the damage_dealt quest tracker. Direct damage plus DoT/drain (residual,
+      // wound, afterburn, drain_hp, poison) each credit via creditDamageDealt below;
+      // reflect and recoil hit the attacker's own HP and are intentionally excluded.
+      if (!c.damageSource) creditDamageDealt(damageCreditUser, target, c.damage);
+      actionEffects.push({
+        txt: `${target.username} takes ${c.damage.toFixed(2)} ${c.damageSource ? `${c.damageSource} ` : ""}damage`,
+        color: "red",
+        types: c.types,
+      });
+      // Vamp: heal the attacker based on the full pre-shield damage dealt (post-boost,
+      // pre-shield; matches lifesteal, so a shield doesn't shrink the vamp heal).
+      // Intentional: this can trigger on killing blows (no target.curHealth > 0 guard).
+      // Fills the shared leech budget first; lifesteal later takes whatever remains.
+      const rawVampHeal = c.vampHeal ?? 0;
+      if (rawVampHeal > 0 && user.curHealth > 0 && !curseHolders.has(user.userId)) {
+        const vampHeal = Math.min(Math.floor(rawVampHeal), leechBudget - leechConsumed);
+        if (vampHeal > 0) {
+          leechConsumed += vampHeal;
+          user.curHealth = Math.min(cap(user, "Health"), user.curHealth + vampHeal);
+          actionEffects.push({
+            txt: `${user.username} vamps ${vampHeal} damage as health`,
+            color: "green",
+          });
+        }
+      }
+      wearArmor(battle, target);
+    }
+    for (const key of ["residual", "wound"] as const) {
+      const amount = c[key];
+      if (amount === undefined || amount < 0) continue;
+      accumulateCurseConsequence(c, key, newUsersEffects, newUsersState, round);
+      creditConsequenceEnmity(c, key, newUsersState, usersEffects);
+      accumulateSiphonShield(shieldConversionsByUser, c, key, target);
+      target.curHealth -= amount;
+      target.curHealth = Math.max(0, target.curHealth);
+      creditDamageDealt(damageCreditUser, target, amount);
+      actionEffects.push({
+        txt: `${target.username} takes ${amount.toFixed(2)} ${key} damage`,
+        color: "red",
+        types: c.types,
+      });
+      wearArmor(battle, target);
+    }
+    if (c.heal_hp !== undefined && c.heal_hp >= 0 && target.curHealth > 0) {
+      target.curHealth += c.heal_hp;
+      target.curHealth = Math.min(cap(target, "Health"), target.curHealth);
+      actionEffects.push({
+        txt: `${target.username} heals ${c.heal_hp} HP`,
+        color: "green",
+      });
+    }
+    if (c.heal_sp !== undefined && c.heal_sp >= 0) {
+      target.curStamina += c.heal_sp;
+      target.curStamina = Math.min(cap(target, "Stamina"), target.curStamina);
+      actionEffects.push({
+        txt: `${target.username} heals ${c.heal_sp} SP`,
+        color: "green",
+      });
+    }
+    if (c.heal_cp !== undefined && c.heal_cp >= 0) {
+      target.curChakra += c.heal_cp;
+      target.curChakra = Math.min(cap(target, "Chakra"), target.curChakra);
+      actionEffects.push({
+        txt: `${target.username} heals ${c.heal_cp} CP`,
+        color: "green",
+      });
+    }
+    if (c.reflect !== undefined && c.reflect >= 0) {
+      // Reflect caps against the source hit before Diffuse and shields; leech uses the remainder.
+      const preShieldDamage = c.preDiffuseDamage ?? c.preShieldDamage ?? 0;
+      const maxReflect = preShieldDamage * 0.6;
+      const finalReflect = Math.min(c.reflect, maxReflect);
+      accumulateCurseDamage(
+        newUsersEffects,
+        newUsersState,
+        target.userId,
+        user.userId,
+        Math.min(user.curHealth, finalReflect),
+        round,
+      );
+      creditDamageEnmity(
+        target,
+        user,
+        Math.min(user.curHealth, finalReflect),
+        usersEffects,
+      );
+      // Reflect belongs to the defender and converts only its capped return.
+      if (target.userId !== user.userId) {
+        accumulateShieldConversion(
+          shieldConversionsByUser,
+          target.userId,
+          finalReflect,
+          "consume",
+        );
+        accumulateShieldConversion(
+          shieldConversionsByUser,
+          user.userId,
+          Math.min(user.curHealth, finalReflect),
+          "siphon",
+        );
+      }
+      user.curHealth -= finalReflect;
+      user.curHealth = Math.max(0, user.curHealth);
+      actionEffects.push({
+        txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage`,
+        color: "red",
+      });
+    }
+    if (c.recoil !== undefined && c.recoil >= 0) {
+      user.curHealth -= c.recoil;
+      user.curHealth = Math.max(0, user.curHealth);
+      actionEffects.push({
+        txt: `${user.username} takes ${c.recoil.toFixed(2)} recoil damage`,
+        color: "red",
+      });
+    }
+    if (c.afterburn !== undefined && c.afterburn >= 0) {
+      accumulateCurseConsequence(c, "afterburn", newUsersEffects, newUsersState, round);
+      creditConsequenceEnmity(c, "afterburn", newUsersState, usersEffects);
+      accumulateSiphonShield(shieldConversionsByUser, c, "afterburn", target);
+      target.curHealth -= c.afterburn;
+      target.curHealth = Math.max(0, target.curHealth);
+      creditDamageDealt(damageCreditUser, target, c.afterburn);
+      actionEffects.push({
+        txt: `${target.username} takes ${c.afterburn.toFixed(2)} afterburn damage`,
+        color: "red",
+      });
+    }
+    // Lifesteal shares the leech budget with vamp: it takes whatever vamp left unused
+    // (both cap the combined heal at DAMAGE_LEECH_CAP_RATIO of the pre-shield damage).
+    // Still requires the target to have survived the whole tick and the attacker alive.
+    if (
+      c.lifesteal_hp !== undefined &&
+      c.lifesteal_hp >= 0 &&
+      !curseHolders.has(user.userId) &&
+      target.curHealth > 0 &&
+      user.curHealth > 0
+    ) {
+      const remaining = Math.max(0, leechBudget - leechConsumed);
+      const finalLifesteal = Math.min(c.lifesteal_hp, remaining);
+      if (finalLifesteal > 0) {
+        leechConsumed += finalLifesteal;
+        user.curHealth += finalLifesteal;
+        user.curHealth = Math.min(cap(user, "Health"), user.curHealth);
+        actionEffects.push({
+          txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
+          color: "green",
+        });
+      }
+    }
+    if (
+      c.absorb_hp !== undefined &&
+      c.absorb_hp >= 0 &&
+      target.curHealth > 0 &&
+      !curseHolders.has(target.userId)
+    ) {
+      // Use pre-shield damage for the 60% cap calculation to avoid shield interference
+      const preShieldDamage = c.preShieldDamage ?? 0;
+      const maxAbsorb = (c.diffuseImmediateDamage ?? preShieldDamage) * 0.6;
+      const absorbAmount = Math.min(c.absorb_hp, maxAbsorb);
+      target.curHealth += absorbAmount;
+      target.curHealth = Math.min(cap(target, "Health"), target.curHealth);
+      actionEffects.push({
+        txt: `${target.username} absorbs ${absorbAmount.toFixed(2)} damage and converts it to health`,
+        color: "green",
+      });
+    }
+    if (
+      c.absorb_sp !== undefined &&
+      c.absorb_sp >= 0 &&
+      !curseHolders.has(target.userId)
+    ) {
+      target.curStamina += c.absorb_sp;
+      target.curStamina = Math.min(cap(target, "Stamina"), target.curStamina);
+      actionEffects.push({
+        txt: `${target.username} absorbs ${c.absorb_sp.toFixed(2)} damage and converts it to stamina`,
+        color: "green",
+      });
+    }
+    if (
+      c.absorb_cp !== undefined &&
+      c.absorb_cp >= 0 &&
+      !curseHolders.has(target.userId)
+    ) {
+      target.curChakra += c.absorb_cp;
+      target.curChakra = Math.min(cap(target, "Chakra"), target.curChakra);
+      actionEffects.push({
+        txt: `${target.username} absorbs ${c.absorb_cp.toFixed(2)} damage and converts it to chakra`,
+        color: "green",
+      });
+    }
+    // Handle drain effects for each pool
+    if (c.drain_hp !== undefined && c.drain_hp >= 0 && target.curHealth > 0) {
+      accumulateCurseConsequence(c, "drain_hp", newUsersEffects, newUsersState, round);
+      creditConsequenceEnmity(c, "drain_hp", newUsersState, usersEffects);
+      accumulateSiphonShield(shieldConversionsByUser, c, "drain_hp", target);
+      target.curHealth = Math.max(0, target.curHealth - c.drain_hp);
+      creditDamageDealt(damageCreditUser, target, c.drain_hp);
+      actionEffects.push({
+        txt: `${target.username} loses ${c.drain_hp.toFixed(2)} HP to drain`,
+        color: "purple",
+      });
+    }
+    if (c.drain_cp !== undefined && c.drain_cp >= 0 && target.curChakra > 0) {
+      target.curChakra = Math.max(0, target.curChakra - c.drain_cp);
+      actionEffects.push({
+        txt: `${target.username} loses ${c.drain_cp.toFixed(2)} CP to drain`,
+        color: "purple",
+      });
+    }
+    if (c.drain_sp !== undefined && c.drain_sp >= 0 && target.curStamina > 0) {
+      target.curStamina = Math.max(0, target.curStamina - c.drain_sp);
+      actionEffects.push({
+        txt: `${target.username} loses ${c.drain_sp.toFixed(2)} SP to drain`,
+        color: "purple",
+      });
+    }
+    if (c.poison !== undefined && c.poison >= 0) {
+      accumulateCurseConsequence(c, "poison", newUsersEffects, newUsersState, round);
+      creditConsequenceEnmity(c, "poison", newUsersState, usersEffects);
+      accumulateSiphonShield(shieldConversionsByUser, c, "poison", target);
+      target.curHealth = Math.max(
+        0,
+        Math.min(cap(target, "Health"), target.curHealth - c.poison),
+      );
+      creditDamageDealt(damageCreditUser, target, c.poison);
+      actionEffects.push({
+        txt: `${target.username} takes ${c.poison.toFixed(2)} poison damage`,
+        color: "purple",
+      });
+    }
+    // Process disappear animation of characters
+    if (target.curHealth <= 0 && !target.isOriginal) {
+      newGroundEffects.push(
+        getVisualOrSound(
+          target.longitude,
+          target.latitude,
+          ID_ANIMATION_SMOKE,
+          undefined,
+          round,
+        ),
+      );
+    }
+    if (user.curHealth <= 0 && !user.isOriginal) {
+      newGroundEffects.push(
+        getVisualOrSound(
+          user.longitude,
+          user.latitude,
+          ID_ANIMATION_SMOKE,
+          undefined,
+          round,
+        ),
+      );
+    }
+  }
+};
+
+/** Grant shields after all damage, sharing each recipient's HP cap proportionally. */
+const grantConversionShields = (
+  { newUsersState, newUsersEffects, actionEffects, battle }: EffectResolution,
+  shieldConversionsByUser: ShieldConversionsByUser,
+) => {
+  shieldConversionsByUser.forEach(({ shields }, userId) => {
+    const user = newUsersState.find((u) => u.userId === userId);
+    if (!user || user.curHealth <= 0) return;
+    const totalHp = shields.reduce((total, shield) => total + shield.hp, 0);
+    const scale = totalHp > SHIELD_MAX_HEALTH ? SHIELD_MAX_HEALTH / totalHp : 1;
+    shields.forEach(({ hp, type, rounds }) => {
+      const shieldHp = Math.floor(hp * scale);
+      if (shieldHp <= 0) return;
+      newUsersEffects.push(
+        createConversionShieldEffect(user, shieldHp, rounds, battle.round),
+      );
+      actionEffects.push({
+        txt: `${user.username} ${type === "siphon" ? "siphons" : "consumes"} ${shieldHp} damage as a shield for ${rounds} rounds`,
+        color: "blue",
+      });
+    });
+  });
 };
 
 /** Every hit on a user wears each piece of armor they have equipped by 1. */
