@@ -31,16 +31,10 @@ export const createCharacterAnimation = (
     position: sprite.position.clone(),
   };
   const originalContact = textureGroundContact(original.texture);
-  let current:
-    | {
-        animation: CharacterAnimation;
-        lease: NonNullable<ReturnType<typeof acquireAnimationTexture>>;
-        views: Texture[];
-        ready: boolean;
-        cellSize: number;
-        contact: { x: number; y: number };
-      }
-    | undefined;
+  // The displayed clip stays until render swaps in its settled successor, so the static
+  // image only shows while no sheet is available and destroyed views never reach a draw.
+  let current: CharacterClip | undefined;
+  let pending: CharacterClip | undefined;
   let desired: CharacterAnimation | undefined;
   let disposed = false;
   let seen = options.initialEventId;
@@ -49,6 +43,8 @@ export const createCharacterAnimation = (
   let actionAt: number | undefined;
   let loopAt = 0;
   let activeKey = "";
+  let looping = true;
+  let elapsed = 0;
   const restore = (facing: AvatarFacing, sourceFacing: AvatarFacing) => {
     sprite.texture = original.texture;
     sprite.position.copyFrom(original.position);
@@ -59,12 +55,22 @@ export const createCharacterAnimation = (
       original.scale.y,
     );
   };
-  const release = () => {
-    if (!current) return;
-    for (const texture of current.views) texture.destroy(false);
-    current.lease.release();
-    current = undefined;
+  const releaseClip = (clip?: CharacterClip) => {
+    if (!clip) return;
+    for (const texture of clip.views) texture.destroy(false);
+    clip.lease.release();
   };
+  const release = () => {
+    releaseClip(current);
+    releaseClip(pending);
+    current = undefined;
+    pending = undefined;
+  };
+  const acquire = (animation: CharacterAnimation, cellSize: number) =>
+    acquireAnimationTexture(animation, cellSize, options.maxTextureSize) ??
+    (cellSize === 256
+      ? acquireAnimationTexture(animation, 128, options.maxTextureSize)
+      : undefined);
   const dispose = () => {
     if (disposed) return;
     disposed = true;
@@ -121,67 +127,84 @@ export const createCharacterAnimation = (
       const key = input.moving ? "move" : (event?.actionKey ?? "idle");
       desired = resolveSpriteAnimation(animations, key);
       const cellSize = input.cellSize ?? 128;
-      if (
-        (current?.animation !== desired ||
-          (current && current.cellSize !== cellSize)) &&
-        input.now >= retryAt
-      ) {
-        release();
-        if (desired) {
-          const lease =
-            acquireAnimationTexture(desired, cellSize, options.maxTextureSize) ??
-            (cellSize === 256
-              ? acquireAnimationTexture(desired, 128, options.maxTextureSize)
-              : undefined);
-          if (!lease) retryAt = input.now + 1000;
-          if (lease) {
-            const slot = {
-              animation: desired,
-              lease,
-              views: [] as Texture[],
-              ready: false,
-              cellSize,
-              contact: { x: 0, y: 0 },
-            };
-            current = slot;
-            void lease.resource.then(
-              (atlas) => {
-                if (disposed || current !== slot) return;
-                const width = atlas.width / slot.animation.columns;
-                slot.views = Array.from({ length: slot.animation.frameCount }, (_, i) =>
-                  stabilizeNearestTexture(
-                    new Texture({
-                      source: atlas.source,
-                      frame: new Rectangle(
-                        (i % slot.animation.columns) * width,
-                        Math.floor(i / slot.animation.columns) * width,
-                        width,
-                        width,
-                      ),
-                    }),
-                  ),
-                );
-                // One rest contact per clip preserves authored movement within every cell.
-                slot.contact = textureGroundContact(slot.views[0]!);
-                slot.ready = true;
-              },
-              () => {},
-            );
-          }
+      const wanted = (clip?: CharacterClip) =>
+        clip?.animation === desired && clip?.cellSize === cellSize;
+      if (wanted(current)) {
+        releaseClip(pending);
+        pending = undefined;
+      } else if (wanted(pending)) {
+        if (pending?.settled) {
+          releaseClip(current);
+          current = pending;
+          pending = undefined;
+        }
+      } else if (input.now >= retryAt) {
+        releaseClip(pending);
+        pending = undefined;
+        let lease = desired && acquire(desired, cellSize);
+        // Without room for the next sheet, or with no sheet to show, the displayed one goes.
+        if (!lease) {
+          releaseClip(current);
+          current = undefined;
+          lease = desired && acquire(desired, cellSize);
+        }
+        if (desired && !lease) retryAt = input.now + 1000;
+        if (desired && lease) {
+          const slot: CharacterClip = {
+            animation: desired,
+            lease,
+            views: [],
+            ready: false,
+            settled: false,
+            cellSize,
+            contact: { x: 0, y: 0 },
+          };
+          pending = slot;
+          void lease.resource.then(
+            (atlas) => {
+              if (disposed || pending !== slot) return;
+              const width = atlas.width / slot.animation.columns;
+              slot.views = Array.from({ length: slot.animation.frameCount }, (_, i) =>
+                stabilizeNearestTexture(
+                  new Texture({
+                    source: atlas.source,
+                    frame: new Rectangle(
+                      (i % slot.animation.columns) * width,
+                      Math.floor(i / slot.animation.columns) * width,
+                      width,
+                      width,
+                    ),
+                  }),
+                ),
+              );
+              // One rest contact per clip preserves authored movement within every cell.
+              slot.contact = textureGroundContact(slot.views[0]!);
+              slot.ready = true;
+              slot.settled = true;
+            },
+            () => {
+              slot.settled = true;
+            },
+          );
         }
       }
       if (!current?.ready) {
         restore(input.facing, input.sourceFacing);
         return;
       }
-      if (activeKey !== key) {
-        activeKey = key;
-        loopAt = input.now;
+      const onDesiredClip = current.animation === desired;
+      if (onDesiredClip) {
+        if (activeKey !== key) {
+          activeKey = key;
+          loopAt = input.now;
+        }
+        if (event && animations[event.actionKey] === desired && actionAt === undefined)
+          actionAt = input.now;
+        looping = !event || animations[event.actionKey] !== desired;
       }
-      if (event && animations[event.actionKey] === desired && actionAt === undefined)
-        actionAt = input.now;
-      const looping = !event || animations[event.actionKey] !== desired;
-      const elapsed = input.now - (looping ? loopAt : (actionAt ?? input.now));
+      // While the next sheet loads, loops keep playing and actions hold their last pose.
+      if (onDesiredClip || looping)
+        elapsed = input.now - (looping ? loopAt : (actionAt ?? input.now));
       const index = input.reducedMotion
         ? 0
         : spriteAnimationFrame(current.animation, elapsed, looping);
@@ -205,4 +228,15 @@ export const createCharacterAnimation = (
       );
     },
   };
+};
+
+/** A leased sheet and its frame views; settled with ready unset means the load failed. */
+type CharacterClip = {
+  animation: CharacterAnimation;
+  lease: NonNullable<ReturnType<typeof acquireAnimationTexture>>;
+  views: Texture[];
+  ready: boolean;
+  settled: boolean;
+  cellSize: number;
+  contact: { x: number; y: number };
 };

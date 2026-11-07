@@ -92,4 +92,42 @@ describe("Pixi AI atlases",()=>{
   render(3100,false,event);await flush();render(3100,false,event);expect(sprite.texture).not.toBe(attackFirst);
   render(4000,false,event,false);expect(sprite.texture).toBe(original);player.dispose();sprite.destroy();
  });
+ it("keeps the displayed clip on screen until the next sheet is ready",async()=>{
+  const attack={...idle,id:"attack",url:"https://example.com/attack.webp"};
+  const idleAtlas=atlas(),attackAtlas=atlas(),attackLoad=deferred<Texture>();
+  vi.spyOn(Assets,"load").mockImplementation(((asset:{src:string})=>asset.src.includes("attack")?attackLoad.promise:Promise.resolve(idleAtlas)) as never);vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
+  const original=new Texture({source:new TextureSource({width:128,height:128})});const sprite=new Sprite(original);
+  const player=createCharacterAnimation(sprite,100,{idle,"jutsu:fire":attack});
+  const frame=async(now:number,event?:{id:string;actionKey:string})=>{player.render({now,moving:false,event,enabled:true,facing:"left",sourceFacing:"left",reducedMotion:false});const drawn=sprite.texture;await flush();return drawn;};
+  await frame(0);expect((await frame(0)).source).toBe(idleAtlas.source);
+  // Idle keeps looping for as long as the action's sheet is downloading.
+  const cast={id:"cast",actionKey:"jutsu:fire"};
+  const waiting=await frame(100,cast),stillWaiting=await frame(350,cast);
+  expect(waiting.source).toBe(idleAtlas.source);expect(stillWaiting.source).toBe(idleAtlas.source);expect(stillWaiting).not.toBe(waiting);
+  attackLoad.resolve(attackAtlas);await flush();
+  // The action clock starts on its first visible frame, so a slow download costs no frames.
+  const attackFirst=await frame(600,cast);expect(attackFirst.source).toBe(attackAtlas.source);
+  const attackLast=await frame(1400,cast);expect(attackLast.source).toBe(attackAtlas.source);expect(attackLast).not.toBe(attackFirst);
+  // A cached sheet still settles after the frame that requests it; the action holds its pose.
+  expect(await frame(1600,cast)).toBe(attackLast);
+  expect((await frame(1616,cast)).source).toBe(idleAtlas.source);
+  const again={id:"again",actionKey:"jutsu:fire"};
+  for(const now of [2000,2016,2032])expect((await frame(now,again))).not.toBe(original);
+  expect(sprite.texture.source).toBe(attackAtlas.source);player.dispose();sprite.destroy();
+ });
+ it("shows the static image once a sheet fails or cannot fit",async()=>{
+  const broken={...idle,id:"broken",url:"https://example.com/broken.webp"};const huge={...idle,id:"huge",columns:8,rows:8,frameCount:64,url:"https://example.com/huge.webp"};
+  vi.spyOn(Assets,"load").mockImplementation(((asset:{src:string})=>asset.src.includes("broken")?Promise.reject(new Error("offline")):Promise.resolve(atlas())) as never);vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
+  const original=new Texture({source:new TextureSource({width:128,height:128})});const sprite=new Sprite(original);
+  const player=createCharacterAnimation(sprite,100,{idle,"jutsu:broken":broken,"jutsu:huge":huge},{maxTextureSize:512});
+  const render=(now:number,event?:{id:string;actionKey:string})=>player.render({now,moving:false,event,enabled:true,facing:"left",sourceFacing:"left",reducedMotion:false});
+  render(0);await flush();render(0);expect(sprite.texture).not.toBe(original);
+  render(100,{id:"one",actionKey:"jutsu:broken"});expect(sprite.texture).not.toBe(original);await flush();render(116,{id:"one",actionKey:"jutsu:broken"});expect(sprite.texture).toBe(original);
+  player.dispose();
+  const oversized=createCharacterAnimation(sprite,100,{idle,"jutsu:huge":huge},{maxTextureSize:512});
+  const renderOversized=(now:number,event?:{id:string;actionKey:string})=>oversized.render({now,moving:false,event,enabled:true,facing:"left",sourceFacing:"left",reducedMotion:false});
+  renderOversized(0);await flush();renderOversized(0);expect(sprite.texture).not.toBe(original);
+  renderOversized(100,{id:"two",actionKey:"jutsu:huge"});expect(sprite.texture).toBe(original);
+  oversized.dispose();sprite.destroy();
+ });
 });
