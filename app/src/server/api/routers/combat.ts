@@ -136,6 +136,7 @@ import {
   getBattleGrid,
   getDefaultBattleSizes,
   getEffectiveMaxPool,
+  getHighestGenerals,
   getPoolKeys,
   inertUserItemColumns,
   mergeExtraState,
@@ -4221,44 +4222,7 @@ export const processUsersForBattle = async (
     }
 
     // Add highest generals to user
-    const generals = {
-      strength: user.strength,
-      intelligence: user.intelligence,
-      willpower: user.willpower,
-      speed: user.speed,
-    } as const;
-
-    type generalKey = keyof typeof generals;
-
-    if (user.preferredGeneral1 && user.preferredGeneral2) {
-      // If both generals are already set, just use them
-      user.highestGenerals = [
-        user.preferredGeneral1.toLowerCase(),
-        user.preferredGeneral2.toLowerCase(),
-      ] as generalKey[];
-    } else {
-      // Sort generals by value
-      const sortedStats = Object.entries(generals)
-        .sort(([, a], [, b]) => b - a)
-        .map(([stat]) => stat) as generalKey[];
-
-      if (user.preferredGeneral1) {
-        // If first general is set, find the highest from remaining
-        const firstGenLower = user.preferredGeneral1.toLowerCase() as generalKey;
-        const secondGeneral =
-          sortedStats.find((stat) => stat !== firstGenLower) ?? sortedStats[0];
-        user.highestGenerals = [firstGenLower, secondGeneral ?? firstGenLower];
-      } else if (user.preferredGeneral2) {
-        // If second general is set, find the highest from remaining
-        const secondGenLower = user.preferredGeneral2.toLowerCase() as generalKey;
-        const firstGeneral =
-          sortedStats.find((stat) => stat !== secondGenLower) ?? sortedStats[0];
-        user.highestGenerals = [firstGeneral ?? secondGenLower, secondGenLower];
-      } else {
-        // If no generals are set, take the two highest
-        user.highestGenerals = sortedStats.slice(0, 2);
-      }
-    }
+    user.highestGenerals = getHighestGenerals(user);
 
     // Fight at the XP-derived effective level, not the stored level, since some things scale
     // with level. This raises level holders and, by design, lags a user who just leveled up.
