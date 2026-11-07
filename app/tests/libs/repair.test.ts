@@ -72,7 +72,7 @@ describe("repair kit selection", () => {
     ];
     const before = structuredClone(kits);
 
-    expect(calculateKitsToUse(damagedItems, kits, kits.map((k) => k.userItem))).toEqual({
+    expect(calculateKitsToUse(damagedItems, kits)).toEqual({
       kitsToUse: [
         { repairItemId: "small-first", repairItemName: "small-first", quantityUsed: 2 },
         { repairItemId: "small-second", repairItemName: "small-second", quantityUsed: 3 },
@@ -87,7 +87,7 @@ describe("repair kit selection", () => {
   it("stops partway through an equal-power stack once damage is covered", () => {
     const kits = [kit("first", 30, 1), kit("second", 30, 5), kit("third", 30, 5)];
 
-    expect(calculateKitsToUse(damagedItems, kits, kits.map((k) => k.userItem))).toEqual({
+    expect(calculateKitsToUse(damagedItems, kits)).toEqual({
       kitsToUse: [
         { repairItemId: "first", repairItemName: "first", quantityUsed: 1 },
         { repairItemId: "second", repairItemName: "second", quantityUsed: 2 },
@@ -100,31 +100,30 @@ describe("repair kit selection", () => {
   it("reports the available partial repair without exceeding stack quantities", () => {
     const kits = [kit("large", 20, 1), kit("empty", 10, 0), kit("small", 10, 2)];
 
-    expect(calculateKitsToUse(damagedItems, kits, undefined)).toEqual({
+    expect(calculateKitsToUse(damagedItems, kits)).toEqual({
       kitsToUse: [
-        { repairItemId: "small", repairItemName: "Unknown Repair Kit", quantityUsed: 2 },
-        { repairItemId: "large", repairItemName: "Unknown Repair Kit", quantityUsed: 1 },
+        { repairItemId: "small", repairItemName: "small", quantityUsed: 2 },
+        { repairItemId: "large", repairItemName: "large", quantityUsed: 1 },
       ],
       totalDurabilityNeeded: 86,
       canRepairAll: false,
     });
   });
 
-  it("looks names up in userItems and falls back when a kit is absent", () => {
-    const kits = [kit("renamed", 10, 1), kit("missing", 100, 1)];
-    const names = [{ ...kits[0]!.userItem, item: { name: "Repair Kit" } }] as UserItemWithRelations[];
+  it("names each used kit after its own item", () => {
+    const renamed = kit("renamed", 10, 1);
+    renamed.userItem.item.name = "Repair Kit";
 
-    expect(calculateKitsToUse(damagedItems, kits, names).kitsToUse).toEqual([
+    expect(calculateKitsToUse(damagedItems, [renamed]).kitsToUse).toEqual([
       { repairItemId: "renamed", repairItemName: "Repair Kit", quantityUsed: 1 },
-      { repairItemId: "missing", repairItemName: "Unknown Repair Kit", quantityUsed: 1 },
     ]);
   });
 
   it("distinguishes no damage from no available kits", () => {
-    expect(calculateKitsToUse([], [], undefined)).toEqual({
+    expect(calculateKitsToUse([], [])).toEqual({
       kitsToUse: [], totalDurabilityNeeded: 0, canRepairAll: true,
     });
-    expect(calculateKitsToUse(damagedItems, [], undefined)).toEqual({
+    expect(calculateKitsToUse(damagedItems, [])).toEqual({
       kitsToUse: [], totalDurabilityNeeded: 86, canRepairAll: false,
     });
   });
