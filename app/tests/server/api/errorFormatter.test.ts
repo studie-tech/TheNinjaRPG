@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createRequire } from "node:module";
-import { DatabaseError } from "@planetscale/database";
+import { type Client, DatabaseError } from "@planetscale/database";
 import { TRPCError } from "@trpc/server";
 import { DrizzleQueryError, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/planetscale-serverless";
@@ -117,6 +117,29 @@ describe("tRPC errorFormatter", () => {
     );
   });
 
+  it.each([
+    ["a driver response", driverAnswer(`rollback failed: ${STATEMENT}`)],
+    ["an incomplete driver response", async () => Response.json({ error: {} }, { status: 400 })],
+    ["a gateway response", async () => new Response("Bad gateway", { status: 503 })],
+  ])("hides cross-copy transaction failures from %s", async (_label, fetch) => {
+    const require = createRequire(import.meta.url);
+    const { Client: OtherClient, DatabaseError: OtherDatabaseError } = require(
+      "@planetscale/database",
+    ) as { Client: typeof Client; DatabaseError: typeof DatabaseError };
+    const { drizzle: otherDrizzle } = require("drizzle-orm/planetscale-serverless") as {
+      drizzle: typeof drizzle;
+    };
+    const failure = await otherDrizzle(
+      new OtherClient({ url: "mysql://u:p@db.example.test/tnr", fetch }),
+    ).transaction(async () => undefined).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(OtherDatabaseError);
+    expect(failure).not.toBeInstanceOf(DatabaseError);
+    expect(format(failure).message).toBe(DATABASE_FAILURE_MESSAGE);
+    expect(format(new Error("transaction failed", { cause: failure })).message).toBe(
+      DATABASE_FAILURE_MESSAGE,
+    );
+  });
+
   it("leaves errors without a database cause alone", () => {
     expect(format(new Error("plain")).message).toBe("plain");
     expect(format(new TRPCError({ code: "FORBIDDEN", message: "Not yours" })).message).toBe(
@@ -125,6 +148,11 @@ describe("tRPC errorFormatter", () => {
     expect(format(Object.assign(new Error("plain"), { query: "search", params: "input" })).message).toBe(
       "plain",
     );
+    for (const metadata of [
+      { status: 400, body: { code: "BAD_REQUEST", message: "plain" } },
+      { name: "DatabaseError", status: "400", body: {} },
+      { name: "DatabaseError", status: 400, body: null },
+    ]) expect(format(Object.assign(new Error("plain"), metadata)).message).toBe("plain");
   });
 
   it("reports zod issues beside the message", () => {

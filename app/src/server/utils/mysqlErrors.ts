@@ -34,7 +34,14 @@ export const isDatabaseFailure = (error: unknown): boolean =>
       ("query" in current &&
         typeof current.query === "string" &&
         "params" in current &&
-        Array.isArray(current.params)),
+        Array.isArray(current.params)) ||
+      // Driver transaction-control failures have no Drizzle query wrapper.
+      ((current.name === "DatabaseError" || current.name === "UnknownError") &&
+        "status" in current &&
+        typeof current.status === "number" &&
+        "body" in current &&
+        typeof current.body === "object" &&
+        current.body !== null),
   );
 
 /**
