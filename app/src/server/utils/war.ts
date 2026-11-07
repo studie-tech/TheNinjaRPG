@@ -5,27 +5,20 @@ import {
   FACTION_RAID_COST,
   FACTION_RAID_DAILY_DRAIN,
   FACTION_RAID_MIN_MEMBERS,
-  FACTION_RAID_REWARD,
-  OBJECTIVE_WAR_ATTACKER_COOLDOWN_DAYS,
   OBJECTIVE_WAR_DEFEAT_PENALTY_DAYS,
-  OBJECTIVE_WAR_DEFENDER_COOLDOWN_DAYS,
   VILLAGE_SYNDICATE_ID,
-  WAR_ATTACKER_EXHAUSTION_MULTIPLIER,
   WAR_DECLARATION_COST,
   WAR_DEFEAT_STRUCTURE_PENALTY_DAYS,
-  WAR_LOSING_COOLDOWN_DAYS,
   WAR_OBJECTIVES_PER_SIDE,
   WAR_PURCHASE_SHRINE_TOKEN_COST,
   WAR_VICTORY_STRUCTURE_BOOST_DAYS,
-  WAR_VICTORY_TOKEN_BONUS,
   WAR_WINNING_BOOST_DAYS,
-  WAR_WINNING_COOLDOWN_DAYS,
-  type WarState,
   type WarType,
 } from "@/drizzle/constants";
 import { mpvpBattleQueue, type War, war, warAlly } from "@/drizzle/schema";
 import { getObjectiveWarDeadline, selectWarObjectives } from "@/libs/objectiveWar";
 import {
+  computeWarOutcome,
   getRaidDeclarationBlock,
   isFactionVillage,
   isVillageInvolvedInAnyWar,
@@ -140,64 +133,17 @@ export const handleWarEnd = async (
       return current;
 
     const isSector = current.type === "SECTOR_WAR";
-    const attackerLost =
-      losingVillageId === current.attackerVillageId ||
-      (!isRaid && !current.rules && current.attackerVillage.tokens <= 0) ||
-      current.attackerWarHealth <= 0;
-    const defenderLost =
-      !!options.shrineBuilderId ||
-      losingVillageId === current.defenderVillageId ||
-      (!isRaid && !current.rules && current.defenderVillage.tokens <= 0) ||
-      current.defenderWarHealth <= 0;
-    const isDraw =
-      !isRaid &&
-      ((attackerLost && defenderLost) ||
-        (!attackerLost &&
-          !defenderLost &&
-          current.attackerWarHealth === current.defenderWarHealth));
-    const winnerId = isRaid
-      ? defenderLost && !attackerLost
-        ? current.attackerVillageId
-        : current.defenderVillageId
-      : (attackerLost && !defenderLost) ||
-          (!attackerLost &&
-            !defenderLost &&
-            current.attackerWarHealth < current.defenderWarHealth)
-        ? current.defenderVillageId
-        : current.attackerVillageId;
-    const loserId =
-      winnerId === current.attackerVillageId
-        ? current.defenderVillageId
-        : current.attackerVillageId;
-    const status: WarState = isDraw
-      ? "DRAW"
-      : winnerId === current.attackerVillageId
-        ? "ATTACKER_VICTORY"
-        : "DEFENDER_VICTORY";
-    const winningVillageIds = isRaid
-      ? [winnerId]
-      : isDraw
-        ? []
-        : [
-            ...new Set([
-              winnerId,
-              ...current.warAllies
-                .filter((ally) => ally.supportVillageId === winnerId)
-                .map((ally) => ally.villageId),
-            ]),
-          ].sort();
-    const share = isRaid
-      ? winnerId === current.attackerVillageId
-        ? FACTION_RAID_REWARD
-        : 0
-      : winningVillageIds.length
-        ? Math.floor(WAR_VICTORY_TOKEN_BONUS / winningVillageIds.length)
-        : 0;
-    const winnerTokens =
-      share +
-      (!isRaid && winningVillageIds.length
-        ? WAR_VICTORY_TOKEN_BONUS % winningVillageIds.length
-        : 0);
+    const {
+      isDraw,
+      winnerId,
+      loserId,
+      status,
+      winningVillageIds,
+      share,
+      winnerTokens,
+      attackerCooldown,
+      defenderCooldown,
+    } = computeWarOutcome(current, losingVillageId, options, endedAt);
     const sectorWars = isSector ? await listWarForHandleWarEnd(client, current) : [];
     const villageIds = [
       ...new Set([
@@ -228,35 +174,6 @@ export const handleWarEnd = async (
       structuresDelivered: isRaid || isSector,
       notified: false,
     };
-    const attackerCooldown = current.rules
-      ? secondsFromDate(
-          (status === "ATTACKER_VICTORY"
-            ? WAR_WINNING_COOLDOWN_DAYS
-            : OBJECTIVE_WAR_ATTACKER_COOLDOWN_DAYS) * DAY_S,
-          endedAt,
-        )
-      : secondsFromDate(
-          (status === "ATTACKER_VICTORY"
-            ? WAR_WINNING_COOLDOWN_DAYS
-            : WAR_LOSING_COOLDOWN_DAYS) *
-            DAY_S *
-            WAR_ATTACKER_EXHAUSTION_MULTIPLIER,
-          endedAt,
-        );
-    const defenderCooldown = current.rules
-      ? secondsFromDate(
-          (status === "DEFENDER_VICTORY"
-            ? WAR_WINNING_COOLDOWN_DAYS
-            : OBJECTIVE_WAR_DEFENDER_COOLDOWN_DAYS) * DAY_S,
-          endedAt,
-        )
-      : secondsFromDate(
-          (status === "DEFENDER_VICTORY"
-            ? WAR_WINNING_COOLDOWN_DAYS
-            : WAR_LOSING_COOLDOWN_DAYS) * DAY_S,
-          endedAt,
-        );
-
     const membership = alias(warAlly, "wa");
 
     const rosterMatches = current.warAllies.length
