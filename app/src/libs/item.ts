@@ -55,35 +55,26 @@ export const nonCombatConsume = (item: Item, userData: UserData): boolean => {
   if (item.itemType !== "CONSUMABLE") {
     return false;
   }
-
-  for (const effect of item.effects) {
-    if (effect.type === "rollbloodline") {
-      return true;
-    } else if (effect.type === "rollsagemode" && !userData.sageModeId) {
-      return true;
-    } else if (effect.type === "removebloodline" && userData.bloodlineId) {
-      return true;
-    } else if (effect.type === "heal") {
-      return true;
-    } else if (effect.type === "marriageslotincrease") {
-      return true;
-    } else if (effect.type === "noncombatincreasereskins") {
-      return true;
-    } else if (effect.type === "increasejutsuslots") {
-      return true;
-    } else if (effect.type === "noncombatconsumereward") {
-      return true;
-    } else if (effect.type === "noncombatgainskill") {
-      return true;
-    } else if (effect.type === "noncombatquest") {
-      return true;
-    } else if (effect.type === "repair") {
-      return true;
-    }
-  }
-
-  return false;
+  return item.effects.some(
+    ({ type }) =>
+      NON_COMBAT_EFFECTS.has(type) ||
+      (type === "rollsagemode" && !userData.sageModeId) ||
+      (type === "removebloodline" && !!userData.bloodlineId),
+  );
 };
+
+/** Consumable effects usable outside combat whatever the user's state. */
+const NON_COMBAT_EFFECTS = new Set<string>([
+  "rollbloodline",
+  "heal",
+  "marriageslotincrease",
+  "noncombatincreasereskins",
+  "increasejutsuslots",
+  "noncombatconsumereward",
+  "noncombatgainskill",
+  "noncombatquest",
+  "repair",
+]);
 
 /**
  * Calculates the maximum number of event items for a user.
