@@ -1,7 +1,7 @@
 import * as clerk from "@clerk/nextjs";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import { useCombatPreferences } from "@/hooks/combat";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
@@ -193,9 +193,12 @@ describe("Classic light layout", () => {
 });
 
 describe("game settings categories", () => {
+  beforeEach(() => {
+    installBrowserGlobals();
+  });
+
   const CombatSettingsProbe = ({ supportsBattleFocus }: { supportsBattleFocus: boolean }) => <UserCombatSettings config={useCombatPreferences()} supportsBattleFocus={supportsBattleFocus} />;
   const renderSettings = (withCombat = false, supportsBattleFocus = true) => {
-    installBrowserGlobals();
     vi.spyOn(clerk, "useUser").mockReturnValue({ isSignedIn: false } as never);
     vi.spyOn(navigation, "useRouter").mockReturnValue({ refresh: vi.fn() } as never);
     Object.assign(vi.spyOn(client, "api" as never), {
