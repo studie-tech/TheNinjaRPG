@@ -139,17 +139,9 @@ export const updateUserPreferencesSchema = z
     showPvpRecord: z.boolean().optional(),
   })
   .refine(
-    (data) => {
-      if (
-        data.preferredGeneral1 !== undefined &&
-        data.preferredGeneral2 !== undefined &&
-        data.preferredGeneral1 !== null &&
-        data.preferredGeneral2 !== null
-      ) {
-        return data.preferredGeneral1 !== data.preferredGeneral2;
-      }
-      return true;
-    },
+    (data) =>
+      data.preferredGeneral1 == null ||
+      data.preferredGeneral1 !== data.preferredGeneral2,
     {
       error: "General preferences must be different",
     },

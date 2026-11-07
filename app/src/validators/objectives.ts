@@ -1184,7 +1184,7 @@ const questSuperRefine = (
       path: ["maxCompletes"],
     });
   }
-  if (["daily"].includes(val.questType)) {
+  if (val.questType === "daily") {
     if (val.content.objectives.length < 3 || val.content.objectives.length > 7) {
       ctx.addIssue({
         code: "custom",
@@ -1223,10 +1223,8 @@ const questSuperRefine = (
     }
     // Validate that raidBossCurrentHealth doesn't exceed raidBossMaxHealth
     if (
-      val.raidBossCurrentHealth !== undefined &&
-      val.raidBossCurrentHealth !== null &&
-      val.raidBossMaxHealth !== undefined &&
-      val.raidBossMaxHealth !== null &&
+      val.raidBossCurrentHealth != null &&
+      val.raidBossMaxHealth != null &&
       val.raidBossCurrentHealth > val.raidBossMaxHealth
     ) {
       ctx.addIssue({

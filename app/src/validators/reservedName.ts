@@ -79,15 +79,8 @@ export const isReservedCustomTitle = (
   title: string,
   extraVillageNames: readonly string[] = [],
 ): boolean => {
-  const normalized = normalizeReservedName(title);
-  if (!normalized) return false;
-  if (STAFF_ROLE_KEYS.has(normalized)) return true;
-  if (
-    RESERVED_CUSTOM_TITLE_VILLAGE_NAMES.some(
-      (name) => normalizeReservedName(name) === normalized,
-    )
-  ) {
-    return true;
-  }
-  return extraVillageNames.some((name) => normalizeReservedName(name) === normalized);
+  return (
+    STAFF_ROLE_KEYS.has(normalizeReservedName(title)) ||
+    isReserved(title, [...RESERVED_CUSTOM_TITLE_VILLAGE_NAMES, ...extraVillageNames])
+  );
 };
