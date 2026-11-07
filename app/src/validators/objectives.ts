@@ -1277,48 +1277,9 @@ export type ZodQuestFormType = z.output<typeof QuestFormSchema>;
 export type ZodQuestFormInput = z.input<typeof QuestFormSchema>;
 
 export const getObjectiveSchema = (type: string) => {
-  if (SimpleTasks.includes(type as SimpleTask)) {
-    return SimpleObjective;
-  } else if (["fail_quest", "win_quest"].includes(type)) {
-    return InstantWinLoseObjective;
-  } else if (type === "reset_quest") {
-    return ResetQuestObjective;
-  } else if (type === "new_quest") {
-    return InstantNewQuestObjective;
-  } else if (type === "start_battle") {
-    return InstantStartBattleObjective;
-  } else if (type === "move_to_location") {
-    return MoveToObjective;
-  } else if (type === "collect_item") {
-    return CollectItem;
-  } else if (type === "deliver_item") {
-    return DeliverItem;
-  } else if (type === "defeat_opponents") {
-    return DefeatOpponents;
-  } else if (type === "dialog") {
-    return DialogObjective;
-  } else if (type === "win_encounter_at_location") {
-    return EncountersAtLocation;
-  } else if (type === "open_raid" || type === "exclusive_raid") {
-    return RaidObjective;
-  } else if (type === "craft_specific_item") {
-    return CraftSpecificItem;
-  } else if (type === "train_specific_jutsu") {
-    return TrainSpecificJutsu;
-  } else if (type === "complete_specific_quest") {
-    return CompleteSpecificQuest;
-  } else if (type === "buy_item") {
-    return BuyItem;
-  } else if (type === "use_specific_item_combat") {
-    return UseSpecificItemCombat;
-  } else if (type === "use_specific_jutsu_combat") {
-    return UseSpecificJutsuCombat;
-  } else if (type === "tag_usage_win") {
-    return TagUsageWin;
-  } else if (type === "damage_dealt") {
-    return DamageDealt;
-  } else if (type === "bloodline_collection") {
-    return BloodlineCollection;
-  }
-  throw new Error(`Unknown objective task ${type}`);
+  const schema = AllObjectives.options.find(
+    (option) => option.shape.task.safeParse(type).success,
+  );
+  if (!schema) throw new Error(`Unknown objective task ${type}`);
+  return schema;
 };
