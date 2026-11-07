@@ -134,8 +134,6 @@ export class SpacetimeDBConnection {
   private identity: string | null = null;
   private currentSessionId: bigint | null = null;
   private currentUserId: string | null = null;
-  // Track if the WebSocket is fully ready for sending (fixes InvalidStateError: Still in CONNECTING state)
-  private wsReady = false;
 
   constructor(config: SpacetimeDBConfig) {
     this.config = config;
@@ -144,13 +142,12 @@ export class SpacetimeDBConnection {
   /**
    * Wait for connection to complete (or fail)
    * Used to avoid race conditions when multiple calls to connect() happen concurrently
-   * Waits for both connectionState === "connected" AND wsReady === true,
-   * ensuring subscriptions are fully applied before proceeding.
+   * "connected" is only set once subscriptions are applied, so this also waits for those.
    */
   private waitForConnection(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const checkConnection = () => {
-        if (this.connectionState === "connected" && this.wsReady) {
+        if (this.connectionState === "connected") {
           resolve();
         } else if (
           this.connectionState === "error" ||
@@ -166,38 +163,13 @@ export class SpacetimeDBConnection {
   }
 
   /**
-   * Wait for WebSocket to be fully ready for sending messages.
-   * The SpacetimeDB SDK's onConnect callback may fire before the underlying
-   * WebSocket is in OPEN state, causing "Still in CONNECTING state" errors.
-   */
-  private async waitForWebSocketReady(): Promise<void> {
-    const maxAttempts = 20;
-    const delayMs = 50;
-
-    for (let i = 0; i < maxAttempts; i++) {
-      if (this.wsReady) {
-        return;
-      }
-      await sleep(delayMs);
-    }
-
-    throw new Error("WebSocket not ready after maximum wait time");
-  }
-
-  /**
    * Connect to SpacetimeDB
    * @param userId - The user's ID for filtered subscriptions (use "guest" for unauthenticated)
    */
   async connect(userId?: string): Promise<void> {
     // If already connected, just update subscriptions if needed
     if (this.connectionState === "connected") {
-      if (userId && userId !== this.currentUserId) {
-        const validatedId = validateUserId(userId);
-        if (validatedId) {
-          this.currentUserId = validatedId;
-          this.setupGlobalSubscriptions();
-        }
-      }
+      this.switchUser(userId);
       return;
     }
 
@@ -206,14 +178,7 @@ export class SpacetimeDBConnection {
     // the WebSocket was actually open (InvalidStateError)
     if (this.connectionState === "connecting") {
       await this.waitForConnection();
-      // After connection completes, update subscriptions if needed
-      if (userId && userId !== this.currentUserId) {
-        const validatedId = validateUserId(userId);
-        if (validatedId) {
-          this.currentUserId = validatedId;
-          this.setupGlobalSubscriptions();
-        }
-      }
+      this.switchUser(userId);
       return;
     }
 
@@ -234,13 +199,12 @@ export class SpacetimeDBConnection {
 
           // Set up filtered subscriptions first to avoid race conditions
           // PERFORMANCE: Only subscribe to this user's data
-          // Note: connectionState and wsReady will be set in setupGlobalSubscriptions's onApplied callback
+          // Note: connectionState will be set in setupGlobalSubscriptions's onApplied callback
           // This ensures callers cannot send reducers before subscriptions are established
           this.setupGlobalSubscriptions();
         })
         .onDisconnect(() => {
           this.connectionState = "disconnected";
-          this.wsReady = false;
           this.emit({ type: "connection_state", state: "disconnected" });
         })
         .onConnectError((_ctx, error) => {
@@ -264,6 +228,17 @@ export class SpacetimeDBConnection {
     }
   }
 
+  /** Follow a new user on an open connection. */
+  private switchUser(userId?: string) {
+    if (userId && userId !== this.currentUserId) {
+      const validatedId = validateUserId(userId);
+      if (validatedId) {
+        this.currentUserId = validatedId;
+        this.setupGlobalSubscriptions();
+      }
+    }
+  }
+
   /**
    * Set up global subscriptions (user-level, not session-specific)
    * PERFORMANCE: Filtered subscriptions to only receive this user's data.
@@ -282,9 +257,8 @@ export class SpacetimeDBConnection {
 
     // For guests, skip global subscription - they'll use subscribeToGuestSession() with specific seed
     if (this.currentUserId === "guest") {
-      // Mark WebSocket as ready immediately for guests (no subscription to wait for)
+      // Guests are connected immediately (no subscription to wait for)
       this.connectionState = "connected";
-      this.wsReady = true;
       this.emit({ type: "connection_state", state: "connected" });
       return;
     }
@@ -300,10 +274,9 @@ export class SpacetimeDBConnection {
     this.globalSubscription = this.connection
       .subscriptionBuilder()
       .onApplied(() => {
-        // Mark WebSocket and connection as ready AFTER subscriptions are applied
+        // Mark the connection as ready AFTER subscriptions are applied
         // This ensures reducers won't fire before subscriptions are fully established
         this.connectionState = "connected";
-        this.wsReady = true;
         this.emit({ type: "connection_state", state: "connected" });
       })
       .onError((ctx: ErrorContext) => {
@@ -541,7 +514,6 @@ export class SpacetimeDBConnection {
       this.connection = null;
     }
     this.connectionState = "disconnected";
-    this.wsReady = false;
     this.currentSessionId = null;
     this.currentUserId = null;
     this.emit({ type: "connection_state", state: "disconnected" });
@@ -575,6 +547,14 @@ export class SpacetimeDBConnection {
   // Reducer Calls
   // ============================================
 
+  /** The live connection, for a reducer call. */
+  private requireConnection(): DbConnection {
+    if (!this.connection || this.connectionState !== "connected") {
+      throw new Error("Not connected to SpacetimeDB");
+    }
+    return this.connection;
+  }
+
   /**
    * Create a new game session
    *
@@ -586,25 +566,14 @@ export class SpacetimeDBConnection {
    * the session signature to prevent tampering.
    */
   async createSession(params: CreateSessionParams): Promise<void> {
-    if (!this.connection || this.connectionState !== "connected") {
-      throw new Error("Not connected to SpacetimeDB");
-    }
-
-    // Wait for WebSocket to be fully ready before sending
-    await this.waitForWebSocketReady();
-
-    await this.connection.reducers.createSession(params);
+    await this.requireConnection().reducers.createSession(params);
   }
 
   /**
    * Start a new wave
    */
   async startWave(sessionId: bigint): Promise<void> {
-    if (!this.connection || this.connectionState !== "connected") {
-      throw new Error("Not connected to SpacetimeDB");
-    }
-
-    await this.connection.reducers.startWave({ sessionId });
+    await this.requireConnection().reducers.startWave({ sessionId });
   }
 
   /**
@@ -615,11 +584,11 @@ export class SpacetimeDBConnection {
     targetCol: number,
     targetRow: number,
   ): Promise<void> {
-    if (!this.connection || this.connectionState !== "connected") {
-      throw new Error("Not connected to SpacetimeDB");
-    }
-
-    await this.connection.reducers.throwShuriken({ sessionId, targetCol, targetRow });
+    await this.requireConnection().reducers.throwShuriken({
+      sessionId,
+      targetCol,
+      targetRow,
+    });
   }
 
   /**
@@ -629,33 +598,21 @@ export class SpacetimeDBConnection {
    * are looked up server-side from hardcoded definitions to prevent cheating.
    */
   async purchaseUpgrade(sessionId: bigint, upgradeId: string): Promise<void> {
-    if (!this.connection || this.connectionState !== "connected") {
-      throw new Error("Not connected to SpacetimeDB");
-    }
-
-    await this.connection.reducers.purchaseUpgrade({ sessionId, upgradeId });
+    await this.requireConnection().reducers.purchaseUpgrade({ sessionId, upgradeId });
   }
 
   /**
    * Delete a completed run record after claiming
    */
   async deleteCompletedRun(sessionId: bigint): Promise<void> {
-    if (!this.connection || this.connectionState !== "connected") {
-      throw new Error("Not connected to SpacetimeDB");
-    }
-
-    await this.connection.reducers.deleteCompletedRun({ sessionId });
+    await this.requireConnection().reducers.deleteCompletedRun({ sessionId });
   }
 
   /**
    * Abandon a session
    */
   async abandonSession(sessionId: bigint): Promise<void> {
-    if (!this.connection || this.connectionState !== "connected") {
-      throw new Error("Not connected to SpacetimeDB");
-    }
-
-    await this.connection.reducers.abandonSession({ sessionId });
+    await this.requireConnection().reducers.abandonSession({ sessionId });
   }
 }
 
