@@ -356,56 +356,50 @@ export const listSupportTicketForGetSupportTicketsWithRelations = (
 ) =>
   client.query.supportTicket.findMany({
     where: and(
-      ...(filters.status && filters.status.length > 0
-        ? [inArray(supportTicket.status, filters.status)]
-        : []),
-      ...(filters.category && filters.category.length > 0
-        ? [inArray(supportTicket.category, filters.category)]
-        : []),
-      ...(filters.priority && filters.priority.length > 0
-        ? [inArray(supportTicket.priority, filters.priority)]
-        : []),
-      ...(filters.assignedToUserId
-        ? [eq(supportTicket.assignedToUserId, filters.assignedToUserId)]
-        : []),
-      ...(filters.createdByUserId
-        ? [eq(supportTicket.createdByUserId, filters.createdByUserId)]
-        : []),
-      ...(filters.isPublic !== undefined
-        ? [eq(supportTicket.isPublic, filters.isPublic)]
-        : []),
-      ...(filters.search
-        ? [
-            or(
-              like(supportTicket.title, `%${filters.search}%`),
-              like(supportTicket.description, `%${filters.search}%`),
+      filters.status && filters.status.length > 0
+        ? inArray(supportTicket.status, filters.status)
+        : undefined,
+      filters.category && filters.category.length > 0
+        ? inArray(supportTicket.category, filters.category)
+        : undefined,
+      filters.priority && filters.priority.length > 0
+        ? inArray(supportTicket.priority, filters.priority)
+        : undefined,
+      filters.assignedToUserId
+        ? eq(supportTicket.assignedToUserId, filters.assignedToUserId)
+        : undefined,
+      filters.createdByUserId
+        ? eq(supportTicket.createdByUserId, filters.createdByUserId)
+        : undefined,
+      filters.isPublic !== undefined
+        ? eq(supportTicket.isPublic, filters.isPublic)
+        : undefined,
+      filters.search
+        ? or(
+            like(supportTicket.title, `%${filters.search}%`),
+            like(supportTicket.description, `%${filters.search}%`),
+          )
+        : undefined,
+      filters.dateFrom
+        ? gte(supportTicket.createdAt, new Date(filters.dateFrom))
+        : undefined,
+      filters.dateTo
+        ? lte(supportTicket.createdAt, new Date(filters.dateTo))
+        : undefined,
+      filters.tags && filters.tags.length > 0
+        ? or(
+            ...filters.tags.map(
+              (tag) =>
+                sql`JSON_CONTAINS(${supportTicket.tags}, ${JSON.stringify(tag)})`,
             ),
-          ]
-        : []),
-      ...(filters.dateFrom
-        ? [gte(supportTicket.createdAt, new Date(filters.dateFrom))]
-        : []),
-      ...(filters.dateTo
-        ? [lte(supportTicket.createdAt, new Date(filters.dateTo))]
-        : []),
-      ...(filters.tags && filters.tags.length > 0
-        ? [
-            or(
-              ...filters.tags.map(
-                (tag) =>
-                  sql`JSON_CONTAINS(${supportTicket.tags}, ${JSON.stringify(tag)})`,
-              ),
-            ),
-          ]
-        : []),
-      ...(!isStaff
-        ? [
-            or(
-              eq(supportTicket.createdByUserId, userId),
-              eq(supportTicket.isPublic, true),
-            ),
-          ]
-        : []),
+          )
+        : undefined,
+      !isStaff
+        ? or(
+            eq(supportTicket.createdByUserId, userId),
+            eq(supportTicket.isPublic, true),
+          )
+        : undefined,
     ),
     with: {
       createdBy: {
