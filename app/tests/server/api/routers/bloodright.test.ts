@@ -32,7 +32,6 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     await db.insert(userData).values({ userId, username: "BloodrightPlayer", gender: "Other", bloodlineId: "line", seichiSilver: 1000, reputationPoints: 100, rank: "JONIN" });
     await db.insert(skillTree).values([tier("root"), tier("child", 2, ["root"]), tier("grandchild", 3, ["child"]), tier("other"), tier("fifth"), tier("sixth")]);
     stubProfile("fetchUpdatedUser", async () => ({ user: await read() }));
-    stubProfile("fetchUser", async (_client: unknown, id: string) => db.query.userData.findFirst({ where: eq(userData.userId, id) }));
   });
   afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
 

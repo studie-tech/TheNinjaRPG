@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from "bun:test";
+import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   conversation,
@@ -9,7 +9,6 @@ import {
 } from "@/drizzle/schema";
 import { commentsRouter } from "@/server/api/routers/comments";
 import { insertUsers } from "../../../setup/factories";
-import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -42,7 +41,6 @@ const insertSoloConversation = async (id: string, isStaffAvailable: boolean) => 
 
 describeWithDatabase("comments.exitConversation", () => {
   beforeEach(async () => {
-    const db = await getTestDatabase();
     await resetTables(
       supportTicket,
       conversationComment,
@@ -51,11 +49,7 @@ describeWithDatabase("comments.exitConversation", () => {
       userData,
     );
     await insertUsers([{ userId: "player" }, { userId: "other" }]);
-    stubProfile("fetchUser", async (_client: unknown, id: string) =>
-      db.query.userData.findFirst({ where: eq(userData.userId, id) }),
-    );
   });
-  afterEach(() => resetServerModuleStubs());
 
   it("keeps a support ticket's conversation and comments when its creator exits", async () => {
     const db = await getTestDatabase();
