@@ -9,8 +9,8 @@ type HomeStorageMoveResult = RouterOutputs["home"]["moveUserItems"];
 
 /**
  * Store stacks in home storage or take them out, one or many per request, and reconcile both
- * inventory views. Confirmed stacks switch sides in the cache; a move whose stacks changed
- * meanwhile, or a failed request, reads the inventory again.
+ * inventory views. Confirmed stacks switch sides in the cache; a refused move, a move whose
+ * stacks changed meanwhile, or a failed request reads the inventory again.
  */
 export const useHomeStorageMove = ({
   onMoved,
@@ -25,7 +25,11 @@ export const useHomeStorageMove = ({
     onSuccess: async (data, input, snapshot) => {
       showMutationToast(data);
       onMoved?.(data);
-      if (!data.success) return;
+      // A refusal comes from a fresher read than the cache; read the inventory again.
+      if (!data.success) {
+        await invalidateInventory();
+        return;
+      }
       const moved = data.movedUserItemIds;
       await (moved
         ? updateInventory(

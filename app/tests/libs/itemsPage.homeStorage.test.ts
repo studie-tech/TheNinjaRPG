@@ -3,6 +3,7 @@ import type { UserData, UserItemWithRelations } from "@/drizzle/schema";
 import { getInventoryBucketCapacity } from "@/libs/item";
 import {
   homeStorageBlockReason,
+  homeStorageMoveBlockReason,
   homeStorageMoveMessage,
   planHomeStorageMove,
 } from "@/libs/itemsPage";
@@ -137,5 +138,16 @@ describe("homeStorageMoveMessage", () => {
     expect(
       homeStorageMoveMessage(0, true, [{ name: "Ore", reason: "is equipped" }]),
     ).toBe("Nothing was moved. 1 stayed: Ore is equipped.");
+  });
+});
+
+describe("homeStorageMoveBlockReason", () => {
+  it("names why one stack cannot move as a sentence, keeping the message's casing", () => {
+    const rows = Array.from({ length: 12 }, (_, index) => row(`kept-${index}`, { storedAtHome: true }));
+    const input = { rows: [...rows, row("sword")], user, homeStorage: 12 };
+    expect(homeStorageMoveBlockReason({ ...input, userItemId: "sword", toHome: true })).toBe(
+      "Does not fit: Your home storage is full",
+    );
+    expect(homeStorageMoveBlockReason({ ...input, userItemId: "kept-0", toHome: false })).toBeNull();
   });
 });

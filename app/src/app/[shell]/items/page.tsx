@@ -32,9 +32,8 @@ import {
   getInventoryBucketCapacity,
   isEquippableUserItem,
 } from "@/libs/item";
-import { homeStorageBlockReason, planHomeStorageMove } from "@/libs/itemsPage";
+import { homeStorageBlockReason, homeStorageMoveBlockReason } from "@/libs/itemsPage";
 import { showMutationToast } from "@/libs/toast";
-import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Carried inventory, equipment loadouts, and item actions across capacity buckets. */
@@ -142,17 +141,16 @@ export default function MyItems() {
   });
   const selectedHomeBag = homeBags.find((bag) => bag.value === homeTab);
   /** Why a stack cannot move to or from home storage now, using the server's own rules. */
-  const homeMoveBlockReason = (userItemId: string, toHome: boolean) => {
-    if (!userData || !userItems) return null;
-    const { refused } = planHomeStorageMove({
-      rows: userItems,
-      userItemIds: [userItemId],
-      toHome,
-      user: userData,
-      homeStorage,
-    });
-    return refused[0] ? capitalizeFirstLetter(refused[0].reason) : null;
-  };
+  const homeMoveBlockReason = (userItemId: string, toHome: boolean) =>
+    userData && userItems
+      ? homeStorageMoveBlockReason({
+          rows: userItems,
+          userItemId,
+          toHome,
+          user: userData,
+          homeStorage,
+        })
+      : null;
 
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;

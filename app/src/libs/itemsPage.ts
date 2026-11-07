@@ -407,6 +407,18 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
   return { moving, refused };
 };
 
+/** Why one stack cannot move to (`toHome`) or from home storage now, as a sentence. */
+export const homeStorageMoveBlockReason = <T extends HomeStorageRow>({
+  userItemId,
+  ...plan
+}: Omit<Parameters<typeof planHomeStorageMove<T>>[0], "userItemIds"> & {
+  userItemId: string;
+}) => {
+  const reason = planHomeStorageMove({ ...plan, userItemIds: [userItemId] }).refused[0]
+    ?.reason;
+  return reason ? reason.charAt(0).toUpperCase() + reason.slice(1) : null;
+};
+
 /** Summarize a home storage move: how many stacks moved and why the others stayed. */
 export const homeStorageMoveMessage = (
   moved: number,
