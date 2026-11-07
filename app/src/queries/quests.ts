@@ -1274,57 +1274,41 @@ export const insertUserBadgeForUpdateRewards = (
     })),
   );
 
-/** Build the `war` update for `updateRewards`, setting `defenderWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateRewards = (
+/** Build the `war` update applying reward damage to one side, using predicates on `id` and `endedAt`. */
+export const updateWarDamageForUpdateRewards = (
   client: Pick<DrizzleClient, "update">,
-  rewards: { reward_war_damage: number },
-  activeWar: { id: string },
+  warId: string,
+  side: "attacker" | "defender",
+  damage: number,
 ) =>
   client
     .update(war)
-    .set({
-      defenderWarHealth: sql`GREATEST(defenderWarHealth - ${rewards.reward_war_damage}, 0)`,
-    })
-    .where(and(eq(war.id, activeWar.id), isNull(war.endedAt), warRaidCombatGuard()));
+    .set(
+      side === "attacker"
+        ? { attackerWarHealth: sql`GREATEST(attackerWarHealth - ${damage}, 0)` }
+        : { defenderWarHealth: sql`GREATEST(defenderWarHealth - ${damage}, 0)` },
+    )
+    .where(and(eq(war.id, warId), isNull(war.endedAt), warRaidCombatGuard()));
 
-/** Build the `war` update for `updateRewards`, setting `attackerWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateRewards2 = (
+/** Build the `war` update applying reward healing to one side, using predicates on `id` and `endedAt`. */
+export const updateWarHealingForUpdateRewards = (
   client: Pick<DrizzleClient, "update">,
-  rewards: { reward_war_damage: number },
-  activeWar: { id: string },
+  warId: string,
+  side: "attacker" | "defender",
+  healing: number,
 ) =>
   client
     .update(war)
-    .set({
-      attackerWarHealth: sql`GREATEST(attackerWarHealth - ${rewards.reward_war_damage}, 0)`,
-    })
-    .where(and(eq(war.id, activeWar.id), isNull(war.endedAt), warRaidCombatGuard()));
-
-/** Build the `war` update for `updateRewards`, setting `attackerWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateRewards3 = (
-  client: Pick<DrizzleClient, "update">,
-  rewards: { reward_war_healing: number },
-  activeWar: { id: string },
-) =>
-  client
-    .update(war)
-    .set({
-      attackerWarHealth: sql`LEAST(attackerWarHealth + ${rewards.reward_war_healing}, attackerWarHealthMax)`,
-    })
-    .where(and(eq(war.id, activeWar.id), isNull(war.endedAt), warRaidCombatGuard()));
-
-/** Build the `war` update for `updateRewards`, setting `defenderWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateRewards4 = (
-  client: Pick<DrizzleClient, "update">,
-  rewards: { reward_war_healing: number },
-  activeWar: { id: string },
-) =>
-  client
-    .update(war)
-    .set({
-      defenderWarHealth: sql`LEAST(defenderWarHealth + ${rewards.reward_war_healing}, defenderWarHealthMax)`,
-    })
-    .where(and(eq(war.id, activeWar.id), isNull(war.endedAt), warRaidCombatGuard()));
+    .set(
+      side === "attacker"
+        ? {
+            attackerWarHealth: sql`LEAST(attackerWarHealth + ${healing}, attackerWarHealthMax)`,
+          }
+        : {
+            defenderWarHealth: sql`LEAST(defenderWarHealth + ${healing}, defenderWarHealthMax)`,
+          },
+    )
+    .where(and(eq(war.id, warId), isNull(war.endedAt), warRaidCombatGuard()));
 
 /**
  * Build the `quest` selection for `fetchUncompletedQuests`, including predicates on
