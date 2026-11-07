@@ -71,6 +71,13 @@ describe("tavern unread", () => {
     expect(isTavernMuted(null, "global")).toBe(false);
   });
 
+  it("treats a profile without the unmute list as having every tavern muted", () => {
+    const profile = { chatMuted: false, mutedConversationIds: [] };
+    expect(isTavernMuted(profile, "global")).toBe(true);
+    expect(unreadForTavern(profile, "global", { global: 2 }, { global: 7 })).toBe(2);
+    expect(countTavernUnread(profile, { global: 2 }, { global: 7, ally: 4 })).toBe(2);
+  });
+
   it("counts new messages only in unmuted taverns, and pings everywhere", () => {
     expect(
       countTavernUnread(user(false, [], ["global"]), { global: 1, ally: 2 }, { global: 3, akikaze: 5, ally: 4 }),

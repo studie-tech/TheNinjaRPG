@@ -113,6 +113,12 @@ it("follows no tavern until the player unmutes one", () => {
   expect(Object.keys(handlers)).toEqual([]);
 });
 
+it("follows no tavern for a profile without the unmute list", () => {
+  const { unmutedTavernIds: _, ...profile } = player() as unknown as Record<string, unknown>;
+  renderHook(() => useTavernActivity(pusher, profile as never));
+  expect(Object.keys(handlers)).toEqual([]);
+});
+
 it("ignores own messages, other events, open taverns and blocked players", async () => {
   hiddenCommentIds = ["troll"];
   store.set(chatViewedConversationsAtom, { akikaze: 1 });

@@ -6,6 +6,7 @@ import { api } from "@/app/_trpc/client";
 import { MAX_MUTED_CONVERSATIONS } from "@/drizzle/constants";
 import {
   chatMutePendingAtom,
+  getUnmutedTavernIds,
   isConversationMuted,
   isTavernMuted,
   toggleMutedConversation,
@@ -103,9 +104,10 @@ export const useChatMutes = () => {
     /** Unmute a tavern to count its new messages, or mute it back to pings only. */
     toggleTavernMute: (tavernId: string) => {
       if (!userData) return;
+      const unmutedTavernIds = getUnmutedTavernIds(userData);
       if (
-        !userData.unmutedTavernIds.includes(tavernId) &&
-        userData.unmutedTavernIds.length >= MAX_MUTED_CONVERSATIONS
+        !unmutedTavernIds.includes(tavernId) &&
+        unmutedTavernIds.length >= MAX_MUTED_CONVERSATIONS
       ) {
         showMutationToast({
           success: false,
@@ -114,7 +116,7 @@ export const useChatMutes = () => {
         return;
       }
       save({
-        unmutedTavernIds: toggleMutedConversation(userData.unmutedTavernIds, tavernId),
+        unmutedTavernIds: toggleMutedConversation(unmutedTavernIds, tavernId),
       });
     },
     setChatMuted: (chatMuted: boolean) => save({ chatMuted }),

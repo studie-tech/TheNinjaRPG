@@ -54,8 +54,9 @@ export const chatTavernActivityAtom = atom<Record<string, number>>({});
 
 type ChatMuteUser = Pick<
   NonNullable<UserWithRelations>,
-  "chatMuted" | "mutedConversationIds" | "unmutedTavernIds"
->;
+  "chatMuted" | "mutedConversationIds"
+> &
+  Partial<Pick<NonNullable<UserWithRelations>, "unmutedTavernIds">>;
 
 /** Whether a conversation's ordinary activity stays out of counts and alerts; pings always arrive. */
 export const isConversationMuted = (
@@ -67,13 +68,20 @@ export const isConversationMuted = (
     (!!conversationId && user.mutedConversationIds.includes(conversationId)));
 
 /**
+ * Taverns the player has unmuted. This list renders in the shell on every page, so a profile
+ * arriving without it counts as the default, every tavern muted, instead of crashing the page.
+ */
+export const getUnmutedTavernIds = (user: Pick<ChatMuteUser, "unmutedTavernIds">) =>
+  user.unmutedTavernIds ?? [];
+
+/**
  * Whether a tavern's ordinary messages stay out of counts. Taverns start muted, so only pings
  * reach the player until they unmute one; muting all chat mutes every tavern.
  */
 export const isTavernMuted = (
   user: ChatMuteUser | null | undefined,
   tavernId: string,
-) => !!user && (user.chatMuted || !user.unmutedTavernIds.includes(tavernId));
+) => !!user && (user.chatMuted || !getUnmutedTavernIds(user).includes(tavernId));
 
 /** Mute list after toggling one conversation. */
 export const toggleMutedConversation = (mutedIds: string[], conversationId: string) =>

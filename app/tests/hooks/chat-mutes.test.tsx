@@ -18,7 +18,7 @@ type PreferenceResponse = { success: boolean; message: string; userPatch?: { cha
 const testApi = createTRPCReact<AppRouter>();
 afterEach(() => { cleanup(); getDefaultStore().set(chatMutePendingAtom, {}); vi.restoreAllMocks(); });
 
-function setup(ids: string[] = [], rejectBeforeMutation = false) {
+function setup(ids: string[] = [], rejectBeforeMutation = false, taverns: { unmutedTavernIds?: string[] } = { unmutedTavernIds: [] }) {
   let respond!: (value: PreferenceResponse | Error) => void;
   const fetch = vi.fn(async () => {
     const value = await new Promise<PreferenceResponse | Error>((resolve) => { respond = resolve; });
@@ -26,7 +26,7 @@ function setup(ids: string[] = [], rejectBeforeMutation = false) {
     return Response.json([{ result: { data: superjson.serialize(value) } }]);
   });
   Object.assign(vi.spyOn(clientModule, "api" as never), { profile: testApi.profile });
-  let data = { userId: "actor", chatMuted: false, mutedConversationIds: ids, unmutedTavernIds: [] as string[] };
+  let data = { userId: "actor", chatMuted: false, mutedConversationIds: ids, ...taverns };
   const updateUser = vi.fn(async (patch: unknown, _options?: { revision?: number }) => {
     const next = typeof patch === "function" ? patch(data) : patch;
     data = { ...data, ...next };
@@ -126,6 +126,15 @@ it("releases the mute lock when the global session guard rejects before local on
   expect(hook.fetch).not.toHaveBeenCalled();
   expect(hook.updateUser).not.toHaveBeenCalled();
   expect(hook.result.current.isPending).toBe(false);
+});
+
+it("unmutes a tavern for a profile without the unmute list", async () => {
+  const hook = setup([], false, {});
+  expect(hook.result.current.isTavernSilenced("global")).toBe(true);
+  act(() => hook.result.current.toggleTavernMute("global"));
+  await waitFor(() => expect(hook.fetch).toHaveBeenCalledTimes(1));
+  const request = hook.fetch.mock.calls[0] as unknown as [string, { body: string }];
+  expect(JSON.parse(request[1].body)).toEqual({ 0: { json: { unmutedTavernIds: ["global"] } } });
 });
 
 it("starts taverns muted and saves the ones the player unmutes", async () => {
