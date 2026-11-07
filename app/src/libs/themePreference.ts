@@ -1,8 +1,7 @@
 "use client";
 
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
-import { getGameLayout } from "@/libs/gameLayouts";
-import type { EffectiveLayout } from "@/libs/layoutPreference";
+import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 
 export type ColorTheme = "light" | "dark";
 
@@ -12,7 +11,7 @@ export type ColorTheme = "light" | "dark";
  * saved preference, so it is correct before the layout's `dark` class is applied.
  * Without one, it reads the document's `dark` class.
  */
-export const getEffectiveColorTheme = (activeLayout?: EffectiveLayout): ColorTheme => {
+export const getEffectiveColorTheme = (activeLayout?: GameLayoutId): ColorTheme => {
   if (activeLayout) {
     const layout = getGameLayout(activeLayout);
     if (!layout.supportsColorMode) return layout.tone;
@@ -25,7 +24,7 @@ export const getEffectiveColorTheme = (activeLayout?: EffectiveLayout): ColorThe
 };
 
 export const getEffectiveThemeTextColor = (
-  activeLayout?: EffectiveLayout,
+  activeLayout?: GameLayoutId,
 ): "#FFFFFF" | "#000000" => {
   return getEffectiveColorTheme(activeLayout) === "dark" ? "#FFFFFF" : "#000000";
 };

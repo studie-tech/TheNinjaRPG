@@ -50,8 +50,6 @@ export const toFontScale = (value?: unknown): FontScaleValue | undefined => {
   return FONT_SCALE_VALUES.find((scale) => scale === parsed);
 };
 
-export type EffectiveLayout = GameLayoutId;
-
 export interface LayoutExperimentAssignment {
   experiment: string;
   variant: string;
@@ -76,7 +74,7 @@ export const getLayoutExperimentAssignments = (variants: {
 };
 
 /** Persist the validated layout synchronously so the next document selects its shell. */
-export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
+export const persistLayoutPreferenceCookie = (layout: GameLayoutId) => {
   writeYearCookie(LAYOUT_PREFERENCE_COOKIE, layout);
 };
 
@@ -112,7 +110,7 @@ export const applyFontScaleCookie = () => {
 /** Accept supported layout IDs stored either directly or as JSON-encoded strings. */
 export const storedValueToLayout = (
   value?: string | null,
-): EffectiveLayout | undefined => {
+): GameLayoutId | undefined => {
   const direct = toGameLayoutId(value);
   if (direct) return direct;
   if (!value) return undefined;
