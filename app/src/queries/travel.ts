@@ -100,16 +100,7 @@ export const fetchSectorWindowData = (
       },
     }),
     client.query.village.findFirst({
-      where: and(
-        eq(village.sector, sector),
-        inArray(village.type, [
-          "VILLAGE",
-          "OUTLAW",
-          "STRONGHOLD",
-          "HIDEOUT",
-          "SAFEZONE",
-        ]),
-      ),
+      where: eq(village.sector, sector),
       with: { structures: true },
     }),
     fetchSector(client, sector),
