@@ -3,7 +3,7 @@
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { isNative } from "@/libs/native";
-import { isIOSInstallDevice } from "@/libs/pwaInstall";
+import { isIOSInstallDevice } from "@/utils/hardware";
 
 /** Delay before the prompt appears, so it never lands on top of a page still loading. */
 const AUTO_SHOW_DELAY_MS = 3000;

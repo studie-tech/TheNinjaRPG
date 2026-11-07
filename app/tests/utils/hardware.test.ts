@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isIOSInstallDevice } from "@/libs/pwaInstall";
+import { isIOSInstallDevice } from "@/utils/hardware";
 
 const browser = (
   userAgent: string,
