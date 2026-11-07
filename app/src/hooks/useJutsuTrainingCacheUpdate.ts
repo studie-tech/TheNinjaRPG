@@ -26,6 +26,17 @@ export const useJutsuTrainingCacheUpdate = () => {
     queue: queue.prepareUpdate(),
     timers: timers.prepareUpdate(),
   });
+  /** Settle successors before refreshing ownership, timers and level-ordered catalogue pages. */
+  const refreshTraining = async () => {
+    // serial-invalidation-ok: the queue read starts successors before dependent recovery.
+    await utils.jutsu.getTrainingQueue.invalidate();
+    await Promise.all([
+      utils.jutsu.getUserJutsus.invalidate(),
+      utils.profile.getSidebarTimers.invalidate(),
+      // Offset pages must share the same ownership levels after a start or cancellation.
+      utils.jutsu.getAll.invalidate({ ownedFirst: true }),
+    ]);
+  };
   /** Preserve queue settlement ordering when learned jutsus, successors or uncertain writes require reads. */
   const updateTraining = async (
     result: RouterOutputs["jutsu"]["startTraining"] | undefined,
@@ -33,12 +44,7 @@ export const useJutsuTrainingCacheUpdate = () => {
   ) => {
     const update = result?.success ? result.trainingUpdate : undefined;
     if (!update) {
-      // serial-invalidation-ok: the queue read starts successors before ownership and timer recovery.
-      await utils.jutsu.getTrainingQueue.invalidate();
-      await Promise.all([
-        utils.jutsu.getUserJutsus.invalidate(),
-        utils.profile.getSidebarTimers.invalidate(),
-      ]);
+      await refreshTraining();
       return;
     }
     void utils.jutsu.getUserJutsus.invalidate(undefined, {
@@ -59,6 +65,8 @@ export const useJutsuTrainingCacheUpdate = () => {
         : undefined,
       snapshot.timers,
     );
+    // A local ownership patch cannot reorder rows beyond the loaded catalogue pages.
+    await utils.jutsu.getAll.invalidate({ ownedFirst: true });
   };
-  return { prepareTrainingUpdate, updateTraining };
+  return { prepareTrainingUpdate, updateTraining, refreshTraining };
 };
