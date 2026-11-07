@@ -11,6 +11,7 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
 import type { AggroDisplay } from "@/libs/combat/aggroDisplay";
+import type { HitSeverity } from "@/libs/combat/playback";
 import { isClone } from "@/libs/combat/summon";
 import type { ReturnedBattle, ReturnedUserState } from "@/libs/combat/types";
 import {
@@ -21,6 +22,7 @@ import {
 } from "@/libs/combat/util";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { lpcFacing } from "@/libs/lpc/catalog";
+import { walkDuration, walkProgress } from "@/libs/rendering/animation";
 import { spriteGroundContact } from "@/libs/rendering/assets";
 import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
@@ -32,8 +34,30 @@ import { createRenderScope } from "@/libs/rendering/scope";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { isObjectChainVisible } from "@/libs/rendering/visibility";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
+import type { LpcAnimation, LpcDirection, SpriteAction } from "@/validators/lpc";
 
 const LPC_COMBAT_SCALE = 0.75;
+/** Strides keep up with the battlefield's faster traversal without changing map walking. */
+const WALK_CYCLE_RATE = 2.4;
+/** A struck fighter is thrown back and blinks; harder hits throw further and hold longer. */
+const HIT_REACTIONS = {
+  light: { ms: 300, reach: 0.2 },
+  heavy: { ms: 380, reach: 0.32 },
+  crushing: { ms: 500, reach: 0.48 },
+};
+const HIT_FLASH_TINT = 0xff4a3a;
+/** Fallback lengths for cues whose outfit has no authored clip. */
+const CUE_DURATIONS: Record<LpcAnimation, number> = {
+  stand: 0,
+  idle: 0,
+  combat: 0,
+  walk: 0,
+  slash: 480,
+  thrust: 640,
+  spellcast: 560,
+  shoot: 1040,
+  hurt: 480,
+};
 
 /** Scene-owned fighters keep art, interpolation and display values outside battle state. */
 export const createCombatActors = (
@@ -52,7 +76,8 @@ export const createCombatActors = (
   let brightness = WORLD_DAY_BRIGHTNESS;
   let needsSort = true,
     expiresAt = Number.POSITIVE_INFINITY,
-    calculatedAt = 0;
+    calculatedAt = 0,
+    animatedAt = 0;
   const shadow = createSoftShadowTexture();
   game.own(() => shadow.destroy(true));
   const sync = (next: CombatActorSnapshot) => {
@@ -132,7 +157,14 @@ export const createCombatActors = (
             x: (tile.width - meterWidth) / 2,
             y: hudTop - index * meterHeight,
           });
-        const hp = meter(0xb22222, 0);
+        const hp = createStatusMeter({
+          width: meterWidth,
+          height: meterHeight,
+          color: 0xb22222,
+          trailColor: 0xffe08a,
+          x: (tile.width - meterWidth) / 2,
+          y: hudTop,
+        });
         const sp = "curStamina" in user ? meter(0x008000, 1) : null;
         const cp = "curChakra" in user ? meter(0x0000ff, 2) : null;
         hp.container.label = "combat-health";
@@ -188,8 +220,10 @@ export const createCombatActors = (
           user,
           tile: previous?.tile ?? tile,
           target: previous?.target ?? tile,
-          path: previous?.path ?? [],
-          pathIndex: previous?.pathIndex ?? 0,
+          walk: previous?.walk ?? null,
+          hitX: 0,
+          hitY: 0,
+          hitSeverity: "light",
           hp,
           sp,
           cp,
@@ -296,8 +330,8 @@ export const createCombatActors = (
       if (record.target !== tile) {
         record.target = tile;
         const path = paths.getShortestPath(record.tile, tile) ?? [];
-        record.path = path[0] === record.tile ? path.slice(1) : path;
-        record.pathIndex = 0;
+        const tiles = path[0] === record.tile ? path.slice(1) : path;
+        record.walk = createWalk(record.root.position, tiles.length ? tiles : [tile]);
       }
       updateVisual(record);
     }
@@ -377,21 +411,21 @@ export const createCombatActors = (
       scheduleExpiry();
     }
     let moving = false;
+    animatedAt = frame.now;
     const pulse = (Math.sin((frame.now * Math.PI) / 900) + 1) / 2;
     for (const record of records.values()) {
-      const { user, root, target } = record;
-      const waypoint = record.path[record.pathIndex] ?? target;
+      const { user, root, target, walk } = record;
+      const waypoint = walk?.tiles[walk.reached] ?? target;
       const tx = -waypoint.center.x,
         ty = -waypoint.center.y;
-      const distance = Math.hypot(tx - root.x, ty - root.y);
-      if (distance > 0.01)
+      if (Math.hypot(tx - root.x, ty - root.y) > 0.01)
         record.facing = lpcFacing(tx - root.x, ty - root.y, record.facing);
       const cue = record.action;
       // Begin the cue clock only after movement and asynchronous artwork loading both finish.
       const startsAction = !!(
         cue &&
         record.art &&
-        distance < 0.01 &&
+        !walk &&
         record.actionAt === undefined
       );
       if (startsAction && cue) {
@@ -404,29 +438,13 @@ export const createCombatActors = (
             record.facing,
           );
       }
-      // Full authored cycles expire independently of reduced-motion frame freezing.
-      const durations = {
-        stand: 0,
-        idle: 0,
-        combat: 0,
-        walk: 0,
-        slash: 480,
-        thrust: 640,
-        spellcast: 560,
-        shoot: 1040,
-        hurt: 480,
-      };
       record.shadow.renderable = game.visualEffects?.shadows !== false;
+      // Full authored cycles expire independently of reduced-motion frame freezing.
       const active =
         cue &&
         record.actionAt !== undefined &&
         frame.now - record.actionAt <
-          (Math.max(
-            0,
-            ...(record.art?.entries ?? []).map(
-              (entry) => entry.character?.durations[cue.animation] ?? 0,
-            ),
-          ) || durations[cue.animation]);
+          (authoredCueDuration(record, cue) || CUE_DURATIONS[cue.animation]);
       if (!record.alive && user.curHealth <= 0 && record.deathAt === undefined)
         record.deathAt = frame.now;
       if (record.alive) record.deathAt = undefined;
@@ -434,7 +452,7 @@ export const createCombatActors = (
         if (entry.description.kind === "aiAvatar" && entry.sprite instanceof Sprite) {
           record.spriteAnimation?.render({
             now: frame.now,
-            moving: distance > 0.01,
+            moving: !!walk,
             facing: getFacingDirection(
               user,
               snapshot.battle.usersState,
@@ -459,43 +477,70 @@ export const createCombatActors = (
         entry.sprite.visible = record.alive || falling;
         entry.character.render(
           frame,
-          falling
-            ? "hurt"
-            : distance > 0.01
-              ? "walk"
-              : active
-                ? cue.animation
-                : "combat",
+          falling ? "hurt" : walk ? "walk" : active ? cue.animation : "combat",
           record.facing ?? (user.direction === "left" ? 3 : 1),
           startsAction,
+          walk ? WALK_CYCLE_RATE : 1,
         );
       }
-      const segment = Math.hypot(
-        waypoint.center.x - record.tile.center.x,
-        waypoint.center.y - record.tile.center.y,
-      );
-      const progress = segment > 0 ? 1 - distance / segment : 1;
-      const ease = Math.max(
-        0.35,
-        Math.sin(Math.PI * Math.max(0, Math.min(1, progress))),
-      );
-      /** Equal traversal time across hex directions preserves walk poses; the fallback permits mid-step returns. */
-      const step = frame.reducedMotion
-        ? distance
-        : (segment || record.tile.height) * 2 * frame.delta * ease;
-      if (distance <= step || distance < 0.01) {
-        root.position.set(tx, ty);
-        if (record.tile !== waypoint) {
-          record.tile = waypoint;
-          needsSort = true;
-          onStep();
+      if (walk) {
+        walk.elapsed += frame.delta * 1000;
+        const arrived = frame.reducedMotion || walk.elapsed >= walk.duration;
+        const travelled = arrived
+          ? walk.total
+          : walkProgress(walk.elapsed / walk.duration, walk.duration) * walk.total;
+        let stepped = false;
+        while (
+          walk.reached < walk.tiles.length &&
+          travelled >= (walk.lengths[walk.reached] ?? 0)
+        ) {
+          const tile = walk.tiles[walk.reached++];
+          if (tile && record.tile !== tile) {
+            record.tile = tile;
+            needsSort = true;
+            stepped = true;
+          }
         }
-        if (record.pathIndex < record.path.length) record.pathIndex++;
-      } else {
-        root.x += ((tx - root.x) / distance) * step;
-        root.y += ((ty - root.y) / distance) * step;
+        if (stepped) onStep();
+        if (arrived) {
+          root.position.set(-target.center.x, -target.center.y);
+          record.walk = null;
+        } else {
+          const from = walk.points[walk.reached],
+            to = walk.points[walk.reached + 1],
+            start = walk.lengths[walk.reached - 1] ?? 0,
+            end = walk.lengths[walk.reached] ?? walk.total;
+          if (from && to) {
+            const share = end > start ? (travelled - start) / (end - start) : 1;
+            root.position.set(
+              from.x + (to.x - from.x) * share,
+              from.y + (to.y - from.y) * share,
+            );
+          }
+        }
       }
-      moving ||= Math.hypot(root.x + target.center.x, root.y + target.center.y) > 0.01;
+      moving ||= !!record.walk;
+      if (record.hitAt !== undefined) {
+        const reaction = HIT_REACTIONS[record.hitSeverity];
+        const progress = (frame.now - record.hitAt) / reaction.ms;
+        if (progress >= 1) {
+          record.hitAt = undefined;
+          record.artRoot.position.set(0, 0);
+          record.artRoot.tint = 0xffffff;
+          record.artRoot.alpha = 1;
+        } else {
+          // Snaps out in the first fifth, then eases home.
+          const curve = progress < 0.2 ? progress / 0.2 : ((1 - progress) / 0.8) ** 2;
+          const kick = frame.reducedMotion
+            ? 0
+            : curve * record.tile.height * reaction.reach;
+          record.artRoot.position.set(record.hitX * kick, record.hitY * kick);
+          record.artRoot.tint = progress < 0.45 ? HIT_FLASH_TINT : 0xffffff;
+          const blink = progress > 0.2 && progress < 0.6 && progress % 0.2 < 0.1;
+          record.artRoot.alpha = blink && !frame.reducedMotion ? 0.45 : 1;
+        }
+      }
+      const draining = record.hp.drain(frame.delta * 1000, frame.reducedMotion);
       const displayed = record.alive && root.visible;
       const isSelected = user.userId === selectedId;
       const isHovered = user.userId === hoveredId;
@@ -514,7 +559,8 @@ export const createCombatActors = (
       );
       record.hover.visible = displayed && isHovered && !isSelected && !clone;
       const visible =
-        displayed && (user.userId === selectedId || user.userId === hoveredId);
+        displayed &&
+        (user.userId === selectedId || user.userId === hoveredId || draining);
       record.hp.container.visible = visible;
       if (record.sp) record.sp.container.visible = visible;
       if (record.cp) record.cp.container.visible = visible;
@@ -528,6 +574,17 @@ export const createCombatActors = (
     layers?.world.sortRenderLayerChildren();
     return moving;
   };
+  /** Authored length of a fighter's cue; 0 when its artwork has nothing to play. */
+  const authoredCueDuration = (record: Fighter, cue: SpriteAction) =>
+    Math.max(
+      0,
+      record.spriteAnimation?.actionDuration(
+        record.user.spriteAnimationEvent?.actionKey,
+      ) ?? 0,
+      ...(record.art?.entries ?? []).map(
+        (entry) => entry.character?.durations[cue.animation] ?? 0,
+      ),
+    );
   const hit = (x: number, y: number) => {
     for (let index = container.children.length - 1; index >= 0; index--) {
       const root = container.children[index];
@@ -551,16 +608,53 @@ export const createCombatActors = (
     animate,
     hit,
     ready: () => Promise.all([...pending]),
+    /** Progress from 0 to 1 through a strike cue; 1 once artwork has nothing left to play. */
+    cue: (id: string, cueId: string) => {
+      const record = records.get(id);
+      if (!record?.art || record.action?.id !== cueId || !record.root.visible) return 1;
+      const duration = authoredCueDuration(record, record.action);
+      if (!duration) return 1;
+      if (record.actionAt === undefined) return 0;
+      return Math.min(1, (animatedAt - record.actionAt) / duration);
+    },
     snap: () => {
       for (const record of records.values()) {
         record.tile = record.target;
-        record.path = [];
-        record.pathIndex = 0;
+        record.walk = null;
         record.root.position.set(-record.target.center.x, -record.target.center.y);
       }
       needsSort = true;
     },
     position: (id: string) => records.get(id)?.root.position,
+    /** Where feedback sits above a fighter on the field; nothing while it is not shown. */
+    headPosition: (id: string) => {
+      const record = records.get(id);
+      if (!record?.root.visible) return undefined;
+      const { root, tile, threat } = record;
+      // The threat row tops the fighter's meters, whose height follows its artwork.
+      return {
+        x: root.x + tile.width / 2,
+        y: root.y + threat.container.y + tile.height * 0.3,
+      };
+    },
+    /** The unit direction a blow travels from its attacker; zero when there is none. */
+    hitDirection: (id: string, attackerId?: string) => {
+      const target = records.get(id)?.root;
+      const attacker = attackerId ? records.get(attackerId)?.root : undefined;
+      const x = target && attacker ? target.x - attacker.x : 0,
+        y = target && attacker ? target.y - attacker.y : 0,
+        distance = Math.hypot(x, y);
+      return distance ? { x: x / distance, y: y / distance } : { x: 0, y: 0 };
+    },
+    /** Throw a struck fighter along the blow, which keeps it in place for no direction. */
+    react: (id: string, direction: { x: number; y: number }, severity: HitSeverity) => {
+      const record = records.get(id);
+      if (!record?.root.visible) return;
+      record.hitAt = animatedAt;
+      record.hitX = direction.x;
+      record.hitY = direction.y;
+      record.hitSeverity = severity;
+    },
   };
 };
 
@@ -653,6 +747,30 @@ export const combatActorParts = (
   return parts;
 };
 
+/** One uninterrupted path: its whole length shares a single speed curve. */
+const createWalk = (from: { x: number; y: number }, tiles: TerrainHex[]): Walk => {
+  const points = [
+    { x: from.x, y: from.y },
+    ...tiles.map(({ center }) => ({ x: -center.x, y: -center.y })),
+  ];
+  let total = 0;
+  const lengths = tiles.map((_, index) => {
+    const a = points[index],
+      b = points[index + 1];
+    total += a && b ? Math.hypot(b.x - a.x, b.y - a.y) : 0;
+    return total;
+  });
+  return {
+    tiles,
+    points,
+    lengths,
+    total,
+    elapsed: 0,
+    duration: walkDuration(tiles.length),
+    reached: 0,
+  };
+};
+
 /** Foot-centered rings distinguish clones and selection without obscuring the terrain. */
 const groundSelection = (tile: TerrainHex, selected: boolean, y: number) => {
   const x = tile.width / 2;
@@ -681,12 +799,28 @@ export type CombatActorSnapshot = {
   aggro?: AggroDisplay;
 };
 type Meter = ReturnType<typeof createStatusMeter>;
+type Walk = {
+  tiles: TerrainHex[];
+  /** The start position followed by each tile's position. */
+  points: { x: number; y: number }[];
+  /** Distance from the start to each tile. */
+  lengths: number[];
+  total: number;
+  elapsed: number;
+  duration: number;
+  /** Tiles already passed; the fighter is between this tile and the next. */
+  reached: number;
+};
 type Fighter = {
+  hitAt?: number;
+  hitX: number;
+  hitY: number;
+  hitSeverity: HitSeverity;
   lastActionId?: string;
-  action?: import("@/validators/lpc").SpriteAction;
+  action?: SpriteAction;
   actionAt?: number;
   deathAt?: number;
-  facing?: import("@/validators/lpc").LpcDirection;
+  facing?: LpcDirection;
   scope: GameRenderer;
   root: Container;
   artRoot: Container;
@@ -696,8 +830,7 @@ type Fighter = {
   user: ReturnedUserState;
   tile: TerrainHex;
   target: TerrainHex;
-  path: TerrainHex[];
-  pathIndex: number;
+  walk: Walk | null;
   hp: Meter;
   sp: Meter | null;
   cp: Meter | null;

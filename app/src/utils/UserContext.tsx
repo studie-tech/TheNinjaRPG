@@ -43,6 +43,27 @@ import { canAccessStructure } from "@/utils/village";
  */
 export const combatActionIdAtom = atom<string | undefined>(undefined);
 
+/** A submitted action, shown as reserved AP and a timeline slot until the field reaches it. */
+export type CombatPendingAction = {
+  battleId: string;
+  /** Version the action was submitted against, which its first log entry carries. */
+  version: number;
+  userId: string;
+  name: string;
+  image: string;
+  cost: number;
+};
+export const combatPendingActionAtom = atom<CombatPendingAction | undefined>(undefined);
+
+/**
+ * Battle version whose ending the field is still replaying. The result is already settled;
+ * only its screen waits, so the deciding action is not lost to the swap.
+ */
+export const combatHeldResultAtom = atom<number | undefined>(undefined);
+
+/** Newest log version the field has replayed; undefined when it is caught up. */
+export const combatPresentedLogVersionAtom = atom<number | undefined>(undefined);
+
 /**
  * Atom for managing any potential battle data
  */

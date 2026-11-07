@@ -1,10 +1,11 @@
 import type { Jutsu } from "@/drizzle/schema";
+import type { BattleJutsu } from "@/libs/combat/catalog";
 import type { ZodAllTags, ZodJutsuType } from "@/validators/combat";
 
 /** Apply only cosmetics; ownership, eligibility, progression and mechanics stay on the base. */
-export const applyLinkedJutsuReskin = <T extends Jutsu>(
+export const applyLinkedJutsuReskin = <T extends BattleJutsu>(
   base: T,
-  reskin?: Jutsu | null,
+  reskin?: (BattleJutsu & { description?: string }) | null,
 ): T => {
   if (
     !reskin ||
@@ -16,7 +17,8 @@ export const applyLinkedJutsuReskin = <T extends Jutsu>(
     ...base,
     name: reskin.name,
     image: reskin.image,
-    description: reskin.description,
+    // Battle catalogs omit descriptions; only the base's caller can display one.
+    ...(reskin.description !== undefined ? { description: reskin.description } : {}),
     battleDescription: reskin.battleDescription,
     effects: inheritJutsuReskinEffects(base.effects, reskin.effects),
   };

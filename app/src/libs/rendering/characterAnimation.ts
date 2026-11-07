@@ -73,6 +73,11 @@ export const createCharacterAnimation = (
   };
   return {
     dispose,
+    /** Length of an action's clip, or 0 when it has none. */
+    actionDuration: (key?: string) => {
+      const action = key ? animations[key] : undefined;
+      return action ? (action.frameCount * 1000) / action.fps : 0;
+    },
     render: (input: {
       now: number;
       moving: boolean;
