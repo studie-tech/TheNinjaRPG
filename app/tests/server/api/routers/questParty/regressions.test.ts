@@ -130,6 +130,25 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     });
   }
 
+  it("only advertises collection to members with a real attempt on a finished team quest", async () => {
+    const client = await getTestDatabase();
+    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, retryDelay: "none", content: {
+      objectives: [AllObjectives.parse({ id: "goal", task: "stats_trained", value: 10 })],
+      reward: ObjectiveReward.parse({ reward_money: 50 }), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    await insertQuestHistory([{ id: "helper-receipt", userId: "helper", questId: "team-quest", questType: "event", completed: 1, previousCompletes: 1, previousAttempts: 1, endAt: new Date() }]);
+    const leader = await callerFor(questPartyRouter, "leader");
+    expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
+    const party = (await client.query.questParty.findFirst())!;
+    expect((await (await callerFor(questPartyRouter, "helper")).join({ partyId: party.id })).success).toBe(true);
+    const tracker = structuredClone(party.tracker);
+    tracker.goals[0]!.done = true; tracker.goals[0]!.value = 10;
+    await client.update(questParty).set({ tracker, version: party.version + 2 }).where(eq(questParty.id, party.id));
+    const notice = expect.objectContaining({ name: "Quest rewards waiting: open your Logbook", notificationCount: 1 });
+    expect((await (await callerFor(profileRouter, "leader")).getUser()).notifications).toContainEqual(notice);
+    expect((await (await callerFor(profileRouter, "helper")).getUser()).notifications).not.toContainEqual(notice);
+  });
+
   it("keeps unclaimed reward choices available after the team disbands", async () => {
     const client = await getTestDatabase();
     await insertQuests([{ id: "choice-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, retryDelay: "none", content: {
