@@ -1,10 +1,9 @@
-import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
-import type { AppRouter } from "@/api/root";
 import * as appClient from "@/app/_trpc/client";
 import type { UserCache } from "@/deltas/profile";
 import { actualUseFarmController as useFarmController } from "../setup/preload";
@@ -13,8 +12,8 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { QuestTracker } from "@/validators/objectives";
 import type { FarmMutationResponse, FarmPlotState, FarmStateResponse } from "@/validators/farming";
 import { deferred as createDeferred } from "../setup/deferred";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 const cleanups: (() => void)[] = [];
 const plot = { id: "plot", slotIndex: 0, seedItemId: "seed", seedName: "Seed", cropName: "Crop", cropImage: "crop.webp",
@@ -58,8 +57,7 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
     requested = true;
     void (deferred ? waiting : Promise.resolve()).then(() => { sink.next({ result: { data: response } }); sink.complete(); });
   })] });
-  const wrapper = ({ children }: { children: ReactNode }) => <testApi.Provider client={trpc} queryClient={client}>
-    <QueryClientProvider client={client}>{children}</QueryClientProvider></testApi.Provider>;
+  const wrapper = ({ children }: { children: ReactNode }) => <TrpcTestProviders client={trpc} queryClient={client}>{children}</TrpcTestProviders>;
   const view = renderHook(useFarmController, { wrapper });
   return { client, view, requests, release, requested: () => requested, profileReads: () => profileReads,
     profile: () => client.getQueryData<UserCache>(profileKey)?.userData, profileKey };

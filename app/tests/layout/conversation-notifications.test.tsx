@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { getDefaultStore } from "jotai";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import * as mastery from "@/hooks/useMasteryQueueRefresh";
 import * as media from "@/hooks/useMediaQuery";
@@ -26,8 +25,8 @@ import * as userContext from "@/utils/UserContext";
 import { UserContextProvider } from "@/utils/UserContext";
 import { actualUserContext } from "../setup/preload";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
 let pathname = "/tavern";
@@ -190,25 +189,23 @@ function mount(
     ],
   });
   const Page = ({ showPanel }: { showPanel: boolean }) => (
-    <testApi.Provider client={trpc} queryClient={qc}>
-      <QueryClientProvider client={qc}>
-        <UserContextProvider initialIsSignedIn>
-          <Conversation
-            title="Full conversation"
-            subtitle="Full page"
-            convo_id={id}
-            refreshKey={0}
-          />
-          {panel === "launcher" ? (
-            <ChatPanel>Chat</ChatPanel>
-          ) : (
-            showPanel && (
-              <ChatConversation convoId={typeof panel === "string" ? panel : id} />
-            )
-          )}
-        </UserContextProvider>
-      </QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpc} queryClient={qc}>
+      <UserContextProvider initialIsSignedIn>
+        <Conversation
+          title="Full conversation"
+          subtitle="Full page"
+          convo_id={id}
+          refreshKey={0}
+        />
+        {panel === "launcher" ? (
+          <ChatPanel>Chat</ChatPanel>
+        ) : (
+          showPanel && (
+            <ChatConversation convoId={typeof panel === "string" ? panel : id} />
+          )
+        )}
+      </UserContextProvider>
+    </TrpcTestProviders>
   );
   if (hidden) {
     Object.defineProperty(document, "hidden", { configurable: true, value: true });

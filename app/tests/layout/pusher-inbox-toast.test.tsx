@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
 import superjson from "superjson";
 import { getDefaultStore } from "jotai";
 import type { PropsWithChildren, ReactElement } from "react";
-import type { AppRouter } from "@/api/root";
 import type { UserCache } from "@/deltas/profile";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -18,13 +17,11 @@ import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import { deferred } from "../setup/deferred";
+import { testRouter } from "../setup/router";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const queryClients: QueryClient[] = [];
-const router = {
-  back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), push: vi.fn(),
-  replace: vi.fn(), prefetch: vi.fn(), bfcacheId: "pusher-inbox",
-};
+const router = testRouter("pusher-inbox");
 
 beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
@@ -62,9 +59,7 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
   queryClient.setQueryData(profileKey, profile);
   const trpcClient = testApi.createClient({ links: [] });
   const wrapper = ({ children }: PropsWithChildren) => (
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
   );
   const view = renderHook(() => usePusherHandler("player"), { wrapper });
 
@@ -116,9 +111,7 @@ it("counts only public conversation pings as Tavern notifications", async () => 
   queryClient.setQueryData(profileKey, profile);
   const trpcClient = testApi.createClient({ links: [] });
   const wrapper = ({ children }: PropsWithChildren) => (
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
   );
   renderHook(() => usePusherHandler("player"), { wrapper });
   await act(async () => receiveEvent({ type: "pinged", conversationId: "private", isPublic: false }));
@@ -151,9 +144,7 @@ it("keeps the notification list when a battle event finds the derived combat ent
   });
   const trpcClient = testApi.createClient({ links: [] });
   const wrapper = ({ children }: PropsWithChildren) => (
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
   );
   renderHook(() => usePusherHandler("player"), { wrapper });
 
@@ -211,9 +202,7 @@ it.each([
   const unsubscribe = observer.subscribe(() => {});
   const trpcClient = testApi.createClient({ links: [] });
   const wrapper = ({ children }: PropsWithChildren) => (
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
   );
   const view = renderHook(() => usePusherHandler("player"), { wrapper });
   try {

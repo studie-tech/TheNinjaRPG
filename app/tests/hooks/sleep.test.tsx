@@ -1,19 +1,17 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
-import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import type { ReactNode } from "react";
 import superjson from "superjson";
-import { createTRPCReact } from "@trpc/react-query";
-import type { AppRouter } from "@/api/root";
 import * as clientModule from "@/app/_trpc/client";
 import { useSleepToggle } from "@/hooks/sleep";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { deferred } from "../setup/deferred";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it("reconciles a delayed sleep response instead of replacing a newer hospitalization", async () => {
@@ -41,9 +39,7 @@ it("reconciles a delayed sleep response instead of replacing a newer hospitaliza
   } as ReturnType<typeof userContext.useUserData>;
   vi.spyOn(userContext, "useUserData").mockReturnValue(user);
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <testApi.Provider client={trpc} queryClient={client}>
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpc} queryClient={client}>{children}</TrpcTestProviders>
   );
   const { result } = renderHook(() => useSleepToggle(), { wrapper });
   act(() => result.current.toggleSleep());

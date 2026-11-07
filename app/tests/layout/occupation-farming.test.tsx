@@ -4,6 +4,7 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import OccupationFarming from "@/layout/OccupationFarming";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { testRouter } from "../setup/router";
 
 const refetch = vi.fn(async () => undefined);
 const query = {
@@ -44,15 +45,7 @@ vi.mock("@/layout/FarmHUD", () => ({
   FarmHUD: () => <div data-testid="farm-hud" />,
 }));
 
-const router = {
-  back: vi.fn(),
-  forward: vi.fn(),
-  refresh: vi.fn(),
-  push: vi.fn(),
-  replace: vi.fn(),
-  prefetch: vi.fn(),
-  bfcacheId: "farm-test",
-};
+const router = testRouter("farm-test");
 
 const renderFarm = () =>
   render(

@@ -1,12 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { createTRPCReact } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import { useTavernActivity } from "@/hooks/useTavernActivity";
 import * as taverns from "@/hooks/useTaverns";
@@ -16,8 +14,8 @@ import { chatTavernActivityAtom, chatViewedConversationsAtom } from "@/libs/chat
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const store = getDefaultStore();
 const clients: QueryClient[] = [];
 type Handler = (event: { type?: string; message?: string; fromId?: string; commentId?: string }) => void;
@@ -113,11 +111,9 @@ for (const source of ["save", "event"] as const) {
         return source === "save" ? <ParentalControls /> : null;
       };
       const view = render(
-        <testApi.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}>
-            <LiveTab />
-          </QueryClientProvider>
-        </testApi.Provider>,
+        <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+          <LiveTab />
+        </TrpcTestProviders>,
       );
       await waitFor(() => expect(readTaverns).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(handlers.has("global")).toBe(!startingBlocked));

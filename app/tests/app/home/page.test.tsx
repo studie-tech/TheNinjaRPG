@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import * as navigation from "next/navigation";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import HomePage from "@/app/[shell]/home/page";
@@ -21,6 +20,7 @@ import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { deferred } from "../../setup/deferred";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import { testApi, TrpcTestProviders } from "../../setup/trpc";
 
 const furniture: HomeFurniture[] = [
   { id: "owned-bed", itemId: "home-bed", name: "Bed", image: "/images/home/furniture/bed.webp", width: 34, groundAnchor: 91.1, action: "sleep", isFloor: false, quantity: 1, views: {} },
@@ -50,7 +50,6 @@ const essentialHome: NonNullable<RouterOutputs["home"]["getUserHome"]> = {
   furniture: basics, furnitureRevision: 3, styles: [], isPublic: false, layout: [...layout],
 };
 
-const testApi = createTRPCReact<AppRouter>();
 const emptyPetCollection = { pets: [], activePetId: null };
 let searchParams: URLSearchParams;
 let replaceRoute: ReturnType<typeof vi.fn>;
@@ -152,9 +151,7 @@ for (const hasCachedInventory of [false, true]) {
     })] });
     try {
       const view = render(
-        <testApi.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-        </testApi.Provider>,
+        <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
       );
       await waitFor(() => expect(queryClient.getQueryData<RouterOutputs["item"]["getUserItems"]>(itemKey)).toEqual([]));
       expect(homeQueries).toBe(1);
@@ -213,9 +210,7 @@ for (const hasMissingInventory of [false, true]) {
     })] });
     try {
       const view = render(
-        <testApi.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-        </testApi.Provider>,
+        <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
       );
       fireEvent.click(await view.findByRole("button", { name: "Storage Box: Open home storage" }));
       const dialog = within(view.getByRole("dialog"));
@@ -264,9 +259,7 @@ it("links every owned companion image to its selected profile and identifies onl
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     for (const pet of collection.pets) {
       const image = await view.findByAltText(pet.name);
@@ -322,9 +315,7 @@ it("does not refresh disabled owner inventory or expose cached pets for a guest"
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     await view.findByRole("button", { name: "Go to sleep" });
     expect(requests).not.toHaveBeenCalled();
@@ -369,9 +360,7 @@ it("refreshes a selected furniture variant when returning from inventory", async
     observer.complete();
   })] });
   const mount = () => render(
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-    </testApi.Provider>,
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
   );
   try {
     const firstVisit = mount();
@@ -420,9 +409,7 @@ it("refreshes furniture storage after a downgrade stores a carried piece from a 
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     fireEvent.click(await view.findByRole("button", { name: "Manage home" }));
     const management = within(view.getByRole("dialog"));
@@ -475,9 +462,7 @@ it("refreshes furniture storage after placing a carried piece and waits for its 
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     fireEvent.click(await view.findByRole("button", { name: "Decorate" }));
     fireEvent.click(view.getByRole("button", { name: /Woven Rug.*Place$/ }));
@@ -558,11 +543,9 @@ for (const success of [true, false]) {
       ],
     });
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <HomePage />
-        </QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+        <HomePage />
+      </TrpcTestProviders>,
     );
     const decorate = await view.findByRole("button", { name: "Decorate" });
     fireEvent.click(decorate);
@@ -642,9 +625,7 @@ it("opens home management from the header and waits for refreshed inventory befo
   let invalidated: Promise<void> | undefined;
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     const trigger = await view.findByRole("button", { name: "Manage home" });
     await view.findByRole("button", { name: "Decorate" });
@@ -702,9 +683,7 @@ it("preserves a draft across a tier refresh and requires recovery before saving"
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     fireEvent.click(await view.findByRole("button", { name: "Decorate" }));
     fireEvent.change(view.getByLabelText("Wall paint"), { target: { value: "sage" } });
@@ -813,9 +792,7 @@ it("opens the kitchen from an accessible owner deep link or scene action and pre
     })] });
     try {
       const view = render(
-        <testApi.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-        </testApi.Provider>,
+        <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
       );
       const trigger = await view.findByRole("button", { name: "Kitchen" });
       expect(view.queryByRole("link", { name: /ramen shop/i })).toBeNull();
@@ -850,9 +827,7 @@ function mountHome() {
     observer.complete();
   })] });
   const page = () => (
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>
   );
   const view = render(page());
   return { view, queryClient, rerender: () => view.rerender(page()) };

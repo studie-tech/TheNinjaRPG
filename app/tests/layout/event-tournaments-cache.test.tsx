@@ -19,15 +19,13 @@ import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { eventTournamentConfigSchema } from "@/validators/tournament";
+import { testRouter } from "../setup/router";
 
 const testApi = createTRPCReact<AppRouter>();
 const UserContext = createContext<ReturnType<typeof userContext.useUserData> | null>(null);
 const key = getQueryKey(testApi.profile.getUser, undefined, "query");
 const clients: QueryClient[] = [];
-const router = {
-  back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), push: vi.fn(),
-  replace: vi.fn(), prefetch: vi.fn(), bfcacheId: "tournament-cache",
-};
+const router = testRouter("tournament-cache");
 type Profile = NonNullable<RouterOutputs["profile"]["getUser"]>;
 type Action = "JOIN" | "WITHDRAW" | "DECLINE";
 type Connection = {

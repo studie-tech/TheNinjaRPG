@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createTRPCReact } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
-import type { AppRouter } from "@/api/root";
+import { QueryClient } from "@tanstack/react-query";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { questsRouter } from "@/server/api/routers/quests";
@@ -13,8 +10,8 @@ import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { updateUserCache } from "@/utils/userCache";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
 let owner: { userId: string; rank: string; status: string; level: number; occupation: string; activePetId: string; battleId: string | null; petTask: unknown; isBanned: boolean; isAi: boolean; autoWakeUp?: boolean };
 let task: RouterOutputs["quests"]["getPetTask"];
@@ -45,19 +42,16 @@ afterEach(() => {
 });
 
 const mount = (dispatch = false) => {
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    const respond = async () => {
-      if (op.path === "quests.getPetTask") return task;
-      if (op.path === "quests.specificQuests") return [{ id: "contract", name: "Hunt creature", questType: "hunting", petTaskMinutes: 30, entryRequirements: [] }, { id: "disabled", name: "Not delegated", questType: "hunting", petTaskMinutes: null, entryRequirements: [] }];
-      if (op.path === "pets.getCollection") return { activePetId: "pet", pets: [{ id: "pet", name: "Kumo", rank: 5, artRank: 5, generationStatus: "READY", avatar: "/kumo.webp" }, { id: "too-young", name: "Cub", rank: 1, artRank: 1, generationStatus: "READY", avatar: "/cub.webp" }] };
-      if (op.path === "quests.startPetTask") return start(op.input);
-      if (op.path === "quests.collectPetTask") return collect(op.input);
-      if (op.path === "quests.cancelPetTask") return cancel(op.input);
-      throw new Error(`Unexpected procedure ${op.path}`);
-    };
-    void respond().then((data) => { observer.next({ result: { data } }); observer.complete(); }, (error) => observer.error(error));
-  })] });
-  return render(<testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}>{dispatch ? <PetTaskDispatch questId="contract" questName="Hunt creature" minutes={30} entryRequirements={[]} /> : <PetTasks petId="pet" />}</QueryClientProvider></testApi.Provider>);
+  const trpcClient = fakeTrpcClient(async (path, input) => {
+    if (path === "quests.getPetTask") return task;
+    if (path === "quests.specificQuests") return [{ id: "contract", name: "Hunt creature", questType: "hunting", petTaskMinutes: 30, entryRequirements: [] }, { id: "disabled", name: "Not delegated", questType: "hunting", petTaskMinutes: null, entryRequirements: [] }];
+    if (path === "pets.getCollection") return { activePetId: "pet", pets: [{ id: "pet", name: "Kumo", rank: 5, artRank: 5, generationStatus: "READY", avatar: "/kumo.webp" }, { id: "too-young", name: "Cub", rank: 1, artRank: 1, generationStatus: "READY", avatar: "/cub.webp" }] };
+    if (path === "quests.startPetTask") return start(input);
+    if (path === "quests.collectPetTask") return collect(input);
+    if (path === "quests.cancelPetTask") return cancel(input);
+    throw new Error(`Unexpected procedure ${path}`);
+  });
+  return render(<TrpcTestProviders client={trpcClient} queryClient={queryClient}>{dispatch ? <PetTaskDispatch questId="contract" questName="Hunt creature" minutes={30} entryRequirements={[]} /> : <PetTasks petId="pet" />}</TrpcTestProviders>);
 };
 
 it("confirms the selected contract duration and final-only rewards before dispatch", async () => {

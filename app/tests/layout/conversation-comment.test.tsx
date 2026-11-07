@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { InfiniteQueryObserver, QueryClient, type InfiniteData } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps } from "react";
 import { type Control, useController } from "react-hook-form";
 import { CommentOnConversation } from "@/layout/Comment";
 import * as CommentModule from "@/layout/Comment";

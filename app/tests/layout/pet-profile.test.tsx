@@ -2,12 +2,10 @@ import { getAssignExperienceUserUpdate, getSavedPetSettingsUpdate } from "@/delt
 import type { UserUpdateOptions } from "@/deltas/profile";
 import { afterEach, beforeEach, expect, it, setDefaultTimeout, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
+import { getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import * as toastUi from "@/components/ui/use-toast";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
@@ -36,11 +34,11 @@ import type { PetTask } from "@/validators/petTasks";
 import { actualShowMutationToast } from "../setup/preload";
 import { deferred } from "../setup/deferred";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
 
-const testApi = createTRPCReact<AppRouter>();
 type PetView = RouterOutputs["pets"]["getPet"];
 let owner: {
   autoWakeUp?: boolean;
@@ -149,26 +147,23 @@ afterEach(() => {
 });
 
 const mount = (strictMode = false) => {
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    const respond = async () => {
-      if (op.path === "profile.getUser") return getUser();
-      if (op.path === "pets.getPet") {
-        return getPet(op.input);
-      }
-      if (op.path === "pets.updatePet") return update(op.input);
-      if (op.path === "pets.unlockSlot") return unlockSlot(op.input);
-      if (op.path === "pets.updateAbilities") return saveAbilities(op.input);
-      if (op.path === "pets.feedPet") return feed(op.input);
-      if (op.path === "pets.updateAiConfig") return saveAi(op.input);
-      if (op.path === "pets.generateAppearance") return generate(op.input);
-      if (op.path === "pets.assignExperience") return assign(op.input);
-      if (op.path === "pets.rankUp") return evolve(op.input);
-      throw new Error(`Unexpected procedure ${op.path}`);
-    };
-    void respond().then((value) => { observer.next({ result: { data: value } }); observer.complete(); }, (error) => observer.error(error));
-  })] });
+  const trpcClient = fakeTrpcClient(async (path, input) => {
+    if (path === "profile.getUser") return getUser();
+    if (path === "pets.getPet") {
+      return getPet(input);
+    }
+    if (path === "pets.updatePet") return update(input);
+    if (path === "pets.unlockSlot") return unlockSlot(input);
+    if (path === "pets.updateAbilities") return saveAbilities(input);
+    if (path === "pets.feedPet") return feed(input);
+    if (path === "pets.updateAiConfig") return saveAi(input);
+    if (path === "pets.generateAppearance") return generate(input);
+    if (path === "pets.assignExperience") return assign(input);
+    if (path === "pets.rankUp") return evolve(input);
+    throw new Error(`Unexpected procedure ${path}`);
+  });
   return render(<PetProfile />, {
-    wrapper: ({ children }) => <testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></testApi.Provider>,
+    wrapper: ({ children }) => <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>,
     reactStrictMode: strictMode,
   });
 };

@@ -1,18 +1,16 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, render, renderHook, waitFor } from "@testing-library/react";
-import { createTRPCReact } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { useEffect, useState } from "react";
-import type { AppRouter } from "@/server/api/root";
 import * as client from "@/app/_trpc/client";
 import { useCombatUpdates } from "@/hooks/combat";
 import { useCombatTabs } from "@/hooks/combatTabs";
 import type { BattleState } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
 import { deferred } from "../setup/deferred";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 const channels = new Set<TestChannel>();
 let locksDescriptor: PropertyDescriptor | undefined;
@@ -95,7 +93,7 @@ const setup = () => {
       drive = () => { if (!current.result && controls.canDrive() && controls.startAction("shared")) action.mutate({ battleId: "shared" }); };
       return <p>{current.result ? "Result" : current.battle?.version}</p>;
     }
-    const view = render(<testApi.Provider client={trpc} queryClient={queryClient}><QueryClientProvider client={queryClient}><Tab /></QueryClientProvider></testApi.Provider>);
+    const view = render(<TrpcTestProviders client={trpc} queryClient={queryClient}><Tab /></TrpcTestProviders>);
     return { view, get state() { return state; }, drive: () => drive(), canDrive: () => controls.canDrive() };
   });
   return { tabs, requests };

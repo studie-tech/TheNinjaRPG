@@ -1,18 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createTRPCReact } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
+import { QueryClient } from "@tanstack/react-query";
 import * as navigation from "next/navigation";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import * as Avatar from "@/layout/Avatar";
 import { BattleHistoryTable } from "@/layout/BattleHistoryTable";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
 type Input = RouterInputs["combat"]["getBattleHistory"];
 type Row = RouterOutputs["combat"]["getBattleHistory"]["data"][number];
-const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
 let requests: Input[];
 let push: ReturnType<typeof vi.fn>;
@@ -41,18 +38,15 @@ const row = (id: number): Row => ({
 });
 
 const mount = (props: Parameters<typeof BattleHistoryTable>[0] = {}) => {
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    const input = op.input as Input;
+  const trpcClient = fakeTrpcClient(async (_path, request) => {
+    const input = request as Input;
     requests.push(input);
-    const respond = async () => {
-      if (fail) throw new Error("Connection failed");
-      if (input.cursor) await new Promise<void>((resolve) => { delay = resolve; });
-      const data = input.cursor ? [row(1)] : [row(3), row(2)];
-      return { data, nextCursor: input.cursor ? undefined : { createdAt: data[1]!.createdAt, id: 2 } };
-    };
-    void respond().then((data) => { observer.next({ result: { data } }); observer.complete(); }, (error) => observer.error(error));
-  })] });
-  const screen = (current: typeof props) => <testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}><BattleHistoryTable {...current} /></QueryClientProvider></testApi.Provider>;
+    if (fail) throw new Error("Connection failed");
+    if (input.cursor) await new Promise<void>((resolve) => { delay = resolve; });
+    const data = input.cursor ? [row(1)] : [row(3), row(2)];
+    return { data, nextCursor: input.cursor ? undefined : { createdAt: data[1]!.createdAt, id: 2 } };
+  });
+  const screen = (current: typeof props) => <TrpcTestProviders client={trpcClient} queryClient={queryClient}><BattleHistoryTable {...current} /></TrpcTestProviders>;
   const view = render(screen(props));
   return { ...view, change: (current: typeof props) => view.rerender(screen(current)) };
 };

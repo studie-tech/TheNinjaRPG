@@ -1,19 +1,18 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { httpBatchLink } from "@trpc/client";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
 import superjson from "superjson";
 import * as clientModule from "@/app/_trpc/client";
 import { useIframeMute } from "@/hooks/useIframeMute";
 import * as toast from "@/libs/toast";
-import type { AppRouter } from "@/server/api/root";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const key = getQueryKey(testApi.profile.getUser, undefined, "query");
 let client: QueryClient;
 let success: boolean;
@@ -63,9 +62,7 @@ afterEach(() => {
 });
 
 const wrapper = ({ children }: { children: ReactNode }) => (
-  <testApi.Provider client={trpc} queryClient={client}>
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  </testApi.Provider>
+  <TrpcTestProviders client={trpc} queryClient={client}>{children}</TrpcTestProviders>
 );
 
 it("shares a saved iframe mute preference with mounted and newly opened audio controls", async () => {

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { useEffect, useState } from "react";
 import superjson from "superjson";
@@ -14,9 +14,9 @@ import { useCombatUpdates } from "@/hooks/combat";
 import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
 // Keep the real tRPC observer and mutation lifecycle; control network ordering.
-const testApi = createTRPCReact<AppRouter>();
 type ActionResponse = RouterOutputs["combat"]["performAction"];
 let queryClient: QueryClient;
 let onEvent: (data: BattleUpdate) => Promise<void>;
@@ -95,7 +95,7 @@ const mount = (initial = stateAt(1)) => {
     };
     return null;
   }
-  return render(<testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}><Hook /></QueryClientProvider></testApi.Provider>);
+  return render(<TrpcTestProviders client={trpcClient} queryClient={queryClient}><Hook /></TrpcTestProviders>);
 };
 
 const actionResponse = (version: number) => ({ updateClient: true, battleUpdate: stateAt(version).battle!, result: null, logEntries: [], updatedQuestIds: [] });
