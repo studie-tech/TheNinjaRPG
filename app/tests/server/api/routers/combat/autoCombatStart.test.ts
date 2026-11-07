@@ -36,7 +36,10 @@ const startBattle = async (
   info: Partial<Parameters<typeof initiateBattle>[0]>,
   equipLimits = equipLimitFixture,
 ) => {
-  const { client, saved: savedBattle, readEquipLimits } = fakeInitiationClient(users, { equipLimits });
+  const { client, saved: savedBattle, readEquipLimits } = fakeInitiationClient(users, {
+    equipLimits,
+    otherRows: [{ count: 0 }],
+  });
   const humans = users.filter((user) => !user.isAi).map((user) => user.userId);
   const ais = users.filter((user) => user.isAi).map((user) => user.userId);
   const result = await initiateBattle(

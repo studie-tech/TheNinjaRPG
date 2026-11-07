@@ -197,11 +197,13 @@ export const fakeInitiationClient = (
   {
     historyCount = 0,
     equipLimits = equipLimitFixture,
+    otherRows = [],
     onHistoryRead,
     onWrite,
   }: {
     historyCount?: number;
     equipLimits?: typeof equipLimitFixture;
+    otherRows?: object[];
     onHistoryRead?: (predicate: SQL) => void;
     onWrite?: () => void;
   } = {},
@@ -230,7 +232,7 @@ export const fakeInitiationClient = (
             ? [{ count: historyCount }]
             : table === userData
               ? [{ average: 0 }]
-              : [];
+              : otherRows;
         const builder = {
           innerJoin: () => builder,
           where: (predicate: SQL) => {

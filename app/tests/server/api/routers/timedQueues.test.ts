@@ -73,7 +73,6 @@ const insertUser = async ({
       ...patch,
     } as never,
   ]);
-  // fetchUpdatedUser creates a missing vote row, and parallel requests would race on it
   await insertUserVotes([{ userId: USER_ID }]);
   if (masteryQueue) await queueMasteries(USER_ID, masteryQueue);
 };

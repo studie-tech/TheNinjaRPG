@@ -51,7 +51,6 @@ const trainee = async ({
     } as never,
   ]);
   if (energyQueue) await queueEnergy(USER_ID, energyQueue);
-  // fetchUpdatedUser creates a missing vote row, and parallel requests would race on it
   await insertUserVotes([{ userId: USER_ID }]);
 };
 
