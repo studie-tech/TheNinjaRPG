@@ -8,8 +8,8 @@ import {
   useContentEditContext,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { statFilters } from "@/libs/train";
 import { tagTypes } from "@/validators/combat";
+import { statFilters } from "@/validators/statFilters";
 
 // Inline schema
 const makeBloodlineFilteringSchema = (

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { resolveRememberedTab } from "@/layout/NavTabs";
+import { getTrainingSections } from "@/libs/train";
 import {
   getJutsuStatQuickFilter,
-  getTrainingSections,
-  jutsuStatQuickFilterSelection,
   jutsuStatQuickFilters,
-} from "@/libs/train";
+  jutsuStatQuickFilterSelection,
+} from "@/validators/statFilters";
 
 describe("training grounds sections", () => {
   it("merges covert training and the sensei system into one section", () => {
