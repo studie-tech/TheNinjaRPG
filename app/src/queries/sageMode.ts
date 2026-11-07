@@ -3,10 +3,33 @@
  */
 import type { SQL } from "drizzle-orm";
 import { eq } from "drizzle-orm";
-import { sageMode } from "@/drizzle/schema";
+import { sageMode, sageModeRolls } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
 import type { ZodSageModeType } from "@/validators/combat";
+
+/**
+ * Item and quest acquisition share this history so a mode cannot be rolled twice.
+ *
+ * @param client - Drizzle client.
+ * @param userId - Player whose `SageModeRolls` rows to load.
+ */
+export const fetchSageModeRolls = async (client: DrizzleClient, userId: string) => {
+  return await client.query.sageModeRolls.findMany({
+    where: eq(sageModeRolls.userId, userId),
+    with: { sageMode: true },
+  });
+};
+
+/**
+ * Visible catalog rows for item-roll pooling. Hidden modes are staff-only and
+ * are never granted by `rollsagemode`.
+ *
+ * @param client - Drizzle client.
+ */
+export const fetchSageModes = async (client: DrizzleClient) => {
+  return await client.query.sageMode.findMany({ where: eq(sageMode.hidden, false) });
+};
 
 /**
  * Load one catalog row by id, including hidden. Used by `get` / `update` / `delete`.

@@ -48,7 +48,6 @@ import {
   petSpecies,
   quest,
   questHistory,
-  sageMode,
   sageModeRolls,
   type UserItem,
   userCookingJob,
@@ -173,29 +172,6 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
     // batched backfill) keep a stable order across reads.
     orderBy: (table) => [asc(table.createdAt), asc(table.id)],
   });
-};
-
-/**
- * Item and quest acquisition share this history so a mode cannot be rolled twice.
- *
- * @param client - Drizzle client.
- * @param userId - Player whose `SageModeRolls` rows to load.
- */
-export const fetchSageModeRolls = async (client: DrizzleClient, userId: string) => {
-  return await client.query.sageModeRolls.findMany({
-    where: eq(sageModeRolls.userId, userId),
-    with: { sageMode: true },
-  });
-};
-
-/**
- * Visible catalog rows for item-roll pooling. Hidden modes are staff-only and
- * are never granted by `rollsagemode`.
- *
- * @param client - Drizzle client.
- */
-export const fetchSageModes = async (client: DrizzleClient) => {
-  return await client.query.sageMode.findMany({ where: eq(sageMode.hidden, false) });
 };
 
 // Fetch candidate calendar periods upfront, before the item's period is known.
