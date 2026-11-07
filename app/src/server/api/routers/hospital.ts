@@ -309,15 +309,15 @@ export const hospitalRouter = createTRPCRouter({
       const healedAt = new Date();
       const energyRecovery = userRegenerationGainSql(user, userData.regenAt, healedAt);
       // Mutate w. validation
-      const isPaid = finishAt > healedAt;
-      const cost = isPaid ? calcHealCost(user) : 0;
-      if (isPaid && user.money < cost) {
+      const isFree = finishAt <= healedAt;
+      const cost = isFree ? 0 : calcHealCost(user);
+      if (!isFree && user.money < cost) {
         return errorResponse("You don't have enough money");
       }
       const result = await updateUserDataForNpcHeal(
         ctx.drizzle,
         user,
-        isPaid ? cost : undefined,
+        isFree ? undefined : cost,
         energyRecovery,
         healedAt,
         ctx,
