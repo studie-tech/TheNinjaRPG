@@ -18,24 +18,12 @@ export const getNewReactions = (
   if (sanitizedEmoji === "") return oldReactions;
   if (sanitizedEmoji.length > 10) return oldReactions;
   // Update
-  const newReactions = { ...oldReactions };
-  if (newReactions[sanitizedEmoji]) {
-    if (newReactions[sanitizedEmoji]?.includes(username)) {
-      const updated = newReactions[sanitizedEmoji]?.filter((u) => u !== username);
-      if (updated && updated.length > 0) {
-        newReactions[sanitizedEmoji] = updated;
-      } else {
-        delete newReactions[sanitizedEmoji];
-      }
-    } else {
-      newReactions[sanitizedEmoji] = [
-        ...(newReactions[sanitizedEmoji] || []),
-        username,
-      ];
-    }
-  } else {
-    newReactions[sanitizedEmoji] = [username];
-  }
+  const users = oldReactions[sanitizedEmoji] ?? [];
+  const updated = users.includes(username)
+    ? users.filter((u) => u !== username)
+    : [...users, username];
+  const newReactions = { ...oldReactions, [sanitizedEmoji]: updated };
+  if (updated.length === 0) delete newReactions[sanitizedEmoji];
   return newReactions;
 };
 
