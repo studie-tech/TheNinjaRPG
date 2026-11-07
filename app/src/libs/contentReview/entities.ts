@@ -4,19 +4,13 @@ import {
   listItemForLoad,
   listTitleForLoad,
   listUserDataForLoad,
-  selectBadgeForFindNames,
   selectBadgeForLoad,
-  selectBloodlineForFindNames,
   selectBloodlineForLoad,
-  selectGameAssetForFindNames,
+  selectContentNames,
   selectGameAssetForLoad,
-  selectItemForFindNames,
-  selectJutsuForFindNames,
   selectJutsuForLoad,
-  selectQuestForFindNames,
   selectQuestForLoad,
   selectTitleForFindNames,
-  selectUserDataForFindNames,
 } from "@/queries/contentReview";
 import type { DrizzleClient } from "@/server/db";
 import { insertAiSchema } from "@/validators/aiInput";
@@ -185,6 +179,11 @@ const AI_EDITABLE_KEYS = [
   "effects",
 ] as const;
 
+const findNamesOf =
+  (entityType: Parameters<typeof selectContentNames>[1]): EntityConfig["findNames"] =>
+  async (client, names) =>
+    (await selectContentNames(client, entityType, names)).map((row) => row.name);
+
 /**
  * How the review system loads, names, validates and links each content type, and which of
  * its fields suggestions may change.
@@ -198,16 +197,9 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     detailHref: (id) => `/manual/jutsu/${id}`,
     load: async (client, ids) => {
       const rows = await selectJutsuForLoad(client, ids);
-      return rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        image: row.image,
-        isHidden: row.hidden,
-        payload: { ...row },
-      }));
+      return rows.map(toLoaded);
     },
-    findNames: async (client, names) =>
-      (await selectJutsuForFindNames(client, names)).map((row) => row.name),
+    findNames: findNamesOf("JUTSU"),
   },
   ITEM: {
     contentType: "item",
@@ -237,8 +229,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         },
       }));
     },
-    findNames: async (client, names) =>
-      (await selectItemForFindNames(client, names)).map((row) => row.name),
+    findNames: findNamesOf("ITEM"),
   },
   BLOODLINE: {
     contentType: "bloodline",
@@ -248,16 +239,9 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     detailHref: (id) => `/manual/bloodline/${id}`,
     load: async (client, ids) => {
       const rows = await selectBloodlineForLoad(client, ids);
-      return rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        image: row.image,
-        isHidden: row.hidden,
-        payload: { ...row },
-      }));
+      return rows.map(toLoaded);
     },
-    findNames: async (client, names) =>
-      (await selectBloodlineForFindNames(client, names)).map((row) => row.name),
+    findNames: findNamesOf("BLOODLINE"),
   },
   QUEST: {
     contentType: "quest",
@@ -270,16 +254,9 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     detailHref: (id) => `/manual/quest/edit/${id}`,
     load: async (client, ids) => {
       const rows = await selectQuestForLoad(client, ids);
-      return rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        image: row.image,
-        isHidden: row.hidden,
-        payload: { ...row },
-      }));
+      return rows.map(toLoaded);
     },
-    findNames: async (client, names) =>
-      (await selectQuestForFindNames(client, names)).map((row) => row.name),
+    findNames: findNamesOf("QUEST"),
   },
   BADGE: {
     contentType: "badge",
@@ -297,8 +274,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         payload: { ...row },
       }));
     },
-    findNames: async (client, names) =>
-      (await selectBadgeForFindNames(client, names)).map((row) => row.name),
+    findNames: findNamesOf("BADGE"),
   },
   TITLE: {
     contentType: "title",
@@ -327,16 +303,9 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     detailHref: (id) => `/manual/asset/edit/${id}`,
     load: async (client, ids) => {
       const rows = await selectGameAssetForLoad(client, ids);
-      return rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        image: row.image,
-        isHidden: row.hidden,
-        payload: { ...row },
-      }));
+      return rows.map(toLoaded);
     },
-    findNames: async (client, names) =>
-      (await selectGameAssetForFindNames(client, names)).map((row) => row.name),
+    findNames: findNamesOf("GAME_ASSET"),
   },
   AI: {
     contentType: "ai",
@@ -372,8 +341,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
       }));
     },
     // Usernames are unique across players and AI, so a new AI cannot take a player's either.
-    findNames: async (client, names) =>
-      (await selectUserDataForFindNames(client, names)).map((row) => row.name),
+    findNames: findNamesOf("AI"),
   },
 };
 
@@ -408,6 +376,19 @@ type EntityConfig = {
   /** The names among `names` that a row already has, compared the way the column collates. */
   findNames: (client: DrizzleClient, names: string[]) => Promise<string[]>;
 };
+
+/** The usual shape of a content row with a name, an image and a hidden flag. */
+const toLoaded = <
+  Row extends { id: string; name: string; image: string | null; hidden: boolean },
+>(
+  row: Row,
+): Loaded => ({
+  id: row.id,
+  name: row.name,
+  image: row.image,
+  isHidden: row.hidden,
+  payload: { ...row },
+});
 
 /** A loaded row, before its editable fields and version are derived. */
 type Loaded = Omit<ContentEntity, "type" | "editable" | "version">;
