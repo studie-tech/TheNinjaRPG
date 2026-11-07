@@ -55,10 +55,6 @@ const sharedConsumable = (id: string, cooldown: number, tags: SharedTag[]) =>
 /** Battle whose user state matches what initiateBattle stores for a fresh fight. */
 const makeGcdBattle = (jutsus: Jutsu[], items: Item[] = []) => {
   const user = makeBattleUser(USER, {
-    curChakra: 5000,
-    maxChakra: 5000,
-    curStamina: 5000,
-    maxStamina: 5000,
     jutsus: jutsus.map((j) => ({
       id: `user-${j.id}`,
       jutsuId: j.id,
