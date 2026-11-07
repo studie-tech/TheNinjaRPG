@@ -1,6 +1,5 @@
 import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as clerk from "@clerk/nextjs/server";
 import { eq, sql } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import {
@@ -25,7 +24,6 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { commentsRouter } from "@/server/api/routers/comments";
-import { registerRouter } from "@/server/api/routers/register";
 import { profileRouter } from "@/server/api/routers/profile";
 import { reportsRouter } from "@/server/api/routers/reports";
 import type { DrizzleClient } from "@/server/db";
@@ -36,6 +34,8 @@ import { processAccountDeletions } from "@/server/utils/accountDeletion/process"
 import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
 
 import { insertUsers } from "../../setup/factories";
+import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
+import { insertSanctionReports, sanctionIdentity, stubClerkUsers } from "../../setup/sanctions";
 import {
   callerFor,
   callerForDatabase,
@@ -48,13 +48,6 @@ import { deferred } from "../../setup/deferred";
 
 const DAY = 86_400_000;
 const EMAIL = "registration-appeal@example.com";
-const identity = (email: string): SanctionIdentity => ({
-  primaryEmailAddressId: "primary",
-  emailAddresses: [
-    { id: "primary", emailAddress: email, verification: { status: "verified" } },
-  ],
-  externalAccounts: [],
-});
 let owners: Map<string, SanctionIdentity>;
 let gatedId: string | undefined;
 let enterLookup: (() => void) | undefined;
@@ -66,28 +59,15 @@ const claimIdentity = (userId: string, email = EMAIL) => {
       owner.emailAddresses.some((address) => address.emailAddress === email),
     ),
   ).toBe(false);
-  owners.set(userId, identity(email));
+  owners.set(userId, sanctionIdentity(email));
 };
 
-const register = async (userId: string, database?: DrizzleClient, userIp?: string) =>
-  registerRouter.createCaller({
-    drizzle: database ?? (await getTestDatabase()),
+const register = (userId: string, database?: DrizzleClient, userIp?: string) =>
+  registerCharacter(
     userId,
-    userIp,
-  } as never).createCharacter({
-    username: userId,
-    gender: "Male",
-    hair_color: "Black",
-    eye_color: "Blue",
-    skin_color: "Light",
-    attribute_1: "Soft features",
-    attribute_2: "Glasses",
-    attribute_3: "Short Hair",
-    read_tos: true,
-    read_privacy: true,
-    read_earlyaccess: true,
-    bloodlineId: "registration-bloodline",
-  });
+    { username: userId, bloodlineId: "registration-bloodline" },
+    { database, userIp },
+  );
 
 const reportsOf = async (userId: string) =>
   (await getTestDatabase()).query.userReport.findMany({
@@ -207,51 +187,32 @@ describeWithDatabase("registration claims current sanction sources", () => {
     gatedId = undefined;
     enterLookup = undefined;
     lookupGate = undefined;
-    vi.spyOn(clerk, "clerkClient").mockResolvedValue({
-      users: {
-        getUser: vi.fn(async (userId: string) => {
-          if (userId === gatedId) {
-            enterLookup?.();
-            await lookupGate;
-          }
-          const owner = owners.get(userId);
-          if (!owner) throw Object.assign(new Error("not found"), { status: 404 });
-          return owner;
-        }),
-        deleteUser: vi.fn(async (userId: string) => {
-          owners.delete(userId);
-        }),
+    stubClerkUsers(
+      async (userId) => {
+        if (userId === gatedId) {
+          enterLookup?.();
+          await lookupGate;
+        }
+        return owners.get(userId);
       },
-    } as never);
+      {
+        deleteUser: async (userId) => {
+          owners.delete(userId);
+        },
+      },
+    );
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue();
-    const database = await getTestDatabase();
     await Promise.all([
       insertUsers([{ userId: "staff", role: "OWNER" }, { userId: "Original" }]),
-      database.insert(village).values({
-        id: "registration-horizon",
-        name: "Horizon",
-        sector: 1,
-        kageId: "kage",
-      }),
-      database.insert(bloodline).values({
-        id: "registration-bloodline",
-        name: "Test bloodline",
-        image: "/bloodline.png",
-        description: "test",
-        effects: [],
-        rank: "D",
-      }),
-      database.insert(userReport).values({
-        id: "original-case",
-        reporterUserId: "staff",
-        reportedUserId: "Original",
-        system: "tavern_comment",
-        infraction: {},
-        reason: "Spam",
-        aiInterpretation: "",
-        status: "BAN_ACTIVATED",
-        banEnd: new Date(Date.now() + 10 * DAY),
-      }),
+      insertRegistrationContent("registration"),
+      insertSanctionReports([
+        {
+          id: "original-case",
+          reportedUserId: "Original",
+          status: "BAN_ACTIVATED",
+          banEnd: new Date(Date.now() + 10 * DAY),
+        },
+      ]),
     ]);
     await deleteAccount("Original");
   });
@@ -301,7 +262,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
       claimIdentity("Concurrent");
       expect(await register("Concurrent")).toMatchObject({ success: true });
       const inherited = (await reportsOf("Concurrent"))[0]!;
-      await database.insert(userReport).values(
+      await insertSanctionReports(
         [
           {
             id: "expired-case",
@@ -314,15 +275,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
             status: "REPORT_CLEARED" as const,
             banEnd: new Date(Date.now() + DAY),
           },
-        ].map((report) => ({
-          ...report,
-          reporterUserId: "staff",
-          reportedUserId: "Concurrent",
-          system: "tavern_comment",
-          infraction: {},
-          reason: "Spam",
-          aiInterpretation: "",
-        })),
+        ].map((report) => ({ ...report, reportedUserId: "Concurrent" })),
       );
       expect(
         await (await callerFor(reportsRouter, "staff")).clear({
@@ -350,16 +303,9 @@ describeWithDatabase("registration claims current sanction sources", () => {
       claimIdentity("Concurrent", "unrelated@example.com");
       expect(await register("Concurrent")).toMatchObject({ success: true });
       expect(await reportsOf("Concurrent")).toHaveLength(0);
-      await database.insert(userReport).values({
-        id: "current-case",
-        reporterUserId: "staff",
-        reportedUserId: "Concurrent",
-        system: "tavern_comment",
-        infraction: {},
-        reason: "Spam",
-        aiInterpretation: "",
-        status: "UNVIEWED",
-      });
+      await insertSanctionReports([
+        { id: "current-case", reportedUserId: "Concurrent", status: "UNVIEWED" },
+      ]);
       const input = {
         object_id: "current-case",
         comment: "Resolve the current character's case",
@@ -370,7 +316,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
         await (await callerFor(reportsRouter, "staff"))[decision](input),
       ).toMatchObject({ success: true });
       // The previous Clerk owner released this verified address during deletion.
-      owners.set("Concurrent", identity(EMAIL));
+      owners.set("Concurrent", sanctionIdentity(EMAIL));
       await database
         .update(userData)
         .set({ deletionAt: new Date(Date.now() - DAY) })
@@ -473,17 +419,14 @@ describeWithDatabase("registration claims current sanction sources", () => {
           deletionAt: new Date(Date.now() - DAY),
         },
       ]);
-      await database.insert(userReport).values({
-        id: "late-case",
-        reporterUserId: "staff",
-        reportedUserId: "LateOriginal",
-        system: "tavern_comment",
-        infraction: {},
-        reason: "Spam",
-        aiInterpretation: "",
-        status: "BAN_ACTIVATED",
-        banEnd: new Date(Date.now() + DAY),
-      });
+      await insertSanctionReports([
+        {
+          id: "late-case",
+          reportedUserId: "LateOriginal",
+          status: "BAN_ACTIVATED",
+          banEnd: new Date(Date.now() + DAY),
+        },
+      ]);
       const userId = mode === "web" ? "LateOriginal" : "Concurrent";
       if (mode === "native") claimIdentity(userId, "unrelated@example.com");
       const { promise: entered, resolve: enter } = deferred<void>();
@@ -641,7 +584,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
       claimIdentity("Replacement");
       expect(await register("Replacement")).toMatchObject({ success: true });
       const inherited = (await reportsOf("Replacement"))[0]!;
-      owners.set("Replacement", identity("changed-appeal@example.com"));
+      owners.set("Replacement", sanctionIdentity("changed-appeal@example.com"));
       // A retry must retain the store ledger's deletion marker until a character exists.
       const alias = {
         oldUserId: "Concurrent",
@@ -943,7 +886,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
     claimIdentity("Replacement");
     expect(await register("Replacement")).toMatchObject({ success: true });
     const inherited = (await reportsOf("Replacement"))[0]!;
-    owners.set("Replacement", identity("different-owner@example.com"));
+    owners.set("Replacement", sanctionIdentity("different-owner@example.com"));
     claimIdentity("Concurrent");
     const failingDatabase = new Proxy(database, {
       get(target, property, receiver) {
