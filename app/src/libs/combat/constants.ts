@@ -13,6 +13,16 @@ import {
 import type { ActionEffect } from "@/libs/combat/types";
 import { IncreaseDamageGivenTag } from "@/validators/combat";
 
+/** Consequence fields that take health from their target, in application order. */
+export const HP_DAMAGE_KEYS = [
+  "damage",
+  "residual",
+  "wound",
+  "afterburn",
+  "drain_hp",
+  "poison",
+] as const;
+
 /** Text color of each applied-effect color, for battle logs and the timeline. */
 export const EFFECT_TEXT_COLORS: Record<ActionEffect["color"], string> = {
   red: "text-red-500",

@@ -6,7 +6,7 @@ import {
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   PARRY_MAX_PERCENTAGE,
 } from "@/drizzle/constants";
-import { damageBoostTypes, damageReductionTypes } from "./constants";
+import { damageBoostTypes, damageReductionTypes, HP_DAMAGE_KEYS } from "./constants";
 import { getCurseDamageMultiplier } from "./curse";
 import { type DiffusePacket, deferDiffuseDamage } from "./diffuse";
 import { getDamageModifierPreventState, getEfficiencyRatio, getPower } from "./tags";
@@ -410,16 +410,7 @@ export const applyDiffuseToConsequences = ({
             e.creatorId === consequence.userId &&
             e.targetId === consequence.targetId),
       );
-    for (const key of [
-      "damage",
-      "residual",
-      "wound",
-      "afterburn",
-      "drain_hp",
-      "poison",
-      "reflect",
-      "recoil",
-    ] as const) {
+    for (const key of [...HP_DAMAGE_KEYS, "reflect", "recoil"] as const) {
       const originalDamage = consequence[key] ?? 0;
       if (originalDamage <= 0) continue;
       const isReturnDamage = key === "reflect" || key === "recoil";
@@ -499,13 +490,10 @@ export const applyDiffuseToConsequences = ({
   }
   deferDiffuseDamage(packets, effects, users, battle.round, actionEffects);
   for (const c of affected) {
-    c.diffuseImmediateDamage =
-      (c.damage ?? 0) +
-      (c.residual ?? 0) +
-      (c.wound ?? 0) +
-      (c.afterburn ?? 0) +
-      (c.drain_hp ?? 0) +
-      (c.poison ?? 0);
+    c.diffuseImmediateDamage = HP_DAMAGE_KEYS.reduce(
+      (sum, key) => sum + (c[key] ?? 0),
+      0,
+    );
   }
 };
 
