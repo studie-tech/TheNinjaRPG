@@ -3,7 +3,6 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getRemoveSageModeUserUpdate } from "@/deltas/sageMode";
 import { REMOVAL_COST } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
 import { sageMode } from "@/drizzle/schema";
 
 import { callDiscordContent } from "@/libs/socials";
@@ -14,15 +13,15 @@ import {
   fetchSageMode,
   findSageModeForUpdate,
   insertActionLogForDelete,
+  insertActionLogForRemoveSageMode,
   insertActionLogForUpdate,
-  insertActionLogForUpdateSageMode,
   insertSageModeForCreate,
   listSageModeForGetAll,
   listSageModeForGetAllNames,
   listUserDataForDelete,
   updateSageModeForUpdate,
   updateUserDataForDelete,
-  updateUserDataForUpdateSageMode,
+  updateUserDataForRemoveSageMode,
 } from "@/queries/sageMode";
 import {
   baseServerResponse,
@@ -32,9 +31,7 @@ import {
   publicProcedure,
   serverError,
 } from "@/server/api/trpc";
-import type { DrizzleClient } from "@/server/db";
 import {
-  type ActionReadiness,
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
@@ -48,22 +45,6 @@ import { idSchema } from "@/validators/misc";
 import type { SageModeFilteringSchema } from "@/validators/sageMode";
 import { sageModeFilteringSchema } from "@/validators/sageMode";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-
-/**
- * Strip per-tag duration before writing a SageMode row. Duration lives on
- * `activationRounds` / `afterEffectRounds`; `rounds === 0` is kept so one-shot
- * tags stay instant through `realizeSageTags`.
- *
- * @param effect - Authored tag from the staff editor.
- * @returns The same object, mutated for persist.
- */
-const persistSageTagDuration = (effect: ZodAllTags) => {
-  if (effect.rounds !== 0) {
-    delete effect.rounds;
-  }
-  delete effect.friendlyFire;
-  return effect;
-};
 
 export const sageModeRouter = createTRPCRouter({
   /**
@@ -114,14 +95,7 @@ export const sageModeRouter = createTRPCRouter({
     if (!result) {
       throw serverError("NOT_FOUND", "Sage Mode not found");
     }
-    return result as Omit<
-      typeof result,
-      "effects" | "afterEffects" | "level2Effects"
-    > & {
-      effects: ZodAllTags[];
-      afterEffects: ZodAllTags[];
-      level2Effects: ZodAllTags[];
-    };
+    return result;
   }),
 
   /** Create a hidden placeholder row and return its id for the staff editor. */
@@ -217,8 +191,9 @@ export const sageModeRouter = createTRPCRouter({
     }),
 
   /**
-   * Paid unequip for the session user. Requires AWAKE and `REMOVAL_COST` reps;
-   * the write is compare-and-swapped in `updateSageMode`.
+   * Paid unequip for the session user. Compare-and-swap: clears `sageModeId` and debits
+   * reputation only while the player is ready, still wears the snapshotted mode and can
+   * afford `REMOVAL_COST`. Zero rows means a concurrent change won; do not retry the debit.
    */
   removeSageMode: protectedProcedure
     .output(userDeltaResponseSchema)
@@ -236,13 +211,16 @@ export const sageModeRouter = createTRPCRouter({
       if (user.reputationPoints < REMOVAL_COST) {
         return errorResponse("You do not have enough reputation points");
       }
-      await updateSageMode(
+      const removed = await updateUserDataForRemoveSageMode(
         ctx.drizzle,
-        user,
         REMOVAL_COST,
-        "SageMode Removed",
+        { userId: user.userId, sageModeId: user.sageModeId },
         readiness,
       );
+      if (!removed.rowsAffected) {
+        throw serverError("BAD_REQUEST", "Unable to update sage mode");
+      }
+      await insertActionLogForRemoveSageMode(ctx.drizzle, user, "SageMode Removed");
       return actionReadinessResponse(
         {
           success: true,
@@ -254,37 +232,6 @@ export const sageModeRouter = createTRPCRouter({
       );
     }),
 });
-
-/**
- * Compare-and-swap unequip: clears `sageModeId` and debits reputation only while
- * the player is AWAKE, still wears the snapshotted mode, and can afford `repCost`.
- * `rowsAffected === 0` means a concurrent change already won — do not retry the debit.
- *
- * @param client - Drizzle client.
- * @param user - Snapshot used for the CAS predicates.
- * @param repCost - Reputation to subtract (`REMOVAL_COST` from the public mutation).
- * @param logMsg - Action-log line written after a successful write.
- */
-export const updateSageMode = async (
-  client: DrizzleClient,
-  user: UserData,
-  repCost: number,
-  logMsg: string,
-  readiness?: ActionReadiness,
-) => {
-  const updateResult = await updateUserDataForUpdateSageMode(
-    client,
-    repCost,
-    user,
-    readiness,
-  );
-
-  if (!updateResult.rowsAffected) {
-    throw serverError("BAD_REQUEST", "Unable to update sage mode");
-  }
-
-  await insertActionLogForUpdateSageMode(client, user, logMsg);
-};
 
 /**
  * Drizzle `where` clauses for the paginated catalog.
@@ -308,4 +255,20 @@ export const sageModeDatabaseFilter = (
         : [] // "All Visibility" (default tri-state) — staff see both hidden and visible
       : [eq(sageMode.hidden, false)]),
   ];
+};
+
+/**
+ * Strip per-tag duration before writing a SageMode row. Duration lives on
+ * `activationRounds` / `afterEffectRounds`; `rounds === 0` is kept so one-shot
+ * tags stay instant through `realizeSageTags`.
+ *
+ * @param effect - Authored tag from the staff editor.
+ * @returns The same object, mutated for persist.
+ */
+const persistSageTagDuration = (effect: ZodAllTags) => {
+  if (effect.rounds !== 0) {
+    delete effect.rounds;
+  }
+  delete effect.friendlyFire;
+  return effect;
 };
