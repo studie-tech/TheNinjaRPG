@@ -339,7 +339,7 @@ export const bountyRouter = createTRPCRouter({
         deleteBountySignups(ctx.drizzle, input.bountyId),
 
         // Log the action
-        insertActionLogForRemoveAllTrackers(ctx.drizzle, ctx, hunters, input),
+        insertActionLogForRemoveAllTrackers(ctx.drizzle, ctx, hunters.length, input),
       ]);
 
       return {
