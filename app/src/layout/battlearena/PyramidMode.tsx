@@ -283,6 +283,7 @@ export function PyramidMode() {
                     {needsConfirm && state.kind === "open" ? (
                       <Confirm
                         title={`Start ${tower.name}?`}
+                        triggerClassName="w-full"
                         button={climbButton}
                         onAccept={() => start(tower.id)}
                       >
