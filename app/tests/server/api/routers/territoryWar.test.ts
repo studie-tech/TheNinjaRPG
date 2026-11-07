@@ -21,7 +21,15 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 import { IncreaseMaxPoolsTag } from "@/validators/combat";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertUserItems, insertUsers, insertQuests, insertQuestHistory } from "../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertQuests,
+  insertQuestHistory,
+  insertDefaultAiProfile,
+  insertClans,
+} from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
@@ -66,7 +74,7 @@ describeWithDatabase("Territory War participation", () => {
     ]);
     await insertUsers(["leader", "ally", "third", "fourth", "rival"].map(id => ({ userId: id, username: id, villageId: id === "rival" ? "enemy" : "home", status: "AWAKE" as const, rank: "JONIN" as const, level: 50, sector: 100, curHealth: 5000, maxHealth: 5000, curChakra: 5000, maxChakra: 5000, curStamina: 5000, maxStamina: 5000, regeneration: 0 })));
     await insertUsers([{ userId: "guardian", username: "guardian", isAi: true, isWarCamp: true, level: 50, curHealth: 100, maxHealth: 100 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default", rules: [] });
+    await insertDefaultAiProfile({ userId: "default" });
     await db.insert(territoryWar).values({ id: "event", predecessorId: "initial", sector: 100, guardianId: "guardian", startsAt: new Date(Date.now() - 1000), endsAt: new Date(Date.now() + 1800000) });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
@@ -308,7 +316,13 @@ describeWithDatabase("Territory War participation", () => {
   it("resolves any outlaw clan and displays that competitor's active bonus", async () => {
     const db = await getTestDatabase();
     const until = new Date(Date.now() + 3600000);
-    await db.insert(clan).values({ id: "faction", name: "Faction", image: "image", founderId: "leader", leaderId: "leader", leaderOrderId: "leader", villageId: VILLAGE_SYNDICATE_ID, territoryWarBoostUntil: until });
+    await insertClans([{
+      id: "faction",
+      name: "Faction",
+      leaderId: "leader",
+      villageId: VILLAGE_SYNDICATE_ID,
+      territoryWarBoostUntil: until,
+    }]);
     await db.update(userData).set({ isOutlaw: true, villageId: VILLAGE_SYNDICATE_ID, clanId: "faction" }).where(eq(userData.userId, "leader"));
     const current = await (await caller()).getCurrent();
     expect(current.competitor).toMatchObject({ id: "clan:faction", name: "Faction" });
@@ -321,7 +335,7 @@ describeWithDatabase("Territory War participation", () => {
 
   it.each(["active", "missing membership", "missing lobby", "missing event", "expired event"] as const)("rolls back a partially launched team with %s", async (ownership) => {
     const db = await getTestDatabase();
-    await db.insert(clan).values({ id: "citizen-clan", name: "Citizens", image: "image", founderId: "leader", leaderId: "leader", leaderOrderId: "leader", villageId: "home" });
+    await insertClans([{ id: "citizen-clan", name: "Citizens", leaderId: "leader", villageId: "home" }]);
     await db.update(userData).set({ clanId: "citizen-clan" });
     const leader = await caller();
     expect((await leader.createTeam({ eventId: "event" })).success).toBe(true);

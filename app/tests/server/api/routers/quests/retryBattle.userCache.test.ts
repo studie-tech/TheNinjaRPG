@@ -13,7 +13,15 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { IncreaseMaxPoolsTag } from "@/validators/combat";
 import { InstantNewQuestObjective, InstantStartBattleObjective, QuestTracker, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUserItems,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertUserVotes,
+} from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
@@ -66,8 +74,8 @@ describeWithDatabase("quest retry admission cache", () => {
       questVersion: isolated ? definition?.updatedAt : null, isolated, startedAt: now,
       entryPaid: scenario === "paid entry",
     }]);
-    await database.insert(aiProfile).values({ id: "Default", userId: "retry-cache-foe", rules: [] });
-    await database.insert(userVote).values({ id: "retry-cache-vote", userId: playerId, secret: "retry001", lastVoteAt: now });
+    await insertDefaultAiProfile({ userId: "retry-cache-foe" });
+    await insertUserVotes([{ userId: playerId, lastVoteAt: now }]);
     if (hasEntryItems) {
       await insertItems([{
         id: "retry-ticket", itemType: "ARMOR", slot: "CHEST", maxDurability: 100,

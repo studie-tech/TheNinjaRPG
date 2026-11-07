@@ -17,7 +17,14 @@ import { type LoadedQuestParty, synchronizeQuestParty } from "@/server/utils/que
 import { questPartyRelations } from "@/queries/questParty";
 import { AllObjectives, QuestTracker, QuestValidator } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuestHistory, insertQuests, insertUsers, insertUserItems } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+  insertUserItems,
+  insertDefaultAiProfile,
+} from "../../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
 
@@ -103,7 +110,6 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   });
 
   it("shows quest invitations in profile notifications until accepted", async () => {
-    const client = await getTestDatabase();
     const { leader, helper, party } = await lastMemberFixture();
     expect((await leader.invite({ partyId: party.id, username: "helper" })).success).toBe(true);
     const profile = await callerFor(profileRouter, "helper");
@@ -933,7 +939,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   it("keeps lifetime-completed helpers active across profile reads and encounter preload without reopening or paying their receipt", async () => {
     const client = await getTestDatabase();
     await insertUsers([{ userId: "enemy", username: "enemy", isAi: true, level: 10, rank: "GENIN" }]);
-    await client.insert(aiProfile).values({ id: "Default", userId: "enemy", rules: [] });
+    await insertDefaultAiProfile({ userId: "enemy" });
     await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 2, maxCompletes: 2, retryDelay: "none", content: { objectives: [AllObjectives.parse({ id: "goal", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }] })], reward: ObjectiveReward.parse({ reward_money: 100 }), sceneBackground: "", sceneCharacters: [] } }]);
     const endAt = new Date("2026-10-01T00:00:00Z");
     await insertQuestHistory([{ id: "receipt", userId: "helper", questId: "team-quest", questType: "event", completed: 0, previousCompletes: 1, previousAttempts: 1, endAt }]);
@@ -1004,7 +1010,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     it(`starts the selected eligible combat objective (${mode})`, async () => {
       const client = await getTestDatabase();
       await insertUsers(["enemy-first", "enemy-selected"].map((userId) => ({ userId, username: userId, isAi: true, level: 10, rank: "GENIN" })));
-      await client.insert(aiProfile).values({ id: "Default", userId: "enemy-selected", rules: [] });
+      await insertDefaultAiProfile({ userId: "enemy-selected" });
       if (mode !== "generic") {
         await client.insert(overworldAiPlacement).values({ id: "selected-npc", aiTemplateUserId: "enemy-selected", interactionType: "HOSTILE", sectorList: [], sector: 50, longitude: 10, latitude: 10, positionVersion: 0 });
       }

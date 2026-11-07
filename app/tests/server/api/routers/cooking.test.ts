@@ -19,7 +19,12 @@ import {
 } from "@/validators/combat";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
 import { makeCompleteBattle } from "../../../libs/combat/helpers/battleScenario";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertUserVotes,
+} from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements, failStatements } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
@@ -42,7 +47,7 @@ describeWithDatabase("Cooking production and consumption", () => {
     await resetTables(userCookingJob, userRaidBuff, userQueue, userItem, craftingRequirement, item, userVote, userData);
     const db = await getTestDatabase();
     await insertUsers([{ userId, username: "Cook", status: "AWAKE", level: 50, rank: "JONIN", isOutlaw: true, occupation: null, federalStatus: "GOLD", regenAt: new Date(), updatedAt: new Date() }]);
-    await db.insert(userVote).values({ id: "cook-vote", userId, secret: "secret01", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
     await insertItems([
       { id: "rice", name: "Rice", stackSize: 100, canStack: true },
       { id: "meal", name: "Rice Bowl", ...MEAL_ITEM_DEFAULTS, itemType: "MEAL", canBeCrafted: true, canBeTraded: true, canStack: true, stackSize: 100, cookingTimeSeconds: 60, cookingOutputQuantity: 3, cookingExperience: 10, mealDurationSeconds: 120, effects: [IncreaseStatTag.parse({ power: 10, statTypes: ["Ninjutsu"] })] },

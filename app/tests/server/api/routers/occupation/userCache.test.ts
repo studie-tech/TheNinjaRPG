@@ -7,7 +7,14 @@ import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUserItems,
+  insertUsers,
+  insertUserVotes,
+} from "../../../../setup/factories";
 import { comparableTrackers } from "../../../../setup/quest";
 import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../../setup/testDatabase";
 
@@ -20,7 +27,7 @@ describeWithDatabase("crafting user cache quest progress", () => {
     await insertUserItems([{ id: "material-stack", userId: "crafter", itemId: "material", quantity: 20 }]);
     const db = await getTestDatabase();
     await db.insert(craftingRequirement).values({ id: "recipe", craftItemId: "crafted", requirementItemId: "material", quantity: 1 });
-    await db.insert(userVote).values({ id: "vote", userId: "crafter", secret: "secret01", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId: "crafter" }]);
   });
 
 

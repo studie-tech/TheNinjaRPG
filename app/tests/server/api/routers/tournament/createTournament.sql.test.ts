@@ -2,7 +2,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { clan, tournament, userData } from "@/drizzle/schema";
 import { tournamentRouter } from "@/server/api/routers/tournament";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertClans } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -15,10 +15,7 @@ describeWithDatabase("Clan tournament prize funding", () => {
   beforeEach(async () => {
     await resetTables(clan, tournament, userData);
     await insertUsers([{ userId: "leader", username: "leader", clanId: "clan" }]);
-    await (await getTestDatabase()).insert(clan).values({
-      id: "clan", name: "Clan", image: "/clan.webp", villageId: "village",
-      founderId: "leader", leaderId: "leader", leaderOrderId: "order", bank: 1000,
-    });
+    await insertClans([{ id: "clan", name: "Clan", villageId: "village", leaderId: "leader", bank: 1000 }]);
   });
 
   it("keeps a deposit made after the treasury was read", async () => {

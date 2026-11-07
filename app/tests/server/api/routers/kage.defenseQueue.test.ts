@@ -17,7 +17,7 @@ import { calcBattleResult } from "@/libs/combat/util";
 import type { DrizzleClient } from "@/server/db";
 import { beforeStatements, failStatements } from "../../../setup/statements";
 import { getKageSlots } from "@/utils/kage";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 import { deferred } from "../../../setup/deferred";
 
@@ -33,7 +33,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     setSystemTime(now);
     await resetTables(aiProfile, battleHistory, battle, kageDefendedChallenges, userData, village, villageElderVote, war);
     const db = await getTestDatabase();
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.insert(village).values({ id: villageId, name: "Defense home", kageId: "defender", leaderUpdatedAt: now, kageScheduleAvailableAt: now });
     await insertUsers(["defender", "first", "second", "third"].map((id) => ({ userId: id, username: id, villageId, rank: "JONIN", status: "AWAKE", villagePrestige: KAGE_PRESTIGE_REQUIREMENT, joinedVillageAt: new Date("2026-01-01") })));
     expect((await (await callerFor(kageRouter, "defender")).publishSchedule({ villageId, windows })).success).toBe(true);

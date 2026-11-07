@@ -8,7 +8,7 @@ import { calcBattleResult } from "@/libs/combat/util";
 import type { DrizzleClient } from "@/server/db";
 import { cleanupTerritoryWarTeams, resolveTerritoryWar, settleTerritoryWarCombat, syncTerritoryWars, territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { guardianVictory } from "../../setup/territoryWar";
-import { insertUsers } from "../../setup/factories";
+import { insertUsers, insertClans } from "../../setup/factories";
 import { failStatements } from "../../setup/statements";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 
@@ -76,7 +76,14 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     { hasHideout: false, timeout: true }, { hasHideout: true, timeout: true },
   ])("pays an outlaw clan with hasHideout=$hasHideout at timeout=$timeout to the proper destination", async ({ hasHideout, timeout }) => {
     const db = await getTestDatabase();
-    await db.insert(clan).values({ id: "faction", name: "Faction", image: "image", villageId: hasHideout ? "hideout" : VILLAGE_SYNDICATE_ID, founderId: "founder", leaderId: "founder", leaderOrderId: "founder", hasHideout, points: 17 });
+    await insertClans([{
+      id: "faction",
+      name: "Faction",
+      villageId: hasHideout ? "hideout" : VILLAGE_SYNDICATE_ID,
+      leaderId: "founder",
+      hasHideout,
+      points: 17,
+    }]);
     await db.insert(territoryWar).values({ ...eventRow(), ...(timeout ? { endsAt: new Date(Date.now() - 1) } : {}) });
     await db.insert(territoryWarScore).values({ warId: "event", competitorId: "clan:faction", name: "Faction", clanId: "faction", points: timeout ? 25 : 395 });
     const fight = guardianVictory();

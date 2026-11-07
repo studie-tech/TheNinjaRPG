@@ -9,7 +9,12 @@ import * as queueSettlement from "@/server/utils/userQueue";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { huntingRouter } from "@/routers/hunting";
 import { IncreaseHuntingYield } from "@/validators/combat";
-import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertDefaultAiProfile,
+} from "../../setup/factories";
 import { huntingContract, huntingHabitatContent, huntingMap, insertHuntingWorld } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import type { DrizzleClient } from "@/server/db";
@@ -38,7 +43,7 @@ describeWithDatabase("Hunting lifecycle", () => {
     const { hunter, session } = await accept();
     const db = await getTestDatabase();
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0, money: 100, cookingExperience: 0 }).where(eq(userData.userId, "hunter"));
     await db.update(huntingSession).set({ readyAt: new Date(0) });
     const hasQueue = ["jutsu", "craft", "queue-failure"].includes(settlement);
@@ -191,9 +196,7 @@ describeWithDatabase("Hunting lifecycle", () => {
     const { hunter, session } = await accept();
     const db = await getTestDatabase();
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await db
-      .insert(aiProfile)
-      .values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db
       .update(userData)
       .set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0 })
@@ -235,7 +238,7 @@ describeWithDatabase("Hunting lifecycle", () => {
     const { hunter, session } = await accept();
     const db = await getTestDatabase();
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0 }).where(eq(userData.userId, "hunter"));
     await db.update(huntingSession).set({ readyAt: new Date(0) });
     await db.update(huntingProgress).set({ used: 2 });

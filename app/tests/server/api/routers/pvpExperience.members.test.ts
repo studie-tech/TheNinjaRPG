@@ -4,7 +4,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { anbuSquad, clan, userData } from "@/drizzle/schema";
 
 
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertClans } from "../../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 describeWithDatabase("PvP experience in member lists", () => {
@@ -15,10 +15,14 @@ describeWithDatabase("PvP experience in member lists", () => {
       id: "xp-squad", name: "XP Squad", image: "/squad.png", villageId: "village",
       kageOrderId: "kage-order", leaderOrderId: "squad-order", pvpActivity: 42,
     });
-    await database.insert(clan).values({
-      id: "xp-clan", name: "XP Clan", image: "/clan.png", villageId: "village",
-      founderId: "xp-member", leaderId: "xp-member", leaderOrderId: "clan-order", pvpActivity: 17,
-    });
+    await insertClans([{
+      id: "xp-clan",
+      name: "XP Clan",
+      villageId: "village",
+      leaderId: "xp-member",
+      leaderOrderId: "clan-order",
+      pvpActivity: 17,
+    }]);
     await insertUsers([{
       userId: "xp-member", username: "XpMember", anbuId: "xp-squad", clanId: "xp-clan",
       pvpExperience: 1234.5, pvpStreak: 4,

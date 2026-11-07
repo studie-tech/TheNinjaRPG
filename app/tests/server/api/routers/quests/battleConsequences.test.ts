@@ -3,7 +3,7 @@ import { aiProfile, battle, userData } from "@/drizzle/schema";
 import { getNewTrackers } from "@/libs/quest";
 import { handleQuestConsequences } from "@/server/api/routers/quests";
 import { InstantStartBattleObjective } from "@/validators/objectives";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
 import { trackerQuest, trackerUser } from "../../../../setup/quest";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -14,8 +14,7 @@ describeWithDatabase("quest battle rejection feedback", () => {
       { userId: "hero", status: "AWAKE", rank: "JONIN", level: 50, experience: 20000000 },
       { userId: "template", isAi: true },
     ]);
-    const client = await getTestDatabase();
-    await client.insert(aiProfile).values({ id: "Default", userId: "template", rules: [] });
+    await insertDefaultAiProfile({ userId: "template" });
   });
 
   for (const [allyId, number, message] of [

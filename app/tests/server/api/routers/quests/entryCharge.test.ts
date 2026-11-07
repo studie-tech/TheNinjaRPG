@@ -25,6 +25,7 @@ import {
   insertQuests,
   insertUserItems,
   insertUsers,
+  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import {
@@ -83,10 +84,7 @@ describeWithDatabase("quest entry items are paid at the start of a run", () => {
         },
       },
     ]);
-    const client = await getTestDatabase();
-    await client
-      .insert(aiProfile)
-      .values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
   });
   afterEach(() => vi.restoreAllMocks());
 

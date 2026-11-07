@@ -6,7 +6,7 @@ import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { fetchUserJutsus, jutsuRouter } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
 import { DamageTag, JutsuValidator } from "@/validators/combat";
-import { insertItems, insertUsers } from "../../../../setup/factories";
+import { insertItems, insertUsers, insertJutsus } from "../../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
 
@@ -48,11 +48,18 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
     await resetTables(contentProposalBasis, contentProposal, actionLog, userJutsu, jutsu, bloodlineReskin, userItem, item, userData);
     await insertUsers([{ userId: "staff", username: "Staff", role: "CONTENT" }, { userId: "player", username: "Player" }] as never);
     const db = await getTestDatabase();
-    await db.insert(jutsu).values({
-      id: "parent", name: "Parent", image: "/parent.png", description: "Parent text", battleDescription: "Parent battle",
+    await insertJutsus([{
+      id: "parent",
+      name: "Parent",
+      description: "Parent text",
       effects: [DamageTag.parse({power: 4, appearAnimation: "appear", appearSfx: "sound"})],
-      range: 1, target: "OTHER_USER", requiredRank: "GENIN", jutsuType: "BLOODLINE", bloodlineId: "blood", hidden: true,
-    });
+      range: 1,
+      target: "OTHER_USER",
+      requiredRank: "GENIN",
+      jutsuType: "BLOODLINE",
+      bloodlineId: "blood",
+      hidden: true,
+    }]);
     await db.insert(bloodlineReskin).values({ id: "group", bloodlineId: "blood", name: "Scarlet", description: "Scarlet", image: "/scarlet.png", createdBy: "staff" });
   });
 
@@ -101,7 +108,7 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
     const db = await getTestDatabase();
     await db.update(jutsu).set({ name: "Scarlet attack" }).where(eq(jutsu.id, id));
     await db.update(userData).set({ bloodlineId: "blood", bloodlineReskinId: "group" }).where(eq(userData.userId, "player"));
-    await db.insert(jutsu).values({ ...await read("parent"), id: "unlinked", name: "Plain attack", bloodlineId: null });
+    await insertJutsus([{ ...await read("parent"), id: "unlinked", name: "Plain attack", bloodlineId: null }]);
     await db.insert(userJutsu).values([
       { id: "learned-parent", userId: "player", jutsuId: "parent" },
       { id: "learned-plain", userId: "player", jutsuId: "unlinked" },
@@ -125,7 +132,7 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
     const template = await read(await createChild());
     const updatedAt = new Date("2026-01-01T00:00:00Z");
     await db.update(jutsu).set({ name: "Older variant", updatedAt: new Date(updatedAt.getTime() - 1000) }).where(eq(jutsu.id, template.id));
-    await db.insert(jutsu).values([
+    await insertJutsus([
       { ...template, id: "variant-a", name: "Selected variant", updatedAt },
       { ...template, id: "variant-b", name: "Unselected variant", updatedAt },
     ]);
@@ -195,7 +202,7 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
 
   it("unequips only the edited jutsu when it is saved as hidden", async () => {
     const db = await getTestDatabase();
-    await db.insert(jutsu).values({ ...await read("parent"), id: "other", name: "Other" });
+    await insertJutsus([{ ...await read("parent"), id: "other", name: "Other" }]);
     await db.insert(userJutsu).values([
       { id: "owned-parent", userId: "player", jutsuId: "parent", equipped: true },
       { id: "owned-other", userId: "player", jutsuId: "other", equipped: true },
@@ -222,8 +229,7 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
 
   it("rejects reskin evolution parents and preserves cosmetic editing and ordinary evolution", async () => {
     const id = await createChild();
-    const db = await getTestDatabase();
-    await db.insert(jutsu).values({ ...await read("parent"), id: "evolution", name: "Evolution" });
+    await insertJutsus([{ ...await read("parent"), id: "evolution", name: "Evolution" }]);
 
     expect(await save("evolution", { parentJutsuId: id })).toMatchObject({
       success: false,
@@ -238,7 +244,7 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
 
   it.each(["reskin", "evolution"] as const)("rejects a stale overlapping save when the %s link commits first", async (firstLink) => {
     const db = await getTestDatabase();
-    await db.insert(jutsu).values([
+    await insertJutsus([
       { ...await read("parent"), id: "candidate", name: "Candidate" },
       { ...await read("parent"), id: "evolution", name: "Evolution" },
     ]);

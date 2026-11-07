@@ -12,7 +12,13 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { getTagSchema } from "@/validators/combat";
 import { beforeStatements } from "../../../setup/statements";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertJutsus,
+  insertUserVotes,
+} from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const userId = "readiness-cache-owner";
@@ -45,13 +51,13 @@ describeWithDatabase("item, jutsu and imbuing recovery cache projections", () =>
     await resetTables(userItemImbuement, itemLoadout, userItem, item, jutsuLoadout, userJutsu, userQueue, jutsu, questHistory, quest, userVote, userData);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await insertUsers([{ userId, username: userId, level: 50, rank: "JONIN", status: "ASLEEP", isOutlaw: true, occupation: "CRAFTING", craftingExperience: CRAFTING_REQUIRED_EXP.MASTER, federalStatus: "GOLD", primaryElement: "Fire", secondaryElement: "Water", money: 100_000, regenAt: new Date(), updatedAt: new Date() }]);
-    await (await getTestDatabase()).insert(userVote).values({ id: "readiness-vote", userId, secret: "secret01", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
   });
   afterEach(() => vi.restoreAllMocks());
 
   it("keeps generated jutsu queue rows and charges while waking without a profile read", async () => {
     const db = await getTestDatabase();
-    await db.insert(jutsu).values({ id: "training", name: "Training", description: "Training", battleDescription: "Training", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuRank: "D", jutsuType: "NORMAL", image: "" });
+    await insertJutsus([{ id: "training", name: "Training" }]);
     await db.insert(userJutsu).values({ id: "owned-training", userId, jutsuId: "training", level: 1 });
     const api = await callerFor(jutsuRouter, userId);
     const cached = await applyMutation(() => api.startTraining({ jutsuId: "training", levels: 2 }));

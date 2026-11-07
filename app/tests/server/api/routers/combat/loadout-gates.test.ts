@@ -14,7 +14,7 @@ import { battleJutsuGateFailure } from "@/libs/train";
 import { combatRouter, processUsersForBattle } from "@/server/api/routers/combat";
 import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
 import { fetchUserJutsus, jutsuRouter } from "@/server/api/routers/jutsu";
-import { insertUsers } from "../../../../setup/factories";
+import { insertDefaultAiProfile, insertJutsus, insertUsers } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const USER = "lobby-gates-user";
@@ -22,24 +22,18 @@ const BATTLE = "lobby-gates-battle";
 const VALID = Array.from({ length: 15 }, (_, index) => `valid-${index}`);
 const LOCKED = ["element-locked", "wrong-bloodline", "hidden"];
 
-const jutsuRow = (id: string, extra: Partial<typeof jutsu.$inferInsert> = {}) => ({
-  id, name: id, image: "", description: id, battleDescription: id, effects: [],
-  target: "SELF" as const, range: 0, requiredRank: "GENIN" as const, jutsuType: "NORMAL" as const,
-  ...extra,
-});
-
 /** Locked jutsu first so, without the shared gates, they take three of the 15 slots. */
 const seedJutsu = async () => {
   const db = await getTestDatabase();
-  await db.insert(jutsu).values([
-    jutsuRow("element-locked", { elementClassification: "Fire" }),
-    jutsuRow("wrong-bloodline", { bloodlineId: "other-bloodline", jutsuType: "BLOODLINE" }),
-    jutsuRow("hidden", { hidden: true }),
-    jutsuRow("level-locked", { requiredLevel: 100 }),
-    jutsuRow("weapon-locked", { jutsuWeapon: "SWORD" }),
-    jutsuRow("mastery-locked", { requiredNinjutsuMastery: 500 }),
-    ...VALID.map((id) => jutsuRow(id)),
-  ]);
+  await insertJutsus([
+    { id: "element-locked", elementClassification: "Fire" as const },
+    { id: "wrong-bloodline", bloodlineId: "other-bloodline", jutsuType: "BLOODLINE" as const },
+    { id: "hidden", hidden: true },
+    { id: "level-locked", requiredLevel: 100 },
+    { id: "weapon-locked", jutsuWeapon: "SWORD" as const },
+    { id: "mastery-locked", requiredNinjutsuMastery: 500 },
+    ...VALID.map((id) => ({ id })),
+  ].map((row) => ({ ...row, requiredRank: "GENIN" as const })));
   const ids = [...LOCKED, "level-locked", "weapon-locked", "mastery-locked", ...VALID];
   await db.insert(userJutsu).values(ids.map((jutsuId) => ({ id: `owned-${jutsuId}`, userId: USER, jutsuId, equipped: false })));
   await db.insert(jutsuLoadout).values({ id: "gates", userId: USER, jutsuIds: [...LOCKED, ...VALID] });
@@ -108,7 +102,7 @@ describeWithDatabase("combat lobby jutsu gates", () => {
       // Keep Fire locked when profile maintenance runs between equip operations.
       primaryElement: "Water", secondaryElement: "Wind",
     }]);
-    await (await getTestDatabase()).insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await seedJutsu();
   });
   afterEach(() => vi.restoreAllMocks());

@@ -9,7 +9,7 @@ import { buildCombatStateUpdate, captureCombatStateUpdate, getCombatEventUpdate,
 import { maskBattle } from "@/libs/combat/util";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { makeEffect } from "../../../../libs/combat/helpers/battleScenario";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
@@ -229,7 +229,7 @@ const startLethalBattle = async (battleType: "COMBAT" | "ARENA", auto = false) =
       sector: 335, curHealth: 5000, maxHealth: 5000, curChakra: 5000,
       maxChakra: 5000, curStamina: 5000, maxStamina: 5000,
     })));
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     const started = await initiateBattle({ client: db, userIds: ["killer"], targetIds: ["victim"] }, battleType);
     expect(started.success, started.message).toBe(true);
     const snapshot = (await db.query.battle.findFirst({ where: eq(battle.id, started.battleId!) }))!;

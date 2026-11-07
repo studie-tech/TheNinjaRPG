@@ -41,7 +41,13 @@ import { cleanupTerritoryWarTeams } from "@/server/utils/territoryWar";
 import { Pusher } from "@/libs/pusher";
 import { dungeonContent } from "../../setup/dungeon";
 import { initialPetSpecies } from "../../libs/pets/helpers/species";
-import { insertPetSpecies, insertUsers } from "../../setup/factories";
+import {
+  insertPetSpecies,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertClans,
+  insertUserPets,
+} from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements } from "../../setup/statements";
 import {
@@ -154,25 +160,9 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
       { id: "enemy", name: "Enemy", sector: 2, kageId: "y" },
       { id: VILLAGE_SYNDICATE_ID, name: "Syndicate", sector: 3, kageId: "s" },
     ]);
-    await db.insert(clan).values([
-      {
-        id: "c",
-        name: "C",
-        image: "/c.webp",
-        villageId: "v",
-        founderId: "x",
-        leaderId: "x",
-        leaderOrderId: "order",
-      },
-      {
-        id: "d",
-        name: "D",
-        image: "/d.webp",
-        villageId: "enemy",
-        founderId: "y",
-        leaderId: "y",
-        leaderOrderId: "order2",
-      },
+    await insertClans([
+      { id: "c", name: "C", villageId: "v", leaderId: "x" },
+      { id: "d", name: "D", villageId: "enemy", leaderId: "y" },
     ]);
     await insertUsers([
       {
@@ -203,26 +193,19 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
         sector: 1,
       },
     ]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "x", rules: [] });
+    await insertDefaultAiProfile({ userId: "x" });
     await insertPetSpecies(initialPetSpecies);
-    await db
-      .insert(userPet)
-      .values(
-        ["one", "two"].map((id) => ({
-          id,
-          userId: "a",
-          name: id,
-          speciesId: initialPetSpecies[0]!.id,
-          paletteIndex: 0,
-          characteristicIndex: 0,
-          auraIndex: 0,
-          rank: 1,
-          artRank: 1,
-          generationStatus: "READY" as const,
-          battleEnabled: true,
-          avatar: "https://example.com/pet.webp",
-        })),
-      );
+    await insertUserPets(["one", "two"].map((id) => ({
+      id,
+      userId: "a",
+      name: id,
+      speciesId: initialPetSpecies[0]!.id,
+      rank: 1,
+      artRank: 1,
+      generationStatus: "READY" as const,
+      battleEnabled: true,
+      avatar: "https://example.com/pet.webp",
+    })));
     await db
       .insert(dungeon)
       .values({ id: "definition", content: dungeonContent(), updatedAt: new Date() });

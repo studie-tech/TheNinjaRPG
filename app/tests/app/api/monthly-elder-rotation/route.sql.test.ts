@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import { GET } from "@/app/api/monthly-elder-rotation/route";
 import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as gamesettings from "@/libs/gamesettings";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertClans } from "../../../setup/factories";
 import { resetServerModuleStubs, stubCronAuth } from "../../../setup/serverModules";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
@@ -19,16 +19,18 @@ describeWithDatabase("monthly elder rotation log", () => {
     vi.spyOn(gamesettings, "lockWithMonthlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewMonth: true, prevTime: new Date(0), response: Response.json("Ready") });
     const db = await getTestDatabase();
     await db.insert(village).values({ id: "rotation-village", name: "Rotation village", kageId: "rotation-kage" });
-    await db.insert(clan).values(
-      [
+    await insertClans([
         { id: "kept", leaderId: "stays-leader", elderNomineeId: "renominated", rank: 1 },
         { id: "banned", leaderId: "stays-leader", elderNomineeId: "banned-nominee", rank: 2 },
         { id: "anbu", leaderId: "anbu-leader", elderNomineeId: null, rank: 3 },
       ].map(({ rank, ...entry }) => ({
-        ...entry, name: `Clan ${entry.id}`, image: "", founderId: entry.leaderId, leaderOrderId: "order", villageId: "rotation-village",
-        elderCutoffRank: rank, activityPoints: 10,
-      })),
-    );
+      ...entry,
+      name: `Clan ${entry.id}`,
+      founderId: entry.leaderId,
+      villageId: "rotation-village",
+      elderCutoffRank: rank,
+      activityPoints: 10,
+    })));
     await insertUsers(
       [
         { userId: "renominated", rank: "ELDER" as const, clanId: "kept" },

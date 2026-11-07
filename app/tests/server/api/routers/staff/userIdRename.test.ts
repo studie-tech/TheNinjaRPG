@@ -47,7 +47,7 @@ import {
   transferStorePurchases,
 } from "@/server/utils/purchases/grant";
 import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
-import { insertPetSpecies, insertUsers } from "../../../../setup/factories";
+import { insertPetSpecies, insertUsers, insertUserPets } from "../../../../setup/factories";
 import { characterInput, insertRegistrationContent } from "../../../../setup/registration";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import {
@@ -236,7 +236,7 @@ describeWithDatabase("staff user-id rename", () => {
       revision: 7,
     } satisfies typeof userPet.$inferInsert;
     await Promise.all([
-      database.insert(userPet).values([
+      insertUserPets([
         pet,
         { ...pet, id: "staff-companion", userId: STAFF },
         { ...pet, id: "parked-companion", storedExperience: 80 },
@@ -274,10 +274,7 @@ describeWithDatabase("staff user-id rename", () => {
 
   it("finishes a failed companion ownership move when the rename is retried", async () => {
     const database = await getTestDatabase();
-    await database.insert(userPet).values({
-      id: "retry-companion", userId: OLD_USER_ID, name: "Companion",
-      speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0,
-    });
+    await insertUserPets([{ id: "retry-companion", userId: OLD_USER_ID, name: "Companion" }]);
     await expect(
       callerForDatabase(staffRouter, STAFF, failStatements(database, userPet)).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
     ).rejects.toThrow("Statement failed on purpose");
@@ -292,7 +289,7 @@ describeWithDatabase("staff user-id rename", () => {
 
   it("retains rename intent without moving ownership when the character claim fails, then retries", async () => {
     const database = await getTestDatabase();
-    await database.insert(userPet).values({ id: "claim-companion", userId: OLD_USER_ID, name: "Companion", speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0 });
+    await insertUserPets([{ id: "claim-companion", userId: OLD_USER_ID, name: "Companion" }]);
     await database.insert(title).values({ id: "claim-title", name: "Private title", legacyOwnerId: OLD_USER_ID });
     await database.insert(userTitle).values({ userId: OLD_USER_ID, titleId: "claim-title" });
     await database.insert(huntingSession).values({ userId: OLD_USER_ID, id: "hunt-session", habitatId: "forest", contractId: "boar", sector: 1, startedAt: new Date() });

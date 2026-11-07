@@ -35,6 +35,7 @@ import {
   insertQuests,
   insertUserItems,
   insertUsers,
+  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../../setup/queues";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
@@ -134,9 +135,7 @@ describeWithDatabase("managed quest battle and abandonment", () => {
         questVersion: content.updatedAt,
       },
     ]);
-    await client
-      .insert(aiProfile)
-      .values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
   });
   afterEach(async () => { vi.restoreAllMocks(); await resetTables(questHistory); });
 

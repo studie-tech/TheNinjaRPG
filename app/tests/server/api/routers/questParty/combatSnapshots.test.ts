@@ -29,6 +29,7 @@ import {
   insertUsers,
   insertQuests,
   insertUserItems,
+  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import {
   callerFor,
@@ -89,9 +90,7 @@ describeWithDatabase("quest team snapshots during unrelated battle", () => {
     await insertUsers([
       { userId: "enemy", username: "enemy", isAi: true, inArena: true, level: 50, rank: "JONIN" },
     ]);
-    await client
-      .insert(aiProfile)
-      .values({ id: "Default", userId: "enemy", rules: [] });
+    await insertDefaultAiProfile({ userId: "enemy" });
     await insertItems([{ id: "scroll" }]);
     await insertQuests([
       {

@@ -21,7 +21,7 @@ import { clanRouter } from "@/server/api/routers/clan";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { deleteClanBattle, rewardClanBattleVictory } from "@/server/utils/clanBattle";
 import { clanPointConversionSchema } from "@/validators/clan";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
 import { beforeStatements, failStatements, pollUntil } from "../../../../setup/statements";
 import {
   callerFor,
@@ -64,20 +64,15 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
       { userId: "outsider", clanId: "c" },
     ]);
     const db = await getTestDatabase();
-    await db.insert(clan).values(
-      ["a", "b", "c"].map((id) => ({
-        id,
-        name: id,
-        image: "/clan.png",
-        villageId: "v",
-        founderId: id === "a" ? "leader" : id === "b" ? "enemy" : "outsider",
-        leaderId: id === "a" ? "leader" : id === "b" ? "enemy" : "outsider",
-        leaderOrderId: id,
-        coLeader1: id === "a" ? "co" : null,
-        points: 100,
-        bank: 50,
-      })),
-    );
+    await insertClans(["a", "b", "c"].map((id) => ({
+      id,
+      villageId: "v",
+      leaderId: id === "a" ? "leader" : id === "b" ? "enemy" : "outsider",
+      leaderOrderId: id,
+      coLeader1: id === "a" ? "co" : null,
+      points: 100,
+      bank: 50,
+    })));
     await db.insert(mpvpBattleQueue).values({
       id: "q",
       attackerEntityId: "a",
@@ -467,11 +462,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
     beforeEach(async () => {
       const db = await getTestDatabase();
       await resetTables(aiProfile);
-      await db.insert(aiProfile).values({
-        id: "Default",
-        userId: "default-ai",
-        rules: [],
-      });
+      await insertDefaultAiProfile();
       await db.update(userData).set({ rank: "JONIN", isOutlaw: true });
       await db
         .update(userData)

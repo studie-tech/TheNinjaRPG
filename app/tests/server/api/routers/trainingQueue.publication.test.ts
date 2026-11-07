@@ -5,7 +5,7 @@ import { getMasteryQueue } from "@/libs/queue";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
 import type { DrizzleClient } from "@/server/db";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertUserVotes } from "../../../setup/factories";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -137,9 +137,7 @@ describeWithDatabase("Training queue atomic publication", () => {
         maxEnergy: 100,
       },
     ]);
-    await (await getTestDatabase())
-      .insert(userVote)
-      .values({ id: "publication-vote", userId, secret: "secret01", lastVoteAt: now });
+    await insertUserVotes([{ userId, lastVoteAt: now }]);
   });
 
   it("saves and clears a mastery queue sequentially", async () => {

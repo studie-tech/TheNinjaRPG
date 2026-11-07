@@ -22,7 +22,7 @@ import {
   settleCraftingQueue,
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
-import { insertItems, insertUsers } from "../../../setup/factories";
+import { insertItems, insertJutsus, insertUsers, insertUserVotes, jutsuRow } from "../../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
@@ -36,19 +36,6 @@ import { deferred } from "../../../setup/deferred";
 const userId = "queue-settlement";
 const minute = 60_000;
 const initialMoney = 100_000;
-const jutsuRow = (id: string) => ({
-  id,
-  name: id,
-  description: id,
-  battleDescription: id,
-  effects: [],
-  target: "SELF" as const,
-  range: 0,
-  requiredRank: "STUDENT" as const,
-  jutsuRank: "D" as const,
-  jutsuType: "NORMAL" as const,
-  image: `/${id}.png`,
-});
 const costs = [10, 11].map((level) =>
   calcJutsuTrainCost(jutsuRow("b") as never, level),
 );
@@ -242,14 +229,8 @@ describeWithDatabase("Queue settlement concurrency and caps", () => {
         regenAt: now,
       },
     ]);
-    const database = await getTestDatabase();
-    await database.insert(userVote).values({
-      id: "queue-settlement-vote",
-      userId,
-      secret: "secret01",
-      lastVoteAt: now,
-    });
-    await database.insert(jutsu).values([jutsuRow("a"), jutsuRow("b"), jutsuRow("c")]);
+    await insertUserVotes([{ userId, lastVoteAt: now }]);
+    await insertJutsus([{ id: "a" }, { id: "b" }, { id: "c" }]);
   });
 
   it("sequential jutsu purchases reserve the correct successive prices", async () => {

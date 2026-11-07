@@ -8,7 +8,12 @@ import { jutsuRouter } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
 import { settleDungeonBattle, expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import { dungeonContent, dungeonBattleState } from "../../../setup/dungeon";
-import { insertUsers, insertItems } from "../../../setup/factories";
+import {
+  insertUsers,
+  insertItems,
+  insertJutsus,
+  insertDefaultAiProfile,
+} from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battleScenario";
 
@@ -49,7 +54,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const first = await completedLobby(content);
     expect(await first.a.claim({id: first.id})).toMatchObject({success: true, reward: {items: [], jutsus: [], rewards: {reward_items: [], reward_jutsus: []}, grantedDrops: []}});
     await insertItems([{id: "missing-item", canStack: false}, {id: "missing-cache", canStack: false}]);
-    await db.insert(jutsu).values({id: "missing-jutsu", name: "Technique", description: "Technique", battleDescription: "Technique", image: "/jutsu.png", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuType: "NORMAL"});
+    await insertJutsus([{ id: "missing-jutsu", name: "Technique" }]);
     const second = await completedLobby(content);
     expect(await second.a.claim({id: second.id})).toMatchObject({success: true, reward: {items: ["missing-item", "missing-item", "missing-cache"], jutsus: ["missing-jutsu"], grantedDrops: content.rewards.drops.map((drop) => JSON.stringify([drop.type, drop.id]))}});
     expect(await db.query.userItem.findMany({where: eq(userItem.userId, "a")})).toHaveLength(3);
@@ -309,7 +314,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const db = await getTestDatabase();
     const { a, id } = await lobby();
     await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0, primaryElement: "Fire", secondaryElement: "Water" });
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.insert(userCookingJob).values({ id: "dungeon-cooking", userId: "a", experience: 23, finishesAt: new Date(0) });
     await db.update(dungeonRun).set({ state: { ...dungeonBattleState().runState, readyIds: ["a", "b", "c"] } }).where(eq(dungeonRun.id, id));
     await db.insert(dungeonMember).values(["b", "c"].map(userId => ({ runId: id, userId, activeUserId: userId })));
@@ -371,7 +376,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   it("rolls back failed grants and delivers item and jutsu drops with the receipt once", async () => {
     const {a, id} = await lobby(); const db = await getTestDatabase();
     await insertItems([{id: "drop", canStack: false}]);
-    await db.insert(jutsu).values({id: "technique", name: "Technique", description: "Technique", battleDescription: "Technique", image: "/jutsu.png", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuType: "NORMAL"});
+    await insertJutsus([{ id: "technique", name: "Technique" }]);
     const content = dungeonContent(); content.rewards.drops = [{type: "item", id: "drop", chance: 100, quantity: 1}, {type: "jutsu", id: "technique", chance: 100, quantity: 1}];
     await db.update(dungeonRun).set({content, status: "COMPLETED", state: {...dungeonBattleState().runState, memberIds: ["a"], floor: 5, clearedFloors: [0,1,2,3,4]}}).where(eq(dungeonRun.id, id));
     // Fail after scalar and jutsu grants, so the receipt cannot hide a partial reward.
@@ -404,7 +409,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   });
   it("keeps owned jutsu eligible until delivered after forgetting", async () => {
     const db = await getTestDatabase();
-    await db.insert(jutsu).values({id: "technique", name: "Technique", description: "Technique", battleDescription: "Technique", image: "/jutsu.png", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuType: "NORMAL"});
+    await insertJutsus([{ id: "technique", name: "Technique" }]);
     await db.insert(userJutsu).values({id: "owned", userId: "a", jutsuId: "technique"});
     const content = dungeonContent();
     content.rewards.drops = [{type: "jutsu", id: "technique", chance: 100, quantity: 1, onlyOnce: true}];

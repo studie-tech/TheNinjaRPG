@@ -23,7 +23,7 @@ import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { profileRouter } from "@/server/api/routers/profile";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertClans } from "../../../../setup/factories";
 import { beforeStatements, failStatements, pollUntil } from "../../../../setup/statements";
 import {
   callerForDatabase,
@@ -57,17 +57,7 @@ describeWithDatabase("clan queue claim ownership", () => {
       })),
     );
     const db = await getTestDatabase();
-    await db.insert(clan).values(
-      ["a", "b"].map((id) => ({
-        id,
-        name: id,
-        image: "/clan.png",
-        villageId: "v",
-        founderId: id === "a" ? "leader" : "enemy",
-        leaderId: id === "a" ? "leader" : "enemy",
-        leaderOrderId: id,
-      })),
-    );
+    await insertClans(["a", "b"].map((id) => ({ id, villageId: "v", leaderId: id === "a" ? "leader" : "enemy", leaderOrderId: id })));
     await db.insert(mpvpBattleQueue).values(
       ["old", "new"].map((id) => ({
         id,

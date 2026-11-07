@@ -3,7 +3,19 @@
  * leaves the rest to their defaults, so a test only states the fields it is actually about.
  */
 import { nanoid } from "nanoid";
-import { item, petSpecies, quest, questHistory, userData, userItem } from "@/drizzle/schema";
+import {
+  aiProfile,
+  clan,
+  item,
+  jutsu,
+  petSpecies,
+  quest,
+  questHistory,
+  userData,
+  userItem,
+  userPet,
+  userVote,
+} from "@/drizzle/schema";
 import { getTestDatabase } from "./testDatabase";
 
 type Insert<T> = Partial<T> & Record<string, unknown>;
@@ -101,4 +113,93 @@ export const insertUserItems = async (
   }));
   await database.insert(userItem).values(rows as never);
   return rows;
+};
+
+/** The founder follows `leaderId` unless a test separates them. */
+export const insertClans = async (clans: Insert<typeof clan.$inferInsert>[]) => {
+  const database = await getTestDatabase();
+  const rows = clans.map((entry, index) => {
+    const id = entry.id ?? `clan-${index}`;
+    return {
+      id,
+      name: id,
+      image: "/clan.png",
+      villageId: "village",
+      founderId: entry.leaderId ?? "leader",
+      leaderId: "leader",
+      leaderOrderId: `${id}-order`,
+      ...entry,
+    };
+  });
+  await database.insert(clan).values(rows as never);
+  return rows;
+};
+
+/** Complete jutsu row, usable in memory by the pure training calculators. */
+export const jutsuRow = (
+  id: string,
+  overrides: Insert<typeof jutsu.$inferInsert> = {},
+) => ({
+  id,
+  name: id,
+  description: id,
+  battleDescription: id,
+  image: "/jutsu.png",
+  effects: [],
+  target: "SELF" as const,
+  range: 0,
+  requiredRank: "STUDENT" as const,
+  jutsuRank: "D" as const,
+  jutsuType: "NORMAL" as const,
+  ...overrides,
+});
+
+export const insertJutsus = async (jutsus: Insert<typeof jutsu.$inferInsert>[]) => {
+  const database = await getTestDatabase();
+  const rows = jutsus.map((entry, index) => jutsuRow(entry.id ?? `jutsu-${index}`, entry));
+  await database.insert(jutsu).values(rows as never);
+  return rows;
+};
+
+/** `speciesId` matches the first row of `insertPetSpecies`. */
+export const insertUserPets = async (pets: Insert<typeof userPet.$inferInsert>[]) => {
+  const database = await getTestDatabase();
+  const rows = pets.map((entry, index) => {
+    const id = entry.id ?? `user-pet-${index}`;
+    return {
+      id,
+      userId: "user-0",
+      name: id,
+      speciesId: "pet-species-0",
+      paletteIndex: 0,
+      characteristicIndex: 0,
+      auraIndex: 0,
+      ...entry,
+    };
+  });
+  await database.insert(userPet).values(rows as never);
+  return rows;
+};
+
+/** `fetchUpdatedUser` creates a missing vote row, and parallel requests would race on it. */
+export const insertUserVotes = async (votes: Insert<typeof userVote.$inferInsert>[]) => {
+  const database = await getTestDatabase();
+  const rows = votes.map((entry) => ({
+    id: `vote-${entry.userId}`,
+    secret: "secret01",
+    lastVoteAt: new Date(),
+    ...entry,
+  }));
+  await database.insert(userVote).values(rows as never);
+  return rows;
+};
+
+/** The profile battle initiation falls back to; schema setup does not seed it. */
+export const insertDefaultAiProfile = async (
+  overrides: Insert<typeof aiProfile.$inferInsert> = {},
+) => {
+  const database = await getTestDatabase();
+  const row = { id: "Default", userId: "default-ai", rules: [], ...overrides };
+  await database.insert(aiProfile).values(row as never);
+  return row;
 };

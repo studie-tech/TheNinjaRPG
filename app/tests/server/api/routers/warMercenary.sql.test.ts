@@ -22,7 +22,7 @@ import { fetchActiveWars, warRouter } from "@/server/api/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { canEnterWarCampSector } from "@/server/utils/warMercenary";
 import { defaultWarRules } from "@/validators/war";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
@@ -341,7 +341,7 @@ describeWithDatabase("mercenary strategic participation", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await db.update(userData).set({ rank: "JONIN", level: 20, experience: 1000, sector: 10, curHealth: 100, maxHealth: 100, curChakra: 100, maxChakra: 100, curStamina: 100, maxStamina: 100 });
     await db.update(war).set({ attackerWarHealth: 9000 }).where(eq(war.id, "w"));
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     const kage = callerForDatabase(warRouter, "kage", db);
     const offer = await hireMerc(db, 1);
     const essentials = await fetchBattleEssentials(db);
@@ -399,7 +399,7 @@ describeWithDatabase("mercenary strategic participation", () => {
     await db.insert(war).values({ id: "home-war", type: "SECTOR_WAR", status: "ACTIVE", attackerVillageId: "c", defenderVillageId: "d", sector: 101, defenderShrineHp: 100, defenderShrineMaxHp: 100 });
     await db.insert(sector).values({ sector: 101, villageId: "d", shrineLevel: 1 });
     await db.insert(villageAlliance).values({ id: "enemies", villageIdA: "c", villageIdB: "d", status: "ENEMY" });
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     const shrineMerc = callerForDatabase(shrineRouter, "merc", db);
     expect((await shrineMerc.challengeShrine({ sectorNumber: 101 })).success).toBe(true);
     const queue = (await db.query.mpvpBattleQueue.findFirst())!;

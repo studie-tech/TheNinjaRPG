@@ -19,7 +19,13 @@ import { combatRouter, processUsersForBattle } from "@/server/api/routers/combat
 import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
 import { fetchUserJutsus } from "@/server/api/routers/jutsu";
 import { getTagSchema } from "@/validators/combat";
-import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
+} from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -48,19 +54,8 @@ const powersOf = (effects: { power?: number }[]) =>
 const seedBattle = async () => {
   const db = await getTestDatabase();
   await insertUsers(USERS.map((userId) => ({ userId, username: userId, level: 20 })));
-  await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
-  await db.insert(jutsu).values({
-    id: "basic",
-    name: "Basic",
-    description: "Basic",
-    battleDescription: "Basic",
-    effects: [],
-    target: "SELF",
-    range: 0,
-    requiredRank: "GENIN",
-    jutsuType: "NORMAL",
-    image: "",
-  });
+  await insertDefaultAiProfile();
+  await insertJutsus([{ id: "basic", name: "Basic", requiredRank: "GENIN" }]);
   await insertItems([
     {
       id: "shared-armor",

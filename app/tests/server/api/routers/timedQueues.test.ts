@@ -27,7 +27,14 @@ import {
   settleCraftingQueue,
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import {
+  insertItems,
+  insertJutsus,
+  insertUserItems,
+  insertUsers,
+  jutsuRow,
+  insertUserVotes,
+} from "../../../setup/factories";
 import { queueMasteries, readMasteryQueue } from "../../../setup/queues";
 import { beforeStatements, failStatements } from "../../../setup/statements";
 import type { MasteryTrainingQueueEntry } from "@/validators/train";
@@ -45,20 +52,8 @@ const MINUTE = 60_000;
 const START_MONEY = 100_000;
 const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * MINUTE);
 
-const jutsuRow = (id: string, patch: Partial<typeof jutsu.$inferInsert> = {}) => ({
-  id,
-  name: `Jutsu ${id}`,
-  description: id,
-  battleDescription: id,
-  effects: [],
-  target: "SELF" as const,
-  range: 0,
-  requiredRank: "STUDENT" as const,
-  jutsuRank: "D" as const,
-  jutsuType: "NORMAL" as const,
-  image: `/${id}.png`,
-  ...patch,
-});
+const queuedJutsu = (id: string, patch: Partial<typeof jutsu.$inferInsert> = {}) =>
+  jutsuRow(id, { name: `Jutsu ${id}`, ...patch });
 
 const insertUser = async ({
   masteryQueue,
@@ -78,10 +73,7 @@ const insertUser = async ({
     } as never,
   ]);
   // fetchUpdatedUser creates a missing vote row, and parallel requests would race on it
-  const database = await getTestDatabase();
-  await database
-    .insert(userVote)
-    .values({ id: "vote-queuer", userId: USER_ID, secret: "secret01", lastVoteAt: new Date() });
+  await insertUserVotes([{ userId: USER_ID }]);
   if (masteryQueue) await queueMasteries(USER_ID, masteryQueue);
 };
 
@@ -145,7 +137,7 @@ const queueJutsu = async (
 /** jutsu-a is in training until `finishTraining`. */
 const trainingJutsuA = async (finishTraining: Date) => {
   const database = await getTestDatabase();
-  await database.insert(jutsu).values([jutsuRow("jutsu-a"), jutsuRow("jutsu-b")]);
+  await insertJutsus([queuedJutsu("jutsu-a"), queuedJutsu("jutsu-b")]);
   await database.insert(userJutsu).values({
     id: "uj-a",
     userId: USER_ID,
@@ -168,7 +160,7 @@ describeWithDatabase("jutsu training queue", () => {
       jutsuId: "jutsu-b",
     });
     expect(result.success).toBe(true);
-    const cost = calcJutsuTrainCost(jutsuRow("jutsu-b") as never, 0);
+    const cost = calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0);
     const [queued] = await readJutsuQueue();
     expect(queued?.reservedRyo).toBe(cost);
     expect(queued?.startsAt).toEqual(finish);
@@ -201,7 +193,7 @@ describeWithDatabase("jutsu training queue", () => {
     expect(queue).toHaveLength(4);
     // Each queued level is priced at the level it trains, and the levels run back to back.
     expect(queue.map((entry) => entry.reservedRyo)).toEqual(
-      [0, 1, 2, 3].map((level) => calcJutsuTrainCost(jutsuRow("jutsu-b") as never, level)),
+      [0, 1, 2, 3].map((level) => calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, level)),
     );
     for (let i = 1; i < queue.length; i++) {
       expect(queue[i]?.startsAt).toEqual(queue[i - 1]?.finishesAt);
@@ -218,19 +210,19 @@ describeWithDatabase("jutsu training queue", () => {
     expect(await settleJutsuTrainingQueue(client, USER_ID)).toBe(2);
     const user = await readUser();
     const learned = await readUserJutsu("jutsu-b");
-    const firstFinish = finished.getTime() + calcJutsuTrainTime(jutsuRow("jutsu-b"), 0, user);
+    const firstFinish = finished.getTime() + calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, user);
     expect(learned?.level).toBe(1);
     expect(learned?.finishTraining?.getTime()).toBe(firstFinish);
     const leveled = await readUserJutsu("jutsu-a");
     expect(leveled?.level).toBe(3);
     expect(leveled?.finishTraining?.getTime()).toBe(
-      firstFinish + calcJutsuTrainTime(jutsuRow("jutsu-a"), 2, user),
+      firstFinish + calcJutsuTrainTime(queuedJutsu("jutsu-a"), 2, user),
     );
     expect(await readJutsuQueue()).toEqual([]);
     // The level-0 price is below the 500 ryo reserved; the difference comes back.
     const refund =
-      500 - calcJutsuTrainCost(jutsuRow("jutsu-b") as never, 0) +
-      (500 - calcJutsuTrainCost(jutsuRow("jutsu-a") as never, 2));
+      500 - calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0) +
+      (500 - calcJutsuTrainCost(queuedJutsu("jutsu-a") as never, 2));
     expect(user.money).toBe(START_MONEY + refund);
   });
 
@@ -283,7 +275,7 @@ describeWithDatabase("jutsu training queue", () => {
     const before = Date.now();
     await (await callerFor(jutsuRouter, USER_ID)).stopTraining();
     const learned = await readUserJutsu("jutsu-b");
-    const trainTime = calcJutsuTrainTime(jutsuRow("jutsu-b"), 0, await readUser());
+    const trainTime = calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, await readUser());
     expect(learned?.finishTraining?.getTime()).toBeGreaterThanOrEqual(before + trainTime);
     expect(learned?.finishTraining?.getTime()).toBeLessThan(Date.now() + trainTime);
     expect((await readUserJutsu("jutsu-a"))?.level).toBe(1);
@@ -293,7 +285,7 @@ describeWithDatabase("jutsu training queue", () => {
     await insertUser();
     await trainingJutsuA(minutesFromNow(-5));
     const database = await getTestDatabase();
-    await database.insert(jutsu).values(jutsuRow("jutsu-bl", { bloodlineId: "bloodline-x" }));
+    await insertJutsus([queuedJutsu("jutsu-bl", { bloodlineId: "bloodline-x" })]);
     await queueJutsu("q-1", "jutsu-bl", minutesFromNow(-5), { reservedRyo: 900 });
     expect(await settleJutsuTrainingQueue(database, USER_ID)).toBe(0);
     expect(await readUserJutsu("jutsu-bl")).toBeUndefined();
@@ -311,7 +303,7 @@ describeWithDatabase("jutsu training queue", () => {
     const queue = await readJutsuQueue();
     // jutsu-a is at level 2 (in training), so the queued entries train levels 3, 4 and 5.
     const costs = [2, 3, 4].map((level) =>
-      calcJutsuTrainCost(jutsuRow("jutsu-a") as never, level),
+      calcJutsuTrainCost(queuedJutsu("jutsu-a") as never, level),
     );
     expect(queue.map((entry) => entry.reservedRyo)).toEqual(costs);
     expect(queue[0]?.startsAt).toEqual(finish);
@@ -332,8 +324,7 @@ describeWithDatabase("jutsu training queue", () => {
 
   it("starts the first level and queues the rest when nothing is training", async () => {
     await insertUser({ federalStatus: "NORMAL" });
-    const database = await getTestDatabase();
-    await database.insert(jutsu).values(jutsuRow("jutsu-b"));
+    await insertJutsus([queuedJutsu("jutsu-b")]);
     const result = await (await callerFor(jutsuRouter, USER_ID)).startTraining({
       jutsuId: "jutsu-b",
       levels: 3,
@@ -345,7 +336,7 @@ describeWithDatabase("jutsu training queue", () => {
     expect(queue).toHaveLength(2);
     expect(queue[0]?.startsAt).toEqual(learned?.finishTraining);
     const costs = [0, 1, 2].map((level) =>
-      calcJutsuTrainCost(jutsuRow("jutsu-b") as never, level),
+      calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, level),
     );
     expect(queue.map((entry) => entry.reservedRyo)).toEqual(costs.slice(1));
     expect((await readUser()).money).toBe(START_MONEY - costs.reduce((a, b) => a + b, 0));
@@ -422,7 +413,7 @@ describeWithDatabase("jutsu training queue", () => {
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
     expect(await readJutsuQueue()).toHaveLength(1);
-    const cost = calcJutsuTrainCost(jutsuRow("jutsu-b") as never, 0);
+    const cost = calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0);
     expect((await readUser()).money).toBe(START_MONEY - cost);
   });
 
@@ -459,7 +450,7 @@ describeWithDatabase("jutsu training queue", () => {
     } else {
       expect(started).toBe(1);
       expect(learned?.level).toBe(1);
-      const cost = calcJutsuTrainCost(jutsuRow("jutsu-b") as never, 0);
+      const cost = calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0);
       expect(money).toBe(START_MONEY + 700 - cost);
     }
     expect(await readJutsuQueue()).toEqual([]);
@@ -1085,7 +1076,7 @@ describeWithDatabase("lazy queue settlement", () => {
     expect(learned?.level).toBe(1);
     // It started when jutsu-a finished, not when the player came back.
     expect(learned?.finishTraining?.getTime()).toBe(
-      finished.getTime() + calcJutsuTrainTime(jutsuRow("jutsu-b"), 0, await readUser()),
+      finished.getTime() + calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, await readUser()),
     );
     expect(await readJutsuQueue()).toEqual([]);
     // The refresh returns the user as it is after the start.

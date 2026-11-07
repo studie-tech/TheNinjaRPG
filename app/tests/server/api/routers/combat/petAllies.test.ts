@@ -8,7 +8,12 @@ import { initiateBattle } from "@/server/api/routers/combat";
 import { IncreaseDamageGivenTag, IncreaseMaxPoolsTag, IncreaseStatTag, SummonTag } from "@/validators/combat";
 import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
 import { petJutsuFixture, petSkillFixture } from "../../../../libs/pets/helpers/abilities";
-import { insertPetSpecies, insertUsers } from "../../../../setup/factories";
+import {
+  insertPetSpecies,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertUserPets,
+} from "../../../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("companion ally passives at battle initiation", () => {
@@ -32,15 +37,18 @@ describeWithDatabase("companion ally passives at battle initiation", () => {
       activePetId: userId === "ally" ? null : `${userId}-pet`,
     })));
     await insertUsers([{ userId: "summon-template", username: "Summon", isAi: true, level: 50 }]);
-    await client.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await client.insert(jutsu).values(petJutsuFixture({
       id: "summon", jutsuType: "NORMAL", effects: [SummonTag.parse({ aiId: "summon-template" })],
     }));
     await client.insert(userJutsu).values({ id: "owned-summon", userId: "caster", jutsuId: "summon", equipped: true });
-    await client.insert(userPet).values(["caster", "enemy"].map((userId) => ({
-      id: `${userId}-pet`, userId, name: `${userId} pet`,
-      speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0,
-      generationStatus: "READY" as const, artRank: 1, avatar: "/pet.png",
+    await insertUserPets(["caster", "enemy"].map((userId) => ({
+      id: `${userId}-pet`,
+      userId,
+      name: `${userId} pet`,
+      generationStatus: "READY" as const,
+      artRank: 1,
+      avatar: "/pet.png",
       battleEnabled: true,
     })));
     const allies = petSkillFixture({ id: "allies", name: "Allies", target: "ALLIES", effects: [

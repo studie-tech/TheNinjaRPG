@@ -4,7 +4,7 @@ import { ACTIVE_VOTING_SITES } from "@/drizzle/constants";
 import { userData, userVote } from "@/drizzle/schema";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertUserVotes } from "../../../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
@@ -29,12 +29,7 @@ describeWithDatabase("vote claims", () => {
     await insertUsers([
       { userId: VOTER, username: VOTER, reputationPoints: 0, reputationPointsTotal: 0 },
     ]);
-    await (await getTestDatabase()).insert(userVote).values({
-      id: "vote-record",
-      userId: VOTER,
-      secret: "vote-secret",
-      ...completedSites,
-    });
+    await insertUserVotes([{ userId: VOTER, ...completedSites }]);
   });
 
   it("credits one claim when concurrent requests claim the same votes", async () => {

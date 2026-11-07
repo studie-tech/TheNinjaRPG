@@ -7,7 +7,12 @@ import type { DrizzleClient } from "@/server/db";
 import { AiRule } from "@/validators/ai";
 import { ItemValidator, NonCombatConsumeRewardTag } from "@/validators/combat";
 import { petJutsuFixture } from "../../../../libs/pets/helpers/abilities";
-import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertUserPets,
+} from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -42,9 +47,7 @@ const failPetInsert = (client: DrizzleClient): DrizzleClient => new Proxy(client
 }) as DrizzleClient;
 
 const insertExistingPet = async (id = "existing-pet") => {
-  const db = await getTestDatabase();
-  await db.insert(userPet).values({ id, userId: USER, speciesId: "gift-species", name: "Existing",
-    paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, storedExperience: 99 });
+  await insertUserPets([{ id, userId: USER, speciesId: "gift-species", name: "Existing", storedExperience: 99 }]);
 };
 
 describeWithDatabase("consumable companion rewards", () => {

@@ -30,7 +30,12 @@ import type { UserWithRelations } from "@/server/api/routers/profile";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { updateUserCache } from "@/utils/userCache";
 import { getTagSchema } from "@/validators/combat";
-import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertDefaultAiProfile,
+} from "../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../setup/queues";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements } from "../../setup/statements";
@@ -269,7 +274,7 @@ describeWithDatabase("CAS combat settlement", () => {
     ]);
     await insertUserItems([{ id: "imbue-stack", userId: "imbue-player", itemId: "imbue-chest", quantity: 1, equipped: "CHEST", durability: 100 }]);
     await database.insert(userItemImbuement).values({ id: "imbue-row", userItemId: "imbue-stack", imbuementItemId: "imbue-crystal", craftingFinishedAt: new Date(Date.now() - 86_400_000) });
-    await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     const original = (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user!;
     const started = await initiateBattle({ client: database, userIds: ["imbue-player"], targetIds: ["imbue-ai"] }, "ARENA");
     expect(started.success).toBe(true);
@@ -325,7 +330,7 @@ describeWithDatabase("CAS combat settlement", () => {
         curStamina: 100, maxStamina: 100, curEnergy: 10, regeneration: 1, regenAt: new Date(Date.now() - 60_000) },
       { userId: "counter-ai", username: "CounterAI", isAi: true, isSummon: false, inArena: true, rank: "NONE", level: 1, curHealth: 100 },
     ]);
-    await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     const original = (await database.query.userData.findFirst({ where: eq(userData.userId, "counter-player") }))!;
     const initial = { ...original, items: [], titles: [], questData: [], userQuests: [], completedQuests: [] } as unknown as NonNullable<UserWithRelations>;
     const profile = observeProfile({ userData: initial }, async () => ({
@@ -688,9 +693,7 @@ describeWithDatabase("CAS combat settlement", () => {
         rank: "JONIN",
         isOutlaw: true,
       });
-      await database
-        .insert(aiProfile)
-        .values({ id: "Default", userId: "default-ai", rules: [] });
+      await insertDefaultAiProfile();
       await database.insert(battleHistory).values({
         battleId: "previous",
         battleType: "COMBAT",

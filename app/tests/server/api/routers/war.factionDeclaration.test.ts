@@ -30,7 +30,7 @@ import { warRouter } from "@/routers/war";
 import * as serverSentry from "@/server/utils/sentry";
 import { applyVillageMissionShrineDamage } from "@/server/utils/villageMission";
 import { startDeclaredWar, handleWarEnd, applyRaidHealthDecay } from "@/server/utils/war";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertClans } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables, lockWaitObserved } from "../../../setup/testDatabase";
 
 const FACTION = "faction-hideout";
@@ -77,7 +77,7 @@ const seedWorld = async (attackerType: "HIDEOUT" | "VILLAGE" = "HIDEOUT") => {
     status: "ENEMY",
   });
   if (attackerType === "HIDEOUT") {
-    await database.insert(clan).values({ id: "raiding-faction", name: "Raiding Faction", image: "/clan.webp", villageId: FACTION, founderId: LEADER, leaderId: LEADER, leaderOrderId: LEADER, hasHideout: true });
+    await insertClans([{ id: "raiding-faction", name: "Raiding Faction", villageId: FACTION, leaderId: LEADER, hasHideout: true }]);
   }
   await database.insert(villageStructure).values([{
     id: "target-training",
@@ -244,7 +244,13 @@ describeWithDatabase("faction war declarations", () => {
         tokens: TOKENS,
         type: "HIDEOUT",
       });
-      await database.insert(clan).values({ id: "other-faction", name: "Other Faction", image: "/clan.webp", villageId: "other-village", founderId: LEADER, leaderId: LEADER, leaderOrderId: LEADER, hasHideout: true });
+      await insertClans([{
+        id: "other-faction",
+        name: "Other Faction",
+        villageId: "other-village",
+        leaderId: LEADER,
+        hasHideout: true,
+      }]);
       await insertUsers(Array.from({ length: FACTION_RAID_MIN_MEMBERS }, (_, i) => ({ userId: `other-${i}`, username: `Other${i}`, villageId: "other-village", clanId: "other-faction", isOutlaw: true })) as never);
       await database.insert(villageStructure).values({ id: "other-training", name: "Training Grounds", route: "/traininggrounds", image: "/training.webp", villageId: "other-village" });
       const declaration = {

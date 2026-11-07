@@ -9,7 +9,7 @@ import type { DrizzleClient } from "@/server/db";
 import { JutsuValidator } from "@/validators/combat";
 import { makeTag, makeUser } from "../../../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile, insertJutsus } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const defaults = (table: typeof jutsu | typeof userData | typeof userJutsu) =>
@@ -134,8 +134,8 @@ describeWithDatabase("cyclic summon battle admission", () => {
       ...["A", "B", "opener"].map((userId) => ({ userId, username: userId, isAi: true, rank: "JONIN" as const, level: 100 })),
     ]);
     const client = await getTestDatabase();
-    await client.insert(aiProfile).values({ id: "Default", userId: "A", rules: [] });
-    await client.insert(jutsu).values([summonJutsu("summon-A", ["B"]), summonJutsu("summon-B", ["A"])]);
+    await insertDefaultAiProfile({ userId: "A" });
+    await insertJutsus([summonJutsu("summon-A", ["B"]), summonJutsu("summon-B", ["A"])]);
     await client.insert(userJutsu).values(["A", "B"].map((userId) => ({ id: `owned-${userId}`, userId, jutsuId: `summon-${userId}`, equipped: true })));
   });
   afterEach(() => vi.restoreAllMocks());
@@ -171,7 +171,7 @@ describeWithDatabase("cyclic summon battle admission", () => {
     const created = await initiateBattle({ client, userIds: ["human"], targetIds: ["opener"] }, "SPARRING");
     expect(created.success).toBe(true);
     const before = (await client.query.battle.findFirst())!;
-    await client.insert(jutsu).values({ ...summonJutsu("human-summon", ["A"]), jutsuType: "NORMAL" });
+    await insertJutsus([{ ...summonJutsu("human-summon", ["A"]), jutsuType: "NORMAL" }]);
     await client.insert(userJutsu).values({ id: "human-owned", userId: "human", jutsuId: "human-summon", equipped: false });
     await client.insert(jutsuLoadout).values({ id: "cyclic-loadout", userId: "human", jutsuIds: ["human-summon"] });
     const result = await (await callerFor(combatRouter, "human")).updateCombatLoadout({ battleId: before.id, jutsuLoadoutId: "cyclic-loadout" });

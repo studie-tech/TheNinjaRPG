@@ -22,7 +22,14 @@ import { statSchema } from "@/validators/combat";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { withAfterTasks } from "../../../../setup/after";
-import { insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertQuests,
+  insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
+  insertUserVotes,
+  insertUserPets,
+} from "../../../../setup/factories";
 import { queueEnergy, queueMasteries } from "../../../../setup/queues";
 import { beforeStatements } from "../../../../setup/statements";
 import {
@@ -65,9 +72,9 @@ describeWithDatabase("arena readiness reads", () => {
         primaryElement: "Fire", secondaryElement: "Water" },
       { userId: aiId, isAi: true, isSummon: false, inArena: true, rank: "JONIN", level: 50 },
     ]);
-    await client.insert(userVote).values({ id: "vote", userId, secret: "secret01", lastVoteAt: now });
+    await insertUserVotes([{ userId, lastVoteAt: now }]);
     await client.insert(village).values({ id: "arena", name: "Arena", sector: 0, kageId: "" });
-    await client.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await client.insert(gameSetting).values(Object.entries(DMG_SETTING_DEFAULTS).map(([name, value]) =>
       ({ id: name, name, value, time: now })));
   });
@@ -89,9 +96,15 @@ describeWithDatabase("arena readiness reads", () => {
         }
         if (queued === "companion") {
           await database.insert(petSpecies).values({ id: "arena-companion-species", name: "Fox", description: "Fox" });
-          await database.insert(userPet).values({ id: "arena-companion", userId, name: "Fox", speciesId: "arena-companion-species",
-            paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, generationStatus: "READY", artRank: 1,
-            avatar: "https://uploadthing.b-cdn.net/f/arena-companion" });
+          await insertUserPets([{
+            id: "arena-companion",
+            userId,
+            name: "Fox",
+            speciesId: "arena-companion-species",
+            generationStatus: "READY",
+            artRank: 1,
+            avatar: "https://uploadthing.b-cdn.net/f/arena-companion",
+          }]);
           await database.update(userData).set({ activePetId: "arena-companion", petExperience: 25 }).where(eq(userData.userId, userId));
         }
         const initial = await fetchActionUser(database, userId);
@@ -308,9 +321,7 @@ describeWithDatabase("arena readiness reads", () => {
     await client.update(userData).set({ updatedAt: past, regenAt: past, regeneration: 100,
       curHealth: 1, maxHealth: 1000, cookingExperience: 0 }).where(eq(userData.userId, userId));
     await client.insert(userCookingJob).values({ id: "cooked", userId, experience: 7, finishesAt: past });
-    await client.insert(jutsu).values({ id: "retired", name: "Retired", description: "",
-      battleDescription: "", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT",
-      jutsuRank: "D", jutsuType: "NORMAL", image: "", hidden: true });
+    await insertJutsus([{ id: "retired", name: "Retired", hidden: true }]);
     await client.insert(userQueue).values({ id: "due", userId, kind: "JUTSU", position: 1,
       jutsuId: "retired", reservedRyo: 100, durationSeconds: 60, startsAt: past, finishesAt: past });
     expect((await launch(client, { aiId, autoCombat: false })).success).toBe(true);

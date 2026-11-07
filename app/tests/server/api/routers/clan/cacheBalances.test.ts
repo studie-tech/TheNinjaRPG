@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { FACTION_REPUTATION_TREASURY_LIMIT } from "@/drizzle/constants";
 import { actionLog, clan, userData, userQueue } from "@/drizzle/schema";
 import { clanRouter } from "@/server/api/routers/clan";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertClans } from "../../../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
@@ -179,18 +179,14 @@ describeWithDatabase("clan mutation cache balances", () => {
         isOutlaw: true,
       },
     ]);
-    const database = await getTestDatabase();
-    await database.insert(clan).values({
+    await insertClans([{
       id: "clan-cache-clan",
       name: "Cache Clan",
-      image: "/clan.png",
-      founderId: "clan-cache-user",
       leaderId: "clan-cache-user",
-      leaderOrderId: "clan-cache-order",
       villageId: "clan-cache-village",
       bank: 500,
       repTreasury: FACTION_REPUTATION_TREASURY_LIMIT - 10,
-    });
+    }]);
   });
 
   it("returns both confirmed deltas after depositing ryo", async () => {

@@ -49,7 +49,7 @@ import { eventTournamentConfigSchema, type EventParticipant } from "@/validators
 import { ObjectiveReward } from "@/validators/rewards";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { withAfterTasks } from "../../../setup/after";
-import { insertItems, insertUsers } from "../../../setup/factories";
+import { insertItems, insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeStatements } from "../../../setup/statements";
@@ -299,9 +299,7 @@ describeWithDatabase("event tournament persistence", () => {
             maxStamina: 1000,
           })),
         );
-        await database
-          .insert(aiProfile)
-          .values({ id: "Default", userId: "ai", rules: [] });
+        await insertDefaultAiProfile({ userId: "ai" });
         if (isEvent || battleType === "TOURNAMENT") {
           await database.insert(tournament).values({
             id: "prior-tournament",
@@ -423,9 +421,7 @@ describeWithDatabase("event tournament persistence", () => {
           })),
         );
         if (queued) await queueEnergy("hero", [{ stat: "strength", energy: 50 }]);
-        await database
-          .insert(aiProfile)
-          .values({ id: "Default", userId: "ai", rules: [] });
+        await insertDefaultAiProfile({ userId: "ai" });
         await database.insert(tournamentMatch).values({
           id: "game",
           tournamentId: "event",
@@ -553,7 +549,7 @@ describeWithDatabase("event tournament persistence", () => {
         curEnergy: 100,
       })),
     );
-    await database.insert(aiProfile).values({ id: "Default", userId: "ai", rules: [] });
+    await insertDefaultAiProfile({ userId: "ai" });
     const event = createEventState({ ...eventConfig("Launch race"), rules });
     event.participants = userIds.map((userId, i) => ({
       id: `seat-${i}`,
@@ -789,7 +785,7 @@ describeWithDatabase("event tournament persistence", () => {
         maxStamina: 1000,
       })),
     );
-    await database.insert(aiProfile).values({ id: "Default", userId: "ai", rules: [] });
+    await insertDefaultAiProfile({ userId: "ai" });
     const event = createEventState(eventConfig("Queue guard"));
     event.status = "REGISTRATION";
     event.participants = [

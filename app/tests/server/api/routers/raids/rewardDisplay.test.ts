@@ -19,7 +19,13 @@ import {
 } from "@/drizzle/schema";
 import { raidsRouter } from "@/server/api/routers/raids";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertQuests,
+  insertUsers,
+  insertJutsus,
+  insertUserVotes,
+} from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,
@@ -65,20 +71,15 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
       { id: "reward-item-b", name: "Potion B" },
     ]);
     const database = await getTestDatabase();
-    await database
-      .insert(jutsu)
-      .values({
-        id: "reward-jutsu",
-        name: "Reward Jutsu",
-        description: "Test",
-        image: "/test.png",
-        effects: [],
-        target: "CHARACTER",
-        range: 1,
-        requiredRank: "STUDENT",
-        jutsuType: "NORMAL",
-        battleDescription: "Test",
-      });
+    await insertJutsus([{
+      id: "reward-jutsu",
+      name: "Reward Jutsu",
+      description: "Test",
+      image: "/test.png",
+      target: "CHARACTER",
+      range: 1,
+      battleDescription: "Test",
+    }]);
     await database
       .insert(bloodline)
       .values({
@@ -97,14 +98,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
         description: "Test",
         image: "/test.png",
       });
-    await database
-      .insert(userVote)
-      .values({
-        id: "raid-reward-vote",
-        userId: "raid-reward-user",
-        secret: "raid0001",
-        lastVoteAt: new Date(),
-      });
+    await insertUserVotes([{ userId: "raid-reward-user" }]);
     await database
       .insert(raidParticipation)
       .values({

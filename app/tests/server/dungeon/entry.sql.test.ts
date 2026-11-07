@@ -11,7 +11,7 @@ import { rollbackDungeonStart, expireDungeonRun } from "@/server/utils/dungeon";
 import { commitDungeonEntryBattle, dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
 import { makeCompleteBattle } from "../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../setup/dungeon";
-import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
+import { insertItems, insertUserItems, insertUsers, insertUserPets } from "../../setup/factories";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("dungeon admission receipts and queue ownership", () => {
@@ -185,7 +185,7 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   });
   it("guards parked companion XP against stale activation while mirroring selected active XP", async () => {
     const db = await getTestDatabase();
-    await db.insert(userPet).values(["one","two"].map((id) => ({ id, userId: "a", name: id, speciesId: "species", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0 })));
+    await insertUserPets(["one","two"].map((id) => ({ id, userId: "a", name: id, speciesId: "species" })));
     await db.update(userData).set({activePetId: "one", petExperience: 0}).where(eq(userData.userId,"a"));
     for (const id of ["one","two"]) await grantDungeonPetExperience(db,"a",[id],10);
     expect((await db.query.userData.findFirst({where: eq(userData.userId,"a")}))?.petExperience).toBe(10);

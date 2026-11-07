@@ -6,7 +6,7 @@ import { getPetAppearancePrompt } from "@/libs/pets/appearance";
 import * as socials from "@/libs/socials";
 import { petSpeciesRouter } from "@/server/api/routers/petSpecies";
 import { petsRouter } from "@/server/api/routers/pets";
-import { insertPetSpecies, insertUsers } from "../../../setup/factories";
+import { insertPetSpecies, insertUsers, insertUserPets } from "../../../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const ownerId = "species-integration-owner";
@@ -52,12 +52,17 @@ describeWithDatabase("Authored species in companion flows", () => {
   it("uses staff edits in owned metadata and evolution prompts while preserving the accepted portrait", async () => {
     const database = await getTestDatabase();
     await insertPetSpecies([species]);
-    await database.insert(userPet).values({
-      id: "owned-mist-fox", userId: ownerId, name: "Miso", speciesId: species.id,
-      paletteIndex: 0, characteristicIndex: 0, auraIndex: 0,
-      rank: 2, experience: 10000, avatar: "https://example.com/accepted-miso.webp",
-      artRank: 2, generationStatus: "READY",
-    });
+    await insertUserPets([{
+      id: "owned-mist-fox",
+      userId: ownerId,
+      name: "Miso",
+      speciesId: species.id,
+      rank: 2,
+      experience: 10000,
+      avatar: "https://example.com/accepted-miso.webp",
+      artRank: 2,
+      generationStatus: "READY",
+    }]);
     const before = await database.query.userPet.findFirst();
     const data = {
       name: "Moon fox", description: "A moon fox with pearl ear tips and a ribbon-like tail",

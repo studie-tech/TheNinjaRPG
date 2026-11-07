@@ -35,6 +35,8 @@ import {
   insertQuestHistory,
   insertQuests,
   insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
 } from "../../setup/factories";
 import { queueEnergy } from "../../setup/queues";
 import { beforeStatements } from "../../setup/statements";
@@ -307,21 +309,7 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
       });
       const now = new Date();
       if (action === "jutsu") {
-        await db
-          .insert(jutsu)
-          .values({
-            id: "new-jutsu",
-            name: "New",
-            description: "New",
-            battleDescription: "New",
-            effects: [],
-            target: "SELF",
-            range: 0,
-            requiredRank: "STUDENT",
-            jutsuRank: "D",
-            jutsuType: "NORMAL",
-            image: "/new.png",
-          });
+        await insertJutsus([{ id: "new-jutsu", name: "New" }]);
         await db
           .insert(userQueue)
           .values({
@@ -382,9 +370,7 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
         await insertUsers([
           { userId: "enemy", username: "Enemy", isAi: true, inArena: true, rank: "NONE", level: 1 },
         ]);
-        await db
-          .insert(aiProfile)
-          .values({ id: "Default", userId: "default-ai", rules: [] });
+        await insertDefaultAiProfile();
         if (action === "energy")
           await queueEnergy(userId, [{ stat: "offence", energy: 100 }]);
         const trigger = vi

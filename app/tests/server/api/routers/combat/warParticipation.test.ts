@@ -12,7 +12,12 @@ import { warRouter } from "@/server/api/routers/war";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { defaultWarRules } from "@/validators/war";
-import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+  insertDefaultAiProfile,
+} from "../../../../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 
 const pusher = { trigger: vi.fn(async () => {}) } as unknown as PusherClient;
@@ -35,7 +40,7 @@ describeWithDatabase("war participation requires deliberate war activity", () =>
       experience: 1000, sector: 100, curHealth: 100, maxHealth: 100, curStamina: 100, maxStamina: 100,
       curChakra: 100, maxChakra: 100, regeneration: 0, warParticipantUntil: new Date(0), bracketImmunityLiftedUntil: new Date(0),
     })));
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
   });
   afterEach(() => vi.restoreAllMocks());
 

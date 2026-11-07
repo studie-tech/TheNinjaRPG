@@ -15,7 +15,12 @@ import { trainRouter } from "@/server/api/routers/train";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { createAssignedExperienceSchema } from "@/validators/user";
 import { initialPetSpecies } from "./helpers/species";
-import { insertPetSpecies, insertUsers } from "../../setup/factories";
+import {
+  insertPetSpecies,
+  insertUsers,
+  insertUserVotes,
+  insertUserPets,
+} from "../../setup/factories";
 import { queueEnergy } from "../../setup/queues";
 import {
   callerFor, describeWithDatabase, getTestDatabase, resetTables,
@@ -32,11 +37,16 @@ const readUser = async () => {
   return user;
 };
 const insertPet = async (patch: Partial<typeof userPet.$inferInsert> = {}) => {
-  await (await getTestDatabase()).insert(userPet).values({
-    id: petId, userId, name: "Nami", rank: 1, artRank: 1,
-    speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0,
-    avatar: "/pet.png", generationStatus: "READY", ...patch,
-  });
+  await insertUserPets([{
+    id: petId,
+    userId,
+    name: "Nami",
+    rank: 1,
+    artRank: 1,
+    avatar: "/pet.png",
+    generationStatus: "READY",
+    ...patch,
+  }]);
   await (await getTestDatabase()).update(userData).set({ activePetId: patch.id ?? petId }).where(eq(userData.userId, userId));
 };
 const grantExperience = async (amount: number, identity?: string | null) => {
@@ -56,9 +66,7 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
       isOutlaw: true, curEnergy: 100, regeneration: 0, trainingSpeed: "15min",
       petExperience: 23, earnedExperience: 0,
     }]);
-    await (await getTestDatabase()).insert(userVote).values({
-      id: "pet-vote", userId, secret: "secret01", lastVoteAt: new Date(),
-    });
+    await insertUserVotes([{ userId }]);
   });
 
   it("increments the bank without losing concurrent XP awards", async () => {

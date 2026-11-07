@@ -29,7 +29,12 @@ import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import { AllObjectives } from "@/validators/objectives";
 import { getTagSchema } from "@/validators/combat";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertQuests,
+  insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
+} from "../../../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
@@ -122,9 +127,7 @@ describeWithDatabase("quest team encounter location claims", () => {
     await insertUsers([
       { userId: "enemy", username: "enemy", isAi: true, level: 10, rank: "GENIN" },
     ]);
-    await client
-      .insert(aiProfile)
-      .values({ id: "Default", userId: "enemy", rules: [] });
+    await insertDefaultAiProfile({ userId: "enemy" });
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -137,10 +140,7 @@ describeWithDatabase("quest team encounter location claims", () => {
       objectives: [AllObjectives.parse({ id: "encounter", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }], givePools: 25, applyBuffs: [getTagSchema("shield").parse({ power: 100, health: 500, rounds: 3 })] })],
       reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
     } }]);
-    await client.insert(jutsu).values(["PVE", "BOTH", "PVP"].map((usage) => ({
-      id: `jutsu-${usage}`, name: `Jutsu ${usage}`, description: "Quest combat fixture", effects: [], target: "SELF" as const,
-      range: 0, requiredRank: "STUDENT" as const, jutsuType: "NORMAL" as const, image: "", battleDescription: "Uses a jutsu", battleUsageType: usage as "PVE" | "PVP" | "BOTH",
-    })));
+    await insertJutsus(["PVE", "BOTH", "PVP"].map((usage) => ({ id: `jutsu-${usage}`, name: `Jutsu ${usage}`, battleUsageType: usage as "PVE" | "PVP" | "BOTH" })));
     await client.insert(userJutsu).values(["leader", "helper"].flatMap((userId) => ["PVE", "BOTH", "PVP"].map((usage) => ({ id: `${userId}-${usage}`, userId, jutsuId: `jutsu-${usage}`, equipped: true }))));
     // A bloodline must not make general jutsu (null bloodlineId) disappear.
     await client.update(userData).set({ bloodlineId: "player-bloodline" }).where(eq(userData.userId, "helper"));

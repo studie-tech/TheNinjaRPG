@@ -21,7 +21,7 @@ import { initiateBattle } from "@/server/api/routers/combat";
 import { deleteUserRankedQueueRow, pvpRankRouter } from "@/server/api/routers/pvprank";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   callerForDatabase,
@@ -59,28 +59,14 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
       })),
     );
     const db = await getTestDatabase();
-    await db.insert(clan).values(
-      ["a", "b"].map((id) => ({
-        id,
-        name: id,
-        image: "/clan.png",
-        villageId: "v",
-        founderId: id === "a" ? "leader" : "enemy",
-        leaderId: id === "a" ? "leader" : "enemy",
-        leaderOrderId: id,
-      })),
-    );
+    await insertClans(["a", "b"].map((id) => ({ id, villageId: "v", leaderId: id === "a" ? "leader" : "enemy", leaderOrderId: id })));
     await db.insert(mpvpBattleQueue).values({
       id: "q",
       attackerEntityId: "a",
       defenderEntityId: "b",
       createdAt: new Date(0),
     });
-    await db.insert(aiProfile).values({
-      id: "Default",
-      userId: "default-ai",
-      rules: [],
-    });
+    await insertDefaultAiProfile();
     await db.insert(rankedLoadout).values(
       ["member", "leader"].map((userId) => ({
         id: userId,

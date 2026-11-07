@@ -10,7 +10,7 @@ import { initiateBattle, processUsersForBattle } from "@/server/api/routers/comb
 import type { DrizzleClient } from "@/server/db";
 import { makeTag, makeUser } from "../../../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile, insertJutsus } from "../../../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
 
@@ -156,12 +156,15 @@ describeWithDatabase("initiated wave summon preloads", () => {
       { userId: "caster", username: "Caster", isAi: true, level: 50, rank: "JONIN" as const },
       { userId: "shared", username: "Shared", isAi: true, level: 50, rank: "JONIN" as const },
     ]);
-    await client.insert(jutsu).values({
-      id: "preload-summon", name: "Summon", description: "Summon", battleDescription: "Summon", image: "/jutsu.png",
-      effects: [makeTag("summon", { aiId: "shared" })], target: "EMPTY_GROUND", range: 3, requiredRank: "STUDENT", jutsuType: "NORMAL",
-    });
+    await insertJutsus([{
+      id: "preload-summon",
+      name: "Summon",
+      effects: [makeTag("summon", { aiId: "shared" })],
+      target: "EMPTY_GROUND",
+      range: 3,
+    }]);
     await client.insert(userJutsu).values({ id: "preload-owned", userId: "caster", jutsuId: "preload-summon", equipped: true });
-    await client.insert(aiProfile).values({ id: "Default", userId: "caster", rules: [] });
+    await insertDefaultAiProfile({ userId: "caster" });
     const reads = vi.spyOn(client.query.userData, "findMany");
     const waves = Array.from({ length: 5 }, (_, index) => ({ aiIds: ["caster"], delayRounds: index ? 1 : 0 }));
     const meta = dungeonBattleState({ runState: { ...dungeonBattleState().runState, memberIds: members } });

@@ -8,7 +8,7 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { stealthRouter } from "@/server/api/routers/stealth";
 import { prepareActionReadiness } from "@/server/utils/actionReadiness";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertUserVotes } from "../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const userId = "recovery-hydration";
@@ -23,8 +23,7 @@ describeWithDatabase("hydrated recovery cache reconciliation", () => {
     await insertUsers([{ userId, username: userId, status: "ASLEEP", rank: "JONIN", level: 50,
       isOutlaw: true, primaryElement: "Fire", secondaryElement: "Water", regeneration: 0,
       money: 100, regenAt: new Date(), updatedAt: new Date() }]);
-    await (await getTestDatabase()).insert(userVote).values({ id: "hydration-vote", userId,
-      secret: "secret01", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
   });
   afterEach(() => vi.restoreAllMocks());
 

@@ -18,7 +18,7 @@ import { ObjectiveReward } from "@/validators/rewards";
 import { type UserDeltaResponse, userDeltaResponseSchema } from "@/validators/userCache";
 import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../../setup/dungeon";
-import { insertQuests, insertUsers } from "../../../setup/factories";
+import { insertQuests, insertUsers, insertUserVotes, insertClans } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 import { deferred } from "../../../setup/deferred";
@@ -82,8 +82,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
       money: 0, earnedExperience: 0, reputationPoints: 0, reputationPointsTotal: 0, medicalExperience: 0,
       huntingExperience: 0, craftingExperience: 0, gatheringExperience: 0, regeneration: 0,
       updatedAt: new Date(), regenAt: new Date() }]);
-    const db = await getTestDatabase();
-    await db.insert(userVote).values({ id: "dungeon-cache-vote", userId, secret: "dungeon1", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
     await insertQuests([{ id: "dungeon-completion", questType: "achievement", content: {
       objectives: [SimpleObjective.parse({ id: "completion", task: "dungeons_completed", value: 1 })],
       reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
@@ -480,8 +479,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
       { id: "cached-village", name: "Cached village", sector: 1, kageId: "" },
       { id: "other-village", name: "Other village", sector: 2, kageId: "" },
     ]);
-    await db.insert(clan).values({ id: "cached-clan", name: "Cached clan", image: "clan.png",
-      villageId: "cached-village", founderId: userId, leaderId: userId, leaderOrderId: "order" });
+    await insertClans([{ id: "cached-clan", name: "Cached clan", villageId: "cached-village", leaderId: userId }]);
     await db.update(userData).set({ isOutlaw: false, villageId: "cached-village", clanId: "cached-clan" }).where(eq(userData.userId, userId));
     const profile = callerForDatabase(profileRouter, userId, db);
     await profile.getUser();

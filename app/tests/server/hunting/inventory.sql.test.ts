@@ -29,7 +29,12 @@ import { huntingRouter } from "@/routers/hunting";
 import { itemRouter } from "@/routers/item";
 import type { DrizzleClient } from "@/server/db";
 import { getTagSchema, IncreaseReskinSlots, ItemValidator, RepairTag, UnlockItemVariantTag } from "@/validators/combat";
-import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertDefaultAiProfile,
+} from "../../setup/factories";
 import { acceptReadySession, insertHuntingWorld } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements, pollUntil } from "../../setup/statements";
@@ -155,8 +160,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "potion", itemType: "CONSUMABLE", canStack: true, stackSize: 10, slot: "ITEM" },
       { id: "spare", itemType: "CONSUMABLE", canStack: true, stackSize: 10, slot: "ITEM" },
     ]);
-    const db = await getTestDatabase();
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await insertHuntingWorld();
   });
   afterEach(() => vi.restoreAllMocks());

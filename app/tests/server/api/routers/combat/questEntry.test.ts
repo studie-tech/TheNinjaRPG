@@ -25,6 +25,7 @@ import {
   insertQuests,
   insertUserItems,
   insertUsers,
+  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import {
   callerFor,
@@ -71,10 +72,7 @@ describeWithDatabase("quest battle entry item identity", () => {
         requiredLevel: 1,
       },
     ]);
-    const client = await getTestDatabase();
-    await client
-      .insert(aiProfile)
-      .values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
   });
   afterEach(() => vi.restoreAllMocks());
 

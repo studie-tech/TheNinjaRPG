@@ -10,7 +10,12 @@ import { itemRouter } from "@/server/api/routers/item";
 import { profileRouter } from "@/server/api/routers/profile";
 import { staffRouter } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
-import { insertItems, insertUsers, insertUserItems } from "../../setup/factories";
+import {
+  insertItems,
+  insertUsers,
+  insertUserItems,
+  insertDefaultAiProfile,
+} from "../../setup/factories";
 import { acceptReadySession, huntingContract, huntingHabitatContent, insertHuntingWorld } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements, holdReads } from "../../setup/statements";
@@ -28,8 +33,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
       { userId: "staff", username: "Terriator", role: "CODING-ADMIN" },
     ]);
     await insertItems([{ id: "hide", canBeHunted: true }, { id: "tusk", canBeHunted: true }]);
-    const db = await getTestDatabase();
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await insertHuntingWorld();
   });
   afterEach(() => { setSystemTime(); vi.restoreAllMocks(); });

@@ -34,7 +34,14 @@ import {
   invalidatePublishedMapCache,
   getSectorNeighborIds,
 } from "@/server/utils/sectorMap";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
+  insertUserVotes,
+} from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
 import {
   queueEnergy,
@@ -114,14 +121,7 @@ const prepare = async (queue = entries) => {
     },
   ]);
   await queueEnergy(USER, queue);
-  await db
-    .insert(userVote)
-    .values({
-      id: "vote-queued",
-      userId: USER,
-      secret: "secret01",
-      lastVoteAt: new Date(),
-    });
+  await insertUserVotes([{ userId: USER }]);
   await db
     .insert(sectorMap)
     .values(
@@ -572,7 +572,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
     await insertItems([{ id: "energy-armor", itemType: "ARMOR", effects: [makeEffect("increasemaxpools", { power: 200, powerPerLevel: 0, calculation: "static", rounds: 1, poolsAffected: ["Energy"] })] }]);
     await insertUserItems([{ userId: USER, itemId: "energy-armor", equipped: "ITEM_1", durability: 100 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.insert(gameSetting).values({ id: "regen-gain", name: "regenGainMultiplier", value: 2, time: new Date(Date.now() + 86_400_000) });
     const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
     try {
@@ -607,7 +607,7 @@ describeWithDatabase("Energy queue state transitions", () => {
       }),
     });
     await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await insertItems([{ id: "mastery-energy-armor", itemType: "ARMOR", requiredNinjutsuMastery: 100, effects: [makeEffect("increasemaxpools", { power: 200, powerPerLevel: 0, calculation: "static", rounds: 1, poolsAffected: ["Energy"] })] }]);
     await insertUserItems([{ userId: USER, itemId: "mastery-energy-armor", equipped: "ITEM_1", durability: 100 }]);
     const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
@@ -648,11 +648,8 @@ describeWithDatabase("Energy queue state transitions", () => {
       }),
     });
     await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
-    await db.insert(jutsu).values({
-      id: "queued-jutsu", name: "Queued", description: "q", battleDescription: "q", effects: [],
-      target: "SELF", range: 0, requiredRank: "STUDENT", jutsuRank: "D", jutsuType: "NORMAL", image: "/q.png",
-    });
+    await insertDefaultAiProfile();
+    await insertJutsus([{ id: "queued-jutsu", name: "Queued" }]);
     await db.insert(userJutsu).values({ id: "uj-queued", userId: USER, jutsuId: "queued-jutsu", level: 2, equipped: true, finishTraining: finished });
     await db.insert(userQueue).values({
       id: "q-jutsu", userId: USER, kind: "JUTSU", position: 1, jutsuId: "queued-jutsu", reservedRyo: 0,
@@ -709,7 +706,7 @@ describeWithDatabase("Energy queue state transitions", () => {
       });
       await queueMasteries(USER, [{ stat: "Earth", speed: "1hr" }], "ELEMENT");
       await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
-      await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+      await insertDefaultAiProfile();
       const speedDb = beforeStatements(db, userData, [async () => {
         speedWriteReady();
         await release;
@@ -788,9 +785,7 @@ describeWithDatabase("Energy queue state transitions", () => {
           latitude: 10,
         },
       ]);
-      await db
-        .insert(aiProfile)
-        .values({ id: "Default", userId: "default-ai", rules: [] });
+      await insertDefaultAiProfile();
       await db
         .insert(gameSetting)
         .values({

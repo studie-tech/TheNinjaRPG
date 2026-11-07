@@ -13,7 +13,14 @@ import { consumeUserAnnouncements } from "@/server/utils/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, CollectItem, InstantNewQuestObjective, InstantStartBattleObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUserItems,
+  insertUsers,
+  insertUserVotes,
+} from "../../../../setup/factories";
 import { queueEnergy } from "../../../../setup/queues";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
@@ -57,7 +64,7 @@ describeWithDatabase("confirmed quest cache responses", () => {
       { id: "cache-tier", name: "Tier", questType: "tier", content: content(10000) },
     ]);
     await insertQuestHistory([{ userId: playerId, questId: "cache-tier", questType: "tier" }]);
-    await (await getTestDatabase()).insert(userVote).values({ id: "cache-vote", userId: playerId, secret: "secret01", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId: playerId }]);
   });
   afterEach(() => { vi.restoreAllMocks(); invalidatePublishedMapCache(); });
 
@@ -491,7 +498,6 @@ describeWithDatabase("confirmed quest cache responses", () => {
   });
 
   it.each(["event", "story"] as const)("reconciles completed %s team navigation after disbanding", async (questType) => {
-    const db = await getTestDatabase();
     const questId = "disbanded-team-cache";
     await insertItems([{ id: "cache-gift", name: "Gift" }]);
     await insertQuests([{ id: questId, name: "Team quest", questType, teamEnabled: true,

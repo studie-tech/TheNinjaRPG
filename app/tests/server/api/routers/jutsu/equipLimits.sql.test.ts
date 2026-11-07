@@ -5,7 +5,7 @@ import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
 import { tryEquipUserJutsuAtomically } from "@/server/api/routers/jutsu";
 import { miscRouter } from "@/server/api/routers/misc";
 import { DamageTag } from "@/validators/combat";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertJutsus } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -35,11 +35,7 @@ describeWithDatabase("configured equipment limits", () => {
     const db = await getTestDatabase();
     await db.insert(jutsuEquipLimit).values({ category: "damage", unrankedMaxEquipped: 1, rankedMaxEquipped: 0 });
     const effects = [DamageTag.parse({})];
-    await db.insert(jutsu).values(["a", "b"].map((id) => ({
-      id, name: id, effects, description: id, battleDescription: id,
-      target: "SELF" as const, range: 0, requiredRank: "GENIN" as const,
-      jutsuType: "NORMAL" as const, image: "",
-    })));
+    await insertJutsus(["a", "b"].map((id) => ({ id, effects, requiredRank: "GENIN" as const })));
     await db.insert(userJutsu).values(["a", "b"].map((id) => ({ id, userId: "player", jutsuId: id, equipped: false })));
     const flags = getJutsuCapFlags({ effects, jutsuType: "NORMAL" });
     const caps = await fetchJutsuEquipCaps(db);

@@ -22,7 +22,13 @@ import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { ActionUseSpecificJutsu } from "@/validators/ai";
 import { makeTag } from "../../../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
-import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
+} from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -65,7 +71,7 @@ describeWithDatabase("dungeon wave preparation", () => {
       await insertItems([{ id: "wave-ticket" }]);
       await insertUserItems(MEMBERS.map((userId) => ({ id: `ticket-${userId}`, userId, itemId: "wave-ticket", quantity: 1, equipped: "ITEM_1" as const })));
     }
-    await client.insert(aiProfile).values({ id: "Default", userId: OPENER, rules: [] });
+    await insertDefaultAiProfile({ userId: OPENER });
     await client.insert(dungeon).values({ id: "wave-definition", content, updatedAt: new Date() });
     await client.insert(dungeonRun).values({
       id: meta.runId, dungeonId: "wave-definition", leaderId: MEMBERS[0]!, content,
@@ -125,7 +131,7 @@ describeWithDatabase("dungeon wave preparation", () => {
       ];
       const content = dungeonContent();
       content.tiers[0]![0]!.waves = waves;
-      await client.insert(aiProfile).values({ id: "Default", userId: OPENER, rules: [] });
+      await insertDefaultAiProfile({ userId: OPENER });
       await insertUsers([
         ...MEMBERS.map((userId) => ({ userId, username: userId, status: "QUEUED" as const, level: 50, rank: "JONIN" as const })),
         ...[OPENER, MID, HIGH].map((userId) => ({ userId, username: userId, isAi: true, level: 50, rank: "JONIN" as const })),
@@ -195,8 +201,9 @@ describeWithDatabase("dungeon wave preparation", () => {
         : [{ aiIds: [OPENER], delayRounds: 0 }, { aiIds: [CASTER, CREATURE], delayRounds: 1 }];
       const content = dungeonContent();
       content.tiers[0]![0]!.waves = waves;
-      await client.insert(aiProfile).values({
-        id: "Default", userId: CREATURE, includeDefaultRules: false,
+      await insertDefaultAiProfile({
+        userId: CREATURE,
+        includeDefaultRules: false,
         rules: [{ conditions: [], action: ActionUseSpecificJutsu.parse({
           jutsuId: "wave-summon", target: "EMPTY_GROUND_CLOSEST_TO_SELF",
         }) }],
@@ -212,9 +219,16 @@ describeWithDatabase("dungeon wave preparation", () => {
       ]);
       await insertItems([{ id: "wave-consumable", itemType: "CONSUMABLE", slot: "ITEM", destroyOnUse: true, effects: [] }]);
       await insertUserItems([{ id: "wave-owned-consumable", userId: CREATURE, itemId: "wave-consumable", equipped: "ITEM_1", quantity: 1 }]);
-      await client.insert(jutsu).values([
-        { id: "wave-technique", name: "Technique", description: "Technique", battleDescription: "Technique", image: "/jutsu.png", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuType: "NORMAL", cooldown: 5 },
-        { id: "wave-summon", name: "Summon", description: "Summon", battleDescription: "Summon", image: "/jutsu.png", effects: [makeTag("summon", { aiId: CREATURE, aiHp: 500, power: 100, rounds: 3 })], target: "EMPTY_GROUND", range: 3, actionCostPerc: 40, requiredRank: "STUDENT", jutsuType: "NORMAL" },
+      await insertJutsus([
+        { id: "wave-technique", name: "Technique", cooldown: 5 },
+        {
+          id: "wave-summon",
+          name: "Summon",
+          effects: [makeTag("summon", { aiId: CREATURE, aiHp: 500, power: 100, rounds: 3 })],
+          target: "EMPTY_GROUND",
+          range: 3,
+          actionCostPerc: 40,
+        },
       ]);
       await client.insert(userJutsu).values([
         { id: "wave-owned-technique", userId: CREATURE, jutsuId: "wave-technique", equipped: true },

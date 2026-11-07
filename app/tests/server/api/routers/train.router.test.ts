@@ -9,7 +9,14 @@ import {trainRouter} from "@/server/api/routers/train";
 import {appRouter} from "@/server/api/root";
 import {InstantNewQuestObjective, SimpleObjective} from "@/validators/objectives";
 import {ObjectiveReward} from "@/validators/rewards";
-import {insertItems, insertUserItems, insertUsers, insertQuests, insertQuestHistory} from "../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertQuests,
+  insertQuestHistory,
+  insertUserVotes,
+} from "../../../setup/factories";
 import {queueEnergy, readEnergyQueue} from "../../../setup/queues";
 import {callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables} from "../../../setup/testDatabase";
 import type {EnergyTrainingQueueEntry} from "@/validators/train";
@@ -45,15 +52,7 @@ const trainee = async ({
   ]);
   if (energyQueue) await queueEnergy(USER_ID, energyQueue);
   // fetchUpdatedUser creates a missing vote row, and parallel requests would race on it
-  const database = await getTestDatabase();
-  await database
-    .insert(userVote)
-    .values({
-      id: "vote-trainee",
-      userId: USER_ID,
-      secret: "secret01",
-      lastVoteAt: new Date(),
-    });
+  await insertUserVotes([{ userId: USER_ID }]);
 };
 
 const readUser = async () => {

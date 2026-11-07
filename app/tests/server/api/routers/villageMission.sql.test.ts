@@ -12,7 +12,12 @@ import { commitQuestObjectiveRewards, questsRouter } from "@/server/api/routers/
 import * as socials from "@/libs/socials";
 import { recordVillageMissionProgress } from "@/server/utils/villageMission";
 import { accrueVillageStructureMaintenance } from "@/server/utils/villageMaintenance";
-import { insertUsers, insertQuests, insertQuestHistory } from "../../../setup/factories";
+import {
+  insertUsers,
+  insertQuests,
+  insertQuestHistory,
+  insertClans,
+} from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../setup/testDatabase";
 import { makeBattleUser, makeCompleteBattle } from "../../../libs/combat/helpers/battleScenario";
 import { barrier } from "../../../setup/statements";
@@ -495,7 +500,7 @@ describeWithDatabase("Village Missions and maintenance on real MySQL", () => {
   it("upgrades a town with clan points in one guarded write, charging only one concurrent upgrade", async () => {
     const db = await getTestDatabase();
     await db.update(village).set({ type: "STRONGHOLD", leaderUpdatedAt: new Date("2020-01-01") }).where(eq(village.id, "v1"));
-    await db.insert(clan).values({ id: "c1", name: "Faction", image: "", villageId: "v1", founderId: "leader", leaderId: "leader", leaderOrderId: "order", points: 500_000 });
+    await insertClans([{ id: "c1", name: "Faction", villageId: "v1", leaderId: "leader", points: 500_000 }]);
     await db.update(userData).set({ clanId: "c1" }).where(eq(userData.userId, "leader"));
     const noTransactions = new Proxy(db, {
       get(target, property, receiver) {

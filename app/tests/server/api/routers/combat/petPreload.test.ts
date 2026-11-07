@@ -8,7 +8,12 @@ import { petsRouter } from "@/server/api/routers/pets";
 import type { DrizzleClient } from "@/server/db";
 import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
 import { petJutsuFixture } from "../../../../libs/pets/helpers/abilities";
-import { insertPetSpecies, insertUsers } from "../../../../setup/factories";
+import {
+  insertPetSpecies,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertUserPets,
+} from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
@@ -28,11 +33,16 @@ describeWithDatabase("companion battle preload consistency", () => {
       { userId: ownerId, username: "Defender", rank: "GENIN", level: 5, status: "AWAKE", activePetId: "first", petSlots: 3, sector: MAP_WAKE_ISLAND_SECTOR },
     ]);
     const database = await getTestDatabase();
-    await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
-    await database.insert(userPet).values(["first", "second"].map((id) => ({
-      id, userId: ownerId, name: id, speciesId: "pet-species-0", paletteIndex: 0,
-      characteristicIndex: 0, auraIndex: 0, generationStatus: "READY" as const,
-      artRank: 1, avatar: "/pet.png", battleEnabled: true, jutsuIds: [`${id}-strike`],
+    await insertDefaultAiProfile();
+    await insertUserPets(["first", "second"].map((id) => ({
+      id,
+      userId: ownerId,
+      name: id,
+      generationStatus: "READY" as const,
+      artRank: 1,
+      avatar: "/pet.png",
+      battleEnabled: true,
+      jutsuIds: [`${id}-strike`],
     })));
     await database.insert(jutsu).values(["first", "second"].map((id) => petJutsuFixture({ id: `${id}-strike`, name: `${id} strike` })));
   });

@@ -14,7 +14,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { shrineRouter } from "@/server/api/routers/shrine";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeStatements } from "../../../setup/statements";
 import {
@@ -67,7 +67,7 @@ describeWithDatabase("shrine AI defenders", () => {
       .insert(villageAlliance)
       .values({ id: "enemy", villageIdA: "a", villageIdB: "b", status: "ENEMY" });
     await db.insert(sector).values({ sector: 101, villageId: "b" });
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await insertUsers([
       { ...fighter, userId: "kage", username: "kage", villageId: "a" },
       { ...fighter, userId: "ally", username: "ally", villageId: "a" },

@@ -35,7 +35,13 @@ import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
 import { fetchUserJutsus } from "@/server/api/routers/jutsu";
 import { getTagSchema } from "@/validators/combat";
 import { makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
-import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
+} from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -62,31 +68,15 @@ const seedLobby = async (
       isOutlaw: true,
     },
   ]);
-  await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
-  await db.insert(jutsu).values([
-    {
-      id: "gated",
-      name: "Gated",
-      description: "Gated",
-      battleDescription: "Gated",
-      effects: [],
-      target: "SELF",
-      range: 0,
-      requiredRank: "GENIN",
-      jutsuType: "NORMAL",
-      image: "",
-      requiredNinjutsuMastery: 500,
-    },
+  await insertDefaultAiProfile();
+  await insertJutsus([
+    { id: "gated", name: "Gated", requiredRank: "GENIN", requiredNinjutsuMastery: 500 },
     {
       id: "usable",
       name: "Usable",
       description: "Usable",
       battleDescription: "Usable",
-      effects: [],
-      target: "SELF",
-      range: 0,
       requiredRank: "GENIN",
-      jutsuType: "NORMAL",
       image: "",
     },
   ]);
@@ -295,7 +285,15 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
     await db.update(jutsu).set({ bloodlineId: "blood", jutsuType: "BLOODLINE" }).where(eq(jutsu.id, "usable"));
     const parent = await db.query.jutsu.findFirst({ where: eq(jutsu.id, "usable") });
     if (!parent) throw new Error("Missing usable jutsu");
-    await db.insert(jutsu).values({ ...parent, id: "scarlet-jutsu", name: "Scarlet cast", reskinParentJutsuId: "usable", bloodlineReskinId: "scarlet", hidden: true, jutsuRank: "H" });
+    await insertJutsus([{
+      ...parent,
+      id: "scarlet-jutsu",
+      name: "Scarlet cast",
+      reskinParentJutsuId: "usable",
+      bloodlineReskinId: "scarlet",
+      hidden: true,
+      jutsuRank: "H",
+    }]);
     // Battle initialization receives relational rows without resolved variants.
     const owned = await db.query.userJutsu.findMany({ where: eq(userJutsu.userId, USER), with: { jutsu: true } });
     const processed = await processUsersForBattle(db, {

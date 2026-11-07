@@ -12,7 +12,7 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { BloodlineCollection, QuestTracker, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuests, insertUsers } from "../../../setup/factories";
+import { insertQuests, insertUsers, insertUserVotes } from "../../../setup/factories";
 import { comparableTrackers } from "../../../setup/quest";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 import { countUserReads } from "../../../setup/userReads";
@@ -30,7 +30,7 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,
       regeneration: 0, reputationPoints: 100000, updatedAt: new Date(), regenAt: new Date() }]);
     const db = await getTestDatabase();
-    await db.insert(userVote).values({ id: "collector-vote", userId, secret: "collect1", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
     await db.insert(bloodline).values({ id: lineId, name: "Last Lineage", rank: "A", hidden: false,
       image: "", description: "Collection fixture", regenIncrease: 0, effects: [] });
     await insertQuests([{ id: questId, name: "Lineage Collection", questType: "achievement", hidden: false,

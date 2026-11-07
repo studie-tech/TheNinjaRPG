@@ -9,7 +9,12 @@ import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { settleCraftingQueue } from "@/server/utils/userQueue";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
-import { insertItems, insertUsers, insertUserItems } from "../../../setup/factories";
+import {
+  insertItems,
+  insertUsers,
+  insertUserItems,
+  insertUserVotes,
+} from "../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../setup/queues";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
@@ -21,7 +26,7 @@ describeWithDatabase("Territory War activity bonus consumers", () => {
     const db = await getTestDatabase();
     await db.insert(village).values({ id: "bonus-home", name: "Bonus Home", sector: 1, kageId: userId, territoryWarBoostUntil: new Date(Date.now() + 3500000) });
     await insertUsers([{ userId, username: "bonus-user", gender: "Male", status: "AWAKE", occupation: "CRAFTING", rank: "JONIN", level: 50, villageId: "bonus-home", sector: 1, federalStatus: "GOLD", regenAt: new Date(), updatedAt: new Date() }]);
-    await db.insert(userVote).values({ id: "bonus-vote", userId, secret: "bonusvote", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
     await insertItems([
       { id: "material", canStack: true, stackSize: 100 },
       { id: "crafted", canBeCrafted: true, craftingExperience: 1000, rarity: "COMMON", itemType: "WEAPON" },
@@ -70,7 +75,7 @@ describeWithDatabase("Territory War activity bonus consumers", () => {
       updatedAt: new Date(),
       joinedVillageAt: new Date(0),
     })));
-    await db.insert(userVote).values(["offline", "refreshed"].map(id => ({ id: `vote-${id}`, userId: id, secret: `secret-${id}`, lastVoteAt: new Date() })));
+    await insertUserVotes(["offline", "refreshed"].map(id => ({ userId: id, secret: `secret-${id}` })));
     for (const id of ["offline", "refreshed"]) {
       await queueEnergy(id, [{ stat: "strength", energy: 100 }]);
       const result = await fetchUpdatedUser({ client: db, userId: id, forceRegen: true });

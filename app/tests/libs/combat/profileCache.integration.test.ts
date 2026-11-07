@@ -11,7 +11,15 @@ import { initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter, type UserWithRelations } from "@/server/api/routers/profile";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../setup/factories";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUserItems,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertUserPets,
+} from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
@@ -51,7 +59,16 @@ describeWithDatabase("combat profile cache inventory confirmation", () => {
     const eligible = condition === "ready";
     const database = await getTestDatabase();
     await database.update(userData).set({ rank: "GENIN", activePetId: "cache-pet", petExperience: 40 }).where(eq(userData.userId, "cache-player"));
-    await database.insert(userPet).values({ id: "cache-pet", userId: "cache-player", name: "Miso", speciesId: "cache-species", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 1, artRank: 1, avatar: "https://example.com/pet.webp", generationStatus: "READY" });
+    await insertUserPets([{
+      id: "cache-pet",
+      userId: "cache-player",
+      name: "Miso",
+      speciesId: "cache-species",
+      rank: 1,
+      artRank: 1,
+      avatar: "https://example.com/pet.webp",
+      generationStatus: "READY",
+    }]);
     const original = (await database.query.userData.findFirst({ where: eq(userData.userId, "cache-player"), with: { items: { with: { item: true } } } }))!;
     const current = { ...original, titles: [], userQuests: [], questData: [] } as unknown as NonNullable<UserWithRelations>;
     const state = makeCompleteBattle({ id: "cache-fight", battleType: "ARENA", rewardScaling: 1, usersState: [
@@ -209,7 +226,16 @@ describeWithDatabase("combat profile cache inventory confirmation", () => {
     const completions = [];
     for (const userId of party.memberIds) {
       const petId = `${userId}-pet`;
-      await database.insert(userPet).values({ id: petId, userId, name: "Miso", speciesId: "cache-species", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 1, artRank: 1, avatar: "https://example.com/pet.webp", generationStatus: "READY" });
+      await insertUserPets([{
+        id: petId,
+        userId,
+        name: "Miso",
+        speciesId: "cache-species",
+        rank: 1,
+        artRank: 1,
+        avatar: "https://example.com/pet.webp",
+        generationStatus: "READY",
+      }]);
       await database.update(userData).set({ rank: "GENIN", activePetId: petId, questPartyId: party.id, questData: [tracker] }).where(eq(userData.userId, userId));
       await insertQuestHistory([{ userId, questId: party.questId, questType: "event" }]);
       const original = (await database.query.userData.findFirst({ where: eq(userData.userId, userId), with: { items: { with: { item: true } }, userQuests: { with: { quest: true } } } }))!;
@@ -282,7 +308,7 @@ describeWithDatabase("combat profile cache inventory confirmation", () => {
     const secret = QuestTracker.parse({ id: "hidden-map", goals: [{ id: "secret", sector: 2, longitude: 7, latitude: 8 }] });
     await database.update(userData).set({ status: "AWAKE", battleId: null, role: "USER", sector: 1, level: 1, questData: [secret] }).where(eq(userData.userId, "cache-player"));
     await insertUsers([{ userId: "private-ai", username: "Private AI", isAi: true, level: 1, rank: "NONE", inArena: true }]);
-    await database.insert(aiProfile).values({ id: "Default", userId: "private-ai", rules: [] });
+    await insertDefaultAiProfile({ userId: "private-ai" });
     await insertQuests([{ id: "hidden-map", hidden: true, questType: "achievement", maxCompletes: 100, maxAttempts: 100,
       content: { objectives: [AllObjectives.parse({ id: "secret", task: "move_to_location", sector: 2, longitude: 7, latitude: 8, sectorType: "specific", sectorList: [], locationType: "specific", hideLocation: true })], reward: ObjectiveReward.parse({}), sceneCharacters: [], sceneBackground: "" },
     }]);

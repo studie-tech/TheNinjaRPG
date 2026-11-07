@@ -6,7 +6,7 @@ import { jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import { exportJutsuLoadout } from "@/libs/loadout";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertJutsus } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -20,11 +20,7 @@ describeWithDatabase("jutsu loadout sharing atomic SQL", () => {
     await resetTables(jutsuLoadout, userJutsu, jutsu, userData);
     await insertUsers([{ userId: USER, username: USER, rank: "GENIN", level: 20, federalStatus: "GOLD", isOutlaw: true }]);
     const database = await getTestDatabase();
-    await database.insert(jutsu).values(["sharing-a", "sharing-b", "sharing-old"].map((id) => ({
-      id, name: id, description: id, battleDescription: id, effects: [],
-      target: "SELF" as const, range: 0, requiredRank: "GENIN" as const,
-      jutsuType: "NORMAL" as const, image: "",
-    })));
+    await insertJutsus(["sharing-a", "sharing-b", "sharing-old"].map((id) => ({ id, requiredRank: "GENIN" as const })));
     await database.insert(userJutsu).values(["sharing-a", "sharing-b", "sharing-old"].map((jutsuId) => ({
       id: `owned-${jutsuId}`, userId: USER, jutsuId, level: 10, equipped: jutsuId === "sharing-old",
     })));

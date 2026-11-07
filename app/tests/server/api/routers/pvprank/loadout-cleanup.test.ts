@@ -15,7 +15,7 @@ import { Pusher } from "@/libs/pusher";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { HealTag, PoisonTag } from "@/validators/combat";
-import { insertItems, insertUsers } from "../../../../setup/factories";
+import { insertItems, insertUsers, insertJutsus } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -56,46 +56,22 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
     ]);
     const db = await getTestDatabase();
     await db.insert(jutsuEquipLimit).values(equipLimitFixture);
-    await db.insert(jutsu).values(
+    await insertJutsus(
       [
         ...["usable", "usable-two", ...FAVORITE_HEAL_IDS].map((id) => ({
           id,
-          requiredSkillId: null,
-          villageId: null,
           battleUsageType: "BOTH" as const,
         })),
-        {
-          id: "skill-jutsu",
-          requiredSkillId: "skill",
-          villageId: null,
-          battleUsageType: "BOTH" as const,
-        },
-        {
-          id: "village-jutsu",
-          requiredSkillId: null,
-          villageId: "village",
-          battleUsageType: "BOTH" as const,
-        },
-        {
-          id: "pve-jutsu",
-          requiredSkillId: null,
-          villageId: null,
-          battleUsageType: "PVE" as const,
-        },
+        { id: "skill-jutsu", requiredSkillId: "skill", battleUsageType: "BOTH" as const },
+        { id: "village-jutsu", villageId: "village", battleUsageType: "BOTH" as const },
+        { id: "pve-jutsu", battleUsageType: "PVE" as const },
       ].map((entry) => ({
         ...entry,
-        name: entry.id,
-        description: entry.id,
-        battleDescription: entry.id,
         effects:
           entry.id.startsWith("usable") || FAVORITE_HEAL_IDS.includes(entry.id)
             ? [HealTag.parse({})]
             : [],
-        target: "SELF" as const,
-        range: 0,
-        jutsuType: "NORMAL" as const,
         requiredRank: "GENIN" as const,
-        image: "",
       })),
     );
     await insertItems([
