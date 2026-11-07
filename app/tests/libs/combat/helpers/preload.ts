@@ -15,7 +15,7 @@ import type {
   CombatQueryUserJutsu,
   CompleteBattle,
 } from "@/libs/combat/types";
-import { refreshMasteries } from "@/libs/combat/util";
+import { refreshMasteries } from "@/libs/combat/mastery";
 import type { fetchBattleEssentials } from "@/queries/combat";
 import { processUsersForBattle } from "@/server/api/routers/combat";
 import { fetchUserItemsWithVariants } from "@/server/api/routers/item";

@@ -15,7 +15,8 @@ import {
 } from "@/drizzle/schema";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { calcActiveUser } from "@/libs/combat/actions";
-import { getBattleGrid, maskBattle } from "@/libs/combat/util";
+import { getBattleGrid } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
 
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";

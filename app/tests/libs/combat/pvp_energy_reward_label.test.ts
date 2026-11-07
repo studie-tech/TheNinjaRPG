@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { BattleType } from "@/drizzle/constants";
-import { isPvpEnergyRewardBattle } from "@/libs/combat/util";
+import { isPvpEnergyRewardBattle } from "@/libs/combat/settlement";
 
 const fighter = (
   userId: string,

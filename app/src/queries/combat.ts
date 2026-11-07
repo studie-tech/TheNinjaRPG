@@ -94,8 +94,9 @@ import {
 import { matchBloodrightSnapshot } from "@/libs/bloodright";
 import { compactBattleCatalogs } from "@/libs/combat/catalog";
 import { petsAllowedInBattle } from "@/libs/combat/pets";
+import { sendsToHospital } from "@/libs/combat/settlement";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
-import { getVillage, sendsToHospital } from "@/libs/combat/util";
+import { getVillage } from "@/libs/combat/util";
 import type { DungeonBattleState } from "@/libs/dungeon";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { withMercenaryParticipation } from "@/libs/objectiveWar";

@@ -26,25 +26,24 @@ import { stillInBattle } from "@/libs/combat/actions";
 import { settleObjectiveWarCombat } from "@/libs/combat/objectiveWar";
 import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
-import type {
-  ActionEffect,
-  BattleWar,
-  CombatResult,
-  CompleteBattle,
-} from "@/libs/combat/types";
 import {
   buildCombatTrackerTasks,
   calcBattleResult,
   didKageChallengerWin,
   didUserTakeKageSeat,
   getBattleTeamWars,
-  getItem,
-  getJutsu,
   getKageChallengeParticipants,
   getOpposingBattleWars,
   hydrateUserForQuests,
   isPvpEnergyRewardBattle,
-} from "@/libs/combat/util";
+} from "@/libs/combat/settlement";
+import type {
+  ActionEffect,
+  BattleWar,
+  CombatResult,
+  CompleteBattle,
+} from "@/libs/combat/types";
+import { getItem, getJutsu } from "@/libs/combat/util";
 import { claimVillageMissionCombatEvents } from "@/libs/combat/villageMission";
 import { getPvpFarmActivityReductionSeconds } from "@/libs/farming";
 import { getJutsuMaxLevel } from "@/libs/jutsuProgression";

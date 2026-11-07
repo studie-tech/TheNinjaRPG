@@ -3,7 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { type BattleType, WAR_SECTORWAR_AI_SHRINE_REDUCE } from "@/drizzle/constants";
 import { battle } from "@/drizzle/schema";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { fakeInitiationClient, makeInitiationUser } from "../../../../libs/combat/helpers/preload";

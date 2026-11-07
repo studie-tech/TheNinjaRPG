@@ -7,7 +7,8 @@ import {
 import { findSidebarOpponent } from "@/libs/combat/actions";
 import { bossFightEncounter } from "@/libs/combat/bossFight";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
-import { calcBattleResult, maskBattle } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { bossArrivalSchema } from "@/validators/coop";
 import { makeCompleteBattle, makeUser } from "./helpers/battleScenario";
 

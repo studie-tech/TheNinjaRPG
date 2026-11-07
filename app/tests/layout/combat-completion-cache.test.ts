@@ -5,7 +5,7 @@ import { waitFor } from "@testing-library/react";
 import { expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
-import { maskBattle } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
 import type { AppRouter } from "@/server/api/root";
 import { makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
 import { guardianVictory } from "../setup/territoryWar";

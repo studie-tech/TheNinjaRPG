@@ -1,15 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { BattleTypes } from "@/drizzle/constants";
 import type { CombatAction, Consequence, ReturnedBattle, UserEffect } from "@/libs/combat/types";
-import {
-  applyPoolAdjustmentsToBase,
-  calcApReduction,
-  calcPoolCost,
-  collapseConsequences,
-  getDefaultBattleSizes,
-  hasNoAvailableActions,
-  rollInitiative,
-} from "@/libs/combat/util";
+import { applyPoolAdjustmentsToBase, calcPoolCost, collapseConsequences, getDefaultBattleSizes, rollInitiative } from "@/libs/combat/util";
+import { calcApReduction, hasNoAvailableActions } from "@/libs/combat/turn";
 import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 
 afterEach(() => {

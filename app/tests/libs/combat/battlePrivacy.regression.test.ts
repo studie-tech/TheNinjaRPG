@@ -3,7 +3,8 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import type { AiProfile, Jutsu } from "@/drizzle/schema";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import type { BattleWar, ReturnedBattle } from "@/libs/combat/types";
-import { hasNoAvailableActions, maskBattle } from "@/libs/combat/util";
+import { hasNoAvailableActions } from "@/libs/combat/turn";
+import { maskBattle } from "@/libs/combat/masking";
 import { flatCombatStats, makeBattleUser, makeCompleteBattle, makeEffect, makeTag } from "./helpers/battleScenario";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect } from "react";
 import { useGameScene } from "@/hooks/game-scene";
-import { maskBattle } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { userBattleAtom } from "@/utils/UserContext";
 import { makeCompleteBattle } from "../libs/combat/helpers/battleScenario";

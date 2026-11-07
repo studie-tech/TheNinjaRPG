@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { VillageStructure } from "@/drizzle/schema";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { makeCompleteBattle, makeUser } from "./helpers/battleScenario";
 
 /** Calculate an arena victory with the same preloaded settlement data used by combat. */

@@ -1,12 +1,12 @@
 import { nanoid } from "nanoid";
 import { WAR_PVP_ESPIONAGE_POINTS } from "@/drizzle/constants";
 import { areBattleAllies } from "@/libs/combat/participants";
+import { getBattleTeamWars, getOpposingBattleWars } from "@/libs/combat/settlement";
 import type {
   BattleUserState,
   CombatResult,
   CompleteBattle,
 } from "@/libs/combat/types";
-import { getBattleTeamWars, getOpposingBattleWars } from "@/libs/combat/util";
 import {
   getWarSide,
   isObjectiveWarActive,

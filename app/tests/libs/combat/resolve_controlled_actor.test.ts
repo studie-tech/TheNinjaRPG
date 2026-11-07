@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { resolveControlledActorId } from "@/libs/combat/util";
+import { resolveControlledActorId } from "@/libs/combat/turn";
 import { makeBattleUser } from "./helpers/battleScenario";
 import type { BattleUserState, ReturnedBattle } from "@/libs/combat/types";
 

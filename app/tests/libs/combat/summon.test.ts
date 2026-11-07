@@ -6,7 +6,7 @@ import {
   spliceOrphanedSummons,
   summonsAllowedInBattle,
 } from "@/libs/combat/summon";
-import { maskBattle } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
 import type { Battle } from "@/drizzle/schema";
 import type { BattleUserState } from "@/libs/combat/types";
 

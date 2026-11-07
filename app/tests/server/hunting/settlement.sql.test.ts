@@ -2,7 +2,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { battle, huntingProgress, huntingReceipt, huntingSession, item, userData, userItem } from "@/drizzle/schema";
 import { updateBattle, updateUser } from "@/libs/combat/database";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import type { PusherClient } from "@/libs/pusher";
 import { settleHuntingBattle } from "@/server/utils/hunting";
 import { makeBattleUserItem, makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";

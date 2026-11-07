@@ -4,7 +4,7 @@ import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { battle, clan, mpvpBattleQueue, mpvpBattleUser, notification, sector, territoryWar, territoryWarReceipt, territoryWarScore, userData, village } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
 import type { CombatResult } from "@/libs/combat/types";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import type { DrizzleClient } from "@/server/db";
 import { cleanupTerritoryWarTeams, resolveTerritoryWar, settleTerritoryWarCombat, syncTerritoryWars, territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { guardianVictory } from "../../setup/territoryWar";

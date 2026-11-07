@@ -4,14 +4,8 @@ import { availableUserActions, getActionPointCost, performBattleAction } from "@
 import { applyEffects } from "@/libs/combat/process";
 import { applyFinalStandDamage, applyPreventTag, heal } from "@/libs/combat/tags";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
-import {
-  alignBattle,
-  calcPoolCost,
-  getBattleGrid,
-  getEffectiveMaxPool,
-  hasActiveEffectOfType,
-  isEffectActive,
-} from "@/libs/combat/util";
+import { calcPoolCost, getBattleGrid, getEffectiveMaxPool, hasActiveEffectOfType, isEffectActive } from "@/libs/combat/util";
+import { alignBattle } from "@/libs/combat/turn";
 import {
   makeBattleUser,
   makeCompleteBattle,

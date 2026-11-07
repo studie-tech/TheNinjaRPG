@@ -27,6 +27,7 @@ import {
   getPreferredDamageElement,
   resolveElementalDamage,
 } from "@/libs/combat/elementalDamage";
+import { storeMasteryBases } from "@/libs/combat/mastery";
 import { getPotencyDescription } from "@/libs/combat/potency";
 import { getEffectPower } from "@/libs/combat/power";
 import {
@@ -51,7 +52,6 @@ import {
   sealCheck,
   selectTransferEffects,
   sortEffects,
-  storeMasteryBases,
 } from "@/libs/combat/util";
 import { oddQHexDistance, oddQLineStep } from "@/libs/hexgrid";
 import { MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
