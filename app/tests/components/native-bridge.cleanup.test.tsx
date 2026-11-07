@@ -4,14 +4,7 @@ import {
   nativeWidgetAccountAction,
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
-
-const capacitorWindow = window as typeof window & {
-  Capacitor?: {
-    getPlatform: () => string;
-    isNativePlatform: () => boolean;
-    Plugins: Record<string, Record<string, unknown>>;
-  };
-};
+import { installCapacitor, removeCapacitor } from "../setup/native";
 
 const clearWidget = vi.fn();
 const endAll = vi.fn();
@@ -21,19 +14,15 @@ beforeEach(() => {
   clearWidget.mockReset().mockResolvedValue(undefined);
   endAll.mockReset().mockResolvedValue(undefined);
   logOut.mockReset().mockResolvedValue(undefined);
-  capacitorWindow.Capacitor = {
-    getPlatform: () => "ios",
-    isNativePlatform: () => true,
-    Plugins: {
-      Purchases: { logOut },
-      TNRLiveActivity: { endAll },
-      TNRWidgetSync: { clear: clearWidget },
-    },
-  };
+  installCapacitor({
+    Purchases: { logOut },
+    TNRLiveActivity: { endAll },
+    TNRWidgetSync: { clear: clearWidget },
+  });
 });
 
 afterEach(() => {
-  delete capacitorWindow.Capacitor;
+  removeCapacitor();
 });
 
 describe("NativeBridge deleted-profile cleanup", () => {

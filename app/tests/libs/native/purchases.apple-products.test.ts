@@ -1,22 +1,18 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { createPurchaseIdentityScope, restoreForBoundIdentity } from "@/libs/native/purchases";
+import { installCapacitor, removeCapacitor } from "../../setup/native";
 
-const capacitorWindow = window as typeof window & { Capacitor?: unknown };
-afterEach(() => { delete capacitorWindow.Capacitor; });
+afterEach(removeCapacitor);
 
 const installCustomer = (platform: string, activeSubscriptions: unknown[], subscriptionsByProductIdentifier: Record<string, unknown>) => {
   const customerInfo = { activeSubscriptions, subscriptionsByProductIdentifier, originalAppUserId: "player-a" };
-  capacitorWindow.Capacitor = {
-    isNativePlatform: () => true,
-    getPlatform: () => platform,
-    Plugins: { Purchases: {
-      isConfigured: async () => ({ isConfigured: true }),
-      logIn: async () => undefined,
-      getOfferings: async () => ({ current: { availablePackages: [] } }),
-      getCustomerInfo: async () => ({ customerInfo }),
-      restorePurchases: async () => ({ customerInfo }),
-    } },
-  };
+  installCapacitor({ Purchases: {
+    isConfigured: async () => ({ isConfigured: true }),
+    logIn: async () => undefined,
+    getOfferings: async () => ({ current: { availablePackages: [] } }),
+    getCustomerInfo: async () => ({ customerInfo }),
+    restorePurchases: async () => ({ customerInfo }),
+  } }, platform);
 };
 
 const appleSubscription = {

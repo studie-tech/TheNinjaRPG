@@ -1,22 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { fitContent } from "@/libs/native/viewport";
+import { installCapacitor, removeCapacitor } from "../../setup/native";
 
-type NativeWindow = Window & { Capacitor?: unknown };
-let previous: unknown;
-beforeEach(() => {
-  previous = (window as NativeWindow).Capacitor;
-});
-afterEach(() => { (window as NativeWindow).Capacitor = previous; });
+afterEach(removeCapacitor);
 
 describe("Android native viewport", () => {
   it.each([false, true])("fits content and keeps system-bar contrast in dark mode %s", async (darkMode) => {
     const setOverlaysWebView = vi.fn().mockResolvedValue(undefined);
     const setBackgroundColor = vi.fn().mockResolvedValue(undefined);
     const setStyle = vi.fn().mockResolvedValue(undefined);
-    (window as NativeWindow).Capacitor = {
-      isNativePlatform: () => true, getPlatform: () => "android",
-      Plugins: { StatusBar: { setOverlaysWebView, setBackgroundColor, setStyle } },
-    };
+    installCapacitor({ StatusBar: { setOverlaysWebView, setBackgroundColor, setStyle } }, "android");
     await fitContent(darkMode);
     expect(setOverlaysWebView).toHaveBeenCalledWith({ overlay: false });
     expect(setBackgroundColor).toHaveBeenCalledWith({ color: darkMode ? "#000000" : "#ffffff" });
@@ -24,24 +17,16 @@ describe("Android native viewport", () => {
   });
   it.each(["ios", "web"])("does not alter %s system bars", async (platform) => {
     const setOverlaysWebView = vi.fn();
-    (window as NativeWindow).Capacitor = {
-      isNativePlatform: () => true, getPlatform: () => platform,
-      Plugins: { StatusBar: { setOverlaysWebView } },
-    };
+    installCapacitor({ StatusBar: { setOverlaysWebView } }, platform);
     await fitContent();
     expect(setOverlaysWebView).not.toHaveBeenCalled();
   });
   it("keeps the page usable without a bridge or with an unavailable plugin", async () => {
-    (window as NativeWindow).Capacitor = undefined;
+    removeCapacitor();
     await expect(fitContent()).resolves.toBeUndefined();
-    (window as NativeWindow).Capacitor = {
-      isNativePlatform: () => true, getPlatform: () => "android", Plugins: {},
-    };
+    installCapacitor({}, "android");
     await expect(fitContent()).resolves.toBeUndefined();
-    (window as NativeWindow).Capacitor = {
-      isNativePlatform: () => true, getPlatform: () => "android",
-      Plugins: { StatusBar: { setOverlaysWebView: async () => { throw new Error("unavailable"); } } },
-    };
+    installCapacitor({ StatusBar: { setOverlaysWebView: async () => { throw new Error("unavailable"); } } }, "android");
     await expect(fitContent()).resolves.toBeUndefined();
   });
 });

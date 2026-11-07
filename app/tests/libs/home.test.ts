@@ -11,6 +11,13 @@ const fixture = (id: string, patch: Partial<HomeFurniture> = {}): HomeFurniture 
   width: 24, groundAnchor: 100, action: null, isFloor: false, quantity: 1, views: {}, ...patch,
 });
 const placement = (id: string) => ({ id, x: 50, y: 50, rotation: 0 as const });
+/** Furniture as the item catalogue seeds it. */
+const seededFurniture = (itemId: string, name: string) => {
+  const catalogue = readFileSync(new URL("../../data/item.sql", import.meta.url), "utf8");
+  const data = catalogue.match(new RegExp(`\\('${itemId}', '${name}',.*?'FURNITURE', '(\\{.*?\\})'`))?.[1];
+  expect(data).toBeDefined();
+  return fixture(itemId, furnitureDataSchema.parse(JSON.parse(data!)));
+};
 
 describe("owned furniture layouts", () => {
   it("uses each published direction's art and optional geometry without transforming the base image", () => {
@@ -251,10 +258,7 @@ describe("painted furniture geometry", () => {
   });
 
   it.each([1, 3] as const)("preserves the seeded lantern's saved facing %s on the measured floor", (rotation) => {
-    const catalogue = readFileSync(new URL("../../data/item.sql", import.meta.url), "utf8");
-    const data = catalogue.match(/\('home-lantern', 'Paper Lantern',.*?'FURNITURE', '(\{.*?\})'/)?.[1];
-    expect(data).toBeDefined();
-    const piece = fixture("home-lantern", furnitureDataSchema.parse(JSON.parse(data!)));
+    const piece = seededFurniture("home-lantern", "Paper Lantern");
     const position = { id: piece.id, room: "room-8" as const, x: 50, y: 50, rotation };
 
     expect(homeFurnitureSaveInputSchema.safeParse({ homeType: "MARSHMALLOWOPOLIS", revision: 0, placements: [position] }).success).toBe(true);
@@ -266,10 +270,7 @@ describe("painted furniture geometry", () => {
   });
 
   it("preserves a rotated bed when the complete upgraded floor fits its facing", () => {
-    const catalogue = readFileSync(new URL("../../data/item.sql", import.meta.url), "utf8");
-    const data = catalogue.match(/\('home-bed', 'Bed',.*?'FURNITURE', '(\{.*?\})'/)?.[1];
-    expect(data).toBeDefined();
-    const bed = fixture("home-bed", furnitureDataSchema.parse(JSON.parse(data!)));
+    const bed = seededFurniture("home-bed", "Bed");
     const saved = [{ id: bed.id, room: "room-3" as const, x: 50, y: 50.515778311884056, rotation: 1 as const }];
     const original = structuredClone({ saved, bed });
 
