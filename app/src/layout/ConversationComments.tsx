@@ -38,7 +38,7 @@ export const ConversationComments = ({
   const sentinelIndex = compact ? 0 : (visibleComments?.length ?? 0) - 1;
 
   return (
-    <>
+    <div data-conversation-comments className="contents">
       {ordered?.map((comment, i) => (
         <div
           key={comment.id}
@@ -63,7 +63,7 @@ export const ConversationComments = ({
           />
         </div>
       ))}
-    </>
+    </div>
   );
 };
 

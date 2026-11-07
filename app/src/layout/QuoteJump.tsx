@@ -6,8 +6,7 @@ import { showMutationToast } from "@/libs/toast";
 
 /**
  * A quote's attribution as a button that scrolls to the quoted message in the same
- * conversation list and outlines it briefly. A message that is not loaded yet is named
- * as further back instead.
+ * conversation list and outlines it briefly. Missing messages keep the reader in that list.
  */
 export function QuoteJump({ commentId, author, children }: QuoteJumpProps) {
   const jump = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -17,8 +16,9 @@ export function QuoteJump({ commentId, author, children }: QuoteJumpProps) {
     if (!target) {
       showMutationToast({
         success: false,
-        title: "Not loaded yet",
-        message: "That message is further back in the chat. Scroll up to load it.",
+        title: "Message unavailable",
+        message:
+          "That message is not in this view. Try loading more messages or clearing the search.",
         id: "quote-jump",
       });
       return;
@@ -44,18 +44,13 @@ export function QuoteJump({ commentId, author, children }: QuoteJumpProps) {
 /** Classes that outline the message a quote jumped to. */
 const JUMP_OUTLINE = ["rounded-md", "ring-2", "ring-inset", "ring-primary"];
 
-/**
- * The quoted message nearest the quote: the closest ancestor holding a row with that id,
- * so the Tavern page and the chat panel each jump within their own list.
- */
+/** Find a message only within this rendered list, even when the same chat is open twice. */
 const findQuotedMessage = (from: HTMLElement, commentId: string) => {
-  // Comment ids are nanoids; any other value is not a message in this list and must not reach the selector.
+  // Comment ids are nanoids; reject values that cannot safely enter the selector.
   if (!/^[\w-]+$/.test(commentId)) return null;
-  for (let node = from.parentElement; node; node = node.parentElement) {
-    const match = node.querySelector<HTMLElement>(`[data-comment-id="${commentId}"]`);
-    if (match) return match;
-  }
-  return null;
+  return from
+    .closest("[data-conversation-comments]")
+    ?.querySelector<HTMLElement>(`[data-comment-id="${commentId}"]`);
 };
 
 interface QuoteJumpProps {

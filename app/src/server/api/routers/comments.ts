@@ -92,8 +92,8 @@ import {
   isStaffRole,
 } from "@/utils/permissions";
 import { checkForBadWords, moderateUserText } from "@/utils/profanity";
-import { buildQuoteHtml, splitQuotedReply } from "@/utils/richText";
-import sanitize from "@/utils/sanitize";
+import { splitQuotedReply } from "@/utils/richText";
+import sanitize, { buildQuoteBlock } from "@/utils/sanitize";
 import {
   createConversationSchema,
   deleteCommentSchema,
@@ -543,18 +543,12 @@ export const commentsRouter = createTRPCRouter({
       // For staff accounts, verify the language is appropriate
       if (!moderationResult.success) return moderationResult;
 
-      // Create the content, santizied & with added quotes
-      let content = input.comment;
-      if (quotes.length > 0) {
-        const quoteContent = quotes
-          .map((q) => buildQuoteHtml({ ...q, username: q.user?.username }))
-          .join("");
-        content = `${quoteContent}\n\n${content}`;
-      }
-
-      // Link visible mentions and collect notification recipients.
-      const { processedContent, mentionedUserNames } = processMentions(content);
-      const sanitized = sanitize(processedContent);
+      // Sanitize authored content before attaching trusted quote metadata.
+      const { processedContent, mentionedUserNames } = processMentions(input.comment);
+      const quoteContent = quotes
+        .map((q) => buildQuoteBlock({ ...q, username: q.user?.username }))
+        .join("");
+      const sanitized = `${quoteContent}${quoteContent ? "\n\n" : ""}${sanitize(processedContent)}`;
 
       // Derived
       const usersIdsInConvo = convo.users.map((u) => u.userId);

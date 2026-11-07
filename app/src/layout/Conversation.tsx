@@ -27,8 +27,7 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { getNewReactions, processMentions } from "@/utils/chat";
 import { canPostAsAi, getConversationComposeRestriction } from "@/utils/permissions";
-import { buildQuoteHtml } from "@/utils/richText";
-import { stripBlockquotes } from "@/utils/sanitize";
+import { buildQuoteBlock, stripBlockquotes } from "@/utils/sanitize";
 import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
@@ -475,7 +474,7 @@ export const useConversation = (props: ConversationLogicProps) => {
       quoteIds
         ?.map((id) => {
           const quote = cachedComments?.find((c) => c.id === id);
-          return quote ? buildQuoteHtml(quote) : "";
+          return quote ? buildQuoteBlock(quote) : "";
         })
         .join("") || "";
 
@@ -488,7 +487,7 @@ export const useConversation = (props: ConversationLogicProps) => {
             id: nanoid(),
             createdAt: new Date(),
             conversationId: conversation.id,
-            content: processMentions(quoteText + newMessage.comment).processedContent,
+            content: quoteText + processMentions(newMessage.comment).processedContent,
             reactions: {},
             isPinned: false,
             isReported: false,

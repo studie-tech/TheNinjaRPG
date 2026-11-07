@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { processMentions } from "@/utils/chat";
 import { parseHtml } from "@/utils/parse";
-import { buildQuoteHtml, needsHtmlSource, richTextInput, splitQuotedReply } from "@/utils/richText";
-import sanitize from "@/utils/sanitize";
+import { needsHtmlSource, richTextInput, splitQuotedReply } from "@/utils/richText";
+import sanitize, { buildQuoteBlock } from "@/utils/sanitize";
 
 const render = (html: string) => renderToStaticMarkup(parseHtml(sanitize(html)));
 
@@ -85,7 +86,7 @@ describe("splitQuotedReply", () => {
   });
 });
 
-describe("buildQuoteHtml", () => {
+describe("buildQuoteBlock", () => {
   const quoted = {
     id: "comment-1",
     username: "Bob",
@@ -94,22 +95,26 @@ describe("buildQuoteHtml", () => {
   };
 
   it("attributes the quote and names the quoted message, without its own quotes", () => {
-    expect(buildQuoteHtml(quoted)).toBe(
+    expect(buildQuoteBlock(quoted)).toBe(
       '<blockquote author="Bob" date="11/05/2026" data-comment-id="comment-1"><p>See <img src="https://utfs.io/f/a.png" /></p></blockquote>',
     );
   });
 
-  it("keeps the quoted message's id through sanitizing", () => {
-    expect(sanitize(buildQuoteHtml(quoted))).toContain('data-comment-id="comment-1"');
+  it("keeps generated IDs while stripping authored IDs before attaching quotes", () => {
+    const authored = '<p>Reply</p><blockquote author="Other" data-comment-id="forged">Fake</blockquote>';
+    const content = buildQuoteBlock(quoted) + processMentions(authored).processedContent;
+    expect(content).toContain('data-comment-id="comment-1"');
+    expect(content).not.toContain('data-comment-id="forged"');
+    expect(renderToStaticMarkup(parseHtml(content))).toContain('Jump to the quoted message from Bob');
   });
 
   it("names an unknown author", () => {
-    expect(buildQuoteHtml({ ...quoted, username: null })).toStartWith('<blockquote author="Unknown"');
+    expect(buildQuoteBlock({ ...quoted, username: null })).toStartWith('<blockquote author="Unknown"');
   });
 
   it("keeps an author name with quotes and markup inside its attribute", () => {
     const username = 'Ai "<b>" data-comment-id="other" & co';
-    const html = sanitize(buildQuoteHtml({ ...quoted, username }));
+    const html = buildQuoteBlock({ ...quoted, username });
     const quote = new DOMParser().parseFromString(html, "text/html").querySelector("blockquote");
     expect(quote?.getAttribute("author")).toBe(username);
     expect(quote?.getAttribute("data-comment-id")).toBe("comment-1");
