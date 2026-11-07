@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import {
   DEFAULT_MOBILE_NAV_CONFIG,
-  getMobileNavIcon,
   MOBILE_NAV_OPTIONS,
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
@@ -32,7 +31,7 @@ describe("mobile navigation options", () => {
   it("gives every option its own icon", () => {
     expect(
       Object.fromEntries(
-        MOBILE_NAV_OPTIONS.map((option) => [option.id, getMobileNavIcon(option.id)]),
+        MOBILE_NAV_OPTIONS.map((option) => [option.id, option.icon]),
       ),
     ).toEqual({
       academy: GraduationCap,

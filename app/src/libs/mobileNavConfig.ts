@@ -27,32 +27,33 @@ export interface MobileNavOption {
   id: string;
   name: string;
   href: string;
+  icon: LucideIcon;
 }
 
 // All available options (village pages + existing defaults)
 export const MOBILE_NAV_OPTIONS: MobileNavOption[] = [
   // Village pages (from requirements)
-  { id: "academy", name: "Academy", href: "/academy" },
-  { id: "traininggrounds", name: "Training", href: "/traininggrounds" },
-  { id: "townhall", name: "Town Hall", href: "/townhall" },
-  { id: "ramenshop", name: "Ramen Shop", href: "/ramenshop" },
-  { id: "missionhall", name: "Mission Hall", href: "/missionhall" },
-  { id: "itemshop", name: "Item Shop", href: "/itemshop" },
-  { id: "hospital", name: "Hospital", href: "/hospital" },
-  { id: "home", name: "Home", href: "/home" },
-  { id: "clanhall", name: "Clan Hall", href: "/clanhall" },
-  { id: "blackmarket", name: "Black Market", href: "/blackmarket" },
-  { id: "battlearena", name: "Arena", href: "/battlearena" },
-  { id: "bank", name: "Bank", href: "/bank" },
-  { id: "anbu", name: "ANBU", href: "/anbu" },
-  { id: "occupation", name: "Occupation", href: "/occupation" },
+  { id: "academy", name: "Academy", href: "/academy", icon: GraduationCap },
+  { id: "traininggrounds", name: "Training", href: "/traininggrounds", icon: Dumbbell },
+  { id: "townhall", name: "Town Hall", href: "/townhall", icon: Landmark },
+  { id: "ramenshop", name: "Ramen Shop", href: "/ramenshop", icon: UtensilsCrossed },
+  { id: "missionhall", name: "Mission Hall", href: "/missionhall", icon: ScrollText },
+  { id: "itemshop", name: "Item Shop", href: "/itemshop", icon: ShoppingBag },
+  { id: "hospital", name: "Hospital", href: "/hospital", icon: HeartPulse },
+  { id: "home", name: "Home", href: "/home", icon: Bed },
+  { id: "clanhall", name: "Clan Hall", href: "/clanhall", icon: Users },
+  { id: "blackmarket", name: "Black Market", href: "/blackmarket", icon: Store },
+  { id: "battlearena", name: "Arena", href: "/battlearena", icon: Swords },
+  { id: "bank", name: "Bank", href: "/bank", icon: Banknote },
+  { id: "anbu", name: "ANBU", href: "/anbu", icon: Shield },
+  { id: "occupation", name: "Occupation", href: "/occupation", icon: Briefcase },
   // Current default pages (must be included)
-  { id: "profile", name: "Profile", href: "/profile" },
-  { id: "inbox", name: "Inbox", href: "/inbox" },
-  { id: "travel", name: "Travel", href: "/travel" },
-  { id: "tavern", name: "Tavern", href: "/tavern" },
-  { id: "settings", name: "Settings", href: "/profile/edit" },
-  { id: "items", name: "Items", href: "/items" },
+  { id: "profile", name: "Profile", href: "/profile", icon: CircleUserRound },
+  { id: "inbox", name: "Inbox", href: "/inbox", icon: Inbox },
+  { id: "travel", name: "Travel", href: "/travel", icon: Compass },
+  { id: "tavern", name: "Tavern", href: "/tavern", icon: MessagesSquare },
+  { id: "settings", name: "Settings", href: "/profile/edit", icon: Cog },
+  { id: "items", name: "Items", href: "/items", icon: Package },
 ];
 
 export interface MobileNavConfig {
@@ -74,38 +75,9 @@ export const getNavOptionById = (id: string): MobileNavOption | undefined => {
   return MOBILE_NAV_OPTIONS.find((opt) => opt.id === id);
 };
 
-// Icon mapping function - returns the appropriate icon component for each option ID
-export const getMobileNavIcon = (id: string): LucideIcon => {
-  const iconMap: Record<string, LucideIcon> = {
-    academy: GraduationCap,
-    traininggrounds: Dumbbell,
-    townhall: Landmark,
-    ramenshop: UtensilsCrossed,
-    missionhall: ScrollText,
-    itemshop: ShoppingBag,
-    hospital: HeartPulse,
-    home: Bed,
-    clanhall: Users,
-    blackmarket: Store,
-    battlearena: Swords,
-    bank: Banknote,
-    anbu: Shield,
-    occupation: Briefcase,
-    profile: CircleUserRound,
-    inbox: Inbox,
-    travel: Compass,
-    tavern: MessagesSquare,
-    settings: Cog,
-    items: Package,
-  };
-  return iconMap[id] ?? CircleUserRound;
-};
-
 // Validate and normalize config from localStorage
-export const normalizeMobileNavConfig = (
-  config: unknown,
-  defaults: MobileNavConfig = DEFAULT_MOBILE_NAV_CONFIG,
-): MobileNavConfig => {
+export const normalizeMobileNavConfig = (config: unknown): MobileNavConfig => {
+  const defaults = DEFAULT_MOBILE_NAV_CONFIG;
   if (!config || typeof config !== "object") return defaults;
 
   const c = config as Record<string, unknown>;

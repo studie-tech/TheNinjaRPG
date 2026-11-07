@@ -4,7 +4,7 @@ import { Compass, House } from "lucide-react";
 import Link from "@/layout/Link";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { MobileNavConfig } from "@/libs/mobileNavConfig";
-import { getMobileNavIcon, getNavOptionById } from "@/libs/mobileNavConfig";
+import { getNavOptionById } from "@/libs/mobileNavConfig";
 import { cn } from "@/libs/shadui";
 
 interface MobileGameNavProps {
@@ -25,7 +25,7 @@ const MobileGameNavButton: React.FC<{
   const option = getNavOptionById(optionId);
   if (!option) return null;
 
-  const Icon = getMobileNavIcon(optionId);
+  const { icon: Icon } = option;
   return (
     <Link
       href={option.href}
