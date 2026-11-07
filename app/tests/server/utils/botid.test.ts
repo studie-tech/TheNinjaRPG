@@ -427,14 +427,15 @@ describe("BotID timing", () => {
   });
 });
 
+/** The client-side matcher botid@1.5 applies to a request's pathname. */
+const clientRegex = (routePath: string) =>
+  new RegExp(
+    `^${routePath.replace(/[.?+^$[\]\\(){}|-]/g, "\\$&").split("*").join(".*")}$`,
+  );
+
 describe("BotID protected procedures", () => {
-  /** The client-side matcher botid@1.5 applies to a request's pathname. */
-  const clientMatches = (routePath: string, pathname: string) =>
-    new RegExp(
-      `^${routePath.replace(/[.?+^$[\]\\(){}|-]/g, "\\$&").split("*").join(".*")}$`,
-    ).test(pathname);
   const matchedBy = (pathname: string) =>
-    BOTID_PROTECTED_ROUTES.filter((route) => clientMatches(route.path, pathname));
+    BOTID_PROTECTED_ROUTES.filter((route) => clientRegex(route.path).test(pathname));
 
   it("lists each procedure once", () => {
     expect(new Set(BOTID_PROTECTED_PROCEDURES).size).toBe(BOTID_PROTECTED_PROCEDURES.length);
@@ -464,10 +465,6 @@ describe("BotID protected procedures", () => {
 });
 
 describe("BotID client matcher with mixed check levels", () => {
-  const clientRegex = (routePath: string) =>
-    new RegExp(
-      `^${routePath.replace(/[.?+^$[\]\\(){}|-]/g, "\\$&").split("*").join(".*")}$`,
-    );
   /** botid@1.5 attaches the challenge of the first matching protect entry. */
   const firstMatch = (pathname: string) =>
     BOTID_PROTECTED_ROUTES.find((route) => clientRegex(route.path).test(pathname));
