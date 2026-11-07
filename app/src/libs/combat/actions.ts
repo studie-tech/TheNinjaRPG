@@ -120,6 +120,9 @@ export const availableUserActions = (
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
   const isRankedBattle = !!battle && RankedBattleTypes.includes(battle.battleType);
+  // Ranked and AI loadouts bypass mastery gates even when penalties or
+  // level scaling lower their battle masteries below the requirements.
+  const skipsMasteryGates = user?.isAi || isRankedBattle;
   // A player-piloted summon must not hand its controller a second Clear/Cleanse
   // on an independent cooldown. Gated here so the UI and the server-side action
   // lookup in the combat router both lose it.
@@ -217,9 +220,7 @@ export const availableUserActions = (
             if (isDisarmed && jutsu.jutsuWeapon !== "NONE") {
               return false;
             }
-            // Ranked and AI loadouts bypass mastery gates even when penalties or
-            // level scaling lower their battle masteries below the requirements.
-            if (!user.isAi && !isRankedBattle && !hasMasteryRequirements(user, jutsu)) {
+            if (!skipsMasteryGates && !hasMasteryRequirements(user, jutsu)) {
               return false;
             }
             // Filter out movement jutsu when immobilized
@@ -268,7 +269,7 @@ export const availableUserActions = (
             if (!fitsBattleUsage(battle.battleType, item.battleUsageType)) return false;
             if (NonActionItemTypes.includes(item.itemType)) return false;
             if (ui.equipped === "NONE") return false;
-            if (!user.isAi && !isRankedBattle && !hasMasteryRequirements(user, item)) {
+            if (!skipsMasteryGates && !hasMasteryRequirements(user, item)) {
               return false;
             }
             if (item.itemType === "WEAPON") {
@@ -327,18 +328,15 @@ export const availableUserActions = (
       if (roundsPassed >= a.cooldown) {
         a.cooldown = a.originalCooldown;
         a.lastUsedRound = -a.originalCooldown;
-        if (a.type === "jutsu") {
-          const entry = user?.jutsus?.find((j) => j.jutsuId === a.id);
-          if (entry) {
-            entry.originalCooldown = a.originalCooldown;
-            entry.lastUsedRound = -a.originalCooldown;
-          }
-        } else if (a.type === "item") {
-          const entry = user?.items?.find((i) => i.itemId === a.id);
-          if (entry) {
-            entry.originalCooldown = a.originalCooldown;
-            entry.lastUsedRound = -a.originalCooldown;
-          }
+        const entry =
+          a.type === "jutsu"
+            ? user?.jutsus?.find((j) => j.jutsuId === a.id)
+            : a.type === "item"
+              ? user?.items?.find((i) => i.itemId === a.id)
+              : undefined;
+        if (entry) {
+          entry.originalCooldown = a.originalCooldown;
+          entry.lastUsedRound = -a.originalCooldown;
         }
       }
     }
@@ -378,8 +376,8 @@ export const getActiveBasicActions = (
   const base = getDefaultBasicActions(user);
 
   // Helper to merge lastUsedRound and cooldown override from tracking data into full action
-  const mergeTracking = (action: CombatAction, actionId: string): CombatAction => {
-    const trackingData = tracking?.find((ba) => ba.id === actionId);
+  const mergeTracking = (action: CombatAction): CombatAction => {
+    const trackingData = tracking?.find((ba) => ba.id === action.id);
     if (trackingData) {
       return {
         ...action,
@@ -393,19 +391,16 @@ export const getActiveBasicActions = (
 
   // Build active actions using base (full CombatAction) merged with tracking data
   const active: BasicActions = {
-    basicAttack: mergeTracking(base.basicAttack, "basicAttack"),
-    basicOffensiveStance: mergeTracking(base.basicOffensiveStance, "offensiveStance"),
-    basicDefensiveStance: mergeTracking(base.basicDefensiveStance, "defensiveStance"),
-    basicHeal: mergeTracking(base.basicHeal, "basicHeal"),
-    basicMeditate: mergeTracking(base.basicMeditate, "meditate"),
-    basicMove: mergeTracking(base.basicMove, "move"),
-    basicReplacementTechnique: mergeTracking(
-      base.basicReplacementTechnique,
-      "replacementTechnique",
-    ),
-    basicClear: mergeTracking(base.basicClear, "clear"),
-    basicCleanse: mergeTracking(base.basicCleanse, "cleanse"),
-    basicFlee: mergeTracking(base.basicFlee, "flee"),
+    basicAttack: mergeTracking(base.basicAttack),
+    basicOffensiveStance: mergeTracking(base.basicOffensiveStance),
+    basicDefensiveStance: mergeTracking(base.basicDefensiveStance),
+    basicHeal: mergeTracking(base.basicHeal),
+    basicMeditate: mergeTracking(base.basicMeditate),
+    basicMove: mergeTracking(base.basicMove),
+    basicReplacementTechnique: mergeTracking(base.basicReplacementTechnique),
+    basicClear: mergeTracking(base.basicClear),
+    basicCleanse: mergeTracking(base.basicCleanse),
+    basicFlee: mergeTracking(base.basicFlee),
   };
 
   // Collect active, targeted effects once
