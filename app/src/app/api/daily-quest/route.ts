@@ -10,10 +10,10 @@ import {
   updateQuestHistoryForGET,
 } from "@/queries/quests";
 import { listVillagesWithStructures } from "@/queries/village";
-import { upsertQuestEntries } from "@/routers/quests";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { upsertQuestEntries } from "@/server/utils/questAssignment";
 import { shuffle } from "@/utils/array";
 import { periodStart, secondsFromNow } from "@/utils/time";
 

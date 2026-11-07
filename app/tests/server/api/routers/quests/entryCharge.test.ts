@@ -17,7 +17,8 @@ import {
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
-import { assignQuestToUser, questsRouter } from "@/server/api/routers/quests";
+import { questsRouter } from "@/server/api/routers/quests";
+import { assignQuestToUser } from "@/server/utils/questAssignment";
 import { DialogObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {

@@ -47,7 +47,6 @@ import { fetchQuest, fetchUserQuestByQuestId } from "@/queries/quests";
 import { fetchSectorVillage } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
-import { assignQuestToUser } from "@/routers/quests";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -61,6 +60,7 @@ import {
   joinCoopChat,
   launchCoopEncounter,
 } from "@/server/utils/coop";
+import { assignQuestToUser } from "@/server/utils/questAssignment";
 import {
   saveQuestPartyMember,
   synchronizeExistingQuestParty,

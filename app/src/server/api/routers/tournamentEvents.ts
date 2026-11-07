@@ -55,7 +55,6 @@ import {
   updateTournamentMatchForSyncEventTournament,
 } from "@/queries/tournamentEvents";
 import { initiateBattle } from "@/routers/combat";
-import { updateRewards } from "@/routers/quests";
 import {
   baseServerResponse,
   errorResponse,
@@ -68,6 +67,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { updateRewards } from "@/server/utils/questRewards";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { shuffle } from "@/utils/array";

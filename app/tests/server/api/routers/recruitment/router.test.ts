@@ -19,7 +19,7 @@ import {
 } from "@/drizzle/schema";
 import { HOME_FURNITURE_STARTERS } from "@/drizzle/constants";
 import { profileRouter } from "@/routers/profile";
-import { updateRewards } from "@/server/api/routers/quests";
+import { updateRewards } from "@/server/utils/questRewards";
 import { hashIp } from "@/server/utils/ipHash";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";

@@ -3,7 +3,7 @@ import { canBootstrapQuestType } from "@/deltas/profile";
 import { beforeEach, expect, it } from "bun:test";
 import { quest, questHistory, type UserData } from "@/drizzle/schema";
 import { fetchQuestBootstrap } from "../../../../../src/server/api/routers/profile";
-import { fetchUncompletedQuests } from "../../../../../src/server/api/routers/quests";
+import { fetchUncompletedQuests } from "@/server/utils/questAssignment";
 import { insertQuestHistory, insertQuests } from "../../../../setup/factories";
 import {
   describeWithDatabase,

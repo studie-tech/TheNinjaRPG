@@ -339,6 +339,8 @@ import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
+import { assignQuestToUser } from "@/server/utils/questAssignment";
+import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -400,7 +402,6 @@ import {
   type WeightedCache,
   weightedCacheSchema,
 } from "@/validators/weightedCache";
-import { assignQuestToUser, nameGrantedRewards, updateRewards } from "./quests";
 
 export const itemRouter = createTRPCRouter({
   /** Content authoring needs source alpha bounds even for generated and historical uploads. */

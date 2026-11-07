@@ -51,8 +51,6 @@ import {
   updateUserStreakProgressForClaimStreakDay3,
 } from "@/queries/activityStreak";
 import { fetchUser } from "@/queries/profile";
-
-import { updateRewards } from "@/server/api/routers/quests";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -61,6 +59,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { updateRewards } from "@/server/utils/questRewards";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canChangeContent } from "@/utils/permissions";
 import { isWithinDateRange } from "@/utils/time";

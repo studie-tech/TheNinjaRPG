@@ -7,7 +7,7 @@ import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/util";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
-import { claimDailyQuestSlot } from "@/server/api/routers/quests";
+import { claimDailyQuestSlot } from "@/server/utils/questAssignment";
 import { warRouter } from "@/server/api/routers/war";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";

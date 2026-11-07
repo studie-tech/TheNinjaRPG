@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
 import { aiProfile, battle, userData } from "@/drizzle/schema";
 import { getNewTrackers } from "@/libs/quest";
-import { handleQuestConsequences } from "@/server/api/routers/quests";
+import { handleQuestConsequences } from "@/server/utils/questConsequences";
 import { InstantStartBattleObjective } from "@/validators/objectives";
 import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
 import { trackerQuest, trackerUser } from "../../../../setup/quest";

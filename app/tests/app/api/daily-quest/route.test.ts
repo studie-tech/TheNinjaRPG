@@ -1,5 +1,5 @@
 import * as gameSettings from "@/libs/gamesettings";
-import * as quests from "@/routers/quests";
+import * as quests from "@/server/utils/questAssignment";
 import {
   resetServerModuleStubs,
   stubCronAuth,

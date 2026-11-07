@@ -13,7 +13,8 @@ import { Pusher } from "@/libs/pusher";
 import { calcEnergy } from "@/libs/profile";
 import { processUsersForBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
-import { questsRouter, upsertQuestEntry } from "@/server/api/routers/quests";
+import { questsRouter } from "@/server/api/routers/quests";
+import { upsertQuestEntry } from "@/server/utils/questAssignment";
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import {
   DialogObjective,
