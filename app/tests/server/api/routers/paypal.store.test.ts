@@ -5,7 +5,8 @@ import { actionLog, item, quest, questHistory, paypalTransaction, recruitmentRew
 import * as purchaseQueries from "@/queries/purchases";
 import { staffRouter } from "@/server/api/routers/staff";
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
-import { paypalRouter, syncTransactions } from "@/server/api/routers/paypal";
+import { paypalRouter } from "@/server/api/routers/paypal";
+import { syncTransactions } from "@/server/utils/paypal/fulfillment";
 import { itemRouter } from "@/server/api/routers/item";
 import { authorizeStoreCapture, deliverStoreOrder, reserveStoreOrder } from "@/server/utils/webStore";
 import * as sentry from "@/server/utils/sentry";
