@@ -465,13 +465,15 @@ export const isQuestRankAllowed = (
   quest: Pick<Quest, "questType" | "questRank">,
   user: Pick<UserData, "rank">,
   source: "ui" | "random_assignment" = "ui",
-) =>
-  quest.questType === "village_mission" ||
-  (quest.questType === "mission" && quest.questRank === "S")
-    ? false
-    : source === "random_assignment" && quest.questType !== "mission"
-      ? true
-      : availableQuestLetterRanks(user.rank).includes(quest.questRank);
+) => {
+  if (
+    quest.questType === "village_mission" ||
+    (quest.questType === "mission" && quest.questRank === "S")
+  )
+    return false;
+  if (source === "random_assignment" && quest.questType !== "mission") return true;
+  return availableQuestLetterRanks(user.rank).includes(quest.questRank);
+};
 
 interface QuestWarSummary {
   attackerVillageId: string;

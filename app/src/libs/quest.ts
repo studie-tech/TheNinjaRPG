@@ -21,7 +21,7 @@ import {
   isSupportedOverworldBindingTask,
   pickPlaceableSector,
 } from "@/libs/overworldAi";
-import { isAvailableUserQuests } from "@/libs/quest/availability";
+import { getUnscaledLevel, isAvailableUserQuests } from "@/libs/quest/availability";
 import { recordPartyContributions } from "@/libs/questParty";
 import {
   getIsolatedPyramid,
@@ -53,9 +53,6 @@ import {
 } from "@/validators/objectives";
 import { getQuestCounterFieldName } from "@/validators/user";
 
-/**
- * Get currently active quests for a user
- */
 /** Select playable definitions; raw history remains available for isolation and recovery controls. */
 export const getUserQuests = (
   user: UserData & {
@@ -238,11 +235,10 @@ export const rollObjectiveAttackers = (
       );
     }
     if (opponents.length > 0) {
+      const questId = questForObjective?.(objective);
       return {
         type: "random_encounter",
-        ...(questForObjective?.(objective)
-          ? { questId: questForObjective(objective) }
-          : {}),
+        ...(questId ? { questId } : {}),
         ids: opponents,
         scaleStats: objective.attackers_scaled_to_user,
         scaleGains: objective.attackers_scale_gains,
@@ -820,12 +816,7 @@ export const getNewTrackers = (
               0,
             );
           } else if (task === "user_level") {
-            // Use originalLevel if available (for combat-scaled users), otherwise use current level
-            const userLevel =
-              "originalLevel" in user && typeof user.originalLevel === "number"
-                ? user.originalLevel
-                : (user.level ?? 1);
-            status.value = userLevel;
+            status.value = getUnscaledLevel(user);
           } else if (task === "farming_level") {
             status.value = getFarmingLevel(user.farmingExperience);
           } else if (

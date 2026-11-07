@@ -374,39 +374,15 @@ export const getExperienceTrackerTasks = (
     | "reward_gathering_experience"
   >,
 ) => {
-  const tasks: {
-    task:
-      | "medical_experience_gained"
-      | "crafting_experience_gained"
-      | "hunting_experience_gained"
-      | "gathering_experience_gained";
-    increment: number;
-  }[] = [];
-  if (rewards.reward_medical_experience > 0) {
-    tasks.push({
-      task: "medical_experience_gained",
-      increment: rewards.reward_medical_experience,
-    });
-  }
-  if (rewards.reward_crafting_experience > 0) {
-    tasks.push({
-      task: "crafting_experience_gained",
-      increment: rewards.reward_crafting_experience,
-    });
-  }
-  if (rewards.reward_hunting_experience > 0) {
-    tasks.push({
-      task: "hunting_experience_gained",
-      increment: rewards.reward_hunting_experience,
-    });
-  }
-  if (rewards.reward_gathering_experience > 0) {
-    tasks.push({
-      task: "gathering_experience_gained",
-      increment: rewards.reward_gathering_experience,
-    });
-  }
-  return tasks;
+  const gains = [
+    ["medical_experience_gained", rewards.reward_medical_experience],
+    ["crafting_experience_gained", rewards.reward_crafting_experience],
+    ["hunting_experience_gained", rewards.reward_hunting_experience],
+    ["gathering_experience_gained", rewards.reward_gathering_experience],
+  ] as const;
+  return gains.flatMap(([task, increment]) =>
+    increment > 0 ? [{ task, increment }] : [],
+  );
 };
 
 /**
