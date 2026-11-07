@@ -6,7 +6,7 @@ import { SAGE_MODE_MAX_LEVEL } from "@/drizzle/constants";
  * `hidden` is a tri-state: `undefined` = all (staff only), `true`/`false` = that set.
  */
 export const sageModeFilteringSchema = z.object({
-  name: z.string().min(0).max(256).optional(),
+  name: z.string().max(256).optional(),
   village: z.string().optional(),
   level: z.coerce.number().min(1).max(SAGE_MODE_MAX_LEVEL).optional(),
   hidden: z.boolean().optional(),

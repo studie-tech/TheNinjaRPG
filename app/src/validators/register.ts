@@ -172,15 +172,15 @@ export type UserSearchSchema = z.infer<typeof userSearchSchema>;
 const searchUserResultSchema = z.object({
   userId: z.string(),
   username: usernameFormatSchema,
-  avatar: z.url().optional().nullish(),
+  avatar: z.url().nullish(),
   rank: z.enum(UserRanks),
   level: z.number(),
   federalStatus: z.enum(FederalStatuses),
   role: z.enum(UserRoles).optional(),
   isOutlaw: z.boolean().optional(),
   displayTitle: z.string().optional(),
-  nRecruited: z.number().optional().nullish(),
-  tavernMessages: z.number().optional().nullish(),
+  nRecruited: z.number().nullish(),
+  tavernMessages: z.number().nullish(),
   tavernUsernameColor: z.enum(TavernColorPresets).optional(),
   tavernTitleColor: z.enum(TavernColorPresets).optional(),
   village: z
@@ -189,7 +189,6 @@ const searchUserResultSchema = z.object({
       hexColor: z.string(),
       kageId: z.string().nullish(),
     })
-    .optional()
     .nullish(),
 });
 export type UserSearchResult = z.infer<typeof searchUserResultSchema>;

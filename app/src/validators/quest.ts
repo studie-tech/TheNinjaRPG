@@ -6,7 +6,7 @@ import { allObjectiveTasks } from "@/validators/objectives";
 export const QUEST_FILTER_MAX_LEVEL = 150;
 
 export const questFilteringSchema = z.object({
-  name: z.string().min(0).max(256).optional(),
+  name: z.string().max(256).optional(),
   objectives: z.array(z.enum(allObjectiveTasks)).optional(),
   questType: z.enum(QuestTypes).optional(),
   rank: z.enum(LetterRanks).optional(),

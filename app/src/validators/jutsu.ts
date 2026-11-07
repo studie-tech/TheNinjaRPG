@@ -39,7 +39,7 @@ export const jutsuFilteringSchema = z.object({
   element: z.array(z.string()).optional(),
   jutsuType: z.array(z.enum(JutsuTypes)).optional(),
   method: z.enum(AttackMethods).optional(),
-  name: z.string().min(0).max(256).optional(),
+  name: z.string().max(256).optional(),
   rank: z.array(z.enum(UserRanks)).optional(),
   requiredLevel: z.coerce.number().optional(),
   rarity: z.enum(LetterRanks).optional(),
@@ -82,7 +82,7 @@ export type UserJutsuFilteringSchema = z.infer<typeof userJutsuFilteringSchema>;
  * Base schema for reskins
  */
 export const jutsuReskinBaseSchema = reskinBaseSchema.extend({
-  battleDescription: z.string().min(0).max(1000).optional(),
+  battleDescription: z.string().max(1000).optional(),
 });
 
 /**
