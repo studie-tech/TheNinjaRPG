@@ -387,6 +387,22 @@ describe("coordinate casts and preview", () => {
     ).toHaveLength(1);
   });
   it.each(["GROUND", "OPPONENT"] as const)(
+    "keeps an enemy-only self tag off the caster on a %s cast",
+    (target) => {
+      const { battle, cast } = scenario();
+      expect(
+        cast(
+          action({
+            target,
+            coordinateTargeting: pattern({ selection: "EXCLUDE", coordinates: [] }),
+            effects: [DamageTag.parse({}), HealTag.parse({ target: "SELF", friendlyFire: "ENEMIES" })],
+          }),
+        ),
+      ).toBe(true);
+      expect(battle.usersEffects.filter((effect) => effect.type === "heal")).toEqual([]);
+    },
+  );
+  it.each(["GROUND", "OPPONENT"] as const)(
     "applies self tags once when only independent coordinates accept a %s cast",
     (target) => {
       const { actor, battle, cast } = scenario();
