@@ -11,7 +11,8 @@ import {
 import { Pusher } from "@/libs/pusher";
 import { itemRouter } from "@/server/api/routers/item";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
-import { commitQuestObjectiveRewards, questsRouter } from "@/server/api/routers/quests";
+import { questsRouter } from "@/server/api/routers/quests";
+import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import { NonCombatConsumeRewardTag, NonCombatQuestTag } from "@/validators/combat";
 import { DialogObjective } from "@/validators/objectives";
 import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";

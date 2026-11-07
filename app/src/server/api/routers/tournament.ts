@@ -30,7 +30,6 @@ import {
   updateUserDataForJoinMatch,
 } from "@/queries/tournament";
 import { initiateBattle } from "@/routers/combat";
-import { updateRewards } from "@/routers/quests";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import {
   baseServerResponse,
@@ -44,6 +43,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { updateRewards } from "@/server/utils/questRewards";
 import { secondsFromDate } from "@/utils/time";
 import { checkCoLeader } from "@/validators/clan";
 import { ObjectiveReward } from "@/validators/rewards";

@@ -61,11 +61,6 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { startQuestPartyEncounter } from "@/routers/questParty";
-import {
-  assignQuestToUser,
-  commitQuestObjectiveRewards,
-  OVERWORLD_ASSIGNABLE_QUEST_TYPES,
-} from "@/routers/quests";
 import { fetchActiveWars } from "@/routers/war";
 import {
   baseServerResponse,
@@ -81,6 +76,11 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { claimActiveNpcQuest, claimUserSnapshot } from "@/server/utils/concurrency";
+import {
+  assignQuestToUser,
+  OVERWORLD_ASSIGNABLE_QUEST_TYPES,
+} from "@/server/utils/questAssignment";
+import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
 import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";

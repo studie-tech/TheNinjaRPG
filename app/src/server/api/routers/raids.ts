@@ -106,7 +106,6 @@ import {
 import { deleteSectorByNumber } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser } from "@/routers/profile";
-import { updateRewards } from "@/routers/quests";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -121,6 +120,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { raidBattleStarted } from "@/server/utils/push/messages";
+import { updateRewards } from "@/server/utils/questRewards";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
 import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";

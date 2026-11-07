@@ -15,7 +15,7 @@ import { combatRouter } from "@/server/api/routers/combat";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { travelRouter } from "@/server/api/routers/travel";
 import { fetchUpdatedUser, type UserWithRelations } from "@/server/api/routers/profile";
-import { updateRewards } from "@/server/api/routers/quests";
+import { updateRewards } from "@/server/utils/questRewards";
 import { isWarMissionAvailable } from "@/libs/quest";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { fetchActiveWars, warRouter } from "@/server/api/routers/war";

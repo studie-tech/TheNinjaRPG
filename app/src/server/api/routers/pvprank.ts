@@ -57,7 +57,6 @@ import {
   updateUserDataForGetRankedPvpQueue,
 } from "@/queries/pvprank";
 import { initiateBattle } from "@/routers/combat";
-import { updateRewards } from "@/server/api/routers/quests";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -71,6 +70,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { updateRewards } from "@/server/utils/questRewards";
 import {
   cleanRankedProhibitedSelections,
   fetchSanninRankedPlayers,

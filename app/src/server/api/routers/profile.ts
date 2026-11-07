@@ -268,7 +268,6 @@ import { fetchJutsuQueueSummary } from "@/queries/train";
 import { fetchVillage, fetchVillages } from "@/queries/village";
 import { removeFromSquad } from "@/routers/anbu";
 import { removeFromClan } from "@/routers/clan";
-import { handleQuestConsequences, insertNextQuest } from "@/routers/quests";
 import { deleteUser } from "@/server/api/routers/staff";
 import {
   baseServerResponse,
@@ -303,10 +302,12 @@ import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { offsetPage } from "@/server/utils/pagination";
 import { consumeUserAnnouncements, fetchPublicUsers } from "@/server/utils/profile";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
+import { insertNextQuest } from "@/server/utils/questAssignment";
 import {
   fetchBloodlineCollectionCatalogue,
   hydrateQuestCollections,
 } from "@/server/utils/questCollections";
+import { handleQuestConsequences } from "@/server/utils/questConsequences";
 import {
   applyQuestParty,
   type LoadedQuestParty,

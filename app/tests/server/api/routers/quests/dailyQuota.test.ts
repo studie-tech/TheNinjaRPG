@@ -10,7 +10,8 @@ import { item, overworldAiPlacement, overworldAiPlacementQuest, quest, questHist
 import { Pusher } from "@/libs/pusher";
 import { overworldAiRouter } from "@/routers/overworldAi";
 import { fetchUpdatedUser } from "@/routers/profile";
-import { assignQuestToUser, questsRouter } from "@/routers/quests";
+import { questsRouter } from "@/routers/quests";
+import { assignQuestToUser } from "@/server/utils/questAssignment";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";

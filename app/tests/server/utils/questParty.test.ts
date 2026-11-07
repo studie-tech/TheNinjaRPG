@@ -34,7 +34,7 @@ import { eq } from "drizzle-orm";
 import { quest, questHistory, questParty, userData } from "@/drizzle/schema";
 import { projectPartyTracker } from "@/libs/questParty";
 import type { UserWithRelations } from "@/routers/profile";
-import { commitQuestObjectiveRewards } from "@/routers/quests";
+import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import { questPartyRelations } from "@/queries/questParty";
 import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";

@@ -20,7 +20,7 @@ const { resolveSync } = (globalThis as unknown as { Bun: { resolveSync: (specifi
 const settlementFunctions = new Set([
   "server/api/routers/profile.ts#fetchUpdatedUser",
   "server/api/routers/profile.ts#fetchUpdatedUserOnce",
-  "server/api/routers/quests.ts#handleQuestConsequences",
+  "server/utils/questConsequences.ts#handleQuestConsequences",
   "libs/quest.ts#getNewTrackers",
   "server/utils/kage.ts#syncLockedKageDefense",
 ]);
