@@ -45,7 +45,6 @@ import {
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_EXTRA_RESKIN_SLOTS,
   MAX_ITEM_VARIANTS,
-  MAX_MARRIAGE_SLOTS,
   PET_MAX_CONSUME_PETS,
   TUTORIAL_ITEM_ID,
   VARIANT_CURRENCY_FIELD,
@@ -205,7 +204,6 @@ import {
   insertActionLogForEvolveItem,
   insertActionLogForSellUserItem,
   insertActionLogForUpdate,
-  insertBloodlineRollsForConsume,
   insertCraftingRequirementForClone,
   insertCraftingRequirementForUpdate,
   insertItemForClone,
@@ -213,12 +211,10 @@ import {
   insertItemLoadoutForInsertMissing,
   insertItemPurchaseCounterForBuy,
   insertItemVariantForUpsertItemVariant,
-  insertSageModeRollsForConsume,
   insertUserItemForEvolveItem,
   insertUserItemForSplitItemStack,
   insertUserItems,
   insertUserItemVariantForPurchaseVariant,
-  insertUserSkillForConsume,
   listItemForDelete,
   listItemForGetAll,
   listItemForGetAllNames,
@@ -253,7 +249,6 @@ import {
   selectUserItemVariantForGetUserUnlockedVariants,
   selectVillageStructureForSellUserItem,
   sellUserItemAtomically,
-  updateBloodlineRollsForConsume,
   updateItemForUpdate,
   updateItemLoadoutForEvolveItem,
   updateItemLoadoutForRenameLoadout,
@@ -337,6 +332,7 @@ import {
   runRewardTasks,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
+import { planConsumeEffects } from "@/server/utils/consumeEffects";
 import { consumeMeal } from "@/server/utils/cooking";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
@@ -345,7 +341,6 @@ import { offsetPage } from "@/server/utils/pagination";
 import { assignQuestToUser } from "@/server/utils/questAssignment";
 import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
-import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { groupBy } from "@/utils/grouping";
 import { fetchWithTimeout } from "@/utils/http";
@@ -362,11 +357,9 @@ import { validateUrlForSsrf } from "@/utils/ssrf";
 import { getNextUserSnapshotAt, getUtcDayKey } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import {
-  HealTag,
   IncreaseJutsuSlots,
   ItemValidator,
   NonCombatConsumeRewardTag,
-  NonCombatGainSkill,
   NonCombatQuestTag,
   type ZodAllTags,
 } from "@/validators/combat";
@@ -394,7 +387,6 @@ import { renameLoadoutSchema, setLoadoutHotkeysSchema } from "@/validators/loado
 import { idSchema } from "@/validators/misc";
 import {
   ObjectiveReward,
-  type ObjectiveRewardType,
   PostProcessedRewardSchema,
   type PostProcessedRewards,
 } from "@/validators/rewards";
@@ -2411,24 +2403,6 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("No sage mode is available to roll");
       }
 
-      // Bookkeeping
-      const messages: string[] = [];
-      if (petReward)
-        messages.push(
-          `${petReward.name} joined your companion collection. Generate its appearance from your companion profile.`,
-        );
-      const updates = {
-        sageModeId: user.sageModeId,
-        curHealth: user.curHealth,
-        curStamina: user.curStamina,
-        curChakra: user.curChakra,
-        marriageSlots: user.marriageSlots,
-        extraReskinSlots: user.extraReskinSlots,
-      };
-
-      // Rewards
-      const rewards: ObjectiveRewardType[] = [];
-
       // Check if item would increase reskin slots beyond max
       const reskinIncreaseEffect = useritem.item.effects.find(
         (e) => e.type === "noncombatincreasereskins",
@@ -2443,139 +2417,26 @@ export const itemRouter = createTRPCRouter({
       }
 
       // Calculations
-      const mutations: ((client: DrizzleClient) => PromiseLike<unknown>)[] = [];
-      // Only set when THIS request rolls a new sage mode; used as the COALESCE fallback at the
-      // flush below so the snapshot write never resurrects a mode a concurrent removal cleared.
-      let grantedSageModeId: string | null = null;
-      let changedBloodlineId: string | null | undefined;
-      useritem.item.effects.forEach((effect) => {
-        if (effect.type === "rollbloodline") {
-          const randomBloodline = getRandomElement(bloodlinePools.get(effect.rank));
-          if (!randomBloodline) {
-            throw serverError("NOT_FOUND", "No bloodline found");
-          }
-          // Success?
-          const roll = Math.random() * 100;
-          const success = roll < effect.power;
-          // Log action
-          const previousRoll = previousRolls.find((r) =>
-            success
-              ? r.bloodlineId === randomBloodline.id
-              : r.goal === effect.rank && !r.bloodlineId,
-          );
-          if (previousRoll) {
-            mutations.push((client) =>
-              updateBloodlineRollsForConsume(client, previousRoll),
-            );
-          } else {
-            mutations.push((client) =>
-              insertBloodlineRollsForConsume(
-                client,
-                ctx,
-                success,
-                randomBloodline,
-                effect,
-              ),
-            );
-          }
-          // Message
-          if (success) {
-            changedBloodlineId = randomBloodline.id;
-            messages.push(`You rolled a new bloodline: ${randomBloodline.name}. `);
-          } else {
-            messages.push(`You rolled for a new bloodline, but none was found. `);
-          }
-        } else if (effect.type === "rollsagemode") {
-          // `updates.sageModeId` guards against a second `rollsagemode` effect on the same item
-          // clobbering a grant an earlier effect in this loop already made; `user.sageModeId`
-          // guards against overwriting a mode the player already owns.
-          if (user.sageModeId || updates.sageModeId) {
-            messages.push(
-              "You already channel a sage mode; the natural energies find no room for another. ",
-            );
-            return;
-          }
-          const randomSageMode = getRandomElement(sageModePool);
-          if (!randomSageMode) {
-            throw serverError("NOT_FOUND", "No sage mode found");
-          }
-          const roll = Math.random() * 100;
-          const success = roll < effect.power;
-          if (success) {
-            mutations.push((client) =>
-              insertSageModeRollsForConsume(client, ctx, randomSageMode),
-            );
-            updates.sageModeId = randomSageMode.id;
-            grantedSageModeId = randomSageMode.id;
-            messages.push(`You rolled a new sage mode: ${randomSageMode.name}. `);
-          } else {
-            messages.push(`You rolled for a new sage mode, but none was found. `);
-          }
-        } else if (effect.type === "noncombatconsumereward") {
-          if (effect.rewardMode !== "weightedCache")
-            rewards.push(ObjectiveReward.parse(effect));
-        } else if (effect.type === "noncombatgainskill") {
-          const parsedEffect = NonCombatGainSkill.parse(effect);
-          if (parsedEffect.skillId) {
-            const skill = userSkills.find((s) => s.skill.id === parsedEffect.skillId);
-            if (!skill) {
-              mutations.push((client) =>
-                insertUserSkillForConsume(client, ctx, parsedEffect),
-              );
-              messages.push("You unlocked a special skill!");
-            } else {
-              messages.push(`You already have the skill ${skill.skill.name}.`);
-            }
-          }
-        } else if (effect.type === "removebloodline") {
-          if (Math.random() * 100 < effect.power) {
-            changedBloodlineId = null;
-            messages.push(`Your bloodline was removed. `);
-          } else {
-            messages.push(`Your bloodline could not be removed successfully.`);
-          }
-        } else if (effect.type === "marriageslotincrease") {
-          if (updates.marriageSlots < MAX_MARRIAGE_SLOTS) {
-            updates.marriageSlots += effect.power;
-            if (updates.marriageSlots > MAX_MARRIAGE_SLOTS) {
-              updates.marriageSlots = MAX_MARRIAGE_SLOTS;
-            }
-            messages.push(`Your marriage slots were increased! `);
-          } else {
-            messages.push(
-              `Your marriage slots are already at max! Current Slots: ${updates.marriageSlots}`,
-            );
-          }
-        } else if (effect.type === "noncombatincreasereskins") {
-          updates.extraReskinSlots += effect.power;
-          messages.push(
-            `Your number of allowed reskins was increased by ${effect.power}! `,
-          );
-        } else if (effect.type === "increasejutsuslots") {
-          messages.push(
-            `You gained ${effect.power} extra jutsu slot${effect.power === 1 ? "" : "s"}!`,
-          );
-        } else if (effect.type === "heal") {
-          const parsedEffect = HealTag.parse(effect);
-          const poolsAffects = parsedEffect.poolsAffected || ["Health"];
-          poolsAffects.forEach((pool) => {
-            const { current, max, label } = HEAL_POOLS[pool];
-            const previous = updates[current];
-            // Heals start from the snapshot, so repeated effects replace rather than stack.
-            // The stored effect decides the amount: the tag defaults calculation to percentage.
-            updates[current] = Math.min(
-              user[current] +
-                (effect.calculation === "percentage"
-                  ? user[max] * (effect.power / 100)
-                  : effect.power),
-              user[max],
-            );
-            messages.push(
-              `You healed ${Math.ceil(updates[current] - previous)} ${label}`,
-            );
-          });
-        }
+      const {
+        updates,
+        messages,
+        rewards,
+        mutations,
+        grantedSageModeId,
+        changedBloodlineId,
+      } = planConsumeEffects({
+        effects: useritem.item.effects,
+        user,
+        ctx,
+        bloodlinePools,
+        sageModePool,
+        previousRolls,
+        userSkills,
       });
+      if (petReward)
+        messages.unshift(
+          `${petReward.name} joined your companion collection. Generate its appearance from your companion profile.`,
+        );
       // Parse rewards
       let processedRewards: PostProcessedRewards | null = null;
       if (rewards.length > 0) {
@@ -3819,13 +3680,6 @@ const preserveEffectReputation = (
     }
   });
 };
-
-/** The user columns and message label of each pool a consumable can heal. */
-const HEAL_POOLS = {
-  Health: { current: "curHealth", max: "maxHealth", label: "HP" },
-  Chakra: { current: "curChakra", max: "maxChakra", label: "CP" },
-  Stamina: { current: "curStamina", max: "maxStamina", label: "SP" },
-} as const;
 
 const rewardPetSpeciesIds = (effects: Item["effects"]) =>
   effects.flatMap((effect) =>
