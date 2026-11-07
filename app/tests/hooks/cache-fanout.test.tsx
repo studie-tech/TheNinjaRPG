@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
+import { InfiniteQueryObserver, QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
@@ -77,6 +77,26 @@ it("recovers the dependent timer after the ownership baseline rejects a training
   await act(async () => hook.updateTraining({ success: true, message: "Training", trainingUpdate: { ...t.training, beforeLevel: 99 } }, hook.prepareTrainingUpdate()));
   expect(t.events).toEqual([1, 3]);
   expect(t.client.getQueryData(t.keys[3]!)).toEqual(t.values[3]);
+});
+
+it.each(["start", "cancel"])("reconciles owned-first offset pages after training %s without refreshing other catalogues", async action => {
+  const t = setup(), hook = t.view.result.current.training;
+  const queryKey = getQueryKey(api.jutsu.getAll, { limit: 1, ownedFirst: true }, "infinite");
+  const ordinaryKey = getQueryKey(api.jutsu.getAll, { limit: 1 }, "infinite");
+  let order = ["high", "active"];
+  const queryFn = vi.fn(async ({ pageParam }: { pageParam: number }) => ({ data: [order[pageParam]], nextCursor: pageParam + 1 < order.length ? pageParam + 1 : undefined }));
+  const observer = new InfiniteQueryObserver(t.client, { queryKey, queryFn, initialPageParam: 0, getNextPageParam: page => page.nextCursor });
+  stops.push(observer.subscribe(() => {}));
+  await observer.refetch();
+  t.client.setQueryData(ordinaryKey, { pages: [{ data: ["ordinary"] }], pageParams: [0] });
+  order = ["active", "high"];
+  await act(async () => action === "start"
+    ? hook.updateTraining({ success: true, message: "Training", trainingUpdate: t.training }, hook.prepareTrainingUpdate())
+    : hook.refreshTraining());
+  await observer.fetchNextPage();
+  expect(observer.getCurrentResult().data?.pages.flatMap(page => page.data)).toEqual(["active", "high"]);
+  expect(queryFn).toHaveBeenCalledTimes(3);
+  expect(t.client.getQueryState(ordinaryKey)?.isInvalidated).toBe(false);
 });
 
 it("keeps sector updates bound to the captured sector when selection changes", async () => {

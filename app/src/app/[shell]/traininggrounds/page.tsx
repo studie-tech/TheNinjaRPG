@@ -1125,14 +1125,44 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Favorites are shared with the ranked loadout builder (same stored list & star)
   const { data: rankedLoadout, isError: isLoadoutUnavailable } =
     api.pvpRank.getRankedLoadout.useQuery(undefined);
-  // The catalogue orders by the favorites it opened with; starring one later re-sorts the
-  // loaded rows here instead of reloading every page.
-  const [listFavoriteIds, setListFavoriteIds] = useState<string[] | null>(null);
+  // Ownership and queue data also determine the catalogue's opening priority.
+  const {
+    data: userJutsus,
+    isPending: isRefetchingUserJutsu,
+    isError: isOwnershipUnavailable,
+  } = api.jutsu.getUserJutsus.useQuery({});
+  const { data: trainingQueue, isError: isQueueUnavailable } =
+    api.jutsu.getTrainingQueue.useQuery(undefined);
+  // Keep priorities fixed across offset pages; later favorite/training changes re-sort
+  // loaded rows locally. Ownership-level changes reconcile the catalogue in the cache hook.
+  const [listPriorities, setListPriorities] = useState<{
+    favoriteIds: string[];
+    trainingIds: string[];
+  } | null>(null);
   useEffect(() => {
-    if (listFavoriteIds !== null) return;
-    if (rankedLoadout) setListFavoriteIds(rankedLoadout.loadout.favoriteJutsuIds ?? []);
-    else if (isLoadoutUnavailable) setListFavoriteIds([]);
-  }, [listFavoriteIds, rankedLoadout, isLoadoutUnavailable]);
+    if (listPriorities !== null) return;
+    if (!rankedLoadout && !isLoadoutUnavailable) return;
+    if (!userJutsus && !isOwnershipUnavailable) return;
+    if (!trainingQueue && !isQueueUnavailable) return;
+    setListPriorities({
+      favoriteIds: rankedLoadout?.loadout.favoriteJutsuIds ?? [],
+      trainingIds: [
+        ...(userJutsus ?? [])
+          .filter((owned) => isJutsuInTraining(owned, Date.now() - timeDiff))
+          .map((owned) => owned.jutsuId),
+        ...(trainingQueue?.waiting ?? []).map((job) => job.jutsuId),
+      ],
+    });
+  }, [
+    listPriorities,
+    rankedLoadout,
+    isLoadoutUnavailable,
+    userJutsus,
+    isOwnershipUnavailable,
+    trainingQueue,
+    isQueueUnavailable,
+    timeDiff,
+  ]);
 
   // Jutsus
   const {
@@ -1146,11 +1176,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       limit: 100,
       hideAi: true,
       ownedFirst: true,
-      favoriteIds: listFavoriteIds?.slice(0, 500),
+      favoriteIds: listPriorities?.favoriteIds.slice(0, 500),
+      trainingIds: listPriorities?.trainingIds.slice(0, 500),
       ...getFilter(state),
     },
     {
-      enabled: listFavoriteIds !== null,
+      enabled: listPriorities !== null,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },
@@ -1169,9 +1200,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     items: userItems ?? [],
   });
 
-  // Ownership and active training must remain available outside the picker filters.
-  const { data: userJutsus, isPending: isRefetchingUserJutsu } =
-    api.jutsu.getUserJutsus.useQuery({});
   const userJutsuCounts = userJutsus?.map((userJutsu) => {
     return {
       id: userJutsu.jutsuId,
@@ -1190,7 +1218,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     { enabled: isJutsuPickStep },
   );
 
-  const { prepareTrainingUpdate, updateTraining } = useJutsuTrainingCacheUpdate();
+  const { prepareTrainingUpdate, updateTraining, refreshTraining } =
+    useJutsuTrainingCacheUpdate();
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
     api.jutsu.startTraining.useMutation({
@@ -1225,11 +1254,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     api.jutsu.stopTraining.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.jutsu.getTrainingQueue.invalidate();
-        await Promise.all([
-          utils.jutsu.getUserJutsus.invalidate(),
-          utils.profile.getSidebarTimers.invalidate(),
-        ]);
+        await refreshTraining();
       },
       onSettled: () => {
         setIsOpen(false);
@@ -1237,21 +1262,15 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
-  // Levels waiting behind the active training
-  const { data: trainingQueue } = api.jutsu.getTrainingQueue.useQuery(undefined);
   const { mutate: cancelQueued, isPending: isCancellingQueued } =
     api.jutsu.cancelQueuedTraining.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        await utils.jutsu.getTrainingQueue.invalidate();
-        await Promise.all([
-          utils.jutsu.getUserJutsus.invalidate(),
-          utils.profile.getSidebarTimers.invalidate(),
-          ...(data.success
-            ? [updateUser(undefined, { revision, delta: data.userDelta })]
-            : []),
-        ]);
+        await refreshTraining();
+        if (data.success) {
+          await updateUser(undefined, { revision, delta: data.userDelta });
+        }
       },
     });
 
@@ -1476,12 +1495,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           emptyText="Nothing in training. Select a jutsu below to start."
           onActiveFinish={async () => {
             setTrainingFinishedAt(Date.now());
-            // serial-invalidation-ok: reading the queue starts the successor before ownership is read.
-            await utils.jutsu.getTrainingQueue.invalidate();
-            await Promise.all([
-              utils.jutsu.getUserJutsus.invalidate(),
-              utils.profile.getSidebarTimers.invalidate(),
-            ]);
+            await refreshTraining();
           }}
         />
       )}
@@ -1625,7 +1639,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           )}
         </div>
         {/* The list can be taller than the screen, so the loader sticks in view */}
-        {(isFetching || listFavoriteIds === null) && (
+        {(isFetching || listPriorities === null) && (
           <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
             <div className="sticky top-24 flex justify-center py-16">
               <Loader explanation="Loading jutsu" />

@@ -234,23 +234,24 @@ export const listJutsuForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
 
 /**
  * Build the `jutsu` listing for `getAll`, using predicates on `jutsuType`. `favoriteIds` come
- * first, then with an `ownerId` that player's jutsu by level, so every page arrives in its
- * final order.
+ * first, then the opening active/queued IDs, then with an `ownerId` that player's jutsu by
+ * level. Callers reconcile cached pages when training changes ownership levels.
  */
 export const listJutsuForGetAll = (
   client: Pick<DrizzleClient, "query">,
   baseFilters: (undefined | SQL<unknown>)[],
   input: { hideAi?: undefined | false | true; limit: number },
   skip: number,
-  priority: { ownerId?: string; favoriteIds?: string[] } = {},
+  priority: { ownerId?: string; favoriteIds?: string[]; trainingIds?: string[] } = {},
 ) => {
-  const { ownerId, favoriteIds } = priority;
+  const { ownerId, favoriteIds, trainingIds } = priority;
   const owned = sql.identifier("ownedJutsu");
   return client.query.jutsu.findMany({
     where: and(...baseFilters, ...(input.hideAi ? [ne(jutsu.jutsuType, "AI")] : [])),
-    // The id breaks updatedAt ties, so offset pages never repeat or skip a row.
+    // The id breaks updatedAt ties for deterministic offset pages.
     orderBy: (table) => [
       ...(favoriteIds?.length ? [desc(inArray(table.id, favoriteIds))] : []),
+      ...(trainingIds?.length ? [desc(inArray(table.id, trainingIds))] : []),
       ...(ownerId
         ? [
             desc(

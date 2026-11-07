@@ -36,7 +36,7 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
     ]);
   });
 
-  const pages = async (input: { ownedFirst?: boolean; favoriteIds?: string[] }) => {
+  const pages = async (input: { ownedFirst?: boolean; favoriteIds?: string[]; trainingIds?: string[] }) => {
     const caller = await callerFor(jutsuRouter, USER);
     const seen: string[][] = [];
     let cursor: number | null | undefined;
@@ -57,6 +57,22 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
       ["j4", "j3"],
       ["j5", "j1"],
       ["j2"],
+    ]);
+  });
+
+  it("keeps active and queued techniques ahead of other learned jutsu across pages", async () => {
+    expect(await pages({ ownedFirst: true, trainingIds: ["j2", "j4"] })).toEqual([
+      ["j4", "j2"],
+      ["j5", "j1"],
+      ["j3"],
+    ]);
+  });
+
+  it("keeps favorites ahead of active/queued priority and ignores missing priority IDs", async () => {
+    expect(await pages({ ownedFirst: true, favoriteIds: ["j3", "j4"], trainingIds: ["j2", "j5", "missing"] })).toEqual([
+      ["j4", "j3"],
+      ["j5", "j2"],
+      ["j1"],
     ]);
   });
 
