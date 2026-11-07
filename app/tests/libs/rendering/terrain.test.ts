@@ -1,7 +1,6 @@
 import alea from "alea";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { BufferImageSource, Mesh, Shader, Texture, UniformGroup } from "pixi.js";
-import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
 import type { VillageStructure } from "@/drizzle/schema";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -14,15 +13,12 @@ import { buildWindowNav } from "@/libs/sector-map/navigation";
 import { getNeighborCoordinates, isReachableCoordinate, isWalkableCoordinate } from "@/libs/sector-map/validation";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { sectorMap } from "../../setup/sectorMap";
 
-const mapOf = (width: number, height: number): NormalizedSectorMap => ({
-  formatVersion: SECTOR_MAP_VERSION, sector: 724, name: "Terrain map", width, height,
-  tiles: Array.from({ length: width * height }, (_, index) => {
-    const x = index % width, y = Math.floor(index / width);
-    const terrain = ["ground", "ocean", "dessert", "ice", "snow"][(x + y) % 5] ?? "ground";
-    return { x, y, terrain, walkCost: 1, blocked: false, zone: "wilderness", battleBiome: terrain === "dessert" ? "dessert" : terrain === "ice" ? "ice" : terrain === "snow" ? "snow" : terrain === "ocean" ? "ocean" : "ground" };
-  }), objects: [], anchors: [], exits: [], metadata: { importedAt: "2026-01-01T00:00:00Z", source: "tiled" },
-});
+const mapOf = (width: number, height: number): NormalizedSectorMap => sectorMap(width, height, (x, y) => {
+  const terrain = ["ground", "ocean", "dessert", "ice", "snow"][(x + y) % 5] ?? "ground";
+  return { terrain, battleBiome: terrain === "dessert" ? "dessert" : terrain === "ice" ? "ice" : terrain === "snow" ? "snow" : terrain === "ocean" ? "ocean" : "ground" };
+}, { sector: 724, name: "Terrain map", anchors: [] });
 const prepare = (map: NormalizedSectorMap, light = false, registry = mergeTerrainSpecs([])) => {
   const random = alea(map.sector + 1);
   const { grid } = prepareSectorGrid(1024, random, 1, [], map, registry, null);
