@@ -36,6 +36,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { barrier } from "../../../setup/statements";
 
 const USER_ID = "timed-recovery";
 const VILLAGE_ID = "timed-recovery-village";
@@ -283,15 +284,13 @@ describeWithDatabase(
       );
       const db = await getTestDatabase();
       const before = await readUser();
-      const { promise: ready, resolve: release } = Promise.withResolvers<void>();
-      let writes = 0;
+      const bothLoaded = barrier(2);
       const client = new Proxy(db, {
         get(target, property, receiver) {
           if (property === "execute")
             return async (query: Parameters<typeof db.execute>[0]) => {
               // Both requests load the recipient snapshot before either delivers healing.
-              if (++writes === 2) release();
-              await ready;
+              await bothLoaded();
               return target.execute(query);
             };
           return Reflect.get(target, property, receiver);

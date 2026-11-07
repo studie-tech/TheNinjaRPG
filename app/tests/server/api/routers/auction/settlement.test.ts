@@ -5,7 +5,7 @@ import { auctionRouter, completeAuctionInternal } from "@/server/api/routers/auc
 import type { DrizzleClient } from "@/server/db";
 import * as nativePush from "@/server/utils/push/defer";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { beforeStatements, failStatements } from "../../../../setup/statements";
+import { beforeStatements, failStatements, barrier } from "../../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("auction settlement", () => {
@@ -139,14 +139,12 @@ describeWithDatabase("auction settlement", () => {
       await seedAuction(currency, true, false);
       const db = await getTestDatabase();
       await db.delete(auctionBid).where(eq(auctionBid.id, "losing-bid"));
-      let arrivals = 0;
-      const { promise: ready, resolve: release } = Promise.withResolvers<void>();
+      const bothArrived = barrier(2);
       const synchronized = new Proxy(db, {
         get(target, key, receiver) {
           if (key !== "execute") return Reflect.get(target, key, receiver);
           return async (query: Parameters<DrizzleClient["execute"]>[0]) => {
-            if (++arrivals === 2) release();
-            await ready;
+            await bothArrived();
             return target.execute(query);
           };
         },
@@ -200,14 +198,12 @@ describeWithDatabase("auction settlement", () => {
     it(`commits one of two simultaneous buyout bids in ${currency}`, async () => {
       await seedAuction(currency, true, false);
       const db = await getTestDatabase();
-      let arrivals = 0;
-      const { promise: ready, resolve: release } = Promise.withResolvers<void>();
+      const bothArrived = barrier(2);
       const synchronized = new Proxy(db, {
         get(target, key, receiver) {
           if (key !== "transaction") return Reflect.get(target, key, receiver);
           return async (work: Parameters<DrizzleClient["transaction"]>[0]) => {
-            if (++arrivals === 2) release();
-            await ready;
+            await bothArrived();
             return target.transaction(work);
           };
         },

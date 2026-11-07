@@ -32,7 +32,7 @@ import { getTagSchema, IncreaseReskinSlots, ItemValidator, RepairTag, UnlockItem
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import { huntingHabitatContent, huntingMap } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements } from "../../setup/statements";
+import { beforeStatements, pollUntil } from "../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -583,13 +583,11 @@ describeWithDatabase("Hunting inventory admission", () => {
     const repair = callerForDatabase(itemRouter, "hunter", client).useRepairAll();
     await paused.promise;
     try {
-      let consumed = false;
-      for (let attempt = 0; attempt < 100; attempt++) {
+      const kitConsumed = async () => {
         const kit = await db.query.userItem.findFirst({ where: eq(userItem.id, "high-kit") });
-        if ((kit?.quantity ?? 0) === quantity - 1) { consumed = true; break; }
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-      expect(consumed).toBe(true);
+        return (kit?.quantity ?? 0) === quantity - 1;
+      };
+      expect(await pollUntil(kitConsumed, { intervalMs: 10 })).toBe(true);
       expect((await hunter.start({ id })).success).toBe(true);
       const current = (await db.query.battle.findFirst()) as CompleteBattle;
       expect(current.usersState.find((u) => u.userId === "hunter")!.items.find((i) => i.id === "high-kit")?.quantity ?? 0).toBe(quantity - 1);

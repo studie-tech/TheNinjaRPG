@@ -24,7 +24,7 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers } from "../../../../setup/factories";
-import { beforeStatements, failStatements } from "../../../../setup/statements";
+import { beforeStatements, failStatements, pollUntil } from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -372,10 +372,7 @@ describeWithDatabase("clan queue claim ownership", () => {
       const client = beforeStatements(db, rankedPvpQueue, [
         async () => {
           // Ranked leave wakes in parallel; keep its old claimed row until clan queuing finishes.
-          for (let attempts = 0; attempts < 100; attempts++) {
-            if ((await storedUser())?.status === "AWAKE") break;
-            await new Promise((resolve) => setTimeout(resolve, 1));
-          }
+          await pollUntil(async () => (await storedUser())?.status === "AWAKE");
           expect(await storedUser()).toEqual({ status: "AWAKE", battleId: null });
           expect((await join(db)).success).toBe(false);
         },
@@ -441,10 +438,7 @@ describeWithDatabase("clan queue claim ownership", () => {
         async () => {
           if (operation === "challenge") {
             // Wait for the parallel challenge-lobby insert before reserving it.
-            for (let attempts = 0; attempts < 100; attempts++) {
-              if ((await db.query.mpvpBattleQueue.findMany()).length === 3) break;
-              await new Promise((resolve) => setTimeout(resolve, 1));
-            }
+            await pollUntil(async () => (await db.query.mpvpBattleQueue.findMany()).length === 3);
           }
           const lobbies = await db.query.mpvpBattleQueue.findMany();
           const lobby = lobbies.find((q) =>

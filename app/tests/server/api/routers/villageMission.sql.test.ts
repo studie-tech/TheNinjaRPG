@@ -15,6 +15,7 @@ import { accrueVillageStructureMaintenance } from "@/server/utils/villageMainten
 import { insertUsers, insertQuests, insertQuestHistory } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../setup/testDatabase";
 import { makeBattleUser, makeCompleteBattle } from "../../../libs/combat/helpers/battleScenario";
+import { barrier } from "../../../setup/statements";
 
 const state = async () => (await getTestDatabase()).query.village.findFirst({ where: eq(village.id, "v1") });
 const leader = async () => callerFor(villageMissionRouter, "leader");
@@ -543,13 +544,11 @@ const shrineResult = (change: number) => ({ didWin: 1, shrineChangeHp: change, v
 
 /** Both requests must load the same level before either guarded upgrade can commit. */
 const synchronizeUpgradeClaims = (db: Awaited<ReturnType<typeof getTestDatabase>>) => {
-  const { promise: ready, resolve: release } = Promise.withResolvers<void>();
-  let writes = 0;
+  const bothLoaded = barrier(2);
   return new Proxy(db, {
     get(target, property, receiver) {
       if (property === "execute") return async (...args: Parameters<typeof db.execute>) => {
-        if (++writes === 2) release();
-        await ready;
+        await bothLoaded();
         return db.execute(...args);
       };
       return Reflect.get(target, property, receiver);

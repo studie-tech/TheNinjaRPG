@@ -11,6 +11,7 @@ import type { DrizzleClient } from "@/server/db";
 import { syncStrongholdMembership } from "@/server/utils/faction";
 import { insertUsers } from "../../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../../setup/testDatabase";
+import { holdReads } from "../../../../setup/statements";
 
 const legacyDowngradeBackfill = readFileSync(resolve(process.cwd(), "drizzle/migrations/0076_brave_nico_minoru.sql"), "utf8").split(";").find((statement) => statement.includes("SET `wasDowngraded` = 1"));
 
@@ -165,20 +166,4 @@ describeWithDatabase("Stronghold membership and restoration", () => {
 });
 
 /** Competing purchases must read the same boost level before their guarded writes race. */
-const holdClanSnapshots = (database: DrizzleClient, count: number): DrizzleClient => {
-  let pending = 0;
-  const { promise: barrier, resolve: release } = Promise.withResolvers<void>();
-  const clanQueries = new Proxy(database.query.clan, {
-    get(target, property, receiver) {
-      if (property !== "findFirst") return Reflect.get(target, property, receiver);
-      return async (...args: Parameters<typeof target.findFirst>) => {
-        const result = await target.findFirst(...args);
-        pending += 1;
-        if (pending >= count) release();
-        await barrier;
-        return result;
-      };
-    },
-  });
-  return new Proxy(database, { get(target, property, receiver) { return property === "query" ? { ...target.query, clan: clanQueries } : Reflect.get(target, property, receiver); } });
-};
+const holdClanSnapshots = (database: DrizzleClient, count: number) => holdReads(database, "clan", count);

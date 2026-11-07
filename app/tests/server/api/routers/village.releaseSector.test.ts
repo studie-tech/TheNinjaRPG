@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, it } from "bun:test";
 import { eq, getTableName, type SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import mysql from "mysql2/promise";
-import { setTimeout } from "node:timers/promises";
 import {
   actionLog,
   gameSetting,
@@ -26,6 +25,7 @@ import {
   getTestDatabase,
   recordQueries,
   resetTables,
+  lockWaitObserved,
 } from "../../../setup/testDatabase";
 
 const sectorId = 205;
@@ -64,24 +64,8 @@ const releaseClient = (
   });
 
 /** Observe the contested parent row, rather than relying on a timing delay. */
-const expectVillageLockWait = async (
-  observer: mysql.Connection,
-  requestedMode: "S" | "X",
-) => {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const [locks] = await observer.query<mysql.RowDataPacket[]>(`
-      SELECT requested.LOCK_MODE AS mode FROM performance_schema.data_lock_waits AS waits
-      INNER JOIN performance_schema.data_locks AS requested
-        ON requested.ENGINE_LOCK_ID = waits.REQUESTING_ENGINE_LOCK_ID
-      INNER JOIN performance_schema.data_locks AS blocking
-        ON blocking.ENGINE_LOCK_ID = waits.BLOCKING_ENGINE_LOCK_ID
-      WHERE requested.OBJECT_SCHEMA = DATABASE() AND requested.OBJECT_NAME = ?
-        AND blocking.OBJECT_NAME = ? AND requested.LOCK_MODE LIKE ?
-    `, [getTableName(village), getTableName(village), `${requestedMode}%`]);
-    if (locks.length > 0) return;
-    await setTimeout(10);
-  }
-  throw new Error(`No ${requestedMode} lock wait on the village row`);
+const expectVillageLockWait = async (requestedMode: "S" | "X") => {
+  expect(await lockWaitObserved({ table: getTableName(village), requestedMode })).toBe(true);
 };
 
 const seed = async () => {
@@ -207,7 +191,6 @@ describeWithDatabase("guarded sector release", () => {
     await enableObjectives(database);
     const locked = Promise.withResolvers<void>();
     const resume = Promise.withResolvers<void>();
-    const observer = await mysql.createConnection(process.env.TEST_MYSQL_URL!);
     const declarationClient = new Proxy(database, {
       get(target, property, receiver) {
         if (property !== "transaction") return Reflect.get(target, property, receiver);
@@ -235,7 +218,7 @@ describeWithDatabase("guarded sector release", () => {
     try {
       await locked.promise;
       released = release(releaseClient(database));
-      await expectVillageLockWait(observer, "S");
+      await expectVillageLockWait("S");
       resume.resolve();
       expect(await started).toBe(true);
       expect(await released).toMatchObject({ success: false, message: rejection });
@@ -246,7 +229,6 @@ describeWithDatabase("guarded sector release", () => {
     } finally {
       resume.resolve();
       await Promise.allSettled([started, ...(released ? [released] : [])]);
-      await observer.end();
     }
   });
 
@@ -271,7 +253,7 @@ describeWithDatabase("guarded sector release", () => {
     try {
       await deleted.promise;
       started = startDeclaredWar(database, declaration);
-      await expectVillageLockWait(connection, "X");
+      await expectVillageLockWait("X");
       resume.resolve();
       expect((await released).success).toBe(true);
       expect(await started).toBe(false);

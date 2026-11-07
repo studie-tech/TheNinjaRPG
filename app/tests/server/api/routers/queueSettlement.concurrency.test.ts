@@ -30,6 +30,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { barrier } from "../../../setup/statements";
 
 const userId = "queue-settlement";
 const minute = 60_000;
@@ -105,8 +106,7 @@ const delayQueueRead = (database: DrizzleClient) => {
 };
 
 const gateEnqueueWrites = (database: DrizzleClient) => {
-  const ready = Promise.withResolvers<void>();
-  let arrivals = 0;
+  const bothArrived = barrier(2);
   const wrap = <T extends object>(builder: T): T =>
     new Proxy(builder, {
       get(target, property) {
@@ -115,9 +115,7 @@ const gateEnqueueWrites = (database: DrizzleClient) => {
             resolve: (value: unknown) => unknown,
             reject: (error: unknown) => unknown,
           ) => {
-            arrivals++;
-            if (arrivals === 2) ready.resolve();
-            await ready.promise;
+            await bothArrived();
             try {
               return resolve(await (target as unknown as PromiseLike<unknown>));
             } catch (error) {

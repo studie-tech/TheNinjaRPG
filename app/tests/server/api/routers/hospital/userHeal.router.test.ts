@@ -1,5 +1,5 @@
 
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { UserCache } from "@/deltas/profile";
 import { fetchActionUser } from "@/queries/actionReadiness";
@@ -29,6 +29,7 @@ import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
+  lockWaitObserved,
 } from "../../../../setup/testDatabase";
 
 const USER_ID = "hospital-self-heal-user";
@@ -452,18 +453,7 @@ describeWithDatabase("hospital healing another user", () => {
     let isWaiting = false;
     try {
       await healingSent;
-      const deadline = Date.now() + 2000;
-      while (!isWaiting && Date.now() < deadline) {
-        const result = await database.execute(sql`
-          SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits AS waits
-          INNER JOIN performance_schema.data_locks AS held
-            ON held.ENGINE_LOCK_ID = waits.BLOCKING_ENGINE_LOCK_ID
-          WHERE held.OBJECT_SCHEMA = DATABASE() AND held.OBJECT_NAME = 'UserData'
-            AND held.LOCK_DATA LIKE ${`%${TARGET_ID}%`}
-        `) as unknown as [[{ waiting: number }]];
-        isWaiting = Number(result[0][0].waiting) > 0;
-        if (!isWaiting) await new Promise((resolve) => setTimeout(resolve, 10));
-      }
+      isWaiting = await lockWaitObserved({ table: "UserData", heldLockData: TARGET_ID });
     } finally {
       releaseAssignment();
     }

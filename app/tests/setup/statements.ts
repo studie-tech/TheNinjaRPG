@@ -83,3 +83,56 @@ export const failStatements = (
     }
   });
 };
+
+/** A wait that returns only once `count` callers have arrived, so a race's competitors overlap. */
+export const barrier = (count: number) => {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  let arrivals = 0;
+  return async () => {
+    if (++arrivals >= count) resolve();
+    await promise;
+  };
+};
+
+/**
+ * A client whose reads of `table` complete and then wait for `count` of them, so competing
+ * requests hold the same snapshot before their guarded writes race.
+ */
+export const holdReads = (
+  client: DrizzleClient,
+  table: keyof DrizzleClient["query"],
+  count: number,
+  method: "findFirst" | "findMany" = "findFirst",
+): DrizzleClient => {
+  const arrive = barrier(count);
+  const reads = new Proxy(client.query[table] as object, {
+    get(target, property, receiver) {
+      if (property !== method) return Reflect.get(target, property, receiver);
+      return async (...args: unknown[]) => {
+        const read = target as Record<string, (...args: unknown[]) => PromiseLike<unknown>>;
+        const result = await read[method]?.(...args);
+        await arrive();
+        return result;
+      };
+    },
+  });
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      return property === "query"
+        ? { ...target.query, [table]: reads }
+        : Reflect.get(target, property, receiver);
+    },
+  });
+};
+
+/** Check until `check` passes. False means it never did, and the caller decides what that fails. */
+export const pollUntil = async (
+  check: () => boolean | Promise<boolean>,
+  { attempts = 100, intervalMs = 1 } = {},
+) => {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (await check()) return true;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return false;
+};

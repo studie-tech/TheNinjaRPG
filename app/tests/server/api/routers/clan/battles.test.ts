@@ -22,7 +22,7 @@ import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { deleteClanBattle, rewardClanBattleVictory } from "@/server/utils/clanBattle";
 import { clanPointConversionSchema } from "@/validators/clan";
 import { insertUsers } from "../../../../setup/factories";
-import { beforeStatements, failStatements } from "../../../../setup/statements";
+import { beforeStatements, failStatements, pollUntil } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -583,9 +583,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
                   membershipFirst
                     ? (await storedUser("leader"))?.status === "AWAKE"
                     : !(await db.query.mpvpBattleQueue.findFirst());
-                for (let attempts = 0; !(await hasFinished()) && attempts < 100; attempts++) {
-                  await new Promise((resolve) => setTimeout(resolve, 1));
-                }
+                await pollUntil(hasFinished);
                 expect(await hasFinished()).toBe(true);
                 if (membershipFirst) throw new Error("Deadlock found when trying to get lock");
               },
@@ -644,11 +642,8 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
     const guarded = beforeStatements(db, mpvpBattleUser, [
       async () => {
         // Hold the member insert until the parallel lobby insert becomes visible.
-        let lobby = await db.query.mpvpBattleQueue.findFirst();
-        for (let attempts = 0; !lobby && attempts < 100; attempts++) {
-          await new Promise((resolve) => setTimeout(resolve, 1));
-          lobby = await db.query.mpvpBattleQueue.findFirst();
-        }
+        await pollUntil(async () => Boolean(await db.query.mpvpBattleQueue.findFirst()));
+        const lobby = await db.query.mpvpBattleQueue.findFirst();
         expect(lobby).toBeDefined();
         if (!lobby) throw new Error("Challenge lobby was not published");
         expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);

@@ -19,7 +19,7 @@ import { petJutsuFixture, petSkillFixture } from "../../../libs/pets/helpers/abi
 import { insertItems, insertPetSpecies, insertUserItems, insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { queueEnergy } from "../../../setup/queues";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, holdReads } from "../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 afterEach(() => resetServerModuleStubs());
@@ -1701,23 +1701,7 @@ const readOwner = (database: DrizzleClient) => database.query.userData.findFirst
 const readPet = (database: DrizzleClient, id?: string) => database.query.userPet.findFirst({ where: and(eq(userPet.userId, userId), id ? eq(userPet.id, id) : undefined) });
 
 /** Hold owner snapshots so competing requests share the same version before their SQL writes race. */
-const holdOwnerSnapshots = (database: DrizzleClient, count: number): DrizzleClient => {
-  let pending = 0;
-  const { promise: barrier, resolve: release } = Promise.withResolvers<void>();
-  const ownerQueries = new Proxy(database.query.userData, {
-    get(target, property, receiver) {
-      if (property !== "findFirst") return Reflect.get(target, property, receiver);
-      return async (...args: Parameters<typeof target.findFirst>) => {
-        const result = await target.findFirst(...args);
-        pending += 1;
-        if (pending >= count) release();
-        await barrier;
-        return result;
-      };
-    },
-  });
-  return new Proxy(database, { get(target, property, receiver) { return property === "query" ? { ...target.query, userData: ownerQueries } : Reflect.get(target, property, receiver); } });
-};
+const holdOwnerSnapshots = (database: DrizzleClient, count: number) => holdReads(database, "userData", count);
 
 /** Inject a state change after preloading but before adoption or active release starts its paired writes. */
 const beforeTransaction = (database: DrizzleClient, hook: () => Promise<void>): DrizzleClient => {

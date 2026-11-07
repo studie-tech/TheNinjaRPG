@@ -13,7 +13,7 @@ import type { DrizzleClient } from "@/server/db";
 import { insertItems, insertUsers, insertUserItems } from "../../setup/factories";
 import { huntingContract, huntingHabitatContent, huntingMap } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements } from "../../setup/statements";
+import { beforeStatements, holdReads } from "../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("staff changes during hunting admission", () => {
@@ -36,23 +36,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
 
   it("assigns distinct contract IDs to concurrent saves with the same draft ID", async () => {
     const db = await getTestDatabase();
-    let reads = 0;
-    const { promise: bothRead, resolve: release } = Promise.withResolvers<void>();
-    const habitatQuery = new Proxy(db.query.huntingHabitat, { get(target, key, receiver) {
-      if (key === "findMany") return async (...args: Parameters<typeof target.findMany>) => {
-        const rows = await target.findMany(...args);
-        if (++reads === 2) release();
-        await bothRead;
-        return rows;
-      };
-      return Reflect.get(target, key, receiver);
-    } });
-    const query = new Proxy(db.query, { get(target, key, receiver) {
-      return key === "huntingHabitat" ? habitatQuery : Reflect.get(target, key, receiver);
-    } });
-    const client = new Proxy(db, { get(target, key, receiver) {
-      return key === "query" ? query : Reflect.get(target, key, receiver);
-    } });
+    const client = holdReads(db, "huntingHabitat", 2, "findMany");
     const staff = callerForDatabase(huntingRouter, "staff", client);
     const saved = await Promise.all(["First", "Second"].map((name) => {
       const content = huntingHabitatContent();

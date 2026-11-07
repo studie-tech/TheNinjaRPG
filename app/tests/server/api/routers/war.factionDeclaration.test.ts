@@ -31,7 +31,7 @@ import * as serverSentry from "@/server/utils/sentry";
 import { applyVillageMissionShrineDamage } from "@/server/utils/villageMission";
 import { startDeclaredWar, handleWarEnd, applyRaidHealthDecay } from "@/server/utils/war";
 import { insertUsers } from "../../../setup/factories";
-import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables, lockWaitObserved } from "../../../setup/testDatabase";
 
 const FACTION = "faction-hideout";
 const TARGET = "target-village";
@@ -488,18 +488,7 @@ describeWithDatabase("faction war declarations", () => {
       await blocker.beginTransaction();
       await blocker.query("SELECT id FROM War WHERE id = ? FOR UPDATE", [raid!.id]);
       hit = applyVillageMissionShrineDamage(db, null, LEADER, raid!.id, "defenderShrineHp", 20, true);
-      let waiting = false;
-      for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
-        const [locks] = await blocker.query<mysql.RowDataPacket[]>(`
-          SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits AS waits
-          INNER JOIN performance_schema.data_locks AS blocking
-            ON blocking.ENGINE_LOCK_ID = waits.BLOCKING_ENGINE_LOCK_ID
-          WHERE blocking.OBJECT_SCHEMA = DATABASE() AND blocking.OBJECT_NAME = ?
-        `, [getTableName(war)]);
-        waiting = Number(locks[0]?.waiting) > 0;
-        if (!waiting) await setTimeout(10);
-      }
-      expect(waiting).toBe(true);
+      expect(await lockWaitObserved({ table: getTableName(war) })).toBe(true);
       const [clock] = await blocker.query<mysql.RowDataPacket[]>(`
         SELECT TIMESTAMPDIFF(MICROSECOND, SYSDATE(3), startedAt + INTERVAL ? HOUR) / 1000 AS remainingMs
         FROM War WHERE id = ?

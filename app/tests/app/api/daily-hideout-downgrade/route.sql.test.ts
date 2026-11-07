@@ -7,6 +7,7 @@ import { GET } from "@/app/api/daily-hideout-downgrade/route";
 import * as gamesettings from "@/libs/gamesettings";
 import { resetServerModuleStubs, stubCronAuth, stubDatabase } from "../../../setup/serverModules";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { barrier } from "../../../setup/statements";
 
 const cost = STRONGHOLD_MONTHLY_MAINTENANCE;
 const dueAt = new Date(Date.now() - 31 * 86400_000);
@@ -33,14 +34,12 @@ describeWithDatabase("Stronghold monthly maintenance", () => {
 
   it.each([cost - 1, cost, cost * 2])("charges or downgrades once when duplicate claims start with %s points", async (points) => {
     const db = await seedMaintenance(points);
-    const { promise: ready, resolve: release } = Promise.withResolvers<void>();
-    let writes = 0;
+    const bothPrefetched = barrier(2);
     stubDatabase({
       select: db.select.bind(db),
       execute: async (...args: Parameters<typeof db.execute>) => {
         // Both requests must finish their prefetch before either maintenance claim runs.
-        if (++writes === 2) release();
-        await ready;
+        await bothPrefetched();
         return db.execute(...args);
       },
     });

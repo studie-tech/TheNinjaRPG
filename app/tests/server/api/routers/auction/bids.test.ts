@@ -14,7 +14,7 @@ import { auctionRouter, completeAuctionInternal } from "@/server/api/routers/auc
 import type { DrizzleClient } from "@/server/db";
 import * as nativePush from "@/server/utils/push/defer";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { beforeStatements, failStatements } from "../../../../setup/statements";
+import { beforeStatements, failStatements, holdReads } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -425,27 +425,7 @@ describeWithDatabase("auction bid atomicity", () => {
 });
 
 /** Both resolvers must finish the same listing snapshot before either can mutate it. */
-const synchronizeAuctionReads = (db: DrizzleClient) => {
-  let arrivals = 0;
-  const { promise: ready, resolve: release } = Promise.withResolvers<void>();
-  return new Proxy(db, {
-    get(target, key, receiver) {
-      if (key !== "query") return Reflect.get(target, key, receiver);
-      return {
-        ...target.query,
-        auctionListing: {
-          ...target.query.auctionListing,
-          findFirst: async (...args: Parameters<typeof db.query.auctionListing.findFirst>) => {
-            const snapshot = await target.query.auctionListing.findFirst(...args);
-            if (++arrivals === 2) release();
-            await ready;
-            return snapshot;
-          },
-        },
-      };
-    },
-  }) as DrizzleClient;
-};
+const synchronizeAuctionReads = (db: DrizzleClient) => holdReads(db, "auctionListing", 2);
 
 const wrapTransactions = (db: DrizzleClient, wrap: (tx: DrizzleClient) => DrizzleClient) =>
   new Proxy(db, {
