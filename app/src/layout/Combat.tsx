@@ -13,7 +13,6 @@ import {
 } from "@/drizzle/constants";
 import {
   type CombatPreferences,
-  shouldInvalidateEndedBattleCaches,
   useBattleMaps,
   useCombatUpdates,
 } from "@/hooks/combat";
@@ -45,6 +44,7 @@ import {
   stillInBattle,
 } from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
+import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { isPvpEnergyRewardBattle, sendsToHospital } from "@/libs/combat/settlement";
