@@ -56,12 +56,12 @@ describe("staff lighting preview", () => {
     expect(rendered).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
-  it.each(["rain", "snow", "sandstorm"] as const)("previews %s locally, adjusts strength and restores regional conditions", (kind) => {
+  it.each(["clouds", "rain", "snow", "sandstorm"] as const)("previews %s locally, adjusts strength and restores regional conditions", (kind) => {
     const view = render(<PreviewMap />);
     fireEvent.click(view.getByRole("button", { name: "Preview map lighting and weather" }));
     const select = view.getByRole("combobox", { name: "Weather" });
     fireEvent.keyDown(select, { key: "ArrowDown" });
-    const labels = { rain: "Rain", snow: "Snow", sandstorm: "Sandstorm" };
+    const labels = { clouds: "Cloud shadows", rain: "Rain", snow: "Snow", sandstorm: "Sandstorm" };
     fireEvent.click(view.getByRole("option", { name: labels[kind] }));
     expect(onWeatherChange.mock.calls.at(-1)![0]).toEqual({ kind, intensity: .65 });
     fireEvent.change(view.getByRole("slider", { name: "Weather strength" }), { target: { value: "25" } });
