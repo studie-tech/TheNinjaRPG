@@ -385,7 +385,7 @@ export const insertActionLogForRerollElement = (
 /** Build the `userData` update for `rerollElement`, including predicates on `userId`, `reputationPoints`, `bloodlineId`. */
 export const updateUserDataForRerollElement = (
   client: Pick<DrizzleClient, "update">,
-  updateData: Record<string, unknown>,
+  element: { primaryElement: ElementName } | { secondaryElement: ElementName },
   ctx: { userId: string },
   user: {
     bloodlineId: null | string;
@@ -395,7 +395,10 @@ export const updateUserDataForRerollElement = (
 ) =>
   client
     .update(userData)
-    .set(updateData)
+    .set({
+      reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
+      ...element,
+    })
     .where(
       and(
         eq(userData.userId, ctx.userId),

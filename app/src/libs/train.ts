@@ -261,12 +261,6 @@ export const checkJutsuElements = (jutsu: Jutsu, userElements: Set<ElementName>)
   return jutsuElements.find((e) => userElements.has(e));
 };
 
-export const filterValidElementsTypeguard = (elements: string[]): ElementName[] => {
-  return elements.filter((e): e is ElementName =>
-    ElementNames.includes(e as ElementName),
-  );
-};
-
 export const checkJutsuItems = (
   jutsu: Jutsu,
   userItems: UserItemWithItem[] | undefined,
