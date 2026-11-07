@@ -454,12 +454,7 @@ export const objectiveContentIds = (objective: AllObjectivesType): string[] => {
  * This function returns consequences without executing their database writes.
  */
 export const getNewTrackers = (
-  user: NonNullable<UserWithRelations> & {
-    useritems?: UserItem[];
-    farmingCollectionCount?: number;
-    bloodlineCollectionProgress?: BloodlineCollectionProgress;
-    ownedObjectiveJutsus?: { jutsuId: string; masteryTypes: MasteryType[] }[];
-  },
+  user: TrackerUser,
   tasks: ObjectiveTrackerTaskInput[],
   combatContext?: CombatQuestContext,
   boundPlacementStatus?: ReadonlyMap<string, boolean>,
@@ -518,171 +513,14 @@ export const getNewTrackers = (
         status.done = false;
       }
 
-      // Older masked snapshots could persist the public placeholder as a real target.
-      // Recover only those fields; valid rolls and completion/progress stay authoritative.
-      const hasMaskedLocation =
-        status.sector === 1337 || status.longitude === 1337 || status.latitude === 1337;
-      if (hasMaskedLocation) {
-        if (status.sector === 1337) {
-          delete status.sector;
-          if (!("sectorType" in objective) && "sector" in objective) {
-            status.sector = objective.sector;
-          }
-        }
-        if (status.longitude === 1337) {
-          delete status.longitude;
-          if (!("locationType" in objective) && "longitude" in objective) {
-            status.longitude = objective.longitude;
-          }
-        }
-        if (status.latitude === 1337) {
-          delete status.latitude;
-          if (!("locationType" in objective) && "latitude" in objective) {
-            status.latitude = objective.latitude;
-          }
-        }
-        delete status.locationChecked;
-        consequences.push({ type: "update_user", ids: ["location_update"] });
-      }
-
-      if ("sectorType" in objective && status.sector === undefined) {
-        if (objective.sectorType === "specific") {
-          status.sector = objective.sector;
-        } else if (objective.sectorType === "random") {
-          status.sector = pickPlaceableSector();
-        } else if (objective.sectorType === "from_list") {
-          if (objective.sectorList.length === 0) {
-            status.sector = pickPlaceableSector();
-          } else {
-            status.sector = Number(getRandomElement(objective.sectorList));
-          }
-        } else if (objective.sectorType === "user_village") {
-          status.sector = user?.village?.sector || user.sector;
-        } else if (objective.sectorType === "current_sector") {
-          status.sector = user.sector;
-        } else if (objective.sectorType === "enemy_village") {
-          // Find an active war and get the enemy village sector
-          for (const w of user.activeWars ?? []) {
-            const side = getWarSide(w, user.villageId);
-            if (side) {
-              status.sector =
-                side === w.attackerVillageId
-                  ? w.defenderVillage.sector
-                  : w.attackerVillage.sector;
-              break;
-            }
-          }
-
-          // Fallback to random sector if no war found
-          if (status.sector === undefined) {
-            status.sector = pickPlaceableSector();
-          }
-        }
-        if (status.sector !== undefined) {
-          consequences.push({ type: "update_user", ids: ["location_update"] });
-        }
-      }
-
-      // Public landmarks share one canonical entrance across all accepted attempts.
-      if (
-        quest.publicLocations &&
-        objective.structureAssetId &&
-        "sectorType" in objective &&
-        objective.sectorType === "specific" &&
-        "locationType" in objective &&
-        objective.locationType === "specific" &&
-        (status.sector !== objective.sector ||
-          status.longitude !== objective.longitude ||
-          status.latitude !== objective.latitude)
-      ) {
-        status.sector = objective.sector;
-        status.longitude = objective.longitude;
-        status.latitude = objective.latitude;
-        status.locationChecked = false;
-        consequences.push({ type: "update_user", ids: ["location_update"] });
-      }
-
-      // If locationType is not specific, update the location accordingly
-      if (
-        "locationType" in objective &&
-        (status.longitude === undefined || status.latitude === undefined)
-      ) {
-        if (objective.locationType === "specific") {
-          status.longitude = objective.longitude;
-          status.latitude = objective.latitude;
-        } else if (objective.locationType === "random") {
-          status.longitude = Math.ceil(Math.random() * (SECTOR_WIDTH - 1));
-          status.latitude = Math.ceil(Math.random() * (SECTOR_HEIGHT - 1));
-        }
-        if (status.longitude !== undefined && status.latitude !== undefined) {
-          consequences.push({ type: "update_user", ids: ["location_update"] });
-        }
-      }
-
-      // If a dialog, find any previous objective pointing to this one, and set the location to the same location
-      const previousObjective = findCompletedPredecessor(
-        quest.content.objectives,
-        objective.id,
+      instantiateGoalLocation(
+        user,
+        quest,
         questTracker,
+        objective,
+        status,
+        consequences,
       );
-
-      // Implicit dialogs follow live NPC positions, never a bound objective's fallback coordinates.
-      let locationPredecessor = previousObjective;
-      const visited = new Set([objective.id]);
-      while (
-        locationPredecessor?.task === "dialog" &&
-        !locationPredecessor.overworldPlacementId &&
-        locationPredecessor.sector === undefined &&
-        locationPredecessor.longitude === undefined &&
-        locationPredecessor.latitude === undefined &&
-        !visited.has(locationPredecessor.id)
-      ) {
-        visited.add(locationPredecessor.id);
-        locationPredecessor = findCompletedPredecessor(
-          quest.content.objectives,
-          locationPredecessor.id,
-          questTracker,
-        );
-      }
-      const hasBoundLocation =
-        objective.task === "dialog" &&
-        !objective.overworldPlacementId &&
-        !!locationPredecessor?.overworldPlacementId &&
-        isSupportedOverworldBindingTask(locationPredecessor.task);
-      if (hasBoundLocation) {
-        for (const field of ["sector", "longitude", "latitude"] as const) {
-          if (objective[field] === undefined && status[field] !== undefined) {
-            delete status[field];
-            delete status.locationChecked;
-            consequences.push({ type: "update_user", ids: ["location_update"] });
-          }
-        }
-      }
-
-      if (previousObjective && !hasBoundLocation) {
-        if (status.sector === undefined && "sector" in previousObjective) {
-          status.sector = previousObjective.sector;
-          consequences.push({ type: "update_user", ids: [`sector_update`] });
-        }
-        if (status.longitude === undefined && "longitude" in previousObjective) {
-          status.longitude = previousObjective.longitude;
-          consequences.push({ type: "update_user", ids: [`longitude_update`] });
-        }
-        if (status.latitude === undefined && "latitude" in previousObjective) {
-          status.latitude = previousObjective.latitude;
-          consequences.push({ type: "update_user", ids: [`latitude_update`] });
-        }
-      }
-
-      // If we have a location on the status (i.e. instantiated for the user, overwrite objective)
-      if ("sector" in objective) {
-        if (status.longitude !== undefined) objective.longitude = status.longitude;
-        if (status.latitude !== undefined) objective.latitude = status.latitude;
-        if (status.sector !== undefined) objective.sector = status.sector;
-        if ("locationType" in objective) {
-          objective.locationType = "specific";
-        }
-      }
 
       // Departure retains personal receipts, so completed shared goals can still
       // deliver their pending effects through the guarded consequence handler.
@@ -753,116 +591,15 @@ export const getNewTrackers = (
       const task = objective.task;
       // Kill objectives whose counting is gated by battle context per quest type
       const isWarContextKillTask = task === "pvp_kills" || task === "defeat_opponents";
-      const isKage = user.village?.kageId === user.userId;
 
-      // General updates we want to apply every time. Team progress treats these
-      // overwrites as snapshots: keep PassiveSnapshotTasks in step with them.
-      if (objective.task === "bloodline_collection") {
-        // Sum the selected rank snapshots; no rank has an implicit exemption.
-        const progress = user.bloodlineCollectionProgress
-          ?.filter((entry) => objective.bloodlineRanks.includes(entry.rank))
-          .reduce(
-            (total, entry) => ({
-              collected: total.collected + entry.collected,
-              total: total.total + entry.total,
-            }),
-            { collected: 0, total: 0 },
-          );
-        if (progress) {
-          const isComplete =
-            progress.total > 0 && progress.collected === progress.total;
-          if (
-            (isComplete || !isInMemoryOnlyAchievement) &&
-            (status.value !== progress.collected ||
-              status.target !== progress.total ||
-              status.done !== isComplete)
-          ) {
-            consequences.push({
-              type: "update_user",
-              ids: ["bloodline_collection_update"],
-            });
-          }
-          status.value = progress.collected;
-          status.target = progress.total;
-          // An empty catalogue cannot award a collection achievement. Done goals are
-          // retained above, so catalogue growth never revokes a recorded completion.
-          status.done = isComplete;
-        }
-      } else if (
-        task === "dungeons_completed" &&
-        user.dungeonsCompleted !== undefined
-      ) {
-        status.value = Number(user.dungeonsCompleted);
-      } else if (task === "raids_completed" && user.raidsCompleted !== undefined) {
-        status.value = Number(user.raidsCompleted);
-      } else if (isInArray(task, Object.values(QuestCompletionTasks))) {
-        // Repeatable quests reset completed; retain lifetime totals and legacy completions.
-        status.value = user.completedQuests.reduce(
-          (total, history) =>
-            history.questType &&
-            QuestCompletionTasks[
-              history.questType as keyof typeof QuestCompletionTasks
-            ] === task
-              ? total + Math.max(history.completed, history.previousCompletes ?? 0)
-              : total,
-          0,
-        );
-      } else if (task === "user_level") {
-        status.value = getUnscaledLevel(user);
-      } else if (task === "farming_level") {
-        status.value = getFarmingLevel(user.farmingExperience);
-      } else if (
-        task === "farming_collection_log" &&
-        typeof user.farmingCollectionCount === "number"
-      ) {
-        status.value = user.farmingCollectionCount;
-      } else if (
-        task === "train_specific_jutsu" &&
-        user.ownedObjectiveJutsus &&
-        objectiveContentIds(objective).length > 0
-      ) {
-        // Learning emits once, and is lost if this objective was not reached yet. A
-        // named jutsu cannot be learned twice, so owning it has to count as well.
-        const owned = user.ownedObjectiveJutsus.filter(({ jutsuId, masteryTypes }) =>
-          matchesContentObjective(objective, {
-            task,
-            contentId: jutsuId,
-            masteryTypes,
-          }),
-        ).length;
-        if (owned > status.value) {
-          status.value = owned;
-          consequences.push({ type: "update_user", ids: ["owned_jutsu_update"] });
-        }
-      } else if (task === "days_in_village") {
-        const days = Math.floor(secondsPassed(user.joinedVillageAt) / 60 / 60 / 24);
-        status.value = days;
-      } else if (task === "days_as_kage" && isKage && user.village) {
-        const seconds = secondsPassed(user.village.leaderUpdatedAt);
-        const days = Math.floor(seconds / 60 / 60 / 24);
-        status.value = days;
-      } else if (task === "reputation_points") {
-        status.value = user.reputationPointsTotal;
-      } else if (task === "minutes_passed") {
-        const minutes = Math.floor(secondsPassed(new Date(questTracker.startAt)) / 60);
-        status.value = minutes;
-      } else if (task.includes("missions_total") || task.includes("crimes_total")) {
-        const type = task.includes("missions") ? "mission" : "crime";
-        const rank = task.split("_")[0]?.toUpperCase() as LetterRank;
-        const field = getQuestCounterFieldName(type, rank);
-        if (field) status.value = user[field];
-      } else if (task === "errands_total") {
-        const field = getQuestCounterFieldName("errand", "D");
-        if (field) status.value = user[field];
-      } else if (task === "medical_experience") {
-        status.value = user.medicalExperience;
-      } else if (task === "crafting_experience") {
-        status.value = user.craftingExperience;
-      } else if (task === "hunting_experience") {
-        status.value = user.huntingExperience;
-      } else if (task === "gathering_experience") {
-        status.value = user.gatheringExperience;
-      }
+      evaluatePassiveGoalValue(
+        user,
+        questTracker,
+        objective,
+        status,
+        isInMemoryOnlyAchievement,
+        consequences,
+      );
 
       // If opponentAIs is in objective, get the ids
       let opponentIds: string[] = [];
@@ -1304,6 +1041,303 @@ export const getNewTrackers = (
 };
 
 /**
+ * Resolve a goal's map location: recover masked placeholders, roll sector and coordinates,
+ * follow public landmarks and completed predecessors. The result is written onto the shared
+ * objective, which every later reader of this quest expects to see instantiated.
+ */
+const instantiateGoalLocation = (
+  user: TrackerUser,
+  quest: Pick<Quest, "content" | "publicLocations">,
+  questTracker: QuestTrackerType,
+  objective: AllObjectivesType,
+  status: ObjectiveTrackerType,
+  consequences: QuestConsequence[],
+) => {
+  // Older masked snapshots could persist the public placeholder as a real target.
+  // Recover only those fields; valid rolls and completion/progress stay authoritative.
+  const hasMaskedLocation =
+    status.sector === 1337 || status.longitude === 1337 || status.latitude === 1337;
+  if (hasMaskedLocation) {
+    if (status.sector === 1337) {
+      delete status.sector;
+      if (!("sectorType" in objective) && "sector" in objective) {
+        status.sector = objective.sector;
+      }
+    }
+    if (status.longitude === 1337) {
+      delete status.longitude;
+      if (!("locationType" in objective) && "longitude" in objective) {
+        status.longitude = objective.longitude;
+      }
+    }
+    if (status.latitude === 1337) {
+      delete status.latitude;
+      if (!("locationType" in objective) && "latitude" in objective) {
+        status.latitude = objective.latitude;
+      }
+    }
+    delete status.locationChecked;
+    consequences.push({ type: "update_user", ids: ["location_update"] });
+  }
+
+  if ("sectorType" in objective && status.sector === undefined) {
+    if (objective.sectorType === "specific") {
+      status.sector = objective.sector;
+    } else if (objective.sectorType === "random") {
+      status.sector = pickPlaceableSector();
+    } else if (objective.sectorType === "from_list") {
+      if (objective.sectorList.length === 0) {
+        status.sector = pickPlaceableSector();
+      } else {
+        status.sector = Number(getRandomElement(objective.sectorList));
+      }
+    } else if (objective.sectorType === "user_village") {
+      status.sector = user?.village?.sector || user.sector;
+    } else if (objective.sectorType === "current_sector") {
+      status.sector = user.sector;
+    } else if (objective.sectorType === "enemy_village") {
+      // Find an active war and get the enemy village sector
+      for (const w of user.activeWars ?? []) {
+        const side = getWarSide(w, user.villageId);
+        if (side) {
+          status.sector =
+            side === w.attackerVillageId
+              ? w.defenderVillage.sector
+              : w.attackerVillage.sector;
+          break;
+        }
+      }
+
+      // Fallback to random sector if no war found
+      if (status.sector === undefined) {
+        status.sector = pickPlaceableSector();
+      }
+    }
+    if (status.sector !== undefined) {
+      consequences.push({ type: "update_user", ids: ["location_update"] });
+    }
+  }
+
+  // Public landmarks share one canonical entrance across all accepted attempts.
+  if (
+    quest.publicLocations &&
+    objective.structureAssetId &&
+    "sectorType" in objective &&
+    objective.sectorType === "specific" &&
+    "locationType" in objective &&
+    objective.locationType === "specific" &&
+    (status.sector !== objective.sector ||
+      status.longitude !== objective.longitude ||
+      status.latitude !== objective.latitude)
+  ) {
+    status.sector = objective.sector;
+    status.longitude = objective.longitude;
+    status.latitude = objective.latitude;
+    status.locationChecked = false;
+    consequences.push({ type: "update_user", ids: ["location_update"] });
+  }
+
+  // If locationType is not specific, update the location accordingly
+  if (
+    "locationType" in objective &&
+    (status.longitude === undefined || status.latitude === undefined)
+  ) {
+    if (objective.locationType === "specific") {
+      status.longitude = objective.longitude;
+      status.latitude = objective.latitude;
+    } else if (objective.locationType === "random") {
+      status.longitude = Math.ceil(Math.random() * (SECTOR_WIDTH - 1));
+      status.latitude = Math.ceil(Math.random() * (SECTOR_HEIGHT - 1));
+    }
+    if (status.longitude !== undefined && status.latitude !== undefined) {
+      consequences.push({ type: "update_user", ids: ["location_update"] });
+    }
+  }
+
+  // If a dialog, find any previous objective pointing to this one, and set the location to the same location
+  const previousObjective = findCompletedPredecessor(
+    quest.content.objectives,
+    objective.id,
+    questTracker,
+  );
+
+  // Implicit dialogs follow live NPC positions, never a bound objective's fallback coordinates.
+  let locationPredecessor = previousObjective;
+  const visited = new Set([objective.id]);
+  while (
+    locationPredecessor?.task === "dialog" &&
+    !locationPredecessor.overworldPlacementId &&
+    locationPredecessor.sector === undefined &&
+    locationPredecessor.longitude === undefined &&
+    locationPredecessor.latitude === undefined &&
+    !visited.has(locationPredecessor.id)
+  ) {
+    visited.add(locationPredecessor.id);
+    locationPredecessor = findCompletedPredecessor(
+      quest.content.objectives,
+      locationPredecessor.id,
+      questTracker,
+    );
+  }
+  const hasBoundLocation =
+    objective.task === "dialog" &&
+    !objective.overworldPlacementId &&
+    !!locationPredecessor?.overworldPlacementId &&
+    isSupportedOverworldBindingTask(locationPredecessor.task);
+  if (hasBoundLocation) {
+    for (const field of ["sector", "longitude", "latitude"] as const) {
+      if (objective[field] === undefined && status[field] !== undefined) {
+        delete status[field];
+        delete status.locationChecked;
+        consequences.push({ type: "update_user", ids: ["location_update"] });
+      }
+    }
+  }
+
+  if (previousObjective && !hasBoundLocation) {
+    if (status.sector === undefined && "sector" in previousObjective) {
+      status.sector = previousObjective.sector;
+      consequences.push({ type: "update_user", ids: [`sector_update`] });
+    }
+    if (status.longitude === undefined && "longitude" in previousObjective) {
+      status.longitude = previousObjective.longitude;
+      consequences.push({ type: "update_user", ids: [`longitude_update`] });
+    }
+    if (status.latitude === undefined && "latitude" in previousObjective) {
+      status.latitude = previousObjective.latitude;
+      consequences.push({ type: "update_user", ids: [`latitude_update`] });
+    }
+  }
+
+  // If we have a location on the status (i.e. instantiated for the user, overwrite objective)
+  if ("sector" in objective) {
+    if (status.longitude !== undefined) objective.longitude = status.longitude;
+    if (status.latitude !== undefined) objective.latitude = status.latitude;
+    if (status.sector !== undefined) objective.sector = status.sector;
+    if ("locationType" in objective) {
+      objective.locationType = "specific";
+    }
+  }
+};
+
+/** Overwrite a goal's value from player state on every evaluation. */
+const evaluatePassiveGoalValue = (
+  user: TrackerUser,
+  questTracker: QuestTrackerType,
+  objective: AllObjectivesType,
+  status: ObjectiveTrackerType,
+  isInMemoryOnlyAchievement: boolean,
+  consequences: QuestConsequence[],
+) => {
+  const task = objective.task;
+  const isKage = user.village?.kageId === user.userId;
+
+  // General updates we want to apply every time. Team progress treats these
+  // overwrites as snapshots: keep PassiveSnapshotTasks in step with them.
+  if (objective.task === "bloodline_collection") {
+    // Sum the selected rank snapshots; no rank has an implicit exemption.
+    const progress = user.bloodlineCollectionProgress
+      ?.filter((entry) => objective.bloodlineRanks.includes(entry.rank))
+      .reduce(
+        (total, entry) => ({
+          collected: total.collected + entry.collected,
+          total: total.total + entry.total,
+        }),
+        { collected: 0, total: 0 },
+      );
+    if (progress) {
+      const isComplete = progress.total > 0 && progress.collected === progress.total;
+      if (
+        (isComplete || !isInMemoryOnlyAchievement) &&
+        (status.value !== progress.collected ||
+          status.target !== progress.total ||
+          status.done !== isComplete)
+      ) {
+        consequences.push({
+          type: "update_user",
+          ids: ["bloodline_collection_update"],
+        });
+      }
+      status.value = progress.collected;
+      status.target = progress.total;
+      // An empty catalogue cannot award a collection achievement. Done goals are
+      // retained above, so catalogue growth never revokes a recorded completion.
+      status.done = isComplete;
+    }
+  } else if (task === "dungeons_completed" && user.dungeonsCompleted !== undefined) {
+    status.value = Number(user.dungeonsCompleted);
+  } else if (task === "raids_completed" && user.raidsCompleted !== undefined) {
+    status.value = Number(user.raidsCompleted);
+  } else if (isInArray(task, Object.values(QuestCompletionTasks))) {
+    // Repeatable quests reset completed; retain lifetime totals and legacy completions.
+    status.value = user.completedQuests.reduce(
+      (total, history) =>
+        history.questType &&
+        QuestCompletionTasks[history.questType as keyof typeof QuestCompletionTasks] ===
+          task
+          ? total + Math.max(history.completed, history.previousCompletes ?? 0)
+          : total,
+      0,
+    );
+  } else if (task === "user_level") {
+    status.value = getUnscaledLevel(user);
+  } else if (task === "farming_level") {
+    status.value = getFarmingLevel(user.farmingExperience);
+  } else if (
+    task === "farming_collection_log" &&
+    typeof user.farmingCollectionCount === "number"
+  ) {
+    status.value = user.farmingCollectionCount;
+  } else if (
+    task === "train_specific_jutsu" &&
+    user.ownedObjectiveJutsus &&
+    objectiveContentIds(objective).length > 0
+  ) {
+    // Learning emits once, and is lost if this objective was not reached yet. A
+    // named jutsu cannot be learned twice, so owning it has to count as well.
+    const owned = user.ownedObjectiveJutsus.filter(({ jutsuId, masteryTypes }) =>
+      matchesContentObjective(objective, {
+        task,
+        contentId: jutsuId,
+        masteryTypes,
+      }),
+    ).length;
+    if (owned > status.value) {
+      status.value = owned;
+      consequences.push({ type: "update_user", ids: ["owned_jutsu_update"] });
+    }
+  } else if (task === "days_in_village") {
+    const days = Math.floor(secondsPassed(user.joinedVillageAt) / 60 / 60 / 24);
+    status.value = days;
+  } else if (task === "days_as_kage" && isKage && user.village) {
+    const seconds = secondsPassed(user.village.leaderUpdatedAt);
+    const days = Math.floor(seconds / 60 / 60 / 24);
+    status.value = days;
+  } else if (task === "reputation_points") {
+    status.value = user.reputationPointsTotal;
+  } else if (task === "minutes_passed") {
+    const minutes = Math.floor(secondsPassed(new Date(questTracker.startAt)) / 60);
+    status.value = minutes;
+  } else if (task.includes("missions_total") || task.includes("crimes_total")) {
+    const type = task.includes("missions") ? "mission" : "crime";
+    const rank = task.split("_")[0]?.toUpperCase() as LetterRank;
+    const field = getQuestCounterFieldName(type, rank);
+    if (field) status.value = user[field];
+  } else if (task === "errands_total") {
+    const field = getQuestCounterFieldName("errand", "D");
+    if (field) status.value = user[field];
+  } else if (task === "medical_experience") {
+    status.value = user.medicalExperience;
+  } else if (task === "crafting_experience") {
+    status.value = user.craftingExperience;
+  } else if (task === "hunting_experience") {
+    status.value = user.huntingExperience;
+  } else if (task === "gathering_experience") {
+    status.value = user.gatheringExperience;
+  }
+};
+
+/**
  * Return remaining collection grants and inventory removals by completed objective ID.
  * Follow the selected consecutive path, or match applied receipts first for parallel goals.
  * A collection/delivery pair that never ran personally cancels both effects, preserving the
@@ -1551,6 +1585,14 @@ export type CombatQuestContext = {
   isWarParticipant: boolean;
   /** Prevent unrelated fights from advancing ticketed or versioned run objectives. */
   questBattleSource?: { questId: string; objectiveId: string };
+};
+
+/** Fully hydrated user, with the optional collections objectives read as snapshots. */
+type TrackerUser = NonNullable<UserWithRelations> & {
+  useritems?: UserItem[];
+  farmingCollectionCount?: number;
+  bloodlineCollectionProgress?: BloodlineCollectionProgress;
+  ownedObjectiveJutsus?: { jutsuId: string; masteryTypes: MasteryType[] }[];
 };
 
 export type ObjectiveTrackerTaskInput = {
