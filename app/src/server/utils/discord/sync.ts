@@ -42,6 +42,7 @@ import {
 } from "@/server/utils/discord/rest";
 import { decryptToken } from "@/server/utils/discord/secrets";
 import { clientErrorMessage } from "@/server/utils/mysqlErrors";
+import { logDatabaseFailure } from "@/server/utils/sentry";
 
 /**
  * Discord side of a link: Linked Roles metadata, server membership, nickname, village role
@@ -59,8 +60,13 @@ const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
 type SyncCharacter = { username: string; level: number; villageId: string | null };
 
 /** Sync errors are stored on the link and shown to whoever asked for the sync. */
-export const errorText = (error: unknown) =>
-  (error instanceof Error ? clientErrorMessage(error) : String(error)).slice(0, 200);
+export const errorText = (error: unknown) => {
+  logDatabaseFailure(error, "Discord sync failed");
+  return (error instanceof Error ? clientErrorMessage(error) : String(error)).slice(
+    0,
+    200,
+  );
+};
 
 /** Discord answers 401 to a token the player revoked; only re-linking restores it. */
 const tokenErrorText = (error: unknown) =>

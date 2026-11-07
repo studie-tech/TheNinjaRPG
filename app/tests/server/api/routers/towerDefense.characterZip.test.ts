@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/node";
 import { DrizzleQueryError, eq } from "drizzle-orm";
 import JSZip from "jszip";
 import * as uploadthing from "uploadthing/server";
@@ -131,23 +132,28 @@ describeWithDatabase("processCharacterZip", () => {
       throw new Error("upload broke");
     });
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const report = vi.spyOn(Sentry, "captureException").mockReturnValue("event");
     expect(await process()).toEqual({
       success: false,
       message: "Failed to process zip: upload broke",
     });
     expect(logged).toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
   });
 
-  it("keeps a failed statement out of the rejected response", async () => {
+  it("reports a failed statement to Sentry and keeps it out of the response", async () => {
     validate();
     serveZip(await characterZip(1));
+    const failure = new DrizzleQueryError("update Character", ["secret"], new TypeError("fetch failed"));
     stubUploads(async () => {
-      throw new DrizzleQueryError("update Character", ["secret"], new TypeError("fetch failed"));
+      throw failure;
     });
     vi.spyOn(console, "error").mockImplementation(() => {});
+    const report = vi.spyOn(Sentry, "captureException").mockReturnValue("event");
     expect(await process()).toEqual({
       success: false,
       message: `Failed to process zip: ${DATABASE_FAILURE_MESSAGE}`,
     });
+    expect(report).toHaveBeenCalledWith(failure, expect.anything());
   });
 });

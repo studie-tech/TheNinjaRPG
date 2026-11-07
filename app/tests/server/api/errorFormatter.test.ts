@@ -44,13 +44,6 @@ const failedStatement = (fetch: typeof globalThis.fetch) =>
 const driverAnswer = (message: string, status = 400) => async () =>
   Response.json({ error: { code: "ALREADY_EXISTS", message } }, { status });
 
-const driverFailure = (message: string) =>
-  new DrizzleQueryError(
-    STATEMENT,
-    [SECRET],
-    new DatabaseError(message, 400, { code: "ALREADY_EXISTS", message }),
-  );
-
 describe("tRPC errorFormatter", () => {
   it.each([
     [
@@ -73,7 +66,7 @@ describe("tRPC errorFormatter", () => {
     expect(format(failure).message).toBe(DATABASE_FAILURE_MESSAGE);
   });
 
-  it("hides the statement when a driver reports it in its own text", () => {
+  it("hides the statement when another driver reports it in its own text", () => {
     const parseError = Object.assign(new Error(`You have an error near '${SECRET}'`), {
       code: "ER_PARSE_ERROR",
       sql: STATEMENT,
@@ -82,36 +75,23 @@ describe("tRPC errorFormatter", () => {
     expect(format(failure).message).toBe(DATABASE_FAILURE_MESSAGE);
   });
 
-  it("reports the driver's summary from a response on the wire", async () => {
-    const message =
-      `target: tnr.-.primary: duplicate entry (errno 1062) (sqlstate 23000) (CallerID: x): ` +
-      `Sql: "${STATEMENT}", BindVars: {vtg1: "${SECRET}"}`;
-    const failure = await failedStatement(driverAnswer(message) as never);
-    expect(format(failure).message).toBe(
-      "target: tnr.-.primary: duplicate entry (errno 1062)",
-    );
-  });
-
-  it("strips the statement and bind values across line breaks", () => {
-    const failure = driverFailure(
-      "Duplicate entry 'x' for key 'y' (errno 1062) (sqlstate 23000) (CallerID: u): " +
-        `Sql: "update UserData\n set money = 5",\r\n BindVars: {vtg1: "${SECRET}"}`,
-    );
-    expect(format(failure).message).toBe("Duplicate entry 'x' for key 'y' (errno 1062)");
-  });
-
   it.each([
-    ["a caller id", `transaction 1 ended (CallerID: u): Sql: "${STATEMENT}"`],
-    ["only the statement", `transaction 1 ended Sql: "${STATEMENT}"`],
-    ["only the bind values", `transaction 1 ended BindVars: {vtg1: "${SECRET}"}`],
-  ])("strips a driver message with no SQL state but %s", (_label, message) => {
-    expect(format(driverFailure(message)).message).toBe("transaction 1 ended");
+    [
+      "the statement after its SQL state",
+      `target: tnr.-.primary: duplicate entry 'x' (errno 1062) (sqlstate 23000) (CallerID: u): Sql: "${STATEMENT}", BindVars: {vtg1: "${SECRET}"}`,
+    ],
+    ["no SQL state", `transaction 1 ended (CallerID: u): Sql: "${STATEMENT}"`],
+    ["a value it repeats", `Duplicate entry '${SECRET}' for key 'username' (errno 1062)`],
+  ])("hides a driver error on the wire carrying %s", async (_label, message) => {
+    const failure = await failedStatement(driverAnswer(message) as never);
+    expect(failure).toBeInstanceOf(DrizzleQueryError);
+    expect(format(failure).message).toBe(DATABASE_FAILURE_MESSAGE);
   });
 
-  it("strips a driver error raised outside Drizzle", () => {
+  it("hides a driver error raised outside Drizzle", () => {
     const message = `rollback failed (errno 1) (sqlstate 1) (CallerID: u): Sql: "${STATEMENT}"`;
     const failure = new DatabaseError(message, 400, { code: "UNKNOWN", message });
-    expect(format(failure).message).toBe("rollback failed (errno 1)");
+    expect(format(failure).message).toBe(DATABASE_FAILURE_MESSAGE);
   });
 
   it("hides a statement rethrown by a server-side caller", () => {

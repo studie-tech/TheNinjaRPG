@@ -68,6 +68,7 @@ import {
   clientErrorMessage,
   isMysqlDuplicateKeyError,
 } from "@/server/utils/mysqlErrors";
+import { logDatabaseFailure } from "@/server/utils/sentry";
 import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import {
   areTowerDefenseClaimsEnabled,
@@ -790,6 +791,7 @@ export const towerDefenseRouter = createTRPCRouter({
         };
       } catch (error) {
         console.error("Error processing character zip:", error);
+        logDatabaseFailure(error, "Could not process a character zip");
         return errorResponse(
           `Failed to process zip: ${error instanceof Error ? clientErrorMessage(error) : "Unknown error"}`,
         );

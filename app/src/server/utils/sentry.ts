@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { BOTID_BLOCKED_MESSAGE, BOTID_RELOAD_REQUIRED_MESSAGE } from "@/libs/botid";
+import { isDatabaseFailure } from "@/server/utils/mysqlErrors";
 
 /**
  * @param error - The error to log
@@ -18,6 +19,14 @@ export const logError = (
       ...attributes,
     },
   });
+};
+
+/**
+ * Report a failed statement that its caller turned into a response, since the error then
+ * never reaches the tRPC route's `onError`. Other failures stay out of Sentry.
+ */
+export const logDatabaseFailure = (error: unknown, message: string) => {
+  if (isDatabaseFailure(error)) logError(error, message);
 };
 
 /**

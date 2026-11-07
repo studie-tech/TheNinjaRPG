@@ -1,5 +1,6 @@
 import { DrizzleQueryError, eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/node";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import { conceptImage, userData, userQueue } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";
@@ -106,15 +107,18 @@ describeWithDatabase("concept art confirmed debits", () => {
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))?.reputationPoints).toBe(1000 - COST_CONCEPT_VIDEO);
   });
 
-  it("reports a dispatch failure and keeps a failed statement out of the response", async () => {
+  it("reports a failed statement to Sentry and keeps it out of the response", async () => {
     const db = await getTestDatabase();
     const caller = callerForDatabase(conceptartRouter, userId, db);
+    const report = vi.spyOn(Sentry, "captureException").mockReturnValue("event");
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(replicate, "startVideoGeneration").mockRejectedValueOnce(new Error("Dispatch failed"));
     expect((await caller.createVideo(videoInput)).message).toBe("Dispatch failed");
-    vi.spyOn(replicate, "startVideoGeneration").mockRejectedValueOnce(
-      new DrizzleQueryError("insert into ConceptImage", ["secret"], new TypeError("fetch failed")),
-    );
+    expect(report).not.toHaveBeenCalled();
+    const failure = new DrizzleQueryError("insert into ConceptImage", ["secret"], new TypeError("fetch failed"));
+    vi.spyOn(replicate, "startVideoGeneration").mockRejectedValueOnce(failure);
     expect((await caller.createVideo(videoInput)).message).toBe(DATABASE_FAILURE_MESSAGE);
+    expect(report).toHaveBeenCalledWith(failure, expect.anything());
   });
 
   it("retains full reconciliation when an energy training queue is pending", async () => {

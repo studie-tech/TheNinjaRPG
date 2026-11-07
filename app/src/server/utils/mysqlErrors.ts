@@ -1,56 +1,43 @@
-import { DatabaseError, UnknownError } from "@planetscale/database";
+import { DatabaseError } from "@planetscale/database";
 import { DrizzleQueryError } from "drizzle-orm";
 import { sleep } from "@/utils/time";
 
-/** Shown for a failed statement when the driver gave no text that is safe to repeat. */
+/** What a client sees for a failed statement; Sentry and server logs keep the full error. */
 export const DATABASE_FAILURE_MESSAGE =
   "The database could not complete this request. Please try again.";
 
-/** Where a Vitess error starts echoing the statement and its bind values. */
-const DRIVER_SQL_ECHO = /\((?:sqlstate|CallerID)\b|\bSql:|\bBindVars:/i;
-
 /**
- * The first error on the `.cause` chain that passes `test`. Drizzle rethrows driver errors
- * as DrizzleQueryError, whose message holds only the SQL and params, so the driver's own
- * text has to be looked for further down.
+ * Whether any error on the `.cause` chain passes `test`. Drizzle rethrows driver errors as
+ * DrizzleQueryError, whose message holds only the SQL and params, so the driver's own text
+ * has to be looked for further down.
  */
-const findErrorInChain = (
-  error: unknown,
-  test: (current: Error) => boolean,
-): Error | undefined => {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
-    if (test(current)) return current;
-    current = current.cause;
-  }
-  return undefined;
-};
-
-/** Whether any error on the `.cause` chain passes `test`. */
 export const someErrorInChain = (
   error: unknown,
   test: (current: Error) => boolean,
-): boolean => findErrorInChain(error, test) !== undefined;
+): boolean => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
+    if (test(current)) return true;
+    current = current.cause;
+  }
+  return false;
+};
 
-/**
- * The text of `error` that may leave the server. A failed statement's Drizzle message is the
- * SQL and params, and a TRPCError or wrapper built on it repeats them, so a database failure
- * reports the driver's summary with the statement cut off, or a generic message without one.
- */
-export const clientErrorMessage = (error: Error): string => {
-  const failure = findErrorInChain(
+/** Whether a failed statement or a driver error is on the `.cause` chain. */
+export const isDatabaseFailure = (error: unknown): boolean =>
+  someErrorInChain(
     error,
     (current) =>
       current instanceof DrizzleQueryError || current instanceof DatabaseError,
   );
-  if (!failure) return error.message;
-  const driver = findErrorInChain(
-    failure,
-    (current) => current instanceof DatabaseError && !(current instanceof UnknownError),
-  );
-  const summary = driver?.message.split(DRIVER_SQL_ECHO, 1)[0]?.trim();
-  return summary || DATABASE_FAILURE_MESSAGE;
-};
+
+/**
+ * The text of `error` that may leave the server. A failed statement's Drizzle message is the
+ * SQL and params, a TRPCError or wrapper built on it repeats them, and the driver's own text
+ * echoes statements, values and tablet names, so a database failure is reported generically.
+ */
+export const clientErrorMessage = (error: Error): string =>
+  isDatabaseFailure(error) ? DATABASE_FAILURE_MESSAGE : error.message;
 
 const hasDuplicateKeyText = (text: string) =>
   text.includes("Duplicate entry") ||
