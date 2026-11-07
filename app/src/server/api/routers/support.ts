@@ -304,16 +304,15 @@ export const supportRouter = createTRPCRouter({
       const dateTo = input.dateTo ? new Date(input.dateTo) : new Date();
 
       /* Build conditions for queries (for re-use) */
-      const baseConds = [
-        ...(dateFrom ? [gte(supportTicket.createdAt, dateFrom)] : []),
-        ...(dateTo ? [lte(supportTicket.createdAt, dateTo)] : []),
+      const whereClause = and(
+        gte(supportTicket.createdAt, dateFrom),
+        lte(supportTicket.createdAt, dateTo),
         ...(input.assignedToUserId
           ? [eq(supportTicket.assignedToUserId, input.assignedToUserId)]
           : []),
         ...(input.category ? [eq(supportTicket.category, input.category)] : []),
-      ];
-      const whereClause = baseConds.length > 0 ? and(...baseConds) : undefined;
-      // Run queries pass 2 if all guards passed
+      );
+      // Run queries
       const [categoryResult, priorityResult, statusResult, assigneeResult, metrics] =
         await Promise.all([
           // Tickets by category

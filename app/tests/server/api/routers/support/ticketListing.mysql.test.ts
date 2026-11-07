@@ -18,7 +18,7 @@ type TicketFilters = Parameters<
 
 const ids = async (userId: string, filters: TicketFilters) => {
   const caller = await callerFor(supportRouter, userId);
-  return (await caller.getTickets(filters)).data.map((ticket) => ticket.id);
+  return (await caller.getTickets(filters)).data.map((ticket) => ticket?.id);
 };
 
 describeWithDatabase("support ticket listing", () => {
