@@ -780,23 +780,29 @@ export const bloodlineRouter = createTRPCRouter({
         if (isMysqlDuplicateKeyError(error)) return alreadyRolled();
         throw error;
       }
+      if (!randomBloodline) {
+        return actionReadinessResponse(
+          {
+            success: false,
+            message:
+              "After thorough examination, the doctors conclude you have no bloodline",
+          },
+          readiness,
+          ctx.drizzle,
+        );
+      }
+      const userPatch = bloodlineCachePatch(
+        user,
+        randomBloodline,
+        settings,
+        progression,
+      );
       return actionReadinessResponse(
-        randomBloodline
-          ? {
-              success: true,
-              userPatch: bloodlineCachePatch(
-                user,
-                randomBloodline,
-                settings,
-                progression,
-              ),
-              message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
-            }
-          : {
-              success: false,
-              message:
-                "After thorough examination, the doctors conclude you have no bloodline",
-            },
+        {
+          success: true,
+          userPatch,
+          message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
+        },
         readiness,
         ctx.drizzle,
       );
