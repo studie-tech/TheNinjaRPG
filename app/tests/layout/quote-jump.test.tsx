@@ -8,19 +8,20 @@ vi.mock("@/libs/toast", createToastMock);
 const toastMock = () => showMutationToast as unknown as Mock<typeof showMutationToast>;
 
 const scrollIntoView = vi.fn();
-const original = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
+let original: PropertyDescriptor | undefined;
 
 beforeEach(() => {
   scrollIntoView.mockReset();
   toastMock().mockClear();
-  Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+  original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
 });
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
-  if (original) Object.defineProperty(Element.prototype, "scrollIntoView", original);
-  else Reflect.deleteProperty(Element.prototype, "scrollIntoView");
+  if (original) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", original);
+  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
 });
 
 const thread = (id: string) => (
