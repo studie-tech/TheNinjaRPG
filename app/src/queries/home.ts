@@ -230,6 +230,34 @@ export const executeResultForToggleStoreItem = (
           )}
         `);
 
+/**
+ * Move the planned stacks between backpack and home storage in one statement. The profile
+ * snapshot CAS rejects the move when capacity changed since it was planned; each stack must
+ * still be unequipped, on the other side and, when stored, outside auctions and offers.
+ * A clean move changes the profile row plus one row per stack.
+ */
+export const executeResultForMoveUserItems = (
+  client: Pick<DrizzleClient, "execute">,
+  user: { userId: string; updatedAt: Date },
+  userItemIds: string[],
+  toHome: boolean,
+) =>
+  client.execute(sql`
+    UPDATE ${userData}
+    INNER JOIN ${userItem} ON ${userItem.userId} = ${userData.userId}
+    SET ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt)},
+        ${userItem.storedAtHome} = ${toHome}
+    WHERE ${and(
+      eq(userData.userId, user.userId),
+      eq(userData.updatedAt, user.updatedAt),
+      inArray(userItem.id, userItemIds),
+      eq(userItem.storedAtHome, !toHome),
+      eq(userItem.equipped, "NONE"),
+      gt(userItem.quantity, 0),
+      toHome ? eq(userItem.isInAuction, false) : undefined,
+    )}
+  `);
+
 /** Execute the database statement for `publishHomeFurnitureLayout`. */
 export const executeRowsForPublishHomeFurnitureLayout = (
   client: Pick<DrizzleClient, "execute">,
