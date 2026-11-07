@@ -273,12 +273,8 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                     <ItemWithEffects
                       item={quest}
                       showEdit="quest"
-                      imageExtra={
-                        <div className="mt-2 space-y-2">
-                          <QuestTeams
-                            questId={quest.id}
-                            teamEnabled={quest.teamEnabled}
-                          />
+                      footer={
+                        <div className="space-y-2">
                           <QuestEntryStock stock={entryStock} />
                           {quest.content.isolated && (
                             <p className="text-sm">
@@ -286,20 +282,27 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                               completion or abandonment.
                             </p>
                           )}
-                          <TakeQuestButton
-                            quest={quest}
-                            entryCost={entryStock}
-                            disabled={entryStock.some(
-                              (required) => required.owned < required.quantity,
-                            )}
-                            onStart={() =>
-                              startQuest({
-                                questId: quest.id,
-                                userSector: userData.sector,
-                                supportsAnnouncements: true,
-                              })
-                            }
-                          />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <TakeQuestButton
+                              quest={quest}
+                              entryCost={entryStock}
+                              disabled={entryStock.some(
+                                (required) => required.owned < required.quantity,
+                              )}
+                              onStart={() =>
+                                startQuest({
+                                  questId: quest.id,
+                                  userSector: userData.sector,
+                                  supportsAnnouncements: true,
+                                })
+                              }
+                            />
+                            <QuestTeams
+                              questId={quest.id}
+                              teamEnabled={quest.teamEnabled}
+                              asAction
+                            />
+                          </div>
                           {isPetTaskContract(quest) && (
                             <PetTaskDispatch
                               questId={quest.id}

@@ -14,6 +14,8 @@ type Options = {
   onSuccess: (result: UserDeltaResponse, variables: unknown, revision: number | undefined) => Promise<void>;
 };
 
+const previousCustomEvent = globalThis.CustomEvent;
+
 const mutation = () => {
   let respond: (result: UserDeltaResponse) => Promise<void>;
   const mutate = vi.fn();
@@ -48,6 +50,7 @@ let actor: { userId: string; status: UserStatus; autoWakeUp: boolean } & typeof 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  globalThis.CustomEvent = window.CustomEvent;
   current = null;
   actor = { userId: "ninja", status: "HOSPITALIZED", autoWakeUp: true, ...encounterLocation };
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
@@ -65,7 +68,7 @@ beforeEach(() => {
     } },
   });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); globalThis.CustomEvent = previousCustomEvent; });
 
 for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
   it(`offers an encounter attempt to the recoverable ${status} leader without changing roster status`, () => {
@@ -156,3 +159,19 @@ for (const [label, action] of [["Form Quest Team", create], ["Join Team", join]]
     expect(invalidate).not.toHaveBeenCalled();
   });
 }
+
+it("keeps available quest team setup behind its action and submits the chosen privacy", () => {
+  const view = render(<QuestTeams questId="quest" asAction />);
+  expect(view.queryByRole("button", { name: "Form Quest Team" })).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "Play with a team" }));
+  fireEvent.click(view.getByRole("switch", { name: "Public team" }));
+  fireEvent.click(view.getByRole("button", { name: "Form Quest Team" }));
+  expect(create.mutate).toHaveBeenCalledWith({ questId: "quest", isPublic: true });
+});
+
+it("keeps joining available teams accessible from the quest action", () => {
+  const view = render(<QuestTeams questId="quest" asAction />);
+  fireEvent.click(view.getByRole("button", { name: "Play with a team" }));
+  fireEvent.click(view.getByRole("button", { name: "Join Team" }));
+  expect(join.mutate).toHaveBeenCalledWith({ partyId: "team" });
+});

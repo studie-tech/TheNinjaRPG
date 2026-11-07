@@ -59,7 +59,7 @@ beforeEach(() => {
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(Logbook, "LogbookEntry").mockImplementation(() => null);
   vi.spyOn(ItemWithEffects, "default").mockImplementation(
-    ({ imageExtra }: { imageExtra?: ReactNode }) => <div>{imageExtra}</div>,
+    ({ footer }: { footer?: ReactNode }) => <div>{footer}</div>,
   );
   vi.spyOn(QuestTeams, "QuestTeams").mockImplementation(({ teamEnabled }) =>
     teamEnabled ? <p>Quest team controls</p> : null,
