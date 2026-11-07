@@ -38,6 +38,7 @@ import {
 import { queueMasteries, readMasteryQueue } from "../../../setup/queues";
 import { beforeStatements, failStatements } from "../../../setup/statements";
 import type { MasteryTrainingQueueEntry } from "@/validators/train";
+import { requireUser } from "../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
@@ -82,12 +83,7 @@ const setFederalStatus = async (federalStatus: "NONE" | "NORMAL" | "SILVER" | "G
   await database.update(userData).set({ federalStatus }).where(eq(userData.userId, USER_ID));
 };
 
-const readUser = async () => {
-  const database = await getTestDatabase();
-  const [user] = await database.select().from(userData).where(eq(userData.userId, USER_ID));
-  if (!user) throw new Error("user missing");
-  return user;
-};
+const readUser = () => requireUser(USER_ID);
 
 const readUserJutsu = async (jutsuId: string) => {
   const database = await getTestDatabase();

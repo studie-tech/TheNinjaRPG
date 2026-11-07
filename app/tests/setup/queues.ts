@@ -8,6 +8,7 @@ import type {
   MasteryTrainingQueueEntry,
 } from "@/validators/train";
 import { getTestDatabase } from "./testDatabase";
+import { requireUser } from "./userReads";
 
 /** Store `entries` as the user's live Energy queue, as the edit endpoint would. */
 export const queueEnergy = async (
@@ -72,8 +73,7 @@ export const queueMasteries = async (
 
 const readUserQueue = async (userId: string) => {
   const database = await getTestDatabase();
-  const [user] = await database.select().from(userData).where(eq(userData.userId, userId));
-  if (!user) throw new Error(`user ${userId} missing`);
+  const user = await requireUser(userId);
   const queue = await database
     .select()
     .from(userQueue)

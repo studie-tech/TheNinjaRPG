@@ -5,6 +5,7 @@ import { paypalRouter } from "@/server/api/routers/paypal";
 import { calcFedUgradeCost, fedStatusRepsCost } from "@/utils/paypal";
 import { insertUsers } from "../../../setup/factories";
 import type { DrizzleClient } from "@/server/db";
+import { readUser } from "../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
@@ -18,8 +19,6 @@ const BUYER = "reps-buyer";
 const GIFTEE = "reps-giftee";
 const ATTEMPTS = 5;
 
-const readUser = async (userId: string) =>
-  (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) });
 const readSubscriptions = async () =>
   (await getTestDatabase()).query.paypalSubscription.findMany();
 
@@ -79,7 +78,7 @@ describeWithDatabase("reputation-funded subscriptions", () => {
     expect(await readUser(BUYER)).toMatchObject({ reputationPoints: 0 });
     const subscriptions = await readSubscriptions();
     expect(subscriptions).toHaveLength(1);
-    const granted = await Promise.all(giftees.map(readUser));
+    const granted = await Promise.all(giftees.map((userId) => readUser(userId)));
     expect(granted.filter((user) => user?.federalStatus === "NORMAL")).toHaveLength(1);
     expect(granted.find((user) => user?.federalStatus === "NORMAL")?.userId).toBe(
       subscriptions[0]?.affectedUserId,

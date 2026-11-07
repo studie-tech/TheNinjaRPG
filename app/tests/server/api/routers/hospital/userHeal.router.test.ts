@@ -23,6 +23,7 @@ import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { beforeStatements } from "../../../../setup/statements";
+import { readUser } from "../../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
@@ -108,10 +109,7 @@ const insertLegendaryHealer = async (
     },
   ]);
 
-const readHealer = async (userId = USER_ID) => {
-  const database = await getTestDatabase();
-  return database.query.userData.findFirst({ where: eq(userData.userId, userId) });
-};
+const readHealer = (userId = USER_ID) => readUser(userId);
 
 /** Assigns a real isolated run through its router so healing exercises persisted isolation. */
 const startTargetPyramid = async (client?: DrizzleClient) => {

@@ -23,6 +23,7 @@ import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
+import { readUser } from "../../../../setup/userReads";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -79,10 +80,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  const storedUser = async (userId = "member") =>
-    (await getTestDatabase()).query.userData.findFirst({
-      where: eq(userData.userId, userId),
-    });
+  const storedUser = (userId = "member") => readUser(userId);
   const queueRows = async () =>
     (await getTestDatabase()).query.rankedPvpQueue.findMany();
   const claimClanQueue = async () => {

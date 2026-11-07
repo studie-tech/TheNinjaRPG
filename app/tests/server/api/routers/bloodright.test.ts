@@ -11,6 +11,7 @@ import { calcEnergy } from "@/libs/profile";
 import { callerForDatabase } from "../../../setup/testDatabase";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
+import { requireUser } from "../../../setup/userReads";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const userId = "bloodright-player";
@@ -20,7 +21,7 @@ const invoke = async (name: "purchase" | "refund" | "reset", input?: unknown) =>
   const { resolver } = procedure._def as unknown as { resolver: (args: { ctx: { drizzle: typeof db; userId: string }; input: unknown }) => Promise<{ success: boolean }> };
   return resolver({ ctx: { drizzle: db, userId }, input });
 };
-const read = async () => (await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
+const read = () => requireUser(userId);
 const tier = (id: string, tier = 1, requiredSkillIds: string[] = []) => ({ id, name: id, image: "", description: "Bloodright fixture", effects: [], tier, requiredSkillIds, pathType: "BLOODRIGHT" as const, bloodlineId: "line", seichiSilverCost: 100 });
 
 describeWithDatabase("Bloodright economy on MySQL", () => {
