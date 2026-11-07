@@ -330,325 +330,35 @@ export const calcBattleResult = (
         });
       }
 
-      // Determine war kills bonus
-      const warHealthInfo: Record<string, number> = {};
-      const addWarHealth = (villageName: string, change: number) => {
-        warHealthInfo[villageName] = (warHealthInfo[villageName] ?? 0) + change;
-      };
-      const shrineInfo: Record<number, number> = {};
-      // Track attacker and defender shrine changes separately per war
-      const villageWarShrineInfo: Record<
-        string,
-        { attacker: number; defender: number }
-      > = {};
-      const villageWarShrineDisplay: Record<string, number> = {};
-      const warIdToDisplayName: Record<string, string> = {};
-      const ensureVillageWarShrine = (war: BattleWar) => {
-        if (war.id in villageWarShrineInfo) return;
-        villageWarShrineInfo[war.id] = { attacker: 0, defender: 0 };
-        // Create display name for this war using village names
-        const attackerName = war.attackerVillage?.name ?? "Attacker";
-        const defenderName = war.defenderVillage?.name ?? "Defender";
-        warIdToDisplayName[war.id] = `${attackerName} vs ${defenderName}`;
-      };
-      let warHealthChange = 0;
-      let shrineChangeHp = 0;
-      const userWars = getBattleTeamWars(battle, user);
-      // Skip war updates if kill happened in war-torn sector
-      if (!user.fledBattle && !isInWarTornSector) {
-        targets.forEach((target) => {
-          const wars = getOpposingBattleWars(battle, user, target);
-          wars.forEach(({ war, sideVillageId }) => {
-            // Objective wars award clamped strategic damage through their own receipts.
-            if (war.rules) return;
-            const isUserOnAttackerSide = war.attackerVillageId === sideVillageId;
-            // Get the names of the village
-            const userVillageName = isUserOnAttackerSide
-              ? war?.attackerVillage?.name || ""
-              : war?.defenderVillage?.name || "";
-            const targetVillageName = isUserOnAttackerSide
-              ? war?.defenderVillage?.name || ""
-              : war?.attackerVillage?.name || "";
-            // Reset to 0 if not in warHealthInfo
-            if (targetVillageName && !(targetVillageName in warHealthInfo)) {
-              warHealthInfo[targetVillageName] = 0;
-            }
-            if (userVillageName && !(userVillageName in warHealthInfo)) {
-              warHealthInfo[userVillageName] = 0;
-            }
-
-            // Village wars & raids
-            if (
-              ["VILLAGE_WAR", "WAR_RAID"].includes(war.type) &&
-              battleType === "COMBAT"
-            ) {
-              const targetVillage = getVillage(battle, target.villageId);
-              if (didWin) {
-                const { recover, remove } = getWarHealthTier(user, village, userClan);
-                warHealthChange += recover;
-                addWarHealth(userVillageName, recover);
-                addWarHealth(targetVillageName, -remove);
-                if (targetVillage?.kageId === target.userId) {
-                  addWarHealth(targetVillageName, -WAR_HEALTH_KAGEDEATH_REMOVE);
-                }
-              } else {
-                const targetClan = getClan(battle, target.clanId);
-                const { remove } = getWarHealthTier(target, targetVillage, targetClan);
-                warHealthChange -= remove;
-                addWarHealth(userVillageName, -remove);
-                if (village?.kageId === user.userId) {
-                  warHealthChange -= WAR_HEALTH_KAGEDEATH_REMOVE;
-                  addWarHealth(userVillageName, -WAR_HEALTH_KAGEDEATH_REMOVE);
-                }
-              }
-            }
-            // Sector wars
-            if (war.type === "SECTOR_WAR") {
-              const sector = war.sector;
-              if (!(sector in shrineInfo)) {
-                shrineInfo[sector] = 0;
-              }
-              if (battleType === "SHRINE_WAR") {
-                if (
-                  (didWin && isUserOnAttackerSide) ||
-                  (!didWin && !isUserOnAttackerSide)
-                ) {
-                  shrineChangeHp -= WAR_SECTORWAR_AI_SHRINE_REDUCE;
-                  shrineInfo[sector] =
-                    (shrineInfo[sector] ?? 0) - WAR_SECTORWAR_AI_SHRINE_REDUCE;
-                } else {
-                  shrineChangeHp += WAR_SECTORWAR_AI_SHRINE_RECOVER;
-                  shrineInfo[sector] =
-                    (shrineInfo[sector] ?? 0) + WAR_SECTORWAR_AI_SHRINE_RECOVER;
-                }
-              }
-              if (battleType === "COMBAT") {
-                if (
-                  (didWin && isUserOnAttackerSide) ||
-                  (!didWin && !isUserOnAttackerSide)
-                ) {
-                  if (didWin) shrineChangeHp -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
-                  shrineInfo[sector] =
-                    (shrineInfo[sector] ?? 0) - WAR_SECTORWAR_PVP_SHRINE_REDUCE;
-                } else {
-                  if (didWin) shrineChangeHp += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
-                  shrineInfo[sector] =
-                    (shrineInfo[sector] ?? 0) + WAR_SECTORWAR_PVP_SHRINE_RECOVER;
-                }
-              }
-            }
-            // Village wars and raids - abstract shrine HP mechanic
-            // Track per-war to avoid accumulation bug when a user is in multiple wars
-            // Track attacker and defender shrine changes separately
-            if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
-              ensureVillageWarShrine(war);
-              const isUserOnDefenderSide = !isUserOnAttackerSide;
-
-              // Determine which shrine is being targeted based on user's sector
-              const atAttackerVillage = war.attackerVillage?.sector === user.sector;
-              const atDefenderVillage = war.defenderVillage?.sector === user.sector;
-
-              // AI shrine battles (SHRINE_WAR) - attacking the shrine directly
-              if (battleType === "SHRINE_WAR") {
-                const warInfo = villageWarShrineInfo[war.id];
-                if (didWin && warInfo) {
-                  if (isUserOnAttackerSide && atDefenderVillage) {
-                    // Attacker wins at defender's shrine: defender shrine HP down
-                    warInfo.defender -= WAR_SECTORWAR_AI_SHRINE_REDUCE;
-                  } else if (isUserOnAttackerSide && atAttackerVillage) {
-                    // Attacker wins defending own shrine: attacker shrine HP up
-                    warInfo.attacker += WAR_SECTORWAR_AI_SHRINE_RECOVER;
-                  } else if (isUserOnDefenderSide && atAttackerVillage) {
-                    // Defender wins at attacker's shrine: attacker shrine HP down
-                    warInfo.attacker -= WAR_SECTORWAR_AI_SHRINE_REDUCE;
-                  } else if (isUserOnDefenderSide && atDefenderVillage) {
-                    // Defender wins defending own shrine: defender shrine HP up
-                    warInfo.defender += WAR_SECTORWAR_AI_SHRINE_RECOVER;
-                  }
-                }
-              }
-
-              // PvP battles (COMBAT) - affect shrine based on where battle occurred
-              if (battleType === "COMBAT") {
-                const warInfo = villageWarShrineInfo[war.id];
-                if (didWin && warInfo) {
-                  if (atDefenderVillage) {
-                    // Battle at defender village affects defender shrine
-                    if (isUserOnAttackerSide) {
-                      // Attacker kills defender at defender village: defender shrine HP down
-                      warInfo.defender -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
-                    } else if (isUserOnDefenderSide) {
-                      // Defender kills attacker at own village: defender shrine HP up
-                      warInfo.defender += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
-                    }
-                  } else if (atAttackerVillage) {
-                    // Battle at attacker village affects attacker shrine
-                    if (isUserOnDefenderSide) {
-                      // Defender kills attacker at attacker village: attacker shrine HP down
-                      warInfo.attacker -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
-                    } else if (isUserOnAttackerSide) {
-                      // Attacker kills defender at own village: attacker shrine HP up
-                      warInfo.attacker += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
-                    }
-                  }
-                }
-              }
-            }
-          });
-        });
-
-        // Handle SHRINE_WAR village wars separately for defend scenarios
-        // When defending own shrine, AI target has same villageId as user, so normal
-        // target loop doesn't process it. Handle this case based on user's wars directly.
-        if (battleType === "SHRINE_WAR" && didWin) {
-          userWars
-            .filter(({ war }) => ["VILLAGE_WAR", "WAR_RAID"].includes(war.type))
-            .forEach(({ war, sideVillageId }) => {
-              // Objective-war recovery shares the same receipt boundary as damage.
-              if (war.rules) return;
-              const isUserOnAttackerSide = war.attackerVillageId === sideVillageId;
-              const isUserOnDefenderSide = !isUserOnAttackerSide;
-
-              const atAttackerVillage = war.attackerVillage?.sector === user.sector;
-              const atDefenderVillage = war.defenderVillage?.sector === user.sector;
-
-              // Check if this is a defend scenario (at own village)
-              const isDefendScenario =
-                (isUserOnAttackerSide && atAttackerVillage) ||
-                (isUserOnDefenderSide && atDefenderVillage);
-
-              // Skip if not a defend scenario (attack scenarios are handled by target loop)
-              if (!isDefendScenario) return;
-
-              ensureVillageWarShrine(war);
-
-              // Apply shrine HP recovery for defend
-              const warInfo = villageWarShrineInfo[war.id];
-              if (warInfo) {
-                if (isUserOnAttackerSide && atAttackerVillage) {
-                  // Attacker wins defending own shrine: attacker shrine HP up
-                  warInfo.attacker += WAR_SECTORWAR_AI_SHRINE_RECOVER;
-                } else if (isUserOnDefenderSide && atDefenderVillage) {
-                  // Defender wins defending own shrine: defender shrine HP up
-                  warInfo.defender += WAR_SECTORWAR_AI_SHRINE_RECOVER;
-                }
-              }
-            });
-        }
-      }
-
-      // Scale everything based on reward scaling
-      shrineChangeHp *= battle.rewardScaling;
-      warHealthChange *= battle.rewardScaling;
-      mapRecordValues(shrineInfo, (value) => value * battle.rewardScaling);
-      mapRecordValues(warHealthInfo, (value) => value * battle.rewardScaling);
-      // Note: villageWarShrineInfo is intentionally NOT scaled by rewardScaling.
-      // Shrine HP changes are a strategic war mechanic and should not be reduced
-      // by anti-farming scaling, ensuring consistent war progress per kill.
-
-      // Adjust shrine & townhall datamage based on level different
-      const maxHumanTargetLevel = Math.max(...targetUsers.map((t) => t.level), 0);
-      if (Math.abs(user.level - maxHumanTargetLevel) > STREAK_LEVEL_DIFF) {
-        // Check if any kage was killed in this battle
-        const targetKageLost =
-          targets.some((target) => {
-            const tVillage = getVillage(battle, target.villageId);
-            return tVillage?.kageId === target.userId;
-          }) && didWin;
-        const userKageLost = village?.kageId === user.userId && !didWin;
-        const kageLost = targetKageLost || userKageLost;
-        const strongestWon = user.level > maxHumanTargetLevel && didWin;
-        const weakestLost = user.level < maxHumanTargetLevel && !didWin;
-        // If kage was killed, we preserve all war damage, otherwise reduce all changes to 1/abs(change) if we're the stronger player
-        if (!kageLost && (strongestWon || weakestLost)) {
-          shrineChangeHp = Math.sign(shrineChangeHp);
-          warHealthChange = Math.sign(warHealthChange);
-          mapRecordValues(shrineInfo, Math.sign);
-          mapRecordValues(warHealthInfo, Math.sign);
-          for (const info of Object.values(villageWarShrineInfo)) {
-            info.attacker = Math.sign(info.attacker);
-            info.defender = Math.sign(info.defender);
-          }
-        }
-      }
-
-      // Convert villageWarShrineInfo to display-friendly format using war names
-      // Combine attacker and defender changes for display purposes
-      for (const [warId, info] of Object.entries(villageWarShrineInfo)) {
-        const displayName = warIdToDisplayName[warId] ?? warId;
-        villageWarShrineDisplay[displayName] = info.attacker + info.defender;
-      }
+      const {
+        warHealthInfo,
+        shrineInfo,
+        villageWarShrineInfo,
+        villageWarShrineDisplay,
+        warHealthChange,
+        shrineChangeHp,
+      } = calcWarDamage({
+        battle,
+        user,
+        targets,
+        targetUsers,
+        village,
+        userClan,
+        didWin,
+        isInWarTornSector,
+      });
 
       // Opponent level gaps for rewards count AI opponents too.
       const maxTargetLevel = Math.max(...targets.map((t) => t.level), 0);
 
-      // Determine if pvpStreak should be adjusted
-      const calculatePvpStreak = (
-        battleType: string,
-        user: { level: number; pvpStreak: number; isAggressor: boolean },
-        maxTargetLevel: number,
-        didWin: boolean,
-      ): number => {
-        if (battleType !== "COMBAT") {
-          return user.pvpStreak;
-        }
-        const levelDifference = user.level - maxTargetLevel;
-        if (user.isAggressor && levelDifference > STREAK_LEVEL_DIFF) {
-          return user.pvpStreak;
-        }
-        if (didWin) {
-          return user.pvpStreak + 1;
-        }
-        if (user.isAggressor || levelDifference > -STREAK_LEVEL_DIFF) {
-          return 0;
-        }
-        return user.pvpStreak;
-      };
-
       // Check if any bounties were claimed
-      const bountiesClaimed: {
-        bountyId: string;
-        hunterId: string;
-        amountRyo: number;
-      }[] = [];
-      if (battleType === "COMBAT" && didWin) {
-        const userBountySignups = getUserBountySignups(battle, user.controllerId);
-        for (const signup of userBountySignups) {
-          for (const target of targets) {
-            const bounty = getUserBounties(battle, target.controllerId).find(
-              (b) => b.id === signup.bountyId,
-            );
-            if (bounty) {
-              bountiesClaimed.push({
-                bountyId: bounty.id,
-                hunterId: user.userId,
-                amountRyo: bounty.amountRyo,
-              });
-            }
-          }
-        }
-      }
+      const bountiesClaimed =
+        battleType === "COMBAT" && didWin
+          ? collectClaimedBounties(battle, user, targets)
+          : [];
 
       // Roll item drops from defeated opponents and include in result for frontend display
-      const droppedItems: DroppedItem[] = [];
-      if (didWin) {
-        targets
-          .filter((t) => !t.isSummon && t.isAi)
-          .forEach((t) => {
-            t.items.forEach((ui) => {
-              const chance = ui.dropChancePerc ?? 0;
-              if (chance > 0 && Math.random() * 100 < chance) {
-                const itemData = getItem(battle, ui.itemId);
-                droppedItems.push({
-                  itemId: ui.itemId,
-                  name: itemData?.name ?? "Item",
-                  userItemId: ui.id,
-                  fromUserId: t.userId,
-                });
-              }
-            });
-          });
-      }
+      const droppedItems = didWin ? rollDroppedItems(battle, targets) : [];
 
       // Positive generated prestige/tokens gain loyalty; penalties retain their existing values.
       deltaTokens = boostPvpGain(deltaTokens, loyalty.villageRewards);
@@ -662,7 +372,7 @@ export const calcBattleResult = (
         lpDiff: lpDiff,
         experience: 0.01,
         earnedExperience: 0,
-        pvpStreak: calculatePvpStreak(battleType, user, maxTargetLevel, didWin),
+        pvpStreak: calcPvpStreak(battleType, user, maxTargetLevel, didWin),
         curHealth: user.curHealth,
         curStamina: user.curStamina,
         curChakra: user.curChakra,
@@ -861,6 +571,358 @@ export const calcBattleResult = (
     }
   }
   return null;
+};
+
+/**
+ * War health, sector shrine and village-war shrine changes of one fighter's result.
+ * Reward scaling covers war health and sector shrines; village-war shrines stay per kill.
+ */
+const calcWarDamage = ({
+  battle,
+  user,
+  targets,
+  targetUsers,
+  village,
+  userClan,
+  didWin,
+  isInWarTornSector,
+}: {
+  battle: CompleteBattle;
+  user: BattleUserState;
+  targets: BattleUserState[];
+  /** Human opponents; the level normalisation ignores AI. */
+  targetUsers: BattleUserState[];
+  village: CompleteBattle["extraState"]["villages"][string] | undefined;
+  userClan: CompleteBattle["extraState"]["clans"][string] | undefined;
+  didWin: boolean;
+  isInWarTornSector: boolean;
+}) => {
+  const { battleType } = battle;
+  // Determine war kills bonus
+  const warHealthInfo: Record<string, number> = {};
+  const addWarHealth = (villageName: string, change: number) => {
+    warHealthInfo[villageName] = (warHealthInfo[villageName] ?? 0) + change;
+  };
+  const shrineInfo: Record<number, number> = {};
+  // Track attacker and defender shrine changes separately per war
+  const villageWarShrineInfo: Record<string, { attacker: number; defender: number }> =
+    {};
+  const villageWarShrineDisplay: Record<string, number> = {};
+  const warIdToDisplayName: Record<string, string> = {};
+  const ensureVillageWarShrine = (war: BattleWar) => {
+    if (war.id in villageWarShrineInfo) return;
+    villageWarShrineInfo[war.id] = { attacker: 0, defender: 0 };
+    // Create display name for this war using village names
+    const attackerName = war.attackerVillage?.name ?? "Attacker";
+    const defenderName = war.defenderVillage?.name ?? "Defender";
+    warIdToDisplayName[war.id] = `${attackerName} vs ${defenderName}`;
+  };
+  let warHealthChange = 0;
+  let shrineChangeHp = 0;
+  const userWars = getBattleTeamWars(battle, user);
+  // Skip war updates if kill happened in war-torn sector
+  if (!user.fledBattle && !isInWarTornSector) {
+    targets.forEach((target) => {
+      const wars = getOpposingBattleWars(battle, user, target);
+      wars.forEach(({ war, sideVillageId }) => {
+        // Objective wars award clamped strategic damage through their own receipts.
+        if (war.rules) return;
+        const isUserOnAttackerSide = war.attackerVillageId === sideVillageId;
+        // Get the names of the village
+        const userVillageName = isUserOnAttackerSide
+          ? war?.attackerVillage?.name || ""
+          : war?.defenderVillage?.name || "";
+        const targetVillageName = isUserOnAttackerSide
+          ? war?.defenderVillage?.name || ""
+          : war?.attackerVillage?.name || "";
+        // Reset to 0 if not in warHealthInfo
+        if (targetVillageName && !(targetVillageName in warHealthInfo)) {
+          warHealthInfo[targetVillageName] = 0;
+        }
+        if (userVillageName && !(userVillageName in warHealthInfo)) {
+          warHealthInfo[userVillageName] = 0;
+        }
+
+        // Village wars & raids
+        if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && battleType === "COMBAT") {
+          const targetVillage = getVillage(battle, target.villageId);
+          if (didWin) {
+            const { recover, remove } = getWarHealthTier(user, village, userClan);
+            warHealthChange += recover;
+            addWarHealth(userVillageName, recover);
+            addWarHealth(targetVillageName, -remove);
+            if (targetVillage?.kageId === target.userId) {
+              addWarHealth(targetVillageName, -WAR_HEALTH_KAGEDEATH_REMOVE);
+            }
+          } else {
+            const targetClan = getClan(battle, target.clanId);
+            const { remove } = getWarHealthTier(target, targetVillage, targetClan);
+            warHealthChange -= remove;
+            addWarHealth(userVillageName, -remove);
+            if (village?.kageId === user.userId) {
+              warHealthChange -= WAR_HEALTH_KAGEDEATH_REMOVE;
+              addWarHealth(userVillageName, -WAR_HEALTH_KAGEDEATH_REMOVE);
+            }
+          }
+        }
+        // Sector wars
+        if (war.type === "SECTOR_WAR") {
+          const sector = war.sector;
+          if (!(sector in shrineInfo)) {
+            shrineInfo[sector] = 0;
+          }
+          if (battleType === "SHRINE_WAR") {
+            if (
+              (didWin && isUserOnAttackerSide) ||
+              (!didWin && !isUserOnAttackerSide)
+            ) {
+              shrineChangeHp -= WAR_SECTORWAR_AI_SHRINE_REDUCE;
+              shrineInfo[sector] =
+                (shrineInfo[sector] ?? 0) - WAR_SECTORWAR_AI_SHRINE_REDUCE;
+            } else {
+              shrineChangeHp += WAR_SECTORWAR_AI_SHRINE_RECOVER;
+              shrineInfo[sector] =
+                (shrineInfo[sector] ?? 0) + WAR_SECTORWAR_AI_SHRINE_RECOVER;
+            }
+          }
+          if (battleType === "COMBAT") {
+            if (
+              (didWin && isUserOnAttackerSide) ||
+              (!didWin && !isUserOnAttackerSide)
+            ) {
+              if (didWin) shrineChangeHp -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
+              shrineInfo[sector] =
+                (shrineInfo[sector] ?? 0) - WAR_SECTORWAR_PVP_SHRINE_REDUCE;
+            } else {
+              if (didWin) shrineChangeHp += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
+              shrineInfo[sector] =
+                (shrineInfo[sector] ?? 0) + WAR_SECTORWAR_PVP_SHRINE_RECOVER;
+            }
+          }
+        }
+        // Village wars and raids - abstract shrine HP mechanic
+        // Track per-war to avoid accumulation bug when a user is in multiple wars
+        // Track attacker and defender shrine changes separately
+        if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
+          ensureVillageWarShrine(war);
+          const isUserOnDefenderSide = !isUserOnAttackerSide;
+
+          // Determine which shrine is being targeted based on user's sector
+          const atAttackerVillage = war.attackerVillage?.sector === user.sector;
+          const atDefenderVillage = war.defenderVillage?.sector === user.sector;
+
+          // AI shrine battles (SHRINE_WAR) - attacking the shrine directly
+          if (battleType === "SHRINE_WAR") {
+            const warInfo = villageWarShrineInfo[war.id];
+            if (didWin && warInfo) {
+              if (isUserOnAttackerSide && atDefenderVillage) {
+                // Attacker wins at defender's shrine: defender shrine HP down
+                warInfo.defender -= WAR_SECTORWAR_AI_SHRINE_REDUCE;
+              } else if (isUserOnAttackerSide && atAttackerVillage) {
+                // Attacker wins defending own shrine: attacker shrine HP up
+                warInfo.attacker += WAR_SECTORWAR_AI_SHRINE_RECOVER;
+              } else if (isUserOnDefenderSide && atAttackerVillage) {
+                // Defender wins at attacker's shrine: attacker shrine HP down
+                warInfo.attacker -= WAR_SECTORWAR_AI_SHRINE_REDUCE;
+              } else if (isUserOnDefenderSide && atDefenderVillage) {
+                // Defender wins defending own shrine: defender shrine HP up
+                warInfo.defender += WAR_SECTORWAR_AI_SHRINE_RECOVER;
+              }
+            }
+          }
+
+          // PvP battles (COMBAT) - affect shrine based on where battle occurred
+          if (battleType === "COMBAT") {
+            const warInfo = villageWarShrineInfo[war.id];
+            if (didWin && warInfo) {
+              if (atDefenderVillage) {
+                // Battle at defender village affects defender shrine
+                if (isUserOnAttackerSide) {
+                  // Attacker kills defender at defender village: defender shrine HP down
+                  warInfo.defender -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
+                } else if (isUserOnDefenderSide) {
+                  // Defender kills attacker at own village: defender shrine HP up
+                  warInfo.defender += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
+                }
+              } else if (atAttackerVillage) {
+                // Battle at attacker village affects attacker shrine
+                if (isUserOnDefenderSide) {
+                  // Defender kills attacker at attacker village: attacker shrine HP down
+                  warInfo.attacker -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
+                } else if (isUserOnAttackerSide) {
+                  // Attacker kills defender at own village: attacker shrine HP up
+                  warInfo.attacker += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+
+    // Handle SHRINE_WAR village wars separately for defend scenarios
+    // When defending own shrine, AI target has same villageId as user, so normal
+    // target loop doesn't process it. Handle this case based on user's wars directly.
+    if (battleType === "SHRINE_WAR" && didWin) {
+      userWars
+        .filter(({ war }) => ["VILLAGE_WAR", "WAR_RAID"].includes(war.type))
+        .forEach(({ war, sideVillageId }) => {
+          // Objective-war recovery shares the same receipt boundary as damage.
+          if (war.rules) return;
+          const isUserOnAttackerSide = war.attackerVillageId === sideVillageId;
+          const isUserOnDefenderSide = !isUserOnAttackerSide;
+
+          const atAttackerVillage = war.attackerVillage?.sector === user.sector;
+          const atDefenderVillage = war.defenderVillage?.sector === user.sector;
+
+          // Check if this is a defend scenario (at own village)
+          const isDefendScenario =
+            (isUserOnAttackerSide && atAttackerVillage) ||
+            (isUserOnDefenderSide && atDefenderVillage);
+
+          // Skip if not a defend scenario (attack scenarios are handled by target loop)
+          if (!isDefendScenario) return;
+
+          ensureVillageWarShrine(war);
+
+          // Apply shrine HP recovery for defend
+          const warInfo = villageWarShrineInfo[war.id];
+          if (warInfo) {
+            if (isUserOnAttackerSide && atAttackerVillage) {
+              // Attacker wins defending own shrine: attacker shrine HP up
+              warInfo.attacker += WAR_SECTORWAR_AI_SHRINE_RECOVER;
+            } else if (isUserOnDefenderSide && atDefenderVillage) {
+              // Defender wins defending own shrine: defender shrine HP up
+              warInfo.defender += WAR_SECTORWAR_AI_SHRINE_RECOVER;
+            }
+          }
+        });
+    }
+  }
+
+  // Scale everything based on reward scaling
+  shrineChangeHp *= battle.rewardScaling;
+  warHealthChange *= battle.rewardScaling;
+  mapRecordValues(shrineInfo, (value) => value * battle.rewardScaling);
+  mapRecordValues(warHealthInfo, (value) => value * battle.rewardScaling);
+  // Note: villageWarShrineInfo is intentionally NOT scaled by rewardScaling.
+  // Shrine HP changes are a strategic war mechanic and should not be reduced
+  // by anti-farming scaling, ensuring consistent war progress per kill.
+
+  // Adjust shrine & townhall datamage based on level different
+  const maxHumanTargetLevel = Math.max(...targetUsers.map((t) => t.level), 0);
+  if (Math.abs(user.level - maxHumanTargetLevel) > STREAK_LEVEL_DIFF) {
+    // Check if any kage was killed in this battle
+    const targetKageLost =
+      targets.some((target) => {
+        const tVillage = getVillage(battle, target.villageId);
+        return tVillage?.kageId === target.userId;
+      }) && didWin;
+    const userKageLost = village?.kageId === user.userId && !didWin;
+    const kageLost = targetKageLost || userKageLost;
+    const strongestWon = user.level > maxHumanTargetLevel && didWin;
+    const weakestLost = user.level < maxHumanTargetLevel && !didWin;
+    // If kage was killed, we preserve all war damage, otherwise reduce all changes to 1/abs(change) if we're the stronger player
+    if (!kageLost && (strongestWon || weakestLost)) {
+      shrineChangeHp = Math.sign(shrineChangeHp);
+      warHealthChange = Math.sign(warHealthChange);
+      mapRecordValues(shrineInfo, Math.sign);
+      mapRecordValues(warHealthInfo, Math.sign);
+      for (const info of Object.values(villageWarShrineInfo)) {
+        info.attacker = Math.sign(info.attacker);
+        info.defender = Math.sign(info.defender);
+      }
+    }
+  }
+
+  // Convert villageWarShrineInfo to display-friendly format using war names
+  // Combine attacker and defender changes for display purposes
+  for (const [warId, info] of Object.entries(villageWarShrineInfo)) {
+    const displayName = warIdToDisplayName[warId] ?? warId;
+    villageWarShrineDisplay[displayName] = info.attacker + info.defender;
+  }
+
+  return {
+    warHealthInfo,
+    shrineInfo,
+    villageWarShrineInfo,
+    villageWarShrineDisplay,
+    warHealthChange,
+    shrineChangeHp,
+  };
+};
+
+/** The PvP streak after a battle; only open-world combat changes it. */
+const calcPvpStreak = (
+  battleType: string,
+  user: { level: number; pvpStreak: number; isAggressor: boolean },
+  maxTargetLevel: number,
+  didWin: boolean,
+): number => {
+  if (battleType !== "COMBAT") {
+    return user.pvpStreak;
+  }
+  const levelDifference = user.level - maxTargetLevel;
+  if (user.isAggressor && levelDifference > STREAK_LEVEL_DIFF) {
+    return user.pvpStreak;
+  }
+  if (didWin) {
+    return user.pvpStreak + 1;
+  }
+  if (user.isAggressor || levelDifference > -STREAK_LEVEL_DIFF) {
+    return 0;
+  }
+  return user.pvpStreak;
+};
+
+/** Bounties the user signed up for on defeated targets, by signup then target. */
+const collectClaimedBounties = (
+  battle: CompleteBattle,
+  user: BattleUserState,
+  targets: BattleUserState[],
+) => {
+  const bountiesClaimed: {
+    bountyId: string;
+    hunterId: string;
+    amountRyo: number;
+  }[] = [];
+  for (const signup of getUserBountySignups(battle, user.controllerId)) {
+    for (const target of targets) {
+      const bounty = getUserBounties(battle, target.controllerId).find(
+        (b) => b.id === signup.bountyId,
+      );
+      if (bounty) {
+        bountiesClaimed.push({
+          bountyId: bounty.id,
+          hunterId: user.userId,
+          amountRyo: bounty.amountRyo,
+        });
+      }
+    }
+  }
+  return bountiesClaimed;
+};
+
+/** Roll each droppable item of the AI opponents, spending one random roll per item. */
+const rollDroppedItems = (battle: CompleteBattle, targets: BattleUserState[]) => {
+  const droppedItems: DroppedItem[] = [];
+  targets
+    .filter((t) => !t.isSummon && t.isAi)
+    .forEach((t) => {
+      t.items.forEach((ui) => {
+        const chance = ui.dropChancePerc ?? 0;
+        if (chance > 0 && Math.random() * 100 < chance) {
+          const itemData = getItem(battle, ui.itemId);
+          droppedItems.push({
+            itemId: ui.itemId,
+            name: itemData?.name ?? "Item",
+            userItemId: ui.id,
+            fromUserId: t.userId,
+          });
+        }
+      });
+    });
+  return droppedItems;
 };
 
 /** Replace every value of a record in place. */
