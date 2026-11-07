@@ -66,7 +66,6 @@ describe("getCurrentCraftingStatus", () => {
       currentCraftingItem: stacks[5]!.item,
       currentCraftingUserItemId: "crafting",
       craftingFinishedAt: future,
-      nextRankExperience: CRAFTING_REQUIRED_EXP[CRAFTING_RANKS[1]],
     });
   });
 
@@ -79,13 +78,12 @@ describe("getCurrentCraftingStatus", () => {
     });
   });
 
-  it("agrees with the rank progress on the next rank's experience", () => {
-    for (const rank of CRAFTING_RANKS) {
-      const craftingExperience = CRAFTING_REQUIRED_EXP[rank];
-      const status = getCurrentCraftingStatus(crafter({ craftingExperience }), []);
-      expect(status.nextRankExperience).toBe(
-        getCraftingRankProgress(craftingExperience).nextRankExperience,
+  it("leaves the next rank's experience to the rank progress", () => {
+    CRAFTING_RANKS.forEach((rank, index) => {
+      const next = CRAFTING_RANKS[index + 1];
+      expect(getCraftingRankProgress(CRAFTING_REQUIRED_EXP[rank]).nextRankExperience).toBe(
+        next ? CRAFTING_REQUIRED_EXP[next] : null,
       );
-    }
+    });
   });
 });
