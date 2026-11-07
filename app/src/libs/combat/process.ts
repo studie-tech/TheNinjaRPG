@@ -1613,7 +1613,8 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
             battle,
             effect,
             usersEffects,
-            curTarget,
+            newUser,
+            newTarget,
             newUsersState,
             newGroundEffects,
           );

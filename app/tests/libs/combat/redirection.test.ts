@@ -42,6 +42,7 @@ const redirect = (
     battle,
     effect,
     [],
+    caster,
     target,
     [caster, target, ...bystanders],
     groundEffects,
