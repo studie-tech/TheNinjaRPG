@@ -95,13 +95,16 @@ const claimGameTimer = async (
   };
 };
 
+/** Share of a rolling duration that must pass, so a scheduler firing early still claims it. */
+const ROLLING_TIMER_TOLERANCE = 0.9999;
+
 /** Atomically claim a rolling duration, retaining the persisted timer name. */
 export const lockWithGameTimer = async (
   client: DrizzleClient,
   timerName: string,
   durationMs: number,
 ) => {
-  const deltaTime = durationMs * 0.9999;
+  const deltaTime = durationMs * ROLLING_TIMER_TOLERANCE;
   const claim = await claimGameTimer(
     client,
     timerName,
@@ -125,9 +128,7 @@ export const lockWithHourlyTimer = async (client: DrizzleClient, name: string) =
   return {
     ...claim,
     isNewHour: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next hour to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "hour"),
   };
 };
 
@@ -144,9 +145,7 @@ export const lockWithMinuteTimer = async (client: DrizzleClient, name: string) =
   return {
     ...claim,
     isNewMinute: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next minute to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "minute"),
   };
 };
 
@@ -156,9 +155,7 @@ export const lockWithDailyTimer = async (client: DrizzleClient, name: string) =>
   return {
     ...claim,
     isNewDay: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next day to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "day"),
   };
 };
 
@@ -168,9 +165,7 @@ export const lockWithWeeklyTimer = async (client: DrizzleClient, name: string) =
   return {
     ...claim,
     isNewWeek: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next week to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "week"),
   };
 };
 
@@ -180,11 +175,13 @@ export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) 
   return {
     ...claim,
     isNewMonth: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next month to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "month"),
   };
 };
+
+/** A period lock's response: nothing for the winner, the wait message for everyone else. */
+const periodWaitResponse = (isClaimed: boolean, period: string) =>
+  Response.json(isClaimed ? null : `Wait until the next ${period} to run this again`);
 
 /** Whether a new UTC calendar period began after the timer's last claim. */
 const startedSince =

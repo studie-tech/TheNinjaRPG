@@ -33,7 +33,7 @@ export async function GET(request: Request) {
 
   // Check timer - run once per minute
   const minuteCheck = await lockWithMinuteTimer(drizzleDB, ENDPOINT_NAME);
-  if (!minuteCheck.isNewMinute && minuteCheck.response) return minuteCheck.response;
+  if (!minuteCheck.isNewMinute) return minuteCheck.response;
 
   let dailyCheck: Awaited<ReturnType<typeof lockWithDailyTimer>> | undefined;
 
