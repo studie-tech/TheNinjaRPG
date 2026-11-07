@@ -9,6 +9,7 @@ import { useAiEditForm } from "@/hooks/ai";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import { AiSpriteAnimations } from "@/layout/AiSpriteAnimations";
+import { AiTransformationEdit } from "@/layout/AiTransformationEdit";
 import ContentBox from "@/layout/ContentBox";
 import { AiHelper } from "@/layout/ContentHelp";
 import { EditContent } from "@/layout/EditContent";
@@ -164,6 +165,10 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
         <>
           <AiProfileEdit userData={props.user} />
           <AiSpriteAnimations userId={processedUser.userId} />
+          <AiTransformationEdit
+            userId={processedUser.userId}
+            username={processedUser.username}
+          />
           <ContentBox title="Nindo" subtitle="Edit the AI Nindo" initialBreak>
             {isUpdating && <Loader explanation="Updating..." />}
             {!isUpdating && (
