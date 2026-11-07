@@ -26,10 +26,12 @@ import type { EffectType, ZodAllTags } from "@/validators/combat";
 import type { PathCalculator, TerrainHex } from "../hexgrid";
 import { createHexGrid, nameArenaTile, oddQHexDistance } from "../hexgrid";
 import { stillInBattle } from "./actions";
+import type { GenName } from "./constants";
 import {
   BARRIER_DAMAGE_TAG_TYPES,
   damageDerivedTagTypes,
   damageModifierTypes,
+  GenNames,
   POST_PIERCE_TAGS,
 } from "./constants";
 import type {
@@ -548,6 +550,28 @@ export const createEmptyExtraState = () =>
     bounties: {},
     bountySignups: {},
   }) satisfies ExtraState;
+
+/**
+ * The two generals a combatant fights with: their stored preferences, with any free slot
+ * taken by their highest remaining general. Equal stats keep GenNames order.
+ */
+export const getHighestGenerals = (
+  user: Record<GenName, number> & {
+    preferredGeneral1?: string | null;
+    preferredGeneral2?: string | null;
+  },
+): GenName[] => {
+  const first = (user.preferredGeneral1?.toLowerCase() || undefined) as
+    | GenName
+    | undefined;
+  const second = (user.preferredGeneral2?.toLowerCase() || undefined) as
+    | GenName
+    | undefined;
+  const remaining = [...GenNames]
+    .sort((a, b) => user[b] - user[a])
+    .filter((general) => general !== first && general !== second);
+  return [first ?? remaining[0], second ?? remaining[first ? 0 : 1]] as GenName[];
+};
 
 /**
  * Finds a user in the battle state based on location

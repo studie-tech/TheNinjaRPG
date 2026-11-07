@@ -9,7 +9,7 @@ import {
 } from "@/drizzle/constants";
 import type { Jutsu, PetSpecies, UserPet } from "@/drizzle/schema";
 import { getDefaultBasicActions, stillInBattle } from "@/libs/combat/actions";
-import { GenNames, GROUND_EFFECT_TAG_TYPES } from "@/libs/combat/constants";
+import { GROUND_EFFECT_TAG_TYPES } from "@/libs/combat/constants";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { checkFriendlyFire } from "@/libs/combat/process";
 import {
@@ -24,7 +24,7 @@ import type {
   GroundEffect,
   UserEffect,
 } from "@/libs/combat/types";
-import { rollInitiative } from "@/libs/combat/util";
+import { getHighestGenerals, rollInitiative } from "@/libs/combat/util";
 import { selectPetBattleAbilities } from "@/libs/pets/abilities";
 import {
   canUsePet,
@@ -341,9 +341,7 @@ const createPetBattleUser = (
   };
   for (const stat of CombatStatNames)
     actor[stat] = Math.min(pet[stat], getCombatStatCap(caps, stat));
-  actor.highestGenerals = GenNames.slice()
-    .sort((a, b) => actor[b] - actor[a])
-    .slice(0, 2);
+  actor.highestGenerals = getHighestGenerals(actor);
   actor.basicActions = Object.values(getDefaultBasicActions(actor)).map((action) => ({
     id: action.id,
     lastUsedRound: action.lastUsedRound ?? -10,
