@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { getNewTrackers } from "@/libs/quest";
 import { AllObjectives } from "@/validators/objectives";
+import { trackerQuest, trackerUser } from "../../setup/quest";
 
 // The real save path validates each objective through `AllObjectives` (quests.ts content
 // schema). Prior tests built the objective as a raw JS object, skipping this parse. This
@@ -9,40 +10,9 @@ import { AllObjectives } from "@/validators/objectives";
 const roundTrip = (raw: Record<string, unknown>) =>
   AllObjectives.parse(JSON.parse(JSON.stringify(AllObjectives.parse(raw))));
 
-const makeQuest = (objectives: unknown[]) => ({
-  id: "q",
-  name: "Quest q",
-  questType: "daily" as const,
-  hidden: false,
-  consecutiveObjectives: false,
-  maxAttempts: 100,
-  maxCompletes: 100,
-  requiredVillage: null,
-  requiredBloodlineId: null,
-  prerequisiteQuestId: null,
-  requiredLevel: null,
-  maxLevel: null,
-  medicalRank: null,
-  huntingRank: null,
-  gatheringRank: null,
-  endsAt: null,
-  content: { objectives, reward: {}, sceneBackground: "", sceneCharacters: [] },
-});
+const makeQuest = (objectives: object[]) => trackerQuest("q", objectives);
 
-const makeUser = (quest: ReturnType<typeof makeQuest>) =>
-  ({
-    userId: "u1",
-    level: 50,
-    villageId: "v1",
-    isOutlaw: false,
-    bloodlineId: null,
-    sector: 1,
-    village: { id: "v1", sector: 1 },
-    activeWars: [],
-    completedQuests: [],
-    questData: [],
-    userQuests: [{ id: "uq", questId: "q", completed: 0, quest }],
-  }) as unknown as Parameters<typeof getNewTrackers>[0];
+const makeUser = (quest: ReturnType<typeof makeQuest>) => trackerUser([quest]);
 
 describe("craft_specific_item survives the real schema round-trip", () => {
   it("keeps craftItemIds through AllObjectives parse and still credits the craft", () => {

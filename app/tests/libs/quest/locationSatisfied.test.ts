@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { getNewTrackers, isObjectiveLocationSatisfied } from "@/libs/quest";
 import { DeliverItem, SimpleObjective } from "@/validators/objectives";
+import { trackerQuest, trackerUser } from "../../setup/quest";
 
 // The player has been validated server-side as standing on the NPC placement's
 // CURRENT tile. The objective's own coordinates were baked in at quest-save time
@@ -128,43 +129,25 @@ const makeLegacyLocationUser = () => {
       nextObjectiveId: [{ text: "Continue", nextObjectiveId: "move" }],
     },
   ];
-  const quest = {
-    id: "legacy-location-quest",
-    name: "Legacy location quest",
-    questType: "mission",
-    hidden: false,
-    consecutiveObjectives: false,
-    maxAttempts: 100,
-    maxCompletes: 100,
+  const quest = trackerQuest("legacy-location-quest", objectives, "mission", {
     retryDelay: "none",
-    requiredVillage: null,
-    content: { objectives, reward: {} },
-  };
-  return {
-    userId: "legacy-user",
-    level: 50,
-    rank: "JONIN",
-    role: "USER",
-    villageId: "v1",
-    isOutlaw: false,
-    bloodlineId: null,
-    sector: 1,
-    longitude: 1,
-    latitude: 1,
-    status: "AWAKE",
-    village: { id: "v1", sector: 1 },
-    activeWars: [],
-    completedQuests: [],
-    useritems: [{ itemId: "delivered-item" }],
-    questData: [
+  });
+  return trackerUser(
+    [quest],
+    [
       {
         id: quest.id,
         startAt: "2026-01-01T00:00:00.000Z",
         goals: objectives.map(({ id }) => ({ id })),
       },
     ],
-    userQuests: [{ id: "history", questId: quest.id, completed: 0, quest }],
-  } as unknown as Parameters<typeof getNewTrackers>[0];
+    {
+      userId: "legacy-user",
+      ...location,
+      status: "AWAKE",
+      useritems: [{ itemId: "delivered-item" }],
+    },
+  );
 };
 
 const legacyLocationTasks = [

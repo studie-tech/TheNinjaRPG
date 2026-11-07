@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getExperienceTrackerTasks, getNewTrackers, getReward } from "@/libs/quest";
+import { getExperienceTrackerTasks, getReward } from "@/libs/quest";
 import {
   buildRewardChoiceCards,
   getFixedChoiceRewards,
@@ -8,7 +8,6 @@ import {
   isRewardChoiceQuest,
   REWARD_CHOICE_OWNED_REASON,
   REWARD_CHOICE_SAGE_EQUIPPED_REASON,
-  type RewardChoiceOwnership,
   requiredRewardPicks,
   rewardFromChoiceCards,
   toggleRewardPick,
@@ -20,6 +19,7 @@ import {
   type PendingRewardChoice,
   type RewardChoiceCard,
 } from "@/validators/rewards";
+import { rewardOwnership as ownership, rewardUser as makeUser } from "../setup/quest";
 
 const reward = (input: Parameters<typeof ObjectiveReward.parse>[0]) =>
   ObjectiveReward.parse(input);
@@ -131,17 +131,6 @@ const contentCard = (
   field: "reward_jutsus" | "reward_bloodlines" | "reward_badges" | "reward_sage_modes",
   contentId: string,
 ): RewardChoiceCard => ({ id: `${field}:${contentId}`, field, amount: 1, contentId });
-
-const ownership = (
-  owned: Partial<Record<keyof Omit<RewardChoiceOwnership, "hasSageMode">, string[]>> = {},
-  hasSageMode = false,
-): RewardChoiceOwnership => ({
-  jutsuIds: new Set(owned.jutsuIds),
-  bloodlineIds: new Set(owned.bloodlineIds),
-  badgeIds: new Set(owned.badgeIds),
-  sageModeIds: new Set(owned.sageModeIds),
-  hasSageMode,
-});
 
 describe("rewards the player cannot receive", () => {
   const cards = [
@@ -347,48 +336,6 @@ describe("reward mode helpers", () => {
 });
 
 describe("getReward with a reward choice", () => {
-  const makeUser = (content: Record<string, unknown>, questType = "mission") =>
-    ({
-      userId: "u1",
-      level: 50,
-      rank: "JONIN",
-      role: "USER",
-      villageId: "v1",
-      isOutlaw: false,
-      bloodlineId: null,
-      sector: 1,
-      village: { id: "v1", sector: 1 },
-      activeWars: [],
-      completedQuests: [],
-      dailyMissions: 0,
-      senseiId: null,
-      questData: [],
-      userQuests: [
-        {
-          id: "uq-1",
-          questId: "q1",
-          completed: 0,
-          previousAttempts: 0,
-          previousCompletes: 0,
-          quest: {
-            id: "q1",
-            name: "Quest",
-            questType,
-            hidden: false,
-            consecutiveObjectives: false,
-            maxAttempts: 10,
-            maxCompletes: 10,
-            content: {
-              objectives: [],
-              sceneBackground: "",
-              sceneCharacters: [],
-              ...content,
-            },
-          },
-        },
-      ],
-    }) as unknown as Parameters<typeof getNewTrackers>[0];
-
   const questReward = {
     reward_money: 100,
     reward_exp: 50,

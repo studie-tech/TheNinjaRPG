@@ -7,6 +7,7 @@ import { collapseRewards } from "@/libs/rewards";
 import { ObjectiveReward, hasReward } from "@/validators/rewards";
 import { TitleEffectSchema, TitleValidator } from "@/validators/title";
 import { IncreaseRegenerationTag } from "@/validators/combat";
+import { rewardOwnership } from "../setup/quest";
 import { makeUser } from "./combat/helpers/battleScenario";
 
 const from = new Date("2026-01-01T00:00:00Z");
@@ -49,7 +50,7 @@ describe("permanent title bonuses", () => {
     expect(collapseRewards([reward, reward]).reward_titles).toEqual(["hero", "hero"]);
     const cards = buildRewardChoiceCards(reward);
     expect(rewardFromChoiceCards(cards).reward_titles).toEqual(["hero"]);
-    const unavailable = getUnavailableRewardCards(cards, { jutsuIds: new Set(), bloodlineIds: new Set(), badgeIds: new Set(), sageModeIds: new Set(), hasSageMode: false, titleIds: new Set(["hero"]) });
+    const unavailable = getUnavailableRewardCards(cards, { ...rewardOwnership(), titleIds: new Set(["hero"]) });
     expect(unavailable.get(cards[0]!.id)).toBe("Already owned");
   });
 });

@@ -7,30 +7,18 @@ import {
   upsertQuestEntries,
   upsertQuestEntry,
 } from "../../../../../src/server/api/routers/quests";
+import { trackerQuest } from "../../../../setup/quest";
 
-const quest = {
-  id: "mission-1",
+const quest = trackerQuest("mission-1", [], "mission", {
   name: "A-rank mission",
-  questType: "mission",
-  requiredFarmingLevel: 0,
   questRank: "A",
   retryDelay: "none",
-  hidden: false,
-  consecutiveObjectives: false,
   maxAttempts: 10,
   maxCompletes: 1,
-  requiredVillage: null,
-  requiredBloodlineId: null,
-  prerequisiteQuestId: null,
   requiredLevel: 1,
   maxLevel: 100,
-  medicalRank: null,
-  huntingRank: null,
-  gatheringRank: null,
   startsAt: null,
-  endsAt: null,
-  content: { objectives: [], reward: {}, sceneBackground: "", sceneCharacters: [] },
-};
+});
 
 const user = {
   userId: "user-1",
