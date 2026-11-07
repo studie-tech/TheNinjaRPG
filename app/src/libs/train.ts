@@ -12,7 +12,6 @@ import {
   BasicElementName,
   CombatStatNames,
   ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER,
-  ElementNames,
   FED_GOLD_JUTSU_SLOTS,
   FED_NORMAL_JUTSU_SLOTS,
   FED_SILVER_JUTSU_SLOTS,
