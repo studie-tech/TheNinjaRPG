@@ -4,6 +4,28 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { platform } from "@/libs/native";
 import { addUserInteractionListeners, isSafariOrIOS } from "@/utils/audio";
 
+const FADE_OUT_MS = 700;
+const FADE_STEP_MS = 40;
+
+/** Stop and unload an element; one still playing fades, so a track change is not a cut. */
+const retireAudio = (audio: HTMLAudioElement) => {
+  const unload = () => {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+  };
+  if (audio.paused || audio.volume === 0) return unload();
+  const step = (audio.volume * FADE_STEP_MS) / FADE_OUT_MS;
+  const startedAt = Date.now();
+  const fade = setInterval(() => {
+    audio.volume = Math.max(0, audio.volume - step);
+    // Platforms with fixed media volume still stop on time, as theirs never lands.
+    if (audio.volume > 0 && Date.now() - startedAt < FADE_OUT_MS) return;
+    clearInterval(fade);
+    unload();
+  }, FADE_STEP_MS);
+};
+
 interface UseAudioOptions {
   src: string;
   loop?: boolean;
@@ -147,10 +169,8 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("ended", handleEnded);
 
-      audio.pause();
-      audio.removeAttribute("src");
-      audio.load();
       audioRef.current = null;
+      retireAudio(audio);
     };
   }, [src, loop, volume, effectivePreload]);
 

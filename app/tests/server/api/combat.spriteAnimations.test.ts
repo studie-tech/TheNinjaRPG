@@ -12,6 +12,7 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
+import type { ReturnedBattle } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { spriteAnimationRouter } from "@/server/api/routers/spriteAnimation";
@@ -42,54 +43,71 @@ describeWithDatabase("combat sprite animation delivery", () => {
   });
 
   it.each(["ARENA", "QUEST"] as const)(
-    "delivers an assigned jutsu before the following wait in manual %s combat",
+    "replays an assigned jutsu before the following wait in manual %s combat",
     async (battleType) => {
       const { api, saved, npc, player, perform, logs } = await startBattle({ battleType });
 
-      const attack = await perform();
-      const event = attack.usersState.find((user) => user.userId === npc.userId)!.spriteAnimationEvent;
-      expect(event?.actionKey).toBe("jutsu:strike");
-      expect(attack.activeUserId).toBe(npc.userId);
-      expect(attack.usersState.find((user) => user.userId === player.userId)!.curHealth)
+      const turn = await perform();
+      const [strike, wait] = replayed(turn, npc.userId);
+      expect(strike?.actionKey).toBe("jutsu:strike");
+      expect(wait?.actionKey).toBe("basic:wait");
+      expect(wait?.id).not.toBe(strike?.id);
+      expect(turn.activeUserId).toBe(player.userId);
+      expect(turn.usersState.find((user) => user.userId === player.userId)!.curHealth)
         .toBeLessThan(player.curHealth);
-      expect((await logs()).map((row) => row.actionId)).toEqual(["strike"]);
-
-      const polled = await api.getBattle({ battleId: saved.id });
-      const polledEvent = polled.battle!.usersState.find((user) => user.userId === npc.userId)!.spriteAnimationEvent;
-      expect(polledEvent).toEqual(event);
-      expect(polled.battle!.version).toBe(attack.version);
-      expect(await logs()).toHaveLength(1);
-
-      const wait = await perform();
-      const waitEvent = wait.usersState.find((user) => user.userId === npc.userId)!.spriteAnimationEvent;
-      expect(waitEvent?.actionKey).toBe("basic:wait");
-      expect(waitEvent?.id).not.toBe(event?.id);
-      expect(wait.activeUserId).toBe(player.userId);
       expect((await logs()).map((row) => row.actionId)).toEqual(["strike", "wait"]);
+
+      // A later read holds the settled snapshot and has nothing left to replay.
+      const polled = await api.getBattle({ battleId: saved.id });
+      expect(polled.battle!.version).toBe(turn.version);
+      expect(polled.battle!.playback).toBeUndefined();
+      expect(polled.battle!.usersState.find((user) => user.userId === npc.userId)!.spriteAnimationEvent).toEqual(wait);
+      expect(await logs()).toHaveLength(2);
     },
   );
 
-  it("delivers a human end-turn before advancing the animated AI", async () => {
+  it("resolves a human end-turn and the animated AI's reply in order within one response", async () => {
     const { npc, player, perform, logs } = await startBattle({ firstActor: "player" });
-    const handoff = await perform({ actionId: "wait", longitude: player.longitude, latitude: player.latitude });
-    expect(handoff.activeUserId).toBe(npc.userId);
-    expect(handoff.usersState.find((user) => user.userId === npc.userId)!.spriteAnimationEvent).toBeUndefined();
-    expect((await logs()).map((row) => row.actionId)).toEqual(["wait"]);
-    const attack = await perform();
-    expect(attack.usersState.find((user) => user.userId === npc.userId)!.spriteAnimationEvent?.actionKey).toBe("jutsu:strike");
-    expect((await logs()).map((row) => row.actionId)).toEqual(["wait", "strike"]);
+    const turn = await perform({ actionId: "wait", longitude: player.longitude, latitude: player.latitude });
+    expect(turn.playback?.map((step) => step.actorId)).toEqual([player.userId, npc.userId, npc.userId]);
+    expect(replayed(turn, npc.userId).map((event) => event?.actionKey)).toEqual(["jutsu:strike", "basic:wait"]);
+    expect((await logs()).map((row) => row.actionId)).toEqual(["wait", "strike", "wait"]);
   });
 
-  it("delivers movement, strike and wait as distinct snapshots", async () => {
-    const { npc, perform, logs } = await startBattle({ withMovement: true });
-    const events = [];
-    for (let i = 0; i < 3; i++) {
-      const view = await perform();
-      events.push(view.usersState.find((user) => user.userId === npc.userId)!.spriteAnimationEvent);
-    }
+  it("orders movement, strike and wait, with damage only on the strike", async () => {
+    const { npc, player, perform, logs } = await startBattle({ withMovement: true });
+    const turn = await perform();
+    const events = replayed(turn, npc.userId);
     expect(events.map((event) => event?.actionKey)).toEqual(["jutsu:jump", "jutsu:strike", "basic:wait"]);
     expect(new Set(events.map((event) => event?.id)).size).toBe(3);
-    expect((await logs()).map((row) => row.actionId)).toEqual(["jump", "strike", "wait"]);
+    const hits = turn.playback!.map((step) => step.users.find((user) => user.userId === player.userId)?.curHealth);
+    expect(hits[0]).toBeUndefined();
+    expect(hits[1]).toBeLessThan(player.curHealth);
+    expect(hits[2]).toBeUndefined();
+    expect(turn.playback![0]!.users.find((user) => user.userId === npc.userId)?.longitude).toBe(5);
+    expect(turn.playback!.map((step) => step.version)).toEqual([0, 1, 2].map((offset) => turn.version - 3 + offset));
+    const rows = await logs();
+    expect(rows.map((row) => row.actionId)).toEqual(["jump", "strike", "wait"]);
+    expect(rows.map((row) => row.battleVersion)).toEqual(turn.playback!.map((step) => step.version));
+  });
+
+  it("resolves auto combat one action per response, so each can be watched and taken back", async () => {
+    const { db, saved, player, perform, logs } = await startBattle({ animated: false, firstActor: "ai" });
+    saved.usersState.find((user) => user.userId === player.userId)!.isAutoCombat = true;
+    await db.update(battle).set({ usersState: saved.usersState }).where(eq(battle.id, saved.id));
+    const first = await perform();
+    expect(first.playback).toHaveLength(1);
+    expect(await logs()).toHaveLength(1);
+  });
+
+  it("keeps one action per response when another human only sees the latest state", async () => {
+    const { db, saved, npc, player, perform, logs } = await startBattle({ firstActor: "ai" });
+    const observer = structuredClone(saved.usersState.find((user) => user.userId === player.userId)!);
+    saved.usersState.push({ ...observer, userId: "observer", controllerId: "observer", username: "Observer", longitude: 9, latitude: 1 });
+    await db.update(battle).set({ usersState: saved.usersState }).where(eq(battle.id, saved.id));
+    const attack = await perform();
+    expect(attack.usersState.find((user) => user.userId === npc.userId)!.spriteAnimationEvent?.actionKey).toBe("jutsu:strike");
+    expect((await logs()).map((row) => row.actionId)).toEqual(["strike"]);
   });
 
   it("delivers an animated summon's strike and wait separately after activating its hidden template", async () => {
@@ -129,22 +147,14 @@ describeWithDatabase("combat sprite animation delivery", () => {
     if (!("battleUpdate" in summon) || !summon.battleUpdate) throw new Error("Missing summon update");
     const spawned = summon.battleUpdate.usersState.find((user) => user.isSummon && !user.isSummonTemplate && user.controllerId === player.userId)!;
     expect(spawned.curHealth).toBeGreaterThan(0);
-    expect(summon.battleUpdate.activeUserId).toBe(spawned.userId);
-    expect(spawned.spriteAnimationEvent).toBeUndefined();
-    const logs = () => db.query.battleAction.findMany({ where: eq(battleAction.battleId, saved.id), orderBy: (row, { asc }) => asc(row.battleVersion) });
-    expect((await logs()).map((row) => row.actionId)).toEqual(["summon"]);
-    const attack = await api.performAction({ battleId: saved.id, version: summon.battleUpdate.version });
-    if (!("battleUpdate" in attack) || !attack.battleUpdate) throw new Error("Missing attack update");
-    const attackEvent = attack.battleUpdate.usersState.find((user) => user.userId === spawned.userId)!.spriteAnimationEvent;
+    const [attackEvent, waitEvent] = replayed(summon.battleUpdate, spawned.userId);
     expect(attackEvent?.actionKey).toBe("jutsu:strike");
-    expect(attack.battleUpdate.usersState.find((user) => user.userId === enemy.userId)!.curHealth).toBeLessThan(enemy.curHealth);
-    expect((await logs()).map((row) => row.actionId)).toEqual(["summon", "strike"]);
-    const wait = await api.performAction({ battleId: saved.id, version: attack.battleUpdate.version });
-    if (!("battleUpdate" in wait) || !wait.battleUpdate) throw new Error("Missing wait update");
-    const waitEvent = wait.battleUpdate.usersState.find((user) => user.userId === spawned.userId)!.spriteAnimationEvent;
     expect(waitEvent?.actionKey).toBe("basic:wait");
     expect(waitEvent?.id).not.toBe(attackEvent?.id);
-    expect((await logs()).map((row) => row.actionId)).toEqual(["summon", "strike", "wait"]);
+    expect(summon.battleUpdate.playback?.[0]?.userIds).toContain(spawned.userId);
+    expect(summon.battleUpdate.usersState.find((user) => user.userId === enemy.userId)!.curHealth).toBeLessThan(enemy.curHealth);
+    const logs = await db.query.battleAction.findMany({ where: eq(battleAction.battleId, saved.id), orderBy: (row, { asc }) => asc(row.battleVersion) });
+    expect(logs.map((row) => row.actionId).slice(0, 3)).toEqual(["summon", "strike", "wait"]);
   });
 
   it.each(["none", "dead", "fled", "left", "template"] as const)(
@@ -171,6 +181,14 @@ describeWithDatabase("combat sprite animation delivery", () => {
     },
   );
 });
+
+/** Each event an actor played within a response, in the order the server resolved them. */
+const replayed = (view: ReturnedBattle, userId: string) =>
+  (view.playback ?? []).flatMap((step) =>
+    step.users.flatMap((user) =>
+      user.userId === userId && user.spriteAnimationEvent ? [user.spriteAnimationEvent] : [],
+    ),
+  );
 
 const startBattle = async ({
   battleType = "ARENA", animated = true, firstActor = "ai", withMovement = false,

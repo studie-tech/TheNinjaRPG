@@ -102,6 +102,7 @@ export const createLpcCharacter = async (
     nextState: LpcAnimation = "idle",
     nextDirection: LpcDirection = direction,
     restart = false,
+    rate = 1,
   ) => {
     if (disposed) return;
     if (state !== nextState || restart) {
@@ -129,7 +130,7 @@ export const createLpcCharacter = async (
       ? frame.reducedMotion
         ? 0
         : idlePhase * 3 * LPC_IDLE_FRAME_MS
-      : frame.now - startedAt;
+      : (frame.now - startedAt) * rate;
     const sampleStep = frame.reducedMotion
       ? 0
       : Math.floor(Math.max(0, elapsed) / lpcFrameDuration(sampleState));

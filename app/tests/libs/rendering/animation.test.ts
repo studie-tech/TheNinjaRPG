@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { assetAnimationClip, characterAnimationClip, sampleAnimationClip } from "@/libs/rendering/animation";
+import { assetAnimationClip, characterAnimationClip, sampleAnimationClip, walkDuration, walkProgress } from "@/libs/rendering/animation";
 import {
   type CharacterAssetConfig,
   type SpriteDirection,
@@ -64,5 +64,36 @@ describe("shared animation clips", () => {
     expect(missing.images).toEqual(["rotations/east.png"]);
     expect(characterAnimationClip(LIGHT_ENEMY_ASSET_CONFIG, "moving", "south").frameDurationMs).toBe(80);
     expect(characterAnimationClip(PLAYER_ASSET_CONFIG, "throw", "south").loop).toBe(false);
+  });
+});
+
+describe("battlefield walking", () => {
+  const samples = (duration: number, count = 200) =>
+    Array.from({ length: count + 1 }, (_, index) => walkProgress(index / count, duration));
+
+  it.each([1, 3, 8])("covers exactly the whole %s-hex path without ever reversing", (tiles) => {
+    const points = samples(walkDuration(tiles));
+    expect(points[0]).toBe(0);
+    expect(points.at(-1)).toBeCloseTo(1);
+    for (let index = 1; index < points.length; index++)
+      expect(points[index]!).toBeGreaterThanOrEqual(points[index - 1]!);
+  });
+
+  it("accelerates, cruises and brakes across a long path instead of each hex", () => {
+    const points = samples(walkDuration(5));
+    const speed = (index: number) => points[index + 1]! - points[index]!;
+    expect(speed(1)).toBeLessThan(speed(100));
+    expect(speed(198)).toBeLessThan(speed(100));
+    expect(speed(60)).toBeCloseTo(speed(140));
+  });
+
+  it("stays continuous where the ramps meet the cruise", () => {
+    const points = samples(walkDuration(3), 1000);
+    for (let index = 1; index < points.length; index++)
+      expect(points[index]! - points[index - 1]!).toBeLessThan(0.004);
+  });
+
+  it("keeps moving through extra hexes rather than repeating a full stop", () => {
+    expect(walkDuration(4) - walkDuration(3)).toBeLessThan(walkDuration(1));
   });
 });

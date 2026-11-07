@@ -525,7 +525,7 @@ describe("layered LPC actors", () => {
     let tick = 0;
     while (actors.animate({ now: 1000 + tick++ * 1000 / fps, delta: 1 / fps, reducedMotion }, user.userId, undefined) && tick < fps * 10) actors.sync({ battle });
     expect(tick).toBeLessThan(fps * 10);
-    if (reducedMotion) { expect(poses.size).toBe(1); expect(tick).toBe(5); }
+    if (reducedMotion) { expect(poses.size).toBe(1); expect(tick).toBe(1); }
     else expect(poses.size).toBeGreaterThanOrEqual(longitude === 8 ? 8 : 4);
     const target = grid.getHex({ col: longitude, row: latitude })!;
     expect(root.x).toBeCloseTo(-target.center.x);
@@ -555,7 +555,7 @@ describe("layered LPC actors", () => {
     const root = actors.container.children[0];
     const render = renders[0]!;
     actors.animate(frame(1000), user.userId, undefined);
-    expect(render.mock.calls.at(-1)?.slice(1)).toEqual(["combat", 1, false]);
+    expect(render.mock.calls.at(-1)?.slice(1, 4)).toEqual(["combat", 1, false]);
     user.spriteAction = { id: "first", animation: "slash", longitude: 3, latitude: 1 };
     actors.sync({ battle }); actors.animate(frame(1100), user.userId, undefined);
     expect(render.mock.calls.at(-1)?.[3]).toBe(true);

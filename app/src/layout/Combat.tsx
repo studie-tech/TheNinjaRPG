@@ -1,5 +1,5 @@
 import type { Grid } from "honeycomb-grid";
-import { useSetAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { Check, HelpCircle, Loader2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -61,6 +61,7 @@ import { haptics } from "@/libs/native";
 import { findConsecutiveQuestId, getIsolatedPyramid } from "@/libs/questRun";
 import {
   type CombatHover,
+  type CombatPresented,
   type CombatSceneSnapshot,
   createCombatScene,
 } from "@/libs/rendering/scenes/combat";
@@ -72,10 +73,21 @@ import { isStaffRole } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
 import {
   combatActionIdAtom,
+  combatHeldResultAtom,
+  combatPendingActionAtom,
+  combatPresentedLogVersionAtom,
   useRequiredUserData,
   userBattleAtom,
 } from "@/utils/UserContext";
 import Countdown from "./Countdown";
+
+/** Autonomous requests stay inside the 60-per-minute limit that fines players. */
+const AUTONOMOUS_ACTION_MS = 1100;
+/** Replays finish between ticks, so the next autonomous action follows them promptly. */
+const DRIVER_TICK_MS = 200;
+const BATTLE_CHECK_MS = 1000;
+/** A result screen never waits longer than this, even if the field stops rendering. */
+const RESULT_HOLD_MS = 12000;
 
 interface CombatProps {
   action?: CombatAction | undefined;
@@ -94,7 +106,11 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Destructure props
   const { battleState, setBattleState, config } = props;
   const router = useRouter();
-  const result = battleState.result;
+  const [heldResultVersion, setHeldResultVersion] = useAtom(combatHeldResultAtom);
+  /** Settled outcome; everything that acts on the battle reads this, not the display. */
+  const settledResult = battleState.result;
+  /** The result screen, once the field has replayed the action that decided the battle. */
+  const result = heldResultVersion === undefined ? settledResult : null;
   const utils = api.useUtils();
   const loadLpcCatalog = useLpcCatalogLoader();
 
@@ -125,6 +141,10 @@ const Combat: React.FC<CombatProps> = (props) => {
   const isPageActive = usePageActive();
   const wasPageActiveRef = useRef(true);
   const lastActionsRef = useRef<Date[]>([]);
+  const lastAutonomousActionRef = useRef(0);
+  const fieldFailedRef = useRef(false);
+  const lastBattleCheckRef = useRef(0);
+  const actionInFlightRef = useRef(false);
   const readyInFlightBattleIdRef = useRef<string | null>(null);
   const loadoutInFlightRef = useRef<{
     battleId: string;
@@ -135,7 +155,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const actionRef = useRef<CombatAction | undefined>(props.action);
   const userIdRef = useRef<string>(props.userId);
   const precomputedActionsRef = useRef<CombatAction[]>([]);
-  const resultRef = useRef(result);
+  const resultRef = useRef(settledResult);
   const mountRef = useRef<HTMLDivElement | null>(null);
   // Read by the document key listener, which only re-registers on [suid, timeDiff].
   const endTurnKeyRef = useRef(props.endTurnKey ?? "");
@@ -164,6 +184,18 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
   const setCombatActionId = useSetAtom(combatActionIdAtom);
+  const setPendingAction = useSetAtom(combatPendingActionAtom);
+  const setPresentedLogVersion = useSetAtom(combatPresentedLogVersionAtom);
+  // Fighter meters follow the field while it replays actions the server already resolved.
+  const [presentedBattle, setPresentedBattle] = useState<ReturnedBattle | null>(null);
+  // A replay ends with its scene; a new one reports nothing until the battle changes.
+  useEffect(
+    () => () => {
+      setPresentedBattle(null);
+      setPresentedLogVersion(undefined);
+    },
+    [battleState.battle?.id, setPresentedLogVersion],
+  );
   const {
     data: userData,
     timeDiff,
@@ -192,7 +224,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       ));
 
   const { updateLogs, startAction, settleAction, canDrive, publishBattle } =
-    useCombatUpdates(battleState, !result && (isPageActive || hasAutoCombat));
+    useCombatUpdates(battleState, !settledResult && (isPageActive || hasAutoCombat));
   const suid = userData?.userId;
   // The actor the human drives right now: themselves on their turn, or their
   // piloted summon on the summon's turn. Resolved by page.tsx from the same
@@ -214,8 +246,17 @@ const Combat: React.FC<CombatProps> = (props) => {
     precomputedActionsRef.current = precomputedActions;
   }, [precomputedActions]);
   useEffect(() => {
-    resultRef.current = result;
-  }, [result]);
+    resultRef.current = settledResult;
+  }, [settledResult]);
+  // Bounds the hold if the field cannot finish, and clears it when the battle unmounts.
+  useEffect(() => {
+    if (heldResultVersion === undefined) return;
+    const timeout = setTimeout(() => setHeldResultVersion(undefined), RESULT_HOLD_MS);
+    return () => {
+      clearTimeout(timeout);
+      setHeldResultVersion(undefined);
+    };
+  }, [heldResultVersion, setHeldResultVersion]);
 
   // Precompute maps for ground effects, user effects, and user positions
   const battleMaps = useBattleMaps(battleState.battle ?? null);
@@ -378,6 +419,8 @@ const Combat: React.FC<CombatProps> = (props) => {
       );
     },
     onError: () => {
+      actionInFlightRef.current = false;
+      setPendingAction(undefined);
       setBattleState((current) =>
         current?.result
           ? { ...current, isPending: false }
@@ -385,6 +428,10 @@ const Combat: React.FC<CombatProps> = (props) => {
       );
     },
     onSuccess: async (data, _variables, context) => {
+      actionInFlightRef.current = false;
+      // A resolved action keeps its slot until the field reaches its log entry.
+      if (!data.updateClient || !data.battleUpdate || !combat.scene.current)
+        setPendingAction(undefined);
       // A peer can finish while this tab still awaits an earlier action response.
       if (resultRef.current) {
         setBattleState((current) =>
@@ -394,6 +441,12 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
       if (data.result && data.battleUpdate) {
         completionRevisionRef.current = { battleId: data.battleUpdate.id, ...context };
+        if (
+          data.updateClient &&
+          combat.scene.current &&
+          data.battleUpdate.playback?.length
+        )
+          setHeldResultVersion(data.battleUpdate.version);
       }
       // Clear the selected action only when control actually hands off to (or
       // away from) another actor — e.g. to/from a piloted summon. On the
@@ -501,6 +554,22 @@ const Combat: React.FC<CombatProps> = (props) => {
   const performAction = (input: RouterInputs["combat"]["performAction"]) => {
     // Reserve synchronously for keyboard, pointer and automatic submissions.
     if (!startAction(input.battleId)) return;
+    actionInFlightRef.current = true;
+    const action = precomputedActionsRef.current.find(
+      ({ id }) => id === input.actionId,
+    );
+    setPendingAction(
+      action && input.version !== undefined
+        ? {
+            battleId: input.battleId,
+            version: input.version,
+            userId: userIdRef.current,
+            name: action.name,
+            image: action.image,
+            cost: action.actionCostPerc,
+          }
+        : undefined,
+    );
     mutateAction(input);
   };
 
@@ -759,9 +828,13 @@ const Combat: React.FC<CombatProps> = (props) => {
         battleRef.current &&
         userIdRef.current &&
         !isPending &&
-        !result &&
-        canDrive()
+        !settledResult &&
+        canDrive() &&
+        // Each action plays out before the next is requested, which keeps a response's
+        // replay ahead of the next one rather than racing it.
+        !combat.scene.current?.isPresenting()
       ) {
+        const now = Date.now();
         const { actor, changedActor } = calcActiveUser(
           battleRef.current,
           suid,
@@ -785,10 +858,16 @@ const Combat: React.FC<CombatProps> = (props) => {
         const inLobby = battleRef.current.createdAt.getTime() > Date.now() - timeDiff;
         const { isAITurn } = getTurnControl(actor, suid);
         if (isAITurn && !isPending && !inLobby) {
+          // Nothing resolves until a visible field can show it. Hidden pages and
+          // fields that cannot load still advance, or the battle would wait forever.
+          if (isPageActive && !combat.scene.current && !fieldFailedRef.current) return;
+          if (now - lastAutonomousActionRef.current < AUTONOMOUS_ACTION_MS) return;
+          lastAutonomousActionRef.current = now;
           if (canPerformAction()) {
             performAction({ battleId: battleRef.current.id });
           }
-        } else {
+        } else if (now - lastBattleCheckRef.current >= BATTLE_CHECK_MS) {
+          lastBattleCheckRef.current = now;
           // Scenario 2: more than 10 seconds passed, or actor is no longer the same as active user - refetch
           const updatePassed =
             Date.now() - timeDiff - battleRef.current.roundStartAt.getTime();
@@ -802,14 +881,14 @@ const Combat: React.FC<CombatProps> = (props) => {
           }
         }
       }
-    }, 1000);
+    }, DRIVER_TICK_MS);
     return () => clearInterval(interval);
   }, [
     isPageActive,
     hasAutoCombat,
     isPending,
     timeDiff,
-    result,
+    settledResult,
     suid,
     controlledActorId,
     canDrive,
@@ -825,7 +904,8 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   useEffect(() => {
     const endedBattleId = props.battleState.battle?.id;
-    const hasResult = !!props.battleState.result;
+    // Held until the screen appears: settling the profile can leave the battle route.
+    const hasResult = !!result;
     if (!hasResult) {
       endedBattleInvalidationRef.current = null;
       return;
@@ -894,7 +974,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           ]
         : []),
     ]);
-  }, [props.battleState.result, props.battleState.battle?.id]);
+  }, [result, props.battleState.battle?.id]);
 
   // Lobby for non-arena battles, letting both oppoenents join
   useEffect(() => {
@@ -913,12 +993,26 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   const combatCallbacks = useRef({
     onTap: (_tile: TerrainHex, _character?: CombatHover) => {},
+    onPresent: (_presented: CombatPresented) => {},
   });
+  combatCallbacks.current.onPresent = ({ battle, logVersion }) => {
+    const caughtUp = logVersion === undefined;
+    setPresentedBattle(caughtUp ? null : battle);
+    setPresentedLogVersion(logVersion);
+    if (caughtUp && !actionInFlightRef.current) setPendingAction(undefined);
+    if (
+      caughtUp &&
+      heldResultVersion !== undefined &&
+      battle.version >= heldResultVersion
+    )
+      setHeldResultVersion(undefined);
+  };
   combatCallbacks.current.onTap = (target, character) => {
     if (
       touchDetailsOpenRef.current ||
       Date.now() < suppressClickUntilRef.current ||
-      document.body.style.cursor === "wait"
+      document.body.style.cursor === "wait" ||
+      resultRef.current
     )
       return;
     setAggroTarget(
@@ -999,6 +1093,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           };
         },
         onTap: (tile, character) => combatCallbacks.current.onTap(tile, character),
+        onPresent: (presented) => combatCallbacks.current.onPresent(presented),
         play: (url, volume) => {
           void playPreloadedAudio(url, volume);
         },
@@ -1014,6 +1109,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     hasGameAssets && !!battleState.battle && !result,
   );
   const webglError = combat.error;
+  fieldFailedRef.current = webglError || hasGameAssetsError;
   useEffect(() => {
     gridRef.current = combat.scene.current?.grid ?? null;
     const mount = mountRef.current;
@@ -1146,7 +1242,7 @@ const Combat: React.FC<CombatProps> = (props) => {
 
       {!result && !isInLobby && !webglError && battleState.battle && (
         <CombatResourceBars
-          battle={battleState.battle}
+          battle={presentedBattle ?? battleState.battle}
           userId={controlledActorId}
           visibility={config.resourceBarsVisibility}
         />

@@ -1,3 +1,4 @@
+import { useAtomValue } from "jotai";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { usePageActive } from "@/hooks/usePageActive";
@@ -5,7 +6,7 @@ import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { calcApReduction } from "@/libs/combat/util";
 import { clamp } from "@/utils/math";
-import { useUserData } from "@/utils/UserContext";
+import { combatPendingActionAtom, useUserData } from "@/utils/UserContext";
 import Loader from "./Loader";
 
 interface ActionTimerProps {
@@ -24,6 +25,10 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   // Data from the DB
   const { timeDiff } = useUserData();
   const isPageActive = usePageActive();
+  const pendingAction = useAtomValue(combatPendingActionAtom);
+  // The submitted action reserves its AP until the response settles the real value.
+  const reserved =
+    isPending && pendingAction?.battleId === battle.id ? pendingAction : undefined;
 
   // State
   const [state, setState] = useState<{
@@ -40,7 +45,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
 
   // Derived values
   const stunReduction = calcApReduction(battle, user.userId);
-  const cost = action?.actionCostPerc ?? 0;
+  const cost = reserved?.cost ?? action?.actionCostPerc ?? 0;
   const actionNow = user.actionPoints - stunReduction;
   const actionAfter = actionNow - cost;
   const clampedActionNow = clamp(actionNow, 0, 100);
@@ -148,15 +153,16 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
                       : "bg-gradient-to-r from-slate-600/70 via-slate-500/70 to-slate-600/80"
                   }
                 />
-                {spentWidth > 0 && !isPending && (
+                {spentWidth > 0 && (
                   <div
-                    className={`pointer-events-none absolute inset-y-0 right-0 z-10 bg-white/35 ${spentStart <= 0 && spentWidth >= 100 ? "rounded-r-full rounded-l-full" : spentStart <= 0 ? "rounded-l-full" : spentStart + spentWidth >= 100 ? "rounded-r-full" : ""}
+                    data-testid={reserved ? "reserved-ap" : undefined}
+                    className={`pointer-events-none absolute inset-y-0 right-0 z-10 ${reserved ? "animate-pulse bg-amber-200/60" : "bg-white/35"} ${spentStart <= 0 && spentWidth >= 100 ? "rounded-r-full rounded-l-full" : spentStart <= 0 ? "rounded-l-full" : spentStart + spentWidth >= 100 ? "rounded-r-full" : ""}
                     `}
                     style={{ left: `${spentStart}%`, width: `${spentWidth}%` }}
                   />
                 )}
                 <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center font-bold text-white text-xs drop-shadow-sm">
-                  {!isPending && `${Math.max(actionNow, 0).toFixed(1)}% AP`}
+                  {`${Math.max(actionNow, 0).toFixed(1)}% AP`}
                 </div>
               </div>
             </div>
@@ -192,7 +198,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
           )}
         </div>
 
-        {(isPending || !user) && (
+        {!user && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
             <Loader noPadding={true} />
           </div>
