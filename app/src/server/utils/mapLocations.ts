@@ -40,18 +40,23 @@ export const fetchPublicQuestLocations = async (
   }: { fresh?: boolean; revision?: number; includeScheduled?: boolean } = {},
 ) => {
   const cached = publicLocationCache.get(client);
-  if (
+  const quests =
     !fresh &&
     cached &&
     cached.at >= revision &&
     cached.generation === publicLocationGeneration &&
     Date.now() - cached.at < MAP_LOCATION_REFRESH_MS
-  )
-    return publicQuestLocations(
-      includeScheduled
-        ? cached.quests.map((q) => ({ ...q, startsAt: null, endsAt: null }))
-        : cached.quests,
-    );
+      ? cached.quests
+      : await loadPublicQuests(client);
+  return publicQuestLocations(
+    includeScheduled
+      ? quests.map((q) => ({ ...q, startsAt: null, endsAt: null }))
+      : quests,
+  );
+};
+
+/** Read the quests and cache them unless an edit invalidated the read meanwhile. */
+const loadPublicQuests = async (client: DrizzleClient) => {
   const generation = publicLocationGeneration;
   // A slow read cannot claim freshness newer than its snapshot.
   const startedAt = Date.now();
@@ -59,11 +64,7 @@ export const fetchPublicQuestLocations = async (
   // A query started before an edit must not repopulate the invalidated cache.
   if (generation === publicLocationGeneration)
     publicLocationCache.set(client, { quests, at: startedAt, generation });
-  return publicQuestLocations(
-    includeScheduled
-      ? quests.map((q) => ({ ...q, startsAt: null, endsAt: null }))
-      : quests,
-  );
+  return quests;
 };
 
 /** Global event contains no quest details; polling/focus refresh recovers missed notifications. */
