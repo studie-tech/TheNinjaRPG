@@ -312,18 +312,12 @@ export const findSectorMapForGetNextSectorMapVersion = (
     orderBy: (table, { desc }) => [desc(table.version)],
   });
 
-/** Build the faction-filtered village and structure listing for world-map sector windows. */
+/** Build the village and structure listing for world-map sector windows. */
 export const listVillagesForSectorWindow = (
   client: Pick<DrizzleClient, "query">,
   sectors: number[],
 ) =>
   client.query.village.findMany({
-    // Same faction filter as travel.getSectorData, so a sector renders the
-    // same buildings whether it is the window center or a neighbor
-    where: (table, { and, inArray }) =>
-      and(
-        inArray(table.sector, sectors),
-        inArray(table.type, ["VILLAGE", "OUTLAW", "STRONGHOLD", "HIDEOUT", "SAFEZONE"]),
-      ),
+    where: (table, { inArray }) => inArray(table.sector, sectors),
     with: { structures: true },
   });
