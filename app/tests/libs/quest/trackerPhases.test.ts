@@ -106,7 +106,12 @@ describe("getNewTrackers passive snapshots", () => {
 });
 
 /** A move objective rolled from `location`, against any persisted `goal` fields. */
-const located = (location: object, user: object = {}, goal?: object, quest: object = {}) => {
+const located = (
+  location: object,
+  user: object = {},
+  goal?: object,
+  quest: Record<string, unknown> = {},
+) => {
   const objective = MoveToObjective.parse({ id: "o1", task: "move_to_location", ...location });
   const definition = makeQuest("q1", [objective], "daily", quest);
   const tracked = makeUser(
