@@ -3,7 +3,7 @@ import type { UserRole } from "@/drizzle/constants";
 import * as furnitureImage from "@/libs/furnitureImage";
 import { itemRouter } from "@/server/api/routers/item";
 import * as http from "@/utils/http";
-import * as ssrf from "@/utils/ssrf";
+import * as ssrf from "@/server/utils/ssrf";
 import type { FurnitureGeometry } from "@/validators/itemFurniture";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { callerForDatabase } from "../../../setup/testDatabase";

@@ -7,7 +7,7 @@ import {
 } from "@/queries/cleaner";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
-import { isUrlAccessible, isWithinImgTag } from "@/utils/url";
+import { isUrlAccessible, isWithinImgTag } from "@/server/utils/url";
 
 const ENDPOINT_NAME = "daily-link-cleaner";
 
