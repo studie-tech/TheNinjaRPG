@@ -2379,31 +2379,36 @@ export const itemRouter = createTRPCRouter({
         })),
       }));
 
-      // Validate the same snapshot used below before consuming any quantity.
-      const hasUnavailableBloodlineRoll = useritem.item.effects.some(
-        (effect) =>
-          effect.type === "rollbloodline" &&
-          filterRollableBloodlines({
-            bloodlines: allBloodlines,
-            user,
-            previousRolls,
-            rank: effect.rank,
-          }).length === 0,
+      // Reject an empty pool before consuming any quantity; the rolls below draw from these.
+      const bloodlinePools = new Map(
+        useritem.item.effects
+          .filter((effect) => effect.type === "rollbloodline")
+          .map(({ rank }) => [
+            rank,
+            filterRollableBloodlines({
+              bloodlines: allBloodlines,
+              user,
+              previousRolls,
+              rank,
+            }),
+          ]),
       );
-      if (hasUnavailableBloodlineRoll) {
+      if ([...bloodlinePools.values()].some((pool) => pool.length === 0)) {
         return errorResponse("No bloodline is available to roll");
       }
 
-      const hasSageRoll = useritem.item.effects.some((e) => e.type === "rollsagemode");
-      if (hasSageRoll && !user.sageModeId) {
-        const sageModePool = filterRollableSageModes({
-          sageModes: allSageModes,
-          user,
-          previousRolls: previousSageRolls,
-        });
-        if (sageModePool.length === 0) {
-          return errorResponse("No sage mode is available to roll");
-        }
+      const canRollSageMode =
+        !user.sageModeId &&
+        useritem.item.effects.some((e) => e.type === "rollsagemode");
+      const sageModePool = canRollSageMode
+        ? filterRollableSageModes({
+            sageModes: allSageModes,
+            user,
+            previousRolls: previousSageRolls,
+          })
+        : [];
+      if (canRollSageMode && sageModePool.length === 0) {
+        return errorResponse("No sage mode is available to roll");
       }
 
       // Bookkeeping
@@ -2445,13 +2450,7 @@ export const itemRouter = createTRPCRouter({
       let changedBloodlineId: string | null | undefined;
       useritem.item.effects.forEach((effect) => {
         if (effect.type === "rollbloodline") {
-          const bloodlinePool = filterRollableBloodlines({
-            bloodlines: allBloodlines,
-            user,
-            previousRolls,
-            rank: effect.rank,
-          });
-          const randomBloodline = getRandomElement(bloodlinePool);
+          const randomBloodline = getRandomElement(bloodlinePools.get(effect.rank));
           if (!randomBloodline) {
             throw serverError("NOT_FOUND", "No bloodline found");
           }
@@ -2496,17 +2495,9 @@ export const itemRouter = createTRPCRouter({
             );
             return;
           }
-          const sageModePool = filterRollableSageModes({
-            sageModes: allSageModes,
-            user,
-            previousRolls: previousSageRolls,
-          });
           const randomSageMode = getRandomElement(sageModePool);
           if (!randomSageMode) {
-            messages.push(
-              "You reach for a new sage mode, but the natural energies reveal none to you. ",
-            );
-            return;
+            throw serverError("NOT_FOUND", "No sage mode found");
           }
           const roll = Math.random() * 100;
           const success = roll < effect.power;
@@ -2568,44 +2559,20 @@ export const itemRouter = createTRPCRouter({
           const parsedEffect = HealTag.parse(effect);
           const poolsAffects = parsedEffect.poolsAffected || ["Health"];
           poolsAffects.forEach((pool) => {
-            switch (pool) {
-              case "Health": {
-                const oldHp = updates.curHealth;
-                updates.curHealth = Math.min(
-                  user.curHealth +
-                    (effect.calculation === "percentage"
-                      ? user.maxHealth * (effect.power / 100)
-                      : effect.power),
-                  user.maxHealth,
-                );
-                messages.push(`You healed ${Math.ceil(updates.curHealth - oldHp)} HP`);
-                break;
-              }
-              case "Chakra": {
-                const oldCp = updates.curChakra;
-                updates.curChakra = Math.min(
-                  user.curChakra +
-                    (effect.calculation === "percentage"
-                      ? user.maxChakra * (effect.power / 100)
-                      : effect.power),
-                  user.maxChakra,
-                );
-                messages.push(`You healed ${Math.ceil(updates.curChakra - oldCp)} CP`);
-                break;
-              }
-              case "Stamina": {
-                const oldSp = updates.curStamina;
-                updates.curStamina = Math.min(
-                  user.curStamina +
-                    (effect.calculation === "percentage"
-                      ? user.maxStamina * (effect.power / 100)
-                      : effect.power),
-                  user.maxStamina,
-                );
-                messages.push(`You healed ${Math.ceil(updates.curStamina - oldSp)} SP`);
-                break;
-              }
-            }
+            const { current, max, label } = HEAL_POOLS[pool];
+            const previous = updates[current];
+            // Heals start from the snapshot, so repeated effects replace rather than stack.
+            // The stored effect decides the amount: the tag defaults calculation to percentage.
+            updates[current] = Math.min(
+              user[current] +
+                (effect.calculation === "percentage"
+                  ? user[max] * (effect.power / 100)
+                  : effect.power),
+              user[max],
+            );
+            messages.push(
+              `You healed ${Math.ceil(updates[current] - previous)} ${label}`,
+            );
           });
         }
       });
@@ -3852,6 +3819,13 @@ const preserveEffectReputation = (
     }
   });
 };
+
+/** The user columns and message label of each pool a consumable can heal. */
+const HEAL_POOLS = {
+  Health: { current: "curHealth", max: "maxHealth", label: "HP" },
+  Chakra: { current: "curChakra", max: "maxChakra", label: "CP" },
+  Stamina: { current: "curStamina", max: "maxStamina", label: "SP" },
+} as const;
 
 const rewardPetSpeciesIds = (effects: Item["effects"]) =>
   effects.flatMap((effect) =>
