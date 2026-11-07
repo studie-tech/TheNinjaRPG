@@ -1,6 +1,6 @@
 import { randomInt as secureRandomInt } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
-import { eq, inArray, ne, notInArray, or, SQL, sql } from "drizzle-orm";
+import { eq, ne, notInArray, or, SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import superjson from "superjson";
 import { z } from "zod";
@@ -29,18 +29,14 @@ import {
   type BattleUsageType,
   COMBAT_BIOMES,
   type CombatBiome,
-  CombatStatNames,
   CREATOR_TRIAL_FORMS,
   DUNGEON_PARTY_SIZE,
   DUNGEON_SOLO_PETS,
   ELEMENTAL_MASTERY_BOOST,
-  ELITE_JONIN_BRACKET,
   IMG_AVATAR_DEFAULT,
   MAP_RESERVED_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
-  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MAX_PLAYER_LEVEL,
-  MasteryNames,
   NonActionItemTypes,
   PoolTypes,
   PvpBattleTypes,
@@ -89,6 +85,14 @@ import { type CreatorTrialState, isCreator } from "@/libs/combat/creatorTrial";
 import { createAction, settlementWrites, updateBattle } from "@/libs/combat/database";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
+import {
+  applyForcedLoadouts,
+  buildQueuedTrainingLogs,
+  getAttackRestriction,
+  projectQuestParty,
+  rollStartingGroundEffects,
+  settleQueuedBattleTraining,
+} from "@/libs/combat/initiation";
 import { BATTLE_LOG_PAGE_SIZE } from "@/libs/combat/log";
 import { maskBattle } from "@/libs/combat/masking";
 import { refreshMasteries, resetMasteriesToBase } from "@/libs/combat/mastery";
@@ -168,7 +172,6 @@ import {
   isObjectiveWarActive,
   isWarMercenary,
 } from "@/libs/objectiveWar";
-import { petExperienceGainSql } from "@/libs/pets/experience";
 import { canUsePet } from "@/libs/pets/progression";
 import {
   calcActiveUserRegen,
@@ -177,10 +180,8 @@ import {
   calcLevelRequirements,
   calcMaxEnergy,
   calcSP,
-  canAttackBracket,
   capUserStats,
   getEffectiveLevel,
-  getExpBracket,
   manuallyAssignUserStats,
   scaleUserStats,
 } from "@/libs/profile";
@@ -191,7 +192,6 @@ import {
   controlShownQuestLocationInformation,
   mockAchievementHistoryEntries,
 } from "@/libs/quest/projection";
-import { projectPartyTracker, questPartyHelperAttemptId } from "@/libs/questParty";
 import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
 import { hasTrainingInProgress } from "@/libs/queue";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
@@ -205,16 +205,12 @@ import {
 } from "@/libs/timedBuffs";
 import { regenerationBuffs, titleCombatTag } from "@/libs/titles";
 import { isActiveEventEntrant } from "@/libs/tournament/events";
-import {
-  applyMasteryTrainingGains,
-  battleJutsuGateFailure,
-  calcJutsuEquipLimit,
-  settleQueuedTraining,
-} from "@/libs/train";
+import { battleJutsuGateFailure, calcJutsuEquipLimit } from "@/libs/train";
 import { getBiomeFromGlobalTile } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import {
+  buildQueuedTrainingClaim,
   deleteBattleById,
   deleteBattleHistoryByBattleId,
   executeResultsForListOngoingBattles,
@@ -296,7 +292,6 @@ import {
   fetchDungeonEntryData,
   getDungeonEntryCharges,
 } from "@/server/utils/dungeonEntry";
-import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { notifyBattleDefenders } from "@/server/utils/push/combat";
 import {
   commitQuestEntryBattle,
@@ -305,16 +300,14 @@ import {
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { hasDueTimedJob, settleDueTimedQueues } from "@/server/utils/userQueue";
 import { findRelationship } from "@/utils/alliance";
-import { getRandomElement } from "@/utils/array";
 import { getKageEligibility } from "@/utils/kage";
 import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
-import { regenTicksSince, secondsFromDate, secondsFromNow } from "@/utils/time";
+import { regenTicksSince, secondsFromNow } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
 import type { BaseServerResponse } from "@/validators/base";
 import {
   type AssignableUserStats,
-  BarrierTag,
   IncreaseDamageGivenTag,
   isActivityBonus,
   statSchema,
@@ -330,7 +323,7 @@ import {
 } from "@/validators/travel";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import { fetchUpdatedUser, type UserWithRelations } from "./profile";
+import { fetchUpdatedUser } from "./profile";
 
 // Pusher instance
 const pusher = getServerPusher();
@@ -1860,7 +1853,7 @@ const hydrateBattleJutsus = (
   user.jutsus
     .filter((ref) => !excludedJutsuIds.includes(ref.jutsuId))
     .map((ref) => {
-      const jutsu = battle.extraState.jutsus?.[ref.jutsuId];
+      const jutsu = battle.extraState.jutsus?.[ref.jutsuId] as Jutsu | undefined;
       if (!jutsu) return null;
       // Add missing UserJutsu fields needed for CombatQueryUserJutsu
       return {
@@ -1883,7 +1876,7 @@ const hydrateBattleJutsus = (
 const hydrateBattleItems = (battle: CompleteBattle, user: BattleUserState, now: Date) =>
   user.items
     .map((ref) => {
-      const item = battle.extraState.items?.[ref.itemId];
+      const item = battle.extraState.items?.[ref.itemId] as Item | undefined;
       if (!item) return null;
       // Add missing UserItem fields needed for CombatQueryUserItem
       return {
@@ -2340,49 +2333,12 @@ export const initiateBattle = async (
     .map(({ userId, updatedAt }) => ({ userId, updatedAt }));
 
   if (questEncounter) {
-    const party = questEncounter;
-    for (const participant of fetchedUsers.filter((user) =>
-      userIds.includes(user.userId),
-    )) {
-      if (
-        participant.questPartyId !== party.id ||
-        participant.sector !== sector ||
-        participant.longitude !== longitude ||
-        participant.latitude !== latitude
-      )
-        return { success: false, message: "Quest team membership or location changed" };
-      if (
-        !participant.userQuests.some((entry) => entry.questId === party.quest.id) &&
-        !participant.completedQuests.some((entry) => entry.questId === party.quest.id)
-      )
-        return { success: false, message: "A team member no longer has this quest" };
-      const personal = participant.questData?.find(
-        (entry) => entry.id === party.quest.id,
-      );
-      participant.questData = [
-        ...(participant.questData ?? []).filter((entry) => entry.id !== party.quest.id),
-        projectPartyTracker({ id: party.id, tracker: party.tracker }, personal),
-      ];
-      if (!participant.userQuests.some((entry) => entry.questId === party.quest.id))
-        participant.userQuests.push({
-          id: questPartyHelperAttemptId(party.id),
-          userId: participant.userId,
-          questId: party.quest.id,
-          questType: party.quest.questType,
-          startedAt: new Date(party.tracker.startAt),
-          endAt: null,
-          completed: 0,
-          previousCompletes: 0,
-          previousAttempts: 0,
-          periodCompletes: 0,
-          periodStartAt: null,
-          pendingRewardChoice: null,
-          entryPaid: false,
-          isolated: false,
-          questVersion: null,
-          quest: structuredClone(party.quest),
-        });
-    }
+    const failure = projectQuestParty(
+      fetchedUsers.filter((user) => userIds.includes(user.userId)),
+      questEncounter,
+      { sector, longitude, latitude },
+    );
+    if (failure) return { success: false, message: failure };
   }
 
   // Recovery is explicit to the requesting actor; opponents and scheduled participants retain strict status checks.
@@ -2427,82 +2383,12 @@ export const initiateBattle = async (
   // The same settlement as an account refresh (`settleQueuedTraining`), written back in
   // bulk with the battle claim below. Exhibitions also preserve real pool recovery here,
   // before loadout/stat normalization, since their settlement discards battle pools.
-  const queuedTraining = fetchedUsers.flatMap((user) => {
-    if (
-      user.isAi ||
-      (!info.tournamentGame &&
-        user.queue.length === 0 &&
-        !user.currentlyTrainingMastery &&
-        !user.currentlyTrainingElement)
-    )
-      return [];
-    const original = { ...user };
-    const ticks = regenTicksSince(user.regenAt);
-    const trainingUser = {
-      ...user,
-      // Existing training keeps its earned Energy when the next isolated floor starts.
-      status: "AWAKE" as const,
-      regeneration: calcActiveUserRegen(user, settings),
-      maxEnergy: calcMaxEnergy(user),
-    } as unknown as NonNullable<UserWithRelations>;
-    const regenerationGain = (fromTick: number, toTick: number) =>
-      getTimedRegenerationGain(
-        calcActiveUserRegen(user, settings, false),
-        regenerationBuffs(user),
-        new Date(user.regenAt.getTime() + fromTick * REGEN_SECONDS * 1000),
-        toTick - fromTick,
-        REGEN_SECONDS,
-      );
-    const { energy, mastery } = settleQueuedTraining(
-      trainingUser,
-      user.queue,
-      settings,
-      ticks,
-      new Date(),
-      regenerationGain,
-    );
-    if (!energy && !mastery && !info.tournamentGame) return [];
-    const amount = energy?.completed.reduce((sum, entry) => sum + entry.amount, 0) ?? 0;
-    const minutes =
-      mastery?.completed.reduce((sum, entry) => sum + entry.minutes, 0) ?? 0;
-    if (energy) {
-      for (const stat of CombatStatNames) user[stat] += energy.gains[stat] ?? 0;
-      user.experience = Math.round(user.experience + amount);
-      user.curEnergy = energy.curEnergy;
-      user.energyQueueHead = energy.head;
-    }
-    if (mastery) {
-      Object.assign(user, applyMasteryTrainingGains(user, mastery.gains));
-      Object.assign(user, mastery.update);
-      // Completion can make already worn Energy capacity gear eligible before loadouts change.
-      energyCapacity[user.userId] = calcMaxEnergy(user);
-    }
-    const tasks = [
-      ...(amount > 0 ? [{ task: "stats_trained" as const, increment: amount }] : []),
-      ...(minutes > 0
-        ? [{ task: "minutes_training" as const, increment: minutes }]
-        : []),
-    ];
-    if (tasks.length > 0) {
-      user.questData = filterQuestTrackersForDbPersist(
-        getNewTrackers(user as unknown as NonNullable<UserWithRelations>, tasks)
-          .trackers,
-        user,
-        true,
-      );
-    }
-    return [
-      {
-        original,
-        user,
-        energy,
-        mastery,
-        amount,
-        regen: regenerationGain(0, ticks),
-        regenAt: secondsFromDate(ticks * REGEN_SECONDS, original.regenAt),
-      },
-    ];
-  });
+  const queuedTraining = settleQueuedBattleTraining(
+    fetchedUsers,
+    settings,
+    energyCapacity,
+    !!info.tournamentGame,
+  );
 
   if (actionActor && actionReadiness?.notice) {
     // Queue settlement owns spent Energy; recovery must not refund training completed in this admission.
@@ -2563,76 +2449,13 @@ export const initiateBattle = async (
 
   // If we have forced loadouts, overwrite user items and jutsus appropriately
   if (info.forceLoadouts && info.forceLoadouts.length > 0) {
-    // Prefer equipped copies, then highest level — includes unequipped ownership.
-    const progressionQueues = new Map<
-      string,
-      (typeof forceLoadoutItemProgression)[number][]
-    >();
-    for (const row of forceLoadoutItemProgression) {
-      const key = `${row.userId}:${row.itemId}`;
-      const queue = progressionQueues.get(key) ?? [];
-      queue.push(row);
-      progressionQueues.set(key, queue);
-    }
-    for (const queue of progressionQueues.values()) {
-      queue.sort((a, b) => {
-        const aEquipped = a.equipped !== "NONE" ? 1 : 0;
-        const bEquipped = b.equipped !== "NONE" ? 1 : 0;
-        if (aEquipped !== bEquipped) return bEquipped - aEquipped;
-        if (a.level !== b.level) return b.level - a.level;
-        return b.experience - a.experience;
-      });
-    }
-
-    for (const user of fetchedUsers) {
-      const userLoadout = info.forceLoadouts.find((l) => l.userId === user.userId);
-      if (userLoadout) {
-        user.items = loadoutItems
-          .filter((item) =>
-            [userLoadout.loadout.weaponIds, userLoadout.loadout.consumableIds]
-              .flat()
-              .includes(item.id),
-          )
-          .map((item) => {
-            const owned =
-              progressionQueues.get(`${user.userId}:${item.id}`)?.shift() ?? null;
-            return {
-              ...inertUserItemColumns(user.userId, new Date()),
-              // Synthetic id so battle-end quantity/durability writes never touch
-              // real inventory rows; XP is credited via progressionRowId instead.
-              id: nanoid(),
-              progressionRowId: owned?.id ?? null,
-              itemId: item.id,
-              quantity: 1,
-              level: owned?.level ?? 1,
-              experience: owned?.experience ?? 0,
-              equipped: "ITEM_1" as const,
-              item: { ...item, variants: owned?.item?.variants ?? [] },
-              activeVariantId: owned?.activeVariantId ?? null,
-              imbuements: [],
-              dropChancePerc: 0,
-              durability: 100,
-            };
-          });
-        user.jutsus = loadoutJutsus
-          .filter((jutsu) => userLoadout.loadout.jutsuIds.includes(jutsu.id))
-          .map((jutsu) => ({
-            id: nanoid(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            userId: user.userId,
-            jutsuId: jutsu.id,
-            level: 25,
-            experience: 0,
-            equipped: true,
-            trainingStartedAt: null,
-            finishTraining: null,
-            jutsu: jutsu,
-            reskinId: null,
-            activeReskin: null,
-          }));
-      }
-    }
+    applyForcedLoadouts(
+      fetchedUsers,
+      info.forceLoadouts,
+      loadoutItems,
+      loadoutJutsus,
+      forceLoadoutItemProgression,
+    );
   }
 
   // Get background for the battle
@@ -2926,109 +2749,15 @@ export const initiateBattle = async (
 
     // XP Bracket restrictions — same bracket, higher, or one below; immunity lift and war exemptions
     if (battleType === "COMBAT" && userIds.includes(user.userId)) {
-      // Elite bracket limits remain absolute before war-zone, war and immunity exemptions.
-      const eliteMismatch =
-        user.userId === userIds[0] &&
-        nonAiTargets.find(
-          (target) =>
-            (user.rank === "ELITE JONIN" || target.rank === "ELITE JONIN") &&
-            !canAttackBracket(
-              getExpBracket(user.experience, user.rank),
-              getExpBracket(target.experience, target.rank),
-            ),
-        );
-      if (eliteMismatch)
-        return {
-          success: false,
-          message: `Elite Jonin can only fight players in brackets ${ELITE_JONIN_BRACKET - 1} and ${ELITE_JONIN_BRACKET}.`,
-        };
-      // War-Torn sectors skip ordinary village and XP bracket restrictions.
-      const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
-      if (!isInWarTornSector) {
-        if (
-          nonAiTargets.some((t) => getWarRelationship(activeWars, user, t) === "ALLY")
-        )
-          return errorResponse("Cannot attack a participant on your war side");
-        // Guard 1: Cannot attack members of your own village
-        const sameVillageTarget = nonAiTargets.find(
-          (t) =>
-            t.villageId !== null &&
-            t.villageId === user.villageId &&
-            getWarRelationship(activeWars, user, t) !== "ENEMY",
-        );
-        if (sameVillageTarget) {
-          return {
-            success: false,
-            message: `Cannot attack ${sameVillageTarget.username} — they are in your village`,
-          };
-        }
-
-        // Guard 2: Cannot attack members of allied villages
-        const alliedTarget = nonAiTargets.find(
-          (t) =>
-            (getWarRelationship(activeWars, user, t) ??
-              findRelationship(relations, user.villageId, t.villageId)?.status) ===
-            "ALLY",
-        );
-        if (alliedTarget) {
-          return {
-            success: false,
-            message: `Cannot attack ${alliedTarget.username} — their village is allied with yours`,
-          };
-        }
-
-        // Guard 3: Bracket restrictions
-        const attackerBracket = getExpBracket(user.experience, user.rank);
-
-        // Collect targets more than one bracket below — protection is one-directional:
-        // attackers may hit same bracket, higher, or one below (without exemption).
-        // Lower-bracket players may freely attack higher-bracket players.
-        // Academy/Genin remain blocked by the rank restrictions above.
-        const crossBracketTargets =
-          user.userId === userIds[0]
-            ? nonAiTargets.filter(
-                (t) =>
-                  !canAttackBracket(
-                    attackerBracket,
-                    getExpBracket(t.experience, t.rank),
-                  ),
-              )
-            : [];
-
-        if (crossBracketTargets.length > 0) {
-          const attackerIsWarParticipant = user.warParticipantUntil > now;
-
-          // Each cross-bracket target needs its own exemption — check individually
-          const blockedTarget = crossBracketTargets.find((t) => {
-            // Guard 4 (allow): target's bracket immunity is lifted (they attacked recently)
-            if (t.bracketImmunityLiftedUntil > now) return false;
-
-            // Guard 5 (allow): both are active war participants on opposing sides.
-            // Effective allegiance includes allied villages and exclusive mercenary appointments.
-            const targetIsWarParticipant = t.warParticipantUntil > now;
-            const atWar = getWarRelationship(activeWars, user, t) === "ENEMY";
-            if (
-              (attackerIsWarParticipant || isWarMercenary(activeWars, user.userId)) &&
-              (targetIsWarParticipant || isWarMercenary(activeWars, t.userId)) &&
-              atWar
-            )
-              return false;
-
-            return true; // no exemption — this target is blocked
-          });
-
-          if (blockedTarget) {
-            const targetBracket = getExpBracket(
-              blockedTarget.experience,
-              blockedTarget.rank,
-            );
-            return {
-              success: false,
-              message: `Cannot attack ${blockedTarget.username} — different combat bracket (${attackerBracket} vs ${targetBracket})`,
-            };
-          }
-        }
-      }
+      const restriction = getAttackRestriction({
+        user,
+        isLeadAttacker: user.userId === userIds[0],
+        targets: nonAiTargets,
+        activeWars,
+        relations,
+        now,
+      });
+      if (restriction) return errorResponse(restriction);
     }
 
     // Scale targets
@@ -3291,40 +3020,7 @@ export const initiateBattle = async (
   }
 
   // Starting ground effects
-  const groundAssets = assets.filter((a) => a.type === "STATIC");
-  for (let col = 0; col < gridSize.width; col++) {
-    for (let row = 0; row < gridSize.height; row++) {
-      // Ignore the spots where we placed users
-      const foundUser = usersState.find(
-        (u) => u.longitude === col && u.latitude === row,
-      );
-      if (!foundUser) {
-        const rand = Math.random();
-        if (rand < 0.1) {
-          const asset = getRandomElement(groundAssets);
-          if (asset) {
-            const tag: GroundEffect = {
-              ...BarrierTag.parse({
-                power: 2,
-                staticAssetPath: asset.id,
-              }),
-              id: `initial-${col}-${row}`,
-              creatorId: "ground",
-              actionId: "initial",
-              createdRound: 0,
-              level: 0,
-              longitude: col,
-              latitude: row,
-              isNew: false,
-              barrierAbsorb: 0,
-              castThisRound: false,
-            };
-            groundEffects.push(tag);
-          }
-        }
-      }
-    }
-  }
+  groundEffects.push(...rollStartingGroundEffects(assets, gridSize, usersState));
 
   // Figure out who starts in the battle
   const attackerFirst = !PvpBattleTypes.includes(battleType);
@@ -3410,118 +3106,11 @@ export const initiateBattle = async (
   const queuedParticipants = queuedTraining.filter((entry) =>
     allParticipantIds.includes(entry.user.userId),
   );
-  const queueUpdate: Record<string, ReturnType<typeof sql>> = {};
-  if (queuedParticipants.length) {
-    const queueCase = (
-      column: keyof typeof userData.$inferSelect,
-      entries: typeof queuedParticipants,
-      value: (entry: (typeof queuedParticipants)[number]) => unknown,
-    ) =>
-      sql`CASE ${sql.join(
-        entries.map(
-          (entry) =>
-            sql`WHEN ${userData.userId} = ${entry.user.userId} THEN ${value(entry)}`,
-        ),
-        sql` `,
-      )} ELSE ${userData[column]} END`;
-    queueUpdate.questData = queueCase("questData", queuedParticipants, (entry) =>
-      JSON.stringify(entry.user.questData),
-    );
-    queueUpdate.updatedAt = sql`CASE WHEN ${inArray(
-      userData.userId,
-      queuedParticipants.map((entry) => entry.user.userId),
-    )} THEN ${nextSnapshotSql(userData.updatedAt)} ELSE ${userData.updatedAt} END`;
-    const energyParticipants = queuedParticipants.filter((entry) => entry.energy);
-    const recoveryParticipants = info.tournamentGame
-      ? queuedParticipants
-      : energyParticipants;
-    if (recoveryParticipants.length) {
-      queueUpdate.curEnergy = queueCase(
-        "curEnergy",
-        recoveryParticipants,
-        (entry) =>
-          entry.energy?.curEnergy ??
-          Math.min(
-            entry.original.curEnergy + entry.regen,
-            energyCapacity[entry.original.userId] ?? entry.original.maxEnergy,
-          ),
-      );
-      for (const pool of PoolTypes) {
-        const { cur, max } = getPoolKeys(pool);
-        queueUpdate[cur] = queueCase(cur, recoveryParticipants, (entry) =>
-          Math.min(entry.original[cur] + entry.regen, entry.original[max]),
-        );
-      }
-      queueUpdate.regenAt = queueCase(
-        "regenAt",
-        recoveryParticipants,
-        (entry) => entry.regenAt,
-      );
-    }
-    if (energyParticipants.length) {
-      // Advancing the head consumes the settled rows in this same statement.
-      queueUpdate.energyQueueHead = queueCase(
-        "energyQueueHead",
-        energyParticipants,
-        (entry) => entry.energy?.head,
-      );
-      queueUpdate.experience = queueCase(
-        "experience",
-        energyParticipants,
-        (entry) => sql`${userData.experience} + ${entry.amount}`,
-      );
-      queueUpdate.petExperience = queueCase(
-        "petExperience",
-        energyParticipants,
-        (entry) => petExperienceGainSql(entry.amount),
-      );
-      for (const stat of CombatStatNames) {
-        queueUpdate[stat] = queueCase(
-          stat,
-          energyParticipants,
-          (entry) => sql`${userData[stat]} + ${entry.energy?.gains[stat] ?? 0}`,
-        );
-      }
-    }
-    const masteryParticipants = queuedParticipants.filter((entry) => entry.mastery);
-    if (masteryParticipants.length) {
-      for (const column of [
-        "masteryQueueHead",
-        "elementalQueueHead",
-        "currentlyTrainingElement",
-        "elementalTrainingStartedAt",
-        "elementalTrainingSpeed",
-        "currentlyTrainingMastery",
-        "masteryTrainingStartedAt",
-        "trainingSpeed",
-        "dailyTrainings",
-      ] as const) {
-        const participants = masteryParticipants.filter(
-          (entry) => entry.mastery && column in entry.mastery.update,
-        );
-        if (!participants.length) continue;
-        queueUpdate[column] = queueCase(
-          column,
-          participants,
-          (entry) => entry.user[column],
-        );
-      }
-      queueUpdate.elementalMastery = queueCase(
-        "elementalMastery",
-        masteryParticipants,
-        (entry) => JSON.stringify(entry.user.elementalMastery),
-      );
-      for (const stat of MasteryNames) {
-        queueUpdate[stat] = queueCase(
-          stat,
-          masteryParticipants,
-          (entry) =>
-            masteryGainUpdates(entry.mastery?.gains ?? {})[stat] ??
-            sql`${userData[stat]}`,
-        );
-      }
-    }
-  }
+  const queueUpdate = buildQueuedTrainingClaim(
+    queuedParticipants,
+    energyCapacity,
+    !!info.tournamentGame,
+  );
 
   if (actionReadiness?.notice && actionActor) {
     // The existing participant claim commits recovery together with BATTLE; no standalone wake can overwrite it.
@@ -3786,22 +3375,7 @@ export const initiateBattle = async (
     const claimed = queuedParticipants.filter((entry) =>
       claimedIds.includes(entry.user.userId),
     );
-    const logs = claimed.flatMap((entry) => [
-      ...(entry.energy?.completed ?? []).map((completed) => ({
-        userId: entry.user.userId,
-        stat: completed.stat,
-        amount: completed.amount,
-        speed: entry.original.trainingSpeed,
-        trainingFinishedAt: new Date(),
-      })),
-      ...(entry.mastery?.completed ?? []).map((completed) => ({
-        userId: entry.user.userId,
-        stat: completed.stat,
-        amount: completed.amount,
-        speed: completed.speed,
-        trainingFinishedAt: completed.finishedAt,
-      })),
-    ]);
+    const logs = buildQueuedTrainingLogs(claimed);
     if (logs.length) {
       try {
         await insertTrainingLogForInitiateBattle(client, logs);
