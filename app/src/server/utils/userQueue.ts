@@ -450,7 +450,7 @@ export const enqueueJutsuLevels = async (
 > => {
   if (entries.length === 0) return { success: true, cost: 0, queue: [] };
   const waiting = user.queue.filter((row) => row.kind === "JUTSU");
-  if (waiting.length + entries.length > getQueueTotalCapacity(user) - 1) {
+  if (!hasQueueRoom(user, waiting.length + entries.length - 1)) {
     return { success: false, message: "Your jutsu training queue is full" };
   }
   const cost = entries.reduce((sum, entry) => sum + entry.reservedRyo, 0);
@@ -491,10 +491,10 @@ export const enqueueJutsuLevels = async (
  * and (when a level may start) the sensei data are read in one parallel round trip;
  * pass `waiting` when the rows were just read to skip reading them again.
  */
-const settleJutsus = async (
+export const settleJutsuTrainingQueue = async (
   client: DrizzleClient,
   userId: string,
-  now: Date,
+  now = new Date(),
   preloaded?: QueuedJutsu[],
 ) => {
   const mayStart = !preloaded || hasDueTimedJob(preloaded, now);
@@ -520,10 +520,10 @@ const settleJutsus = async (
 };
 
 /** Start every waiting craft whose turn has come. Returns how many started. */
-const settleCrafts = async (
+export const settleCraftingQueue = async (
   client: DrizzleClient,
   userId: string,
-  now: Date,
+  now = new Date(),
   preloaded?: QueuedCraft[],
 ) => {
   const [waiting, crafting, average] = await Promise.all([
@@ -558,22 +558,13 @@ export const settleTimedQueue = (
   preloaded?: QueuedJutsu[] | QueuedCraft[],
 ) =>
   kind === "JUTSU"
-    ? settleJutsus(client, userId, now, preloaded as QueuedJutsu[] | undefined)
-    : settleCrafts(client, userId, now, preloaded as QueuedCraft[] | undefined);
-
-export const settleJutsuTrainingQueue = (
-  client: DrizzleClient,
-  userId: string,
-  now = new Date(),
-  preloaded?: QueuedJutsu[],
-) => settleJutsus(client, userId, now, preloaded);
-
-export const settleCraftingQueue = (
-  client: DrizzleClient,
-  userId: string,
-  now = new Date(),
-  preloaded?: QueuedCraft[],
-) => settleCrafts(client, userId, now, preloaded);
+    ? settleJutsuTrainingQueue(
+        client,
+        userId,
+        now,
+        preloaded as QueuedJutsu[] | undefined,
+      )
+    : settleCraftingQueue(client, userId, now, preloaded as QueuedCraft[] | undefined);
 
 /**
  * Settle the timed queues of every user whose loaded rows hold a due job. Users run in
@@ -624,7 +615,7 @@ export const cancelQueuedJob = async (
   if (entry.kind === "JUTSU") {
     await refundRyo(client, userId, entry.reservedRyo ?? 0);
   } else {
-    await returnMaterials(client, userId, entry.materials ?? []);
+    await returnCraftMaterials(client, userId, entry.materials ?? []);
   }
   const rest = waiting.filter((row) => row.id !== entry.id);
   const started = rest.length
@@ -825,7 +816,7 @@ const startQueuedCraft = async (
   if (!(await claimQueueRow(client, entry.id))) return "conflict";
   const craftable = !!entry.item && !entry.item.hidden && entry.item.canBeCrafted;
   if (!entry.item || !craftable) {
-    await returnMaterials(client, entry.userId, entry.materials, true);
+    await returnCraftMaterials(client, entry.userId, entry.materials, true);
     return "dropped";
   }
   // Waiting durations are unboosted; eligibility is fixed when this job actually starts.
@@ -855,7 +846,7 @@ const startQueuedCraft = async (
         getInventoryBucket(row.item) === "cooking",
     ).length;
     if (carried + outputs.length > getInventoryBucketCapacity("cooking", user)) {
-      await returnMaterials(client, entry.userId, entry.materials, true);
+      await returnCraftMaterials(client, entry.userId, entry.materials, true);
       return "dropped";
     }
   }
@@ -908,7 +899,7 @@ const restoreQueueRow = async (
     if (!isMysqlDuplicateKeyError(error)) throw error;
     if (entry.kind === "JUTSU")
       await refundRyo(client, entry.userId, row.reservedRyo ?? 0);
-    else await returnMaterials(client, entry.userId, row.materials ?? [], true);
+    else await returnCraftMaterials(client, entry.userId, row.materials ?? [], true);
   }
 };
 
@@ -978,7 +969,7 @@ const refundRyo = async (client: DrizzleClient, userId: string, amount: number) 
  * cannot execute concurrent statements. Per-stack results determine which materials
  * need new stacks; the rest go in one insert.
  */
-const returnMaterials = async (
+export const returnCraftMaterials = async (
   client: DrizzleClient,
   userId: string,
   materials: CraftingQueueMaterial[],
@@ -1000,9 +991,6 @@ const returnMaterials = async (
   if (unmerged.length === 0) return;
   await insertUserItemForReturnMaterials(client, unmerged, userId);
 };
-
-/** Return materials taken for a craft that did not get queued. */
-export const returnCraftMaterials = returnMaterials;
 
 /**
  * Quest context of a job's owner. Unlike a session refresh, settling a queue must not
