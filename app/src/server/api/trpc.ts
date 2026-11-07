@@ -125,15 +125,16 @@ const t = initTRPC
     errorFormatter({ shape, error }) {
       // If a database error, extract & format error message better
       if (error?.cause?.cause) {
-        const cause = error.cause.cause as { name?: string; body: unknown };
+        const cause = error.cause.cause as {
+          name?: string;
+          body?: { message?: unknown };
+        };
         if (cause?.name === "DatabaseError" && cause?.body) {
-          const message = JSON.stringify(cause.body);
+          const { message } = cause.body;
+          const text =
+            typeof message === "string" ? message : JSON.stringify(cause.body);
           // Remove everything after (including) "sqlstate" from the error message
-          const cleanMessage =
-            typeof message === "string"
-              ? message.replace(/\s*\(sqlstate.*$/i, "")
-              : message;
-          shape.message = cleanMessage;
+          shape.message = text.replace(/\s*\(sqlstate[\s\S]*$/i, "");
         }
       }
 
