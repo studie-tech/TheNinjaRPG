@@ -59,7 +59,27 @@ jobs:
               {
                 name: "size:XXL",
                 color: "b60205",
-                description: "1,000+ effective text lines (JSON excluded; tests excluded in mixed PRs).",
+                description: "1,000-1,999 effective text lines (JSON excluded; tests excluded in mixed PRs).",
+              },
+              {
+                name: "size:XXXL",
+                color: "990000",
+                description: "2,000-4,999 effective text lines (JSON excluded; tests excluded in mixed PRs).",
+              },
+              {
+                name: "size:XXXXL",
+                color: "800000",
+                description: "5,000-9,999 effective text lines (JSON excluded; tests excluded in mixed PRs).",
+              },
+              {
+                name: "size:XXXXXL",
+                color: "660000",
+                description: "10,000-19,999 effective text lines (JSON excluded; tests excluded in mixed PRs).",
+              },
+              {
+                name: "size:XXXXXXL",
+                color: "4d0000",
+                description: "20,000+ effective text lines (JSON excluded; tests excluded in mixed PRs).",
               },
             ];
 
@@ -134,7 +154,11 @@ jobs:
               if (totalChangedLines < 100) return "size:M";
               if (totalChangedLines < 500) return "size:L";
               if (totalChangedLines < 1000) return "size:XL";
-              return "size:XXL";
+              if (totalChangedLines < 2000) return "size:XXL";
+              if (totalChangedLines < 5000) return "size:XXXL";
+              if (totalChangedLines < 10000) return "size:XXXXL";
+              if (totalChangedLines < 20000) return "size:XXXXXL";
+              return "size:XXXXXXL";
             };
 
             // --- Fetch commits ---
