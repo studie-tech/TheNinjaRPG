@@ -542,8 +542,8 @@ export const selectUserReportForGetAll = (
   const { reporterUserId, ...rest } = getTableColumns(userReport);
   return client
     .select({
-      UserReport: !staffUser ? { ...rest } : getTableColumns(userReport),
-      reportedUser: { ...getTableColumns(reportedUser) },
+      UserReport: staffUser ? getTableColumns(userReport) : rest,
+      reportedUser: getTableColumns(reportedUser),
     })
     .from(userReport)
     .where(
@@ -1090,19 +1090,7 @@ export const insertAutomatedModeration = async (
     userId: info.userId,
     content: info.content,
     relationType: info.relationType,
-    sexual: info.categories.sexual,
-    sexual_minors: info.categories.sexual_minors,
-    harassment: info.categories.harassment,
-    harassment_threatening: info.categories.harassment_threatening,
-    hate: info.categories.hate,
-    hate_threatening: info.categories.hate_threatening,
-    illicit: info.categories.illicit,
-    illicit_violent: info.categories.illicit_violent,
-    self_harm: info.categories.self_harm,
-    self_harm_intent: info.categories.self_harm_intent,
-    self_harm_instructions: info.categories.self_harm_instructions,
-    violence: info.categories.violence,
-    violence_graphic: info.categories.violence_graphic,
+    ...info.categories,
   });
 };
 

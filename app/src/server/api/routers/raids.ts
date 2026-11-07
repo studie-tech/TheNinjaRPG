@@ -379,10 +379,7 @@ export const raidsRouter = createTRPCRouter({
           id: queue.clanBattle.id,
           questId: queue.clanBattle.attackerEntityId,
           createdAt: queue.clanBattle.createdAt,
-          members: queue.clanBattle.queue.map((m) => ({
-            ...m,
-            user: m.user,
-          })),
+          members: queue.clanBattle.queue,
         },
       };
     }),

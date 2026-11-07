@@ -8,7 +8,6 @@ import {
   listDamageSimulationForCreateDamageSimulation,
   listDamageSimulationForGetDamageSimulations,
   updateDamageSimulationForUpdateDamageSimulation,
-  updateDamageSimulationForUpdateDamageSimulation2,
 } from "@/queries/simulator";
 import {
   baseServerResponse,
@@ -68,15 +67,7 @@ export const simulatorRouter = createTRPCRouter({
     .input(z.object({ id: z.string().optional(), active: z.boolean() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      if (input.id) {
-        await updateDamageSimulationForUpdateDamageSimulation(
-          ctx.drizzle,
-          { active: input.active, id: input.id },
-          ctx,
-        );
-      } else {
-        await updateDamageSimulationForUpdateDamageSimulation2(ctx.drizzle, input, ctx);
-      }
+      await updateDamageSimulationForUpdateDamageSimulation(ctx.drizzle, input, ctx);
       return { success: true, message: "Damage simulation updated" };
     }),
   deleteDamageSimulation: protectedProcedure

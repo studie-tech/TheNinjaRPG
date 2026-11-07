@@ -10,7 +10,6 @@ import type { DamageSimulationState } from "@/validators/combat";
 export const findDamageSimulationById = (client: DrizzleClient, id: string) =>
   client.query.damageSimulation.findFirst({
     where: eq(damageSimulation.id, id),
-    orderBy: [desc(damageSimulation.createdAt)],
   });
 
 /** Build the `damageSimulation` listing for `getDamageSimulations`, using predicates on `userId`. */
@@ -73,31 +72,23 @@ export const deleteDamageSimulationForCreateDamageSimulation = (
     );
 
 /**
- * Build the `damageSimulation` update for `updateDamageSimulation`, setting `active`,
- * using predicates on `id` and `userId`.
+ * Build the `damageSimulation` update for `updateDamageSimulation`, setting `active` on one
+ * of the user's entries, or on all of them when `id` is absent.
  */
 export const updateDamageSimulationForUpdateDamageSimulation = (
   client: Pick<DrizzleClient, "update">,
-  input: { active: false | true; id: string },
+  input: { active: false | true; id?: string | undefined },
   ctx: { userId: string },
 ) =>
   client
     .update(damageSimulation)
     .set({ active: input.active ? 1 : 0 })
     .where(
-      and(eq(damageSimulation.id, input.id), eq(damageSimulation.userId, ctx.userId)),
+      and(
+        input.id ? eq(damageSimulation.id, input.id) : undefined,
+        eq(damageSimulation.userId, ctx.userId),
+      ),
     );
-
-/** Build the `damageSimulation` update for `updateDamageSimulation`, setting `active`, using predicates on `userId`. */
-export const updateDamageSimulationForUpdateDamageSimulation2 = (
-  client: Pick<DrizzleClient, "update">,
-  input: { active: false | true },
-  ctx: { userId: string },
-) =>
-  client
-    .update(damageSimulation)
-    .set({ active: input.active ? 1 : 0 })
-    .where(eq(damageSimulation.userId, ctx.userId));
 
 /** Build the `damageSimulation` deletion for `deleteDamageSimulation`, using predicates on `id`. */
 export const deleteDamageSimulationForDeleteDamageSimulation = (
