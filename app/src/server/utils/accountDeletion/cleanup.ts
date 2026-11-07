@@ -36,8 +36,8 @@ import {
 import { fetchClan } from "@/queries/clan";
 import { findUserById } from "@/queries/profile";
 import { removeFromClan } from "@/server/api/routers/clan";
-import { deleteUser } from "@/server/api/routers/staff";
 import { drizzleDB } from "@/server/db";
+import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import { retireStoreUserId } from "@/server/utils/purchases/grant";
 import { removeAccountProcessorData } from "./processors";
 

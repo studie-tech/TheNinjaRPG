@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { CHARACTER_DELETION_CONFIRMATION, type UserRole } from "@/drizzle/constants";
 import { profileRouter } from "@/server/api/routers/profile";
-import * as staff from "@/server/api/routers/staff";
+import * as deleteUserData from "@/server/utils/accountDeletion/deleteUserData";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
 
@@ -19,7 +19,7 @@ beforeEach(() => {
   readUser.mockImplementation(async (_client: unknown, userId: string) => ({ userId, role, deletionAt, anbuId: null, clanId: null }));
   stubProfile("fetchUser", readUser);
   stubProfile("updateUserDataForToggleDeletionTimer", writeTimer);
-  vi.spyOn(staff, "deleteUser").mockResolvedValue(undefined);
+  vi.spyOn(deleteUserData, "deleteUser").mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -51,15 +51,15 @@ it("does not restart a timer when a cancellation arrives after the request was c
 it("requires the phrase again before permanent self-deletion", async () => {
   deletionAt = new Date(Date.now() - 1000);
   expect(await caller().confirmDeletion({ userId: "player" })).toMatchObject({ success: false });
-  expect(staff.deleteUser).not.toHaveBeenCalled();
+  expect(deleteUserData.deleteUser).not.toHaveBeenCalled();
   expect(await caller().confirmDeletion({ userId: "player", confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({ success: true });
-  expect(staff.deleteUser).toHaveBeenCalledTimes(1);
+  expect(deleteUserData.deleteUser).toHaveBeenCalledTimes(1);
 });
 
 it("keeps the waiting period enforced even with the correct phrase", async () => {
   deletionAt = new Date(Date.now() + 60_000);
   expect(await caller().confirmDeletion({ userId: "player", confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({ success: false, message: "Deletion timer not passed yet" });
-  expect(staff.deleteUser).not.toHaveBeenCalled();
+  expect(deleteUserData.deleteUser).not.toHaveBeenCalled();
 });
 
 it("preserves staff management permissions for another character", async () => {
@@ -85,12 +85,12 @@ it("rejects deletion management of another character by a player", async () => {
   deletionAt = new Date(Date.now() - 1000);
   expect(await caller().confirmDeletion({ userId: "other-player", confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({ success: false });
   expect(writeTimer).not.toHaveBeenCalled();
-  expect(staff.deleteUser).not.toHaveBeenCalled();
+  expect(deleteUserData.deleteUser).not.toHaveBeenCalled();
 });
 
 it.each(["CONTENT", "BALANCE", "EVENT-ADMIN", "JR_MODERATOR"] as const)("rejects deleting another character for %s staff without deletion rights", async (staffRole) => {
   role = staffRole;
   deletionAt = new Date(Date.now() - 1000);
   expect(await caller().confirmDeletion({ userId: "other-player" })).toMatchObject({ success: false, message: "You can't delete other users" });
-  expect(staff.deleteUser).not.toHaveBeenCalled();
+  expect(deleteUserData.deleteUser).not.toHaveBeenCalled();
 });

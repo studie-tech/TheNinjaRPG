@@ -14,7 +14,7 @@ import {
 import { GET as authorizeDiscord } from "@/app/api/discord/authorize/route";
 import { DISCORD_RELINK_REQUIRED, needsDiscordRelink } from "@/libs/discordLink";
 import { discordRouter } from "@/server/api/routers/discord";
-import { deleteUser } from "@/server/api/routers/staff";
+import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import { getDiscordConfig } from "@/server/utils/discord/config";
 import {
   archiveDiscordLink,

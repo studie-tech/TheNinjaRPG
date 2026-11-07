@@ -35,7 +35,8 @@ import {
 } from "@/drizzle/schema";
 import { OPENAI_REPORT_EMBEDDING_MODEL, REPORT_EMBEDDING_DIMENSIONS, STARTING_REPUTATION_POINTS } from "@/drizzle/constants";
 import { registerRouter } from "@/server/api/routers/register";
-import { deleteUser, staffRouter } from "@/server/api/routers/staff";
+import { staffRouter } from "@/server/api/routers/staff";
+import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import { pushRouter } from "@/server/api/routers/push";
 import { petsRouter } from "@/server/api/routers/pets";
 import {
