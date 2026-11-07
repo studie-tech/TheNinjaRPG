@@ -429,7 +429,7 @@ export const addDecorationTileset = (
     // decoration exactly where the game renders it (WYSIWYG round-trip)
     const offsetX = Number(props.find((prop) => prop.name === "offsetX")?.value) || 0;
     const offsetY = Number(props.find((prop) => prop.name === "offsetY")?.value) || 0;
-    const tileWidth = Number(map.tilewidth) || 64;
+    const tileWidth = Number(map.tilewidth) || TILED_TILE_WIDTH;
     delete object.point;
     object.gid = gid;
     object.width = Math.round(width * 100) / 100;

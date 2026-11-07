@@ -5,6 +5,7 @@ import {
   SECTOR_MAP_MAX_DIMENSION,
   SECTOR_MAP_VERSION,
 } from "@/drizzle/constants";
+import { SPRITE_GROUND_LIFT } from "@/libs/sector-map/decorations";
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import {
   FALLBACK_TERRAIN_KEY,
@@ -228,27 +229,38 @@ export const WYSIWYG_TILE_HEIGHT = Math.round(
 /**
  * Vertical distance (in tile heights) from a hex's centre DOWN to where the
  * game roots a decoration sprite's base: half a tile minus the renderer's
- * grounding lift of 0.1 x scale (see the sprite placement in
- * rendering/sectorSprites.ts). The exporter grounds tile-objects with this same
+ * grounding lift (see the sprite placement in rendering/sectorSprites.ts).
+ * The exporter grounds tile-objects with this same
  * formula and the importer inverts it, so Tiled shows sprites rooted exactly
  * where the game draws them. Clamped so extreme scales stay within the tile.
  */
 export const spriteGroundingOffset = (scale: number) =>
-  clamp(0.5 - 0.1 * scale, -0.5, 0.5);
+  clamp(0.5 - SPRITE_GROUND_LIFT * scale, -0.5, 0.5);
 
 /**
  * Hex tile coordinate -> Tiled pixel centre of that hex (flat-top odd-q:
- * column pitch 0.75*tilewidth, odd columns shifted down half a tile). Exact
- * forward counterpart of the inversion in getObjectCoordinate below - change
- * them together.
+ * column pitch 0.75*tilewidth, odd columns shifted down half a tile; a flipped
+ * file shifts the even columns instead). Exact forward counterpart of the
+ * inversion in getObjectCoordinate below - change them together.
  */
-export const hexTileToPixel = (x: number, y: number) => ({
-  x: x * TILED_TILE_WIDTH * 0.75 + TILED_TILE_WIDTH / 2,
-  y:
-    y * TILED_TILE_HEIGHT +
-    (x % 2 === 1 ? TILED_TILE_HEIGHT / 2 : 0) +
-    TILED_TILE_HEIGHT / 2,
+export const hexTileToPixel = (
+  x: number,
+  y: number,
+  {
+    tileWidth = TILED_TILE_WIDTH,
+    tileHeight = TILED_TILE_HEIGHT,
+    flipped = false,
+  }: { tileWidth?: number; tileHeight?: number; flipped?: boolean } = {},
+) => ({
+  x: x * tileWidth * 0.75 + tileWidth / 2,
+  y: y * tileHeight + ((x % 2 === 1) !== flipped ? tileHeight / 2 : 0) + tileHeight / 2,
 });
+
+/** The y a tile object is rooted at: grounded below the hex centre that point objects use. */
+const getObjectAnchorY = (map: TiledMap, object: TiledObject, spriteScale: number) =>
+  object.gid !== undefined
+    ? object.y - map.tileheight * spriteGroundingOffset(spriteScale)
+    : object.y;
 
 /**
  * Tile coordinate of an object: the hex under its pixel position, found by
@@ -269,10 +281,7 @@ const getObjectCoordinate = (
   // (gid) anchor at bottom-center, rooted a grounding offset below the hex
   // centre point-objects use. Clamp the column first so the stagger parity is
   // computed from the in-bounds tile.
-  const anchorY =
-    object.gid !== undefined
-      ? object.y - map.tileheight * spriteGroundingOffset(spriteScale)
-      : object.y;
+  const anchorY = getObjectAnchorY(map, object, spriteScale);
   // The kit's collection tilesets declare objectalignment "bottom", so Tiled
   // anchors tile-objects at bottom-CENTER: object.x IS the sprite's centre
   const col = clamp(
@@ -471,23 +480,20 @@ export const normalizeTiledSectorMap = (
       objectType === "decoration" &&
       (offsetX === undefined || offsetY === undefined)
     ) {
-      const centreX = coordinate.x * tiledMap.tilewidth * 0.75 + tiledMap.tilewidth / 2;
       // The hex centre in FILE pixel space (mirrored files reverse the row
       // order and flip the stagger parity); the vertical remainder then flips
       // sign so stored offsets are always game-convention
       const fileRow = flipped ? tiledMap.height - 1 - coordinate.y : coordinate.y;
-      const centreY =
-        fileRow * tiledMap.tileheight +
-        ((coordinate.x % 2 === 1) !== flipped ? tiledMap.tileheight / 2 : 0) +
-        tiledMap.tileheight / 2;
+      const centre = hexTileToPixel(coordinate.x, fileRow, {
+        tileWidth: tiledMap.tilewidth,
+        tileHeight: tiledMap.tileheight,
+        flipped,
+      });
       // Tile-objects root at the renderer's grounding point below the hex
       // centre; inverting with the same formula makes the round trip exact
-      const anchorY =
-        object.gid !== undefined
-          ? object.y - tiledMap.tileheight * spriteGroundingOffset(groundingScale)
-          : object.y;
-      const derivedX = clamp((object.x - centreX) / tiledMap.tilewidth, -0.5, 0.5);
-      const derivedYFile = clamp((anchorY - centreY) / tiledMap.tileheight, -0.5, 0.5);
+      const anchorY = getObjectAnchorY(tiledMap, object, groundingScale);
+      const derivedX = clamp((object.x - centre.x) / tiledMap.tilewidth, -0.5, 0.5);
+      const derivedYFile = clamp((anchorY - centre.y) / tiledMap.tileheight, -0.5, 0.5);
       const derivedY = flipped ? -derivedYFile : derivedYFile;
       // Skip near-zero remainders so clean hex-centre placements stay unoffset
       if (offsetX === undefined && Math.abs(derivedX) > 0.01) {
