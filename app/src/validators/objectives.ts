@@ -923,29 +923,29 @@ export type QuestTrackerType = z.infer<typeof QuestTracker>;
 export const QuestValidatorRawSchema = z.object({
   ...masteryRequirementFields,
   name: z.string().min(1).max(191),
-  image: z.url().optional().nullish(),
+  image: z.url().nullish(),
   description: z.string().min(1).max(5000).nullable(),
   successDescription: z.string().min(1).max(5000).nullable(),
   questRank: z.enum(LetterRanks).optional(),
-  medicalRank: z.enum(MEDNIN_RANKS).optional().nullish(),
-  huntingRank: z.enum(HUNTING_RANKS).optional().nullish(),
-  gatheringRank: z.enum(GATHERING_RANKS).optional().nullish(),
+  medicalRank: z.enum(MEDNIN_RANKS).nullish(),
+  huntingRank: z.enum(HUNTING_RANKS).nullish(),
+  gatheringRank: z.enum(GATHERING_RANKS).nullish(),
   petTaskMinutes: petTaskMinutesSchema,
   requiredLevel: z.coerce.number().int().min(0).max(MAX_PLAYER_LEVEL).optional(),
   requiredFarmingLevel: z.coerce.number().min(0).max(FARMING_MAX_LEVEL).optional(),
   maxLevel: z.coerce.number().int().min(0).max(MAX_PLAYER_LEVEL).optional(),
   maxAttempts: z.coerce.number().min(0).max(100).prefault(1),
   maxCompletes: z.coerce.number().min(0).max(100).prefault(1),
-  requiredVillage: z.string().min(0).max(30).optional().nullish(),
-  requiredBloodlineId: z.string().min(0).max(191).optional().nullish(),
+  requiredVillage: z.string().max(30).nullish(),
+  requiredBloodlineId: z.string().max(191).nullish(),
   /** Exact equipped sage mode required to take the quest; unset = no mode gate. */
-  requiredSageModeId: z.string().min(0).max(191).optional().nullish(),
+  requiredSageModeId: z.string().max(191).nullish(),
   /** Minimum mastery rank (`NONE`…`LEGENDARY`); unset / empty = no rank gate. */
   requiredSageRank: z.preprocess(
     (v) => (v === "" ? null : v),
     z.enum(SAGE_MASTERY_RANKS).nullish(),
   ),
-  prerequisiteQuestId: z.string().min(0).max(191).optional().nullish(),
+  prerequisiteQuestId: z.string().max(191).nullish(),
   tierLevel: z.coerce.number().min(0).max(100).nullable(),
   questType: z.enum(QuestTypes),
   content: z.object({
@@ -966,8 +966,8 @@ export const QuestValidatorRawSchema = z.object({
   endsAt: z.string().regex(DateTimeRegExp, "Must be of format YYYY-MM-DD").nullable(),
   startsAt: z.string().regex(DateTimeRegExp, "Must be of format YYYY-MM-DD").nullable(),
   // Raid-specific fields (only persisted data, AI and sector come from objective)
-  raidBossMaxHealth: z.coerce.number().min(1).optional().nullish(),
-  raidBossCurrentHealth: z.coerce.number().min(0).optional().nullish(),
+  raidBossMaxHealth: z.coerce.number().min(1).nullish(),
+  raidBossCurrentHealth: z.coerce.number().min(0).nullish(),
 });
 // Shared superRefine logic for quest validation
 const questSuperRefine = (

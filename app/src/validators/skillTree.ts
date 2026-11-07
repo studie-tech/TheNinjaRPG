@@ -4,7 +4,7 @@ import { SkillTreePathTypes } from "@/drizzle/constants";
 export const skillTreeFilteringSchema = z.object({
   pathType: z.enum(SkillTreePathTypes).optional(),
   bloodlineId: z.string().min(1).optional(),
-  name: z.string().min(0).max(256).optional(),
+  name: z.string().max(256).optional(),
   effect: z.array(z.string()).optional(),
   tier: z.number().min(1).max(10).nullable().optional(),
   costSkillPoints: z.number().min(1).nullable().optional(),
