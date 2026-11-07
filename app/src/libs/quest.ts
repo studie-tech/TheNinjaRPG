@@ -269,7 +269,10 @@ export const filterQuestTrackersForDbPersist = (
             isInArray(objective.task, CompletionTasks)) &&
             tracker.goals.some((goal) => goal.id === objective.id && goal.done)) ||
           (isInArray(objective.task, CombatActivityTasks) &&
-            tracker.goals.some((goal) => goal.id === objective.id && goal.value > 0)),
+            tracker.goals.some((goal) => goal.id === objective.id && goal.value > 0)) ||
+          // A won battle cannot be derived again, so its goal waits here to be claimed.
+          (objective.task === "defeat_opponents" &&
+            tracker.goals.some((goal) => goal.id === objective.id && goal.done)),
       )
     );
   });
