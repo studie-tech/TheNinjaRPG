@@ -49,7 +49,7 @@ import {
   getWorldWeather,
   type WorldWeather,
 } from "@/libs/rendering/worldWeather";
-import { sampleWorldWind } from "@/libs/rendering/worldWind";
+import { sampleShadowWind, sampleWorldWind } from "@/libs/rendering/worldWind";
 import { clamp } from "@/utils/math";
 
 const NO_HITS: CombatHit[] = [];
@@ -516,14 +516,14 @@ export const createCombatScene = async (options: {
       );
       if (shadows)
         shadows.update(
-          worldSunlight(lightDate),
+          worldSunlight(lightDate, 60_000),
           {
             minX: camera.x - game.renderer.width / (2 * scale()),
             maxX: camera.x + game.renderer.width / (2 * scale()),
             minY: camera.y - game.renderer.height / (2 * scale()),
             maxY: camera.y + game.renderer.height / (2 * scale()),
           },
-          breeze,
+          sampleShadowWind(sourceFrame, scale(), game.visualEffects.wind),
         );
       else {
         const brightness =
