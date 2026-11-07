@@ -15,6 +15,7 @@ import {
 } from "@/drizzle/constants";
 import { clan, village, villageStructure } from "@/drizzle/schema";
 import { castElderVoteEntry, tallyElderVotes } from "@/libs/elder";
+import { isFactionVillage } from "@/libs/war";
 import { fetchClan } from "@/queries/clan";
 import { fetchElderVote } from "@/queries/elder";
 import {
@@ -244,15 +245,12 @@ export const kageRouter = createTRPCRouter({
 
       // Derived
       const structure = userVillage?.structures.find((s) => s.id === input.structureId);
-      const isHideoutOrStronghold = ["HIDEOUT", "STRONGHOLD"].includes(
-        userVillage?.type ?? "",
-      );
-      const lockout = isHideoutOrStronghold ? KAGE_DELAY_SECS : 0;
 
       // Guards
       if (!userVillage) return errorResponse("Village not found");
       if (!structure) return errorResponse("Structure not found");
-      if (isHideoutOrStronghold && !clanData) return errorResponse("Faction not found");
+      if (isFactionVillage(userVillage) && !clanData)
+        return errorResponse("Faction not found");
       if (userVillage.kageId !== user.userId) return errorResponse("Not the leader");
       if (structure.level === 0) return errorResponse("Can't upgrade from lvl 0 yet");
       if (structure.level >= structure.maxLevel)
@@ -264,6 +262,8 @@ export const kageRouter = createTRPCRouter({
       if (!["VILLAGE", "STRONGHOLD"].includes(userVillage.type)) {
         return errorResponse("Only for villages");
       }
+      const isStronghold = userVillage.type === "STRONGHOLD";
+      const lockout = isStronghold ? KAGE_DELAY_SECS : 0;
       if (clanData && clanData.id !== user.clanId) {
         return errorResponse("Not in faction");
       }
@@ -275,15 +275,13 @@ export const kageRouter = createTRPCRouter({
       // Guard on cost & mutate
       const { total } = calcStructureUpgrade(structure, userVillage);
       if (
-        isHideoutOrStronghold && clanData
-          ? clanData.points < total
-          : userVillage.tokens < total
+        isStronghold && clanData ? clanData.points < total : userVillage.tokens < total
       ) {
         return errorResponse(
-          isHideoutOrStronghold ? "Not enough clan points" : "Not enough tokens",
+          isStronghold ? "Not enough clan points" : "Not enough tokens",
         );
       }
-      const fundingClan = isHideoutOrStronghold ? clanData : null;
+      const fundingClan = isStronghold ? clanData : null;
       const balance = fundingClan ? clan.points : village.tokens;
       const guards = and(
         eq(villageStructure.id, input.structureId),
