@@ -102,74 +102,8 @@ import {
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import type { DrizzleClient } from "../../db";
 
-type PaypalAmount = {
-  currency_code?: string;
-  value?: string;
-};
-
-type PaypalOrder =
-  | {
-      id?: string;
-      status?: string;
-      purchase_units?: {
-        amount?: PaypalAmount;
-        invoice_id?: string;
-        custom_id?: string;
-        payments?: {
-          captures?: {
-            id: string;
-            status: string;
-            amount: PaypalAmount;
-            invoice_id: string;
-            update_time: string;
-          }[];
-        };
-      }[];
-    }
-  | undefined;
-type PaypalPurchaseUnit = NonNullable<
-  NonNullable<PaypalOrder>["purchase_units"]
->[number];
-type StoreCapture = NonNullable<
-  NonNullable<PaypalPurchaseUnit["payments"]>["captures"]
->[number];
-
 const PAYPAL_DECLINED_MESSAGE =
   "PayPal declined the payment. No payment was captured. Start a new checkout with another payment method.";
-
-type PaypalSubscription = {
-  id: string;
-  custom_id: string;
-  plan_id: string;
-  status: string;
-  billing_info: {
-    last_payment: {
-      amount: PaypalAmount;
-      time: string;
-    };
-  };
-};
-
-type PaypalTransaction = {
-  transaction_info: {
-    transaction_id: string;
-    transaction_initiation_date: string;
-    transaction_updated_date: string;
-    paypal_reference_id: string;
-    paypal_reference_id_type: "ODR" | "TXN" | "SUB" | "PAP";
-    transaction_event_code: string;
-    transaction_subject: string;
-    transaction_amount: PaypalAmount;
-    transaction_status: "D" | "P" | "S" | "V";
-    custom_field: string;
-    invoice_id: string;
-  };
-  cart_info: {
-    item_details: {
-      total_item_amount: PaypalAmount;
-    }[];
-  };
-};
 
 export const paypalRouter = createTRPCRouter({
   /** List offers with the caller's lifetime buyer counts; managers may include drafts. */
@@ -1490,4 +1424,70 @@ const requestStorePaypalOrder = async (
     );
   }
   return (await response.json()) as PaypalOrder;
+};
+
+type PaypalAmount = {
+  currency_code?: string;
+  value?: string;
+};
+
+type PaypalOrder =
+  | {
+      id?: string;
+      status?: string;
+      purchase_units?: {
+        amount?: PaypalAmount;
+        invoice_id?: string;
+        custom_id?: string;
+        payments?: {
+          captures?: {
+            id: string;
+            status: string;
+            amount: PaypalAmount;
+            invoice_id: string;
+            update_time: string;
+          }[];
+        };
+      }[];
+    }
+  | undefined;
+type PaypalPurchaseUnit = NonNullable<
+  NonNullable<PaypalOrder>["purchase_units"]
+>[number];
+type StoreCapture = NonNullable<
+  NonNullable<PaypalPurchaseUnit["payments"]>["captures"]
+>[number];
+
+type PaypalSubscription = {
+  id: string;
+  custom_id: string;
+  plan_id: string;
+  status: string;
+  billing_info: {
+    last_payment: {
+      amount: PaypalAmount;
+      time: string;
+    };
+  };
+};
+
+type PaypalTransaction = {
+  transaction_info: {
+    transaction_id: string;
+    transaction_initiation_date: string;
+    transaction_updated_date: string;
+    paypal_reference_id: string;
+    paypal_reference_id_type: "ODR" | "TXN" | "SUB" | "PAP";
+    transaction_event_code: string;
+    transaction_subject: string;
+    transaction_amount: PaypalAmount;
+    transaction_status: "D" | "P" | "S" | "V";
+    custom_field: string;
+    invoice_id: string;
+  };
+  cart_info: {
+    item_details: {
+      total_item_amount: PaypalAmount;
+    }[];
+  };
 };
