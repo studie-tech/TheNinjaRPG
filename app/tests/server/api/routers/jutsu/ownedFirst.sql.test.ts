@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { jutsu, userData, userJutsu } from "@/drizzle/schema";
+import { listJutsuForGetAll } from "@/queries/jutsu";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { DamageTag } from "@/validators/combat";
 import { insertUsers } from "../../../../setup/factories";
@@ -7,7 +8,7 @@ import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const USER = "owned-first-player";
-// Newest first: the catalogue's own order is j1, j2, j3, j4, j5.
+// Equal catalogue timestamps exercise the ID tie-breaker across pages.
 const ids = ["j1", "j2", "j3", "j4", "j5"];
 
 describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
@@ -21,12 +22,12 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
     ]);
     const db = await getTestDatabase();
     await db.insert(jutsu).values(
-      ids.map((id, index) => ({
+      ids.map((id) => ({
         id, name: id, image: "", description: id, battleDescription: id,
         target: "SELF" as const, range: 0, requiredRank: "GENIN" as const,
         jutsuType: "NORMAL" as const,
         effects: [DamageTag.parse({ statTypes: ["Ninjutsu"] })],
-        updatedAt: new Date(Date.UTC(2026, 0, 10 - index)),
+        updatedAt: new Date(Date.UTC(2026, 0, 10)),
       })),
     );
     await db.insert(userJutsu).values([
@@ -76,7 +77,11 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
     ]);
   });
 
-  it("keeps the catalogue order when the option is off", async () => {
+  it("breaks catalogue timestamp ties by id when priority is off", async () => {
+    const db = await getTestDatabase();
+    expect(listJutsuForGetAll(db, [], { limit: 2 }, 0).toSQL().sql).toContain(
+      "order by `jutsu`.`updatedAt` desc, `jutsu`.`id` asc",
+    );
     expect(await pages({})).toEqual([["j1", "j2"], ["j3", "j4"], ["j5"]]);
   });
 });
