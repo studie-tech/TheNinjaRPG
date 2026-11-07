@@ -1,7 +1,7 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 import type { UserData } from "@/drizzle/schema";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import { getPublicQuestUser } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
 /** Project confirmed robbery credits and faction counters when no live stealth roll can change the actor. */

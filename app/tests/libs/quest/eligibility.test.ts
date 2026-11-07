@@ -4,7 +4,7 @@ import { QueryBuilder } from "drizzle-orm/mysql-core";
 import { describe, expect, it, vi } from "bun:test";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
 import { quest } from "@/drizzle/schema";
-import { questTypeConcurrentBlockMessage } from "@/libs/quest";
+import { questTypeConcurrentBlockMessage } from "@/libs/quest/missionHall";
 import { fetchUncompletedQuests } from "@/server/utils/questAssignment";
 
 /** Creates a minimal user fixture with unfinished quests of the supplied types. */

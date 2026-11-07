@@ -6,7 +6,7 @@ import {
   mapPlotToState,
   patchFarmPlot,
 } from "@/libs/farming";
-import { getPublicQuestUser } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import type { FarmMutationResponse, FarmStateResponse } from "@/validators/farming";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 

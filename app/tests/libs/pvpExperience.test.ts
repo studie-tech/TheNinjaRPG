@@ -4,7 +4,7 @@ import type { GameSetting } from "@/drizzle/schema";
 import { boostPvpGain, boostPvpRewards, getPvpBoost, pvpExperienceReward } from "@/libs/pvpExperience";
 import { trainingBoost } from "@/libs/train";
 import { calcActiveUserRegen } from "@/libs/profile";
-import { getReward } from "@/libs/quest";
+import { getReward } from "@/libs/quest/rewards";
 import { combatMasteryGains } from "@/libs/combat/mastery";
 import { calcBattleResult } from "@/libs/combat/util";
 import { makeUser, makeCompleteBattle } from "./combat/helpers/battleScenario";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { UserStatuses } from "@/drizzle/constants";
-import { missionHallStartBlockedMessage, questProgressBlockedMessage } from "@/libs/quest";
+import { missionHallStartBlockedMessage, questProgressBlockedMessage } from "@/libs/quest/missionHall";
 
 describe("awake-only quest actions", () => {
   it("explains every non-awake status that hides dialog and reward actions", () => {

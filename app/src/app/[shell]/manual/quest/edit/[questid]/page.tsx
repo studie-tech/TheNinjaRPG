@@ -25,7 +25,7 @@ import { RaidThresholdEditor } from "@/layout/RaidThresholdEditor";
 import { RewardEditor } from "@/layout/RewardEditor";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
-import { verifyQuestObjectiveFlow } from "@/libs/quest";
+import { verifyQuestObjectiveFlow } from "@/libs/quest/validation";
 import { getQuestFlowPositions, restoreQuestFlowPositions } from "@/libs/questFlow";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import type {

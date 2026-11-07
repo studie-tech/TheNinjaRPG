@@ -14,7 +14,7 @@ import { displayTitleSql } from "@/server/utils/titleDisplay";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { getUnavailableRewardCards, buildRewardChoiceCards } from "@/libs/rewardChoice";
-import { postProcessRewards } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
 import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
 import { ObjectiveReward } from "@/validators/rewards";
 import { captureCombatCacheSnapshot, combatCacheDerived, type CombatProfileUpdate } from "@/deltas/combat";

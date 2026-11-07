@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  verifyDialogBranches,
-  verifyQuestContentForSave,
-  verifyQuestObjectiveFlow,
-} from "@/libs/quest";
+import { verifyDialogBranches, verifyQuestContentForSave, verifyQuestObjectiveFlow } from "@/libs/quest/validation";
 import type { AllObjectivesType } from "@/validators/objectives";
 
 /** Narrows compact objective fixtures to the validator's full objective type. */

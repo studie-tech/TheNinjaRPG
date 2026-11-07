@@ -57,11 +57,8 @@ import {
   updateUserOnMap,
 } from "@/libs/pusher";
 import { boostPvpGain } from "@/libs/pvpExperience";
-import {
-  filterQuestTrackersForDbPersist,
-  getNewTrackers,
-  getPublicQuestUser,
-} from "@/libs/quest";
+import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import { getIsolatedPyramid } from "@/libs/questRun";
 import {
   getRaidChatConversationId,

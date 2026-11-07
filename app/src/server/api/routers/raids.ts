@@ -19,7 +19,7 @@ import {
 import type { Quest } from "@/drizzle/schema";
 import { getWarSide } from "@/libs/objectiveWar";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
-import { postProcessRewards } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
 import {
   createBattleClaimId,
   getRaidChatConversationId,

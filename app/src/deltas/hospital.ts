@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { UserData } from "@/drizzle/schema";
-import { getPublicQuestUser } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { healerAfterHealSchema } from "@/validators/hospital";
 

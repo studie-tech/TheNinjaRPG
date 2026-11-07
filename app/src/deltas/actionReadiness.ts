@@ -2,7 +2,7 @@ import { CombatStatNames, MasteryNames } from "@/drizzle/constants";
 import type { GameSetting, UserData } from "@/drizzle/schema";
 import { effectiveMasteries, type MasteryBuffUser } from "@/libs/mastery";
 import { calcActiveUserRegen, calcMaxEnergy } from "@/libs/profile";
-import { getPublicQuestUser } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import { getTimedRegeneration } from "@/libs/timedBuffs";
 import { regenerationBuffs } from "@/libs/titles";
 import type { UserWithRelations } from "@/server/api/routers/profile";

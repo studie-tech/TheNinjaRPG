@@ -13,7 +13,8 @@ import {
 } from "@/libs/masteryProgression";
 import { masteryQuestTemplates } from "../setup/mastery";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
-import { isAvailableUserQuests, collapseRewards } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
+import { collapseRewards } from "@/libs/rewards";
 import { ObjectiveReward } from "@/validators/rewards";
 import { QuestReward } from "@/validators/rewardPackages";
 import type { UserData } from "@/drizzle/schema";

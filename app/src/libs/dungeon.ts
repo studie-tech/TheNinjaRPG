@@ -2,7 +2,7 @@ import { DUNGEON_FLOORS_PER_TIER, DUNGEON_INACTIVE_ROUNDS } from "@/drizzle/cons
 import { stillInBattle } from "@/libs/combat/actions";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import type { NavBarDropdownLink } from "@/libs/menus";
-import { attemptCapReached } from "@/libs/quest";
+import { attemptCapReached } from "@/libs/quest/availability";
 import { periodStart } from "@/utils/time";
 import type {
   DungeonContent,

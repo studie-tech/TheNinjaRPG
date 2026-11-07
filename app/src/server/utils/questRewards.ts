@@ -12,11 +12,8 @@ import { getEffectiveStackSize, splitIntoStacks } from "@/libs/item";
 import { getWarSide } from "@/libs/objectiveWar";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { boostPvpGain, boostPvpRewards, getPvpBoost } from "@/libs/pvpExperience";
-import {
-  filterQuestTrackersForDbPersist,
-  type GetRewardResult,
-  getNewTrackers,
-} from "@/libs/quest";
+import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import type { GetRewardResult } from "@/libs/quest/rewards";
 import { incrementAnbuPoints } from "@/queries/anbu";
 import { incrementUserVillagePrestige } from "@/queries/profile";
 import {

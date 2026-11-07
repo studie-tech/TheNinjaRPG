@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { MISSIONS_FULL_REWARD_COUNT } from "@/drizzle/constants";
-import { isReducedMissionReward } from "@/libs/quest";
+import { isReducedMissionReward } from "@/libs/quest/rewards";
 
 describe("isReducedMissionReward", () => {
   it("pre-start warns once the last full-reward mission is already done", () => {

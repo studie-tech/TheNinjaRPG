@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import type { Quest } from "@/drizzle/schema";
-import { isAvailableUserQuests } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { questsRouter } from "@/routers/quests";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";

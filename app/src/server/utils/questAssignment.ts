@@ -12,7 +12,10 @@ import { type Quest, questHistory, type UserData, userData } from "@/drizzle/sch
 import {
   getNewTrackers,
   getQuestTargetSectorsToCheck,
-  isAvailableUserQuests,
+  snapQuestTargetsToReachable,
+} from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
+import {
   isQuestRankAllowed,
   isWarMissionAvailable,
   questAlreadyActiveBlockMessage,
@@ -20,8 +23,7 @@ import {
   questDailyQuota,
   questTypeConcurrentBlockMessage,
   questUiAccessBlockMessage,
-  snapQuestTargetsToReachable,
-} from "@/libs/quest";
+} from "@/libs/quest/missionHall";
 import {
   formatQuestEntryCost,
   getIsolatedPyramid,

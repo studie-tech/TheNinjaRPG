@@ -8,7 +8,7 @@ import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
-import { isAvailableUserQuests } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 

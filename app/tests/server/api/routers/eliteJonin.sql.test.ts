@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { calcHP } from "@/libs/profile";
-import { isAvailableUserQuests } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { fetchQuestBootstrap } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";

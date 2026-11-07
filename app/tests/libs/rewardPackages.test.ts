@@ -9,7 +9,7 @@ import { rewardOwnership, rewardUser as makeUser } from "../setup/quest";
 import { resolverOf } from "../setup/testDatabase";
 import { QuestValidator, SimpleObjective } from "@/validators/objectives";
 import { villageMissionContentError } from "@/validators/villageMission";
-import { getReward, postProcessRewards } from "@/libs/quest";
+import { getReward, postProcessRewards } from "@/libs/quest/rewards";
 import { buildRewardChoiceCards, getUnavailableRewardCards, maxRewardPicks, requiredRewardPicks, rewardFromChoiceCards, toggleRewardPick, validateRewardPicks, verifyRewardChoiceForSave } from "@/libs/rewardChoice";
 import { validateQuestRewardPackages } from "@/server/api/routers/rewardPackages";
 import { QuestReward, RewardNodeValidator, RewardPackageValidator } from "@/validators/rewardPackages";

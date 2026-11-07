@@ -4,7 +4,7 @@ import { calcMasteryTrainingAmount, settleEnergyTrainingQueue, settleMasteryTrai
 import type { UserWithRelations } from "@/routers/profile";
 import { combatMasteryGains } from "@/libs/combat/mastery";
 import { calcBattleResult } from "@/libs/combat/util";
-import { getReward, postProcessRewards } from "@/libs/quest";
+import { getReward, postProcessRewards } from "@/libs/quest/rewards";
 import { QuestValidator } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { makeBattleUser, makeCompleteBattle } from "./combat/helpers/battleScenario";

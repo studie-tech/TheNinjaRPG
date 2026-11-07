@@ -44,7 +44,7 @@ import {
   maskWarObjectives,
   withMercenaryParticipation,
 } from "@/libs/objectiveWar";
-import { isAvailableUserQuests } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { findActiveExclusiveRaidForSector } from "@/libs/raids";
 import { hasRequiredRank } from "@/libs/train";
 import {
