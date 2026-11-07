@@ -38,7 +38,7 @@ import {
 } from "../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../setup/queues";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements } from "../../setup/statements";
+import { beforeStatements, aroundStatements } from "../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -457,28 +457,10 @@ describeWithDatabase("CAS combat settlement", () => {
     await fetchUpdatedUser({client: database, userId: "winner", forceRegen: true});
     await database.update(userData).set({regenAt: new Date(Date.now() - 120_000), regeneration: 3}).where(eq(userData.userId, "winner"));
     let enteredCombat = false;
-    const delayedDatabase = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof database.update>[0]) => {
-          const builder = database.update(table);
-          return {
-            set(values: Parameters<typeof builder.set>[0]) {
-              const update = builder.set(values);
-              return {
-                async where(condition: Parameters<typeof update.where>[0]) {
-                  if (table === userData && "primaryElement" in values && !enteredCombat) {
-                    enteredCombat = true;
-                    await database.update(userData).set({status: "BATTLE", battleId: "settlement"}).where(eq(userData.userId, "winner"));
-                  }
-                  return update.where(condition);
-                },
-              };
-            },
-          };
-        };
-      },
-    });
+    const delayedDatabase = beforeStatements(database, userData, [async () => {
+      enteredCombat = true;
+      await database.update(userData).set({status: "BATTLE", battleId: "settlement"}).where(eq(userData.userId, "winner"));
+    }], { when: (set) => "primaryElement" in set });
     const {user} = await fetchUpdatedUser({client: delayedDatabase, userId: "winner", forceRegen: true});
     expect(enteredCombat).toBe(true);
     expect(user?.status).toBe("BATTLE");
@@ -756,54 +738,19 @@ describeWithDatabase("CAS combat settlement", () => {
       await database.insert(battle).values(snapshot);
       const { promise: cleanupGate, resolve: releaseCleanup } = deferred<void>();
       const { promise: rewardReady, resolve: rewardWritten } = deferred<void>();
-      const client = new Proxy(database, {
-        get(target, key, receiver) {
-          if (key === "insert")
-            return (table: Parameters<typeof database.insert>[0]) => {
-              if (table !== logBattleLengths) return database.insert(table);
-              return {
-                values: (values: typeof logBattleLengths.$inferInsert) => ({
-                  onDuplicateKeyUpdate: async (
-                    config: Parameters<
-                      ReturnType<
-                        ReturnType<typeof database.insert>["values"]
-                      >["onDuplicateKeyUpdate"]
-                    >[0],
-                  ) => {
-                    await cleanupGate;
-                    return database
-                      .insert(logBattleLengths)
-                      .values(values)
-                      .onDuplicateKeyUpdate(config);
-                  },
-                }),
-              };
-            };
-          if (key === "update")
-            return (table: Parameters<typeof database.update>[0]) => {
-              if (table !== userData) return database.update(table);
-              return {
-                set: (
-                  values: Parameters<ReturnType<typeof database.update>["set"]>[0],
-                ) => ({
-                  where: async (
-                    condition: Parameters<
-                      ReturnType<ReturnType<typeof database.update>["set"]>["where"]
-                    >[0],
-                  ) => {
-                    const result = await database
-                      .update(userData)
-                      .set(values)
-                      .where(condition);
-                    rewardWritten();
-                    return result;
-                  },
-                }),
-              };
-            };
-          return Reflect.get(target, key, receiver);
+      const client = aroundStatements(
+        aroundStatements(database, logBattleLengths, async (run) => {
+          await cleanupGate;
+          return run();
+        }, { operations: ["insert"] }),
+        userData,
+        async (run) => {
+          const result = await run();
+          rewardWritten();
+          return result;
         },
-      });
+        { operations: ["update"] },
+      );
       const api = callerForDatabase(combatRouter, "winner", client);
       const request =
         route === "getBattle"
@@ -837,16 +784,10 @@ describeWithDatabase("CAS combat settlement", () => {
       await (await getTestDatabase()).insert(battle).values(snapshot);
       let attempts = 0;
       const database = await getTestDatabase();
-      const client = new Proxy(database, {
-        get(target, key, receiver) {
-          if (key !== "delete") return Reflect.get(target, key, receiver);
-          return (...args: Parameters<typeof database.delete>) => {
-            if (args[0] === battle && ++attempts === 1)
-              throw new Error("Deadlock found when trying to get lock");
-            return database.delete(...args);
-          };
-        },
-      });
+      const client = aroundStatements(database, battle, async (run) => {
+        if (++attempts === 1) throw new Error("Deadlock found when trying to get lock");
+        return run();
+      }, { operations: ["delete"] });
       const api = callerForDatabase(combatRouter, "winner", client);
       const response =
         route === "getBattle"

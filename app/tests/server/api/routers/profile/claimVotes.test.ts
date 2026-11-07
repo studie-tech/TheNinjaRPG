@@ -12,6 +12,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { overrideQuery } from "../../../../setup/statements";
 
 /** A completed vote set is credited exactly once, however many claims race for it. */
 const VOTER = "vote-claimer";
@@ -66,16 +67,10 @@ describeWithDatabase("vote claims", () => {
 });
 
 /** A client whose vote reads still show the record as unclaimed. */
-const unclaimedVoteClient = (database: DrizzleClient): DrizzleClient =>
-  new Proxy(database, {
-    get(target, property, receiver) {
-      if (property !== "query") return Reflect.get(target, property, receiver);
-      const findFirst: typeof target.query.userVote.findFirst = (async (
-        ...args: Parameters<typeof target.query.userVote.findFirst>
-      ) => {
-        const row = await target.query.userVote.findFirst(...args);
-        return row ? { ...row, claimed: false } : row;
-      }) as unknown as typeof target.query.userVote.findFirst;
-      return { ...target.query, userVote: { findFirst } };
+const unclaimedVoteClient = (database: DrizzleClient) =>
+  overrideQuery(database, "userVote", {
+    findFirst: async (read, ...args) => {
+      const row = await read(...args);
+      return row ? { ...row, claimed: false } : row;
     },
   });

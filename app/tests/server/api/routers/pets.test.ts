@@ -25,7 +25,7 @@ import {
 } from "../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { queueEnergy } from "../../../setup/queues";
-import { beforeStatements, holdReads } from "../../../setup/statements";
+import { beforeStatements, holdReads, beforeTransaction, withoutTransactions, overrideQuery } from "../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 afterEach(() => resetServerModuleStubs());
@@ -209,11 +209,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     await readyPet(database);
     await parkedPet();
     await database.update(userData).set({ status: "ASLEEP", autoWakeUp: true }).where(eq(userData.userId, userId));
-    const withoutTransactions = new Proxy(database, { get(target, property, receiver) {
-      if (property === "transaction") return () => { throw new Error("Inactive release must not use a transaction"); };
-      return Reflect.get(target, property, receiver);
-    } });
-    const result = await callerForDatabase(petsRouter, userId, withoutTransactions).releasePet({ petId: "parked" });
+    const result = await callerForDatabase(petsRouter, userId, withoutTransactions(database, "Inactive release must not use a transaction")).releasePet({ petId: "parked" });
     expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
     expect(await readOwner(database)).toMatchObject({ status: "AWAKE", activePetId: petId });
     expect(await readPet(database, "parked")).toBeUndefined();
@@ -487,12 +483,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     const input = await adoptionInput(database);
     expect((await callerForDatabase(petsRouter, userId, database).acquirePet(input)).success).toBe(true);
     const nextInput = await adoptionInput(database);
-    const petQueries = new Proxy(database.query.userPet, { get(target, property, receiver) {
-      return property === "findMany" ? async () => stalePets : Reflect.get(target, property, receiver);
-    } });
-    const skewed = new Proxy(database, { get(target, property, receiver) {
-      return property === "query" ? { ...target.query, userPet: petQueries } : Reflect.get(target, property, receiver);
-    } });
+    const skewed = overrideQuery(database, "userPet", { findMany: async () => stalePets });
     const before = await readOwner(database);
     expect((await callerForDatabase(petsRouter, userId, skewed).acquirePet(nextInput)).success).toBe(false);
     expect(await database.query.userPet.findMany()).toHaveLength(2);
@@ -569,7 +560,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     const input = await adoptionInput(database);
     const before = (await readOwner(database))!;
     const companionBefore = await readPet(database);
-    const hooked = beforeTransaction(database, async () => {
+    const hooked = beforeFirstTransaction(database, async () => {
       await database.update(userData).set({ federalStatus: "NONE", staffAccount: false, updatedAt: before.updatedAt }).where(eq(userData.userId, userId));
     });
     expect((await callerForDatabase(petsRouter, userId, hooked).acquirePet(input)).success).toBe(false);
@@ -583,7 +574,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     await database.update(userData).set({ petAcquisitions: 1, seichiSilver: PET_SEICHI_SILVER_COST }).where(eq(userData.userId, userId));
     const input = await adoptionInput(database);
     const before = (await readOwner(database))!;
-    const hooked = beforeTransaction(database, async () => {
+    const hooked = beforeFirstTransaction(database, async () => {
       await database.update(userData).set({ seichiSilver: PET_SEICHI_SILVER_COST - 1, updatedAt: before.updatedAt }).where(eq(userData.userId, userId));
     });
     expect((await callerForDatabase(petsRouter, userId, hooked).acquirePet({ ...input, currency: "SEICHI_SILVER" })).success).toBe(false);
@@ -684,12 +675,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     await parkedPet({ storedExperience: 30 });
     await database.update(userData).set({ petExperience: 10 }).where(eq(userData.userId, userId));
     const pets = await database.query.userPet.findMany({ where: eq(userPet.id, "parked") });
-    const petQueries = new Proxy(database.query.userPet, { get(target, property, receiver) {
-      return property === "findMany" ? async () => pets : Reflect.get(target, property, receiver);
-    } });
-    const skewed = new Proxy(database, { get(target, property, receiver) {
-      return property === "query" ? { ...target.query, userPet: petQueries } : Reflect.get(target, property, receiver);
-    } });
+    const skewed = overrideQuery(database, "userPet", { findMany: async () => pets });
     expect((await callerForDatabase(petsRouter, userId, skewed).activatePet({ petId: "parked" })).success).toBe(false);
     expect(await readOwner(database)).toMatchObject({ activePetId: petId, petExperience: 10 });
     expect(await readPet(database, "parked")).toMatchObject({ storedExperience: 30, revision: 0 });
@@ -962,11 +948,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     await parkedPet({ storedExperience: 30, experience: 7500 });
     await mealStack();
     await database.update(userData).set({ rank: "CHUNIN", petExperience: 20 }).where(eq(userData.userId, userId));
-    const withoutTransactions = new Proxy(database, { get(target, property, receiver) {
-      if (property === "transaction") return () => { throw new Error("Routine pet writes must not use a transaction"); };
-      return Reflect.get(target, property, receiver);
-    } });
-    const caller = callerForDatabase(petsRouter, userId, withoutTransactions);
+    const caller = callerForDatabase(petsRouter, userId, withoutTransactions(database, "Routine pet writes must not use a transaction"));
     const rules = [{ conditions: [], action: { type: "end_turn" as const, description: 'Wait for "Kumo"' } }];
     expect((await caller.updatePet({ petId, name: 'Kumo "守"', battleEnabled: false, spawnPosition: "LEFT" })).success).toBe(true);
     expect((await caller.updateAiConfig({ petId, rules, includeDefaultRules: false })).success).toBe(true);
@@ -1141,7 +1123,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     const database = await getTestDatabase();
     await readyPet(database);
     await database.update(userData).set({ petExperience: 15, petAcquisitions: 1 }).where(eq(userData.userId, userId));
-    const hooked = beforeTransaction(database, async () => {
+    const hooked = beforeFirstTransaction(database, async () => {
       await database.update(userData).set({ petExperience: petExperienceGainSql(25, petId) }).where(eq(userData.userId, userId));
     });
     expect((await callerForDatabase(petsRouter, userId, hooked).releasePet({ petId })).success).toBe(true);
@@ -1155,7 +1137,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     const database = await getTestDatabase();
     await readyPet(database);
     await database.update(userData).set({ petExperience: 50 }).where(eq(userData.userId, userId));
-    const hooked = beforeTransaction(database, async () => {
+    const hooked = beforeFirstTransaction(database, async () => {
       await database.update(userPet).set({ revision: sql`${userPet.revision} + 1` }).where(eq(userPet.id, petId));
     });
     expect((await callerForDatabase(petsRouter, userId, hooked).releasePet({ petId })).success).toBe(false);
@@ -1714,13 +1696,5 @@ const readPet = (database: DrizzleClient, id?: string) => database.query.userPet
 const holdOwnerSnapshots = (database: DrizzleClient, count: number) => holdReads(database, "userData", count);
 
 /** Inject a state change after preloading but before adoption or active release starts its paired writes. */
-const beforeTransaction = (database: DrizzleClient, hook: () => Promise<void>): DrizzleClient => {
-  let pending = true;
-  return new Proxy(database, { get(target, property, receiver) {
-    if (property !== "transaction") return Reflect.get(target, property, receiver);
-    return async (...args: Parameters<typeof target.transaction>) => {
-      if (pending) { pending = false; await hook(); }
-      return target.transaction(...args);
-    };
-  } });
-};
+const beforeFirstTransaction = (database: DrizzleClient, hook: () => Promise<void>) =>
+  beforeTransaction(database, (call) => (call === 1 ? hook() : undefined));

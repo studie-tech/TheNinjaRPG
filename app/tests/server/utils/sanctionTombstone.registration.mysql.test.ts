@@ -1,7 +1,6 @@
 import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
 import {
   accountDeletion,
   actionLog,
@@ -45,6 +44,7 @@ import {
   resetTables,
 } from "../../setup/testDatabase";
 import { deferred } from "../../setup/deferred";
+import { interceptExecute, sqlText, overrideQuery } from "../../setup/statements";
 
 const DAY = 86_400_000;
 const EMAIL = "registration-appeal@example.com";
@@ -325,28 +325,13 @@ describeWithDatabase("registration claims current sanction sources", () => {
       const { promise: entered, resolve: enter } = deferred<void>();
       const { promise: paused, resolve: release } = deferred<void>();
       let reads = 0;
-      const delayed = new Proxy(database, {
-        get(target, property, receiver) {
-          if (property === "query")
-            return {
-              ...target.query,
-              userReport: {
-                ...target.query.userReport,
-                findFirst: target.query.userReport.findFirst.bind(
-                  target.query.userReport,
-                ),
-                findMany: async (
-                  ...args: Parameters<typeof database.query.userReport.findMany>
-                ) => {
-                  const reports = await target.query.userReport.findMany(...args);
-                  expect(reports).toHaveLength(0);
-                  if (++reads === 3) enter();
-                  await paused;
-                  return reports;
-                },
-              },
-            };
-          return Reflect.get(target, property, receiver);
+      const delayed = overrideQuery(database, "userReport", {
+        findMany: async (read, ...args) => {
+          const reports = await read(...args);
+          expect(reports).toHaveLength(0);
+          if (++reads === 3) enter();
+          await paused;
+          return reports;
         },
       });
       const clearing = callerForDatabase(reportsRouter, "staff", delayed).clear(input);
@@ -431,35 +416,23 @@ describeWithDatabase("registration claims current sanction sources", () => {
       if (mode === "native") claimIdentity(userId, "unrelated@example.com");
       const { promise: entered, resolve: enter } = deferred<void>();
       const { promise: gate, resolve: release } = deferred<void>();
-      const delayed = new Proxy(database, {
-        get(target, property, receiver) {
-          if (property === "query")
-            return {
-              ...target.query,
-              userData: {
-                ...target.query.userData,
-                findFirst: async (
-                  ...args: Parameters<typeof target.query.userData.findFirst>
-                ) => {
-                  await gate;
-                  return target.query.userData.findFirst(...args);
-                },
-              },
-              sanctionTombstone: {
-                ...target.query.sanctionTombstone,
-                findMany: async (
-                  ...args: Parameters<typeof target.query.sanctionTombstone.findMany>
-                ) => {
-                  const result = await target.query.sanctionTombstone.findMany(...args);
-                  expect(result).toHaveLength(0);
-                  enter();
-                  return result;
-                },
-              },
-            };
-          return Reflect.get(target, property, receiver);
+      const delayed = overrideQuery(
+        overrideQuery(database, "userData", {
+          findFirst: async (read, ...args) => {
+            await gate;
+            return read(...args);
+          },
+        }),
+        "sanctionTombstone",
+        {
+          findMany: async (read, ...args) => {
+            const result = await read(...args);
+            expect(result).toHaveLength(0);
+            enter();
+            return result;
+          },
         },
-      });
+      );
       const pending = register(userId, delayed);
       await entered;
       try {
@@ -888,23 +861,14 @@ describeWithDatabase("registration claims current sanction sources", () => {
     const inherited = (await reportsOf("Replacement"))[0]!;
     owners.set("Replacement", sanctionIdentity("different-owner@example.com"));
     claimIdentity("Concurrent");
-    const failingDatabase = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "execute")
-          return async (query: Parameters<DrizzleClient["execute"]>[0]) => {
-            const statement =
-              typeof query === "string"
-                ? query
-                : new MySqlDialect().sqlToQuery(query.getSQL()).sql;
-            if (
-              statement.includes("INSERT INTO `UserData`") ||
-              statement.includes("DELETE `UserReport`")
-            )
-              throw new Error("Database unavailable");
-            return target.execute(query);
-          };
-        return Reflect.get(target, property, receiver);
-      },
+    const failingDatabase = interceptExecute(database, async (query, run) => {
+      const statement = sqlText(query);
+      if (
+        statement.includes("INSERT INTO `UserData`") ||
+        statement.includes("DELETE `UserReport`")
+      )
+        throw new Error("Database unavailable");
+      return run();
     });
     await expect(register("Concurrent", failingDatabase)).rejects.toThrow(
       "Database unavailable",
@@ -954,34 +918,22 @@ describeWithDatabase("registration claims current sanction sources", () => {
       if (preparation) await preparation.entered;
       const { promise: readReports, resolve: enter } = deferred<void>();
       const { promise: paused, resolve: release } = deferred<void>();
-      const getBanDatabase = new Proxy(database, {
-        get(target, property, receiver) {
-          if (property === "query")
-            return {
-              ...target.query,
-              userData: {
-                ...target.query.userData,
-                findFirst: async (
-                  ...args: Parameters<typeof database.query.userData.findFirst>
-                ) => {
-                  await paused;
-                  return target.query.userData.findFirst(...args);
-                },
-              },
-              userReport: {
-                ...target.query.userReport,
-                findMany: async (
-                  ...args: Parameters<typeof database.query.userReport.findMany>
-                ) => {
-                  const reports = await target.query.userReport.findMany(...args);
-                  enter();
-                  return reports;
-                },
-              },
-            };
-          return Reflect.get(target, property, receiver);
+      const getBanDatabase = overrideQuery(
+        overrideQuery(database, "userData", {
+          findFirst: async (read, ...args) => {
+            await paused;
+            return read(...args);
+          },
+        }),
+        "userReport",
+        {
+          findMany: async (read, ...args) => {
+            const reports = await read(...args);
+            enter();
+            return reports;
+          },
         },
-      });
+      );
       const lookup = callerForDatabase(
         reportsRouter,
         "Concurrent",
@@ -1097,23 +1049,13 @@ describeWithDatabase("registration claims current sanction sources", () => {
     claimIdentity("Concurrent");
     const { promise: reachedInsert, resolve: enter } = deferred<void>();
     const { promise: paused, resolve: release } = deferred<void>();
-    const failingDatabase = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "execute")
-          return async (query: Parameters<DrizzleClient["execute"]>[0]) => {
-            const statement =
-              typeof query === "string"
-                ? query
-                : new MySqlDialect().sqlToQuery(query.getSQL()).sql;
-            if (statement.includes("INSERT INTO `UserData`")) {
-              enter();
-              await paused;
-              throw new Error("Character insert failed");
-            }
-            return target.execute(query);
-          };
-        return Reflect.get(target, property, receiver);
-      },
+    const failingDatabase = interceptExecute(database, async (query, run) => {
+      if (sqlText(query).includes("INSERT INTO `UserData`")) {
+        enter();
+        await paused;
+        throw new Error("Character insert failed");
+      }
+      return run();
     });
     const failing = register("Concurrent", failingDatabase);
     await reachedInsert;

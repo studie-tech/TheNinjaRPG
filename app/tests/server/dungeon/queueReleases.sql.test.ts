@@ -28,7 +28,7 @@ import {
 } from "../../setup/factories";
 import { initialPetSpecies } from "../../libs/pets/helpers/species";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements } from "../../setup/statements";
+import { beforeStatements, overrideQuery } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("activity releases preserve dungeon reservations", () => {
@@ -246,20 +246,16 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
     await db.update(userData).set({status:"QUEUED"}).where(eq(userData.userId,"member"));
     let interposed = false;
     // Both cleanups capture the same roster before the first releases it.
-    const queue = new Proxy(db.query.mpvpBattleQueue,{get(target,key,receiver){
-      if(key!=="findMany") return Reflect.get(target,key,receiver);
-      return async (...args:Parameters<typeof target.findMany>)=>{
-        const rows = await target.findMany(...args);
-        if(!interposed){
-          interposed=true;
-          await checkAndCleanupExpiredRaid(db,"raid");
-          const created=await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]});
-          expect(created.success).toBe(true);
-        }
-        return rows;
-      };
+    const delayed = overrideQuery(db,"mpvpBattleQueue",{findMany: async (read,...args)=>{
+      const rows = await read(...args);
+      if(!interposed){
+        interposed=true;
+        await checkAndCleanupExpiredRaid(db,"raid");
+        const created=await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]});
+        expect(created.success).toBe(true);
+      }
+      return rows;
     }});
-    const delayed=new Proxy(db,{get(target,key,receiver){return key==="query"?{...target.query,mpvpBattleQueue:queue}:Reflect.get(target,key,receiver);}});
     await checkAndCleanupExpiredRaid(delayed,"raid");
     expect(await db.query.mpvpBattleQueue.findFirst()).toBeUndefined();
     expect(await db.query.mpvpBattleUser.findFirst()).toBeUndefined();
@@ -276,18 +272,14 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
     await db.update(userData).set({status:"QUEUED"}).where(eq(userData.userId,"member"));
     let interposed = false;
     // The launcher captured this raider before they left and entered the dungeon.
-    const users = new Proxy(db.query.userData,{get(target,key,receiver){
-      if(key!=="findMany") return Reflect.get(target,key,receiver);
-      return async (...args:Parameters<typeof target.findMany>)=>{
-        if(!interposed){
-          interposed=true;
-          expect((await (await callerFor(raidsRouter,"member")).leaveRaidQueue()).success).toBe(true);
-          expect((await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]})).success).toBe(true);
-        }
-        return await target.findMany(...args);
-      };
+    const delayed = overrideQuery(db,"userData",{findMany: async (read,...args)=>{
+      if(!interposed){
+        interposed=true;
+        expect((await (await callerFor(raidsRouter,"member")).leaveRaidQueue()).success).toBe(true);
+        expect((await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]})).success).toBe(true);
+      }
+      return await read(...args);
     }});
-    const delayed=new Proxy(db,{get(target,key,receiver){return key==="query"?{...target.query,userData:users}:Reflect.get(target,key,receiver);}});
     const result=await callerForDatabase(raidsRouter,"member",delayed).startRaidBattle({teamId:"raid-team"});
     expect(result.success).toBe(false);
     expect(await db.query.mpvpBattleQueue.findFirst()).toBeUndefined();

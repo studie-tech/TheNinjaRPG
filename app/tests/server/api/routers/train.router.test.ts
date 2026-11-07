@@ -19,6 +19,7 @@ import {
 } from "../../../setup/factories";
 import {queueEnergy, readEnergyQueue} from "../../../setup/queues";
 import {callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables} from "../../../setup/testDatabase";
+import { beforeStatements, failStatements } from "../../../setup/statements";
 import type {EnergyTrainingQueueEntry} from "@/validators/train";
 const USER_ID = "trainee";
 const SESSION_GAIN = 100;
@@ -192,21 +193,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     });
     const database = await getTestDatabase();
     const before = await readUser();
-    const failedDatabase = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof database.update>[0]) => {
-          const builder = database.update(table);
-          return {
-            set(values: Parameters<typeof builder.set>[0]) {
-              if (table === userData && "energyQueueHead" in values)
-                throw new Error("Simulated queued training write failure");
-              return builder.set(values);
-            },
-          };
-        };
-      },
-    });
+    const failedDatabase = failStatements(database, userData, Infinity, { when: (set) => "energyQueueHead" in set });
     const refreshed = await fetchUpdatedUser({client: failedDatabase, userId: USER_ID, forceRegen: true});
     expect(refreshed.user?.questData?.find(t => t.id === "queued-stat-quest")?.goals.find(g => g.id === "queued-stat-goal")?.value).toBe(0);
     expect(refreshed.user?.offence).toBe(before.offence);
@@ -219,28 +206,10 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     const database = await getTestDatabase();
     const before = await readUser();
     let moved = false;
-    const movingDatabase = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof database.update>[0]) => {
-          const builder = database.update(table);
-          return {
-            set(values: Parameters<typeof builder.set>[0]) {
-              const update = builder.set(values);
-              return {
-                async where(condition: Parameters<typeof update.where>[0]) {
-                  if (table === userData && "energyQueueHead" in values && !moved) {
-                    moved = true;
-                    await backdate({longitude: before.longitude + 1});
-                  }
-                  return update.where(condition);
-                },
-              };
-            },
-          };
-        };
-      },
-    });
+    const movingDatabase = beforeStatements(database, userData, [async () => {
+      moved = true;
+      await backdate({longitude: before.longitude + 1});
+    }], { when: (set) => "energyQueueHead" in set });
     const refreshed = await fetchUpdatedUser({client: movingDatabase, userId: USER_ID, forceRegen: true});
     expect(moved).toBe(true);
     expect(refreshed.user?.offence).toBe(before.offence);
@@ -713,28 +682,10 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     await fetchUpdatedUser({client: database, userId: USER_ID, forceRegen: true});
     const api = await caller();
     let spent = false;
-    const delayedDatabase = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof database.update>[0]) => {
-          const builder = database.update(table);
-          return {
-            set(values: Parameters<typeof builder.set>[0]) {
-              const update = builder.set(values);
-              return {
-                async where(condition: Parameters<typeof update.where>[0]) {
-                  if (table === userData && "primaryElement" in values && !spent) {
-                    spent = true;
-                    expect((await api.startTraining({stat: "offence", energy: 10})).success).toBe(true);
-                  }
-                  return update.where(condition);
-                },
-              };
-            },
-          };
-        };
-      },
-    });
+    const delayedDatabase = beforeStatements(database, userData, [async () => {
+      spent = true;
+      expect((await api.startTraining({stat: "offence", energy: 10})).success).toBe(true);
+    }], { when: (set) => "primaryElement" in set });
     const refreshed = await fetchUpdatedUser({client: delayedDatabase, userId: USER_ID, forceRegen: true});
     expect(spent).toBe(true);
     expect(refreshed.user?.curEnergy).toBe(0);

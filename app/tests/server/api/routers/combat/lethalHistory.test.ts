@@ -13,6 +13,7 @@ import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
+import { aroundStatements, failStatements } from "../../../../setup/statements";
 
 describeWithDatabase("lethal combat history", () => {
   let trigger: ReturnType<typeof vi.spyOn<Pusher, "trigger">>;
@@ -58,21 +59,11 @@ describeWithDatabase("lethal combat history", () => {
     }
     // Pause only the action-log insert, leaving the state claim and settlement
     // writes free to finish. This exposes the incomplete log to a real observer.
-    const delayed = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "insert") return (table: Parameters<typeof db.insert>[0]) => {
-          if (table !== battleAction) return db.insert(table);
-          return { values: (values: typeof battleAction.$inferInsert[]) => ({
-            onDuplicateKeyUpdate: async (config: Parameters<ReturnType<ReturnType<typeof db.insert>["values"]>["onDuplicateKeyUpdate"]>[0]) => {
-              insertReached();
-              await insertGate;
-              return db.insert(battleAction).values(values).onDuplicateKeyUpdate(config);
-            },
-          }) };
-        };
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const delayed = aroundStatements(db, battleAction, async (run) => {
+      insertReached();
+      await insertGate;
+      return run();
+    }, { operations: ["insert"] });
     const actor = callerForDatabase(combatRouter, route === "performAction" ? "killer" : "victim", delayed);
     const observer = await callerFor(combatRouter, route === "performAction" ? "victim" : "killer");
     const pending = route === "performAction"
@@ -204,12 +195,7 @@ describeWithDatabase("lethal combat history", () => {
     const db = await getTestDatabase();
     snapshot.usersState.find((user) => user.userId === "victim")!.curHealth = 5000;
     await db.update(battle).set({ usersState: snapshot.usersState }).where(eq(battle.id, snapshot.id));
-    const failed = new Proxy(db, { get(target, key, receiver) {
-      if (key === "insert") return (table: Parameters<typeof db.insert>[0]) => table !== battleAction ? db.insert(table) : {
-        values: () => ({ onDuplicateKeyUpdate: async () => { throw new Error("Log insert failed"); } }),
-      };
-      return Reflect.get(target, key, receiver);
-    } });
+    const failed = failStatements(db, battleAction, Infinity, { operations: ["insert"] });
     const response = await (await callerForDatabase(combatRouter, "killer", failed)).performAction({ battleId: snapshot.id,
       version: snapshot.version, actionId: "basicAttack", longitude: 1, latitude: 0 });
     expect(response).toMatchObject({ updateClient: true, notification: "Unable to update battle. Please try again." });

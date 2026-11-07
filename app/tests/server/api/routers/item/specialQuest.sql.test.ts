@@ -12,7 +12,6 @@ import { Pusher } from "@/libs/pusher";
 import { itemRouter } from "@/server/api/routers/item";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { commitQuestObjectiveRewards, questsRouter } from "@/server/api/routers/quests";
-import type { DrizzleClient } from "@/server/db";
 import { NonCombatConsumeRewardTag, NonCombatQuestTag } from "@/validators/combat";
 import { DialogObjective } from "@/validators/objectives";
 import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
@@ -29,6 +28,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { inTransactions, failStatements } from "../../../../setup/statements";
 
 // Validate the shared content fixture even when SQL tests are skipped locally.
 const contractObjective = DialogObjective.parse({ id: "wait", task: "dialog" });
@@ -203,35 +203,16 @@ describeWithDatabase("item-only Special quest grants", () => {
 
   it("rolls back history, rewards and debit when writing the new quest fails", async () => {
     const db = await getTestDatabase();
-    const failing = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property === "transaction")
-          return (callback: (tx: DrizzleClient) => Promise<unknown>) =>
-            target.transaction(async (tx) =>
-              callback(
-                new Proxy(tx, {
-                  get(transaction, key, txReceiver) {
-                    if (key === "insert")
-                      return (table: typeof questHistory) => {
-                        if (table === questHistory)
-                          throw new Error("Injected quest grant failure");
-                        return transaction.insert(table);
-                      };
-                    return Reflect.get(transaction, key, txReceiver);
-                  },
-                }) as unknown as DrizzleClient,
-              ),
-            );
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const failing = inTransactions(db, (tx) =>
+      failStatements(tx, questHistory, 1, { operations: ["insert"] }),
+    );
     const before = await db.query.userData.findFirst();
     await expect(
       callerForDatabase(itemRouter, "hero", failing).consume({
         userItemId: "scroll-stack",
         requestId: "rollback-request",
       }),
-    ).rejects.toThrow("Injected quest grant failure");
+    ).rejects.toThrow("Statement failed on purpose");
     expect(await db.query.userItem.findFirst()).toMatchObject({ quantity: 5 });
     expect(await db.query.userData.findFirst()).toMatchObject({ money: before!.money });
     expect(await db.query.questHistory.findMany()).toHaveLength(0);

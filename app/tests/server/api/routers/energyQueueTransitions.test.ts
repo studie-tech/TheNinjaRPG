@@ -42,7 +42,7 @@ import {
   insertDefaultAiProfile,
   insertUserVotes,
 } from "../../../setup/factories";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, aroundStatements } from "../../../setup/statements";
 import {
   queueEnergy,
   queueMasteries,
@@ -329,24 +329,11 @@ describeWithDatabase("Energy queue state transitions", () => {
     const regenAt = new Date(Date.now() - 195_000);
     await patch({ status: "TRAVEL", travelFinishAt: new Date(Date.now() - 1000), regenAt });
     let attempts = 0;
-    const racingDb = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof db.update>[0]) => {
-          const builder = db.update(table);
-          return { set(values: Parameters<typeof builder.set>[0]) {
-            const update = builder.set(values);
-            return { async where(condition: Parameters<typeof update.where>[0]) {
-              if (table === userData && ("regenAt" in values) === (mode === "queued")) {
-                attempts++;
-                if (attempts === 1) throw new Error("Deadlock found when trying to get lock; try restarting transaction");
-              }
-              return update.where(condition);
-            } };
-          } };
-        };
-      },
-    });
+    const racingDb = aroundStatements(db, userData, async (run) => {
+      attempts++;
+      if (attempts === 1) throw new Error("Deadlock found when trying to get lock; try restarting transaction");
+      return run();
+    }, { when: (set) => ("regenAt" in set) === (mode === "queued") });
     await completeExpiredGlobalTravel(racingDb);
     expect(attempts).toBe(2);
     const arrived = (await read())!;
@@ -394,24 +381,10 @@ describeWithDatabase("Energy queue state transitions", () => {
     await patch({ status: "TRAVEL", travelFinishAt: new Date(Date.now() - 1000), regenAt });
     const changedAt = new Date(Date.now() + 60_000);
     let raced = false;
-    const racingDb = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof db.update>[0]) => {
-          const builder = db.update(table);
-          return { set(values: Parameters<typeof builder.set>[0]) {
-            const update = builder.set(values);
-            return { async where(condition: Parameters<typeof update.where>[0]) {
-              if (table === userData && "regenAt" in values && !raced) {
-                raced = true;
-                await patch({ updatedAt: changedAt, curEnergy: 1 });
-              }
-              return update.where(condition);
-            } };
-          } };
-        };
-      },
-    });
+    const racingDb = beforeStatements(db, userData, [async () => {
+      raced = true;
+      await patch({ updatedAt: changedAt, curEnergy: 1 });
+    }], { when: (set) => "regenAt" in set });
     await completeExpiredGlobalTravel(racingDb);
     expect(raced).toBe(true);
     expect(await read()).toEqual(expect.objectContaining({ status: "TRAVEL", regenAt, updatedAt: changedAt, curEnergy: 1, offence: 10, defence: 10 }));
@@ -528,27 +501,10 @@ describeWithDatabase("Energy queue state transitions", () => {
     const before = (await read())!;
     const changedAt = new Date(before.updatedAt.getTime() + 1);
     const db = await getTestDatabase();
-    const racingDb = new Proxy(db, {
-      get(target, property, receiver) {
-        const value = Reflect.get(target, property, receiver);
-        if (property !== "update") return value;
-        return (table: typeof userData) => {
-          const update = value.call(target, table);
-          if (table !== userData) return update;
-          return {
-            set: (values: Record<string, unknown>) => {
-              const builder = update.set(values);
-              return {
-                where: async (...conditions: unknown[]) => {
-                  await patch({ updatedAt: changedAt, curHealth: 42 });
-                  return builder.where(...conditions);
-                },
-              };
-            },
-          };
-        };
-      },
-    });
+    const racingDb = aroundStatements(db, userData, async (run) => {
+      await patch({ updatedAt: changedAt, curHealth: 42 });
+      return run();
+    }, { operations: ["update"] });
     const result = await travelRouter
       .createCaller({ drizzle: racingDb, userId: USER } as never)
       .finishGlobalMove();
@@ -798,32 +754,9 @@ describeWithDatabase("Energy queue state transitions", () => {
         .spyOn(getServerPusher(), "trigger")
         .mockResolvedValue({} as never);
       try {
-        let injectFailure = mode === "partial failure";
-        const racingDb = new Proxy(db, {
-          get(target, property, receiver) {
-            const value = Reflect.get(target, property, receiver);
-            if (property !== "update") return value;
-            return (table: typeof userData) => {
-              const update = value.call(target, table);
-              if (table !== userData || !injectFailure) return update;
-              injectFailure = false;
-              return {
-                set: (values: Record<string, unknown>) => {
-                  const builder = update.set(values);
-                  return {
-                    where: async (...conditions: unknown[]) => {
-                      await db
-                        .update(userData)
-                        .set({ status: "HOSPITALIZED" })
-                        .where(eq(userData.userId, "attacker"));
-                      return builder.where(...conditions);
-                    },
-                  };
-                },
-              };
-            };
-          },
-        });
+        const hospitalize = () =>
+          db.update(userData).set({ status: "HOSPITALIZED" }).where(eq(userData.userId, "attacker"));
+        const racingDb = beforeStatements(db, userData, mode === "partial failure" ? [hospitalize] : [], { operations: ["update"] });
         const start = () =>
           initiateBattle(
             {

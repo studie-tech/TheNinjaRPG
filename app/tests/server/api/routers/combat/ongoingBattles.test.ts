@@ -1,9 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
-import type { SQL } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
 import { battle, tournamentMatch, userRequest } from "@/drizzle/schema";
 import { combatRouter } from "@/server/api/routers/combat";
-import type { DrizzleClient } from "@/server/db";
 import { makeCompleteBattle, makeUser } from "../../../../libs/combat/helpers/battleScenario";
 import {
   callerForDatabase,
@@ -13,6 +11,7 @@ import {
   recordQueries,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { interceptExecute } from "../../../../setup/statements";
 
 describeWithDatabase("combat.listOngoingBattles", () => {
   beforeEach(async () => {
@@ -80,14 +79,9 @@ const fixture = (id: string, battleType: BattleType, order: number, tournamentGa
 /** Adapt mysql2's raw SELECT tuple to the PlanetScale execute result used by this endpoint. */
 const listCaller = async () => {
   const database = await getTestDatabase();
-  const client = new Proxy(database, {
-    get(target, key, receiver) {
-      if (key === "execute") return async (query: SQL) => {
-        const [rows] = await target.execute(query) as unknown as [unknown[], unknown];
-        return { rows };
-      };
-      return Reflect.get(target, key, receiver);
-    },
-  }) as DrizzleClient;
+  const client = interceptExecute(database, async (_query, run) => {
+    const [rows] = await run() as unknown as [unknown[], unknown];
+    return { rows };
+  });
   return callerForDatabase(combatRouter, "viewer", client);
 };

@@ -24,7 +24,7 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers, insertClans } from "../../../../setup/factories";
-import { beforeStatements, failStatements, pollUntil } from "../../../../setup/statements";
+import { beforeStatements, failStatements, pollUntil, overrideQuery } from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -270,23 +270,11 @@ describeWithDatabase("clan queue claim ownership", () => {
           let client = db;
           if (cleanup === "undo") {
             let reads = 0;
-            client = new Proxy(db, {
-              get(target, property, receiver) {
-                if (property !== "query")
-                  return Reflect.get(target, property, receiver);
-                return {
-                  ...target.query,
-                  mpvpBattleQueue: {
-                    ...target.query.mpvpBattleQueue,
-                    findFirst: async (
-                      ...args: Parameters<typeof target.query.mpvpBattleQueue.findFirst>
-                    ) => {
-                      // Delete the old join's lobby after insertion but before validation.
-                      if (++reads === 2) await replace();
-                      return target.query.mpvpBattleQueue.findFirst(...args);
-                    },
-                  },
-                };
+            client = overrideQuery(db, "mpvpBattleQueue", {
+              findFirst: async (read, ...args) => {
+                // Delete the old join's lobby after insertion but before validation.
+                if (++reads === 2) await replace();
+                return read(...args);
               },
             });
           } else {

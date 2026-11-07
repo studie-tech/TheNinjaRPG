@@ -20,7 +20,7 @@ import {
   insertDefaultAiProfile,
   insertUserVotes,
 } from "../../../setup/factories";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, overrideQuery } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -170,23 +170,15 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
       goals: [{ id: "ambush", value: 0, done: false, sector: 0, longitude: 0, latitude: 0 }],
     })] }).where(eq(userData.userId, userId));
     let profileReads = 0;
-    const client = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "query") return Reflect.get(target, property, receiver);
-        return { ...target.query, userData: new Proxy(target.query.userData, {
-          get(queries, method, queryReceiver) {
-            if (method !== "findFirst") return Reflect.get(queries, method, queryReceiver);
-            return async (options: Parameters<typeof queries.findFirst>[0]) => {
-              const user = await queries.findFirst(options);
-              if (options?.with?.queue) {
-                profileReads++;
-                // Hydration captured `now` before this read; battle setup uses the later clock.
-                setSystemTime(new Date(now.getTime() + 180_000));
-              }
-              return user;
-            };
-          },
-        }) };
+    const client = overrideQuery(db, "userData", {
+      findFirst: async (read, options) => {
+        const user = await read(options);
+        if (options?.with?.queue) {
+          profileReads++;
+          // Hydration captured `now` before this read; battle setup uses the later clock.
+          setSystemTime(new Date(now.getTime() + 180_000));
+        }
+        return user;
       },
     });
     const result = await callerForDatabase(questsRouter, userId, client).checkLocationQuest();

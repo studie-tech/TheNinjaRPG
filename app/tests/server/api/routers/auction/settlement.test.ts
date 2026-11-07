@@ -2,10 +2,9 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { actionLog, auctionBid, auctionListing, item, notification, userData, userItem } from "@/drizzle/schema";
 import { auctionRouter, completeAuctionInternal } from "@/server/api/routers/auction";
-import type { DrizzleClient } from "@/server/db";
 import * as nativePush from "@/server/utils/push/defer";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { beforeStatements, failStatements, barrier } from "../../../../setup/statements";
+import { beforeStatements, failStatements, barrier, inTransactions, beforeTransaction, interceptExecute } from "../../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("auction settlement", () => {
@@ -111,7 +110,7 @@ describeWithDatabase("auction settlement", () => {
     it(`rolls back a first-bid buyout INSERT, debit and log when ${currency} delivery fails`, async () => {
       await seedAuction(currency, false, false);
       const db = await getTestDatabase();
-      const failed = wrapTransactions(db, (tx) => failStatements(tx, userItem));
+      const failed = inTransactions(db, (tx) => failStatements(tx, userItem));
       const buyer = callerForDatabase(auctionRouter, "winner", failed);
       await expect(buyer.placeBid({ auctionId: "auction", amount: 150 })).rejects.toThrow("Statement failed on purpose");
       expect(await balances(balance)).toEqual({ seller: 1000, winner: 900, loser: 930 });
@@ -140,14 +139,9 @@ describeWithDatabase("auction settlement", () => {
       const db = await getTestDatabase();
       await db.delete(auctionBid).where(eq(auctionBid.id, "losing-bid"));
       const bothArrived = barrier(2);
-      const synchronized = new Proxy(db, {
-        get(target, key, receiver) {
-          if (key !== "execute") return Reflect.get(target, key, receiver);
-          return async (query: Parameters<DrizzleClient["execute"]>[0]) => {
-            await bothArrived();
-            return target.execute(query);
-          };
-        },
+      const synchronized = interceptExecute(db, async (_query, run) => {
+        await bothArrived();
+        return run();
       });
       const buyer = callerForDatabase(auctionRouter, "winner", synchronized);
       const results = await Promise.all([
@@ -164,12 +158,7 @@ describeWithDatabase("auction settlement", () => {
     it(`rolls back delivery, credits and the listing claim if a later ${currency} write fails`, async () => {
       await seedAuction(currency);
       const db = await getTestDatabase();
-      const failed = new Proxy(db, {
-        get(target, key, receiver) {
-          if (key === "transaction") return (work: Parameters<DrizzleClient["transaction"]>[0]) => target.transaction((tx) => work(failStatements(tx as DrizzleClient, auctionBid) as typeof tx));
-          return Reflect.get(target, key, receiver);
-        },
-      });
+      const failed = inTransactions(db, (tx) => failStatements(tx, auctionBid));
       await expect(completeAuctionInternal(failed, "auction")).rejects.toThrow("Statement failed on purpose");
       expect(await balances(balance)).toEqual({ seller: 1000, winner: 900, loser: 930 });
       expect((await db.select().from(auctionListing))[0]?.status).toBe("ACTIVE");
@@ -183,7 +172,7 @@ describeWithDatabase("auction settlement", () => {
     it(`rolls back the buyout debit, bid and log if ${currency} delivery fails`, async () => {
       await seedAuction(currency, true, false);
       const db = await getTestDatabase();
-      const failed = wrapTransactions(db, (tx) => failStatements(tx, userItem));
+      const failed = inTransactions(db, (tx) => failStatements(tx, userItem));
       const buyer = callerForDatabase(auctionRouter, "loser", failed);
       await expect(buyer.placeBid({ auctionId: "auction", amount: 150 })).rejects.toThrow("Statement failed on purpose");
       expect(await balances(balance)).toEqual({ seller: 1000, winner: 900, loser: 930 });
@@ -199,15 +188,7 @@ describeWithDatabase("auction settlement", () => {
       await seedAuction(currency, true, false);
       const db = await getTestDatabase();
       const bothArrived = barrier(2);
-      const synchronized = new Proxy(db, {
-        get(target, key, receiver) {
-          if (key !== "transaction") return Reflect.get(target, key, receiver);
-          return async (work: Parameters<DrizzleClient["transaction"]>[0]) => {
-            await bothArrived();
-            return target.transaction(work);
-          };
-        },
-      });
+      const synchronized = beforeTransaction(db, bothArrived);
       const winner = callerForDatabase(auctionRouter, "winner", synchronized);
       const loser = callerForDatabase(auctionRouter, "loser", synchronized);
       const results = await Promise.all([
@@ -358,16 +339,11 @@ describeWithDatabase("auction settlement", () => {
     await seedAuction("MONEY");
     const db = await getTestDatabase();
     let attempts = 0;
-    const retrying = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "transaction") return (work: Parameters<DrizzleClient["transaction"]>[0]) => {
-          attempts++;
-          return target.transaction((tx) => work(beforeStatements(tx as DrizzleClient, auctionBid, [async () => {
-            if (attempts === 1) throw new Error("Deadlock found when trying to get lock");
-          }]) as typeof tx));
-        };
-        return Reflect.get(target, key, receiver);
-      },
+    const retrying = inTransactions(db, (tx, attempt) => {
+      attempts = attempt;
+      return beforeStatements(tx, auctionBid, [async () => {
+        if (attempt === 1) throw new Error("Deadlock found when trying to get lock");
+      }]);
     });
     expect((await completeAuctionInternal(retrying, "auction")).success).toBe(true);
     expect(attempts).toBe(2);
@@ -378,7 +354,7 @@ describeWithDatabase("auction settlement", () => {
   it("rejects an in-flight buyout if expiration settles before its listing claim", async () => {
     await seedAuction("MONEY", true, false);
     const db = await getTestDatabase();
-    const expired = wrapTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
+    const expired = inTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
       await db.update(auctionListing).set({ expiresAt: new Date(0) }).where(eq(auctionListing.id, "auction"));
       expect((await completeAuctionInternal(db, "auction")).success).toBe(true);
     }]));
@@ -411,12 +387,3 @@ describeWithDatabase("auction settlement", () => {
     expect(queuePush).not.toHaveBeenCalled();
   });
 });
-
-const wrapTransactions = (db: DrizzleClient, wrap: (tx: DrizzleClient) => DrizzleClient) =>
-  new Proxy(db, {
-    get(target, key, receiver) {
-      if (key !== "transaction") return Reflect.get(target, key, receiver);
-      return (work: Parameters<DrizzleClient["transaction"]>[0]) =>
-        target.transaction((tx) => work(wrap(tx as unknown as DrizzleClient) as unknown as typeof tx));
-    },
-  });

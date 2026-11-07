@@ -24,6 +24,7 @@ import {
   callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables,
 } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
+import { aroundStatements } from "../../../../setup/statements";
 
 const participants = ["credit-actor", "credit-ally", "credit-enemy"];
 const winners = participants.slice(0, 2);
@@ -207,19 +208,11 @@ describeWithDatabase("combat team faction rewards", () => {
     // Pause one finalizer at deletion so the other deterministically wins the claim.
     const { promise: gate, resolve: unblock } = deferred<void>();
     const { promise: ready, resolve: reached } = deferred<void>();
-    const staleClient = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "delete") return Reflect.get(target, key, receiver);
-        return (...args: Parameters<typeof db.delete>) => {
-          if (args[0] !== battle) return db.delete(...args);
-          return { where: async (condition: Parameters<ReturnType<typeof db.delete>["where"]>[0]) => {
-            reached();
-            await gate;
-            return db.delete(battle).where(condition);
-          } };
-        };
-      },
-    });
+    const staleClient = aroundStatements(db, battle, async (run) => {
+      reached();
+      await gate;
+      return run();
+    }, { operations: ["delete"] });
     const staleApi = callerForDatabase(combatRouter, winners[staleUser === "actor" ? 0 : 1]!, staleClient);
     const staleRequest = staleUser === "actor"
       ? staleApi.performAction({ battleId: saved.id })

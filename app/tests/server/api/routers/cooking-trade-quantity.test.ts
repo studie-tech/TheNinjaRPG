@@ -5,6 +5,7 @@ import { actionLog, auctionBid, auctionListing, item, userData, userItem } from 
 import { auctionRouter } from "@/server/api/routers/auction";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { overrideQuery } from "../../../setup/statements";
 
 describeWithDatabase("cooking trade quantities", () => {
   beforeEach(async () => {
@@ -95,17 +96,14 @@ describeWithDatabase("cooking trade quantities", () => {
   it("rejects a stale quantity snapshot before splitting", async () => {
     const db = await getTestDatabase();
     let firstRead = true;
-    const raced = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "query") return Reflect.get(target, key, receiver);
-        return { ...db.query, userItem: { ...db.query.userItem, findFirst: async (...args: Parameters<typeof db.query.userItem.findFirst>) => {
-          const row = await db.query.userItem.findFirst(...args);
-          if (firstRead) {
-            firstRead = false;
-            await db.update(userItem).set({ quantity: 10 }).where(eq(userItem.id, "stack"));
-          }
-          return row;
-        } } };
+    const raced = overrideQuery(db, "userItem", {
+      findFirst: async (read, ...args) => {
+        const row = await read(...args);
+        if (firstRead) {
+          firstRead = false;
+          await db.update(userItem).set({ quantity: 10 }).where(eq(userItem.id, "stack"));
+        }
+        return row;
       },
     });
     const sender = callerForDatabase(auctionRouter, "sender", raced);

@@ -6,7 +6,7 @@ import { WAR_DAILY_TOKEN_DECAY_PERCENT_BASE } from "@/drizzle/constants";
 import { gameSetting, village, villageStructure, war } from "@/drizzle/schema";
 import * as gamesettings from "@/libs/gamesettings";
 import { resetServerModuleStubs, stubCronAuth, stubDatabase } from "../../../setup/serverModules";
-import { beforeStatements } from "../../../setup/statements";
+import { aroundStatements } from "../../../setup/statements";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const now = new Date("2026-10-12T12:00:00.000Z");
@@ -42,23 +42,10 @@ describeWithDatabase("daily war token decay", () => {
       await db.update(village).set({ tokens: sql`${village.tokens} + 500` }).where(eq(village.id, "attacker"));
     };
     // Credit the attacker just before the decay's war update, after the wars were loaded
-    stubDatabase(new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "update") return Reflect.get(target, property, receiver);
-        return (table: object) => {
-          const builder = target.update(table as typeof war);
-          if (table !== war) return builder;
-          return new Proxy(builder, {
-            get(inner, key, innerReceiver) {
-              if (key !== "set") return Reflect.get(inner, key, innerReceiver);
-              return (values: Record<string, unknown>) => "lastTokenReductionAt" in values
-                ? beforeStatements(db, war, [credit]).update(war).set(values as never)
-                : inner.set(values as never);
-            },
-          });
-        };
-      },
-    }));
+    stubDatabase(aroundStatements(db, war, async (run) => {
+      await credit();
+      return run();
+    }, { when: (set) => "lastTokenReductionAt" in set }));
     expect((await GET(new Request("http://localhost/api/hourly-war"))).status).toBe(200);
     const [attacker, defender] = await Promise.all([
       db.query.village.findFirst({ where: eq(village.id, "attacker") }),

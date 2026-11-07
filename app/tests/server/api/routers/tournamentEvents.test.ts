@@ -52,7 +52,7 @@ import { withAfterTasks } from "../../../setup/after";
 import { insertItems, insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, inTransactions } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -1834,20 +1834,9 @@ const beforeTransactionalWrite = (
     pending = false;
     await hook();
   };
-  return new Proxy(beforeStatements(client, table, [once]), {
-    get(target, property, receiver) {
-      if (property === "transaction")
-        return (callback: Parameters<typeof client.transaction>[0]) =>
-          client.transaction((tx) =>
-            callback(
-              beforeStatements(tx as unknown as DrizzleClient, table, [
-                once,
-              ]) as typeof tx,
-            ),
-          );
-      return Reflect.get(target, property, receiver);
-    },
-  });
+  return inTransactions(beforeStatements(client, table, [once]), (tx) =>
+    beforeStatements(tx, table, [once]),
+  );
 };
 
 /** Pause after the first real SQL transaction commits, before its caller can continue. */

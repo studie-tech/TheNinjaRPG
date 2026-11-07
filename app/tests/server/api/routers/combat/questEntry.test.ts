@@ -33,6 +33,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { beforeTransaction } from "../../../../setup/statements";
 
 describeWithDatabase("quest battle entry item identity", () => {
   beforeEach(async () => {
@@ -128,25 +129,17 @@ describeWithDatabase("quest battle entry item identity", () => {
       const caller = await callerFor(itemRouter, "hero");
       let evolved = false;
       // The transaction begins after battle and entry inventory have been preloaded.
-      const raced = new Proxy(client, {
-        get(target, property, receiver) {
-          if (property === "transaction") {
-            return async (...args: Parameters<typeof client.transaction>) => {
-              expect(
-                (await caller.evolveItem({
-                  userItemId: "b",
-                  evolutionItemId: "evolved",
-                })).success,
-              ).toBe(true);
-              expect(
-                await client.query.userItem.findFirst({ where: eq(userItem.id, "b") }),
-              ).toMatchObject({ itemId: "evolved", quantity: 1 });
-              evolved = true;
-              return target.transaction(...args);
-            };
-          }
-          return Reflect.get(target, property, receiver);
-        },
+      const raced = beforeTransaction(client, async () => {
+        expect(
+          (await caller.evolveItem({
+            userItemId: "b",
+            evolutionItemId: "evolved",
+          })).success,
+        ).toBe(true);
+        expect(
+          await client.query.userItem.findFirst({ where: eq(userItem.id, "b") }),
+        ).toMatchObject({ itemId: "evolved", quantity: 1 });
+        evolved = true;
       });
       const result = await initiateBattle(
         {

@@ -13,6 +13,7 @@ import { hashParentalPin, verifyParentalPin } from "@/server/utils/parentalContr
 import { createTRPCRouter } from "@/server/api/trpc";
 import { insertUsers } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
+import { aroundStatements } from "../../../setup/statements";
 
 const settings = { enabled: true, tavernDisabled: true, privateMessages: "APPROVED" as const,
   approvedUserIds: ["friend"], pin: "012345", version: 0 };
@@ -120,19 +121,11 @@ describeWithDatabase("parental controls", () => {
   it("retries a rolled-back setup deadlock without replacing its PIN or version", async () => {
     const db = await getTestDatabase();
     let attempts = 0;
-    const retrying = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property === "insert") return (table: Parameters<typeof db.insert>[0]) =>
-          table === parentalControl
-            ? { ignore: () => ({ values: async (values: typeof parentalControl.$inferInsert) => {
-                attempts += 1;
-                if (attempts === 1) throw new Error("Wrapped query", { cause: new Error("Deadlock found when trying to get lock") });
-                return target.insert(parentalControl).ignore().values(values);
-              } }) }
-            : target.insert(table);
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const retrying = aroundStatements(db, parentalControl, async (run) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("Wrapped query", { cause: new Error("Deadlock found when trying to get lock") });
+      return run();
+    }, { operations: ["insert"] });
     const api = callerForDatabase(parentalControlsRouter, "child", retrying);
     expect((await api.save(settings)).success).toBe(true);
     expect(attempts).toBe(2);

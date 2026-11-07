@@ -11,6 +11,7 @@ import { DialogObjective, InstantNewQuestObjective, QuestTracker, SimpleObjectiv
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { overrideQuery } from "../../../../setup/statements";
 
 const router = createTRPCRouter({ quests: questsRouter });
 const hold = DialogObjective.parse({ id: "hold", task: "dialog", nextObjectiveId: [{ text: "Continue", nextObjectiveId: "later" }] });
@@ -54,12 +55,9 @@ describeWithDatabase("Pyramid consequence publication", () => {
     await db.update(userData).set({ status: "AWAKE" }).where(eq(userData.userId, "hero"));
     const { user } = await fetchUpdatedUser({ client: db, userId: "hero" });
     let injected = false;
-    const client = new Proxy(db, { get(target, property, receiver) {
-      if (property === "query") return { ...target.query, quest: { ...target.query.quest, findMany: async (...args: Parameters<typeof target.query.quest.findMany>) => {
-        if (!injected) { injected = true; expect((await (await callerFor(router, "hero")).quests.startQuest({ questId: "p2", userSector: 0 })).success).toBe(true); }
-        return target.query.quest.findMany(...args);
-      } } };
-      return Reflect.get(target, property, receiver);
+    const client = overrideQuery(db, "quest", { findMany: async (read, ...args) => {
+      if (!injected) { injected = true; expect((await (await callerFor(router, "hero")).quests.startQuest({ questId: "p2", userSector: 0 })).success).toBe(true); }
+      return read(...args);
     } });
     const result = await handleQuestConsequences(client, user!, [{ type: "start_quest", ids: ["p1"] }], []);
     expect(result.claimed).toBe(true);
@@ -88,18 +86,15 @@ describeWithDatabase("Pyramid consequence publication", () => {
     await db.update(questHistory).set({ questVersion: p1!.updatedAt }).where(eq(questHistory.id, "p1-attempt"));
     await db.update(userData).set({ questData: [QuestTracker.parse({ id: "p1", startAt: new Date().toISOString(), goals: [{ id: "entry", value: 0 }] })] }).where(eq(userData.userId, "hero"));
     let rescued = false;
-    const client = new Proxy(db, { get(target, property, receiver) {
-      if (property === "query") return { ...target.query, quest: { ...target.query.quest, findMany: async (...args: Parameters<typeof target.query.quest.findMany>) => {
-        const rows = await target.query.quest.findMany(...args);
-        if (!rescued && rows.some(row => row.id === destination)) {
-          rescued = true;
-          expect((await (await callerFor(staffRouter, "staff")).forceAwake({ userId: "hero", reason: "Cancel a stranded Pyramid" })).success).toBe(true);
-          expect(await activeRows(db)).toHaveLength(0);
-          expect((await state(db))?.status).toBe("AWAKE");
-        }
-        return rows;
-      } } };
-      return Reflect.get(target, property, receiver);
+    const client = overrideQuery(db, "quest", { findMany: async (read, ...args) => {
+      const rows = await read(...args);
+      if (!rescued && rows.some(row => row.id === destination)) {
+        rescued = true;
+        expect((await (await callerFor(staffRouter, "staff")).forceAwake({ userId: "hero", reason: "Cancel a stranded Pyramid" })).success).toBe(true);
+        expect(await activeRows(db)).toHaveLength(0);
+        expect((await state(db))?.status).toBe("AWAKE");
+      }
+      return rows;
     } });
     const result = await callerForDatabase(router, "hero", client).quests.checkRewards({ questId: "p1", nextObjectiveId: "grant" });
     expect(rescued).toBe(true);

@@ -11,7 +11,7 @@ import { farmingRouter } from "@/server/api/routers/farming";
 import { itemRouter } from "@/server/api/routers/item";
 import { DecreaseFarmingTime } from "@/validators/combat";
 import { queueEnergy } from "../../../setup/queues";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, failStatements, overrideQuery } from "../../../setup/statements";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import {
   callerFor,
@@ -767,53 +767,41 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const { promise: catalogUpdated, resolve: releaseReads } = deferred<void>();
     let catalogRead = false;
     let completionReads = 0;
-    const skewed = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property !== "query") return Reflect.get(target, property, receiver);
-        const query = target.query;
-        return {
-          ...query,
-          item: {
-            ...query.item,
-            findMany: async (args: Parameters<typeof query.item.findMany>[0]) => {
-              if (args?.with?.farmYieldItem) {
-                // Read the old catalog, then let the independently loaded references see
-                // staff's reassignment. None of the new crops has another seed reference.
-                const catalog = await query.item.findMany(args);
-                catalogRead = true;
-                await Promise.all(Object.entries({
-                  "seed-1": "crop-2",
-                  "seed-inventory": "crop-3",
-                  "seed-shop": "crop-4",
-                  "seed-missing": "missing-crop",
-                }).map(([seedId, yieldId]) => database.update(item)
-                  .set({ farmYieldItemId: yieldId })
-                  .where(eq(item.id, seedId))));
-                releaseReads();
-                return catalog;
-              }
-              await catalogUpdated;
-              if (!args?.columns && !args?.orderBy) completionReads += 1;
-              return query.item.findMany(args);
-            },
+    const waitForCatalog = async <Result>(read: () => PromiseLike<Result>) => {
+      await catalogUpdated;
+      return read();
+    };
+    const skewed = overrideQuery(
+      overrideQuery(
+        overrideQuery(database, "item", {
+          findMany: async (read, args) => {
+            if (args?.with?.farmYieldItem) {
+              // Read the old catalog, then let the independently loaded references see
+              // staff's reassignment. None of the new crops has another seed reference.
+              const catalog = await read(args);
+              catalogRead = true;
+              await Promise.all(Object.entries({
+                "seed-1": "crop-2",
+                "seed-inventory": "crop-3",
+                "seed-shop": "crop-4",
+                "seed-missing": "missing-crop",
+              }).map(([seedId, yieldId]) => database.update(item)
+                .set({ farmYieldItemId: yieldId })
+                .where(eq(item.id, seedId))));
+              releaseReads();
+              return catalog;
+            }
+            await catalogUpdated;
+            if (!args?.columns && !args?.orderBy) completionReads += 1;
+            return read(args);
           },
-          farmPlot: {
-            ...query.farmPlot,
-            findMany: async (args: Parameters<typeof query.farmPlot.findMany>[0]) => {
-              await catalogUpdated;
-              return query.farmPlot.findMany(args);
-            },
-          },
-          userItem: {
-            ...query.userItem,
-            findMany: async (args: Parameters<typeof query.userItem.findMany>[0]) => {
-              await catalogUpdated;
-              return query.userItem.findMany(args);
-            },
-          },
-        };
-      },
-    });
+        }),
+        "farmPlot",
+        { findMany: (read, args) => waitForCatalog(() => read(args)) },
+      ),
+      "userItem",
+      { findMany: (read, args) => waitForCatalog(() => read(args)) },
+    );
     const api = farmingRouter.createCaller({ drizzle: skewed, userId: "farm-user" } as never);
     const recorded = await recordQueries(() => api.getFarmState());
     const state = recorded.result;
@@ -934,17 +922,9 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       seedItem: null,
       yieldItem: null,
     };
-    const staleClient = new Proxy(database as object, {
-      get(target, property) {
-        if (property === "query") {
-          const query = Reflect.get(target, property) as Record<string, unknown>;
-          return {
-            ...query,
-            farmPlot: { findFirst: async () => stalePlot, findMany: async () => [stalePlot] },
-          };
-        }
-        return Reflect.get(target, property);
-      },
+    const staleClient = overrideQuery(database, "farmPlot", {
+      findFirst: async () => stalePlot,
+      findMany: async () => [stalePlot],
     });
     const { farmingRouter: router } = { farmingRouter };
     const api = router.createCaller({ drizzle: staleClient, userId: "farm-user" } as never);
@@ -1004,27 +984,13 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
 
     // The opening actor read is stale; quest-CAS retries must load current trackers.
     let skewServed = false;
-    const skewedClient = new Proxy(database as object, {
-      get(target, property) {
-        if (property === "query") {
-          const query = Reflect.get(target, property) as Record<string, unknown>;
-          const userDataQuery = query.userData as { findFirst: (args: unknown) => unknown;
-          };
-          return {
-            ...query,
-            userData: {
-              ...userDataQuery,
-              findFirst: async (args: { columns?: { questData?: boolean } }) => {
-                if (!args?.columns && !skewServed) {
-                  skewServed = true;
-                  return staleActor;
-                }
-                return await userDataQuery.findFirst(args);
-              },
-            },
-          };
+    const skewedClient = overrideQuery(database, "userData", {
+      findFirst: async (read, args) => {
+        if (!args?.columns && !skewServed) {
+          skewServed = true;
+          return staleActor;
         }
-        return Reflect.get(target, property);
+        return await read(args);
       },
     });
     const skewed = farmingRouter.createCaller({
@@ -1077,17 +1043,9 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     expect(settled.availableSeeds.find((seed) => seed.itemId === "seed-1")?.quantity).toBe(50);
 
     // A concurrent request that read the extraction before the settling delete removed it.
-    const staleClient = new Proxy(database as object, {
-      get(target, property) {
-        if (property === "query") {
-          const query = Reflect.get(target, property) as Record<string, unknown>;
-          return {
-            ...query,
-            farmExtraction: { findMany: async () => [finished], findFirst: async () => finished },
-          };
-        }
-        return Reflect.get(target, property);
-      },
+    const staleClient = overrideQuery(database, "farmExtraction", {
+      findMany: async () => [finished],
+      findFirst: async () => finished,
     });
     await farmingRouter
       .createCaller({ drizzle: staleClient, userId: "farm-user" } as never)
@@ -1199,28 +1157,9 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
 
     // Stand in for a grant that landed on this stack after settlement read its snapshot.
     // Aggregation cannot help here -- the staleness comes from another request.
-    const staleClient = new Proxy(database as object, {
-      get(target, property) {
-        if (property === "query") {
-          const query = Reflect.get(target, property) as Record<string, unknown>;
-          const userItemQuery = query.userItem as {
-            findMany: (args: unknown) => Promise<{ quantity: number }[]>;
-            findFirst: (args: unknown) => unknown;
-          };
-          return {
-            ...query,
-            userItem: {
-              findFirst: (args: unknown) => userItemQuery.findFirst(args),
-              findMany: async (args: unknown) =>
-                (await userItemQuery.findMany(args)).map((row) => ({
-                  ...row,
-                  quantity: 40,
-                })),
-            },
-          };
-        }
-        return Reflect.get(target, property);
-      },
+    const staleClient = overrideQuery(database, "userItem", {
+      findMany: async (read, args) =>
+        (await read(args)).map((row) => ({ ...row, quantity: 40 })),
     });
     await farmingRouter
       .createCaller({ drizzle: staleClient, userId: "farm-user" } as never)
@@ -1302,25 +1241,13 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     } as never);
 
     // The seed grant commits, then the delete of the settled row fails transiently.
-    const failingDelete = new Proxy(database as object, {
-      get(target, property) {
-        if (property === "delete") {
-          return (table: unknown) => {
-            if (table === farmExtraction) throw new Error("simulated delete failure");
-            return (Reflect.get(target, property) as (arg: unknown) => unknown).call(
-              target,
-              table,
-            );
-          };
-        }
-        return Reflect.get(target, property);
-      },
-    });
+    const failingDelete = failStatements(database, farmExtraction, Infinity, { operations: ["delete"] });
     await farmingRouter
       .createCaller({ drizzle: failingDelete, userId: "farm-user" } as never)
       .getFarmState();
 
     const [afterGrant] = await database.select().from(farmExtraction);
+    expect(afterGrant).toBeDefined();
     expect(afterGrant?.settledAt).not.toBeNull();
     expect((await database.select().from(userItem))[0]?.quantity).toBe(3);
 
@@ -1358,20 +1285,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     } as never);
 
     // Stand in for the item write failing after the extraction has been claimed.
-    const failingClient = new Proxy(database as object, {
-      get(target, property) {
-        if (property === "insert") {
-          return (table: unknown) => {
-            if (table === userItem) throw new Error("simulated item write failure");
-            return (Reflect.get(target, property) as (arg: unknown) => unknown).call(
-              target,
-              table,
-            );
-          };
-        }
-        return Reflect.get(target, property);
-      },
-    });
+    const failingClient = failStatements(database, userItem, Infinity, { operations: ["insert"] });
     await farmingRouter
       .createCaller({ drizzle: failingClient, userId: "farm-user" } as never)
       .getFarmState();

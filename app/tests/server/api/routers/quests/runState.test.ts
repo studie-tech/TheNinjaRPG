@@ -10,7 +10,7 @@ import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { DialogObjective, InstantStartBattleObjective, QuestTracker, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { beforeStatements } from "../../../../setup/statements";
+import { beforeStatements, failCommits } from "../../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const floor = InstantStartBattleObjective.parse({ id: "floor", task: "start_battle", opponentAIs: [{ ids: ["foe"], number: 1 }] });
@@ -133,20 +133,9 @@ describeWithDatabase("quest run state preservation", () => {
     await insertUserItems([{ id: "tickets", userId: "hero", itemId: "ticket", quantity: 2 }]);
     const authored = await client.query.quest.findFirst({ where: eq(quest.id, "mission") });
     const { user } = await fetchUpdatedUser({ client, userId: "hero" });
-    const transact = client.transaction.bind(client);
-    let attempts = 0;
-    const retryingClient = new Proxy(client, {
-      get(target, key, receiver) {
-        if (key === "transaction") return (callback: Parameters<typeof transact>[0]) => transact(async (tx) => {
-          const result = await callback(tx);
-          if (attempts++ < retries) throw new Error("Deadlock found when trying to get lock (errno 1213)");
-          return result;
-        });
-        return Reflect.get(target, key, receiver);
-      },
-    });
-    expect((await assignQuestToUser({ client: retryingClient, user: user!, quest: authored!, source: "ui", prevAttempt: undefined })).success).toBe(true);
-    expect(attempts).toBe(retries + 1);
+    const retrying = failCommits(client, retries, "Deadlock found when trying to get lock (errno 1213)");
+    expect((await assignQuestToUser({ client: retrying.client, user: user!, quest: authored!, source: "ui", prevAttempt: undefined })).success).toBe(true);
+    expect(retrying.attempts()).toBe(retries + 1);
     expect(user!.dailyMissions).toBe(20);
     expect((await client.query.userData.findFirst({ where: eq(userData.userId, "hero") }))?.dailyMissions).toBe(20);
     expect(await client.query.questHistory.findMany({ where: eq(questHistory.questId, "mission") })).toMatchObject([{ entryPaid: true }]);

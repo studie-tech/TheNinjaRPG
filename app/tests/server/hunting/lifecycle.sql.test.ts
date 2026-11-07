@@ -18,7 +18,7 @@ import {
 import { huntingContract, huntingHabitatContent, huntingMap, insertHuntingWorld } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import type { DrizzleClient } from "@/server/db";
-import { beforeStatements, failStatements } from "../../setup/statements";
+import { beforeStatements, failStatements, inTransactions, overrideQuery } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("Hunting lifecycle", () => {
@@ -243,20 +243,14 @@ describeWithDatabase("Hunting lifecycle", () => {
     await db.update(huntingSession).set({ readyAt: new Date(0) });
     await db.update(huntingProgress).set({ used: 2 });
     const cooldownUntil = new Date(Date.now() + 60_000);
-    const query = new Proxy(db.query, { get(target, key, receiver) {
-      if (key === "huntingProgress") return {
-        findMany: async (...args: Parameters<typeof target.huntingProgress.findMany>) => {
-          const stale = await target.huntingProgress.findMany(...args);
-          // Advance the allowance after its parallel read, as a final victory does.
-          await db.update(huntingProgress).set({ used: 3, version: 1, cooldownUntil });
-          return stale;
-        },
-      };
-      return Reflect.get(target, key, receiver);
-    } });
-    const client = new Proxy(db, { get(target, key, receiver) {
-      return key === "query" ? query : Reflect.get(target, key, receiver);
-    } });
+    const client = overrideQuery(db, "huntingProgress", {
+      findMany: async (read, ...args) => {
+        const stale = await read(...args);
+        // Advance the allowance after its parallel read, as a final victory does.
+        await db.update(huntingProgress).set({ used: 3, version: 1, cooldownUntil });
+        return stale;
+      },
+    });
     expect(await callerForDatabase(huntingRouter, "hunter", client).start({ id: session.id })).toMatchObject({ success: false, message: "Your hunting session changed. Refresh the board and try again." });
     expect(await db.query.battle.findMany()).toHaveLength(0);
     expect(await db.query.battleHistory.findMany()).toHaveLength(0);
@@ -391,9 +385,5 @@ describeWithDatabase("Hunting lifecycle", () => {
 });
 
 /** Apply statement fault/interleaving hooks to the short finish transaction as well. */
-const withTransactionStatements = (database: DrizzleClient, wrap: (client: DrizzleClient) => DrizzleClient): DrizzleClient =>
-  new Proxy(wrap(database), { get(target, key, receiver) {
-    if (key === "transaction") return (...args: Parameters<typeof database.transaction>) =>
-      database.transaction((tx) => args[0](wrap(tx as unknown as DrizzleClient) as typeof tx));
-    return Reflect.get(target, key, receiver);
-  } });
+const withTransactionStatements = (database: DrizzleClient, wrap: (client: DrizzleClient) => DrizzleClient) =>
+  inTransactions(wrap(database), wrap);

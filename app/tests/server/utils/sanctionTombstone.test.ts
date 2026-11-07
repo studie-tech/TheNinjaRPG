@@ -1,7 +1,6 @@
 import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
 import {
   accountDeletion,
   actionLog,
@@ -32,7 +31,7 @@ import {
 import { insertUsers } from "../../setup/factories";
 import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
 import { insertSanctionReports, sanctionIdentity, stubClerkUsers } from "../../setup/sanctions";
-import { beforeStatements, failStatements } from "../../setup/statements";
+import { beforeStatements, failStatements, interceptExecute, sqlText, overrideQuery, aroundStatements } from "../../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
@@ -196,46 +195,29 @@ describeWithDatabase("sanction tombstones", () => {
       await ipEntered;
       const { promise: deletionEntered, resolve: enterDeletion } = deferred<void>();
       const { promise: deletionGate, resolve: releaseDeletion } = deferred<void>();
-      // Read/delete gates must pause after execution; beforeStatements only provides
-      // a before-write hook, so those boundaries need the custom proxy below.
-      const deletionClient = boundary === "before sources"
-        ? beforeStatements(database, sanctionTombstone, [async () => {
-            enterDeletion();
-            await deletionGate;
-          }])
-        : new Proxy(database, {
-            get(target, property, receiver) {
-              if (property === "query" && boundary === "history snapshot")
-                return {
-                  ...target.query,
-                  historicalIp: {
-                    ...target.query.historicalIp,
-                    findMany: async (
-                      ...args: Parameters<typeof target.query.historicalIp.findMany>
-                    ) => {
-                      const result = await target.query.historicalIp.findMany(...args);
-                      enterDeletion();
-                      await deletionGate;
-                      return result;
-                    },
-                  },
-                };
-              if (property === "delete" && boundary === "history removed")
-                return (table: Parameters<typeof target.delete>[0]) => {
-                  const builder = target.delete(table);
-                  if (table !== historicalIp) return builder;
-                  return {
-                    where: async (...args: Parameters<typeof builder.where>) => {
-                      const result = await builder.where(...args);
-                      enterDeletion();
-                      await deletionGate;
-                      return result;
-                    },
-                  };
-                };
-              return Reflect.get(target, property, receiver);
-            },
-          });
+      const pauseDeletion = async () => {
+        enterDeletion();
+        await deletionGate;
+      };
+      // The read and delete gates pause after their statement executes.
+      const deletionClient =
+        boundary === "before sources"
+          ? beforeStatements(database, sanctionTombstone, [pauseDeletion])
+          : boundary === "history snapshot"
+            ? overrideQuery(database, "historicalIp", {
+                findMany: async (read, ...args) => {
+                  const result = await read(...args);
+                  await pauseDeletion();
+                  return result;
+                },
+              })
+            : boundary === "history removed"
+              ? aroundStatements(database, historicalIp, async (run) => {
+                  const result = await run();
+                  await pauseDeletion();
+                  return result;
+                }, { operations: ["delete"] })
+              : database;
       const capture = sanctions.recordSanctionTombstone;
       if (boundary === "captured")
         vi.spyOn(sanctions, "recordSanctionTombstone").mockImplementation(
@@ -1053,20 +1035,10 @@ describeWithDatabase("sanction tombstones", () => {
     stubClerk({ [SANCTIONED]: sanctionIdentity("partial@example.com") });
     const database = await getTestDatabase();
     await deleteUser(database, SANCTIONED);
-    const failingDatabase = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "execute")
-          return async (query: Parameters<DrizzleClient["execute"]>[0]) => {
-            const statement =
-              typeof query === "string"
-                ? query
-                : new MySqlDialect().sqlToQuery(query.getSQL()).sql;
-            if (statement.includes("INSERT INTO `ActionLog`"))
-              throw new Error("Failed to save supporting record");
-            return target.execute(query);
-          };
-        return Reflect.get(target, property, receiver);
-      },
+    const failingDatabase = interceptExecute(database, async (query, run) => {
+      if (sqlText(query).includes("INSERT INTO `ActionLog`"))
+        throw new Error("Failed to save supporting record");
+      return run();
     });
     await expect(register(SANCTIONED, failingDatabase)).rejects.toThrow(
       "Failed to save supporting record",

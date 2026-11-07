@@ -26,7 +26,7 @@ import {
   insertUserVotes,
 } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
-import { beforeStatements, failStatements } from "../../../setup/statements";
+import { beforeStatements, failStatements, beforeTransaction } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const userId = "cook";
@@ -61,15 +61,7 @@ describeWithDatabase("Cooking production and consumption", () => {
   it.each([20, 2])("rejects a direct craft when its %d-unit material stack is listed mid-request", async (quantity) => {
     const db = await getTestDatabase();
     await db.update(userItem).set({ quantity }).where(eq(userItem.id, "rice-stack"));
-    const listing = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "transaction") return Reflect.get(target, property, receiver);
-        return async (...args: Parameters<typeof target.transaction>) => {
-          await target.update(userItem).set({ isInAuction: true }).where(eq(userItem.id, "rice-stack"));
-          return target.transaction(...args);
-        };
-      },
-    });
+    const listing = beforeTransaction(db, () => db.update(userItem).set({ isInAuction: true }).where(eq(userItem.id, "rice-stack")));
     const before = await readUser();
 
     const result = await callerForDatabase(occupationRouter, userId, listing).craftItem({ itemId: "meal", quantity: 1 });

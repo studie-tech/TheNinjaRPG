@@ -1,13 +1,12 @@
-import { jutsuEquipLimit } from "@/drizzle/schema";
+import { jutsuEquipLimit, jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import { exportJutsuLoadout } from "@/libs/loadout";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
 import { insertUsers, insertJutsus } from "../../../../setup/factories";
-import { beforeStatements } from "../../../../setup/statements";
+import { beforeStatements, aroundStatements } from "../../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const USER = "jutsu-sharing-recipient";
@@ -113,7 +112,8 @@ describeWithDatabase("jutsu loadout sharing atomic SQL", () => {
     const input = await previewInput("sharing-active", exportJutsuLoadout(["sharing-old"]));
     const database = await getTestDatabase();
     let concurrentState: Awaited<ReturnType<typeof snapshot>> | undefined;
-    const interleaved = beforeLoadoutConfirmation(database, async () => {
+    // Interleave at no-op SELECT execution, after all preparation reads.
+    const interleaved = aroundStatements(database, jutsuLoadout, async (run) => {
       if (change === "destination") await database.update(jutsuLoadout).set({ jutsuIds: ["sharing-a"] }).where(eq(jutsuLoadout.id, input.loadoutId));
       if (change === "active selection") await database.update(userData).set({ jutsuLoadout: "sharing-inactive" }).where(eq(userData.userId, USER));
       if (change === "missing equipment") await database.update(userJutsu).set({ equipped: false }).where(eq(userJutsu.id, "owned-sharing-old"));
@@ -121,7 +121,8 @@ describeWithDatabase("jutsu loadout sharing atomic SQL", () => {
       if (change === "ownership") await database.delete(userJutsu).where(eq(userJutsu.id, "owned-sharing-old"));
       if (change === "allowance") await database.update(userData).set({ federalStatus: "NONE" }).where(eq(userData.userId, USER));
       concurrentState = await snapshot();
-    });
+      return run();
+    }, { operations: ["select"] });
     const caller = callerForDatabase(jutsuRouter, USER, interleaved);
     const result = await caller.importJutsuLoadout(input);
     if (!concurrentState) throw new Error("No-op confirmation did not read current state");
@@ -130,42 +131,3 @@ describeWithDatabase("jutsu loadout sharing atomic SQL", () => {
     expect(await snapshot()).toEqual(concurrentState);
   });
 });
-
-/**
- * Interleave an edit at no-op SELECT execution, after all preparation reads.
- * The shared statement helper intercepts writes, so it cannot target this read.
- */
-const beforeLoadoutConfirmation = (client: DrizzleClient, action: () => Promise<void>): DrizzleClient => {
-  /** Preserve fluent builder chaining while deferring the interleaving until execution. */
-  const wrap = (builder: object): object => new Proxy(builder, {
-    get(target, property, receiver) {
-      if (property === "then") {
-        const pending = action().then(() => Promise.resolve(target as PromiseLike<unknown>));
-        return pending.then.bind(pending);
-      }
-      const value = Reflect.get(target, property, receiver);
-      if (typeof value !== "function") return value;
-      return (...args: unknown[]) => {
-        const next = value.apply(target, args);
-        return next === target ? receiver : wrap(next);
-      };
-    },
-  });
-  return new Proxy(client, {
-    get(target, property, receiver) {
-      if (property !== "select") return Reflect.get(target, property, receiver);
-      return (...args: Parameters<DrizzleClient["select"]>) => {
-        const selection = target.select(...args);
-        return new Proxy(selection, {
-          get(builder, key, proxy) {
-            if (key !== "from") return Reflect.get(builder, key, proxy);
-            return (table: Parameters<typeof selection.from>[0]) => {
-              const query = builder.from(table);
-              return table === jutsuLoadout ? wrap(query) : query;
-            };
-          },
-        });
-      };
-    },
-  });
-};

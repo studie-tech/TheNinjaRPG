@@ -3,9 +3,8 @@ import { beforeEach, expect, it } from "bun:test";
 import { paypalSubscription, storePurchase, stripeCheckout, stripePayment, userData } from "@/drizzle/schema";
 import { reconcileFederalStatuses, setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
 import { grantStripeReceipt, upgradeStripeFederalWithReps, settleStripePayments, type StripeReceipt } from "@/server/utils/stripe/fulfillment";
-import type { DrizzleClient } from "@/server/db";
 import { insertUsers } from "../../setup/factories";
-import { failStatements } from "../../setup/statements";
+import { failStatements, inTransactions } from "../../setup/statements";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const USER = "stripe-recipient";
@@ -14,14 +13,6 @@ const receipt = (overrides: Partial<StripeReceipt> = {}): StripeReceipt => ({
   amountCents: 1000, reputationPoints: 20, federalStatus: "NONE", purchasedAt: new Date(), ...overrides,
 });
 const user = async () => (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, USER) });
-
-// Apply fault injection inside the transaction that serializes reputation delivery.
-const withTransactionFault = (db: DrizzleClient, wrap: (tx: DrizzleClient) => DrizzleClient) => new Proxy(db, {
-  get(target, property, receiver) {
-    if (property === "transaction") return (run: (tx: DrizzleClient) => Promise<unknown>) => target.transaction((tx) => run(wrap(tx)));
-    return Reflect.get(target, property, receiver);
-  },
-});
 
 describeWithDatabase("Stripe receipt delivery and federal provider coexistence", () => {
   beforeEach(async () => {
@@ -37,7 +28,7 @@ describeWithDatabase("Stripe receipt delivery and federal provider coexistence",
   });
   it("recovers when delivery fails after recording a receipt", async () => {
     const db = await getTestDatabase();
-    await expect(grantStripeReceipt(withTransactionFault(db, (tx) => failStatements(tx, userData)), receipt())).rejects.toThrow();
+    await expect(grantStripeReceipt(inTransactions(db, (tx) => failStatements(tx, userData)), receipt())).rejects.toThrow();
     expect((await user())?.reputationPoints).toBe(0);
     await grantStripeReceipt(db, receipt());
     expect((await user())?.reputationPoints).toBe(20);
@@ -119,7 +110,7 @@ describeWithDatabase("Stripe receipt delivery and federal provider coexistence",
     const db = await getTestDatabase();
     await db.insert(stripePayment).values([receipt({ id: "pi_first" }), receipt({ id: "pi_second" })]);
     let failFirst = true;
-    const faulty = withTransactionFault(db, tx => {
+    const faulty = inTransactions(db, tx => {
       if (!failFirst) return tx;
       failFirst = false;
       return failStatements(tx, userData);

@@ -32,6 +32,7 @@ import { applyVillageMissionShrineDamage } from "@/server/utils/villageMission";
 import { startDeclaredWar, handleWarEnd, applyRaidHealthDecay } from "@/server/utils/war";
 import { insertUsers, insertClans } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables, lockWaitObserved } from "../../../setup/testDatabase";
+import { beforeTransaction } from "../../../setup/statements";
 
 const FACTION = "faction-hideout";
 const TARGET = "target-village";
@@ -350,12 +351,8 @@ describeWithDatabase("faction war declarations", () => {
       });
     }
     // Simulate the driver rejecting the war-start transaction after the vote is claimed.
-    const failingTransactions = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "transaction")
-          return () => Promise.reject(new Error("transaction in use"));
-        return Reflect.get(target, property, receiver);
-      },
+    const failingTransactions = beforeTransaction(database, () => {
+      throw new Error("transaction in use");
     });
     await expect(
       callerForDatabase(warRouter, majority.at(-1)!.userId, failingTransactions).voteOnWarDeclaration({

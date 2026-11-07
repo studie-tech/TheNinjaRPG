@@ -30,7 +30,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { barrier } from "../../../setup/statements";
+import { barrier, aroundStatements, overrideQuery } from "../../../setup/statements";
 import { deferred } from "../../../setup/deferred";
 
 const userId = "queue-settlement";
@@ -69,21 +69,14 @@ const delayQueueRead = (database: DrizzleClient) => {
         };
       },
     });
-  const client = new Proxy(database, {
+  const gatedQueue = overrideQuery(database, "userQueue", {
+    findMany: async (read, ...args) => {
+      await release.promise;
+      return read(...args);
+    },
+  });
+  const client = new Proxy(gatedQueue, {
     get(target, property) {
-      if (property === "query")
-        return {
-          ...target.query,
-          userQueue: {
-            ...target.query.userQueue,
-            findMany: async (
-              ...args: Parameters<typeof target.query.userQueue.findMany>
-            ) => {
-              await release.promise;
-              return target.query.userQueue.findMany(...args);
-            },
-          },
-        };
       if (property === "select")
         return (...args: unknown[]) =>
           wrapBuilder(Reflect.get(target, property).apply(target, args as never));
@@ -95,36 +88,10 @@ const delayQueueRead = (database: DrizzleClient) => {
 
 const gateEnqueueWrites = (database: DrizzleClient) => {
   const bothArrived = barrier(2);
-  const wrap = <T extends object>(builder: T): T =>
-    new Proxy(builder, {
-      get(target, property) {
-        if (property === "then")
-          return async (
-            resolve: (value: unknown) => unknown,
-            reject: (error: unknown) => unknown,
-          ) => {
-            await bothArrived();
-            try {
-              return resolve(await (target as unknown as PromiseLike<unknown>));
-            } catch (error) {
-              return reject(error);
-            }
-          };
-        const value = Reflect.get(target, property);
-        if (typeof value !== "function") return value;
-        return (...args: unknown[]) => {
-          const result = value.apply(target, args);
-          return result && typeof result === "object" ? wrap(result) : result;
-        };
-      },
-    });
-  return new Proxy(database, {
-    get(target, property) {
-      if (property !== "update") return Reflect.get(target, property);
-      return (table: Parameters<typeof target.update>[0]) =>
-        table === userData ? wrap(target.update(table)) : target.update(table);
-    },
-  });
+  return aroundStatements(database, userData, async (run) => {
+    await bothArrived();
+    return run();
+  }, { operations: ["update"] });
 };
 
 const readUser = async () => {

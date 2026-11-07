@@ -13,6 +13,7 @@ import { makeCompleteBattle } from "../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../setup/dungeon";
 import { insertItems, insertUserItems, insertUsers, insertUserPets } from "../../setup/factories";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
+import { withoutTransactions } from "../../setup/statements";
 
 describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   beforeEach(async () => {
@@ -95,17 +96,12 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   it("expires an offline lobby and releases only its own queued members", async () => {
     const info = await admission();
     // A battle-free expiry must not acquire a transaction session, even through a wrapper.
-    const withoutTransactions = new Proxy(info.client, {
-      get(target, key, receiver) {
-        if (key === "transaction") return () => { throw new Error("Unexpected expiry transaction"); };
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const noTransactions = withoutTransactions(info.client);
     await info.client.update(dungeonRun).set({status: "LOBBY", battleId: null, expiresAt: new Date(Date.now()-1)});
     await info.client.update(userData).set({status: "BATTLE", battleId: "other"}).where(eq(userData.userId,"c"));
     const expired = await listExpiredDungeonRuns(info.client);
     expect(expired).toHaveLength(1);
-    const { statements } = await recordQueries(() => Promise.all(expired.map((run) => expireDungeonRun(withoutTransactions,run))));
+    const { statements } = await recordQueries(() => Promise.all(expired.map((run) => expireDungeonRun(noTransactions,run))));
     expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"a")}))?.status).toBe("AWAKE");
     expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"c")}))?.battleId).toBe("other");
     expect((await info.client.query.dungeonMember.findMany()).every((row) => row.activeUserId === null)).toBe(true);

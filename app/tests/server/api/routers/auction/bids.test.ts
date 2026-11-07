@@ -14,7 +14,7 @@ import { auctionRouter, completeAuctionInternal } from "@/server/api/routers/auc
 import type { DrizzleClient } from "@/server/db";
 import * as nativePush from "@/server/utils/push/defer";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { beforeStatements, failStatements, holdReads } from "../../../../setup/statements";
+import { beforeStatements, failStatements, holdReads, inTransactions } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -262,7 +262,7 @@ describeWithDatabase("auction bid atomicity", () => {
   it.each([auctionBid, actionLog])("rolls back the debit and listing if a later write fails", async (table) => {
     await seedBid();
     const db = await getTestDatabase();
-    const failing = wrapTransactions(db, (tx) => failStatements(tx, table));
+    const failing = inTransactions(db, (tx) => failStatements(tx, table));
     const api = callerForDatabase(auctionRouter, "rival", failing);
     await expect(api.placeBid({ auctionId: "auction", amount: 100 })).rejects.toThrow("Statement failed on purpose");
     const state = await saved();
@@ -277,7 +277,7 @@ describeWithDatabase("auction bid atomicity", () => {
 
   it.each(["CANCELLED", "SOLD", "EXPIRED"] as const)("rejects an in-flight bid after the listing becomes %s", async (status) => {
     const db = await getTestDatabase();
-    const changed = wrapTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
+    const changed = inTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
       await db.update(auctionListing).set({ status }).where(eq(auctionListing.id, "auction"));
     }]));
     const api = callerForDatabase(auctionRouter, "bidder", changed);
@@ -292,7 +292,7 @@ describeWithDatabase("auction bid atomicity", () => {
   it("does not charge when the seller cancels before the bid claim", async () => {
     const db = await getTestDatabase();
     const seller = await callerFor(auctionRouter, "seller");
-    const cancelled = wrapTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
+    const cancelled = inTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
       expect((await seller.cancelAuction({ auctionId: "auction" })).success).toBe(true);
     }]));
     const api = callerForDatabase(auctionRouter, "bidder", cancelled);
@@ -333,7 +333,7 @@ describeWithDatabase("auction bid atomicity", () => {
   it("does not charge a bid whose listing settles after its snapshot", async () => {
     await seedBid();
     const db = await getTestDatabase();
-    const settled = wrapTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
+    const settled = inTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
       await db.update(auctionListing).set({ expiresAt: new Date(0) }).where(eq(auctionListing.id, "auction"));
       expect((await completeAuctionInternal(db, "auction")).success).toBe(true);
     }]));
@@ -358,7 +358,7 @@ describeWithDatabase("auction bid atomicity", () => {
 
   it("cannot publish after the deadline passes between the read and claim", async () => {
     const db = await getTestDatabase();
-    const expired = wrapTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
+    const expired = inTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
       await db.update(auctionListing).set({ expiresAt: new Date(0) }).where(eq(auctionListing.id, "auction"));
     }]));
     const api = callerForDatabase(auctionRouter, "bidder", expired);
@@ -368,7 +368,7 @@ describeWithDatabase("auction bid atomicity", () => {
 
   it("rolls the listing claim back if the available balance changes", async () => {
     const db = await getTestDatabase();
-    const spent = wrapTransactions(db, (tx) => beforeStatements(tx, userData, [async () => {
+    const spent = inTransactions(db, (tx) => beforeStatements(tx, userData, [async () => {
       await db.update(userData).set({ bank: 0 }).where(eq(userData.userId, "bidder"));
     }]));
     const api = callerForDatabase(auctionRouter, "bidder", spent);
@@ -426,12 +426,3 @@ describeWithDatabase("auction bid atomicity", () => {
 
 /** Both resolvers must finish the same listing snapshot before either can mutate it. */
 const synchronizeAuctionReads = (db: DrizzleClient) => holdReads(db, "auctionListing", 2);
-
-const wrapTransactions = (db: DrizzleClient, wrap: (tx: DrizzleClient) => DrizzleClient) =>
-  new Proxy(db, {
-    get(target, key, receiver) {
-      if (key !== "transaction") return Reflect.get(target, key, receiver);
-      return (work: Parameters<DrizzleClient["transaction"]>[0]) =>
-        target.transaction((tx) => work(wrap(tx as unknown as DrizzleClient) as unknown as typeof tx));
-    },
-  });

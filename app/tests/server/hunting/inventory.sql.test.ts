@@ -37,7 +37,7 @@ import {
 } from "../../setup/factories";
 import { acceptReadySession, insertHuntingWorld } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements, pollUntil } from "../../setup/statements";
+import { beforeStatements, pollUntil, overrideQuery } from "../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -50,44 +50,25 @@ import { deferred } from "../../setup/deferred";
 const pauseRead = (db: DrizzleClient, equipment: boolean) => {
   const reached = deferred<void>();
   const resume = deferred<void>();
-  const userQuery = new Proxy(db.query.userData, {
-    get(target, key, receiver) {
-      if (equipment && key === "findMany")
-        return async (...args: Parameters<typeof target.findMany>) => {
-          const rows = await target.findMany(...args);
-          if ((args[0] as { with?: { items?: unknown } })?.with?.items) {
-            reached.resolve();
-            await resume.promise;
-          }
+  const hold = async () => {
+    reached.resolve();
+    await resume.promise;
+  };
+  const client = equipment
+    ? overrideQuery(db, "userData", {
+        findMany: async (read, ...args) => {
+          const rows = await read(...args);
+          if ((args[0] as { with?: { items?: unknown } })?.with?.items) await hold();
           return rows;
-        };
-      return Reflect.get(target, key, receiver);
-    },
-  });
-  const itemQuery = new Proxy(db.query.userItem, {
-    get(target, key, receiver) {
-      if (!equipment && key === "findMany")
-        return async (...args: Parameters<typeof target.findMany>) => {
-          const rows = await target.findMany(...args);
-          reached.resolve();
-          await resume.promise;
+        },
+      })
+    : overrideQuery(db, "userItem", {
+        findMany: async (read, ...args) => {
+          const rows = await read(...args);
+          await hold();
           return rows;
-        };
-      return Reflect.get(target, key, receiver);
-    },
-  });
-  const query = new Proxy(db.query, {
-    get(target, key, receiver) {
-      if (key === "userData") return userQuery;
-      if (key === "userItem") return itemQuery;
-      return Reflect.get(target, key, receiver);
-    },
-  });
-  const client = new Proxy(db, {
-    get(target, key, receiver) {
-      return key === "query" ? query : Reflect.get(target, key, receiver);
-    },
-  });
+        },
+      });
   return { client, reached: reached.promise, resume: resume.resolve };
 };
 
@@ -95,48 +76,10 @@ const pauseRead = (db: DrizzleClient, equipment: boolean) => {
 const pauseMergePublish = (db: DrizzleClient) => {
   const reached = deferred<void>();
   const resume = deferred<void>();
-  let paused = false;
-  const client = new Proxy(db, {
-    get(target, key, receiver) {
-      if (key === "update")
-        return (table: Parameters<typeof target.update>[0]) => {
-          const builder = target.update(table);
-          if (table !== userItem) return builder;
-          return new Proxy(builder, {
-            get(update, property, updateReceiver) {
-              if (property === "set")
-                return (values: Parameters<typeof update.set>[0]) => {
-                  const setter = update.set(values);
-                  if (paused || !("quantity" in values) || "updatedAt" in values)
-                    return setter;
-                  paused = true;
-                  return new Proxy(setter, {
-                    get(set, setKey, setReceiver) {
-                      if (setKey === "where")
-                        return (...args: Parameters<typeof set.where>) => {
-                          const write = set.where(...args);
-                          return new Proxy(write, {
-                            get(statement, writeKey, writeReceiver) {
-                              if (writeKey === "then")
-                                return (...callbacks: Parameters<typeof statement.then>) => {
-                                  reached.resolve();
-                                  return resume.promise.then(() => statement.then(...callbacks));
-                                };
-                              return Reflect.get(statement, writeKey, writeReceiver);
-                            },
-                          });
-                        };
-                      return Reflect.get(set, setKey, setReceiver);
-                    },
-                  });
-                };
-              return Reflect.get(update, property, updateReceiver);
-            },
-          });
-        };
-      return Reflect.get(target, key, receiver);
-    },
-  });
+  const client = beforeStatements(db, userItem, [async () => {
+    reached.resolve();
+    await resume.promise;
+  }], { when: (set) => "quantity" in set && !("updatedAt" in set) });
   return { client, reached: reached.promise, resume: resume.resolve };
 };
 

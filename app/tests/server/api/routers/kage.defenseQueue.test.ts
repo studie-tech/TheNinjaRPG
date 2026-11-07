@@ -14,8 +14,7 @@ import { villageRouter } from "@/server/api/routers/village";
 import { kageRouter } from "@/server/api/routers/kage";
 import { syncKageDefense, syncLockedKageDefense, withinKageChallengeLimits, withKageDefense } from "@/server/utils/kage";
 import { calcBattleResult } from "@/libs/combat/util";
-import type { DrizzleClient } from "@/server/db";
-import { beforeStatements, failStatements } from "../../../setup/statements";
+import { beforeStatements, failStatements, inTransactions, beforeTransaction, failCommits } from "../../../setup/statements";
 import { getKageSlots } from "@/utils/kage";
 import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
@@ -104,16 +103,9 @@ describeWithDatabase("scheduled Kage defenses", () => {
   it.each(["defender", "first"])("rejects %s recovery when the preference changes after combat preload", async (actor) => {
     const input = await launchInput(actor); const db = await getTestDatabase();
     await db.update(userData).set({ status: "ASLEEP", autoWakeUp: true }).where(eq(userData.userId, actor));
-    let transactionCalls = 0;
-    const racing = new Proxy(db, { get(target, key, receiver) {
-      if (key !== "transaction") return Reflect.get(target, key, receiver);
-      return (callback: Parameters<typeof db.transaction>[0]) => db.transaction((tx) => {
-        const launch = ++transactionCalls === 2;
-        return callback(launch ? beforeStatements(tx as unknown as DrizzleClient, userData, [async () => {
-          await tx.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, actor));
-        }]) as typeof tx : tx);
-      });
-    } });
+    const racing = inTransactions(db, (tx, attempt) => attempt === 2 ? beforeStatements(tx, userData, [async () => {
+      await tx.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, actor));
+    }]) : tx);
     const result = await callerForDatabase(kageRouter, actor, racing).startDefense(input);
     expect(result.success).toBe(false);
     expect(result).not.toHaveProperty("actionNotice");
@@ -251,18 +243,12 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const { m, input, defender } = await invite(); const db = await getTestDatabase();
     // Admission reconciles first; the second transaction is the atomic launch after
     // combat preload. Interleave here to exercise the final guards rather than preflight.
-    let transactionCalls = 0;
-    const wrapped = new Proxy(db, { get(target, key, receiver) {
-      if (key !== "transaction") return Reflect.get(target, key, receiver);
-      return async (callback: Parameters<typeof db.transaction>[0]) => {
-        if (++transactionCalls === 2) {
-          if (change === "cancel") await defender.dismissInstantDefense(input);
-          if (change === "expire") setSystemTime(new Date(now.getTime() + KAGE_DEFENSE_INSTANT_REQUEST_MINUTES * 60_000));
-          if (change === "busy") await db.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, "defender"));
-        }
-        return db.transaction(callback);
-      };
-    } });
+    const wrapped = beforeTransaction(db, async (call) => {
+      if (call !== 2) return;
+      if (change === "cancel") await defender.dismissInstantDefense(input);
+      if (change === "expire") setSystemTime(new Date(now.getTime() + KAGE_DEFENSE_INSTANT_REQUEST_MINUTES * 60_000));
+      if (change === "busy") await db.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, "defender"));
+    });
     expect((await callerForDatabase(kageRouter, "first", wrapped).startDefense(input)).success).toBe(false);
     expect(await db.query.battle.findMany()).toHaveLength(0);
     expect((await db.query.kageDefendedChallenges.findFirst())).toEqual(expect.objectContaining({ scheduledAt: m.scheduledAt, status: "SCHEDULED", startedAt: null }));
@@ -489,18 +475,8 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ status: "HOSPITALIZED", regenAt: new Date(Date.now() - 24 * 60 * 60 * 1000) }).where(eq(userData.userId, "first"));
     const publication = vi.spyOn(liveActivity, "pushActivityUpdate").mockResolvedValue(undefined);
-    const rejectedCommit = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property === "transaction") {
-          return (callback: (tx: DrizzleClient) => Promise<unknown>) => target.transaction(async (tx) => {
-            await callback(tx as unknown as DrizzleClient);
-            throw new Error("Check-in commit rejected");
-          });
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
-    await expect(callerForDatabase(kageRouter, "first", rejectedCommit).checkInDefense({ id: match.id })).rejects.toThrow("Check-in commit rejected");
+    const rejectedCommit = failCommits(db, 1);
+    await expect(callerForDatabase(kageRouter, "first", rejectedCommit.client).checkInDefense({ id: match.id })).rejects.toThrow("Commit failed on purpose");
     expect(publication).not.toHaveBeenCalled();
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "first") })).toMatchObject({ status: "HOSPITALIZED" });
     expect(await db.query.kageDefendedChallenges.findFirst({ where: eq(kageDefendedChallenges.id, match.id) })).toMatchObject({ checkedInAt: null });
@@ -656,10 +632,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
   });
   it("rolls back battle deletion if its queue receipt cannot complete", async () => {
     const { db, m, fight, result } = await terminalDefense();
-    const failing = new Proxy(db, { get(target, key, receiver) {
-      if (key !== "transaction") return Reflect.get(target, key, receiver);
-      return (callback: Parameters<typeof db.transaction>[0]) => db.transaction((tx) => callback(failStatements(tx as unknown as DrizzleClient, kageDefendedChallenges) as typeof tx));
-    } });
+    const failing = inTransactions(db, (tx) => failStatements(tx, kageDefendedChallenges));
     await expect(updateBattle(failing, result, "defender", fight, fight.version)).rejects.toThrow("Statement failed on purpose");
     expect((await db.query.battle.findFirst())?.id).toBe(fight.id);
     expect((await db.query.kageDefendedChallenges.findFirst({ where: eq(kageDefendedChallenges.id, m.id) }))?.status).toBe("BATTLE");

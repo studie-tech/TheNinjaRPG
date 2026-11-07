@@ -11,7 +11,7 @@ import * as sentry from "@/server/utils/sentry";
 import { buyRepsSchema, storeBundleSchema, storeBundleSchemaForItems } from "@/validators/points";
 import { dynamicMonthlyRepCap, getStoreBundleMinimumPriceCents, reps2dollars } from "@/utils/paypal";
 import { insertItems, insertUsers } from "../../../setup/factories";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, withoutTransactions, overrideQuery } from "../../../setup/statements";
 import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 const contents = {reputationPoints:20, money:500, items:[{id:"store-item",quantity:7}]};
@@ -479,14 +479,10 @@ describeWithDatabase("web store payments", () => {
     const failed = await reserve();
     const paid = await reserve();
     let lookups = 0;
-    const failingClient = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "query") return Reflect.get(target, property, receiver);
-        const findFirst = (async (...args: Parameters<typeof target.query.webStoreOrder.findFirst>) => {
-          if (lookups++ === 0) throw error;
-          return target.query.webStoreOrder.findFirst(...args);
-        }) as unknown as typeof target.query.webStoreOrder.findFirst;
-        return { ...target.query, webStoreOrder: { findFirst } };
+    const failingClient = overrideQuery(db, "webStoreOrder", {
+      findFirst: async (read, ...args) => {
+        if (lookups++ === 0) throw error;
+        return read(...args);
       },
     });
     const report = spyOn(sentry, "logError").mockImplementation(() => {});
@@ -530,20 +526,15 @@ describeWithDatabase("web store payments", () => {
   });
   it("reserves and authorizes zero-reputation offers without transactions or buyer locks", async () => {
     const db = await getTestDatabase();
-    const withoutTransactions = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property === "transaction") return () => { throw new Error("Unexpected transaction"); };
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const noTransactions = withoutTransactions(db);
     const recorded = await recordQueries(async () => {
       for (const contents of [
         {reputationPoints:0,money:500,items:[]},
         {reputationPoints:0,money:0,items:[{id:"store-item",quantity:1}]},
       ]) {
-        const result = await reserveStoreOrder(withoutTransactions,"buyer","recipient",{...offer,contents});
+        const result = await reserveStoreOrder(noTransactions,"buyer","recipient",{...offer,contents});
         if (!result.success) throw new Error(result.message);
-        expect(await authorizeStoreCapture(withoutTransactions,result.order.id,"buyer")).toBeNull();
+        expect(await authorizeStoreCapture(noTransactions,result.order.id,"buyer")).toBeNull();
       }
     });
     expect(recorded.statements.some(statement => /for update|start transaction|begin/i.test(statement))).toBe(false);

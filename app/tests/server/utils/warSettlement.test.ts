@@ -2,7 +2,6 @@ import { fetchActiveWar, fetchEndedWars } from "@/queries/war";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, expect, it, spyOn, vi } from "bun:test";
 import { eq, type SQL } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
 import mysql from "mysql2/promise";
 import {
   FACTION_RAID_REWARD,
@@ -53,30 +52,13 @@ import {
   resetTables,
   runRawSql,
 } from "../../setup/testDatabase";
+import { interceptExecute, sqlText, withoutTransactions } from "../../setup/statements";
 
 const warId = "settlement-war";
 const sectorId = 205;
 const tokens = WAR_PURCHASE_SHRINE_TOKEN_COST * 3;
-const dialect = new MySqlDialect();
-const statement = (query: SQL) => dialect.sqlToQuery(query).sql;
-const intercept = (
-  db: DrizzleClient,
-  run: (
-    query: SQL,
-    execute: () => ReturnType<DrizzleClient["execute"]>,
-  ) => ReturnType<DrizzleClient["execute"]>,
-) =>
-  new Proxy(db, {
-    get(target, property, receiver) {
-      if (property === "execute")
-        return (query: SQL) => run(query, () => target.execute(query));
-      if (property === "transaction")
-        return () => {
-          throw new Error("Settlement must not open a transaction");
-        };
-      return Reflect.get(target, property, receiver);
-    },
-  });
+const intercept = (db: DrizzleClient, run: Parameters<typeof interceptExecute>[1]) =>
+  interceptExecute(withoutTransactions(db, "Settlement must not open a transaction"), run);
 const seed = async (type: WarType = "VILLAGE_WAR") => {
   const db = await getTestDatabase();
   await db.insert(village).values(
@@ -408,7 +390,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
   it("resumes failed cleanup through active-war reads without paying or notifying twice", async () => {
     const db = await seed();
     const client = intercept(db, async (query, execute) => {
-      if (statement(query).includes("DELETE qh"))
+      if (sqlText(query).includes("DELETE qh"))
         throw new Error("Quest cleanup unavailable");
       return execute();
     });
@@ -727,7 +709,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       }
       let declaredWarId: string | undefined;
       const client = intercept(db, async (query, execute) => {
-        if (!declaredWarId && statement(query).trimStart().startsWith("UPDATE `War`")) {
+        if (!declaredWarId && sqlText(query).trimStart().startsWith("UPDATE `War`")) {
           const pending = connection ? execute() : undefined;
           if (connection) await new Promise((resolve) => setTimeout(resolve, 50));
           expect((await savedWar(db))?.status).toBe("ACTIVE");
@@ -814,7 +796,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       requiresUserRefresh: false,
     }));
     const fail = intercept(db, async (query, execute) => {
-      if (statement(query).trimStart().startsWith("UPDATE `War`"))
+      if (sqlText(query).trimStart().startsWith("UPDATE `War`"))
         throw new Error("Claim unavailable");
       return execute();
     });
@@ -854,7 +836,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     const db = await seed();
     await addOffer(db);
     const client = intercept(db, async (query, execute) => {
-      if (statement(query).includes("UPDATE `UserRequest` r"))
+      if (sqlText(query).includes("UPDATE `UserRequest` r"))
         throw new Error("Payment unavailable");
       return execute();
     });
@@ -895,7 +877,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
           requiresUserRefresh: false,
         }));
         const paymentFailure = intercept(db, async (query, execute) => {
-          if (statement(query).includes("UPDATE `UserRequest` r"))
+          if (sqlText(query).includes("UPDATE `UserRequest` r"))
             throw new Error("Payment unavailable");
           return execute();
         });
@@ -1045,7 +1027,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
         }));
         const delayed = intercept(db, async (query, execute) => {
           if (
-            statement(query).includes(
+            sqlText(query).includes(
               phase === "reservation"
                 ? "INSERT IGNORE INTO `WarAlly`"
                 : "UPDATE `UserRequest` r",
@@ -1114,7 +1096,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       }
       let admittedAt: Date | undefined;
       const client = intercept(db, async (query, execute) => {
-        if (!admittedAt && statement(query).trimStart().startsWith("UPDATE `War`")) {
+        if (!admittedAt && sqlText(query).trimStart().startsWith("UPDATE `War`")) {
           const pending = connection ? execute() : undefined;
           await new Promise((resolve) => setTimeout(resolve, 50));
           expect((await savedWar(db))?.status).toBe("ACTIVE");
@@ -1173,7 +1155,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
   it("delayed delivery preserves quests and shrine queues created after the settlement", async () => {
     const db = await seed();
     const client = intercept(db, async (query, execute) => {
-      if (statement(query).includes("DELETE qh"))
+      if (sqlText(query).includes("DELETE qh"))
         throw new Error("Cleanup unavailable");
       return execute();
     });

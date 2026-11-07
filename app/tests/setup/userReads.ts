@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { getTestDatabase } from "./testDatabase";
+import { overrideQuery } from "./statements";
 
 /** The stored row for `userId`, through `client` when a test holds an observed connection. */
 export const readUser = async (userId: string, client?: DrizzleClient) =>
@@ -16,22 +17,25 @@ export const requireUser = async (userId: string, client?: DrizzleClient) => {
   return user;
 };
 
-/** Observe profile reads on one caller without changing the shared database client. */
-export const countUserReads = (database: DrizzleClient) => {
+type UserRead = Parameters<DrizzleClient["query"]["userData"]["findFirst"]>[0];
+
+/**
+ * Observe profile reads on one caller without changing the shared database client.
+ * `counts` limits the tally to the reads it accepts.
+ */
+export const countUserReads = (
+  database: DrizzleClient,
+  counts: (options: UserRead) => boolean = () => true,
+) => {
   let reads = 0;
   let userWrites = 0;
-  const userQueries = new Proxy(database.query.userData, {
-    get(target, property, receiver) {
-      if (property === "findFirst") {
-        return (...args: Parameters<typeof target.findFirst>) => {
-          reads += 1;
-          return target.findFirst(...args);
-        };
-      }
-      return Reflect.get(target, property, receiver);
+  const counted = overrideQuery(database, "userData", {
+    findFirst: (read, ...args) => {
+      if (counts(args[0])) reads += 1;
+      return read(...args);
     },
   });
-  const client = new Proxy(database, {
+  const client = new Proxy(counted, {
     get(target, property, receiver) {
       if (property === "update") {
         return (table: Parameters<typeof target.update>[0]) => {
@@ -39,7 +43,6 @@ export const countUserReads = (database: DrizzleClient) => {
           return target.update(table);
         };
       }
-      if (property === "query") return { ...target.query, userData: userQueries };
       return Reflect.get(target, property, receiver);
     },
   });

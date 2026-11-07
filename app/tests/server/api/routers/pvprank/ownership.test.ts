@@ -22,7 +22,7 @@ import { deleteUserRankedQueueRow, pvpRankRouter } from "@/server/api/routers/pv
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
-import { beforeStatements } from "../../../../setup/statements";
+import { beforeStatements, interceptExecute, overrideQuery } from "../../../../setup/statements";
 import { readUser } from "../../../../setup/userReads";
 import {
   callerForDatabase,
@@ -347,14 +347,9 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
 
   it("preserves ownership when a committed claim loses its response", async () => {
     const db = await getTestDatabase();
-    const client = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "execute") return Reflect.get(target, property, receiver);
-        return async (query: Parameters<typeof target.execute>[0]) => {
-          await target.execute(query);
-          throw new Error("Claim response lost");
-        };
-      },
+    const client = interceptExecute(db, async (_query, run) => {
+      await run();
+      throw new Error("Claim response lost");
     });
     await expect(
       callerForDatabase(pvpRankRouter, "member", client).queueForRankedPvp(),
@@ -392,25 +387,12 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   it("preserves a newer ranked owner during delayed failed-clan-join compensation", async () => {
     const db = await getTestDatabase();
     let reads = 0;
-    const queried = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "query") return Reflect.get(target, property, receiver);
-        return {
-          ...target.query,
-          mpvpBattleQueue: {
-            ...target.query.mpvpBattleQueue,
-            findFirst: async (
-              ...args: Parameters<typeof target.query.mpvpBattleQueue.findFirst>
-            ) => {
-              reads += 1;
-              if (reads === 2)
-                expect(await deleteClanBattle(db, { id: "q", battleId: null })).toBe(
-                  true,
-                );
-              return target.query.mpvpBattleQueue.findFirst(...args);
-            },
-          },
-        };
+    const queried = overrideQuery(db, "mpvpBattleQueue", {
+      findFirst: async (read, ...args) => {
+        reads += 1;
+        if (reads === 2)
+          expect(await deleteClanBattle(db, { id: "q", battleId: null })).toBe(true);
+        return read(...args);
       },
     });
     const client = beforeStatements(queried, userData, [

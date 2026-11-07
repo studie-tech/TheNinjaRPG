@@ -8,8 +8,7 @@ import { farmingRouter } from "@/server/api/routers/farming";
 import { homeRouter } from "@/server/api/routers/home";
 import * as nativePush from "@/server/utils/push/defer";
 import { tradeUpdate } from "@/server/utils/push/messages";
-import { beforeStatements, failStatements } from "../../../../setup/statements";
-import type { DrizzleClient } from "@/server/db";
+import { beforeStatements, failStatements, inTransactions } from "../../../../setup/statements";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
@@ -217,14 +216,9 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
     await insertItems([{ id: "chair", name: "Chair", itemType: "FURNITURE", canBeTraded: true, canStack: false }]);
     await insertUserItems([{ id: "owner-chair", userId: "owner", itemId: "chair", homeX: 24, homeY: 68 }]);
     const database = await getTestDatabase();
-    const reservationDatabase = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "transaction") return Reflect.get(target, key, receiver);
-        return (work: Parameters<DrizzleClient["transaction"]>[0]) => target.transaction((tx) => work(beforeStatements(tx as DrizzleClient, userItem, [async () => {
-          await database.update(userItem).set({ homeX: 31, homeY: 72, homeRotation: 1 }).where(eq(userItem.id, "owner-chair"));
-        }]) as typeof tx));
-      },
-    });
+    const reservationDatabase = inTransactions(database, (tx) => beforeStatements(tx, userItem, [async () => {
+      await database.update(userItem).set({ homeX: 31, homeY: 72, homeRotation: 1 }).where(eq(userItem.id, "owner-chair"));
+    }]));
     const owner = callerForDatabase(auctionRouter, "owner", reservationDatabase);
     expect((await owner.createAuctionOffer({ offerType: "TRADE", requestedItemId: "ore", requestedQuantity: 1, offeredUserItemId: "owner-chair", offeredQuantity: 1 })).success).toBe(true);
     const [offer] = await database.select().from(auctionOffer);
@@ -346,12 +340,7 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
   it("rolls back a split, offer claim and payment if delivery fails", async () => {
     const offer = await postTrade();
     const db = await getTestDatabase();
-    const failed = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "transaction") return (work: Parameters<DrizzleClient["transaction"]>[0]) => target.transaction((tx) => work(failStatements(tx as DrizzleClient, actionLog) as typeof tx));
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const failed = inTransactions(db, (tx) => failStatements(tx, actionLog));
     const supplier = callerForDatabase(auctionRouter, "supplier", failed);
     await expect(supplier.acceptAuctionOffer({ offerId: offer.id, userItemId: "supplier-ore" })).rejects.toThrow("Statement failed on purpose");
     expect(queuePush).not.toHaveBeenCalled();
@@ -364,12 +353,7 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
 
   it("rolls back a bank reservation if creating the offer fails", async () => {
     const db = await getTestDatabase();
-    const failed = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "transaction") return (work: Parameters<DrizzleClient["transaction"]>[0]) => target.transaction((tx) => work(failStatements(tx as DrizzleClient, auctionOffer) as typeof tx));
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const failed = inTransactions(db, (tx) => failStatements(tx, auctionOffer));
     const owner = callerForDatabase(auctionRouter, "owner", failed);
     await expect(owner.createAuctionOffer({ offerType: "REQUEST", requestedItemId: "ore", requestedQuantity: 10, ryo: 300 })).rejects.toThrow("Statement failed on purpose");
     expect((await balances()).owner).toBe(1000);

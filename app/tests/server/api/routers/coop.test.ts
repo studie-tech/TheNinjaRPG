@@ -4,7 +4,6 @@ import { eq } from "drizzle-orm";
 import { conversation, dungeon, dungeonMember, dungeonRun, quest, questHistory, questParty, user2conversation, userData, village, villageStructure } from "@/drizzle/schema";
 import { profileRouter, fetchUpdatedUser } from "@/routers/profile";
 import * as Sentry from "@sentry/nextjs";
-import type { DrizzleClient } from "@/server/db";
 import { AllObjectives, QuestTracker, ObjectiveTracker } from "@/validators/objectives";
 import { coopRouter } from "@/server/api/routers/coop";
 import { Pusher } from "@/libs/pusher";
@@ -12,6 +11,7 @@ import { dungeonContent } from "../../../setup/dungeon";
 import { insertUsers } from "../../../setup/factories";
 import { insertQuestTeamWorld, insertTeamQuest } from "../../../setup/questParty";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { aroundStatements } from "../../../setup/statements";
 
 describeWithDatabase("co-op activity adapters", () => {
   beforeEach(async () => {
@@ -90,14 +90,10 @@ describeWithDatabase("co-op activity adapters", () => {
     tracker.goals[0]!.value = 6;
     tracker.party!.contributions = [ObjectiveTracker.parse({ id: "train", value: 6 })];
     await db.update(userData).set({ questData: trackers }).where(eq(userData.userId, "leader"));
-    const failing = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "update") return (table: Parameters<typeof db.update>[0]) => table === questParty
-          ? { set: () => ({ where: async () => { if (mode === "failure") throw new Error("Synchronization unavailable"); return { rowsAffected: 0 }; } }) }
-          : target.update(table);
-        return Reflect.get(target, key, receiver);
-      },
-    }) as DrizzleClient;
+    const failing = aroundStatements(db, questParty, async () => {
+      if (mode === "failure") throw new Error("Synchronization unavailable");
+      return { rowsAffected: 0 };
+    }, { operations: ["update"] });
     const capture = vi.spyOn(Sentry, "captureException").mockReturnValue("test-event");
     const response = await callerForDatabase(profileRouter, "leader", failing).getUser();
     expect(response.userData?.userId).toBe("leader");

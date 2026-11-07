@@ -14,6 +14,7 @@ import type { DrizzleClient } from "@/server/db";
 import { insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
+import { beforeTransaction, inTransactions, failStatements } from "../../../setup/statements";
 
 const playerId = "forum-player"; const adminId = "forum-admin"; const moderatorId = "forum-scoped-moderator";
 const topicInput = (board_id = "general") => ({ board_id, title: "Learning the shinobi arts", content: "<p>A useful game discussion.</p>", senderId: null, image: null });
@@ -65,11 +66,8 @@ describeWithDatabase("forum authorization, administration and discussion lifecyc
     expect(await db.query.forumPost.findMany()).toHaveLength(1);
   });
   it("rolls topic and opening post back if a counter statement fails", async () => {
-    const db = await getTestDatabase(); const failing = new Proxy(db, { get(target, key, receiver) {
-      if (key === "transaction") return (work: (tx: unknown) => unknown) => target.transaction(tx => work(new Proxy(tx, { get(transaction, property, txReceiver) { if (property === "update") return (table: unknown) => { if (table === forumBoard) throw new Error("Counter write failed"); return transaction.update(table as never); }; return Reflect.get(transaction, property, txReceiver); } })) as Promise<unknown>);
-      return Reflect.get(target, key, receiver);
-    } });
-    await expect((await client(playerId, failing)).createThread(topicInput())).rejects.toThrow("Counter write failed");
+    const db = await getTestDatabase(); const failing = inTransactions(db, tx => failStatements(tx, forumBoard, 1, { operations: ["update"] }));
+    await expect((await client(playerId, failing)).createThread(topicInput())).rejects.toThrow("Statement failed on purpose");
     expect(await db.query.forumThread.findMany()).toHaveLength(0); expect(await db.query.forumPost.findMany()).toHaveLength(0);
     expect(moderation.deferModeration).not.toHaveBeenCalled();
   });
@@ -521,7 +519,7 @@ describeWithDatabase("forum authorization, administration and discussion lifecyc
   });
   it("rejects stale public News publication after its guest access changes", async () => {
     const db = await getTestDatabase();
-    const stale = new Proxy(db, { get(target, key, receiver) { if (key === "transaction") return async (work: Parameters<DrizzleClient["transaction"]>[0]) => { await db.update(forumBoard).set({ policy: { read: "STAFF", create: "STAFF" } }).where(eq(forumBoard.id, "news")); return target.transaction(work); }; return Reflect.get(target, key, receiver); } });
+    const stale = beforeTransaction(db, () => db.update(forumBoard).set({ policy: { read: "STAFF", create: "STAFF" } }).where(eq(forumBoard.id, "news")));
     expect((await (await client(adminId, stale)).createThread(topicInput("news"))).success).toBe(false); expect(await db.query.forumThread.findMany()).toHaveLength(0);
   });
   it("publishes approved public News once and keeps private News private", async () => {
@@ -656,15 +654,11 @@ describeWithDatabase("forum authorization, administration and discussion lifecyc
         await db.update(forumPost).set({ deletedAt: null }).where(eq(forumPost.id, post.id));
         await db.update(forumThread).set({ deletedAt: null }).where(eq(forumThread.id, id));
       }
-      const database = stale ? new Proxy(db, { get(database, key, receiver) {
-        if (key === "transaction") return async (work: Parameters<DrizzleClient["transaction"]>[0]) => {
-          const removedPost = before[0].find(p => p.id === post.id)!; const removedThread = before[1].find(t => t.id === id)!;
-          await db.update(forumPost).set({ deletedAt: removedPost.deletedAt }).where(eq(forumPost.id, post.id));
-          await db.update(forumThread).set({ deletedAt: removedThread.deletedAt }).where(eq(forumThread.id, id));
-          return database.transaction(work);
-        };
-        return Reflect.get(database, key, receiver);
-      } }) : db;
+      const database = stale ? beforeTransaction(db, async () => {
+        const removedPost = before[0].find(p => p.id === post.id)!; const removedThread = before[1].find(t => t.id === id)!;
+        await db.update(forumPost).set({ deletedAt: removedPost.deletedAt }).where(eq(forumPost.id, post.id));
+        await db.update(forumThread).set({ deletedAt: removedThread.deletedAt }).where(eq(forumThread.id, id));
+      }) : db;
       const result = await approve(await client(moderatorId, database));
       expect(result).toMatchObject({ success: false, message: expect.stringContaining("Refresh") });
       expect(await snapshot()).toEqual(before);
@@ -892,12 +886,11 @@ describeWithDatabase("forum authorization, administration and discussion lifecyc
   });
   it("rejects a post moved after preload and an author removal after a post lock", async () => {
     const topicId = await create(); const privateId = await create("private-board", adminId); const db = await getTestDatabase(); const post = (await db.query.forumPost.findMany({ where: eq(forumPost.threadId, topicId) }))[0]!;
-    const beforeTransaction = (change: () => Promise<unknown>) => new Proxy(db, { get(target, key, receiver) { if (key === "transaction") return async (work: Parameters<DrizzleClient["transaction"]>[0]) => { await change(); return target.transaction(work); }; return Reflect.get(target, key, receiver); } });
-    const moved = beforeTransaction(() => db.update(forumPost).set({ threadId: privateId }).where(eq(forumPost.id, post.id)) as unknown as Promise<unknown>);
+    const moved = beforeTransaction(db, () => db.update(forumPost).set({ threadId: privateId }).where(eq(forumPost.id, post.id)));
     expect((await (await client(moderatorId, moved)).moderatePost({ postId: post.id, action: "LOCK", reason: "Stale scope must reject" })).success).toBe(false);
     expect((await db.query.forumPost.findFirst({ where: eq(forumPost.id, post.id) }))?.isLocked).toBe(false);
     await db.update(forumPost).set({ threadId: topicId }).where(eq(forumPost.id, post.id));
-    const locked = beforeTransaction(() => db.update(forumPost).set({ isLocked: true }).where(eq(forumPost.id, post.id)) as unknown as Promise<unknown>);
+    const locked = beforeTransaction(db, () => db.update(forumPost).set({ isLocked: true }).where(eq(forumPost.id, post.id)));
     expect((await (await comments(playerId, locked)).deleteForumComment({ id: post.id })).success).toBe(false);
     expect((await db.query.forumPost.findFirst({ where: eq(forumPost.id, post.id) }))?.deletedAt).toBeNull();
   });
@@ -911,13 +904,9 @@ describeWithDatabase("forum authorization, administration and discussion lifecyc
     const [before, board, audit] = await Promise.all([discussionState(), db.query.forumBoard.findFirst({ where: eq(forumBoard.id, "general") }), db.query.forumAudit.findMany()]);
     const actorId = action === "author removal" ? playerId : moderatorId;
     const policy = action === "author removal" ? { deleteOwn: false } : { read: "STAFF" as const };
-    const stale = new Proxy(db, { get(target, key, receiver) {
-      if (key === "transaction") return async (work: Parameters<DrizzleClient["transaction"]>[0]) => {
-        expect((await (await client(adminId)).saveBoard({ ...board!, policy, reason: "Restrict access to this discussion" })).success).toBe(true);
-        return target.transaction(work);
-      };
-      return Reflect.get(target, key, receiver);
-    } });
+    const stale = beforeTransaction(db, async () => {
+      expect((await (await client(adminId)).saveBoard({ ...board!, policy, reason: "Restrict access to this discussion" })).success).toBe(true);
+    });
     const result = await (await comments(actorId, stale)).deleteForumComment({ id: post.id });
     const permissions = (await getForumContext(db, actorId)).boards.find(b => b.id === "general")!.permissions;
     expect(action === "author removal" ? permissions.remove : permissions.moderate).toBe(false);

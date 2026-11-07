@@ -35,6 +35,7 @@ import {
   resetTables,
 } from "../../../setup/testDatabase";
 import { restoreEnvAfterEach } from "../../../setup/env";
+import { interceptExecute, sqlText } from "../../../setup/statements";
 
 restoreEnvAfterEach("CRON_SECRET");
 
@@ -107,14 +108,9 @@ describeWithDatabase("war ally reservations during request expiry", () => {
 
   it("releases an interrupted reservation so a replacement offer can pay once", async () => {
     const db = await getTestDatabase();
-    const interrupted = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property === "execute") return (query: SQL) => {
-          if (dialect.sqlToQuery(query).sql.includes("UPDATE `UserRequest` r")) throw new Error("Payment interrupted");
-          return target.execute(query);
-        };
-        return Reflect.get(target, property, receiver);
-      },
+    const interrupted = interceptExecute(db, (query, run) => {
+      if (sqlText(query).includes("UPDATE `UserRequest` r")) throw new Error("Payment interrupted");
+      return run();
     });
     await expect(acceptWarAllyOffer(interrupted, offer)).rejects.toThrow("Payment interrupted");
     expect(await db.select().from(warAlly)).toHaveLength(1);
@@ -153,17 +149,12 @@ describeWithDatabase("war ally reservations during request expiry", () => {
 
   it("expiry overlapping interrupted admission leaves neither reservation nor payment", async () => {
     const db = await getTestDatabase();
-    const overlapping = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property === "execute") return async (query: SQL) => {
-          if (dialect.sqlToQuery(query).sql.includes("UPDATE `UserRequest` r")) {
-            await expireRequests(db);
-            throw new Error("Payment interrupted after expiry");
-          }
-          return target.execute(query);
-        };
-        return Reflect.get(target, property, receiver);
-      },
+    const overlapping = interceptExecute(db, async (query, run) => {
+      if (sqlText(query).includes("UPDATE `UserRequest` r")) {
+        await expireRequests(db);
+        throw new Error("Payment interrupted after expiry");
+      }
+      return run();
     });
     await expect(acceptWarAllyOffer(overlapping, offer)).rejects.toThrow("Payment interrupted after expiry");
     expect(await db.select().from(userRequest)).toHaveLength(0);

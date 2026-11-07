@@ -28,6 +28,7 @@ import {
   lockWaitObserved,
 } from "../../../setup/testDatabase";
 import { deferred } from "../../../setup/deferred";
+import { interceptExecute, withoutTransactions, inTransactions, overrideQuery } from "../../../setup/statements";
 
 const sectorId = 205;
 const leader = "defender-kage";
@@ -47,22 +48,12 @@ const declaration = {
 /** Exercise the procedure's real SQL while rejecting an application transaction. */
 const releaseClient = (
   database: DrizzleClient,
-  run: (
-    query: SQL,
-    execute: () => ReturnType<DrizzleClient["execute"]>,
-  ) => ReturnType<DrizzleClient["execute"]> = (_query, execute) => execute(),
+  run: Parameters<typeof interceptExecute>[1] = (_query, execute) => execute(),
 ) =>
-  new Proxy(database, {
-    get(target, property, receiver) {
-      if (property === "transaction")
-        return () => {
-          throw new Error("Sector release must use one guarded statement");
-        };
-      if (property === "execute")
-        return (query: SQL) => run(query, () => target.execute(query));
-      return Reflect.get(target, property, receiver);
-    },
-  });
+  interceptExecute(
+    withoutTransactions(database, "Sector release must use one guarded statement"),
+    run,
+  );
 
 /** Observe the contested parent row, rather than relying on a timing delay. */
 const expectVillageLockWait = async (requestedMode: "S" | "X") => {
@@ -192,28 +183,13 @@ describeWithDatabase("guarded sector release", () => {
     await enableObjectives(database);
     const locked = deferred<void>();
     const resume = deferred<void>();
-    const declarationClient = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property !== "transaction") return Reflect.get(target, property, receiver);
-        return (callback: Parameters<DrizzleClient["transaction"]>[0]) =>
-          target.transaction((tx) => callback(new Proxy(tx, {
-            get(transaction, key, txReceiver) {
-              if (key !== "query") return Reflect.get(transaction, key, txReceiver);
-              return {
-                ...transaction.query,
-                war: {
-                  ...transaction.query.war,
-                  findMany: async (options: Parameters<typeof transaction.query.war.findMany>[0]) => {
-                    locked.resolve();
-                    await resume.promise;
-                    return transaction.query.war.findMany(options);
-                  },
-                },
-              };
-            },
-          })));
+    const declarationClient = inTransactions(database, (tx) => overrideQuery(tx, "war", {
+      findMany: async (read, ...args) => {
+        locked.resolve();
+        await resume.promise;
+        return read(...args);
       },
-    });
+    }));
     const started = startDeclaredWar(declarationClient, declaration);
     let released: ReturnType<typeof release> | undefined;
     try {
@@ -242,7 +218,7 @@ describeWithDatabase("guarded sector release", () => {
     const client = releaseClient(database, async (query) => {
       // Keep this real procedure statement uncommitted only to observe the declaration's wait.
       await connection.beginTransaction();
-      const compiled = dialect.sqlToQuery(query);
+      const compiled = dialect.sqlToQuery(query as SQL);
       const [result] = await connection.query<mysql.ResultSetHeader>(compiled.sql, compiled.params);
       deleted.resolve();
       await resume.promise;

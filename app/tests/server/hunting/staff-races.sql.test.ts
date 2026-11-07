@@ -18,7 +18,7 @@ import {
 } from "../../setup/factories";
 import { acceptReadySession, huntingContract, huntingHabitatContent, insertHuntingWorld } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements, holdReads } from "../../setup/statements";
+import { beforeStatements, holdReads, beforeTransaction, overrideQuery } from "../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 import { deferred } from "../../setup/deferred";
 
@@ -185,32 +185,27 @@ describeWithDatabase("staff changes during hunting admission", () => {
     const material = await db.query.item.findFirst({ where: eq(item.id, "hide") });
     const inventory = await db.query.userItem.findMany({ where: eq(userItem.itemId, "hide") });
     let pendingActiveCheck: Promise<unknown> | undefined;
-    const sessions = new Proxy(db.query.huntingSession, { get(target, key, receiver) {
-      if (key === "findFirst") return (...args: Parameters<typeof target.findFirst>) => {
-        pendingActiveCheck = Promise.resolve(target.findFirst(...args));
-        return pendingActiveCheck;
-      };
-      return Reflect.get(target, key, receiver);
-    } });
-    const habitats = new Proxy(db.query.huntingHabitat, { get(target, key, receiver) {
-      if (key === "findMany") return async (...args: Parameters<typeof target.findMany>) => {
-        // Let an independently started session check finish before publishing the new snapshot.
-        await Promise.resolve();
-        await pendingActiveCheck;
-        expect((await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).success).toBe(true);
-        const content = huntingHabitatContent();
-        content.contracts[0]!.rewards = [{ itemId: "tusk", quantity: 1, chance: 100 }];
-        expect((await callerForDatabase(huntingRouter, "staff", db).save({ id: "forest", content })).success).toBe(true);
-        return target.findMany(...args);
-      };
-      return Reflect.get(target, key, receiver);
-    } });
-    const query = new Proxy(db.query, { get(target, key, receiver) {
-      return key === "huntingSession" ? sessions : key === "huntingHabitat" ? habitats : Reflect.get(target, key, receiver);
-    } });
-    const client = new Proxy(db, { get(target, key, receiver) {
-      return key === "query" ? query : Reflect.get(target, key, receiver);
-    } });
+    const client = overrideQuery(
+      overrideQuery(db, "huntingSession", {
+        findFirst: (read, ...args) => {
+          pendingActiveCheck = Promise.resolve(read(...args));
+          return pendingActiveCheck;
+        },
+      }),
+      "huntingHabitat",
+      {
+        findMany: async (read, ...args) => {
+          // Let an independently started session check finish before publishing the new snapshot.
+          await Promise.resolve();
+          await pendingActiveCheck;
+          expect((await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).success).toBe(true);
+          const content = huntingHabitatContent();
+          content.contracts[0]!.rewards = [{ itemId: "tusk", quantity: 1, chance: 100 }];
+          expect((await callerForDatabase(huntingRouter, "staff", db).save({ id: "forest", content })).success).toBe(true);
+          return read(...args);
+        },
+      },
+    );
     expect(await callerForDatabase(itemRouter, "staff", client).delete({ id: "hide" })).toMatchObject({ success: false, message: expect.stringContaining("active hunting session") });
     expect(await db.query.item.findFirst({ where: eq(item.id, "hide") })).toEqual(material);
     expect(await db.query.userItem.findMany({ where: eq(userItem.itemId, "hide") })).toEqual(inventory);
@@ -334,19 +329,12 @@ describeWithDatabase("staff changes during hunting admission", () => {
 
   it("admits accepted terms when a staff save overlaps battle admission", async () => {
     const { db, id } = await acceptReadySession();
-    let edited = false;
-    const client = new Proxy(db, { get(target, key, receiver) {
-      if (key === "transaction") return async (...args: Parameters<typeof target.transaction>) => {
-        if (!edited) {
-          edited = true;
-          const content = huntingHabitatContent();
-          content.contracts = [];
-          expect((await callerForDatabase(huntingRouter, "staff", db).save({ id: "forest", content })).success).toBe(true);
-        }
-        return target.transaction(...args);
-      };
-      return Reflect.get(target, key, receiver);
-    } });
+    const client = beforeTransaction(db, async (call) => {
+      if (call !== 1) return;
+      const content = huntingHabitatContent();
+      content.contracts = [];
+      expect((await callerForDatabase(huntingRouter, "staff", db).save({ id: "forest", content })).success).toBe(true);
+    });
     expect((await callerForDatabase(huntingRouter, "hunter", client).start({ id })).success).toBe(true);
     await settleVictory(db);
   });
@@ -419,10 +407,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
       const { db, id } = await acceptReadySession();
       const { promise: reached, resolve: paused } = deferred<void>();
       const { promise: wait, resolve: resume } = deferred<void>();
-      const client = new Proxy(db, { get(target, key, receiver) {
-        if (key === "transaction") return async (...args: Parameters<typeof target.transaction>) => { paused(); await wait; return target.transaction(...args); };
-        return Reflect.get(target, key, receiver);
-      } });
+      const client = beforeTransaction(db, async () => { paused(); await wait; });
       const pending = callerForDatabase(huntingRouter, "hunter", client).start({ id });
       try {
         await reached;

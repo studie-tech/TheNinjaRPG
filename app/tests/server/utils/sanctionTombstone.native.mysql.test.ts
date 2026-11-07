@@ -26,7 +26,7 @@ import { fetchActiveSanctionTombstones } from "@/queries/reports";
 import { insertUsers } from "../../setup/factories";
 import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
 import { insertSanctionReports, sanctionIdentity, stubClerkUsers } from "../../setup/sanctions";
-import { beforeStatements } from "../../setup/statements";
+import { beforeStatements, interceptExecute, aroundStatements } from "../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -153,30 +153,22 @@ const deleteReplacement = async () => {
 /** Pause an atomic decision write to interleave authorized actions and cleanup. */
 const pauseNextDecision = async (beforeWrite = false) => {
   const database = await getTestDatabase();
-  const execute = database.execute.bind(database);
   const { promise: entered, resolve: enter } = deferred<void>();
   const { promise: gate, resolve: release } = deferred<void>();
   let paused = false;
-  const client = new Proxy(database, {
-    get(target, property, receiver) {
-      if (property === "execute") {
-        return async (...args: Parameters<typeof execute>) => {
-          if (paused) return execute(...args);
-          paused = true;
-          if (beforeWrite) {
-            enter();
-            await gate;
-          }
-          const result = await execute(...args);
-          if (!beforeWrite) {
-            enter();
-            await gate;
-          }
-          return result;
-        };
-      }
-      return Reflect.get(target, property, receiver);
-    },
+  const client = interceptExecute(database, async (_query, run) => {
+    if (paused) return run();
+    paused = true;
+    if (beforeWrite) {
+      enter();
+      await gate;
+    }
+    const result = await run();
+    if (!beforeWrite) {
+      enter();
+      await gate;
+    }
+    return result;
   });
   return { client, entered, release };
 };
@@ -313,30 +305,17 @@ describeWithDatabase("original sanctions during native deletion", () => {
         .where(eq(userData.userId, NATIVE_USER));
       await recordSanctionTombstone(database, NATIVE_USER, identity);
       let attempts = 0;
-      const injected = new Proxy(database, {
-        get(target, property, receiver) {
-          if (property === "delete")
-            return (table: Parameters<typeof target.delete>[0]) => {
-              if (table !== sanctionTombstone) return target.delete(table);
-              return {
-                where: async (
-                  ...args: Parameters<ReturnType<typeof target.delete>["where"]>
-                ) => {
-                  attempts += 1;
-                  if (deadlock && attempts === 1)
-                    throw Object.assign(
-                      new Error(
-                        "Deadlock found when trying to get lock; try restarting transaction",
-                      ),
-                      { errno: 1213, code: "ER_LOCK_DEADLOCK", sqlState: "40001" },
-                    );
-                  return target.delete(table).where(...args);
-                },
-              };
-            };
-          return Reflect.get(target, property, receiver);
-        },
-      });
+      const injected = aroundStatements(database, sanctionTombstone, async (run) => {
+        attempts += 1;
+        if (deadlock && attempts === 1)
+          throw Object.assign(
+            new Error(
+              "Deadlock found when trying to get lock; try restarting transaction",
+            ),
+            { errno: 1213, code: "ER_LOCK_DEADLOCK", sqlState: "40001" },
+          );
+        return run();
+      }, { operations: ["delete"] });
       expect(
         await callerForDatabase(reportsRouter, "staff", injected).clear(decisionInput),
       ).toMatchObject({ success: true });

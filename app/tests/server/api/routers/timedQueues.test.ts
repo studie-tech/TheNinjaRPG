@@ -19,7 +19,6 @@ import { getMasteryQueue } from "@/libs/queue";
 import { calcJutsuTrainCost, calcJutsuTrainTime, findJutsuInTraining } from "@/libs/train";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { occupationRouter } from "@/server/api/routers/occupation";
-import type { DrizzleClient } from "@/server/db";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
 import {
@@ -36,7 +35,7 @@ import {
   insertUserVotes,
 } from "../../../setup/factories";
 import { queueMasteries, readMasteryQueue } from "../../../setup/queues";
-import { beforeStatements, failStatements } from "../../../setup/statements";
+import { beforeStatements, failStatements, inTransactions } from "../../../setup/statements";
 import type { MasteryTrainingQueueEntry } from "@/validators/train";
 import { requireUser } from "../../../setup/userReads";
 import {
@@ -609,17 +608,7 @@ describeWithDatabase("crafting queue", () => {
       finishesAt: new Date(now.getTime() + MINUTE),
     });
     const before = await readCraftQueue();
-    const client = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "transaction") {
-          return (callback: (tx: DrizzleClient) => Promise<unknown>) =>
-            target.transaction((tx) =>
-              callback(failStatements(tx as unknown as DrizzleClient, userItem)),
-            );
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const client = inTransactions(database, (tx) => failStatements(tx, userItem));
     await expect(settleCraftingQueue(client, USER_ID, now)).rejects.toThrow(
       "Statement failed on purpose",
     );

@@ -22,6 +22,7 @@ import { insertQuests, insertUsers, insertUserVotes, insertClans } from "../../.
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 import { deferred } from "../../../setup/deferred";
+import { overrideQuery } from "../../../setup/statements";
 
 type Profile = RouterOutputs["profile"]["getUser"];
 type DungeonState = RouterOutputs["coop"]["dungeon"]["getState"];
@@ -432,23 +433,22 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     const cache = cachedProfile(initial, () => profile.getUser());
     const { promise: memberGate, resolve: releaseMember } = deferred<void>();
     const { promise: openingMoney, resolve: actorRead } = deferred<number | undefined>();
-    const delayed = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "query") return Reflect.get(target, property, receiver);
-        return {
-          ...target.query,
-          userData: { ...target.query.userData, findFirst: async (...args: Parameters<typeof target.query.userData.findFirst>) => {
-            const actor = await target.query.userData.findFirst(...args);
-            actorRead(actor?.money);
-            return actor;
-          } },
-          dungeonMember: { ...target.query.dungeonMember, findFirst: async (...args: Parameters<typeof target.query.dungeonMember.findFirst>) => {
-            await memberGate;
-            return target.query.dungeonMember.findFirst(...args);
-          } },
-        };
+    const delayed = overrideQuery(
+      overrideQuery(db, "userData", {
+        findFirst: async (read, ...args) => {
+          const actor = await read(...args);
+          actorRead(actor?.money);
+          return actor;
+        },
+      }),
+      "dungeonMember",
+      {
+        findFirst: async (read, ...args) => {
+          await memberGate;
+          return read(...args);
+        },
       },
-    });
+    );
     const revision = cache.callbacks.onMutate();
     const pending = callerForDatabase(dungeonRouter, userId, delayed).claim({ id: "completed-run" });
     try {

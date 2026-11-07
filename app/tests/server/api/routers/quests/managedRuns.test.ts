@@ -38,7 +38,7 @@ import {
   insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../../setup/queues";
-import { beforeStatements, failStatements } from "../../../../setup/statements";
+import { beforeStatements, failStatements, withoutTransactions } from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -50,18 +50,6 @@ import {
 import { deferred } from "../../../../setup/deferred";
 
 const router = createTRPCRouter({ quests: questsRouter });
-
-/** Fail if a floor or abandonment unnecessarily opens a transaction. */
-const withoutTransactions = (client: DrizzleClient): DrizzleClient =>
-  new Proxy(client, {
-    get(target, property, receiver) {
-      if (property === "transaction")
-        return () => {
-          throw new Error("Unexpected managed-run transaction");
-        };
-      return Reflect.get(target, property, receiver);
-    },
-  });
 
 /** Exercise battle initialization with the same attempt snapshot as the quest router. */
 const startFloor = (client: DrizzleClient, attempt: UserQuest) =>

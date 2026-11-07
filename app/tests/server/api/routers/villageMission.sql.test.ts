@@ -20,7 +20,7 @@ import {
 } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../setup/testDatabase";
 import { makeBattleUser, makeCompleteBattle } from "../../../libs/combat/helpers/battleScenario";
-import { barrier } from "../../../setup/statements";
+import { barrier, withoutTransactions, interceptExecute } from "../../../setup/statements";
 
 const state = async () => (await getTestDatabase()).query.village.findFirst({ where: eq(village.id, "v1") });
 const leader = async () => callerFor(villageMissionRouter, "leader");
@@ -432,13 +432,7 @@ describeWithDatabase("Village Missions and maintenance on real MySQL", () => {
     await (await leader()).select({ villageId: "v1" });
     const battle = await shrineBattle(type);
     battle.usersState[0]!.isAi = isAi;
-    const noTransactions = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property === "transaction") throw new Error("Unexpected shrine transaction");
-        return Reflect.get(target, property, receiver);
-      },
-    });
-    await updateWars(noTransactions, {} as never, battle, shrineResult(change), "member");
+    await updateWars(withoutTransactions(db), {} as never, battle, shrineResult(change), "member");
     expect((await db.query.war.findFirst({ where: eq(war.id, "w1") }))?.defenderShrineHp).toBe(15 + change);
     expect((await state())?.missionCounters.siege_operation ?? 0).toBe(!isAi && change < 0 ? -change : 0);
   });
@@ -502,12 +496,7 @@ describeWithDatabase("Village Missions and maintenance on real MySQL", () => {
     await db.update(village).set({ type: "STRONGHOLD", leaderUpdatedAt: new Date("2020-01-01") }).where(eq(village.id, "v1"));
     await insertClans([{ id: "c1", name: "Faction", villageId: "v1", leaderId: "leader", points: 500_000 }]);
     await db.update(userData).set({ clanId: "c1" }).where(eq(userData.userId, "leader"));
-    const noTransactions = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property === "transaction") throw new Error("Unexpected upgrade transaction");
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const noTransactions = withoutTransactions(db);
     const caller = callerForDatabase(kageRouter, "leader", synchronizeUpgradeClaims(noTransactions));
     const results = await Promise.all([1, 2].map(() => caller.upgradeStructure({ structureId: "bank", villageId: "v1", clanId: "c1" })));
     expect(results.filter((result) => result.success)).toHaveLength(1);
@@ -517,14 +506,9 @@ describeWithDatabase("Village Missions and maintenance on real MySQL", () => {
     // Membership can change after the endpoint's upfront reads but before the guarded write.
     await db.update(villageStructure).set({ level: 1 }).where(eq(villageStructure.id, "bank"));
     await db.update(clan).set({ points: 500_000 }).where(eq(clan.id, "c1"));
-    const revoked = new Proxy(noTransactions, {
-      get(target, property, receiver) {
-        if (property === "execute") return async (...args: Parameters<typeof db.execute>) => {
-          await db.update(userData).set({ clanId: null }).where(eq(userData.userId, "leader"));
-          return db.execute(...args);
-        };
-        return Reflect.get(target, property, receiver);
-      },
+    const revoked = interceptExecute(noTransactions, async (_query, run) => {
+      await db.update(userData).set({ clanId: null }).where(eq(userData.userId, "leader"));
+      return run();
     });
     const staleCaller = callerForDatabase(kageRouter, "leader", revoked);
     expect((await staleCaller.upgradeStructure({ structureId: "bank", villageId: "v1", clanId: "c1" })).success).toBe(false);
@@ -550,13 +534,8 @@ const shrineResult = (change: number) => ({ didWin: 1, shrineChangeHp: change, v
 /** Both requests must load the same level before either guarded upgrade can commit. */
 const synchronizeUpgradeClaims = (db: Awaited<ReturnType<typeof getTestDatabase>>) => {
   const bothLoaded = barrier(2);
-  return new Proxy(db, {
-    get(target, property, receiver) {
-      if (property === "execute") return async (...args: Parameters<typeof db.execute>) => {
-        await bothLoaded();
-        return db.execute(...args);
-      };
-      return Reflect.get(target, property, receiver);
-    },
+  return interceptExecute(db, async (_query, run) => {
+    await bothLoaded();
+    return run();
   });
 };

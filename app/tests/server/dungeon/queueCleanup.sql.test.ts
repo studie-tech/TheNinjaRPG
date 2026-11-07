@@ -1,7 +1,6 @@
 /** Ordinary and delayed activity cleanup must preserve another live dungeon's reservation. */
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
 import {
   actionLog,
   aiProfile,
@@ -49,7 +48,7 @@ import {
   insertUserPets,
 } from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements } from "../../setup/statements";
+import { beforeStatements, interceptExecute, sqlText } from "../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -300,28 +299,18 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
         endsAt: new Date("2100-01-01T00:00:00.000Z"),
       });
     let interposed = false;
-    const dialect = new MySqlDialect();
-    const delayed = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "execute")
-          return async (query: Parameters<typeof target.execute>[0]) => {
-            const isInsert = dialect
-              .sqlToQuery(query as never)
-              .sql.includes("INSERT IGNORE INTO MpvpBattleUser");
-            const result = await target.execute(query);
-            if (isInsert && !interposed) {
-              interposed = true;
-              await createDungeon();
-              await db
-                .update(territoryWar)
-                .set({ endsAt: new Date("2000-01-02T00:00:00.000Z") })
-                .where(eq(territoryWar.id, "event"));
-              await cleanupTerritoryWarTeams(db);
-            }
-            return result;
-          };
-        return Reflect.get(target, key, receiver);
-      },
+    const delayed = interceptExecute(db, async (query, run) => {
+      const result = await run();
+      if (sqlText(query).includes("INSERT IGNORE INTO MpvpBattleUser") && !interposed) {
+        interposed = true;
+        await createDungeon();
+        await db
+          .update(territoryWar)
+          .set({ endsAt: new Date("2000-01-02T00:00:00.000Z") })
+          .where(eq(territoryWar.id, "event"));
+        await cleanupTerritoryWarTeams(db);
+      }
+      return result;
     });
     const result = await callerForDatabase(territoryWarRouter, "a", delayed).createTeam(
       { eventId: "event" },

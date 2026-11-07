@@ -14,7 +14,7 @@ import {
   insertDefaultAiProfile,
   insertUserPets,
 } from "../../../../setup/factories";
-import { beforeStatements } from "../../../../setup/statements";
+import { beforeStatements, overrideQuery } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
 
@@ -171,21 +171,15 @@ const beforeParticipantRead = (database: DrizzleClient, change: () => Promise<vo
     if (++completed === 2) release();
     return result;
   };
-  const pets = new Proxy(database.query.userPet, { get(target, property, receiver) {
-    return property === "findMany" ? (...args: Parameters<typeof target.findMany>) => afterRead(target.findMany(...args)) : Reflect.get(target, property, receiver);
-  } });
-  const jutsus = new Proxy(database.query.jutsu, { get(target, property, receiver) {
-    return property === "findMany" ? (...args: Parameters<typeof target.findMany>) => typeof args[0]?.where === "function" ? afterRead(target.findMany(...args)) : target.findMany(...args) : Reflect.get(target, property, receiver);
-  } });
-  const users = new Proxy(database.query.userData, { get(target, property, receiver) {
-    if (property !== "findMany") return Reflect.get(target, property, receiver);
-    return async (...args: Parameters<typeof target.findMany>) => {
+  const pets = overrideQuery(database, "userPet", { findMany: (read, ...args) => afterRead(read(...args)) });
+  const jutsus = overrideQuery(pets, "jutsu", {
+    findMany: (read, ...args) => typeof args[0]?.where === "function" ? afterRead(read(...args)) : read(...args),
+  });
+  return overrideQuery(jutsus, "userData", {
+    findMany: async (read, ...args) => {
       await preloaded;
       await change();
-      return target.findMany(...args);
-    };
-  } });
-  return new Proxy(database, { get(target, property, receiver) {
-    return property === "query" ? { ...target.query, userPet: pets, jutsu: jutsus, userData: users } : Reflect.get(target, property, receiver);
-  } });
+      return read(...args);
+    },
+  });
 };

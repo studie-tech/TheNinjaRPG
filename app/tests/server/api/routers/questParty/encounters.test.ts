@@ -24,7 +24,6 @@ import { fetchUpdatedUser } from "@/routers/profile";
 import { combatRouter } from "@/routers/combat";
 import { questPartyRouter, startQuestPartyEncounter } from "@/routers/questParty";
 import { travelRouter } from "@/routers/travel";
-import type { DrizzleClient } from "@/server/db";
 import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import { AllObjectives } from "@/validators/objectives";
 import { getTagSchema } from "@/validators/combat";
@@ -41,6 +40,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { aroundStatements } from "../../../../setup/statements";
 
 describeWithDatabase("quest team encounter location claims", () => {
   beforeEach(async () => {
@@ -160,22 +160,10 @@ describeWithDatabase("quest team encounter location claims", () => {
     const client = await getTestDatabase();
     await insertTeamQuest([AllObjectives.parse({ id: "encounter", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }] })], { maxAttempts: 3 });
     const { leader, party } = await formQuestTeam();
-    const failing = new Proxy(client, {
-      get(target, key, receiver) {
-        if (key === "update") return (table: Parameters<typeof client.update>[0]) => {
-          if (table !== questParty) return target.update(table);
-          return { set: (values: Partial<typeof questParty.$inferInsert>) => {
-            const next = target.update(questParty).set(values);
-            if (typeof values.battleId !== "string" || values.battleId.startsWith("claiming:")) return next;
-            return { where: async (guard: Parameters<typeof next.where>[0]) => {
-              if (committed) await next.where(guard);
-              throw new Error("Publication unavailable");
-            } };
-          } };
-        };
-        return Reflect.get(target, key, receiver);
-      },
-    }) as DrizzleClient;
+    const failing = aroundStatements(client, questParty, async (run) => {
+      if (committed) await run();
+      throw new Error("Publication unavailable");
+    }, { when: (set) => typeof set.battleId === "string" && !set.battleId.startsWith("claiming:") });
     await expect(callerForDatabase(questPartyRouter, "leader", failing).startEncounter({ partyId: party.id })).rejects.toThrow("Publication unavailable");
     const [saved, fight, members] = await Promise.all([
       client.query.questParty.findFirst(), client.query.battle.findFirst(), client.query.userData.findMany(),
@@ -239,44 +227,28 @@ describeWithDatabase("quest team encounter location claims", () => {
         const { user } = await fetchUpdatedUser({ client, userId: "leader" });
         let interposed = false;
         // Execute legal travel at a real SQL boundary without changing the production predicate.
-        const interleaved = new Proxy(client, {
-          get(target, property, receiver) {
-            if (property === "update")
-              return (table: unknown) => {
-                const builder = target.update(table as typeof userData);
-                return {
-                  set: (values: Record<string, unknown>) => {
-                    const next = builder.set(values);
-                    const beforePreload =
-                      table === questParty &&
-                      String(values.battleId).startsWith("claiming:") &&
-                      (timing === "before combat preload" ||
-                        timing === "all before combat preload");
-                    const beforeClaim =
-                      table === userData &&
-                      values.status === "BATTLE" &&
-                      timing === "before participant claim";
-                    if (!beforePreload && !beforeClaim) return next;
-                    return {
-                      where: async (predicate: Parameters<typeof next.where>[0]) => {
-                        if (beforeClaim) await move("helper");
-                        const result = await next.where(predicate);
-                        if (beforePreload) {
-                          expect(result.rowsAffected).toBe(1);
-                          await move("helper");
-                          if (timing === "all before combat preload")
-                            await move("leader");
-                        }
-                        interposed = true;
-                        return result;
-                      },
-                    };
-                  },
-                };
-              };
-            return Reflect.get(target, property, receiver);
+        const interleaved = aroundStatements(
+          aroundStatements(client, questParty, async (run) => {
+            const result = (await run()) as { rowsAffected: number };
+            expect(result.rowsAffected).toBe(1);
+            await move("helper");
+            if (timing === "all before combat preload") await move("leader");
+            interposed = true;
+            return result;
+          }, {
+            when: (set) =>
+              String(set.battleId).startsWith("claiming:") &&
+              (timing === "before combat preload" || timing === "all before combat preload"),
+          }),
+          userData,
+          async (run) => {
+            await move("helper");
+            const result = await run();
+            interposed = true;
+            return result;
           },
-        }) as DrizzleClient;
+          { when: (set) => set.status === "BATTLE" && timing === "before participant claim" },
+        );
         const ambush =
           battleType === "RANDOM_ENCOUNTER" && user?.questParty
             ? rollObjectiveAttackers(

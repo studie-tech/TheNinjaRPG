@@ -9,7 +9,7 @@ import type { DrizzleClient } from "@/server/db";
 import { cleanupTerritoryWarTeams, resolveTerritoryWar, settleTerritoryWarCombat, syncTerritoryWars, territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { guardianVictory } from "../../setup/territoryWar";
 import { insertUsers, insertClans } from "../../setup/factories";
-import { failStatements } from "../../setup/statements";
+import { failStatements, inTransactions, withoutTransactions } from "../../setup/statements";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 
 const now = () => new Date();
@@ -109,13 +109,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     const event = { ...eventRow(), endsAt: new Date(Date.now() + (state === "active" ? 60000 : -1000)) };
     await db.insert(territoryWar).values(event);
     if (state === "active") await db.insert(territoryWarScore).values({ warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: 399 });
-    const noTransaction = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "transaction") return () => { throw new Error("Expiry needs only its guarded UPDATE"); };
-        return Reflect.get(target, key, receiver);
-      },
-    });
-    await syncTerritoryWars(noTransaction);
+    await syncTerritoryWars(withoutTransactions(db, "Expiry needs only its guarded UPDATE"));
     expect((await db.query.territoryWar.findFirst())?.resolvedAt).toEqual(state === "expired" ? event.endsAt : null);
     expect((await db.query.territoryWarScore.findFirst())?.rewarded ?? false).toBe(false);
     expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(10);
@@ -146,12 +140,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     const event = { ...eventRow(), endsAt: new Date(Date.now() - 1000) };
     await db.insert(territoryWar).values(event);
     await db.insert(territoryWarScore).values({ warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: 12 });
-    const failing = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "transaction") return (run: (tx: DrizzleClient) => Promise<unknown>) => target.transaction(tx => run(failStatements(tx as unknown as DrizzleClient, table)));
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const failing = inTransactions(db, tx => failStatements(tx, table));
     await expect(syncTerritoryWars(failing)).rejects.toThrow("Statement failed on purpose");
     expect((await db.query.territoryWar.findFirst())?.resolvedAt).toBeNull();
     expect((await db.query.territoryWarScore.findFirst())?.rewarded).toBe(false);
@@ -197,12 +186,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     fight.usersState[0]!.fledBattle = outcome === "flee";
     fight.usersState[1]!.curHealth = outcome === "mutual knockout" ? 0 : 100;
     await db.insert(battle).values(fight);
-    const noTransaction = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "transaction") return () => { throw new Error("Scoreless claim needs only its guarded DELETE"); };
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const noTransaction = withoutTransactions(db, "Scoreless claim needs only its guarded DELETE");
     const result = calcBattleResult(fight, "player-0", []);
     expect(result).not.toBeNull();
     const claimed = await recordQueries(() => updateBattle(noTransaction, result, "player-0", fight, fight.version));

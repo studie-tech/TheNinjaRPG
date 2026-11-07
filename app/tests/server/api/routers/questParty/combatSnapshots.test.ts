@@ -37,6 +37,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { beforeStatements } from "../../../../setup/statements";
 
 describeWithDatabase("quest team snapshots during unrelated battle", () => {
   beforeEach(async () => {
@@ -548,29 +549,4 @@ const beforeUserWrite = (
   client: DrizzleClient,
   matches: (set: Record<string, unknown>) => boolean,
   run: () => Promise<void>,
-) => {
-  let paused = false;
-  return new Proxy(client, {
-    get(target, key, receiver) {
-      if (key === "update")
-        return (table: Parameters<DrizzleClient["update"]>[0]) => {
-          const query = target.update(table);
-          return {
-            set: (set: Record<string, unknown>) => {
-              const pending = query.set(set);
-              return {
-                where: async (...conditions: Parameters<typeof pending.where>) => {
-                  if (table === userData && !paused && matches(set)) {
-                    paused = true;
-                    await run();
-                  }
-                  return pending.where(...conditions);
-                },
-              };
-            },
-          };
-        };
-      return Reflect.get(target, key, receiver);
-    },
-  }) as DrizzleClient;
-};
+) => beforeStatements(client, userData, [run], { when: matches });

@@ -9,6 +9,7 @@ import { CACHE_RESTRICTED_REWARD_MESSAGE } from "@/libs/weightedCache";
 import { ItemValidator, NonCombatConsumeRewardTag, RollRandomBloodline } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { inTransactions, failStatements, beforeTransaction } from "../../../../setup/statements";
 
 /** Exercise repeated bundle grants across both stackable and non-stackable inventory rows. */
 const cacheEffect = () => NonCombatConsumeRewardTag.parse({ rewardMode: "weightedCache", weightedCache: {
@@ -18,20 +19,8 @@ const cacheEffect = () => NonCombatConsumeRewardTag.parse({ rewardMode: "weighte
 } });
 
 /** Inject a failure at the reward insert, after the real consumption claim ran. */
-const failingGrantClient = (client: DrizzleClient): DrizzleClient => new Proxy(client, {
-  get(target, property, receiver) {
-    if (property === "transaction") return (callback: (tx: DrizzleClient) => Promise<unknown>) => target.transaction(async (tx) => callback(new Proxy(tx, {
-      get(transaction, key, txReceiver) {
-        if (key === "insert") return (table: typeof userItem) => {
-          if (table === userItem) throw new Error("Injected grant failure");
-          return transaction.insert(table);
-        };
-        return Reflect.get(transaction, key, txReceiver);
-      },
-    }) as unknown as DrizzleClient));
-    return Reflect.get(target, property, receiver);
-  },
-});
+const failingGrantClient = (client: DrizzleClient) =>
+  inTransactions(client, (tx) => failStatements(tx, userItem, 1, { operations: ["insert"] }));
 
 describeWithDatabase("weighted cache consumption", () => {
   beforeEach(async () => {
@@ -113,7 +102,7 @@ describeWithDatabase("weighted cache consumption", () => {
   it("rolls back consumption, partial grants and receipt on failure and permits a safe retry", async () => {
     const db = await getTestDatabase(); const input = { userItemId: "cache-stack", requestId: "failed-opening-request" };
     const failing = callerForDatabase(itemRouter, "opener", failingGrantClient(db));
-    await expect(failing.consume(input)).rejects.toThrow("Injected grant failure");
+    await expect(failing.consume(input)).rejects.toThrow("Statement failed on purpose");
     expect((await db.select().from(userItem))).toHaveLength(1);
     expect((await db.select().from(userItem))[0]?.quantity).toBe(2);
     expect(await db.select().from(actionLog)).toHaveLength(0);
@@ -294,15 +283,7 @@ describeWithDatabase("cache grant catalog races", () => {
     await insertUsers([{ userId: "opener", username: "Opener", level: 50, status: "AWAKE", isOutlaw: true }]);
     await insertItems([{ id: "cache", itemType: "CONSUMABLE", effects: [cacheEffect()] }, { id: "pill", name: "Pill" }, { id: "gear", name: "Gear" }]);
     await insertUserItems([{ id: "cache-stack", userId: "opener", itemId: "cache", quantity: 1 }]);
-    const racing = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property === "transaction") return async (callback: Parameters<DrizzleClient["transaction"]>[0]) => {
-          await db.delete(item).where(eq(item.id, "pill"));
-          return target.transaction(callback);
-        };
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const racing = beforeTransaction(db, () => db.delete(item).where(eq(item.id, "pill")));
     await expect(callerForDatabase(itemRouter, "opener", racing).consume({ userItemId: "cache-stack", requestId: "deleted-during-delivery" })).rejects.toThrow("Cache reward became unavailable during delivery");
     expect((await db.select().from(userItem))).toHaveLength(1);
     expect((await db.select().from(userItem))[0]?.quantity).toBe(1);

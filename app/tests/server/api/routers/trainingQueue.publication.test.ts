@@ -14,6 +14,7 @@ import {
   recordQueries,
 } from "../../../setup/testDatabase";
 import { deferred } from "../../../setup/deferred";
+import { beforeTransaction, aroundStatements, inTransactions, beforeStatements } from "../../../setup/statements";
 
 const userId = "queue-publication";
 const genjutsu = { stat: "genjutsuMastery" as const, speed: "15min" as const };
@@ -23,84 +24,25 @@ const bukijutsu = { stat: "bukijutsuMastery" as const, speed: "15min" as const }
 const delayReplacementInsert = (database: DrizzleClient, fail = false) => {
   const entered = deferred<void>();
   const release = deferred<void>();
-  const client = new Proxy(database, {
-    get(target, property) {
-      if (property !== "transaction") return Reflect.get(target, property);
-      return (callback: Parameters<typeof target.transaction>[0]) =>
-        target.transaction(async (tx) => {
-          const gated = new Proxy(tx, {
-            get(transaction, key) {
-              if (key !== "insert") return Reflect.get(transaction, key);
-              return (table: Parameters<typeof tx.insert>[0]) => {
-                const builder = transaction.insert(table);
-                if (table !== userQueue) return builder;
-                return {
-                  values: (values: (typeof userQueue.$inferInsert)[]) => ({
-                    then: async (
-                      resolve: (value: unknown) => unknown,
-                      reject: (error: unknown) => unknown,
-                    ) => {
-                      entered.resolve();
-                      await release.promise;
-                      try {
-                        if (fail) throw new Error("Replacement insert unavailable");
-                        return resolve(await builder.values(values));
-                      } catch (error) {
-                        return reject(error);
-                      }
-                    },
-                  }),
-                };
-              };
-            },
-          });
-          return callback(gated);
-        });
-    },
-  });
+  const gate = async (run: () => Promise<unknown>) => {
+    entered.resolve();
+    await release.promise;
+    if (fail) throw new Error("Replacement insert unavailable");
+    return run();
+  };
+  const client = inTransactions(database, (tx) =>
+    aroundStatements(tx, userQueue, gate, { operations: ["insert"] }),
+  );
   return { client, entered: entered.promise, release: release.resolve };
 };
 
 const delayFirstUserWrite = (database: DrizzleClient) => {
   const entered = deferred<void>();
   const release = deferred<void>();
-  let delayed = false;
-  const wrap = <T extends object>(builder: T): T =>
-    new Proxy(builder, {
-      get(target, property) {
-        if (property === "then")
-          return async (
-            resolve: (value: unknown) => unknown,
-            reject: (error: unknown) => unknown,
-          ) => {
-            if (!delayed) {
-              delayed = true;
-              entered.resolve();
-              await release.promise;
-            }
-            try {
-              return resolve(await (target as unknown as PromiseLike<unknown>));
-            } catch (error) {
-              return reject(error);
-            }
-          };
-        const value = Reflect.get(target, property);
-        if (typeof value !== "function") return value;
-        return (...args: unknown[]) => {
-          const next = value.apply(target, args);
-          return next && typeof next === "object" ? wrap(next) : next;
-        };
-      },
-    });
-  const client = new Proxy(database, {
-    get(target, property) {
-      if (property !== "update") return Reflect.get(target, property);
-      return (table: Parameters<typeof database.update>[0]) => {
-        const builder = target.update(table);
-        return table === userData ? wrap(builder) : builder;
-      };
-    },
-  });
+  const client = beforeStatements(database, userData, [async () => {
+    entered.resolve();
+    await release.promise;
+  }], { operations: ["update"] });
   return { client, entered: entered.promise, release: release.resolve };
 };
 
@@ -206,16 +148,10 @@ describeWithDatabase("Training queue atomic publication", () => {
 
   it.each(["ENERGY", "MASTERY"] as const)("rejects a %s addition if the player falls asleep before publication", async (kind) => {
     const database = await getTestDatabase();
-    const client = new Proxy(database, {
-      get(target, property) {
-        if (property !== "transaction") return Reflect.get(target, property);
-        return async (callback: Parameters<typeof target.transaction>[0]) => {
-          // Sleep changes status without updating the snapshot timestamp.
-          await database.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, userId));
-          return target.transaction(callback);
-        };
-      },
-    });
+    // Sleep changes status without updating the snapshot timestamp.
+    const client = beforeTransaction(database, () =>
+      database.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, userId)),
+    );
     const caller = callerForDatabase(trainRouter, userId, client);
     const result = kind === "ENERGY"
       ? await caller.updateEnergyTrainingQueue({ expectedEntries: [], entries: [{ stat: "strength", energy: 100 }] })

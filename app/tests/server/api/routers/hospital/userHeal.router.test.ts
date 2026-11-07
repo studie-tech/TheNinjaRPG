@@ -22,7 +22,7 @@ import { DialogObjective, QuestTracker, SimpleObjective } from "@/validators/obj
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
-import { beforeStatements } from "../../../../setup/statements";
+import { beforeStatements, inTransactions, aroundStatements, interceptExecute } from "../../../../setup/statements";
 import { readUser } from "../../../../setup/userReads";
 import {
   callerFor,
@@ -267,32 +267,15 @@ describeWithDatabase("hospital self-healing", () => {
     const { promise: secondRegenReached, resolve: releaseFirstRegen } = deferred<void>();
     const { promise: firstHealFinished, resolve: releaseSecondRegen } = deferred<void>();
     let regenWrites = 0;
-    const delayedDatabase = new Proxy(database, {
-      get(target, property) {
-        if (property !== "update") return Reflect.get(target, property);
-        return (table: typeof userData) => {
-          const builder = target.update(table);
-          return {
-            set(values: Record<string, unknown>) {
-              const update = builder.set(values);
-              return {
-                async where(condition: Parameters<typeof update.where>[0]) {
-                  if ("primaryElement" in values) {
-                    regenWrites++;
-                    if (regenWrites === 1) await secondRegenReached;
-                    else if (regenWrites === 2) {
-                      releaseFirstRegen();
-                      await firstHealFinished;
-                    }
-                  }
-                  return await update.where(condition);
-                },
-              };
-            },
-          };
-        };
-      },
-    });
+    const delayedDatabase = aroundStatements(database, userData, async (run) => {
+      regenWrites++;
+      if (regenWrites === 1) await secondRegenReached;
+      else if (regenWrites === 2) {
+        releaseFirstRegen();
+        await firstHealFinished;
+      }
+      return run();
+    }, { when: (set) => "primaryElement" in set });
     const api = callerForDatabase(hospitalRouter, USER_ID, delayedDatabase);
 
     const first = api
@@ -421,31 +404,16 @@ describeWithDatabase("hospital healing another user", () => {
     const { promise: release, resolve: releaseAssignment } = deferred<void>();
     const { promise: locked, resolve: markLocked } = deferred<void>();
     const { promise: healingSent, resolve: markHealingSent } = deferred<void>();
-    const assignmentClient = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "transaction") {
-          return (callback: Parameters<typeof database.transaction>[0]) =>
-            target.transaction(async (tx) => callback(beforeStatements(tx as unknown as DrizzleClient, questHistory, [
-              async () => { markLocked(); await release; },
-            ]) as never));
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const assignmentClient = inTransactions(database, (tx) => beforeStatements(tx, questHistory, [
+      async () => { markLocked(); await release; },
+    ]));
     let assignment: Promise<void> | undefined;
-    const healingClient = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "execute") {
-          return async (query: Parameters<typeof database.execute>[0]) => {
-            assignment = startTargetPyramid(assignmentClient);
-            await Promise.race([locked, assignment]);
-            const pending = target.execute(query);
-            markHealingSent();
-            return pending;
-          };
-        }
-        return Reflect.get(target, property, receiver);
-      },
+    const healingClient = interceptExecute(database, async (_query, run) => {
+      assignment = startTargetPyramid(assignmentClient);
+      await Promise.race([locked, assignment]);
+      const pending = run();
+      markHealingSent();
+      return pending;
     });
     const api = callerForDatabase(hospitalRouter, USER_ID, healingClient);
     const heal = api.userHeal({ userId: TARGET_ID, healPercentage: 30 });

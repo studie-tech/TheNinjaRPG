@@ -36,7 +36,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { barrier } from "../../../setup/statements";
+import { barrier, interceptExecute } from "../../../setup/statements";
 
 const USER_ID = "timed-recovery";
 const VILLAGE_ID = "timed-recovery-village";
@@ -240,19 +240,14 @@ describeWithDatabase(
           },
         ]);
         const db = await getTestDatabase();
-        const client = new Proxy(db, {
-          get(target, property, receiver) {
-            if (property === "execute" && interveningReset)
-              return async (query: Parameters<typeof db.execute>[0]) => {
-                // Another healer has already consumed the first two ticks and changed the balance.
-                await db
-                  .update(userData)
-                  .set({ curEnergy: 100, regenAt: new Date(from.getTime() + 2 * STEP) })
-                  .where(eq(userData.userId, USER_ID));
-                return target.execute(query);
-              };
-            return Reflect.get(target, property, receiver);
-          },
+        const client = interceptExecute(db, async (_query, run) => {
+          // Another healer has already consumed the first two ticks and changed the balance.
+          if (interveningReset)
+            await db
+              .update(userData)
+              .set({ curEnergy: 100, regenAt: new Date(from.getTime() + 2 * STEP) })
+              .where(eq(userData.userId, USER_ID));
+          return run();
         });
         const api = callerForDatabase(hospitalRouter, "timed-healer", client);
         expect(
@@ -285,16 +280,10 @@ describeWithDatabase(
       const db = await getTestDatabase();
       const before = await readUser();
       const bothLoaded = barrier(2);
-      const client = new Proxy(db, {
-        get(target, property, receiver) {
-          if (property === "execute")
-            return async (query: Parameters<typeof db.execute>[0]) => {
-              // Both requests load the recipient snapshot before either delivers healing.
-              await bothLoaded();
-              return target.execute(query);
-            };
-          return Reflect.get(target, property, receiver);
-        },
+      const client = interceptExecute(db, async (_query, run) => {
+        // Both requests load the recipient snapshot before either delivers healing.
+        await bothLoaded();
+        return run();
       });
       const results = await Promise.all(
         healerIds.map(async (userId) => ({

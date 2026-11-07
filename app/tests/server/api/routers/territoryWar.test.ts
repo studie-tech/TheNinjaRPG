@@ -31,7 +31,7 @@ import {
   insertClans,
 } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, interceptExecute } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 const caller = (id = "leader") => callerFor(territoryWarRouter, id);
@@ -122,17 +122,12 @@ describeWithDatabase("Territory War participation", () => {
       await queueEnergy(actorId, [{ stat: "offence", energy: 100 }]);
       const before = (await db.query.userData.findFirst({ where: eq(userData.userId, actorId) }))!;
       let interposed = false;
-      const raced = new Proxy(db, {
-        get(target, key, receiver) {
-          if (key !== "execute") return Reflect.get(target, key, receiver);
-          return async (statement: Parameters<typeof db.execute>[0]) => {
-            if (!interposed) {
-              interposed = true;
-              await db.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, actorId));
-            }
-            return target.execute(statement);
-          };
-        },
+      const raced = interceptExecute(db, async (_query, run) => {
+        if (!interposed) {
+          interposed = true;
+          await db.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, actorId));
+        }
+        return run();
       });
       const actor = callerForDatabase(territoryWarRouter, actorId, raced);
       const result = operation === "createTeam" ? await actor.createTeam({ eventId: "event" }) : await actor.joinTeam({ teamId: teamId! });
@@ -233,21 +228,16 @@ describeWithDatabase("Territory War participation", () => {
     const ally = await caller("ally");
     let statements = 0;
     let id = "";
-    const delayed = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "execute") return async (query: Parameters<typeof db.execute>[0]) => {
-          // The creator's membership is public before their separate status claim.
-          if (++statements === 2) {
-            const visible = await ally.getCurrent();
-            expect(visible.teams).toHaveLength(1);
-            id = visible.teams[0]!.id;
-            expect((await ally.joinTeam({ teamId: id })).success).toBe(true);
-            expect((await (await callerFor(homeRouter, "leader")).toggleSleep()).success).toBe(true);
-          }
-          return target.execute(query);
-        };
-        return Reflect.get(target, key, receiver);
-      },
+    const delayed = interceptExecute(db, async (_query, run) => {
+      // The creator's membership is public before their separate status claim.
+      if (++statements === 2) {
+        const visible = await ally.getCurrent();
+        expect(visible.teams).toHaveLength(1);
+        id = visible.teams[0]!.id;
+        expect((await ally.joinTeam({ teamId: id })).success).toBe(true);
+        expect((await (await callerFor(homeRouter, "leader")).toggleSleep()).success).toBe(true);
+      }
+      return run();
     });
     const created = await callerForDatabase(territoryWarRouter, "leader", delayed).createTeam({ eventId: "event" });
     expect(created.success).toBe(false);
