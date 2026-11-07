@@ -82,7 +82,6 @@ import {
   COST_SWAP_BLOODLINE,
   COST_SWAP_VILLAGE,
   COST_TAVERN_COLOR_CHANGE,
-  getTavernColorChangeCost,
   MAX_ATTRIBUTES,
   TavernColorPresets,
 } from "@/drizzle/constants";
@@ -2373,7 +2372,7 @@ const TavernColors: React.FC = () => {
     // Size pickers to the editor's width, including when the category sidebar is visible.
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-5">
       {controls.map((control) => {
-        const cost = getTavernColorChangeCost(control.value);
+        const cost = COST_TAVERN_COLOR_CHANGE;
         const unchanged = control.value === control.current;
         const canAfford = userData.reputationPoints >= cost;
         const isThisPending =

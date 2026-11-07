@@ -23,9 +23,9 @@ import {
   CHARACTER_DELETION_CONFIRMATION,
   CHARACTER_DELETION_DELAY_DAYS,
   COST_CHANGE_USERNAME,
+  COST_TAVERN_COLOR_CHANGE,
   type CombatStatName,
   CombatStatNames,
-  getTavernColorChangeCost,
   getUserCaps,
   KAGE_MIN_PRESTIGE,
   MAX_ATTRIBUTES,
@@ -1678,7 +1678,7 @@ export const profileRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const storedColor =
         input.target === "username" ? user.tavernUsernameColor : user.tavernTitleColor;
-      const cost = getTavernColorChangeCost(input.color);
+      const cost = COST_TAVERN_COLOR_CHANGE;
 
       if (user.isBanned) return errorResponse("You are banned");
       if (storedColor !== input.currentColor) {

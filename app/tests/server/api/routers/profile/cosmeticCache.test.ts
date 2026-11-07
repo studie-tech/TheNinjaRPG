@@ -3,7 +3,7 @@ import { beforeEach, expect, it } from "bun:test";
 import {
   COST_CHANGE_GENDER,
   COST_CHANGE_USERNAME,
-  getTavernColorChangeCost,
+  COST_TAVERN_COLOR_CHANGE,
 } from "@/drizzle/constants";
 import { actionLog, userData, village } from "@/drizzle/schema";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";
@@ -59,7 +59,7 @@ describeWithDatabase("Committed cosmetic cache patches", () => {
     expect(result.success).toBe(true);
     expect(result.userPatch).toEqual<typeof purchase.userPatch>(purchase.userPatch);
     if (purchase.name === "tavern username color") {
-      expect(result.userDelta).toEqual({ reputationPoints: -getTavernColorChangeCost("NAVY") });
+      expect(result.userDelta).toEqual({ reputationPoints: -COST_TAVERN_COLOR_CHANGE });
     }
     expect(counted.getReads()).toBe(purchase.reads);
     const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
