@@ -12,7 +12,7 @@ import {
   type DamageModifierEligibility,
   consolidatePreBattleDamageModifiers,
   isConsolidatedStage1PercentageModifier,
-} from "@/libs/combat/process";
+} from "@/libs/combat/damagePipeline";
 import { getAffected } from "@/libs/combat/tags";
 import { getStatTypeLabels } from "@/libs/combat/util";
 import type { Consequence } from "@/libs/combat/types";
