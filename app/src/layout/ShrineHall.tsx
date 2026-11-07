@@ -51,7 +51,6 @@ import { getShrineHpByLevel } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import {
   formatDateTimeShort,
-  getDaysHoursMinutesSeconds,
   getSlotIndex,
   getTimeLeftStr,
   isNewSlotDue,
@@ -395,7 +394,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
           {activeBoosts.length > 0 ? (
             <div className="space-y-2">
               {activeBoosts.map(({ boostType, msLeft }, i) => {
-                const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
+                const timeLeft = getTimeLeftStr(msLeft);
 
                 return (
                   <div
@@ -760,9 +759,7 @@ const MaintenanceTab = ({ user }: TabProps) => {
 
                   const msToNextPayment = dueDate.getTime() - Date.now();
 
-                  const nextPaymentAt = getTimeLeftStr(
-                    ...getDaysHoursMinutesSeconds(msToNextPayment),
-                  );
+                  const nextPaymentAt = getTimeLeftStr(msToNextPayment);
 
                   return (
                     <div
