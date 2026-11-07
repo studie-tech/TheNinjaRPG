@@ -3,14 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dynamic from "next/dynamic";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as navigation from "next/navigation";
-import {
-  type ComponentProps,
-  type Dispatch,
-  type SetStateAction,
-  useState,
-} from "react";
 import * as client from "@/app/_trpc/client";
-import * as select from "@/components/ui/select";
 import { WAR_PURCHASE_SHRINE_TOKEN_COST } from "@/drizzle/constants";
 import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schema";
 import * as map from "@/hooks/map";
@@ -25,6 +18,8 @@ import type { FetchActiveWarsReturnType } from "@/routers/war";
 import * as UserContext from "@/utils/UserContext";
 import { defaultWarRules } from "@/validators/war";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { controllableMutation, stubSelect } from "./helpers/warUi";
+import { testRouter } from "../setup/router";
 
 // Exercise declarations through WarMap while isolating map rendering and transport.
 vi.spyOn(dynamic, "default").mockImplementation(
@@ -46,39 +41,7 @@ vi.spyOn(dynamic, "default").mockImplementation(
 const { WarRoom, WarMap, SectorWar, VillageWar } = await import("@/layout/WarSystem");
 
 type MutationResult = { success: boolean; message: string };
-type MutationCallbacks = {
-  onSuccess?: (result: MutationResult) => void | Promise<void>;
-  onError?: () => void;
-};
-
-const mutation = () => {
-  const mutate = vi.fn();
-  let callbacks: MutationCallbacks;
-  let setPending: Dispatch<SetStateAction<boolean>>;
-  return {
-    mutate,
-    useMutation: (options: MutationCallbacks) => {
-      const [isPending, setIsPending] = useState(false);
-      callbacks = options;
-      setPending = setIsPending;
-      return {
-        isPending,
-        mutate: (input: unknown) => {
-          mutate(input);
-          setPending(true);
-        },
-      };
-    },
-    respond: async (result: MutationResult) => {
-      await callbacks.onSuccess?.(result);
-      setPending(false);
-    },
-    fail: () => {
-      callbacks.onError?.();
-      setPending(false);
-    },
-  };
-};
+const mutation = () => controllableMutation<MutationResult>();
 
 const declarations = mutation();
 const declare = declarations.mutate;
@@ -168,34 +131,7 @@ beforeEach(() => {
   );
   vi.spyOn(Image, "default").mockImplementation(() => <span />);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => {});
-  vi.spyOn(select, "Select").mockImplementation(
-    ({ value, onValueChange, children }: ComponentProps<typeof select.Select>) => (
-      <select
-        aria-label="Structure"
-        value={value}
-        onChange={(event) => onValueChange?.(event.target.value)}
-      >
-        {children}
-      </select>
-    ),
-  );
-  vi.spyOn(select, "SelectTrigger").mockImplementation(
-    Object.assign(() => <></>, { displayName: select.SelectTrigger.displayName }),
-  );
-  vi.spyOn(select, "SelectContent").mockImplementation(
-    Object.assign(
-      ({ children }: ComponentProps<typeof select.SelectContent>) => <>{children}</>,
-      { displayName: select.SelectContent.displayName },
-    ),
-  );
-  vi.spyOn(select, "SelectItem").mockImplementation(
-    Object.assign(
-      ({ value, children }: ComponentProps<typeof select.SelectItem>) => (
-        <option value={value}>{children}</option>
-      ),
-      { displayName: select.SelectItem.displayName },
-    ),
-  );
+  stubSelect("Structure");
 });
 
 afterEach(async () => {
@@ -250,10 +186,7 @@ describe("war room participation", () => {
       cancelAllyOffer: declarations,
     });
     const view = render(
-      <AppRouterContext.Provider value={{
-        back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), push: vi.fn(),
-        replace: vi.fn(), prefetch: vi.fn(), bfcacheId: "war-room",
-      }}>
+      <AppRouterContext.Provider value={testRouter("war-room")}>
         <WarRoom user={user} />
       </AppRouterContext.Provider>,
     );
@@ -742,10 +675,7 @@ describe("objective war townhall health", () => {
         buildShrine,
       });
       return render(
-        <AppRouterContext.Provider value={{
-          back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), push: vi.fn(),
-          replace: vi.fn(), prefetch: vi.fn(), bfcacheId: "war-offers",
-        }}>
+        <AppRouterContext.Provider value={testRouter("war-offers")}>
           <WarRoom user={kage} />
         </AppRouterContext.Provider>,
       );
