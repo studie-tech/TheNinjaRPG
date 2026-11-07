@@ -1,7 +1,7 @@
 import { releaseDeclinedStoreCapture } from "@/queries/paypal";
 import { beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { DrizzleQueryError, eq } from "drizzle-orm";
-import { actionLog, item, quest, questHistory, paypalTransaction, recruitmentRewards, userData, userItem, webStoreBundle, webStoreOrder, storeUserIdAlias } from "@/drizzle/schema";
+import { actionLog, item, quest, questHistory, paypalTransaction, recruitmentRewards, stripeCheckout, stripePayment, userData, userItem, webStoreBundle, webStoreOrder, storeUserIdAlias } from "@/drizzle/schema";
 import * as purchaseQueries from "@/queries/purchases";
 import { staffRouter } from "@/server/api/routers/staff";
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
@@ -86,6 +86,7 @@ describeWithDatabase("web store payments", () => {
   });
   it("does not count a checkout against its own reputation allowance at capture", async () => {
     const db = await getTestDatabase();
+    await resetTables(stripePayment, stripeCheckout);
     const buyer = await db.query.userData.findFirst({ where: eq(userData.userId, "buyer") });
     const reputationPoints = dynamicMonthlyRepCap(buyer);
     const full = { ...offer, priceCents: reputationPoints * 100, contents: { reputationPoints, money: 0, items: [] } };
