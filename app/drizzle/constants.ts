@@ -3884,7 +3884,7 @@ export const COPY_PRIORITY_RANK = buildTagPriorityRank(COPY_PRIORITY_TIERS);
 export const MIRROR_PRIORITY_RANK = buildTagPriorityRank(MIRROR_PRIORITY_TIERS);
 
 // Map of DMG setting names to their default values (for gameSetting table storage)
-export const DMG_SETTING_DEFAULTS: Record<string, number> = {
+export const DMG_SETTING_DEFAULTS = {
   DMG_STATS_SCALING,
   DMG_BASE_HITS,
   DMG_CURVE,
@@ -3894,7 +3894,8 @@ export const DMG_SETTING_DEFAULTS: Record<string, number> = {
   DMG_ADVANTAGE_MIN,
   DMG_ADVANTAGE_MAX,
 };
-export const DMG_SETTING_NAMES = Object.keys(DMG_SETTING_DEFAULTS);
+export type DmgSettingName = keyof typeof DMG_SETTING_DEFAULTS;
+export const DMG_SETTING_NAMES = Object.keys(DMG_SETTING_DEFAULTS) as DmgSettingName[];
 
 // ---------------------------------------------------------------------------
 // Native apps (iOS / Android)
