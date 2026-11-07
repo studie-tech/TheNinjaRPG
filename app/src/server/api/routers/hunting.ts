@@ -387,7 +387,7 @@ export const huntingRouter = createTRPCRouter({
             const deleted = await deleteHuntingSessionForSessionAction(tx, guard);
             if (deleted.rowsAffected === 1)
               await reconcileInactiveAllowance(
-                tx as unknown as DrizzleClient,
+                tx,
                 ctx.userId,
                 session.habitatId,
                 session.contractId,

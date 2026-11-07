@@ -680,7 +680,7 @@ export const dungeonRouter = createTRPCRouter({
           if (claim.rowsAffected === 0) return null;
           // Reward tasks execute serially inside the driver's rotating transaction session.
           const delivered = await updateRewards({
-            client: tx as unknown as DrizzleClient,
+            client: tx,
             user,
             rewards: rolled,
             reason: `Dungeon: ${run.content.name}`,
