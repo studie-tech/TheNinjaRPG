@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import * as questStart from "@/hooks/useQuestStartCacheUpdate";
-import { PyramidMode } from "@/layout/battlearena/PyramidMode";
+import { climbLabelFontSize, PyramidMode } from "@/layout/battlearena/PyramidMode";
 import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
 import * as questTeams from "@/layout/QuestTeams";
@@ -145,8 +145,19 @@ it("lists the tower being climbed first", () => {
   expect(names).toEqual(["Tower of Echoes", "Test Arena"]);
   expect(within(card("Tower of Echoes")).getByText("Climbing now")).toBeDefined();
   expect(within(card("Tower of Echoes")).getByText("Current objective")).toBeDefined();
-  const other = within(card("Test Arena")).getByRole("button", { name: /Finish Tower of Echoes first/ });
+  const other = within(card("Test Arena")).getByRole("button", { name: /Finish current climb/ });
   expect(other.hasAttribute("disabled")).toBe(true);
+  // The button keeps its size: a long label shrinks onto one line and never spills out.
+  expect(other.className).toMatch(/(^|\s)h-11(\s|$)/);
+  expect(other.className).not.toContain("whitespace-normal");
+  expect(other.getAttribute("title")).toBe("Finish Tower of Echoes first");
+  expect(other.querySelector("span")?.className).toContain("truncate");
+});
+
+it("shrinks only labels too long for the button", () => {
+  expect(climbLabelFontSize("Climb tower")).toBe("clamp(0.625rem, calc((100cqi - 1.75rem) / 6.05), 0.875rem)");
+  // At the default 12px root size this 20-character label fits the 132px desktop button near 7.9px.
+  expect(climbLabelFontSize("Finish current climb")).toBe("clamp(0.625rem, calc((100cqi - 1.75rem) / 11), 0.875rem)");
 });
 
 it("lists towers open to the player before towers missing entry items", () => {
