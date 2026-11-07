@@ -49,7 +49,6 @@ import {
   updateUserDataForUpdateTrainingSpeed,
 } from "@/queries/train";
 import { trainingCaptchaMessage } from "@/routers/misc";
-import type { UserWithRelations } from "@/routers/profile";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
@@ -475,10 +474,10 @@ export const trainRouter = createTRPCRouter({
       }
       const captchaBlock = await trainingCaptchaMessage(ctx.drizzle, user, input.guess);
       if (captchaBlock) return errorResponse(captchaBlock);
-      const { trainingAmount } = calcTrainingAmount(
+      const trainingAmount = calcMasteryTrainingAmount(
         { ...user, trainingSpeed: speed },
         settings,
-        startedAt,
+        secondsPassed(startedAt, undefined, false),
       );
       const gained =
         user.dailyTrainings < MAX_DAILY_TRAININGS
@@ -644,19 +643,6 @@ export const trainRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       return listTrainingLogForGetTrainingLog(ctx.drizzle, input);
     }),
-});
-
-/** Calculate timed mastery gains with the shared training bonuses. */
-export const calcTrainingAmount = (
-  user: NonNullable<UserWithRelations>,
-  settings: Awaited<ReturnType<typeof fetchUpdatedUser>>["settings"],
-  startedAt: Date,
-) => ({
-  trainingAmount: calcMasteryTrainingAmount(
-    user,
-    settings,
-    secondsPassed(startedAt, undefined, false),
-  ),
 });
 
 /** A queue edit's response, with the saved queue as a cache patch when it can be trusted. */
