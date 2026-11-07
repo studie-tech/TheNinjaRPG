@@ -510,6 +510,20 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
   );
 };
 
+/** Interval tabs carry their efficiency, so intervals compare before one is picked. */
+const TRAINING_SPEED_LABELS = Object.fromEntries(
+  TrainingSpeeds.map((speed) => [
+    speed,
+    <span key={speed} className="flex flex-col leading-tight">
+      <span>{speed}</span>
+      <span className="font-normal text-muted-foreground text-xs">
+        {trainEfficiency({ trainingSpeed: speed })}%
+        <span className="sr-only"> efficiency</span>
+      </span>
+    </span>,
+  ]),
+);
+
 /** Each tile gets its own art; the per-type images are matched by look, not by name */
 const StatsTraining: React.FC<
   TrainingProps & { section: "Stats" | "Masteries" | "Elements" }
@@ -917,6 +931,7 @@ const StatsTraining: React.FC<
               <NavTabs
                 current={selectedMasterySpeed}
                 options={TrainingSpeeds}
+                labels={TRAINING_SPEED_LABELS}
                 setValue={(value) => {
                   if (isPending) return;
                   if (session.stat || kind === "ELEMENT") {
