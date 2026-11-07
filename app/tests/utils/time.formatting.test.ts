@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, setSystemTime } from "bun:test";
 import {
   formatClockTime,
   formatHoursMinutes,
-  getDaysHoursMinutesSeconds,
   getLocalDateStringMonthsAgo,
   getTimeLeftStr,
 } from "@/utils/time";
@@ -60,7 +59,7 @@ describe("getTimeLeftStr", () => {
   const MINUTE = 60 * SECOND;
   const HOUR = 60 * MINUTE;
   const DAY = 24 * HOUR;
-  const label = (ms: number) => getTimeLeftStr(...getDaysHoursMinutesSeconds(ms));
+  const label = getTimeLeftStr;
 
   it("shows the two largest units from the first one set", () => {
     expect(label(2 * DAY + 3 * HOUR + 4 * MINUTE)).toBe("2 days, 3 hours");

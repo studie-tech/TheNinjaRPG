@@ -19,13 +19,7 @@ import {
   updateGameSettingForUpdateGameSetting,
 } from "@/queries/gamesettings";
 import type { DrizzleClient } from "@/server/db";
-import {
-  addDays,
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  isDifferentDay,
-  periodStart,
-} from "@/utils/time";
+import { addDays, getTimeLeftStr, isDifferentDay, periodStart } from "@/utils/time";
 
 /**
  * Retrieves the game setting for the specified timer name.
@@ -218,10 +212,7 @@ export const runClaimedCron = async (
 const gameTimerWaitResponse = (previous: Date, durationMs: number) => {
   const remaining = previous.getTime() + durationMs - Date.now();
   if (remaining <= 0) return Response.json("Timer already claimed; try again later");
-  const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(remaining);
-  return Response.json(
-    `Wait ${getTimeLeftStr(days, hours, minutes, seconds)} before running again`,
-  );
+  return Response.json(`Wait ${getTimeLeftStr(remaining)} before running again`);
 };
 
 /**

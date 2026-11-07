@@ -117,12 +117,7 @@ import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent, canRemoveBloodlineFromPool } from "@/utils/permissions";
-import {
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  secondsFromDate,
-  secondsPassed,
-} from "@/utils/time";
+import { getTimeLeftStr, secondsFromDate, secondsPassed } from "@/utils/time";
 import {
   type BloodlineFilteringSchema,
   bloodlineFilteringSchema,
@@ -301,7 +296,7 @@ export const bloodlineRouter = createTRPCRouter({
         );
         if (canTransferAgainDate > new Date()) {
           const msLeft = -secondsPassed(canTransferAgainDate) * 1000;
-          const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
+          const timeLeft = getTimeLeftStr(msLeft);
           return errorResponse(`You can swap again in ${timeLeft}`);
         }
       }

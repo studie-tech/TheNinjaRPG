@@ -124,13 +124,9 @@ export const getDaysHoursMinutesSeconds = (countDown: number) => {
   return [days, hours, minutes, seconds] as const;
 };
 
-/** Return a string of how much time left */
-export const getTimeLeftStr = (
-  days: number,
-  hours: number,
-  minutes: number,
-  seconds: number,
-) => {
+/** Return a string of how much time is left of a duration in milliseconds */
+export const getTimeLeftStr = (ms: number) => {
+  const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(ms);
   if (days > 0) {
     return `${days} days, ${hours} hours`;
   } else if (hours > 0) {
