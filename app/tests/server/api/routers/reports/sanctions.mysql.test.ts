@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq, gt } from "drizzle-orm";
 import { GET as runDailyReports } from "@/app/api/daily-reports/route";
 import { userData, userReport, userReportComment } from "@/drizzle/schema";
@@ -7,9 +7,6 @@ import { Pusher } from "@/libs/pusher";
 import * as reportQueries from "@/queries/reports";
 import {
   clearUserBanWithoutActiveReport,
-  listUserReportForClear,
-  listUserReportForClear2,
-  listUserReportForClear3,
   noActiveReportGuard,
 } from "@/queries/reports";
 import { reportsRouter } from "@/server/api/routers/reports";
@@ -215,27 +212,6 @@ describeWithDatabase("moderation sanctions", () => {
         expect(await target()).toMatchObject({ isSilenced: true });
       },
     );
-
-    it("clear treats a report ending this instant as over, like getBan and the daily job", async () => {
-      const db = await getTestDatabase();
-      const banEnd = new Date(Date.now() + 3_600_000);
-      await insertCase({ id: "ban", status: "BAN_ACTIVATED", banEnd });
-      await insertCase({ id: "silence", status: "SILENCE_ACTIVATED", banEnd });
-      await insertCase({ id: "trade", status: "TRADE_BAN_ACTIVATED", banEnd });
-      setSystemTime(banEnd);
-      try {
-        const other = { id: "other" };
-        expect(
-          await Promise.all([
-            listUserReportForClear(db, "target", other),
-            listUserReportForClear2(db, "target", other),
-            listUserReportForClear3(db, "target", other),
-          ]),
-        ).toEqual([[], [], []]);
-      } finally {
-        setSystemTime();
-      }
-    });
 
     it("clear rechecks running reports with the same boundary", async () => {
       const db = await flagTarget({ isSilenced: true });

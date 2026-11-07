@@ -751,51 +751,6 @@ export const updateUserReportForEscalate = (
       ),
     );
 
-/** Build the `userReport` listing for `clear`, including predicates on `reportedUserId`, `status`, `banEnd`. */
-export const listUserReportForClear = (
-  client: Pick<DrizzleClient, "query">,
-  reportedUserId: string,
-  report: { id: string },
-) =>
-  client.query.userReport.findMany({
-    where: and(
-      eq(userReport.reportedUserId, reportedUserId),
-      inArray(userReport.status, ActiveBanStates),
-      gt(userReport.banEnd, new Date()),
-      ne(userReport.id, report.id),
-    ),
-  });
-
-/** Build the `userReport` listing for `clear`, including predicates on `reportedUserId`, `status`, `banEnd`. */
-export const listUserReportForClear2 = (
-  client: Pick<DrizzleClient, "query">,
-  reportedUserId: string,
-  report: { id: string },
-) =>
-  client.query.userReport.findMany({
-    where: and(
-      eq(userReport.reportedUserId, reportedUserId),
-      inArray(userReport.status, ActiveSilenceStates),
-      gt(userReport.banEnd, new Date()),
-      ne(userReport.id, report.id),
-    ),
-  });
-
-/** Build the `userReport` listing for `clear`, including predicates on `reportedUserId`, `status`, `banEnd`. */
-export const listUserReportForClear3 = (
-  client: Pick<DrizzleClient, "query">,
-  reportedUserId: string,
-  report: { id: string },
-) =>
-  client.query.userReport.findMany({
-    where: and(
-      eq(userReport.reportedUserId, reportedUserId),
-      eq(userReport.status, "TRADE_BAN_ACTIVATED"),
-      gt(userReport.banEnd, new Date()),
-      ne(userReport.id, report.id),
-    ),
-  });
-
 /** Build a ban reset guarded by the caller’s active-report predicate. */
 export const clearUserBanWithoutActiveReport = (
   client: Pick<DrizzleClient, "update">,

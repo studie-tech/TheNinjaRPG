@@ -32,9 +32,6 @@ import {
   insertUserReport,
   insertUserReportDecisionComment,
   insertUserReviewForUpsertStaffReview,
-  listUserReportForClear,
-  listUserReportForClear2,
-  listUserReportForClear3,
   listUserReportForGetUserReports,
   listUserReportForLoadReports,
   listUserReviewForGetUserStaffReviews,
@@ -585,43 +582,17 @@ export const reportsRouter = createTRPCRouter({
       const mutations: PromiseLike<unknown>[] = [];
       // If someone was reported
       if (report.reportedUserId) {
-        const reportedUserId = report.reportedUserId;
-        const [bans, activeSilenceOrTimeout, activeTradeBans] = await Promise.all([
-          listUserReportForClear(ctx.drizzle, reportedUserId, report),
-          listUserReportForClear2(ctx.drizzle, reportedUserId, report),
-          listUserReportForClear3(ctx.drizzle, reportedUserId, report),
-        ]);
-        // A character can be recreated after these reads; only reset flags while
-        // no current report still enforces that restriction.
-        const noActiveReport = noActiveReportGuard(ctx.drizzle, reportedUserId, gt);
+        const targetIds = [report.reportedUserId];
+        // Each reset applies only while no current report enforces that restriction.
+        const noActiveReport = noActiveReportGuard(
+          ctx.drizzle,
+          report.reportedUserId,
+          gt,
+        );
         mutations.push(
-          ...(bans.length === 0
-            ? [
-                clearUserBanWithoutActiveReport(
-                  ctx.drizzle,
-                  [reportedUserId],
-                  noActiveReport,
-                ),
-              ]
-            : []),
-          ...(activeSilenceOrTimeout.length === 0
-            ? [
-                clearUserSilenceWithoutActiveReport(
-                  ctx.drizzle,
-                  [reportedUserId],
-                  noActiveReport,
-                ),
-              ]
-            : []),
-          ...(activeTradeBans.length === 0
-            ? [
-                clearUserTradeBanWithoutActiveReport(
-                  ctx.drizzle,
-                  [reportedUserId],
-                  noActiveReport,
-                ),
-              ]
-            : []),
+          clearUserBanWithoutActiveReport(ctx.drizzle, targetIds, noActiveReport),
+          clearUserSilenceWithoutActiveReport(ctx.drizzle, targetIds, noActiveReport),
+          clearUserTradeBanWithoutActiveReport(ctx.drizzle, targetIds, noActiveReport),
         );
       }
       mutations.push(
