@@ -80,8 +80,7 @@ async function runShrineMaintenance(now: Date) {
     fetchVillages(drizzleDB),
   ]);
 
-  type VillageType = NonNullable<typeof villages>[number];
-  const villageSectors = new Set(villages?.map((v: VillageType) => v.sector) ?? []);
+  const villageSectors = new Set(villages.map((v) => v.sector));
 
   let shrinesDowngraded = 0;
   let shrinesDestroyed = 0;
