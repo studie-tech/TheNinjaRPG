@@ -6,7 +6,14 @@ import { questsRouter } from "@/routers/quests";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { aroundStatements } from "../../../../setup/statements";
+import {
+  callerFor,
+  callerForDatabase,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../../setup/testDatabase";
 
 const input = { type: "crime", rank: "A", userLevel: 50, userSector: 0, userVillageId: null } as const;
 const questVersion = new Date("2026-01-01T00:00:00.000Z");
@@ -90,9 +97,20 @@ describeWithDatabase("startRandom attempt history", () => {
         questVersion: new Date("2025-01-01T00:00:00.000Z"),
       },
     ]);
-    const result = await (await callerFor(questsRouter, "hero")).startRandom(input);
-    expect(result).toMatchObject({ success: true, message: "Quest started: Crime" });
     const client = await getTestDatabase();
+    let historyInserts = 0;
+    const counted = aroundStatements(
+      client,
+      questHistory,
+      (run) => {
+        historyInserts += 1;
+        return run();
+      },
+      { operations: ["insert"] },
+    );
+    const result = await callerForDatabase(questsRouter, "hero", counted).startRandom(input);
+    expect(result).toMatchObject({ success: true, message: "Quest started: Crime" });
+    expect(historyInserts).toBe(0);
     const rows = await client.query.questHistory.findMany();
     expect(rows).toHaveLength(1);
     const saved = rows[0]!;

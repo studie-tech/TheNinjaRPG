@@ -558,30 +558,6 @@ export const questsRouter = createTRPCRouter({
       );
       if (!result) return errorResponse("No assignments at this level could be found");
 
-      // Reuse the history row already loaded by the widened LEFT JOIN above so upsertQuestEntry
-      // skips its own findFirst. A NULL join (never-attempted quest) → `null` → the idempotent
-      // insert branch; a real row → the update branch keyed on the REAL questHistory id.
-      const prevEntry =
-        result.questHistoryId != null
-          ? {
-              id: result.questHistoryId,
-              userId: user.userId,
-              questId: result.id,
-              questType: result.questType,
-              startedAt: result.historyStartedAt ?? new Date(),
-              endAt: result.historyEndAt,
-              completed: result.completed ?? 0,
-              previousCompletes: result.historyPreviousCompletes ?? 0,
-              previousAttempts: result.previousAttempts ?? 0,
-              periodCompletes: result.periodCompletes ?? 0,
-              periodStartAt: result.periodStartAt,
-              pendingRewardChoice: result.historyPendingRewardChoice,
-              entryPaid: result.historyEntryPaid ?? false,
-              isolated: result.historyIsolated ?? false,
-              questVersion: result.historyQuestVersion,
-            }
-          : null;
-
       // Reserve the slot before delivering a quest, including when another start races us.
       if (
         quota &&
@@ -598,7 +574,8 @@ export const questsRouter = createTRPCRouter({
         user,
         result,
         "random_assignment",
-        prevEntry,
+        // The widened LEFT JOIN already loaded this row; a null is the idempotent insert branch.
+        result.history,
         false,
         quota ? undefined : readiness,
       );
