@@ -1,7 +1,7 @@
 /**
  * Database access for guide; authorization and transaction scopes stay in callers.
  */
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import type { GuideCategory } from "@/drizzle/constants";
 import { bloodline, guideArticle, item } from "@/drizzle/schema";
 import { isGuideworthyEntityName } from "@/libs/guide/generate";
@@ -81,29 +81,21 @@ export const fetchFarmCatalog = async (client: DrizzleClient) => {
     },
     where: and(eq(item.isFarmSeed, true), eq(item.hidden, false)),
     orderBy: [asc(item.farmMinLevel), asc(item.name)],
+    with: { farmYieldItem: { columns: { id: true, name: true, hidden: true } } },
   });
-  const yieldIds = seeds.flatMap((row) =>
-    row.farmYieldItemId ? [row.farmYieldItemId] : [],
-  );
-  const yields = yieldIds.length
-    ? await client.query.item.findMany({
-        columns: { id: true, name: true },
-        where: and(inArray(item.id, yieldIds), eq(item.hidden, false)),
-      })
-    : [];
   // Same visibility rules as the seeds themselves: a visible seed can still point at a
   // hidden or QA yield, and this table must not be the place that discloses it. A
   // filtered yield leaves its row's "grows into" cell blank rather than dropping the seed.
-  const yieldById = new Map(
-    yields
-      .filter((row) => isGuideworthyEntityName(row.name))
-      .map((row) => [row.id, row]),
-  );
   return seeds
     .filter((row) => isGuideworthyEntityName(row.name))
-    .map((row) => ({
+    .map(({ farmYieldItem, ...row }) => ({
       ...row,
-      yield: row.farmYieldItemId ? (yieldById.get(row.farmYieldItemId) ?? null) : null,
+      yield:
+        farmYieldItem &&
+        !farmYieldItem.hidden &&
+        isGuideworthyEntityName(farmYieldItem.name)
+          ? { id: farmYieldItem.id, name: farmYieldItem.name }
+          : null,
     }));
 };
 
