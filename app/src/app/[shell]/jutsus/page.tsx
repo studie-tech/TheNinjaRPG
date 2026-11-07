@@ -51,7 +51,10 @@ import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import { JutsuLoadoutSharing } from "@/layout/JutsuLoadoutSharing";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
-import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
+import {
+  EVOLUTION_STAT_FIELDS,
+  meetsEvolutionStatRequirements,
+} from "@/libs/evolution";
 import {
   compareByLoadoutOrder,
   filterFreeJutsuTransfers,
@@ -63,7 +66,6 @@ import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import {
   calcJutsuEquipLimit,
-  canEvolveJutsu,
   isJutsuInTraining,
   jutsuRequirementWarning,
   remainingXpToLevel,
@@ -882,7 +884,7 @@ export default function MyJutsu() {
                           undefined,
                           true,
                         ) ||
-                        (canEvolveJutsu(evo, userData)
+                        (meetsEvolutionStatRequirements(evo, userData)
                           ? ""
                           : "You do not meet the stat requirements for this evolution.");
                       const evolutionLevel = getJutsuMaxLevel(userjutsu.jutsu);

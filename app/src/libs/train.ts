@@ -46,7 +46,7 @@ import type {
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { elementalGainRoom } from "@/libs/elementalMastery";
-import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
+import { isEvolution } from "@/libs/evolution";
 import {
   applyGameSettingMultiplier,
   getGameSettingBoost,
@@ -295,17 +295,6 @@ export const checkJutsuBloodlineItem = (
   });
 };
 
-export const canEvolveJutsu = (
-  evolutionJutsu: Jutsu,
-  userdata: UserStatData,
-): boolean => {
-  return meetsEvolutionStatRequirements(evolutionJutsu, userdata);
-};
-
-export const isJutsuEvolution = (jutsu: Jutsu): boolean => {
-  return isEvolution(jutsu.parentJutsuId);
-};
-
 /** XP remaining until the next ownership level (jutsu, items, etc.). Never negative. */
 export const remainingXpToLevel = (xpToLevel: number, experience: number): number =>
   Math.max(0, xpToLevel - experience);
@@ -315,7 +304,7 @@ export const canTrainJutsu = (
   userdata: NonNullable<UserWithRelations>,
   masteries?: MasteryStatSource,
 ): boolean => {
-  if (isJutsuEvolution(jutsu)) return false;
+  if (isEvolution(jutsu.parentJutsuId)) return false;
   // Bloodline items and activated skills gate use, while learning remains available.
   return canUseJutsu(jutsu, userdata, true, masteries, true);
 };

@@ -42,7 +42,11 @@ import {
   editedReason,
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
-import { filterVisibleEvolutions, validateEvolutionGraph } from "@/libs/evolution";
+import {
+  filterVisibleEvolutions,
+  meetsEvolutionStatRequirements,
+  validateEvolutionGraph,
+} from "@/libs/evolution";
 import type { JutsuEquipCap } from "@/libs/jutsu";
 import {
   type ComputedJutsuLoadout,
@@ -84,7 +88,6 @@ import {
   calcJutsuEquipLimit,
   calcJutsuTrainCost,
   calcJutsuTrainTime,
-  canEvolveJutsu,
   canTrainJutsu,
   canUseJutsu,
   checkJutsuBloodlineItem,
@@ -879,7 +882,7 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("You don't meet the rank requirement for this evolution");
       if (!hasRequiredLevel(user.level, evolutionJutsu.requiredLevel))
         return errorResponse("You don't meet the level requirement for this evolution");
-      if (!canEvolveJutsu(evolutionJutsu, user))
+      if (!meetsEvolutionStatRequirements(evolutionJutsu, user))
         return errorResponse("You don't meet the stat requirements for this evolution");
       if (!canUseJutsu(evolutionJutsu, user, true, undefined, true))
         return errorResponse(
