@@ -1,5 +1,6 @@
-import type { WarState, WarType } from "@/drizzle/constants";
+import type { AllianceVillageType, WarState, WarType } from "@/drizzle/constants";
 import {
+  ALLIANCE_VILLAGE_TYPES,
   FACTION_RAID_MAX_DAYS,
   FACTION_RAID_REWARD,
   FACTION_RAID_STRUCTURE_ROUTES,
@@ -67,35 +68,36 @@ export const canJoinWar = (
     warringVillageId,
   );
   const status = relationship?.status || "NEUTRAL";
-  // Checks
-  const check1 = ![activeWar.attackerVillageId, activeWar.defenderVillageId].includes(
-    joiningVillageId,
-  );
-  const check2 = [activeWar.attackerVillageId, activeWar.defenderVillageId].includes(
-    warringVillageId,
-  );
-  const check3 = !activeWar.warAllies.some((f) => f.villageId === joiningVillageId);
-  const check4 = ["VILLAGE", "HIDEOUT", "STRONGHOLD"].includes(joiningVillage.type);
-  const check5 = ["NEUTRAL", "ALLY"].includes(status);
-  const check6 = joiningVillage.type !== "VILLAGE" || joiningVillage.allianceSystem;
-  const check =
-    activeWar.type !== "WAR_RAID" &&
-    check1 &&
-    check2 &&
-    check3 &&
-    check4 &&
-    check5 &&
-    check6;
-  // Derived message for each check failing
-  let message = activeWar.type === "WAR_RAID" ? "Raids do not accept war allies" : "";
-  if (!check1) message = "Cannot join war, already in it";
-  if (!check2) message = "Cannot join war, warring village is not in it";
-  if (!check3) message = "Cannot join war, faction already in war";
-  if (!check4) message = "Cannot join war, not a village/hideout/stronghold";
-  if (!check5) message = "Cannot join war with your enemy";
-  if (!check6) message = "Cannot join war, not a joinable village/hideout/stronghold";
-  // Return
-  return { check, message };
+  const warVillageIds = [activeWar.attackerVillageId, activeWar.defenderVillageId];
+  // The first failure is the message a player sees.
+  const failure = [
+    {
+      ok: joiningVillage.type !== "VILLAGE" || joiningVillage.allianceSystem,
+      message: "Cannot join war, not a joinable village/hideout/stronghold",
+    },
+    {
+      ok: ["NEUTRAL", "ALLY"].includes(status),
+      message: "Cannot join war with your enemy",
+    },
+    {
+      ok: ALLIANCE_VILLAGE_TYPES.includes(joiningVillage.type as AllianceVillageType),
+      message: "Cannot join war, not a village/hideout/stronghold",
+    },
+    {
+      ok: !activeWar.warAllies.some((f) => f.villageId === joiningVillageId),
+      message: "Cannot join war, faction already in war",
+    },
+    {
+      ok: warVillageIds.includes(warringVillageId),
+      message: "Cannot join war, warring village is not in it",
+    },
+    {
+      ok: !warVillageIds.includes(joiningVillageId),
+      message: "Cannot join war, already in it",
+    },
+    { ok: activeWar.type !== "WAR_RAID", message: "Raids do not accept war allies" },
+  ].find((requirement) => !requirement.ok);
+  return { check: !failure, message: failure?.message ?? "" };
 };
 
 /**
