@@ -111,10 +111,11 @@ export function ItemsWorkspace({
   const isHome = home?.place === "home";
   const { moveItems, isMoving } = useHomeStorageMove({
     onMoved: (result) => {
-      // Stacks that stayed remain selected so the player can see why and retry.
+      // A refused request moved nothing; stacks that stayed remain selected for a retry.
+      if (!result.success) return;
       const stayed = result.refused.map((entry) => entry.userItemId);
       setTickedIds((ids) => ids.filter((id) => stayed.includes(id)));
-      if (result.success && stayed.length === 0) setIsSelecting(false);
+      if (stayed.length === 0) setIsSelecting(false);
     },
   });
   // The backpack column lists the open bag or, at home, the open storage bucket.

@@ -106,7 +106,7 @@ const player = { userId: "user-1", role: "USER", status: "AWAKE", battleId: null
 const renderWorkspace = ({
   place = "backpack" as ItemsPlace,
   onPlaceChange = vi.fn(),
-  blockReason = () => null as string | null,
+  blockReason = (_id: string, _toHome: boolean): string | null => null,
   withHome = true,
 } = {}) => {
   render(
@@ -177,6 +177,10 @@ it("stores selected backpack stacks and keeps the ones that stayed selected", ()
   act(() => fireEvent.click(card("Old Scroll")));
   act(() => fireEvent.click(within(bar()).getByRole("button", { name: "Store at home" })));
   expect(moveItems).toHaveBeenCalledWith(["Chakra Pill", "Old Scroll"], true);
+  // A refused request moves nothing, so the whole selection stays for a retry.
+  act(() => finishMove({ success: false, refused: [] }));
+  expect(card("Chakra Pill").getAttribute("aria-pressed")).toBe("true");
+  expect(card("Old Scroll").getAttribute("aria-pressed")).toBe("true");
   act(() => finishMove({ success: true, refused: [{ userItemId: "Old Scroll" }] }));
   expect(card("Chakra Pill").getAttribute("aria-pressed")).toBe("false");
   expect(card("Old Scroll").getAttribute("aria-pressed")).toBe("true");
