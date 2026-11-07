@@ -155,9 +155,9 @@ it("lists the tower being climbed first", () => {
 });
 
 it("shrinks only labels too long for the button", () => {
-  expect(climbLabelFontSize("Climb tower")).toBe("clamp(10px, calc((100cqi - 1.75rem) / 6.05), 14px)");
-  // In the 176px desktop button this 20-character label renders near 10.5px.
-  expect(climbLabelFontSize("Finish current climb")).toBe("clamp(10px, calc((100cqi - 1.75rem) / 11), 14px)");
+  expect(climbLabelFontSize("Climb tower")).toBe("clamp(0.625rem, calc((100cqi - 1.75rem) / 6.05), 0.875rem)");
+  // At the default 12px root size this 20-character label fits the 132px desktop button near 7.9px.
+  expect(climbLabelFontSize("Finish current climb")).toBe("clamp(0.625rem, calc((100cqi - 1.75rem) / 11), 0.875rem)");
 });
 
 it("lists towers open to the player before towers missing entry items", () => {

@@ -398,7 +398,7 @@ function TowerHeading({ name, state }: { name: string; state: TowerState }) {
 /**
  * Font size that fits a climb label on one line of its fixed-size button: the button's content
  * width minus its icon (1.75rem), shared by the label's characters at about 0.55em each,
- * between 10px and the button's usual 14px.
+ * between 0.625rem and the button's usual 0.875rem so it follows the user's font scale.
  */
 export const climbLabelFontSize = (label: string) =>
-  `clamp(10px, calc((100cqi - 1.75rem) / ${Number((label.length * 0.55).toFixed(2))}), 14px)`;
+  `clamp(0.625rem, calc((100cqi - 1.75rem) / ${Number((label.length * 0.55).toFixed(2))}), 0.875rem)`;
