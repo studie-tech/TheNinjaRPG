@@ -2291,24 +2291,36 @@ export const move = (
       effect.rounds = 0;
       return;
     }
-    // This is related to users stepping into/out of ground effects
-    groundEffects.forEach((g) => {
-      if (g.timeTracker && user.userId in g.timeTracker) {
-        delete g.timeTracker[user.userId];
-      }
-    });
-    groundEffects.forEach((g) => {
-      if (
-        g.timeTracker &&
-        g.longitude === effect.longitude &&
-        g.latitude === effect.latitude
-      ) {
-        g.timeTracker[user.userId] = effect.createdRound;
-      }
-    });
-    user.longitude = effect.longitude;
-    user.latitude = effect.latitude;
+    relocateUser(
+      user,
+      effect.longitude,
+      effect.latitude,
+      groundEffects,
+      effect.createdRound,
+    );
   }
+};
+
+/** Place a user on a tile and move their ground-effect entry timers along with them. */
+const relocateUser = (
+  user: BattleUserState,
+  longitude: number,
+  latitude: number,
+  groundEffects: GroundEffect[],
+  round: number,
+) => {
+  groundEffects.forEach((g) => {
+    if (g.timeTracker && user.userId in g.timeTracker) {
+      delete g.timeTracker[user.userId];
+    }
+  });
+  groundEffects.forEach((g) => {
+    if (g.timeTracker && g.longitude === longitude && g.latitude === latitude) {
+      g.timeTracker[user.userId] = round;
+    }
+  });
+  user.longitude = longitude;
+  user.latitude = latitude;
 };
 
 /** One-hit-kill target with a given static chance */
@@ -2552,6 +2564,7 @@ export const redirection = (
   battle: ReturnedBattle,
   effect: UserEffect,
   usersEffects: UserEffect[],
+  caster: BattleUserState,
   target: BattleUserState,
   usersState: BattleUserState[],
   groundEffects: GroundEffect[],
@@ -2569,29 +2582,8 @@ export const redirection = (
     return;
   }
 
-  // Find the user who cast the effect
-  const caster = usersState.find((u) => u.userId === effect.creatorId);
-  if (!caster) {
-    return {
-      txt: `${target.username} cannot be pulled - caster not found`,
-      color: "red",
-    };
-  }
-
-  // Find the actual target user in the usersState array to update their position
-  const actualTarget = usersState.find((u) => u.userId === target.userId);
-  if (!actualTarget) {
-    return {
-      txt: `${target.username} cannot be redirected - target not found in battle state`,
-      color: "red",
-    };
-  }
-
   // Check if target and caster are at the same position
-  if (
-    actualTarget.longitude === caster.longitude &&
-    actualTarget.latitude === caster.latitude
-  ) {
+  if (target.longitude === caster.longitude && target.latitude === caster.latitude) {
     return {
       txt: `${target.username} is already at the caster's location`,
       color: "blue",
@@ -2599,7 +2591,7 @@ export const redirection = (
   }
 
   // A pull stops next to the caster; a push travels its full power.
-  const origin = { col: actualTarget.longitude, row: actualTarget.latitude };
+  const origin = { col: target.longitude, row: target.latitude };
   const casterTile = { col: caster.longitude, row: caster.latitude };
   const casterDistance = oddQHexDistance(
     origin.col,
@@ -2634,8 +2626,7 @@ export const redirection = (
     row < battle.height &&
     !(col === caster.longitude && row === caster.latitude) &&
     !usersState.some(
-      (u) =>
-        u.userId !== actualTarget.userId && u.longitude === col && u.latitude === row,
+      (u) => u.userId !== target.userId && u.longitude === col && u.latitude === row,
     ) &&
     !groundEffects.some(
       (g) => g.longitude === col && g.latitude === row && "curHealth" in g,
@@ -2653,25 +2644,13 @@ export const redirection = (
       oddQLineStep(landing, origin, steps),
     ).find(isOpenTile) ?? origin;
 
-  // Update the actual target's position in the battle state
-  actualTarget.longitude = destination.col;
-  actualTarget.latitude = destination.row;
-
-  // Handle ground effect timeTracker updates (mirroring the move function logic)
-  groundEffects.forEach((g) => {
-    if (g.timeTracker && actualTarget.userId in g.timeTracker) {
-      delete g.timeTracker[actualTarget.userId];
-    }
-  });
-  groundEffects.forEach((g) => {
-    if (
-      g.timeTracker &&
-      g.longitude === destination.col &&
-      g.latitude === destination.row
-    ) {
-      g.timeTracker[actualTarget.userId] = effect.createdRound;
-    }
-  });
+  relocateUser(
+    target,
+    destination.col,
+    destination.row,
+    groundEffects,
+    effect.createdRound,
+  );
 
   const actualDistance = oddQHexDistance(
     origin.col,
