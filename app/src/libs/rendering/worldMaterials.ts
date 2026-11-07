@@ -431,7 +431,14 @@ export const createCharacterMaterialFrame = (
   const capacity = Math.floor(
     (MAX_FRAME_VERTICES - vertices.length / 6) / CHARACTER_VOLUME_VERTICES,
   );
-  const rowStep = Math.max(1, Math.ceil(rows.flat().length / Math.max(1, capacity)));
+  let rowStep = Math.max(1, Math.ceil(rows.flat().length / Math.max(1, capacity)));
+  // Spans can bunch on the rows a step keeps, so count those rather than assume an even spread.
+  while (
+    rowStep < rows.length &&
+    rows.reduce((kept, spans, y) => kept + (y % rowStep ? 0 : spans.length), 0) >
+      capacity
+  )
+    rowStep += 1;
   for (let y = 0; y < rows.length; y += rowStep) {
     const top = foot - (trim?.y ?? 0) - y * pixelY,
       lower = Math.max(0, top - pixelY * rowStep);
