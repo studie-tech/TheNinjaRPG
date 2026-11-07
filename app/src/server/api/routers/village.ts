@@ -96,7 +96,7 @@ export const villageRouter = createTRPCRouter({
       ]);
       return { success: true, message: "Structure points restored successfully" };
     }),
-  // Get a specific village & its structures∂
+  // Get a specific village & its structures
   get: publicProcedure
     .meta({ mcp: { description: "Get village details and structures" } })
     .input(idSchema)
@@ -138,10 +138,9 @@ export const villageRouter = createTRPCRouter({
   // Buying food in ramen shop
   buyFood: protectedProcedure
     .meta({ mcp: { description: "Buy food at ramen shop to heal" } })
-    .input(z.object({ ramen: z.enum(ramenOptions), villageId: z.string().nullish() }))
+    .input(z.object({ ramen: z.enum(ramenOptions) }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      // Get structures of current (visiting) village or Sydicate if outlaw
       const updatedUser = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
@@ -149,6 +148,7 @@ export const villageRouter = createTRPCRouter({
       });
       let user = updatedUser.user;
       if (!user) return errorResponse("User does not exist");
+      // Get structures of the visiting village, or Syndicate when the sector has none
       const sectorVillage = await fetchSectorVillage(
         ctx.drizzle,
         user.sector,
@@ -401,7 +401,7 @@ export const villageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
-      const { user, villages, relationships, requests } = await fetchAllienceInfo(
+      const { user, villages, relationships, requests } = await fetchAllianceInfo(
         ctx.drizzle,
         ctx.userId,
       );
@@ -476,7 +476,7 @@ export const villageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
-      const { user, villages, relationships, requests } = await fetchAllienceInfo(
+      const { user, villages, relationships, requests } = await fetchAllianceInfo(
         ctx.drizzle,
         ctx.userId,
       );
@@ -484,9 +484,9 @@ export const villageRouter = createTRPCRouter({
       // Derived
       const request = requests.find((r) => r.id === input.id);
       if (!request) return errorResponse("Request not found");
-      const senderVillage = villages.find((v) => v.kageId === request?.senderId);
+      const senderVillage = villages.find((v) => v.kageId === request.senderId);
       if (!senderVillage) return errorResponse("Request author no longer kage");
-      const senderId = senderVillage?.id;
+      const senderId = senderVillage.id;
       const receiverId = user?.villageId;
 
       // Guards
@@ -522,7 +522,7 @@ export const villageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
-      const { user, requests } = await fetchAllienceInfo(ctx.drizzle, ctx.userId);
+      const { user, requests } = await fetchAllianceInfo(ctx.drizzle, ctx.userId);
       // Derived
       const request = requests.find((r) => r.id === input.id);
       // Guards
@@ -542,7 +542,7 @@ export const villageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
-      const { user, requests } = await fetchAllienceInfo(ctx.drizzle, ctx.userId);
+      const { user, requests } = await fetchAllianceInfo(ctx.drizzle, ctx.userId);
       // Derived
       const request = requests.find((r) => r.id === input.id);
       // Guards
@@ -560,7 +560,7 @@ export const villageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
-      const { user, relationships } = await fetchAllienceInfo(ctx.drizzle, ctx.userId);
+      const { user, relationships } = await fetchAllianceInfo(ctx.drizzle, ctx.userId);
       // Derived
       const alliance = relationships.find((r) => r.id === input.allianceId);
       // Guards
@@ -628,7 +628,7 @@ export const villageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
-      const { user, villages, relationships } = await fetchAllienceInfo(
+      const { user, villages, relationships } = await fetchAllianceInfo(
         ctx.drizzle,
         ctx.userId,
       );
@@ -721,7 +721,7 @@ const detachFromVillageRelations = (ctx: { drizzle: DrizzleClient; userId: strin
  * @param userId - The ID of the user.
  * @returns An object containing the user, villages, relationships, and requests.
  */
-export const fetchAllienceInfo = async (client: DrizzleClient, userId: string) => {
+const fetchAllianceInfo = async (client: DrizzleClient, userId: string) => {
   const [{ user }, villages, relationships, requests] = await Promise.all([
     fetchUpdatedUser({ client, userId }),
     fetchVillages(client),
