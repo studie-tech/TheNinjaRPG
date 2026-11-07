@@ -3019,7 +3019,6 @@ export const itemRouter = createTRPCRouter({
       const { kitsToUse, totalDurabilityNeeded, canRepairAll } = calculateKitsToUse(
         itemsNeedingRepair,
         repairKits,
-        useritems,
       );
       if (!canRepairAll) {
         const coveredDurability = kitsToUse.reduce((sum, kit) => {
