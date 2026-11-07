@@ -3821,6 +3821,7 @@ export const SENSORY_DETECT_CHANCE_PER_1000_POINTS = 2.75; // +2.75% per 1000 po
 export const SENSORY_MAX_DETECT_CHANCE_PERC = 60; // 60% max detection chance
 export const SENSORY_BASE_COOLDOWN_SECONDS = 120; // 2 minute base cooldown
 export const SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS = 5; // -5 seconds per 1000 points
+export const SENSORY_MIN_COOLDOWN_SECONDS = 30;
 export const STEALTH_TRAIN_GAIN_PER_MINUTE = 50; // Training gain per minute
 
 // Covert training types enum
