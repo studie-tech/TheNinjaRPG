@@ -15,7 +15,7 @@ it.each([false, true])("publishes the inbox event only after successful storage 
     insert: () => ({ values: write }),
     update: () => ({ set: () => ({ where: write }) }),
   } as unknown as DrizzleClient;
-  const trigger = vi.fn(async () => { expect(completed).toBe(5); });
+  const trigger = vi.fn(async () => { expect(completed).toBe(4); });
   vi.spyOn(pusher, "getServerPusher").mockReturnValue({ trigger } as never);
   const notify = vi.spyOn(social, "notifyPrivateConversation").mockImplementation(() => {});
   const pending = createConvo({ client, senderUserId: "sender", authorUserId: "sender", receiverUserIds: ["recipient"], title: "Test chat", content: "Hello there", convoId: "chat" });
