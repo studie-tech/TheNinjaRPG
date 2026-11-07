@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleDollarSign, Undo2, Wrench, Zap } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import type { UserItemWithRelations } from "@/drizzle/schema";
@@ -18,12 +18,15 @@ import { useRequiredUserData } from "@/utils/UserContext";
 /**
  * The item loadout selector and whole-inventory actions: unequip all, merge all stacks,
  * repair all (with kits, or ryo for crafters) and auto equip, each behind its confirmation.
+ * Repair all leads while gear is damaged and repairable here, otherwise auto equip; phones
+ * show only that action and open the others with ⋯.
  */
 export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   // Phones show the secondary actions on request; wider screens always show them.
   const [showMore, setShowMore] = useState(false);
+  const moreActionsId = useId();
 
   const { mutate: autoEquipOptimal, isPending: isAutoEquipping } =
     api.item.autoEquipOptimal.useMutation({
@@ -105,6 +108,149 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   const canRepairWithKits = repairKits.length > 0 && repairAllInfo.canRepairAll;
   // The selector renders nothing for a single loadout; drop its label with it.
   const hasLoadouts = fedItemLoadouts(userData) > 1;
+  const canRepairAll =
+    itemsNeedingRepair.length > 0 && (repairKits.length > 0 || isCrafter);
+
+  const autoEquipAction = (
+    <Confirm
+      title="Auto Equip"
+      proceed_label={isAutoEquipping ? undefined : "Auto equip"}
+      isValid={!isAutoEquipping}
+      disabled={isAutoEquipping}
+      button={
+        <Button
+          disabled={isAutoEquipping}
+          aria-busy={isAutoEquipping}
+          variant={canRepairAll ? "outline" : "default"}
+          size="sm"
+          className="gap-1.5 px-2"
+        >
+          <Zap className="h-4 w-4" />
+          {isAutoEquipping ? "Equipping" : "Auto equip"}
+        </Button>
+      }
+      onAccept={(e) => {
+        e.preventDefault();
+        autoEquipOptimal();
+      }}
+    >
+      <p>
+        Equip the best available items from your backpack into your equipment slots?
+      </p>
+    </Confirm>
+  );
+  const repairAllAction = (
+    <Confirm
+      title="Repair All Items"
+      proceed_label={
+        canRepairWithKits && !isRepairAllPending ? "Repair with Kits" : null
+      }
+      isValid={canRepairWithKits && !isRepairAllPending}
+      disabled={isRepairAllPending}
+      button={
+        <Button
+          disabled={isRepairAllPending}
+          aria-busy={isRepairAllPending}
+          aria-label={isRepairAllPending ? "Repairing all items" : "Repair all items"}
+          hoverText="Repair all items"
+          variant="default"
+          size="sm"
+          className="gap-1.5"
+        >
+          <Wrench className="h-4 w-4" />
+          {isRepairAllPending
+            ? "Repairing"
+            : `Repair all (${itemsNeedingRepair.length})`}
+        </Button>
+      }
+      onAccept={(e) => {
+        e.preventDefault();
+        if (canRepairWithKits) {
+          mutateRepairAll();
+        }
+      }}
+      footerExtra={
+        isCrafter
+          ? ({ close }) => (
+              <Button
+                variant="default"
+                disabled={!canAffordRyoRepair || isRepairAllPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  mutateRepairAllRyo();
+                  close();
+                }}
+              >
+                <CircleDollarSign className="mr-2 h-4 w-4" />
+                Repair with Ryo ({totalRyoRepairCost.toLocaleString()})
+              </Button>
+            )
+          : undefined
+      }
+    >
+      <div className="space-y-3">
+        {repairKits.length > 0 ? (
+          canRepairWithKits ? (
+            <>
+              <p>
+                You are about to repair all {itemsNeedingRepair.length} item
+                {itemsNeedingRepair.length !== 1 ? "s" : ""} using repair kits.
+              </p>
+              {repairAllInfo.kitsToUse.length > 0 && (
+                <div>
+                  <p className="mb-2 font-semibold">Repair kits to be used:</p>
+                  <div className="space-y-1">
+                    {repairAllInfo.kitsToUse.map((kit) => (
+                      <div
+                        key={kit.repairItemId}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span>{kit.repairItemName}</span>
+                        <span className="font-medium">x{kit.quantityUsed}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div>
+              <p className="mb-2 font-semibold text-red-600">Not enough repair kits</p>
+              <p className="text-muted-foreground text-sm">
+                You have {itemsNeedingRepair.length} damaged item
+                {itemsNeedingRepair.length !== 1 ? "s" : ""} that need
+                {itemsNeedingRepair.length === 1 ? "s" : ""}{" "}
+                {repairAllInfo.totalDurabilityNeeded} total durability, but you
+                don&apos;t have enough repair kits to repair all of them.
+              </p>
+            </div>
+          )
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            You don&apos;t have any repair kits. As a crafter, you can repair with ryo
+            instead.
+          </p>
+        )}
+        {isCrafter && (
+          <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+            <p className="font-semibold">Repair with ryo</p>
+            <p className="text-muted-foreground">
+              Total cost:{" "}
+              <span className={canAffordRyoRepair ? "text-green-600" : "text-red-600"}>
+                {totalRyoRepairCost.toLocaleString()} ryo
+              </span>
+              {!canAffordRyoRepair && (
+                <span className="ml-2">
+                  (You have {userData.money.toLocaleString()} ryo)
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+      </div>
+    </Confirm>
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-2">
@@ -119,43 +265,20 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
         </div>
       )}
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        <Confirm
-          title="Auto Equip"
-          proceed_label={isAutoEquipping ? undefined : "Auto equip"}
-          isValid={!isAutoEquipping}
-          disabled={isAutoEquipping}
-          button={
-            <Button
-              disabled={isAutoEquipping}
-              aria-busy={isAutoEquipping}
-              variant="default"
-              size="sm"
-              className="gap-1.5 px-2"
-            >
-              <Zap className="h-4 w-4" />
-              {isAutoEquipping ? "Equipping" : "Auto equip"}
-            </Button>
-          }
-          onAccept={(e) => {
-            e.preventDefault();
-            autoEquipOptimal();
-          }}
-        >
-          <p>
-            Equip the best available items from your backpack into your equipment slots?
-          </p>
-        </Confirm>
+        {canRepairAll ? repairAllAction : autoEquipAction}
         <Button
           variant="outline"
           size="sm"
           className="sm:hidden"
           aria-expanded={showMore}
+          aria-controls={moreActionsId}
           aria-label="More item actions"
           onClick={() => setShowMore((open) => !open)}
         >
           ⋯
         </Button>
         <div
+          id={moreActionsId}
           className={cn(
             "flex flex-wrap items-center gap-2",
             !showMore && "max-sm:hidden",
@@ -193,126 +316,7 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
               current item loadout. Your loadout slot selection stays the same.
             </p>
           </Confirm>
-          {itemsNeedingRepair.length > 0 && (repairKits.length > 0 || isCrafter) && (
-            <Confirm
-              title="Repair All Items"
-              proceed_label={
-                canRepairWithKits && !isRepairAllPending ? "Repair with Kits" : null
-              }
-              isValid={canRepairWithKits && !isRepairAllPending}
-              disabled={isRepairAllPending}
-              button={
-                <Button
-                  disabled={isRepairAllPending}
-                  aria-busy={isRepairAllPending}
-                  aria-label={
-                    isRepairAllPending ? "Repairing all items" : "Repair all items"
-                  }
-                  hoverText="Repair all items"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                >
-                  <Wrench className="h-4 w-4" />
-                  {isRepairAllPending
-                    ? "Repairing"
-                    : `Repair all (${itemsNeedingRepair.length})`}
-                </Button>
-              }
-              onAccept={(e) => {
-                e.preventDefault();
-                if (canRepairWithKits) {
-                  mutateRepairAll();
-                }
-              }}
-              footerExtra={
-                isCrafter
-                  ? ({ close }) => (
-                      <Button
-                        variant="default"
-                        disabled={!canAffordRyoRepair || isRepairAllPending}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          mutateRepairAllRyo();
-                          close();
-                        }}
-                      >
-                        <CircleDollarSign className="mr-2 h-4 w-4" />
-                        Repair with Ryo ({totalRyoRepairCost.toLocaleString()})
-                      </Button>
-                    )
-                  : undefined
-              }
-            >
-              <div className="space-y-3">
-                {repairKits.length > 0 ? (
-                  canRepairWithKits ? (
-                    <>
-                      <p>
-                        You are about to repair all {itemsNeedingRepair.length} item
-                        {itemsNeedingRepair.length !== 1 ? "s" : ""} using repair kits.
-                      </p>
-                      {repairAllInfo.kitsToUse.length > 0 && (
-                        <div>
-                          <p className="mb-2 font-semibold">Repair kits to be used:</p>
-                          <div className="space-y-1">
-                            {repairAllInfo.kitsToUse.map((kit) => (
-                              <div
-                                key={kit.repairItemId}
-                                className="flex items-center justify-between text-sm"
-                              >
-                                <span>{kit.repairItemName}</span>
-                                <span className="font-medium">x{kit.quantityUsed}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div>
-                      <p className="mb-2 font-semibold text-red-600">
-                        Not enough repair kits
-                      </p>
-                      <p className="text-muted-foreground text-sm">
-                        You have {itemsNeedingRepair.length} damaged item
-                        {itemsNeedingRepair.length !== 1 ? "s" : ""} that need
-                        {itemsNeedingRepair.length === 1 ? "s" : ""}{" "}
-                        {repairAllInfo.totalDurabilityNeeded} total durability, but you
-                        don&apos;t have enough repair kits to repair all of them.
-                      </p>
-                    </div>
-                  )
-                ) : (
-                  <p className="text-muted-foreground text-sm">
-                    You don&apos;t have any repair kits. As a crafter, you can repair
-                    with ryo instead.
-                  </p>
-                )}
-                {isCrafter && (
-                  <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-                    <p className="font-semibold">Repair with ryo</p>
-                    <p className="text-muted-foreground">
-                      Total cost:{" "}
-                      <span
-                        className={
-                          canAffordRyoRepair ? "text-green-600" : "text-red-600"
-                        }
-                      >
-                        {totalRyoRepairCost.toLocaleString()} ryo
-                      </span>
-                      {!canAffordRyoRepair && (
-                        <span className="ml-2">
-                          (You have {userData.money.toLocaleString()} ryo)
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </Confirm>
-          )}
+          {canRepairAll && autoEquipAction}
           <MergeAllStacksButton storedAtHome={false} />
         </div>
       </div>

@@ -1,0 +1,98 @@
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from "bun:test";
+import * as client from "@/app/_trpc/client";
+import type { UserItemWithRelations } from "@/drizzle/schema";
+import * as itemLoadout from "@/layout/ItemLoadoutSelector";
+import * as mergeAll from "@/layout/MergeAllStacksButton";
+import * as userContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+
+const mutation = () => ({ useMutation: () => ({ mutate: vi.fn(), isPending: false }) });
+let ItemsToolbar: typeof import("@/layout/items/ItemsToolbar").ItemsToolbar;
+
+const mockClient = () =>
+  Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({}),
+    item: {
+      autoEquipOptimal: mutation(),
+      useRepairAll: mutation(),
+      repairAll: mutation(),
+      unequipAllItems: mutation(),
+    },
+  });
+
+beforeAll(async () => {
+  // The toolbar binds its kit repair procedure when the module loads.
+  mockClient();
+  ({ ItemsToolbar } = await import("@/layout/items/ItemsToolbar"));
+});
+
+beforeEach(() => {
+  installBrowserGlobals();
+  mockClient();
+  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+    prepareUserUpdate: vi.fn(),
+    updateUser: vi.fn(),
+  } as never);
+  vi.spyOn(itemLoadout, "default").mockImplementation((() => <p>Item loadout</p>) as never);
+  vi.spyOn(mergeAll, "MergeAllStacksButton").mockImplementation(() => (
+    <button type="button">Merge stacks</button>
+  ));
+});
+
+afterEach(() => {
+  cleanup();
+  document.body.innerHTML = "";
+  vi.restoreAllMocks();
+  restoreBrowserGlobals();
+});
+
+const sword = (durability: number) =>
+  ({
+    id: `sword-${durability}`,
+    itemId: "sword",
+    quantity: 1,
+    durability,
+    equipped: "HAND_1",
+    storedAtHome: false,
+    isInAuction: false,
+    imbuements: [],
+    item: { id: "sword", name: "Sword", itemType: "WEAPON", maxDurability: 100, cost: 1000, effects: [] },
+  }) as unknown as UserItemWithRelations;
+
+const player = (occupation: string) =>
+  ({ userId: "user-1", occupation, money: 1_000_000, federalStatus: "NONE" }) as never;
+
+/** Confirm wraps its trigger in a second element with the button role; keep the real ones. */
+const buttons = (scope: Pick<typeof screen, "queryAllByRole">, name: string | RegExp) =>
+  scope.queryAllByRole("button", { name }).filter((element) => element.tagName === "BUTTON");
+
+/** The actions a phone shows only after pressing ⋯. */
+const moreActions = () => {
+  const toggle = screen.getByRole("button", { name: "More item actions" });
+  const group = document.getElementById(toggle.getAttribute("aria-controls") ?? "");
+  expect(group).not.toBeNull();
+  return within(group!);
+};
+
+it("keeps auto equip in view while nothing needs repair", () => {
+  render(<ItemsToolbar userData={player("CRAFTING")} userItems={[sword(100)]} />);
+  expect(buttons(moreActions(), /Auto equip/)).toHaveLength(0);
+  expect(buttons(screen, /Auto equip/)).toHaveLength(1);
+  expect(buttons(screen, /Repair all/)).toHaveLength(0);
+});
+
+it("puts repair in view and auto equip under more actions when gear is damaged", () => {
+  render(<ItemsToolbar userData={player("CRAFTING")} userItems={[sword(40)]} />);
+  const [repair] = buttons(screen, "Repair all items");
+  expect(repair?.textContent).toContain("Repair all (1)");
+  expect(buttons(moreActions(), "Repair all items")).toHaveLength(0);
+  expect(buttons(moreActions(), /Auto equip/)).toHaveLength(1);
+});
+
+it("keeps auto equip in view when damaged gear cannot be repaired here", () => {
+  // Without kits only crafters repair from the toolbar.
+  render(<ItemsToolbar userData={player("NONE")} userItems={[sword(40)]} />);
+  expect(buttons(screen, /Repair all/)).toHaveLength(0);
+  expect(buttons(moreActions(), /Auto equip/)).toHaveLength(0);
+});
