@@ -487,7 +487,7 @@ export const useConversation = (props: ConversationLogicProps) => {
             id: nanoid(),
             createdAt: new Date(),
             conversationId: conversation.id,
-            content: processMentions(quoteText + newMessage.comment).processedContent,
+            content: quoteText + processMentions(newMessage.comment).processedContent,
             reactions: {},
             isPinned: false,
             isReported: false,

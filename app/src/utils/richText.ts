@@ -1,3 +1,4 @@
+import { decodeHTML } from "entities";
 import sanitize from "@/utils/sanitize";
 
 /** Quill imports basic HTML; keep advanced documents in source mode until explicitly converted. */
@@ -23,7 +24,7 @@ export const splitQuotedReply = (html: string) => {
   let rest = html;
   let match = ATTACHED_QUOTE.exec(rest);
   while (match) {
-    authors.push(match[1] ?? "");
+    authors.push(decodeHTML(match[1] ?? ""));
     rest = rest.slice(match[0].length);
     match = ATTACHED_QUOTE.exec(rest);
   }

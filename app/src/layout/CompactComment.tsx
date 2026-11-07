@@ -17,6 +17,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment } from "@/drizzle/schema";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
@@ -26,6 +27,7 @@ import Link from "@/layout/Link";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import { getPostUserClasses, type PostProps } from "@/layout/Post";
 import { QuotingNote } from "@/layout/QuotingNote";
+import { ReactionPill } from "@/layout/ReactionPill";
 import ReportUser from "@/layout/Report";
 import RichInput from "@/layout/RichInput";
 import type { ChatStartUser } from "@/libs/chatPanel";
@@ -129,23 +131,23 @@ export function CompactComment(props: CompactCommentProps) {
           </div>
         )}
         {reactions.length > 0 && (
-          <div className="mt-[4px] flex flex-wrap gap-[4px]">
-            {reactions.map(([emoji, usernames]) => (
-              <button
-                key={emoji}
-                type="button"
-                title={usernames.join(", ")}
-                disabled={!props.toggleReaction}
-                onClick={() => props.toggleReaction?.(emoji)}
-                className={cn(
-                  "bg-muted/60 rounded-full border px-[6px] text-[12px] leading-5",
-                  userData && usernames.includes(userData.username) && "border-primary",
-                )}
-              >
-                {emoji} {usernames.length}
-              </button>
-            ))}
-          </div>
+          <TooltipProvider delayDuration={300}>
+            <div className="mt-[4px] flex flex-wrap gap-[4px]">
+              {reactions.map(([emoji, usernames]) => (
+                <ReactionPill
+                  key={emoji}
+                  emoji={emoji}
+                  usernames={usernames}
+                  isMine={!!userData && usernames.includes(userData.username)}
+                  onToggle={
+                    props.toggleReaction
+                      ? () => props.toggleReaction?.(emoji)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          </TooltipProvider>
         )}
         <div
           className={cn(

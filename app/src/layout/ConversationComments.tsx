@@ -38,9 +38,13 @@ export const ConversationComments = ({
   const sentinelIndex = compact ? 0 : (visibleComments?.length ?? 0) - 1;
 
   return (
-    <>
+    <div data-conversation-comments className="contents">
       {ordered?.map((comment, i) => (
-        <div key={comment.id} ref={i === sentinelIndex ? setLastElement : null}>
+        <div
+          key={comment.id}
+          data-comment-id={comment.id}
+          ref={i === sentinelIndex ? setLastElement : null}
+        >
           <ConversationCommentRow
             comment={comment}
             isQuoted={quoteIds?.includes(comment.id) ?? false}
@@ -59,7 +63,7 @@ export const ConversationComments = ({
           />
         </div>
       ))}
-    </>
+    </div>
   );
 };
 

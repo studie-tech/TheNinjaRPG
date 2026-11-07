@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { decodeHTML } from "entities";
+import { decodeHTML, encodeXML } from "entities";
 import sanitizeHtml from "sanitize-html";
 
 const sanitizeOptions: sanitizeHtml.IOptions = {
@@ -134,16 +134,16 @@ export const stripBlockquotes = (html: string) =>
   });
 
 /**
- * Stored markup of a quoted comment, with quotes nested in it removed. `quote author="`
- * highlighting of replies depends on this format. Run the finished message through
- * `sanitize` before storing it: the username is not escaped here.
+ * Sanitized markup of an attached comment with nested quotes removed. Escaped metadata
+ * keeps the jump ID server-built; append this only after sanitizing the authored reply.
  */
 export const buildQuoteBlock = (quote: {
+  id: string;
   username?: string | null;
   createdAt: Date;
   content: string;
 }) =>
-  `<blockquote author="${quote.username || "Unknown"}" date="${format(quote.createdAt, "MM/dd/yyyy")}">${stripBlockquotes(quote.content)}</blockquote>`;
+  `<blockquote author="${encodeXML(quote.username || "Unknown")}" date="${format(quote.createdAt, "MM/dd/yyyy")}" data-comment-id="${encodeXML(quote.id)}">${stripBlockquotes(quote.content)}</blockquote>`;
 
 /** Preserve link and supported embed destinations as untrusted evidence. */
 export const moderationLinks = (html: string): string[] => {

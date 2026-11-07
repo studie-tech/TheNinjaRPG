@@ -219,6 +219,9 @@ describe("conversation comment row isolation", () => {
     expect(ids).toEqual(["1", "2", "3"]);
     const sentinel = setLastElement.mock.calls.find(([element]) => element)?.[0];
     expect(sentinel?.textContent).toContain("Message 1");
+    // Each row names its message, so a quote can jump to it.
+    const rows = Array.from(view.container.querySelectorAll("[data-comment-id]"));
+    expect(rows.map((element) => element.getAttribute("data-comment-id"))).toEqual(["1", "2", "3"]);
   });
 
   it("renders only changed cached rows in a 100-message history and reparses only changed content", () => {
@@ -336,6 +339,36 @@ describe("compact chat identity", () => {
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
     } finally {
       avatar.mockRestore();
+      ["Event", "CustomEvent", "ResizeObserver"].forEach((name, index) => {
+        const descriptor = descriptors[index];
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+        else Reflect.deleteProperty(globalThis, name);
+      });
+    }
+  });
+});
+
+describe("compact message reactions", () => {
+  it("names who reacted on the button and in a tooltip, and toggles on click", async () => {
+    const descriptors = ["Event", "CustomEvent", "ResizeObserver"].map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperties(globalThis, {
+      Event: { configurable: true, value: window.Event },
+      CustomEvent: { configurable: true, value: window.CustomEvent },
+      ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
+    });
+    try {
+      const toggleReaction = vi.fn();
+      const reacted = { ...comment, reactions: { "👍": ["Ana", "Ben", "Cy"] } };
+      const view = render(<CompactComment user={user} comment={reacted} editing={false} setEditing={() => {}} toggleReaction={toggleReaction}>Message</CompactComment>);
+      const reaction = view.getByRole("button", { name: "👍 3, reacted by Ana, Ben and Cy" });
+      expect(reaction.className).toContain("cursor-pointer");
+      act(() => fireEvent.focus(reaction));
+      await waitFor(() => expect(document.body.querySelector('[role="tooltip"]')?.textContent).toContain("3 reacted with 👍"));
+      expect(document.body.querySelector('[role="tooltip"]')?.textContent).toContain("Cy");
+      fireEvent.click(reaction);
+      expect(toggleReaction).toHaveBeenCalledWith("👍");
+      view.unmount();
+    } finally {
       ["Event", "CustomEvent", "ResizeObserver"].forEach((name, index) => {
         const descriptor = descriptors[index];
         if (descriptor) Object.defineProperty(globalThis, name, descriptor);
