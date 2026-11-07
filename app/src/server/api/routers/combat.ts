@@ -203,7 +203,7 @@ import {
 import { regenerationBuffs, titleCombatTag } from "@/libs/titles";
 import { isActiveEventEntrant } from "@/libs/tournament/events";
 import { battleJutsuGateFailure, calcJutsuEquipLimit } from "@/libs/train";
-import { getBiomeFromGlobalTile } from "@/libs/travel";
+import { getBiomeFromTileType } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import {
@@ -2388,7 +2388,7 @@ export const initiateBattle = async (
     const map = mapData as unknown as GlobalMapData;
     const tile = map.tiles[sector];
     if (tile) {
-      background = getBiomeFromGlobalTile(tile);
+      background = getBiomeFromTileType(tile.t);
     }
   }
 
