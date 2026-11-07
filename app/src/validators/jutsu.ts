@@ -8,9 +8,9 @@ import {
   StatTypes,
   UserRanks,
 } from "@/drizzle/constants";
-import { statFilters } from "@/libs/train";
 import { reskinBaseSchema } from "@/validators/bloodline";
 import { JutsuValidator } from "@/validators/combat";
+import { statFilters } from "@/validators/statFilters";
 
 export const getEvolutionsSchema = z.object({
   jutsuId: z.string(),
