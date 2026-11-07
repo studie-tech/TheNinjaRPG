@@ -15,7 +15,7 @@ import {
 } from "@/libs/combat/damagePipeline";
 import { getAffected } from "@/libs/combat/tags";
 import { getStatTypeLabels } from "@/libs/combat/util";
-import type { Consequence } from "@/libs/combat/types";
+import type { Consequence, UserEffect } from "@/libs/combat/types";
 import {
   defaultTestGearModifiers,
   gearMods,
@@ -1225,6 +1225,31 @@ describe("computeDamagePacket", () => {
     const blocked = makeDamageEffect({ allowBloodlineDamageDecrease: false });
     expect(packet(allowed, true)).toBeCloseTo(packet(allowed, false) - 50, 2);
     expect(packet(blocked, true)).toBeCloseTo(packet(blocked, false), 2);
+  });
+
+  it.each([
+    ["bloodline", 0],
+    ["jutsu", 50],
+  ] as const)("gates only bloodline static increases on the damage tag (%s)", (fromType, gain) => {
+    const staticIncrease = makeModifierEffect({
+      id: "static-inc",
+      type: "increasedamagegiven",
+      targetId: "attacker",
+      fromType,
+      calculation: "static",
+      power: 50,
+    });
+    const packet = (usersEffects: UserEffect[]) =>
+      computeDamagePacket({
+        rawDamage: 505,
+        damageEffect: makeDamageEffect({ allowBloodlineDamageIncrease: false }),
+        usersEffects,
+        attackerId: "attacker",
+        defenderId: "defender",
+        battleRound: 1,
+        preBattleGearModifiers: { attacker: gearMods(), defender: gearMods() },
+      }).damage;
+    expect(packet([staticIncrease])).toBeCloseTo(packet([]) + gain, 2);
   });
 });
 
