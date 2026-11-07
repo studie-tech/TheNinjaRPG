@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import {
   DMG_SETTING_DEFAULTS,
   DMG_SETTING_NAMES,
+  type DmgSettingName,
   PET_ART_PROVIDER_SETTING,
   PetArtProviders,
 } from "@/drizzle/constants";
@@ -248,14 +249,15 @@ export const fetchDmgConfig = async (client: DrizzleClient): Promise<DmgConfig> 
       id: nanoid(),
       name,
       time: addDays(new Date(), -30),
-      value: DMG_SETTING_DEFAULTS[name] ?? 0,
+      value: DMG_SETTING_DEFAULTS[name],
     }));
     await insertGameSettings(client, newSettings);
     settings.push(...newSettings);
   }
 
   // Missing settings were inserted above, so every name resolves to a row
-  const get = (name: string) => settings.find((s) => s.name === name)?.value ?? 0;
+  const get = (name: DmgSettingName) =>
+    settings.find((s) => s.name === name)?.value ?? 0;
 
   return Object.fromEntries(
     dmgConfigSettings().map(([key, name]) => [key, get(name)]),
@@ -271,7 +273,7 @@ export const updateDmgConfig = (client: DrizzleClient, config: DmgConfig) =>
   );
 
 /** GameSetting row behind each DmgConfig field. */
-const DMG_CONFIG_SETTINGS: Record<keyof DmgConfig, string> = {
+const DMG_CONFIG_SETTINGS: Record<keyof DmgConfig, DmgSettingName> = {
   stats_scaling: "DMG_STATS_SCALING",
   base_hits: "DMG_BASE_HITS",
   curve: "DMG_CURVE",
@@ -284,7 +286,7 @@ const DMG_CONFIG_SETTINGS: Record<keyof DmgConfig, string> = {
 
 /** Keep config keys typed when enumerating their persisted setting names. */
 const dmgConfigSettings = () =>
-  Object.entries(DMG_CONFIG_SETTINGS) as [keyof DmgConfig, string][];
+  Object.entries(DMG_CONFIG_SETTINGS) as [keyof DmgConfig, DmgSettingName][];
 
 /**
  * Handles errors that occur during endpoint processing.
