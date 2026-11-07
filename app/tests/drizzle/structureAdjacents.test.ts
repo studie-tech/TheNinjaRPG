@@ -7,5 +7,6 @@ describe("STRUCTURE_ADJACENTS", () => {
     expect([...offsets].sort()).toEqual(
       ["-1,-1", "-1,0", "-1,1", "0,-1", "0,0", "0,1", "1,-1", "1,0", "1,1"].sort(),
     );
+    expect(STRUCTURE_ADJACENTS).toHaveLength(offsets.size);
   });
 });
