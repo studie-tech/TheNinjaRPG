@@ -634,6 +634,21 @@ export type AvatarFacing = (typeof AvatarFacings)[number];
 /** Bound character atlas downloads, decoded memory and loop duration. */
 export const SPRITE_ANIMATION_LIMITS = { frames: 192, cells: 192, seconds: 16 } as const;
 
+/** Life of a staff sprite request, from gameasset.dev's queue to the shared library. */
+export const SpriteGenerationStatuses = [
+  "QUEUED",
+  "PROCESSING",
+  "PREPARING",
+  "READY",
+  "ACCEPTED",
+  "DISCARDED",
+  "FAILED",
+] as const;
+export type SpriteGenerationStatus = (typeof SpriteGenerationStatuses)[number];
+/** The loop kinds gameasset.dev understands; everything but idle and move is custom. */
+export const SpriteGenerationMotions = ["idle", "move", "custom"] as const;
+export type SpriteGenerationMotion = (typeof SpriteGenerationMotions)[number];
+
 export const UserRanks = [
   "STUDENT",
   "GENIN",

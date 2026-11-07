@@ -1,7 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
+import { useState } from "react";
 import { useForm, useFormState, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,9 @@ import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { SPRITE_ANIMATION_LIMITS } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
+import { SpriteSheetPicker } from "@/layout/SpriteSheetPicker";
+import { SpriteAnimationPreview, SpriteSheetFrame } from "@/layout/SpriteSheetPreview";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
 import { showMutationToast } from "@/libs/toast";
 import { groupBy } from "@/utils/grouping";
@@ -34,8 +38,8 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
   const utils = api.useUtils();
   const config = api.spriteAnimation.getAiConfig.useQuery({ userId });
   const [actionKey, setActionKey] = useState("idle");
-  // Undefined follows the saved binding; an empty string explicitly previews clearing it.
-  const [candidateId, setCandidateId] = useState<string>();
+  // Undefined follows the saved binding; null explicitly previews clearing it.
+  const [candidate, setCandidate] = useState<CharacterAnimation | null>();
   const [editorOpen, setEditorOpen] = useState(false);
   const [revisionName, setRevisionName] = useState<string>();
   const form = useForm<SpriteAnimationInput>({
@@ -56,8 +60,8 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
         form.reset(emptyAnimation);
         setRevisionName(undefined);
         setEditorOpen(false);
-        await utils.spriteAnimation.getAiConfig.invalidate();
-        if ("id" in result) setCandidateId(result.id);
+        await utils.spriteAnimation.search.invalidate();
+        if ("animation" in result) setCandidate(result.animation);
       }
     },
   });
@@ -65,35 +69,32 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
     onSuccess: async (result) => {
       showMutationToast(result);
       if (result.success) {
-        await utils.spriteAnimation.getAiConfig.invalidate({ userId });
-        setCandidateId(undefined);
+        await Promise.all([
+          utils.spriteAnimation.getAiConfig.invalidate({ userId }),
+          utils.spriteAnimation.search.invalidate(),
+        ]);
+        setCandidate(undefined);
       }
     },
   });
   const data = config.data;
-  const bindings = new Map(
-    data?.assignments.map((assignment) => [
-      assignment.actionKey,
-      assignment.animationId,
-    ]),
-  );
-  const savedId = bindings.get(actionKey) ?? "";
-  const selectionId = candidateId ?? savedId;
-  const hasChanges = selectionId !== savedId;
-  const animationId =
-    selectionId || (actionKey !== "idle" ? bindings.get("idle") : undefined);
-  const preview = data?.animations.find((animation) => animation.id === animationId);
+  const sheetFor = (key: string) => {
+    const id = data?.assignments.find((entry) => entry.actionKey === key)?.animationId;
+    return data?.animations.find((animation) => animation.id === id);
+  };
+  const saved = sheetFor(actionKey);
+  const idle = sheetFor("idle");
+  const selection = candidate === undefined ? saved : (candidate ?? undefined);
+  const hasChanges = selection?.id !== saved?.id;
+  const preview = selection ?? (actionKey !== "idle" ? idle : undefined);
+  const studioHref = `/manual/sprite_studio?ai=${encodeURIComponent(userId)}&action=${encodeURIComponent(actionKey)}`;
 
   return (
     <ContentBox
       title="Sprite animations"
-      subtitle="Idle, movement and action-specific character sprites"
+      subtitle="Choose the sheet each action plays in new battles"
       initialBreak
     >
-      <p className="mb-3 text-sm">
-        Unassigned actions use Idle. If Idle is unassigned, the current character image
-        is shown. Preview a selection, then apply it to new battles.
-      </p>
       {config.isPending && <p>Loading animation assignments…</p>}
       {config.error && (
         <div role="alert">
@@ -102,129 +103,163 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
         </div>
       )}
       {data && (
-        <div className="grid grid-cols-[minmax(0,1fr)_128px] gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
-          <div className="min-w-0 space-y-3">
-            <div>
-              <Label htmlFor="sprite-action">Action</Label>
-              <select
-                id="sprite-action"
-                className="block w-full min-w-0 rounded-md border bg-background p-2 text-sm"
-                value={actionKey}
-                disabled={assign.isPending}
-                onChange={(event) => {
-                  setActionKey(event.target.value);
-                  setCandidateId(undefined);
-                  assign.reset();
-                }}
-              >
-                {[...groupBy(data.actions, "group")].map(([group, actions]) => (
-                  <optgroup key={group} label={group}>
-                    {actions.map((action) => (
-                      <option key={action.key} value={action.key}>
-                        {action.name}
-                        {bindings.has(action.key) ? " (assigned)" : ""}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+        <>
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
+            <div className="max-h-96 min-w-0 space-y-3 overflow-y-auto pr-1">
+              {[...groupBy(data.actions, "group")].map(([group, actions]) => (
+                <section key={group} aria-label={group}>
+                  <h3 className="mb-1 font-semibold text-muted-foreground text-xs uppercase">
+                    {group}
+                  </h3>
+                  <ul className="space-y-1">
+                    {actions.map((action) => {
+                      const sheet = sheetFor(action.key);
+                      const shown = sheet ?? (action.key === "idle" ? undefined : idle);
+                      return (
+                        <li key={action.key}>
+                          <button
+                            type="button"
+                            aria-pressed={action.key === actionKey}
+                            disabled={assign.isPending}
+                            className="flex w-full items-center gap-2 rounded-md border border-transparent p-1 text-left hover:bg-muted aria-pressed:border-primary aria-pressed:bg-muted"
+                            onClick={() => {
+                              setActionKey(action.key);
+                              setCandidate(undefined);
+                              assign.reset();
+                            }}
+                          >
+                            <span
+                              className={`size-9 shrink-0 overflow-hidden rounded-sm border bg-background ${sheet ? "" : "opacity-40"}`}
+                            >
+                              {shown && <SpriteSheetFrame animation={shown} />}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium text-sm">
+                                {action.name}
+                              </span>
+                              <span className="block truncate text-muted-foreground text-xs">
+                                {sheet
+                                  ? sheet.name
+                                  : action.key === "idle"
+                                    ? "Character image"
+                                    : "Uses Idle"}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ))}
             </div>
-            <div>
-              <Label htmlFor="sprite-selection">Animation</Label>
-              <select
-                id="sprite-selection"
-                className="block w-full min-w-0 rounded-md border bg-background p-2 text-sm"
-                value={selectionId}
-                disabled={assign.isPending}
-                onChange={(event) => {
-                  setCandidateId(event.target.value);
-                  assign.reset();
-                }}
-              >
-                <option value="">
-                  {actionKey === "idle" ? "Current image" : "Default (idle → image)"}
-                </option>
-                {data.animations.map((animation) => (
-                  <option key={animation.id} value={animation.id}>
-                    {animation.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                disabled={!hasChanges || assign.isPending}
-                onClick={() =>
-                  assign.mutate({
-                    userId,
-                    actionKey,
-                    animationId: selectionId || null,
-                  })
-                }
-              >
-                {assign.isPending ? "Saving…" : "Apply"}
-              </Button>
-              {hasChanges && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={assign.isPending}
-                  onClick={() => {
-                    setCandidateId(undefined);
-                    assign.reset();
-                  }}
-                >
-                  Reset
-                </Button>
+            <div className="mx-auto w-full min-w-0 max-w-52 sm:max-w-none">
+              {preview ? (
+                <SpriteAnimationPreview key={preview.id} animation={preview} />
+              ) : (
+                <p className="flex aspect-square items-center justify-center rounded-md border bg-muted p-3 text-center text-muted-foreground text-sm">
+                  Uses the current character image.
+                </p>
               )}
               {preview && (
+                <p className="mt-2 text-muted-foreground text-xs">
+                  {preview.frameCount} frames · {preview.fps} fps · faces{" "}
+                  {preview.facing}
+                  {!selection && actionKey !== "idle" && " · uses Idle"}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  variant="outline"
-                  disabled={create.isPending}
-                  onClick={() => {
-                    form.reset({
-                      name: `${preview.name.slice(0, 180)} (revision)`,
-                      url: preview.url,
-                      columns: preview.columns,
-                      rows: preview.rows,
-                      frameCount: preview.frameCount,
-                      fps: preview.fps,
-                      facing: preview.facing,
-                    });
-                    create.reset();
-                    setRevisionName(preview.name);
-                    setEditorOpen(true);
-                  }}
+                  disabled={!hasChanges || assign.isPending}
+                  onClick={() =>
+                    assign.mutate({
+                      userId,
+                      actionKey,
+                      animationId: selection?.id ?? null,
+                    })
+                  }
                 >
-                  Edit as new version
+                  {assign.isPending ? "Saving…" : "Apply"}
                 </Button>
+                {hasChanges && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={assign.isPending}
+                    onClick={() => {
+                      setCandidate(undefined);
+                      assign.reset();
+                    }}
+                  >
+                    Reset
+                  </Button>
+                )}
+                {selection && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={assign.isPending}
+                    onClick={() => {
+                      setCandidate(null);
+                      assign.reset();
+                    }}
+                  >
+                    Remove sheet
+                  </Button>
+                )}
+              </div>
+              <div className="mt-2 flex flex-col gap-1">
+                <Button asChild type="button" variant="ghost" size="sm">
+                  <Link href={studioHref}>
+                    <Sparkles className="mr-1 size-4" />
+                    Create with Sprite Studio
+                  </Link>
+                </Button>
+                {preview && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={create.isPending}
+                    onClick={() => {
+                      form.reset({
+                        name: `${preview.name.slice(0, 180)} (revision)`,
+                        url: preview.url,
+                        columns: preview.columns,
+                        rows: preview.rows,
+                        frameCount: preview.frameCount,
+                        fps: preview.fps,
+                        facing: preview.facing,
+                      });
+                      create.reset();
+                      setRevisionName(preview.name);
+                      setEditorOpen(true);
+                    }}
+                  >
+                    Edit as new version
+                  </Button>
+                )}
+              </div>
+              {assign.error && (
+                <p role="alert" className="mt-2 text-destructive text-sm">
+                  {assign.error.message}
+                </p>
               )}
             </div>
-            {assign.error && (
-              <p role="alert" className="text-destructive text-sm">
-                {assign.error.message}
-              </p>
-            )}
           </div>
-          <div className="min-w-0">
-            <p className="mb-2 font-semibold text-sm">Preview</p>
-            {preview ? (
-              <SpriteAnimationPreview key={preview.id} animation={preview} />
-            ) : (
-              <p className="text-muted-foreground text-sm">
-                Uses the current character image.
-              </p>
-            )}
-            {preview && (
-              <p className="mt-2 text-muted-foreground text-xs">
-                {preview.frameCount} frames · {preview.fps} fps · faces {preview.facing}
-                {!selectionId && actionKey !== "idle" && " · uses Idle"}
-              </p>
-            )}
-          </div>
-        </div>
+          <SpriteSheetPicker
+            userId={userId}
+            aiName={data.username}
+            selectedId={selection?.id}
+            savedId={saved?.id}
+            studioHref={studioHref}
+            onSelect={(sheet) => {
+              setCandidate(sheet);
+              assign.reset();
+            }}
+          />
+        </>
       )}
       <details
         className="mt-5 rounded-md border p-3"
@@ -358,53 +393,5 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
         </form>
       </details>
     </ContentBox>
-  );
-};
-
-/**
- * Preview the unchanged row-major atlas without cropping or resizing its source cells.
- * Key by sheet identity or draft metadata to reset frame and load-error state on edits.
- */
-export const SpriteAnimationPreview = ({
-  animation,
-}: {
-  animation: CharacterAnimation;
-}) => {
-  const [frame, setFrame] = useState(0);
-  const [error, setError] = useState(false);
-  useEffect(() => {
-    const timer = window.setInterval(
-      () => setFrame((current) => (current + 1) % animation.frameCount),
-      1000 / animation.fps,
-    );
-    return () => window.clearInterval(timer);
-  }, [animation.frameCount, animation.fps]);
-  return (
-    <div
-      className="relative aspect-square overflow-hidden rounded-md border bg-muted"
-      role="img"
-      aria-label={animation.name}
-    >
-      {error ? (
-        <p role="alert" className="p-3 text-sm">
-          Sprite sheet could not be loaded. Check the image URL.
-        </p>
-      ) : (
-        // biome-ignore lint/performance/noImgElement: Atlas UV previews must load the full unchanged sheet.
-        <img
-          src={animation.url}
-          alt=""
-          onError={() => setError(true)}
-          className="absolute max-w-none"
-          style={{
-            width: `${animation.columns * 100}%`,
-            height: `${animation.rows * 100}%`,
-            left: `${-(frame % animation.columns) * 100}%`,
-            top: `${-Math.floor(frame / animation.columns) * 100}%`,
-            imageRendering: "pixelated",
-          }}
-        />
-      )}
-    </div>
   );
 };

@@ -62,6 +62,7 @@ import { simulatorRouter } from "./routers/simulator";
 import { skillTreeRouter } from "./routers/skillTree";
 import { sparringRouter } from "./routers/sparring";
 import { spriteAnimationRouter } from "./routers/spriteAnimation";
+import { spriteStudioRouter } from "./routers/spriteStudio";
 import { staffRouter } from "./routers/staff";
 import { stealthRouter } from "./routers/stealth";
 import { stripeRouter } from "./routers/stripe";
@@ -88,6 +89,7 @@ export const appRouter = createTRPCRouter({
   activityStreak: activityStreakRouter,
   ai: aiRouter,
   spriteAnimation: spriteAnimationRouter,
+  spriteStudio: spriteStudioRouter,
   anbu: anbuRouter,
   avatar: avatarRouter,
   audio: audioRouter,

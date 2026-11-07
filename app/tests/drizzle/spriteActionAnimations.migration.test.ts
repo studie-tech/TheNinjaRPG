@@ -35,7 +35,7 @@ it("registers after the small sheet backfill without statement markers", () => {
     migrationsFolder: fileURLToPath(new URL("../../drizzle/migrations", import.meta.url)),
   });
   const index = migrations.findIndex(({ sql }) => sql.join("\n").includes(migration));
-  expect(index).toBe(migrations.length - 1);
+  expect(migrations[index - 1]?.sql.join("\n")).toContain("smallUrl");
   expect(migration).not.toContain("--> statement-breakpoint");
 });
 
