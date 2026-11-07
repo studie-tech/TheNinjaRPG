@@ -238,6 +238,27 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     await db.update(paypalTransaction).set({ createdAt: new Date(Date.now() - 4 * 3600000) });
     expect(await paypal.getRecentRepsCount({ userId: BUYER })).toBe(status === "RESERVED" ? 0 : MAX_REPS_PER_MONTH - 500);
   });
+  const receipt = { id: "reserved_receipt", createdById: BUYER, affectedUserId: TARGET, transactionId: "legacy_capture", transactionUpdatedDate: new Date().toISOString(), orderId: "reserved_order", amount: reps2dollars(20), reputationPoints: 20, currency: "USD", status: "RESERVED", type: "REP_PURCHASE" as const, rawData: {} };
+  it.each([
+    ["buyer", { createdById: OTHER }, "PayPal payment does not match receipt ownership or amount"],
+    ["recipient", { affectedUserId: OTHER }, "PayPal payment does not match receipt ownership or amount"],
+    ["amount", { amount: receipt.amount + 1 }, "PayPal payment does not match receipt ownership or amount"],
+    ["currency", { currency: "EUR" }, "PayPal payment does not match receipt ownership or amount"],
+    ["reputation", { reputationPoints: 21 }, "PayPal payment does not match reserved terms"],
+    ["order", { orderId: "other_order" }, "PayPal payment does not match reserved terms"],
+  ])("refuses a payment whose %s differs from its reserved receipt", async (_, terms, message) => {
+    await (await getTestDatabase()).insert(paypalTransaction).values({ ...receipt, ...terms });
+    await expect(paid(20, { orderId: "reserved_order" })).rejects.toThrow(message);
+    expect((await target())?.reputationPoints).toBe(0);
+  });
+  it("answers delivered receipts before comparing their reserved terms, but never before ownership", async () => {
+    const db = await getTestDatabase();
+    await db.insert(paypalTransaction).values({ ...receipt, status: "COMPLETED", reputationPoints: 21 });
+    expect(await paid(20, { orderId: "reserved_order" })).toEqual({ success: true, message: "Reputation points already delivered" });
+    await db.update(paypalTransaction).set({ affectedUserId: OTHER });
+    await expect(paid(20, { orderId: "reserved_order" })).rejects.toThrow("receipt ownership or amount");
+    expect((await target())?.reputationPoints).toBe(0);
+  });
   it("recovery of an unreserved legacy payment cannot exceed Stripe's reservation", async () => {
     expect((await (await callerFor(stripeRouter, BUYER)).createCheckout(stripeRequest(3000))).success).toBe(true);
     const outcome = await paid(2000);
