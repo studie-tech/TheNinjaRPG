@@ -15,13 +15,12 @@ const startingTokens = 10_000;
 const decay = Math.floor(startingTokens * (WAR_DAILY_TOKEN_DECAY_PERCENT_BASE / 100));
 
 describeWithDatabase("daily war token decay", () => {
-  const spies: { mockRestore: () => void }[] = [];
   beforeEach(async () => {
     setSystemTime(now);
     await resetTables(gameSetting, village, villageStructure, war);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewHour: true, prevTime: new Date(0), response: Response.json("Ready") }));
-    spies.push(vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewDay: true, prevTime: hours(24), response: Response.json(null) }));
+    vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewHour: true, prevTime: new Date(0), response: Response.json("Ready") });
+    vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewDay: true, prevTime: hours(24), response: Response.json(null) });
     const db = await getTestDatabase();
     await db.insert(village).values(["attacker", "defender"].map((id, index) => ({
       id, name: id, sector: 301 + index, kageId: `${id}-kage`, tokens: startingTokens,
@@ -32,7 +31,7 @@ describeWithDatabase("daily war token decay", () => {
     });
   });
   afterEach(() => {
-    for (const spy of spies.splice(0)) spy.mockRestore();
+    vi.restoreAllMocks();
     resetServerModuleStubs();
     setSystemTime();
   });

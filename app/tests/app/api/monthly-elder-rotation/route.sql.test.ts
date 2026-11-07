@@ -12,12 +12,11 @@ const now = new Date("2026-10-28T12:00:00.000Z");
 const request = () => new Request("https://example.com/api/monthly-elder-rotation");
 
 describeWithDatabase("monthly elder rotation log", () => {
-  const spies: { mockRestore: () => void }[] = [];
   beforeEach(async () => {
     setSystemTime(now);
     await resetTables(actionLog, clan, userData, village);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(gamesettings, "lockWithMonthlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewMonth: true, prevTime: new Date(0), response: Response.json("Ready") }));
+    vi.spyOn(gamesettings, "lockWithMonthlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewMonth: true, prevTime: new Date(0), response: Response.json("Ready") });
     const db = await getTestDatabase();
     await db.insert(village).values({ id: "rotation-village", name: "Rotation village", kageId: "rotation-kage" });
     await db.insert(clan).values(
@@ -40,7 +39,7 @@ describeWithDatabase("monthly elder rotation log", () => {
     );
   });
   afterEach(() => {
-    for (const spy of spies.splice(0)) spy.mockRestore();
+    vi.restoreAllMocks();
     resetServerModuleStubs();
     setSystemTime();
   });

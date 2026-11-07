@@ -36,7 +36,6 @@ const request = () =>
   });
 
 describeWithDatabase("shrine minute scheduler war camps", () => {
-  const spies: { mockRestore: () => void }[] = [];
   let now: Date;
   let previousMinute: Date;
   let previousCronSecret: string | undefined;
@@ -60,23 +59,15 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
       userData,
       village,
     );
-    spies.push(
-      vi
-        .spyOn(gamesettings, "getGameSetting")
-        .mockImplementation(actualGameSettings.getGameSetting),
-      vi
-        .spyOn(gamesettings, "lockWithMinuteTimer")
-        .mockImplementation(actualGameSettings.lockWithMinuteTimer),
-      vi
-        .spyOn(gamesettings, "lockWithDailyTimer")
-        .mockImplementation(actualGameSettings.lockWithDailyTimer),
-      vi
-        .spyOn(gamesettings, "updateGameSetting")
-        .mockImplementation(actualGameSettings.updateGameSetting),
-      vi
-        .spyOn(gamesettings, "handleEndpointError")
-        .mockImplementation(actualGameSettings.handleEndpointError),
-    );
+    vi.spyOn(gamesettings, "getGameSetting").mockImplementation(actualGameSettings.getGameSetting);
+    vi.spyOn(gamesettings, "lockWithMinuteTimer")
+      .mockImplementation(actualGameSettings.lockWithMinuteTimer);
+    vi.spyOn(gamesettings, "lockWithDailyTimer")
+      .mockImplementation(actualGameSettings.lockWithDailyTimer);
+    vi.spyOn(gamesettings, "updateGameSetting")
+      .mockImplementation(actualGameSettings.updateGameSetting);
+    vi.spyOn(gamesettings, "handleEndpointError")
+      .mockImplementation(actualGameSettings.handleEndpointError);
 
     const db = await getTestDatabase();
     const combatStartedAt = new Date(now.getTime() - 10 * 60000);
@@ -104,7 +95,7 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
   });
 
   afterEach(() => {
-    for (const spy of spies.splice(0)) spy.mockRestore();
+    vi.restoreAllMocks();
     resetServerModuleStubs();
     setSystemTime();
     if (previousCronSecret === undefined) delete process.env.CRON_SECRET;
@@ -165,12 +156,9 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
   it("restores the minute timer after camp failure so the same minute can retry", async () => {
     const db = await getTestDatabase();
     const failure = new Error("Camp synchronization failed");
-    spies.push(vi.spyOn(objectiveWar, "syncWarCamps").mockRejectedValueOnce(failure));
-    spies.push(
-      vi
-        .spyOn(gamesettings, "handleEndpointError")
-        .mockResolvedValueOnce(new Response("Internal server error", { status: 500 })),
-    );
+    vi.spyOn(objectiveWar, "syncWarCamps").mockRejectedValueOnce(failure);
+    vi.spyOn(gamesettings, "handleEndpointError")
+      .mockResolvedValueOnce(new Response("Internal server error", { status: 500 }));
 
     expect((await GET(request())).status).toBe(500);
     expect(gamesettings.handleEndpointError).toHaveBeenCalledWith(failure);
@@ -190,16 +178,10 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
       .update(gameSetting)
       .set({ time: previousDay })
       .where(eq(gameSetting.name, dailyTimer));
-    spies.push(
-      vi
-        .spyOn(villageRouter, "fetchVillages")
-        .mockRejectedValueOnce(new Error("Daily maintenance failed")),
-    );
-    spies.push(
-      vi
-        .spyOn(gamesettings, "handleEndpointError")
-        .mockResolvedValueOnce(new Response("Internal server error", { status: 500 })),
-    );
+    vi.spyOn(villageRouter, "fetchVillages")
+      .mockRejectedValueOnce(new Error("Daily maintenance failed"));
+    vi.spyOn(gamesettings, "handleEndpointError")
+      .mockResolvedValueOnce(new Response("Internal server error", { status: 500 }));
 
     expect((await GET(request())).status).toBe(500);
     expect(await db.query.warCamp.findMany()).toHaveLength(1);

@@ -21,14 +21,13 @@ const seedMaintenance = async (points: number) => {
 };
 
 describeWithDatabase("Stronghold monthly maintenance", () => {
-  const spies: { mockRestore: () => void }[] = [];
   beforeEach(async () => {
     await resetTables(clan, village);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewDay: true, prevTime: new Date(0), prevValue: 0, response: Response.json("Ready") }));
+    vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewDay: true, prevTime: new Date(0), prevValue: 0, response: Response.json("Ready") });
   });
   afterEach(() => {
-    for (const spy of spies.splice(0)) spy.mockRestore();
+    vi.restoreAllMocks();
     resetServerModuleStubs();
   });
 

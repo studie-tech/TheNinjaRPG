@@ -12,16 +12,15 @@ import { describeWithDatabase, getTestDatabase, resetTables } from "../../../set
 const now = new Date("2026-10-12T12:00:00.000Z");
 
 describeWithDatabase("expired elder kage removal protection", () => {
-  const spies: { mockRestore: () => void }[] = [];
   beforeEach(async () => {
     setSystemTime(now);
     await resetTables(clan, notification, userData, village, villageElderVote, villageElderVoteEntry, villageStructure, war);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewHour: true, prevTime: new Date(0), response: Response.json("Ready") }));
-    spies.push(vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isClaimed: false, isNewDay: false, prevTime: now, response: Response.json("Wait") }));
+    vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewHour: true, prevTime: new Date(0), response: Response.json("Ready") });
+    vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isClaimed: false, isNewDay: false, prevTime: now, response: Response.json("Wait") });
   });
   afterEach(() => {
-    for (const spy of spies.splice(0)) spy.mockRestore();
+    vi.restoreAllMocks();
     resetServerModuleStubs();
     setSystemTime();
   });
