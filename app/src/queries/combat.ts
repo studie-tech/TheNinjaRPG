@@ -33,6 +33,7 @@ import {
   type BattleTypes,
   type CombatBiome,
   type CombatStatName,
+  CombatStatNames,
   HOSPITAL_LAT,
   HOSPITAL_LONG,
   HUNTING_REQUIRED_EXP,
@@ -42,6 +43,7 @@ import {
   KAGE_PRESTIGE_REQUIREMENT,
   MAP_WAKE_ISLAND_SECTOR,
   MasteryNames,
+  PoolTypes,
   RankedBattleTypes,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
@@ -93,10 +95,11 @@ import {
 } from "@/drizzle/schema";
 import { matchBloodrightSnapshot } from "@/libs/bloodright";
 import { compactBattleCatalogs } from "@/libs/combat/catalog";
+import type { QueuedBattleTraining } from "@/libs/combat/initiation";
 import { petsAllowedInBattle } from "@/libs/combat/pets";
 import { sendsToHospital } from "@/libs/combat/settlement";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
-import { getVillage } from "@/libs/combat/util";
+import { getPoolKeys, getVillage } from "@/libs/combat/util";
 import type { DungeonBattleState } from "@/libs/dungeon";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { withMercenaryParticipation } from "@/libs/objectiveWar";
@@ -647,6 +650,129 @@ export const listGameAssetForInitiateBattle = (client: Pick<DrizzleClient, "quer
   client.query.gameAsset.findMany({
     where: and(eq(gameAsset.hidden, false), eq(gameAsset.onInitialBattleField, true)),
   });
+
+/**
+ * Per-participant column updates writing settled queued training back in the battle claim,
+ * so the gains commit with the participant's status.
+ */
+export const buildQueuedTrainingClaim = (
+  queuedParticipants: QueuedBattleTraining[],
+  energyCapacity: Record<string, number>,
+  isTournamentGame: boolean,
+) => {
+  const queueUpdate: Record<string, SQL<unknown>> = {};
+  if (queuedParticipants.length === 0) return queueUpdate;
+  const queueCase = (
+    column: keyof typeof userData.$inferSelect,
+    entries: typeof queuedParticipants,
+    value: (entry: (typeof queuedParticipants)[number]) => unknown,
+  ) =>
+    sql`CASE ${sql.join(
+      entries.map(
+        (entry) =>
+          sql`WHEN ${userData.userId} = ${entry.user.userId} THEN ${value(entry)}`,
+      ),
+      sql` `,
+    )} ELSE ${userData[column]} END`;
+  queueUpdate.questData = queueCase("questData", queuedParticipants, (entry) =>
+    JSON.stringify(entry.user.questData),
+  );
+  queueUpdate.updatedAt = sql`CASE WHEN ${inArray(
+    userData.userId,
+    queuedParticipants.map((entry) => entry.user.userId),
+  )} THEN ${nextSnapshotSql(userData.updatedAt)} ELSE ${userData.updatedAt} END`;
+  const energyParticipants = queuedParticipants.filter((entry) => entry.energy);
+  const recoveryParticipants = isTournamentGame
+    ? queuedParticipants
+    : energyParticipants;
+  if (recoveryParticipants.length) {
+    queueUpdate.curEnergy = queueCase(
+      "curEnergy",
+      recoveryParticipants,
+      (entry) =>
+        entry.energy?.curEnergy ??
+        Math.min(
+          entry.original.curEnergy + entry.regen,
+          energyCapacity[entry.original.userId] ?? entry.original.maxEnergy,
+        ),
+    );
+    for (const pool of PoolTypes) {
+      const { cur, max } = getPoolKeys(pool);
+      queueUpdate[cur] = queueCase(cur, recoveryParticipants, (entry) =>
+        Math.min(entry.original[cur] + entry.regen, entry.original[max]),
+      );
+    }
+    queueUpdate.regenAt = queueCase(
+      "regenAt",
+      recoveryParticipants,
+      (entry) => entry.regenAt,
+    );
+  }
+  if (energyParticipants.length) {
+    // Advancing the head consumes the settled rows in this same statement.
+    queueUpdate.energyQueueHead = queueCase(
+      "energyQueueHead",
+      energyParticipants,
+      (entry) => entry.energy?.head,
+    );
+    queueUpdate.experience = queueCase(
+      "experience",
+      energyParticipants,
+      (entry) => sql`${userData.experience} + ${entry.amount}`,
+    );
+    queueUpdate.petExperience = queueCase(
+      "petExperience",
+      energyParticipants,
+      (entry) => petExperienceGainSql(entry.amount),
+    );
+    for (const stat of CombatStatNames) {
+      queueUpdate[stat] = queueCase(
+        stat,
+        energyParticipants,
+        (entry) => sql`${userData[stat]} + ${entry.energy?.gains[stat] ?? 0}`,
+      );
+    }
+  }
+  const masteryParticipants = queuedParticipants.filter((entry) => entry.mastery);
+  if (masteryParticipants.length) {
+    for (const column of [
+      "masteryQueueHead",
+      "elementalQueueHead",
+      "currentlyTrainingElement",
+      "elementalTrainingStartedAt",
+      "elementalTrainingSpeed",
+      "currentlyTrainingMastery",
+      "masteryTrainingStartedAt",
+      "trainingSpeed",
+      "dailyTrainings",
+    ] as const) {
+      const participants = masteryParticipants.filter(
+        (entry) => entry.mastery && column in entry.mastery.update,
+      );
+      if (!participants.length) continue;
+      queueUpdate[column] = queueCase(
+        column,
+        participants,
+        (entry) => entry.user[column],
+      );
+    }
+    queueUpdate.elementalMastery = queueCase(
+      "elementalMastery",
+      masteryParticipants,
+      (entry) => JSON.stringify(entry.user.elementalMastery),
+    );
+    for (const stat of MasteryNames) {
+      queueUpdate[stat] = queueCase(
+        stat,
+        masteryParticipants,
+        (entry) =>
+          masteryGainUpdates(entry.mastery?.gains ?? {})[stat] ??
+          sql`${userData[stat]}`,
+      );
+    }
+  }
+  return queueUpdate;
+};
 
 /**
  * Build the `battleHistory` selection for `initiateBattle`, including predicates on
