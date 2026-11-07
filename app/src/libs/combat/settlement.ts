@@ -903,7 +903,7 @@ const collectClaimedBounties = (
   return bountiesClaimed;
 };
 
-/** Roll each droppable item of the AI opponents, spending one random roll per item. */
+/** Roll each droppable item of the AI opponents; an item with no drop chance spends no roll. */
 const rollDroppedItems = (battle: CompleteBattle, targets: BattleUserState[]) => {
   const droppedItems: DroppedItem[] = [];
   targets

@@ -105,6 +105,19 @@ export const mockAchievementHistoryEntries = (
 };
 
 /**
+ * The achievements whose definitions `quests.getAchievementCatalogue` publishes for the client to
+ * cache, and therefore exactly the ones `profile.getUser` may send as progress alone.
+ *
+ * Both sides read this one list, cut from the raw catalogue, rather than re-deciding on their own
+ * copy: `fetchUpdatedUser` rewrites the objectives of its quests - trackers write resolved
+ * coordinates back onto them, and location hiding rewrites them again - so a predicate applied
+ * after that and one applied to the raw row can disagree, and a progress row whose definition the
+ * catalogue withholds renders nothing at all.
+ */
+export const publishedAchievementsOf = <T extends Quest>(catalogue: T[]) =>
+  catalogue.filter((achievement) => !questHasOverworldObjectives(achievement));
+
+/**
  * Whether any of a quest's objectives is something the overworld has to draw or act on: a map
  * location, an ambush, a bound NPC placement, or a dialog. The sector view, the world map and
  * `getActiveObjectives` scan `userQuests[].quest.content.objectives` for exactly these.
@@ -120,19 +133,6 @@ export const mockAchievementHistoryEntries = (
  * `opponentAIs` are the other way round: nearly every objective serialises them as empty arrays,
  * so only a populated one means anything.
  */
-/**
- * The achievements whose definitions `quests.getAchievementCatalogue` publishes for the client to
- * cache, and therefore exactly the ones `profile.getUser` may send as progress alone.
- *
- * Both sides read this one list, cut from the raw catalogue, rather than re-deciding on their own
- * copy: `fetchUpdatedUser` rewrites the objectives of its quests - trackers write resolved
- * coordinates back onto them, and location hiding rewrites them again - so a predicate applied
- * after that and one applied to the raw row can disagree, and a progress row whose definition the
- * catalogue withholds renders nothing at all.
- */
-export const publishedAchievementsOf = <T extends Quest>(catalogue: T[]) =>
-  catalogue.filter((achievement) => !questHasOverworldObjectives(achievement));
-
 export const questHasOverworldObjectives = (quest: Quest) =>
   quest.content.objectives.some(
     (objective) =>

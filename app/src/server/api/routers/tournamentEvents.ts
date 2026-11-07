@@ -817,8 +817,7 @@ const payEventRewards = async (client: DrizzleClient, row: EventRow) => {
   for (const userId of unpaid) {
     try {
       await retryOnDeadlock(() =>
-        client.transaction(async (tx) => {
-          const database = tx as unknown as DrizzleClient;
+        client.transaction(async (database) => {
           // Claim the still-retained terminal event, preventing cleanup from removing receipts
           // while a delayed payer is in flight. The version increment also fences deletion.
           const retained = await updateTournamentForPayEventRewards(database, row);

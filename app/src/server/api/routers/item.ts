@@ -3631,7 +3631,6 @@ export const itemRouter = createTRPCRouter({
     }),
 });
 
-/** Pet rewards address authored species, while each delivery creates a new owned individual. */
 type EffectWithReputation = Record<string, unknown> & {
   type: string;
   reward_reputation?: number;
@@ -3680,6 +3679,7 @@ const preserveEffectReputation = (
   });
 };
 
+/** Pet rewards address authored species, while each delivery creates a new owned individual. */
 const rewardPetSpeciesIds = (effects: Item["effects"]) =>
   effects.flatMap((effect) =>
     effect.type === "noncombatconsumereward" ? (effect.reward_pets ?? []) : [],

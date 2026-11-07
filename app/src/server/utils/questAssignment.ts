@@ -242,7 +242,7 @@ export const assignQuestToUser = async (args: {
     return errorResponse("This quest type cannot be granted by an overworld NPC.");
   }
 
-  // Reject unknown quest types before touching the DB (mirrors the original serverError throw)
+  // Reject unknown quest types before reserving a slot or writing history.
   if (!ASSIGNABLE_QUEST_TYPES.includes(questData.questType)) {
     throw serverError(
       "PRECONDITION_FAILED",
@@ -347,8 +347,7 @@ export const assignQuestToUser = async (args: {
     // With entry items the slot, history row and item debit must commit together, so a
     // changed ticket stack refunds the daily slot instead of burning it.
     const paid = await retryOnDeadlock(() =>
-      client.transaction(async (tx) => {
-        const database = tx as unknown as DrizzleClient;
+      client.transaction(async (database) => {
         // A rolled-back attempt must not leave its tracker changes on the caller's user.
         const warUser = { ...user };
         if (
@@ -407,8 +406,7 @@ export const assignQuestToUser = async (args: {
     // a fresh account stamp before the active Pyramid row. A joined UPDATE cannot insert
     // missing history or commit its tracker and initial recovery with that insertion.
     const assigned = await retryOnDeadlock(() =>
-      client.transaction(async (tx) => {
-        const database = tx as unknown as DrizzleClient;
+      client.transaction(async (database) => {
         const claim = await claimUserSnapshot({
           client: database,
           userId: user.userId,
@@ -489,7 +487,7 @@ export const assignQuestToUser = async (args: {
  * {@link fetchUserQuestByQuestId} in its opening `Promise.all`) hand it in so the initial
  * `findFirst` round-trip is skipped: `undefined` = not provided (fetch it here), a row or
  * `null` = already resolved (use as-is). Mirrors the `existingHistory` sentinel that
- * {@link commitQuestObjectiveRewards} uses. The insert branch is idempotent on the
+ * `commitQuestObjectiveRewards` uses. The insert branch is idempotent on the
  * `(userId, questId)` unique key, so a stale `null` that races a concurrent insert restarts
  * the existing row rather than throwing.
  *
@@ -558,7 +556,7 @@ export const upsertQuestEntry = async (
       client.transaction(async (tx) => {
         const claimedUser = { ...user };
         const result = await upsertQuestEntry(
-          tx as unknown as DrizzleClient,
+          tx,
           claimedUser,
           quest,
           source,

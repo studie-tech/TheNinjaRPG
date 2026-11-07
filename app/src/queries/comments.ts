@@ -484,7 +484,6 @@ export const listPublicConversationsByTitle = (
     .from(conversation)
     .where(and(inArray(conversation.title, titles), eq(conversation.isPublic, true)));
 
-/** Build the `conversation` lookup for `getConvo`, using predicates on `title`. */
 /**
  * Build the `supportTicket` update for `updateSupportTicketStatusAfterComment`,
  * setting `status` and `updatedAt`, using predicates on `id` and `status`.
