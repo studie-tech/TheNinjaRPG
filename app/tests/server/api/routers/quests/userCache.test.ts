@@ -24,6 +24,7 @@ import {
 import { queueEnergy } from "../../../../setup/queues";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
+import { countUserReads } from "../../../../setup/userReads";
 
 const playerId = "quest-cache-player";
 const missionId = "quest-cache-mission";
@@ -40,15 +41,10 @@ const immediateObjectives = [
 
 const readPlayer = async () => (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, playerId) });
 
+/** A quests caller that counts the relation-hydrating profile reads it makes. */
 const countProfileReads = async () => {
-  const database = await getTestDatabase();
-  const read = database.query.userData.findFirst.bind(database.query.userData);
-  let reads = 0;
-  vi.spyOn(database.query.userData, "findFirst").mockImplementation(((options: Parameters<typeof read>[0]) => {
-    if (options?.with) reads++;
-    return read(options);
-  }) as never);
-  return () => reads;
+  const { client, getReads } = countUserReads(await getTestDatabase(), (options) => !!options?.with);
+  return { counted: callerForDatabase(questsRouter, playerId, client), countedClient: client, reads: getReads };
 };
 
 describeWithDatabase("confirmed quest cache responses", () => {
@@ -133,8 +129,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const api = await callerFor(questsRouter, playerId);
     expect((await api.startQuest({ questId: missionId, userSector: 0 })).success).toBe(true);
     await db.update(userData).set({ activeNpcQuestId: missionId }).where(eq(userData.userId, playerId));
-    const reads = await countProfileReads();
-    const result = await api.abandon({ id: missionId });
+    const { counted, reads } = await countProfileReads();
+    const result = await counted.abandon({ id: missionId });
     expect(result.success).toBe(true);
     expect(result.userPatch?.activeNpcQuestId).toBeNull();
     expect(result.userPatch?.userQuests?.some((entry) => entry.questId === missionId)).toBe(false);
@@ -226,8 +222,7 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const stop = observer.subscribe(() => undefined);
     try {
       const revision = prepareUserUpdate(client, key);
-      const readsBefore = await countProfileReads();
-      const caller = await callerFor(questsRouter, playerId);
+      const { counted: caller, reads: readsBefore } = await countProfileReads();
       const result = method === "startQuest"
         ? await caller.startQuest({ questId: missionId, userSector: 0 })
         : await caller.startRandom({ type: "crime", rank: "A", userLevel: 50, userSector: 0, userVillageId: null });
@@ -296,8 +291,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
   });
 
   it("returns the accepted specific mission, counter and trackers using its existing profile read", async () => {
-    const reads = await countProfileReads();
-    const result = await (await callerFor(questsRouter, playerId)).startQuest({ questId: missionId, userSector: 0 });
+    const { counted, reads } = await countProfileReads();
+    const result = await counted.startQuest({ questId: missionId, userSector: 0 });
     expect(result.success).toBe(true);
     const saved = await readPlayer();
     expect(result.userPatch?.dailyMissions).toBe(saved?.dailyMissions);
@@ -375,7 +370,7 @@ describeWithDatabase("confirmed quest cache responses", () => {
     await db.update(userData).set({ skillPoints: 2 }).where(eq(userData.userId, playerId));
     const profileApi = await callerFor(profileRouter, playerId);
     const profile = await profileApi.getUser();
-    const reads = await countProfileReads();
+    const { countedClient, reads } = await countProfileReads();
     const key = ["independent-profile"];
     const clients = questIds.map(() => new QueryClient());
     for (const client of clients) client.setQueryData(key, profile);
@@ -397,7 +392,7 @@ describeWithDatabase("confirmed quest cache responses", () => {
         } };
       } };
     }) as typeof db.select;
-    const pausedDb = new Proxy(db, { get: (target, property, receiver) => property === "select" ? selectWithPause : Reflect.get(target, property, receiver) });
+    const pausedDb = new Proxy(countedClient, { get: (target, property, receiver) => property === "select" ? selectWithPause : Reflect.get(target, property, receiver) });
     const api = callerForDatabase(questsRouter, playerId, pausedDb);
     const first = api.checkRewards({ questId: questIds[0]! });
     await Promise.race([entered[0]!.promise, first.then((result) => { throw new Error(`First claim skipped payout: ${result.success}`); })]);
@@ -747,8 +742,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const database = await getTestDatabase();
     await database.update(userData).set({ questData: [{ id: missionId, startAt: new Date().toISOString(), goals: [{ id: "train", value: 10, done: true, collected: false, recentlyDied: false }] }] }).where(eq(userData.userId, playerId));
     const before = await readPlayer();
-    const reads = await countProfileReads();
-    const result = await api.checkRewards({ questId: missionId });
+    const { counted, reads } = await countProfileReads();
+    const result = await counted.checkRewards({ questId: missionId });
     expect(result).toMatchObject({ success: true, resolved: true });
     expect(result.questCacheUpdate).toBeDefined();
     expect(getQuestRewardDashboardUpdate(dashboardBefore, result.questCacheUpdate!)).toEqual(await profileApi.getDashboard());
@@ -774,8 +769,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
       questData: [{ id: missionId, startAt: new Date().toISOString(), goals: [{ id: "train", value: 10, done: true, collected: false, recentlyDied: false }] }],
     }).where(eq(userData.userId, playerId));
     const before = await readPlayer();
-    const reads = await countProfileReads();
-    const result = await api.checkRewards({ questId: missionId });
+    const { counted, reads } = await countProfileReads();
+    const result = await counted.checkRewards({ questId: missionId });
     const saved = await readPlayer();
     expect(result).toMatchObject({ success: true, resolved: true });
     expect(saved?.offence).toBeGreaterThan(before?.offence ?? 0);
@@ -811,8 +806,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const observer = new QueryObserver(client, { queryKey: key, queryFn: async () => { refetches++; return profileApi.getUser(); }, staleTime: Infinity });
     const unsubscribe = observer.subscribe(() => {});
     const revision = prepareUserUpdate(client, key);
-    const reads = await countProfileReads();
-    const result = await api.checkRewards({ questId: missionId });
+    const { counted, reads } = await countProfileReads();
+    const result = await counted.checkRewards({ questId: missionId });
     expect(result).toMatchObject({ success: true, resolved: true });
     expect(reads()).toBe(1);
     await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
