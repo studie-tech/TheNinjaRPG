@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, setSystemTime } from "bun:test";
 import {
   formatClockTime,
   formatHoursMinutes,
+  getDaysHoursMinutesSeconds,
   getLocalDateStringMonthsAgo,
+  getTimeLeftStr,
 } from "@/utils/time";
 
 afterEach(() => {
@@ -50,5 +52,27 @@ describe("getLocalDateStringMonthsAgo", () => {
   it("overflows month ends like Date.setMonth", () => {
     setSystemTime(new Date(2026, 4, 31, 12));
     expect(getLocalDateStringMonthsAgo(3)).toBe("2026-03-03");
+  });
+});
+
+describe("getTimeLeftStr", () => {
+  const SECOND = 1000;
+  const MINUTE = 60 * SECOND;
+  const HOUR = 60 * MINUTE;
+  const DAY = 24 * HOUR;
+  const label = (ms: number) => getTimeLeftStr(...getDaysHoursMinutesSeconds(ms));
+
+  it("shows the two largest units from the first one set", () => {
+    expect(label(2 * DAY + 3 * HOUR + 4 * MINUTE)).toBe("2 days, 3 hours");
+    expect(label(DAY)).toBe("1 days, 0 hours");
+    expect(label(3 * HOUR + 4 * MINUTE + 5 * SECOND)).toBe("3 hours, 4 mins");
+    expect(label(4 * MINUTE + 5 * SECOND)).toBe("4 mins, 5 secs");
+    expect(label(5 * SECOND + 999)).toBe("5 secs");
+  });
+
+  it("reads zero below a second and once time has passed", () => {
+    expect(label(999)).toBe("0 seconds");
+    expect(label(0)).toBe("0 seconds");
+    expect(label(-5 * SECOND)).toBe("0 seconds");
   });
 });
