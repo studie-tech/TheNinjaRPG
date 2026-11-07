@@ -365,6 +365,13 @@ export const worldMaterialFrame = (
   return result;
 };
 
+/** Highest vertex count a frame's 16-bit index buffer can address. */
+const MAX_FRAME_VERTICES = 65535;
+/** Points on one silhouette span's half-round footprint. */
+const CHARACTER_VOLUME_RING = 5;
+/** A volume's upper and lower copies of that footprint. */
+const CHARACTER_VOLUME_VERTICES = CHARACTER_VOLUME_RING * 2;
+
 /**
  * Characters retain their logical foot row, or the visible footer of a trimmed cutout.
  * Rounded row volumes extend behind the visible card along the camera ray, so side lighting cannot collapse
@@ -403,10 +410,9 @@ export const createCharacterMaterialFrame = (
   const volumes: AuthoredMaterialFrame["volumes"][number][] = [];
   const pixelX = 1 / ratioX,
     pixelY = 1 / ratioY;
-  for (let y = 0; y < rect.height; y++) {
-    const top = foot - (trim?.y ?? 0) - y * pixelY,
-      lower = Math.max(0, top - pixelY);
-    if (top <= 0) continue;
+  // Each covered run per row, from which sun volumes rebuild the sprite's silhouette.
+  const rows = Array.from({ length: Math.ceil(rect.height) }, (_, y) => {
+    const spans: { start: number; end: number }[] = [];
     let start = -1;
     for (let x = 0; x <= Math.ceil(rect.width); x++) {
       const covered =
@@ -416,24 +422,36 @@ export const createCharacterMaterialFrame = (
         ] ?? 0) >= 128;
       if (covered && start < 0) start = x;
       if ((covered || start < 0) && x < Math.ceil(rect.width)) continue;
-      if (start < 0) continue;
-      const left = (trim?.x ?? 0) + start * pixelX,
-        width = (Math.min(x, rect.width) - start) * pixelX;
-      const depth = Math.min(width * 0.65, lower * 1.8);
-      if (depth > 0) {
-        const ring = Array.from({ length: 5 }, (_, index) => {
-          const angle = Math.PI * (1 - index / 4),
-            back = Math.sin(angle) * depth;
-          return [
-            left + (width * (1 + Math.cos(angle))) / 2,
-            foot - top,
-            lower - back / 2,
-            top - back / 2,
-          ] as const;
-        });
-        volumes.push({ vertices: ring, indices: [0, 1, 2, 0, 2, 3, 0, 3, 4] });
-      }
+      if (start >= 0) spans.push({ start, end: Math.min(x, rect.width) });
       start = -1;
+    }
+    return spans;
+  });
+  // Indices are 16-bit, so a frilly cutout keeps fewer, taller rows rather than overflowing them.
+  const capacity = Math.floor(
+    (MAX_FRAME_VERTICES - vertices.length / 6) / CHARACTER_VOLUME_VERTICES,
+  );
+  const rowStep = Math.max(1, Math.ceil(rows.flat().length / Math.max(1, capacity)));
+  for (let y = 0; y < rows.length; y += rowStep) {
+    const top = foot - (trim?.y ?? 0) - y * pixelY,
+      lower = Math.max(0, top - pixelY * rowStep);
+    if (top <= 0) continue;
+    for (const { start, end } of rows[y] ?? []) {
+      const left = (trim?.x ?? 0) + start * pixelX,
+        width = (end - start) * pixelX;
+      const depth = Math.min(width * 0.65, lower * 1.8);
+      if (depth <= 0) continue;
+      const ring = Array.from({ length: CHARACTER_VOLUME_RING }, (_, index) => {
+        const angle = Math.PI * (1 - index / (CHARACTER_VOLUME_RING - 1)),
+          back = Math.sin(angle) * depth;
+        return [
+          left + (width * (1 + Math.cos(angle))) / 2,
+          foot - top,
+          lower - back / 2,
+          top - back / 2,
+        ] as const;
+      });
+      volumes.push({ vertices: ring, indices: [0, 1, 2, 0, 2, 3, 0, 3, 4] });
     }
   }
   const closed = appendAuthoredGeometry(
@@ -565,7 +583,7 @@ const appendAuthoredGeometry = (
     )
       return reuse;
     const index = vertices.length / 6;
-    if (index >= 65535)
+    if (index >= MAX_FRAME_VERTICES)
       throw new Error("Authored world surface geometry exceeds WebGL1 vertex limit");
     vertices.push(px, py, pz, atlasU, atlasV, cutout);
     return index;
