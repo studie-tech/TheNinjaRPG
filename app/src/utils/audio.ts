@@ -471,12 +471,12 @@ export const unmuteAllUserIframes = (): void => {
 };
 
 /**
- * Set mute state for all user iframes
+ * Set mute state for all user iframes, and for the ones added to the page from now on
  * @param muted - The mute state to set
  * @returns void
- * @param muted
  */
 export const setIframeMuteState = (muted: boolean): void => {
+  iframesMuted = muted;
   if (muted) {
     muteAllUserIframes();
   } else {
@@ -485,88 +485,51 @@ export const setIframeMuteState = (muted: boolean): void => {
 };
 
 /**
- * Observer to automatically mute new YouTube iframes as they're added to the DOM
+ * Mute user iframes as they are added to the DOM, leaving the ones already there alone.
+ * Every mounted consumer holds one observation; the DOM is observed until the last one stops.
+ * @param muted - Whether added iframes get muted
+ * @returns A function that ends this observation
  */
-export class IframeMuteObserver {
-  private observer: MutationObserver | null = null;
-  private isMuted = false;
-  // Every mounted consumer holds one start; the DOM is observed until the last one stops
-  private activeStarts = 0;
+export const observeUserIframes = (muted: boolean): (() => void) => {
+  iframesMuted = muted;
+  iframeObserver ??= new MutationObserver(muteAddedIframes);
+  activeObservations += 1;
+  if (activeObservations === 1) {
+    iframeObserver.observe(document.body, { childList: true, subtree: true });
+  }
+  return () => {
+    activeObservations -= 1;
+    if (activeObservations === 0) iframeObserver?.disconnect();
+  };
+};
 
-  constructor() {
-    if (typeof window === "undefined") return;
+const muteAddedIframes = (mutations: MutationRecord[]) => {
+  mutations.forEach((mutation) => {
+    mutation.addedNodes.forEach((node) => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node as Element;
 
-    this.observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const element = node as Element;
+        if (
+          element.tagName === "IFRAME" &&
+          isUserIframe(element as HTMLIFrameElement)
+        ) {
+          if (iframesMuted) {
+            muteUserIframe(element as HTMLIFrameElement);
+          }
+        }
 
-            if (
-              element.tagName === "IFRAME" &&
-              isUserIframe(element as HTMLIFrameElement)
-            ) {
-              if (this.isMuted) {
-                muteUserIframe(element as HTMLIFrameElement);
-              }
-            }
-
-            const userIframes =
-              element.querySelectorAll?.("iframe[data-user-iframe]") || [];
-            userIframes.forEach((iframe) => {
-              if (this.isMuted) {
-                muteUserIframe(iframe as HTMLIFrameElement);
-              }
-            });
+        const userIframes =
+          element.querySelectorAll?.("iframe[data-user-iframe]") || [];
+        userIframes.forEach((iframe) => {
+          if (iframesMuted) {
+            muteUserIframe(iframe as HTMLIFrameElement);
           }
         });
-      });
+      }
     });
-  }
-
-  start(muted = false): void {
-    if (!this.observer) return;
-    this.isMuted = muted;
-    this.activeStarts += 1;
-    if (this.activeStarts === 1) {
-      this.observer.observe(document.body, { childList: true, subtree: true });
-    }
-  }
-
-  stop(): void {
-    if (!this.observer || this.activeStarts === 0) return;
-    this.activeStarts -= 1;
-    if (this.activeStarts === 0) {
-      this.observer.disconnect();
-    }
-  }
-
-  setMuted(muted: boolean): void {
-    this.isMuted = muted;
-    setIframeMuteState(muted);
-  }
-}
-
-// Global instance
-let globalIframeObserver: IframeMuteObserver | null = null;
-
-/**
- * Initialize the global YouTube mute observer
- */
-export const initIframeMuteObserver = (muted = false): IframeMuteObserver => {
-  if (typeof window === "undefined") {
-    return new IframeMuteObserver();
-  }
-  if (!globalIframeObserver) {
-    globalIframeObserver = new IframeMuteObserver();
-  }
-  globalIframeObserver.start(muted);
-  return globalIframeObserver;
+  });
 };
 
-/**
- * Get the global YouTube mute observer
- */
-export const getIframeMuteObserver = (): IframeMuteObserver | null => {
-  return globalIframeObserver;
-};
+let iframesMuted = false;
+let iframeObserver: MutationObserver | null = null;
+let activeObservations = 0;
