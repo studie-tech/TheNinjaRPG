@@ -119,10 +119,14 @@ export const updateUserDataForUserHeal = (
       ),
     );
 
-/** Build free checkout after the caller verifies eligibility. */
+/**
+ * Build the `userData` update for `npcHeal`. A defined `cost` is charged and guarded on the
+ * balance, even at zero; a free checkout leaves money out of the statement.
+ */
 export const updateUserDataForNpcHeal = (
   client: Pick<DrizzleClient, "update">,
   user: { maxHealth: number; maxEnergy: number },
+  cost: number | undefined,
   energyRecovery: SQL<unknown>,
   healedAt: Date,
   ctx: { userId: string },
@@ -131,28 +135,7 @@ export const updateUserDataForNpcHeal = (
     .update(userData)
     .set({
       curHealth: user.maxHealth,
-      curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${energyRecovery})`,
-      maxEnergy: user.maxEnergy,
-      regenAt: healedAt,
-      updatedAt: nextSnapshotSql(userData.updatedAt),
-      status: "AWAKE",
-    })
-    .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "HOSPITALIZED")));
-
-/** Build the `userData` update for `npcHeal`, using predicates on `userId`, `money`, `status`. */
-export const updateUserDataForNpcHeal2 = (
-  client: Pick<DrizzleClient, "update">,
-  user: { maxHealth: number; maxEnergy: number },
-  cost: number,
-  energyRecovery: SQL<unknown>,
-  healedAt: Date,
-  ctx: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({
-      curHealth: user.maxHealth,
-      money: sql`${userData.money} - ${cost}`,
+      ...(cost === undefined ? {} : { money: sql`${userData.money} - ${cost}` }),
       curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${energyRecovery})`,
       maxEnergy: user.maxEnergy,
       regenAt: healedAt,
@@ -162,7 +145,7 @@ export const updateUserDataForNpcHeal2 = (
     .where(
       and(
         eq(userData.userId, ctx.userId),
-        gte(userData.money, cost),
+        cost === undefined ? undefined : gte(userData.money, cost),
         eq(userData.status, "HOSPITALIZED"),
       ),
     );
