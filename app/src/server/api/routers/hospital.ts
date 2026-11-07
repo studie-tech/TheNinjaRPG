@@ -1,4 +1,3 @@
-import type { ExecutedQuery } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
 import { gte, sql } from "drizzle-orm";
 import { after } from "next/server";
@@ -27,7 +26,6 @@ import {
   executeResultForUserHeal,
   listUserDataForGetHospitalizedUsers,
   updateUserDataForNpcHeal,
-  updateUserDataForNpcHeal2,
   updateUserDataForUserHeal,
 } from "@/queries/hospital";
 import { fetchUser } from "@/queries/profile";
@@ -311,31 +309,19 @@ export const hospitalRouter = createTRPCRouter({
       const healedAt = new Date();
       const energyRecovery = userRegenerationGainSql(user, userData.regenAt, healedAt);
       // Mutate w. validation
-      let result: ExecutedQuery;
-      let cost: number;
-      if (finishAt <= healedAt) {
-        cost = 0;
-        result = await updateUserDataForNpcHeal(
-          ctx.drizzle,
-          user,
-          energyRecovery,
-          healedAt,
-          ctx,
-        );
-      } else {
-        cost = calcHealCost(user);
-        if (user.money < cost) {
-          return errorResponse("You don't have enough money");
-        }
-        result = await updateUserDataForNpcHeal2(
-          ctx.drizzle,
-          user,
-          cost,
-          energyRecovery,
-          healedAt,
-          ctx,
-        );
+      const isPaid = finishAt > healedAt;
+      const cost = isPaid ? calcHealCost(user) : 0;
+      if (isPaid && user.money < cost) {
+        return errorResponse("You don't have enough money");
       }
+      const result = await updateUserDataForNpcHeal(
+        ctx.drizzle,
+        user,
+        isPaid ? cost : undefined,
+        energyRecovery,
+        healedAt,
+        ctx,
+      );
       if (result.rowsAffected === 1) {
         after(() =>
           updateUserOnMap(pusher, user.sector, {
