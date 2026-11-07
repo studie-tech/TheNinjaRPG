@@ -867,6 +867,7 @@ export const createTravelScene = async (options: {
           ),
         world.position,
         snapshot.brightness,
+        scale(),
       );
       // World lighting excludes the canvas UI and the actors' identity markers.
       bakedLighting?.blendSun(worldSunlight(snapshot.lightDate));

@@ -225,6 +225,7 @@ export const DayNightIndicator = memo(function DayNightIndicator({
 
 const WEATHER_LABELS: Record<WorldWeather["kind"], string> = {
   clear: "Clear",
+  clouds: "Cloud shadows",
   rain: "Rain",
   snow: "Snow",
   sandstorm: "Sandstorm",
