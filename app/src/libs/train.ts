@@ -712,7 +712,7 @@ export type StatGenType = (typeof statFilters)[number];
 /**
  * Get training efficiency
  */
-export const trainEfficiency = (user: UserData) => {
+export const trainEfficiency = (user: Pick<UserData, "trainingSpeed">) => {
   switch (user.trainingSpeed) {
     case "15min":
       return 100;

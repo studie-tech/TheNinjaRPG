@@ -1,13 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import { MAX_DAILY_TRAININGS } from "@/drizzle/constants";
+import { MAX_DAILY_TRAININGS, TrainingSpeeds } from "@/drizzle/constants";
 import type { Jutsu, UserData } from "@/drizzle/schema";
 import {
   getTrainingMultiplierBoost,
   jutsuRequirementWarning,
   masteryTrainingBlockMessage,
   statTrainingBlockMessage,
+  trainEfficiency,
   trainingEnergyMessage,
   trainingMultiplier,
+  trainingSpeedSeconds,
 } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import type { ZodAllTags } from "@/validators/combat";
@@ -168,6 +170,21 @@ describe("player training modifiers", () => {
     expect(trainingMultiplier(student)).toBeCloseTo(0.0105);
     expect(getTrainingMultiplierBoost({ ...student, trainingSpeed: "24hrs" })).toBeCloseTo(1.05);
     expect(trainingMultiplier({ ...student, trainingSpeed: "24hrs" })).toBeCloseTo(1.008);
+  });
+
+  it("shows efficiency as each interval's gain per hour against 15min", () => {
+    const gainPerHour = (trainingSpeed: UserData["trainingSpeed"]) =>
+      (trainEfficiency({ trainingSpeed }) *
+        trainingMultiplier({ ...trainee, trainingSpeed })) /
+      (trainingSpeedSeconds(trainingSpeed) / 3600);
+    expect(TrainingSpeeds.map((trainingSpeed) => trainEfficiency({ trainingSpeed }))).toEqual([
+      100, 90, 80, 70, 60, 50,
+    ]);
+    for (const speed of TrainingSpeeds) {
+      expect(gainPerHour(speed) / gainPerHour("15min")).toBeCloseTo(
+        trainEfficiency({ trainingSpeed: speed }) / 100,
+      );
+    }
   });
 
   it("retains reduced training gains after joining a village", () => {
