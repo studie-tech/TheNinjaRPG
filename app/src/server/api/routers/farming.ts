@@ -35,6 +35,7 @@ import {
   getMaxPurchasablePlots,
   getSeedExtractionDurationSeconds,
   getTotalFarmPlots,
+  isFarmMarketSeed,
   isPlotReady,
   mapPlotToState,
 } from "@/libs/farming";
@@ -1702,20 +1703,11 @@ const resolveShopEntry = async (
     if (!itemId) return null;
     const shopItem = await fetchItem(client, itemId);
     if (!shopItem) return null;
-    if (type === "SEED" && !shopItem.isFarmSeed) return null;
-    if (type === "FERTILIZER" && !shopItem.isFarmFertilizer) return null;
-    if (shopItem.hidden || shopItem.farmSellValue <= 0) return null;
-    if (type === "SEED") {
-      if (shopItem.inShop) return null;
-      return {
-        type,
-        label: shopItem.name,
-        cost: shopItem.farmSellValue,
-        minLevel: shopItem.farmMinLevel,
-        itemId: shopItem.id,
-        itemInfo: shopItem,
-      };
-    }
+    const isListed =
+      type === "SEED"
+        ? isFarmMarketSeed(shopItem)
+        : shopItem.isFarmFertilizer && !shopItem.hidden && shopItem.farmSellValue > 0;
+    if (!isListed) return null;
     return {
       type,
       label: shopItem.name,
@@ -1743,30 +1735,24 @@ const buildShopEntries = (
   const shopYieldIds = new Set(farmShopSeeds.map((seed) => seed.farmYieldItemId));
 
   const staticEntries: FarmShopEntryState[] = FARM_SHOP_ENTRIES.map((entry) => {
-    let canPurchase = farmingLevel >= entry.minLevel && user.farmCurrency >= entry.cost;
     let lockedReason: string | undefined;
 
     if (farmingLevel < entry.minLevel) {
       lockedReason = `Requires level ${entry.minLevel}`;
-      canPurchase = false;
     } else if (user.farmCurrency < entry.cost) {
       lockedReason = "Not enough farm coins";
-      canPurchase = false;
     } else if (
       entry.type === "PLOT" &&
       FARM_STARTING_PLOTS + user.farmPlotsPurchased + 1 > FARM_MAX_PLOTS
     ) {
       lockedReason = "Maximum farm size reached";
-      canPurchase = false;
     } else if (entry.type === "PLOT" && user.farmPlotsPurchased >= maxPurchased) {
       lockedReason = "Plot limit reached";
-      canPurchase = false;
     } else if (
       entry.type === "EXTRACTOR" &&
       user.farmExtractorsOwned >= maxExtractors
     ) {
       lockedReason = "Extractor limit reached";
-      canPurchase = false;
     }
 
     return {
@@ -1775,7 +1761,7 @@ const buildShopEntries = (
       cost: entry.cost,
       minLevel: entry.minLevel,
       canAfford: user.farmCurrency >= entry.cost,
-      canPurchase,
+      canPurchase: !lockedReason,
       lockedReason,
     };
   });
@@ -1783,15 +1769,11 @@ const buildShopEntries = (
   const dynamicEntries: FarmShopEntryState[] = dynamicItems.map((shopItem) => {
     const cost = shopItem.farmSellValue;
     const type = shopItem.isFarmSeed ? "SEED" : "FERTILIZER";
-    let canPurchase =
-      farmingLevel >= shopItem.farmMinLevel && user.farmCurrency >= cost;
     let lockedReason: string | undefined;
     if (farmingLevel < shopItem.farmMinLevel) {
       lockedReason = `Requires level ${shopItem.farmMinLevel}`;
-      canPurchase = false;
     } else if (user.farmCurrency < cost) {
       lockedReason = "Not enough farm coins";
-      canPurchase = false;
     }
     const yieldItem =
       shopItem.farmYieldItemId && shopYieldIds.has(shopItem.farmYieldItemId)
@@ -1806,7 +1788,7 @@ const buildShopEntries = (
       itemName: shopItem.name,
       itemImage: shopItem.image,
       canAfford: user.farmCurrency >= cost,
-      canPurchase,
+      canPurchase: !lockedReason,
       lockedReason,
       growTimeSeconds: shopItem.isFarmSeed
         ? getFarmGrowTimeSeconds(
