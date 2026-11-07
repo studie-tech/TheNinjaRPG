@@ -11,13 +11,7 @@
  */
 import { and, eq, exists, sql } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
-import {
-  type bloodlineRolls,
-  huntingSession,
-  type UserItem,
-  userData,
-  userItem,
-} from "@/drizzle/schema";
+import { huntingSession, type UserItem, userData, userItem } from "@/drizzle/schema";
 import {
   deleteBloodlineRollsForRemoveBloodlineFromPoolAtomically,
   deleteUserItemForRestoreStaleUserItemMergeClaims,
@@ -27,7 +21,7 @@ import {
   selectClaimedRankedQueueEntry,
   selectMpvpBattleUserForBattleClaimRollbackStatus,
   updateBloodlineRollsForRemoveBloodlineFromPoolAtomically,
-  updateTableForReservePityCredit,
+  updateBloodlineRollsForReservePityCredit,
   updateUserDataForAdjustSeichiSilverAtomically,
   updateUserDataForClaimActiveNpcQuest,
   updateUserDataForClaimUserSnapshot,
@@ -347,7 +341,6 @@ export const battleClaimRollbackStatus = (
 
 type ReservePityCreditParams = {
   client: DrizzleClient;
-  table: typeof bloodlineRolls;
   rollId: string;
   expectedPityRolls: number;
 };
@@ -360,13 +353,11 @@ type ReservePityCreditParams = {
  */
 export const reservePityCredit = async ({
   client,
-  table,
   rollId,
   expectedPityRolls,
 }: ReservePityCreditParams) => {
-  const result = await updateTableForReservePityCredit(
+  const result = await updateBloodlineRollsForReservePityCredit(
     client,
-    table,
     rollId,
     expectedPityRolls,
   );
