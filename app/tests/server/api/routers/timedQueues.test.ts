@@ -28,7 +28,7 @@ import {
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
-import { queueMasteries } from "../../../setup/queues";
+import { queueMasteries, readMasteryQueue } from "../../../setup/queues";
 import { beforeStatements, failStatements } from "../../../setup/statements";
 import type { MasteryTrainingQueueEntry } from "@/validators/train";
 import {
@@ -116,10 +116,6 @@ const readQueue = async (kind: (typeof userQueue.$inferSelect)["kind"]) => {
 };
 
 const readJutsuQueue = () => readQueue("JUTSU");
-
-/** The live mastery queue, as the client derives it. */
-const liveMasteryQueue = async () =>
-  getMasteryQueue({ ...(await readUser()), queue: await readQueue("MASTERY") });
 
 /** Next free position of a kind, as `appendQueueEntries` would pick it. */
 const nextPosition = async (kind: (typeof userQueue.$inferSelect)["kind"]) =>
@@ -908,7 +904,7 @@ describeWithDatabase("mastery training queue", () => {
     expect(user.masteryTrainingStartedAt).toBeNull();
     expect(user.ninjutsuMastery).toBeGreaterThan(0);
     expect(user.dailyTrainings).toBe(1);
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
     const logs = await database.select().from(trainingLog).where(eq(trainingLog.userId, USER_ID));
     expect(logs).toHaveLength(1);
     expect(logs[0]?.trainingFinishedAt?.getTime()).toBe(startedAt.getTime() + 15 * MINUTE);
@@ -933,7 +929,7 @@ describeWithDatabase("mastery training queue", () => {
     expect(user.genjutsuMastery).toBeGreaterThan(0);
     expect(user.dailyTrainings).toBe(2);
     expect(user.masteryQueueHead).toBe(1);
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
     expect(await readQueue("MASTERY")).toHaveLength(1);
     await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
     expect((await readUser()).ninjutsuMastery).toBe(user.ninjutsuMastery);
@@ -958,7 +954,7 @@ describeWithDatabase("mastery training queue", () => {
     expect(user.currentlyTrainingMastery).toBe("genjutsuMastery");
     expect(user.trainingSpeed).toBe("1hr");
     expect(user.masteryTrainingStartedAt?.getTime()).toBe(startedAt.getTime() + 15 * MINUTE);
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
     expect(user.dailyTrainings).toBe(1);
     const database = await getTestDatabase();
     const logs = await database
@@ -983,7 +979,7 @@ describeWithDatabase("mastery training queue", () => {
     const user = await readUser();
     expect(user.currentlyTrainingMastery).toBe("taijutsuMastery");
     expect(user.trainingSpeed).toBe("15min");
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
   });
 
   it("limits waiting masteries to the federal waiting slots", async () => {
@@ -1008,7 +1004,7 @@ describeWithDatabase("mastery training queue", () => {
       (await caller.updateMasteryTrainingQueue({ expectedEntries: [], entries: [] }))
         .success,
     ).toBe(false);
-    expect(await liveMasteryQueue()).toEqual(one);
+    expect(await readMasteryQueue(USER_ID)).toEqual(one);
   });
 
   it("validates a changed entry even when the queue length stays the same", async () => {
@@ -1047,7 +1043,7 @@ describeWithDatabase("mastery training queue", () => {
     await queueMasteries(USER_ID, current);
     const caller = await callerFor(trainRouter, USER_ID);
     expect(await caller.updateMasteryTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "You are asleep. Wake up before taking this action." });
-    expect(await liveMasteryQueue()).toEqual(current);
+    expect(await readMasteryQueue(USER_ID)).toEqual(current);
     expect(await readUser()).toMatchObject({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery" });
   });
 
@@ -1057,9 +1053,9 @@ describeWithDatabase("mastery training queue", () => {
     await queueMasteries(USER_ID, entries);
     const caller = await callerFor(trainRouter, USER_ID);
     expect(await caller.updateMasteryTrainingQueue({ expectedEntries: entries, entries: [entries[1]!] })).toMatchObject({ success: true });
-    expect(await liveMasteryQueue()).toEqual([entries[1]!]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([entries[1]!]);
     expect(await caller.updateMasteryTrainingQueue({ expectedEntries: [entries[1]!], entries: [] })).toMatchObject({ success: true });
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
     expect((await readUser()).status).toBe("ASLEEP");
   });
 
