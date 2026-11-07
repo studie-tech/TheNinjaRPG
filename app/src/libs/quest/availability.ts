@@ -105,22 +105,8 @@ export const isAvailableUserQuests = (
   const maxAttempts = questAndUserQuestInfo.maxAttempts;
   const maxCompletes = questAndUserQuestInfo.maxCompletes;
   const questMedRank = questAndUserQuestInfo.medicalRank;
-  const userMedRank = calcMedninRank({
-    medicalExperience: user.medicalExperience,
-    rank: user.rank,
-  });
-  const reqMedRankIdx = questMedRank ? MEDNIN_RANKS.indexOf(questMedRank) : null;
-  const userMedRankIdx = MEDNIN_RANKS.indexOf(userMedRank);
   const questHuntRank = questAndUserQuestInfo.huntingRank;
-  const userHuntRank = getHuntingRank(user.huntingExperience);
-  const reqHuntRankIdx = questHuntRank ? HUNTING_RANKS.indexOf(questHuntRank) : null;
-  const userHuntRankIdx = HUNTING_RANKS.indexOf(userHuntRank);
   const questGatherRank = questAndUserQuestInfo.gatheringRank;
-  const userGatherRank = getGatheringRank(user.gatheringExperience);
-  const reqGatherRankIdx = questGatherRank
-    ? GATHERING_RANKS.indexOf(questGatherRank)
-    : null;
-  const userGatherRankIdx = GATHERING_RANKS.indexOf(userGatherRank);
 
   // Exams read stored mastery only; temporary combat and equipment modifiers cannot qualify.
   const baseMasteries = {
@@ -192,9 +178,21 @@ export const isAvailableUserQuests = (
     );
 
   // Medical rank check for quests that require it
-  const medicalRankCheck = !reqMedRankIdx || userMedRankIdx >= reqMedRankIdx;
-  const huntingRankCheck = !reqHuntRankIdx || userHuntRankIdx >= reqHuntRankIdx;
-  const gatheringRankCheck = !reqGatherRankIdx || userGatherRankIdx >= reqGatherRankIdx;
+  const medicalRankCheck = meetsRank(
+    MEDNIN_RANKS,
+    questMedRank,
+    calcMedninRank({ medicalExperience: user.medicalExperience, rank: user.rank }),
+  );
+  const huntingRankCheck = meetsRank(
+    HUNTING_RANKS,
+    questHuntRank,
+    getHuntingRank(user.huntingExperience),
+  );
+  const gatheringRankCheck = meetsRank(
+    GATHERING_RANKS,
+    questGatherRank,
+    getGatheringRank(user.gatheringExperience),
+  );
   const farmingLevelCheck =
     questAndUserQuestInfo.questType === "daily" ||
     !questAndUserQuestInfo.requiredFarmingLevel ||
@@ -251,69 +249,69 @@ export const isAvailableUserQuests = (
       );
     });
 
-  // Check if quest is available
-  const check =
-    hideCheck &&
-    startsCheck &&
-    expiresCheck &&
-    eventCompletedCheck &&
-    eventAttemptsCheck &&
-    periodCapCheck &&
-    villageCheck &&
-    bloodlineCheck &&
-    sageModeCheck &&
-    sageRankCheck &&
-    masteryCheck &&
-    promotionCheck &&
-    !examBlock &&
-    !milestoneBlock &&
-    prerequisiteCheck &&
-    medicalRankCheck &&
-    huntingRankCheck &&
-    gatheringRankCheck &&
-    farmingLevelCheck &&
-    levelCheck;
-
-  // If quest is not available, return the reason
-  let message = "";
-  if (!hideCheck) message += "Quest is hidden\n";
-  if (!startsCheck) message += "Quest starts in the future\n";
-  if (!expiresCheck) message += "Quest has expired\n";
-  if (!eventCompletedCheck) message += "Quest has been completed too many times\n";
-  if (!eventAttemptsCheck) message += "Quest has been attempted too many times\n";
-  if (!periodCapCheck) message += "Quest limit for this period reached\n";
-  if (!villageCheck) message += "Quest is not available in your village\n";
-  if (!bloodlineCheck) message += "Quest requires a specific bloodline\n";
-  if (!sageModeCheck) message += "Quest requires a specific sage mode\n";
-  if (!sageRankCheck) message += "Quest requires a higher sage mode rank\n";
+  // Every failed rule is unavailable and contributes its reason
+  const failures: string[] = [];
+  if (!hideCheck) failures.push("Quest is hidden");
+  if (!startsCheck) failures.push("Quest starts in the future");
+  if (!expiresCheck) failures.push("Quest has expired");
+  if (!eventCompletedCheck) failures.push("Quest has been completed too many times");
+  if (!eventAttemptsCheck) failures.push("Quest has been attempted too many times");
+  if (!periodCapCheck) failures.push("Quest limit for this period reached");
+  if (!villageCheck) failures.push("Quest is not available in your village");
+  if (!bloodlineCheck) failures.push("Quest requires a specific bloodline");
+  if (!sageModeCheck) failures.push("Quest requires a specific sage mode");
+  if (!sageRankCheck) failures.push("Quest requires a higher sage mode rank");
   if (!masteryCheck)
-    message +=
-      "Quest requires more earned mastery (equipment and bloodline bonuses do not count)\n";
-  if (!promotionCheck) message += "Quest requires the previous mastery rank\n";
-  if (examBlock) message += `${examBlock}\n`;
-  if (milestoneBlock) message += `${milestoneBlock}\n`;
-  if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
+    failures.push(
+      "Quest requires more earned mastery (equipment and bloodline bonuses do not count)",
+    );
+  if (!promotionCheck) failures.push("Quest requires the previous mastery rank");
+  if (examBlock) failures.push(examBlock);
+  if (milestoneBlock) failures.push(milestoneBlock);
+  if (!prerequisiteCheck)
+    failures.push("You must complete the prerequisite quest first");
   if (!medicalRankCheck)
-    message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;
+    failures.push(
+      `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}`,
+    );
   if (!huntingRankCheck)
-    message += `Quest requires hunting rank ${capitalizeFirstLetter(questHuntRank ?? "NONE")}\n`;
+    failures.push(
+      `Quest requires hunting rank ${capitalizeFirstLetter(questHuntRank ?? "NONE")}`,
+    );
   if (!gatheringRankCheck)
-    message += `Quest requires gathering rank ${capitalizeFirstLetter(questGatherRank ?? "NONE")}\n`;
+    failures.push(
+      `Quest requires gathering rank ${capitalizeFirstLetter(questGatherRank ?? "NONE")}`,
+    );
   if (!farmingLevelCheck)
-    message += `Quest requires farming level ${questAndUserQuestInfo.requiredFarmingLevel}\n`;
+    failures.push(
+      `Quest requires farming level ${questAndUserQuestInfo.requiredFarmingLevel}`,
+    );
   if (!levelCheck) {
     if (
       questAndUserQuestInfo.requiredLevel &&
       userLevel < questAndUserQuestInfo.requiredLevel
     ) {
-      message += `Quest requires level ${questAndUserQuestInfo.requiredLevel}\n`;
+      failures.push(`Quest requires level ${questAndUserQuestInfo.requiredLevel}`);
     }
     if (maxLevel && userLevel > maxLevel) {
-      message += `Quest is only available up to level ${maxLevel}\n`;
+      failures.push(`Quest is only available up to level ${maxLevel}`);
     }
   }
   // Returned detailed info on all the checks
-  return { check, message };
+  return {
+    check: failures.length === 0,
+    message: failures.map((failure) => `${failure}\n`).join(""),
+  };
+};
+
+/** An unset rank and the zero-index "NONE" rank both mean no requirement. */
+const meetsRank = <Rank extends string>(
+  ranks: readonly Rank[],
+  required: Rank | null | undefined,
+  current: Rank,
+) => {
+  const requiredIndex = required ? ranks.indexOf(required) : null;
+  return !requiredIndex || ranks.indexOf(current) >= requiredIndex;
 };
 
 /** The level a combat-scaled user carried into battle, otherwise the current level. */
