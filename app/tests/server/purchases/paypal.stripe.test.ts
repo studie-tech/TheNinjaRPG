@@ -9,7 +9,10 @@ import { deliverPaypalReputation, reconcilePaypalSubscription, syncTransactions,
 import { reserveStoreOrder, deliverStoreOrder } from "@/server/utils/webStore";
 import { stripeRouter } from "@/server/api/routers/stripe";
 import * as stripeClient from "@/server/utils/stripe/client";
-import { reconcileFederalStatuses, setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+import {
+  reconcileFederalStatuses,
+  setFederalStatusWithStoreFloor,
+} from "@/server/utils/purchases/federalStatus";
 import { fulfillStripeInvoice, fulfillStripeSession } from "@/server/utils/stripe/fulfillment";
 import { calcFedUgradeCost, dollars2reps, fedStatusRepsCost, reps2dollars } from "@/utils/paypal";
 import { beforeStatements, failStatements } from "../../setup/statements";

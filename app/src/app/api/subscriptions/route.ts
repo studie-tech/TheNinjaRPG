@@ -11,7 +11,7 @@ import {
   getPaypalSubscription,
 } from "@/server/utils/paypal/client";
 import { reconcilePaypalSubscription } from "@/server/utils/paypal/fulfillment";
-import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/federalStatus";
 import { DAY_S, secondsFromNow } from "@/utils/time";
 
 export async function GET(request: Request) {

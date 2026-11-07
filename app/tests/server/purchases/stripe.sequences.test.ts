@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
 import { paypalSubscription, storePurchase, stripeCheckout, stripePayment, userData } from "@/drizzle/schema";
-import { reconcileFederalStatuses, setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+import {
+  reconcileFederalStatuses,
+  setFederalStatusWithStoreFloor,
+} from "@/server/utils/purchases/federalStatus";
 import { grantStripeReceipt, upgradeStripeFederalWithReps, settleStripePayments, type StripeReceipt } from "@/server/utils/stripe/fulfillment";
 import { insertUsers } from "../../setup/factories";
 import { failStatements, inTransactions } from "../../setup/statements";

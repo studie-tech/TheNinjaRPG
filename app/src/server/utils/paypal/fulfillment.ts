@@ -32,10 +32,8 @@ import {
   lockPurchaseBuyer,
   reputationAllowanceUsed,
 } from "@/server/utils/purchases/allowance";
-import {
-  canonicalStoreUserId,
-  setFederalStatusWithStoreFloor,
-} from "@/server/utils/purchases/grant";
+import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/federalStatus";
+import { canonicalStoreUserId } from "@/server/utils/purchases/storeIdentity";
 import { logError } from "@/server/utils/sentry";
 import {
   deliverStoreOrder,

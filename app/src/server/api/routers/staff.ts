@@ -200,7 +200,7 @@ import {
   migrateStoreEntitlementRevocations,
   migrateStoreEntitlementStates,
   migrateStorePurchaseTransfers,
-} from "@/server/utils/purchases/grant";
+} from "@/server/utils/purchases/storeIdentity";
 import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import {
   canClearSectors,

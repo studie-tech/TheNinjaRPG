@@ -48,7 +48,7 @@ import { processAccountDeletions } from "@/server/utils/accountDeletion/process"
 import { cleanupOrphanRows, deleteCleanupCandidates } from "@/server/utils/cleaner";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { reconcileFederalStatuses } from "@/server/utils/purchases/grant";
+import { reconcileFederalStatuses } from "@/server/utils/purchases/federalStatus";
 import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { removeExpiredSanctionTombstones } from "@/server/utils/sanctionTombstone";
 import { getBankInterestDateRange } from "@/utils/time";

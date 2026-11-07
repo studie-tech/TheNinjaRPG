@@ -38,7 +38,7 @@ import { findUserById } from "@/queries/profile";
 import { removeFromClan } from "@/server/api/routers/clan";
 import { drizzleDB } from "@/server/db";
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
-import { retireStoreUserId } from "@/server/utils/purchases/grant";
+import { retireStoreUserId } from "@/server/utils/purchases/storeIdentity";
 import { removeAccountProcessorData } from "./processors";
 
 export const removeAccountGameData = async (userId: string) => {

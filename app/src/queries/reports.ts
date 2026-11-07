@@ -56,7 +56,7 @@ import {
 import { insertValuesWhere } from "@/queries/concurrency";
 import { userCardColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
-import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
+import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
 import sanitize from "@/utils/sanitize";
 import { secondsFromNow } from "@/utils/time";
 import type { AdditionalContext } from "@/validators/reports";

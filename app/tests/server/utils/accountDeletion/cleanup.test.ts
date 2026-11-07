@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as clans from "@/server/api/routers/clan";
 import * as deleteUserData from "@/server/utils/accountDeletion/deleteUserData";
-import * as grant from "@/server/utils/purchases/grant";
+import * as storeIdentity from "@/server/utils/purchases/storeIdentity";
 import { insertUsers, insertClans } from "../../../setup/factories";
 import {
   describeWithDatabase,
@@ -19,7 +19,7 @@ const depart = clans.removeFromClan;
 describeWithDatabase("account deletion clan departure retries", () => {
   beforeEach(async () => {
     await resetTables(userData, clan, village, actionLog);
-    vi.spyOn(grant, "retireStoreUserId").mockResolvedValue(undefined);
+    vi.spyOn(storeIdentity, "retireStoreUserId").mockResolvedValue(undefined);
     vi.spyOn(processors, "removeAccountProcessorData").mockResolvedValue(undefined);
     // Exercise clan cleanup without deleting the fixture character or calling processors.
     vi.spyOn(deleteUserData, "deleteUser").mockResolvedValue(undefined);

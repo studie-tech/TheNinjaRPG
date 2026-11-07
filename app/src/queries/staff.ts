@@ -95,7 +95,7 @@ import {
 import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
-import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
+import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
 
 /** Build the `contentBackup` listing for `getBackups`. */
 export const listContentBackupForGetBackups = (client: Pick<DrizzleClient, "query">) =>
