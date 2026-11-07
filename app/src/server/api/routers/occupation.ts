@@ -284,7 +284,11 @@ export const occupationRouter = createTRPCRouter({
           `You need to be at least ${formatCraftingRank(missingCraftingRank)} rank to craft ${itemWithRequirements.rarity} items`,
         );
       }
-      // Validate user has enough materials using collapsed quantities
+      // Validate user has enough materials using collapsed quantities, and plan which
+      // stacks to take; a total that covers a requirement always yields a full plan.
+      const allConsumptions: ReturnType<
+        typeof calculateItemConsumption
+      >["consumptions"] = [];
       for (const requirement of itemWithRequirements.craftingRequirements) {
         const totalQuantity = getTotalItemQuantity(
           useritems,
@@ -297,6 +301,13 @@ export const occupationRouter = createTRPCRouter({
             `You need ${requiredQuantity} ${itemName} (you have ${totalQuantity})`,
           );
         }
+        allConsumptions.push(
+          ...calculateItemConsumption(
+            useritems,
+            requirement.requirementItemId,
+            requiredQuantity,
+          ).consumptions,
+        );
       }
 
       // See if we have a shrine boost, add it to crafting time in case
@@ -329,25 +340,6 @@ export const occupationRouter = createTRPCRouter({
         craftSeconds,
         waiting.at(-1)?.finishesAt ?? currentlyCrafting?.craftingFinishedAt,
       );
-
-      // Execute crafting: consume materials and create crafting item
-      // Calculate consumption for each requirement
-      const allConsumptions: ReturnType<
-        typeof calculateItemConsumption
-      >["consumptions"] = [];
-      for (const requirement of itemWithRequirements.craftingRequirements) {
-        const requiredQuantity = requirement.quantity * input.quantity;
-        const consumption = calculateItemConsumption(
-          useritems,
-          requirement.requirementItemId,
-          requiredQuantity,
-        );
-        if (!consumption.hasEnough) {
-          const itemName = requirement.requirementItem?.name || "Unknown item";
-          return errorResponse(`Insufficient ${itemName} for crafting`);
-        }
-        allConsumptions.push(...consumption.consumptions);
-      }
 
       // Create crafting item entry/entries
       // Respect stackSize limit when creating items
