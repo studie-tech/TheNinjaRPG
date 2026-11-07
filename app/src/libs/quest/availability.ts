@@ -202,11 +202,7 @@ export const isAvailableUserQuests = (
       questAndUserQuestInfo.requiredFarmingLevel;
 
   // Level check - user must be >= requiredLevel and <= maxLevel
-  // Use originalLevel if available (for combat-scaled users), otherwise use current level
-  const userLevel =
-    "originalLevel" in user && typeof user.originalLevel === "number"
-      ? user.originalLevel
-      : (user.level ?? 1);
+  const userLevel = getUnscaledLevel(user);
   // The cap gates entering a Pyramid; a run's own fights can carry the player past it.
   const maxLevel = isOpenPyramidRun(questAndUserQuestInfo)
     ? null
@@ -319,6 +315,12 @@ export const isAvailableUserQuests = (
   // Returned detailed info on all the checks
   return { check, message };
 };
+
+/** The level a combat-scaled user carried into battle, otherwise the current level. */
+export const getUnscaledLevel = (user: Pick<UserData, "level">) =>
+  "originalLevel" in user && typeof user.originalLevel === "number"
+    ? user.originalLevel
+    : (user.level ?? 1);
 
 /**
  * Extend only legacy quests capped at the XP ceiling; milestone and other explicit caps
