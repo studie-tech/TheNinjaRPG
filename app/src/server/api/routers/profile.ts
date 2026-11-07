@@ -2827,69 +2827,25 @@ const fetchUpdatedUserOnce = async (
     applyQuestParty(user, user.questParty);
   }
 
-  // Filter and attach active wars for enemy_village sector type resolution
+  // Filter and attach active wars (for enemy_village sector type resolution) and shrine battles
   if (user?.villageId) {
-    const userActiveWars = allActiveWars.filter(
-      (w) =>
-        (!mercenaryWarId || w.id === mercenaryWarId) && !!getWarSide(w, user.villageId),
+    const { villageId } = user;
+    (user as NonNullable<UserWithRelations>).activeWars = allActiveWars.filter(
+      (w) => (!mercenaryWarId || w.id === mercenaryWarId) && !!getWarSide(w, villageId),
     );
-    (user as NonNullable<UserWithRelations>).activeWars = userActiveWars;
-  }
-
-  // Filter and attach active shrine battles
-  if (user?.villageId) {
-    const userActiveShrineBattles = activeShrineBattles.filter(
-      (b) =>
-        b.defenderEntityId === user.villageId || b.attackerEntityId === user.villageId,
+    (user as NonNullable<UserWithRelations>).shrineBattles = activeShrineBattles.filter(
+      (b) => b.defenderEntityId === villageId || b.attackerEntityId === villageId,
     );
-    (user as NonNullable<UserWithRelations>).shrineBattles = userActiveShrineBattles;
   }
 
   // Filter and attach active raids
   if (user) {
-    // Get village-owned sectors for exclusive raid filtering
-    const ownedSectorNumbers = new Set(
-      user.village?.sectors?.map((s) => s.sector) ?? [],
+    (user as NonNullable<UserWithRelations>).activeRaids = listVillageRaids(
+      user,
+      activeRaids,
+      allActiveWars,
+      now,
     );
-
-    const attackerDefeatedShrineSectors = new Set(
-      allActiveWars
-        .filter(
-          (w) =>
-            w.type === "SECTOR_WAR" &&
-            w.defenderShrineHp <= 0 &&
-            getWarSide(w, user.villageId) === w.attackerVillageId,
-        )
-        .map((w) => w.sector),
-    );
-    const userActiveRaids = activeRaids
-      .filter((raid) =>
-        isRaidListedForVillage(
-          raid,
-          user.villageId,
-          ownedSectorNumbers,
-          attackerDefeatedShrineSectors,
-          now,
-        ),
-      )
-      .flatMap((raid) => {
-        const raidData = getRaidObjectiveData(raid);
-        return raidData
-          ? [
-              {
-                id: raid.id,
-                name: raid.name,
-                description: raid.description,
-                image: raid.image,
-                sector: raidData.sector,
-                raidType: raidData.raidType,
-                raidEndsAt: raid.raidEndsAt,
-              },
-            ]
-          : [];
-      });
-
-    (user as NonNullable<UserWithRelations>).activeRaids = userActiveRaids;
   }
 
   // Retain the stored base rate separately from the derived rate for accrued ticks.
@@ -3351,6 +3307,54 @@ const fetchUpdatedUserOnce = async (
       craftingItemsChanged: settlement.craftingItemsChanged,
     };
   }
+};
+
+/** Project the raids listed for the user's village, as attached to the profile. */
+const listVillageRaids = (
+  user: Pick<NonNullable<UserWithRelations>, "villageId" | "village">,
+  activeRaids: Awaited<ReturnType<typeof fetchActiveRaids>>,
+  allActiveWars: Awaited<ReturnType<typeof fetchAllActiveWars>>,
+  now: Date,
+) => {
+  // Get village-owned sectors for exclusive raid filtering
+  const ownedSectorNumbers = new Set(user.village?.sectors?.map((s) => s.sector) ?? []);
+
+  const attackerDefeatedShrineSectors = new Set(
+    allActiveWars
+      .filter(
+        (w) =>
+          w.type === "SECTOR_WAR" &&
+          w.defenderShrineHp <= 0 &&
+          getWarSide(w, user.villageId) === w.attackerVillageId,
+      )
+      .map((w) => w.sector),
+  );
+  return activeRaids
+    .filter((raid) =>
+      isRaidListedForVillage(
+        raid,
+        user.villageId,
+        ownedSectorNumbers,
+        attackerDefeatedShrineSectors,
+        now,
+      ),
+    )
+    .flatMap((raid) => {
+      const raidData = getRaidObjectiveData(raid);
+      return raidData
+        ? [
+            {
+              id: raid.id,
+              name: raid.name,
+              description: raid.description,
+              image: raid.image,
+              sector: raidData.sector,
+              raidType: raidData.raidType,
+              raidEndsAt: raid.raidEndsAt,
+            },
+          ]
+        : [];
+    });
 };
 
 /**
