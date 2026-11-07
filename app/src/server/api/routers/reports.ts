@@ -85,7 +85,7 @@ import {
 } from "@/utils/permissions";
 import { getMillisecondsFromTimeUnit, getUtcDayWindowStart } from "@/utils/time";
 import { idSchema } from "@/validators/misc";
-import type { AdditionalContext, ReportCommentSchema } from "@/validators/reports";
+import type { ReportCommentSchema } from "@/validators/reports";
 import {
   modBotPerformanceSchema,
   reportCommentSchema,
