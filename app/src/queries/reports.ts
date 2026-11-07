@@ -1039,6 +1039,24 @@ export const insertUserReportForInsertUserReport = (
     additionalContext: info.additionalContext,
   });
 
+export const insertUserReport = async (
+  client: DrizzleClient,
+  info: {
+    userId: string;
+    reportedUserId: string;
+    system: string;
+    infraction: unknown;
+    additionalContext: AdditionalContext[];
+    reason: string;
+    aiInterpretation: string;
+    predictedStatus: BanState | null;
+  },
+) => {
+  const id = nanoid();
+  await insertUserReportForInsertUserReport(client, id, info);
+  return id;
+};
+
 /**
  * Insert an automated moderation report
  * @param client - The database client

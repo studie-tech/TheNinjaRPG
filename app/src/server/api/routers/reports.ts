@@ -1,5 +1,4 @@
 import { gt } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   ActiveBanStates,
@@ -30,8 +29,8 @@ import {
   insertHistoricalAvatarForUpdateUserAvatar,
   insertReportLogForClearNindo,
   insertReportLogForUpdateUserAvatar,
+  insertUserReport,
   insertUserReportDecisionComment,
-  insertUserReportForInsertUserReport,
   insertUserReviewForUpsertStaffReview,
   listUserReportForClear,
   listUserReportForClear2,
@@ -802,22 +801,4 @@ export const getBanEndDate = (input: ReportCommentSchema) => {
         Date.now() + input.banTime * getMillisecondsFromTimeUnit(input.banTimeUnit),
       )
     : null;
-};
-
-export const insertUserReport = async (
-  client: DrizzleClient,
-  info: {
-    userId: string;
-    reportedUserId: string;
-    system: string;
-    infraction: unknown;
-    additionalContext: AdditionalContext[];
-    reason: string;
-    aiInterpretation: string;
-    predictedStatus: BanState | null;
-  },
-) => {
-  const id = nanoid();
-  await insertUserReportForInsertUserReport(client, id, info);
-  return id;
 };
