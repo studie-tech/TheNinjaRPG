@@ -2,11 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { showMutationToast } from "@/libs/toast";
-import {
-  getIframeMuteObserver,
-  initIframeMuteObserver,
-  setIframeMuteState,
-} from "@/utils/audio";
+import { observeUserIframes, setIframeMuteState } from "@/utils/audio";
 import { useUserDataSelector } from "@/utils/UserContext";
 
 interface UseIframeMuteReturn {
@@ -21,15 +17,10 @@ interface UseIframeMuteReturn {
  * @returns boolean
  */
 const getInitialIframeMuteState = (
-  userData: { iframesMuted?: unknown } | undefined,
+  userData: { iframesMuted?: boolean } | undefined,
 ): boolean => {
   // Respect explicit user preference when logged in
-  if (userData && typeof userData === "object" && userData !== undefined) {
-    const record = userData as unknown as {
-      iframesMuted?: unknown;
-    };
-    if (typeof record.iframesMuted === "boolean") return record.iframesMuted;
-  }
+  if (typeof userData?.iframesMuted === "boolean") return userData.iframesMuted;
 
   // Fallback to locally saved preference
   const saved = safeLocalStorageGetItem("iframesMuted");
@@ -59,13 +50,8 @@ export const useIframeMute = (): UseIframeMuteReturn => {
     const initialMuteState = getInitialIframeMuteState(userData);
     setIsIframesMuted(initialMuteState);
 
-    // Initialize the observer with the current mute state
-    const observer = initIframeMuteObserver(initialMuteState);
-
-    // Cleanup on unmount
-    return () => {
-      observer.stop();
-    };
+    // Mute iframes added from now on; existing ones keep their state until a toggle
+    return observeUserIframes(initialMuteState);
   }, [userData]);
 
   // Update preferences mutation
@@ -82,14 +68,7 @@ export const useIframeMute = (): UseIframeMuteReturn => {
     (muted: boolean) => {
       setIsIframesMuted(muted);
 
-      // Update all existing user iframes
       setIframeMuteState(muted);
-
-      // Update observer state
-      const observer = getIframeMuteObserver();
-      if (observer) {
-        observer.setMuted(muted);
-      }
 
       // Save to database if user is logged in, otherwise localStorage
       if (userData) {
