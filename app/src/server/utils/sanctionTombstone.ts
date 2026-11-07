@@ -399,7 +399,11 @@ export const reapplySanctions = async (
   identity: SanctionIdentity | null | undefined,
   userIp?: string,
 ) => {
-  const reportIds = matches.map((match) => carryoverReportId(userId, match));
+  const carryovers = matches.map((match) => ({
+    match,
+    reportId: carryoverReportId(userId, match),
+  }));
+  const reportIds = carryovers.map(({ reportId }) => reportId);
   await discardUnpublishedSanctions(
     client,
     userId,
@@ -425,8 +429,7 @@ export const reapplySanctions = async (
     );
   };
   try {
-    for (const match of matches) {
-      const reportId = carryoverReportId(userId, match);
+    for (const { match, reportId } of carryovers) {
       const status = REAPPLIED_STATE[match.sanction];
       const writable = and(accountAbsent(userId), sourcesUnchanged);
       await insertRecord(
@@ -446,7 +449,7 @@ export const reapplySanctions = async (
         } satisfies typeof userReport.$inferInsert,
         writable,
       );
-      const reportExists = sql`EXISTS (SELECT 1 FROM ${userReport} WHERE ${and(eq(userReport.id, reportId), eq(userReport.reportedUserId, userId), eq(userReport.status, status), eq(userReport.banEnd, match.endsAt))})`;
+      const reportExists = carryoverReportExists(userId, reportId, match);
       const records = await Promise.allSettled([
         insertRecord(
           userReportComment,
@@ -543,20 +546,27 @@ export const reapplySanctions = async (
           )})`
         : undefined,
     )})`,
-    ...matches.map((match) => {
-      const reportId = carryoverReportId(userId, match);
-      return and(
-        sql`EXISTS (SELECT 1 FROM ${userReport} WHERE ${and(eq(userReport.id, reportId), eq(userReport.reportedUserId, userId), eq(userReport.status, REAPPLIED_STATE[match.sanction]), eq(userReport.banEnd, match.endsAt))})`,
+    ...carryovers.map(({ match, reportId }) =>
+      and(
+        carryoverReportExists(userId, reportId, match),
         sql`EXISTS (SELECT 1 FROM ${userReportComment} WHERE ${eq(userReportComment.id, `${reportId}-comment`)})`,
         sql`EXISTS (SELECT 1 FROM ${actionLog} WHERE ${eq(actionLog.id, `${reportId}-log`)})`,
         ...match.tombstones.map(
           (source) =>
             sql`EXISTS (SELECT 1 FROM ${sanctionTombstone} WHERE ${and(unchangedSource(source), sql`JSON_CONTAINS(${sanctionTombstone.carryoverReportIds}, JSON_QUOTE(${reportId}))`)})`,
         ),
-      );
-    }),
+      ),
+    ),
   );
 };
+
+/** Whether the carried-over report still holds this sanction and end date. */
+const carryoverReportExists = (
+  userId: string,
+  reportId: string,
+  match: SanctionMatch,
+) =>
+  sql`EXISTS (SELECT 1 FROM ${userReport} WHERE ${and(eq(userReport.id, reportId), eq(userReport.reportedUserId, userId), eq(userReport.status, REAPPLIED_STATE[match.sanction]), eq(userReport.banEnd, match.endsAt))})`;
 
 /**
  * Commit a report decision and its retained sources atomically; omitted banEnd is preserved.

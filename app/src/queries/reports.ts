@@ -1263,7 +1263,7 @@ export const executeRowsForRemoveExpiredSanctionTombstones = (
       UPDATE ${userReport}
       INNER JOIN ${sanctionTombstone} ON ${and(eq(userReport.id, sanctionTombstone.sourceId), eq(userReport.reportedUserId, sanctionTombstone.userId))}
       SET ${userReport.status} = 'REPORT_CLEARED', ${userReport.adminResolved} = TRUE, ${userReport.updatedAt} = CURRENT_TIMESTAMP(3)
-      WHERE ${and(expired, inArray(userReport.status, [...ActiveBanStates, "SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"]), gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`))}
+      WHERE ${and(expired, inArray(userReport.status, [...ActiveBanStates, ...ActiveSilenceStates]), gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`))}
     `);
 
 /** Build the `sanctionTombstone` deletion for `removeExpiredSanctionTombstones`, using the configured predicates. */
@@ -1276,11 +1276,7 @@ export const deleteSanctionTombstoneForRemoveExpiredSanctionTombstones = (
 const activeSanctionReportsWhere = (userId: string) =>
   and(
     eq(userReport.reportedUserId, userId),
-    inArray(userReport.status, [
-      ...ActiveBanStates,
-      "SILENCE_ACTIVATED",
-      "TIMEOUT_ACTIVATED",
-    ]),
+    inArray(userReport.status, [...ActiveBanStates, ...ActiveSilenceStates]),
     gt(userReport.banEnd, new Date()),
   );
 
