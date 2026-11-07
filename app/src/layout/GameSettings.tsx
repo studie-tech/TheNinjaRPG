@@ -1,5 +1,6 @@
 "use client";
 
+import { useAtomValue } from "jotai";
 import { RefreshCw, Settings, Volume2, VolumeX } from "lucide-react";
 import {
   createContext,
@@ -50,6 +51,7 @@ import { createSerialQueue } from "@/utils/async";
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { clamp } from "@/utils/math";
+import { combatThemeHeldAtom } from "@/utils/UserContext";
 
 /** Audio and preference fields consumed by settings and playback. */
 export type GameSettingsUser = Pick<
@@ -174,6 +176,7 @@ export const GlobalAudioProvider: React.FC<{
   const [buttonSfxOn, setButtonSfxOn] = useState<boolean>(true);
   const [sfxVolume, setSfxVolume] = useState<number>(0.8);
 
+  const combatThemeHeld = useAtomValue(combatThemeHeldAtom);
   // Battle, event, bloodline, outlaw or village theme (see getBackgroundMusicSrc)
   const musicSrc = getBackgroundMusicSrc(
     userData
@@ -181,7 +184,7 @@ export const GlobalAudioProvider: React.FC<{
           villageName: userData.village?.name,
           isOutlaw: userData.isOutlaw,
           bloodlineId: userData.bloodlineId,
-          inBattle: userData.status === "BATTLE",
+          inBattle: userData.status === "BATTLE" || combatThemeHeld,
         }
       : undefined,
   );

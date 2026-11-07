@@ -856,19 +856,19 @@ export const combatRouter = createTRPCRouter({
           // not authorized as an AI turn at the top of the block.
           const { isAITurn: newIsAITurn } = getTurnControl(newActor, suid);
           // Recheck after actions: a hidden animated summon template may now be
-          // alive. The actor replays a batch from its steps, while other humans only
-          // receive the latest state, so each event must reach them before another
-          // action overwrites it; departed participants no longer cap the batch.
+          // alive. Auto combat is watched and can be taken back at any moment, so it
+          // resolves one action at a time. The actor replays a batch from its steps,
+          // but other humans only receive the latest state, so each event must reach
+          // them before another action overwrites it; departed participants no
+          // longer cap the batch.
           const fighting = newBattle.usersState.filter(
             (u) => !u.leftBattle && stillInBattle(u),
           );
+          const humans = fighting.filter((u) => !u.isAi && !u.isSummon);
           const needsActionPlayback =
-            fighting.filter((u) => !u.isAi && !u.isSummon).length > 1 &&
-            fighting.some(
-              (u) =>
-                (!u.isAi && !u.isSummon && u.isAutoCombat) ||
-                Object.keys(u.spriteAnimations ?? {}).length > 0,
-            );
+            humans.some((u) => u.isAutoCombat) ||
+            (humans.length > 1 &&
+              fighting.some((u) => Object.keys(u.spriteAnimations ?? {}).length > 0));
           const maxActions =
             AutoBattleTypes.includes(newBattle.battleType) || needsActionPlayback
               ? 1

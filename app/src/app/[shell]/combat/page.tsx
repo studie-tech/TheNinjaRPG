@@ -54,6 +54,7 @@ import { isTutorialActive } from "@/libs/tutorial";
 import {
   combatActionIdAtom,
   combatHeldResultAtom,
+  combatThemeHeldAtom,
   useRequiredUserData,
   userBattleAtom,
 } from "@/utils/UserContext";
@@ -159,6 +160,11 @@ export default function CombatPage() {
   const heldResultVersion = useAtomValue(combatHeldResultAtom);
   // Keeps the battle layout while the field replays the action that ended it.
   const resultShown = !!results && heldResultVersion === undefined;
+  const setCombatThemeHeld = useSetAtom(combatThemeHeldAtom);
+  useEffect(() => {
+    setCombatThemeHeld(!!results);
+    return () => setCombatThemeHeld(false);
+  }, [results, setCombatThemeHeld]);
   const battle = battleState?.battle;
   const isBattleMissing = isSuccess && data.battle === null;
   const versionId = battle?.version;

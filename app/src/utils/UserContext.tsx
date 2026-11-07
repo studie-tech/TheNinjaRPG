@@ -61,6 +61,9 @@ export const combatPendingActionAtom = atom<CombatPendingAction | undefined>(und
  */
 export const combatHeldResultAtom = atom<number | undefined>(undefined);
 
+/** The battle theme carries through a result screen, so another fight continues it. */
+export const combatThemeHeldAtom = atom(false);
+
 /** Newest log version the field has replayed; undefined when it is caught up. */
 export const combatPresentedLogVersionAtom = atom<number | undefined>(undefined);
 

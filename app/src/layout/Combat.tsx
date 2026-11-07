@@ -142,6 +142,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const wasPageActiveRef = useRef(true);
   const lastActionsRef = useRef<Date[]>([]);
   const lastAutonomousActionRef = useRef(0);
+  const fieldFailedRef = useRef(false);
   const lastBattleCheckRef = useRef(0);
   const actionInFlightRef = useRef(false);
   const readyInFlightBattleIdRef = useRef<string | null>(null);
@@ -849,6 +850,9 @@ const Combat: React.FC<CombatProps> = (props) => {
         const inLobby = battleRef.current.createdAt.getTime() > Date.now() - timeDiff;
         const { isAITurn } = getTurnControl(actor, suid);
         if (isAITurn && !isPending && !inLobby) {
+          // Nothing resolves until a visible field can show it. Hidden pages and
+          // fields that cannot load still advance, or the battle would wait forever.
+          if (isPageActive && !combat.scene.current && !fieldFailedRef.current) return;
           if (now - lastAutonomousActionRef.current < AUTONOMOUS_ACTION_MS) return;
           lastAutonomousActionRef.current = now;
           if (canPerformAction()) {
@@ -1097,6 +1101,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     hasGameAssets && !!battleState.battle && !result,
   );
   const webglError = combat.error;
+  fieldFailedRef.current = webglError || hasGameAssetsError;
   useEffect(() => {
     gridRef.current = combat.scene.current?.grid ?? null;
     const mount = mountRef.current;

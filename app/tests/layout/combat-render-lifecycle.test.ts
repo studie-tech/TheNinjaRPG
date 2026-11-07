@@ -85,6 +85,7 @@ it("still drives live auto combat while its scene is paused in the background", 
     battleRef: { current: { id: "live-battle", version: 1, createdAt: new Date(0) } },
     userIdRef: { current: "viewer" }, precomputedActionsRef: { current: [] },
     lastAutonomousActionRef: { current: 0 }, lastBattleCheckRef: { current: 0 },
+    fieldFailedRef: { current: false },
     combat: { scene: { current: { isPresenting: () => false } } },
     AUTONOMOUS_ACTION_MS: 1100, BATTLE_CHECK_MS: 1000, DRIVER_TICK_MS: 200,
     useEffect(callback: () => void) { callback(); },
@@ -110,6 +111,40 @@ it("still drives live auto combat while its scene is paused in the background", 
   drive();
   expect(actions).toBe(1);
   scope.canDrive = () => true;
+  drive();
+  expect(actions).toBe(2);
+});
+
+it("resolves nothing autonomously until a visible field can show it", () => {
+  const driver = sourceBetween("  useEffect(() => {\n    if (!isPageActive && !hasAutoCombat)", "\n\n  useEffect(() => {\n    actionRef.current");
+  let drive = () => {};
+  let actions = 0;
+  const scope = {
+    isPageActive: true, hasAutoCombat: true, isPending: false, settledResult: null,
+    suid: "viewer", timeDiff: 0, controlledActorId: "viewer",
+    battleRef: { current: { id: "live-battle", version: 1, createdAt: new Date(0) } },
+    userIdRef: { current: "viewer" }, precomputedActionsRef: { current: [] },
+    lastAutonomousActionRef: { current: 0 }, lastBattleCheckRef: { current: 0 },
+    fieldFailedRef: { current: false },
+    combat: { scene: { current: null as { isPresenting: () => boolean } | null } },
+    AUTONOMOUS_ACTION_MS: 1100, BATTLE_CHECK_MS: 1000, DRIVER_TICK_MS: 200,
+    useEffect(callback: () => void) { callback(); },
+    setInterval(callback: () => void) { drive = callback; return 1; },
+    calcActiveUser: () => ({ actor: { userId: "ai" }, changedActor: false }),
+    getTurnControl: () => ({ isAITurn: true }),
+    canPerformAction: () => true, canDrive: () => true,
+    performAction: () => { actions++; },
+  };
+  new Function("scope", `with (scope) { ${transpiler.transformSync(driver)} }`)(scope);
+  drive();
+  expect(actions).toBe(0);
+  scope.combat.scene.current = { isPresenting: () => false };
+  drive();
+  expect(actions).toBe(1);
+  // A field that cannot load must not strand the battle.
+  scope.combat.scene.current = null;
+  scope.lastAutonomousActionRef.current = 0;
+  scope.fieldFailedRef.current = true;
   drive();
   expect(actions).toBe(2);
 });

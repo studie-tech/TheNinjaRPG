@@ -91,6 +91,15 @@ describeWithDatabase("combat sprite animation delivery", () => {
     expect(rows.map((row) => row.battleVersion)).toEqual(turn.playback!.map((step) => step.version));
   });
 
+  it("resolves auto combat one action per response, so each can be watched and taken back", async () => {
+    const { db, saved, player, perform, logs } = await startBattle({ animated: false, firstActor: "ai" });
+    saved.usersState.find((user) => user.userId === player.userId)!.isAutoCombat = true;
+    await db.update(battle).set({ usersState: saved.usersState }).where(eq(battle.id, saved.id));
+    const first = await perform();
+    expect(first.playback).toHaveLength(1);
+    expect(await logs()).toHaveLength(1);
+  });
+
   it("keeps one action per response when another human only sees the latest state", async () => {
     const { db, saved, npc, player, perform, logs } = await startBattle({ firstActor: "ai" });
     const observer = structuredClone(saved.usersState.find((user) => user.userId === player.userId)!);
