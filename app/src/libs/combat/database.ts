@@ -242,8 +242,7 @@ export const updateBattle = async (
       newBattle.extraState.tournamentGameId ||
       newBattle.extraState.kageMatch ||
       territoryWarAwards(newBattle).length > 0
-        ? client.transaction(async (tx) => {
-            const database = tx as unknown as DrizzleClient;
+        ? client.transaction(async (database) => {
             const deleted = await deleteBattle(database);
             // The version DELETE and match UPDATE must commit together: a single-row CAS
             // cannot prevent recovery treating a deleted battle as an interrupted launch.
@@ -272,8 +271,7 @@ export const updateBattle = async (
       updateBattleForUpdateBattleState(database, newBattle, fetchedVersion);
     const updated = await retryOnDeadlock(() =>
       result && territoryWarAwards(newBattle).length > 0
-        ? client.transaction(async (tx) => {
-            const database = tx as unknown as DrizzleClient;
+        ? client.transaction(async (database) => {
             const updated = await updateBattleState(database);
             // A decided PvP win must score before the opponent collects their result.
             // MySQL cannot UPDATE Battle and INSERT missing receipt/score rows in one
@@ -820,7 +818,7 @@ export const updateWars = async (
 
   // Handle SHRINE_WAR defend scenarios where user and AI share same villageId
   // In these cases, both teams have the same faction, so warResults is empty
-  // but villageWarShrineInfo may still have data from the defend scenario handler in util.ts
+  // but villageWarShrineInfo may still have data from `calcWarDamage`
   if (curBattle.battleType === "SHRINE_WAR") {
     const userWars = getBattleTeamWars(curBattle, user).map(({ war }) => war);
     for (const warId of Object.keys(result.villageWarShrineInfo)) {

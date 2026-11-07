@@ -45,6 +45,7 @@ const mount = async (
   session: { isLoaded: boolean; isSignedIn?: boolean },
   cached?: Snapshot,
   response: Promise<Snapshot> = new Promise(() => undefined),
+  initialIsSignedIn = true,
 ) => {
   vi.spyOn(clerk, "useUser").mockReturnValue({
     ...session,
@@ -68,7 +69,7 @@ const mount = async (
   await act(async () => {
     render(
       <QueryClientProvider client={queryClient}>
-        <UserContextProvider initialIsSignedIn>
+        <UserContextProvider initialIsSignedIn={initialIsSignedIn}>
           <Consumer />
         </UserContextProvider>
       </QueryClientProvider>,
@@ -80,6 +81,11 @@ const mount = async (
 describe("useRequiredUserDataSelector", () => {
   it("waits for Clerk before judging the session", async () => {
     await mount({ isLoaded: false });
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("waits for Clerk on a hard load that starts signed out", async () => {
+    await mount({ isLoaded: false }, undefined, undefined, false);
     expect(push).not.toHaveBeenCalled();
   });
 

@@ -978,8 +978,7 @@ const executeClaimedQuestConsequences = async ({
                 nextQuest.content.isolated
               ) {
                 const assigned = await retryOnDeadlock(() =>
-                  client.transaction(async (tx) => {
-                    const database = tx as unknown as DrizzleClient;
+                  client.transaction(async (database) => {
                     const claim = await claimUserSnapshot({
                       client: database,
                       userId: user.userId,

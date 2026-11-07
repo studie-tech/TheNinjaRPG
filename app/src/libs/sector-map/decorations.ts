@@ -26,10 +26,10 @@ export interface DecorationAsset {
   renderScale?: number;
 }
 
-/** Bundled practice targets share their physical height in authored scenery and combat. */
 /** How far above a hex's base line the renderer roots a decoration, per unit of scale. */
 export const SPRITE_GROUND_LIFT = 0.1;
 
+/** Bundled practice targets share their physical height in authored scenery and combat. */
 export const TRAINING_DUMMY_ASSET = {
   key: "training.dummy",
   filepath: "/world-art/training-dummy.webp",

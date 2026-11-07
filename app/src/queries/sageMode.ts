@@ -2,8 +2,13 @@
  * Database access for sage mode; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { eq } from "drizzle-orm";
-import { sageMode, sageModeRolls } from "@/drizzle/schema";
+import { and, eq, gte, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import {
+  IMG_AVATAR_DEFAULT,
+  SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
+} from "@/drizzle/constants";
+import { actionLog, sageMode, sageModeRolls, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
 import type { ZodSageModeType } from "@/validators/combat";
@@ -42,14 +47,6 @@ export const fetchSageMode = async (client: DrizzleClient, sageModeId: string) =
     where: eq(sageMode.id, sageModeId),
   });
 };
-
-import { and, gte, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import {
-  IMG_AVATAR_DEFAULT,
-  SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
-} from "@/drizzle/constants";
-import { actionLog, userData } from "@/drizzle/schema";
 
 /** Build the `sageMode` listing for `getAllNames`, using predicates on `hidden`. */
 export const listSageModeForGetAllNames = (

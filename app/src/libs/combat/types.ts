@@ -44,7 +44,12 @@ import type {
   WarCamp,
 } from "@/drizzle/schema";
 import type { BattleItem, BattleJutsu, BattleVillage } from "@/libs/combat/catalog";
-import type { GenNames, publicState, StatNames, HP_DAMAGE_KEYS } from "@/libs/combat/constants";
+import type {
+  GenNames,
+  HP_DAMAGE_KEYS,
+  publicState,
+  StatNames,
+} from "@/libs/combat/constants";
 import type { CreatorTrialState } from "@/libs/combat/creatorTrial";
 import type { EncounterWaveState } from "@/libs/combat/encounters";
 import type { DungeonBattleState } from "@/libs/dungeon";

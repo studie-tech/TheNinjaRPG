@@ -60,7 +60,6 @@ import {
   fetchPurchaseUserCacheInputs,
   getKnownPurchaseUserUpdate,
 } from "@/server/utils/purchases/cache";
-import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/federalStatus";
 import {
   canonicalStoreUserId,
   isDeletedStoreUserId,

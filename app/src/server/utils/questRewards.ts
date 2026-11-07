@@ -454,9 +454,6 @@ export const nameGrantedRewards = (
   rewards.reward_titles = granted.titles.map((i) => i.name);
 };
 
-/**
- * COMMON QUERIES WHICH ARE REUSED
- */
 /** Drop one quest's tracker so a restarted/reassigned quest always starts fresh. */
 export const removeQuestTrackerByQuestId = (
   trackers: QuestTrackerType[] | null | undefined,
