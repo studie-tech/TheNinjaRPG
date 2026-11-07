@@ -319,13 +319,19 @@ export const clampStoredPools = (
     "curHealth" | "maxHealth" | "curStamina" | "maxStamina" | "curChakra" | "maxChakra"
   >,
 ) => {
-  user.curHealth = Math.min(user.curHealth, MAX_STORED_POOL);
-  user.maxHealth = Math.min(user.maxHealth, MAX_STORED_POOL);
-  user.curStamina = Math.min(user.curStamina, MAX_STORED_POOL);
-  user.maxStamina = Math.min(user.maxStamina, MAX_STORED_POOL);
-  user.curChakra = Math.min(user.curChakra, MAX_STORED_POOL);
-  user.maxChakra = Math.min(user.maxChakra, MAX_STORED_POOL);
+  for (const field of STORED_POOL_FIELDS) {
+    user[field] = Math.min(user[field], MAX_STORED_POOL);
+  }
 };
+
+const STORED_POOL_FIELDS = [
+  "curHealth",
+  "maxHealth",
+  "curStamina",
+  "maxStamina",
+  "curChakra",
+  "maxChakra",
+] as const;
 
 /** Which scale a unit's stored stats are on; see scaleUserStats. */
 export type StatScale = "ai" | "player";
@@ -472,18 +478,11 @@ export const experienceAssignmentBlockMessage = (user: Pick<UserData, "rank">) =
 
 /** Assign stats of user, meant for the training dummy and ranked equalization */
 export function manuallyAssignUserStats(user: UserData, stats: AssignableUserStats) {
-  user.offence = stats.offence;
-  user.defence = stats.defence;
-  user.strength = stats.strength;
-  user.intelligence = stats.intelligence;
-  user.willpower = stats.willpower;
-  user.speed = stats.speed;
-  if (stats.ninjutsuMastery != null) user.ninjutsuMastery = stats.ninjutsuMastery;
-  if (stats.genjutsuMastery != null) user.genjutsuMastery = stats.genjutsuMastery;
-  if (stats.taijutsuMastery != null) user.taijutsuMastery = stats.taijutsuMastery;
-  if (stats.bukijutsuMastery != null) user.bukijutsuMastery = stats.bukijutsuMastery;
-  if (stats.bloodlineMastery != null) user.bloodlineMastery = stats.bloodlineMastery;
-  if (stats.sageMastery != null) user.sageMastery = stats.sageMastery;
+  for (const stat of CombatStatNames) user[stat] = stats[stat];
+  for (const mastery of MasteryNames) {
+    const value = stats[mastery];
+    if (value != null) user[mastery] = value;
+  }
 }
 
 export const showUserRank = (user?: { rank?: UserRank; isOutlaw?: boolean }) => {
@@ -529,7 +528,7 @@ export const calcActiveUserRegen = (
     regeneration += HomeTypeDetails[user.homeType].regen;
   }
 
-  // // Bloodline
+  // Bloodline
   if (user.bloodline?.regenIncrease) {
     regeneration = regeneration + user.bloodline.regenIncrease;
   }
@@ -538,15 +537,15 @@ export const calcActiveUserRegen = (
   const maxRegenBoost = CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL;
   if (
     !user.isOutlaw &&
-    user.clan?.regenBoost &&
-    user.clan?.regenBoost > 0 &&
-    user.clan?.regenBoost <= maxRegenBoost
+    user.clan &&
+    user.clan.regenBoost > 0 &&
+    user.clan.regenBoost <= maxRegenBoost
   ) {
     regeneration *= (100 + user.clan.regenBoost) / 100;
   }
 
-  // // Calculate percentage boost
-  let boost = getStrucBoost("regenIncreasePerLvl", user?.village?.structures);
+  // Village structure boosts
+  let boost = getStrucBoost("regenIncreasePerLvl", user.village?.structures);
   if (user.status === "ASLEEP") {
     boost += getStrucBoost("sleepRegenPerLvl", user.village?.structures);
   }
