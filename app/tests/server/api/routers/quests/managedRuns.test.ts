@@ -35,9 +35,10 @@ import {
   insertQuests,
   insertUserItems,
   insertUsers,
+  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../../setup/queues";
-import { beforeStatements, failStatements } from "../../../../setup/statements";
+import { beforeStatements, failStatements, withoutTransactions } from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -46,20 +47,9 @@ import {
   resetTables,
   runRawSql,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const router = createTRPCRouter({ quests: questsRouter });
-
-/** Fail if a floor or abandonment unnecessarily opens a transaction. */
-const withoutTransactions = (client: DrizzleClient): DrizzleClient =>
-  new Proxy(client, {
-    get(target, property, receiver) {
-      if (property === "transaction")
-        return () => {
-          throw new Error("Unexpected managed-run transaction");
-        };
-      return Reflect.get(target, property, receiver);
-    },
-  });
 
 /** Exercise battle initialization with the same attempt snapshot as the quest router. */
 const startFloor = (client: DrizzleClient, attempt: UserQuest) =>
@@ -133,9 +123,7 @@ describeWithDatabase("managed quest battle and abandonment", () => {
         questVersion: content.updatedAt,
       },
     ]);
-    await client
-      .insert(aiProfile)
-      .values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
   });
   afterEach(async () => { vi.restoreAllMocks(); await resetTables(questHistory); });
 
@@ -344,15 +332,9 @@ describeWithDatabase("managed quest battle and abandonment", () => {
 
   it("waits for delayed history and participant writes before compensating a failed insert", async () => {
     const { client, attempt } = await snapshot();
-    let release = () => {};
-    const released = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: released, resolve: release } = deferred<void>();
     let entered = 0;
-    let markReady = () => {};
-    const ready = new Promise<void>((resolve) => {
-      markReady = resolve;
-    });
+    const { promise: ready, resolve: markReady } = deferred<void>();
     const delay = async () => {
       entered += 1;
       if (entered === 2) markReady();
@@ -552,14 +534,8 @@ describeWithDatabase("managed quest battle and abandonment", () => {
 
   it("settles delayed sibling inserts before compensating a rejected paid-floor claim", async () => {
     const { client, attempt } = await snapshot();
-    let markInsertStarted = () => {};
-    let releaseInsert = () => {};
-    const started = new Promise<void>((resolve) => {
-      markInsertStarted = resolve;
-    });
-    const released = new Promise<void>((resolve) => {
-      releaseInsert = resolve;
-    });
+    const { promise: started, resolve: markInsertStarted } = deferred<void>();
+    const { promise: released, resolve: releaseInsert } = deferred<void>();
     const delayed = beforeStatements(withoutTransactions(client), battle, [
       async () => {
         markInsertStarted();

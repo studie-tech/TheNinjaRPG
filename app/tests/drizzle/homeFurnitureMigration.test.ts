@@ -1,28 +1,19 @@
-import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { expect, it } from "bun:test";
-import mysql from "mysql2/promise";
-import { baselineTableSql, quoteIdentifier, type SnapshotTable } from "../setup/migrations";
+import type mysql from "mysql2/promise";
+import { readMigration, withMigrationSandbox } from "../setup/migrations";
 import { describeWithDatabase } from "../setup/testDatabase";
 
 describeWithDatabase("home furniture inventory migration", () => {
   it("adds rooms and home sharing directly to the existing schema without changing account or inventory data", async () => {
-    const connection = await mysql.createConnection({ uri: process.env.TEST_MYSQL_URL, multipleStatements: true });
-    const prefix = `home_rooms_${randomUUID().replaceAll("-", "")}_`;
-    const names = ["UserData", "UserItem", "UserRequest", "UserHome"];
-    const query = <T extends mysql.QueryResult = mysql.QueryResult>(statement: string, values?: unknown[]) =>
-      connection.query<T>(statement.replace(/\b(UserData|UserItem|UserRequest|UserHome)\b/g, `${prefix}$1`), values);
-    try {
-      const snapshot = JSON.parse(await readFile("drizzle/migrations/meta/0086_snapshot.json", "utf8")) as { tables: Record<string, SnapshotTable> };
-      for (const name of ["UserData", "UserItem", "UserRequest"]) await query(baselineTableSql(snapshot.tables[name]!));
+    await withMigrationSandbox({ snapshot: "0086", baseline: ["UserData", "UserItem", "UserRequest"], created: ["UserHome"] }, async ({ query }) => {
       await query("INSERT INTO UserData (userId, username, gender, money, bank, homeFurnitureRevision) VALUES ('owner', 'Owner', 'Other', 123456, 654321, 7)");
       await query("INSERT INTO UserItem (id, userId, itemId, homeX, homeY) VALUES ('placed', 'owner', 'furniture', 50, 50), ('stored', 'owner', 'furniture', NULL, NULL)");
       await query("INSERT INTO UserRequest (id, senderId, receiverId, status, type) VALUES ('spar', 'owner', 'guest', 'PENDING', 'SPAR')");
       const [accountsBefore] = await query<mysql.RowDataPacket[]>("SELECT * FROM UserData");
       const [inventoryBefore] = await query<mysql.RowDataPacket[]>("SELECT * FROM UserItem ORDER BY id");
       const [requestsBefore] = await query<mysql.RowDataPacket[]>("SELECT * FROM UserRequest");
-      const migration = await readFile("drizzle/migrations/0087_tough_lady_vermin.sql", "utf8");
-      expect(migration).not.toContain("--> statement-breakpoint");
+      const migration = await readMigration("0087_tough_lady_vermin.sql");
       await query(migration);
       const [accounts] = await query<mysql.RowDataPacket[]>("SELECT * FROM UserData");
       expect(accounts).toEqual(accountsBefore);
@@ -44,29 +35,13 @@ describeWithDatabase("home furniture inventory migration", () => {
       await expect(query("INSERT INTO UserRequest (id, senderId, receiverId, status, type) VALUES ('duplicate', 'owner', 'guest', 'ACCEPTED', 'HOME')")).rejects.toMatchObject({ code: "ER_DUP_ENTRY" });
       await query("UPDATE UserRequest SET status = 'REJECTED' WHERE id = 'invite'");
       await query("INSERT INTO UserRequest (id, senderId, receiverId, status, type) VALUES ('accepted', 'owner', 'guest', 'ACCEPTED', 'HOME')");
-    } finally {
-      await connection.query(`DROP TABLE IF EXISTS ${names.map((name) => quoteIdentifier(prefix + name)).join(", ")}`);
-      await connection.end();
-    }
+    });
   }, 30_000);
 
   it("seeds ordinary furniture and grants starter copies without changing balances or existing inventory", async () => {
-    const connection = await mysql.createConnection({
-      uri: process.env.TEST_MYSQL_URL,
-      multipleStatements: true,
-    });
-    const prefix = `home_migration_${randomUUID().replaceAll("-", "")}_`;
-    const names = ["Item", "ItemVariant", "UserItem", "UserData"];
-    const query = <T extends mysql.QueryResult = mysql.QueryResult>(statement: string, values?: unknown[]) =>
-      connection.query<T>(statement.replace(/\b(Item|ItemVariant|UserItem|UserData)\b/g, `${prefix}$1`), values);
-    try {
+    await withMigrationSandbox({ snapshot: "0079", baseline: ["Item", "ItemVariant", "UserItem", "UserData"] }, async ({ query, tables }) => {
       // Unique tables isolate the baseline schema. MySQL temporary tables cannot be
       // both the insert target and the inventory read used to skip existing starter copies.
-      const snapshot = JSON.parse(
-        await readFile("drizzle/migrations/meta/0079_snapshot.json", "utf8"),
-      ) as { tables: Record<string, SnapshotTable> };
-      for (const name of names)
-        await query(baselineTableSql(snapshot.tables[name]!));
       for (const [userId, homeType] of [
         ["resident", "PALACE"],
         ["fresh", "NONE"],
@@ -80,10 +55,7 @@ describeWithDatabase("home furniture inventory migration", () => {
       await query(
         "INSERT INTO Item (id, name, description, image, effects, itemType, rarity, slot, target) VALUES ('gear', 'Existing gear', 'Existing gear', '/gear.webp', JSON_ARRAY(), 'WEAPON', 'COMMON', 'ITEM', 'CHARACTER'); INSERT INTO UserItem (id, userId, itemId, quantity, level, experience, durability, equipped) VALUES ('owned-gear', 'resident', 'gear', 2, 7, 45, 55, 'ITEM_1');",
       );
-      const migration = await readFile(
-        "drizzle/migrations/0080_curious_snowbird.sql",
-        "utf8",
-      );
+      const migration = await readMigration("0080_curious_snowbird.sql");
       expect(migration).not.toMatch(/JSON_(EXTRACT|SEARCH|CONTAINS|SET)/i);
       const backfillStart = migration.indexOf("INSERT INTO `UserItem`");
       const backfillSql = migration.slice(backfillStart);
@@ -104,7 +76,7 @@ describeWithDatabase("home furniture inventory migration", () => {
       );
       expect(
         columns
-          .filter((column) => !snapshot.tables.UserData!.columns[column.Field])
+          .filter((column) => !tables.UserData!.columns[column.Field])
           .map((column) => column.Field),
       ).toEqual(["homeFurnitureRevision"]);
       const [inventory] = await query<mysql.RowDataPacket[]>(
@@ -183,9 +155,6 @@ describeWithDatabase("home furniture inventory migration", () => {
             row.homeFurnitureRevision === 0,
         ),
       ).toBe(true);
-    } finally {
-      await connection.query(`DROP TABLE IF EXISTS ${names.map((name) => quoteIdentifier(prefix + name)).join(", ")}`);
-      await connection.end();
-    }
+    });
   }, 30_000);
 });

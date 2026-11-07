@@ -1,5 +1,5 @@
 
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { UserCache } from "@/deltas/profile";
 import { fetchActionUser } from "@/queries/actionReadiness";
@@ -22,14 +22,17 @@ import { DialogObjective, QuestTracker, SimpleObjective } from "@/validators/obj
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
-import { beforeStatements } from "../../../../setup/statements";
+import { beforeStatements, inTransactions, aroundStatements, interceptExecute } from "../../../../setup/statements";
+import { readUser } from "../../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
+  lockWaitObserved,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const USER_ID = "hospital-self-heal-user";
 const TARGET_ID = "hospital-heal-target";
@@ -106,10 +109,7 @@ const insertLegendaryHealer = async (
     },
   ]);
 
-const readHealer = async (userId = USER_ID) => {
-  const database = await getTestDatabase();
-  return database.query.userData.findFirst({ where: eq(userData.userId, userId) });
-};
+const readHealer = (userId = USER_ID) => readUser(userId);
 
 /** Assigns a real isolated run through its router so healing exercises persisted isolation. */
 const startTargetPyramid = async (client?: DrizzleClient) => {
@@ -264,41 +264,18 @@ describeWithDatabase("hospital self-healing", () => {
     // Bootstrap profile rows before both requests read the same user concurrently.
     await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
 
-    let releaseFirstRegen!: () => void;
-    let releaseSecondRegen!: () => void;
-    const secondRegenReached = new Promise<void>((resolve) => {
-      releaseFirstRegen = resolve;
-    });
-    const firstHealFinished = new Promise<void>((resolve) => {
-      releaseSecondRegen = resolve;
-    });
+    const { promise: secondRegenReached, resolve: releaseFirstRegen } = deferred<void>();
+    const { promise: firstHealFinished, resolve: releaseSecondRegen } = deferred<void>();
     let regenWrites = 0;
-    const delayedDatabase = new Proxy(database, {
-      get(target, property) {
-        if (property !== "update") return Reflect.get(target, property);
-        return (table: typeof userData) => {
-          const builder = target.update(table);
-          return {
-            set(values: Record<string, unknown>) {
-              const update = builder.set(values);
-              return {
-                async where(condition: Parameters<typeof update.where>[0]) {
-                  if ("primaryElement" in values) {
-                    regenWrites++;
-                    if (regenWrites === 1) await secondRegenReached;
-                    else if (regenWrites === 2) {
-                      releaseFirstRegen();
-                      await firstHealFinished;
-                    }
-                  }
-                  return await update.where(condition);
-                },
-              };
-            },
-          };
-        };
-      },
-    });
+    const delayedDatabase = aroundStatements(database, userData, async (run) => {
+      regenWrites++;
+      if (regenWrites === 1) await secondRegenReached;
+      else if (regenWrites === 2) {
+        releaseFirstRegen();
+        await firstHealFinished;
+      }
+      return run();
+    }, { when: (set) => "primaryElement" in set });
     const api = callerForDatabase(hospitalRouter, USER_ID, delayedDatabase);
 
     const first = api
@@ -424,55 +401,26 @@ describeWithDatabase("hospital healing another user", () => {
     const database = await getTestDatabase();
     await database.update(userData).set({ status: "AWAKE", isOutlaw: true })
       .where(eq(userData.userId, TARGET_ID));
-    let releaseAssignment = () => {};
-    let markLocked = () => {};
-    let markHealingSent = () => {};
-    const release = new Promise<void>((resolve) => { releaseAssignment = resolve; });
-    const locked = new Promise<void>((resolve) => { markLocked = resolve; });
-    const healingSent = new Promise<void>((resolve) => { markHealingSent = resolve; });
-    const assignmentClient = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "transaction") {
-          return (callback: Parameters<typeof database.transaction>[0]) =>
-            target.transaction(async (tx) => callback(beforeStatements(tx as unknown as DrizzleClient, questHistory, [
-              async () => { markLocked(); await release; },
-            ]) as never));
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const { promise: release, resolve: releaseAssignment } = deferred<void>();
+    const { promise: locked, resolve: markLocked } = deferred<void>();
+    const { promise: healingSent, resolve: markHealingSent } = deferred<void>();
+    const assignmentClient = inTransactions(database, (tx) => beforeStatements(tx, questHistory, [
+      async () => { markLocked(); await release; },
+    ]));
     let assignment: Promise<void> | undefined;
-    const healingClient = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "execute") {
-          return async (query: Parameters<typeof database.execute>[0]) => {
-            assignment = startTargetPyramid(assignmentClient);
-            await Promise.race([locked, assignment]);
-            const pending = target.execute(query);
-            markHealingSent();
-            return pending;
-          };
-        }
-        return Reflect.get(target, property, receiver);
-      },
+    const healingClient = interceptExecute(database, async (_query, run) => {
+      assignment = startTargetPyramid(assignmentClient);
+      await Promise.race([locked, assignment]);
+      const pending = run();
+      markHealingSent();
+      return pending;
     });
     const api = callerForDatabase(hospitalRouter, USER_ID, healingClient);
     const heal = api.userHeal({ userId: TARGET_ID, healPercentage: 30 });
     let isWaiting = false;
     try {
       await healingSent;
-      const deadline = Date.now() + 2000;
-      while (!isWaiting && Date.now() < deadline) {
-        const result = await database.execute(sql`
-          SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits AS waits
-          INNER JOIN performance_schema.data_locks AS held
-            ON held.ENGINE_LOCK_ID = waits.BLOCKING_ENGINE_LOCK_ID
-          WHERE held.OBJECT_SCHEMA = DATABASE() AND held.OBJECT_NAME = 'UserData'
-            AND held.LOCK_DATA LIKE ${`%${TARGET_ID}%`}
-        `) as unknown as [[{ waiting: number }]];
-        isWaiting = Number(result[0][0].waiting) > 0;
-        if (!isWaiting) await new Promise((resolve) => setTimeout(resolve, 10));
-      }
+      isWaiting = await lockWaitObserved({ table: "UserData", heldLockData: TARGET_ID });
     } finally {
       releaseAssignment();
     }

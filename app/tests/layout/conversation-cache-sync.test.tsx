@@ -1,12 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, renderHook, waitFor } from "@testing-library/react";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
+import { getQueryKey } from "@trpc/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import type { PropsWithChildren } from "react";
 import { useController } from "react-hook-form";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import * as mutes from "@/hooks/useChatMutes";
 import * as tavernActivity from "@/hooks/useTavernActivity";
@@ -28,10 +26,12 @@ import * as toast from "@/libs/toast";
 import * as uploadthing from "@/utils/uploadthing";
 import * as userContext from "@/utils/UserContext";
 import { actualRichInput } from "../setup/preload";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
-const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
+/** Procedures a test did not expect; the query error alone would pass unnoticed. */
+const refused: unknown[] = [];
 const user = {
   userId: "me", username: "Me", role: "USER", level: 50, rank: "CHUNIN",
   isBanned: false, isSilenced: false, tutorialOn: true,
@@ -48,10 +48,7 @@ beforeEach(() => {
   // Tavern counts are covered by their own suites.
   vi.spyOn(tavernActivity, "useTavernIds").mockReturnValue([]);
   vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-  });
+  installBrowserGlobals();
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: testApi.comments, profile: testApi.profile, reports: testApi.reports, useUtils: testApi.useUtils,
   });
@@ -62,34 +59,31 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  // Radix restores focus on a deferred turn, using the DOM's Event constructor.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   for (const queryClient of clients.splice(0)) queryClient.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   getDefaultStore().set(chatDraftsAtom, {});
   getDefaultStore().set(chatViewedConversationsAtom, {});
   localStorage.removeItem("selectedTavern2");
   vi.restoreAllMocks();
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
+  expect(refused.splice(0)).toEqual([]);
 });
 
 /** Keep the actual tRPC hooks, keys and invalidation behavior while replacing only transport. */
 const session = (read: (path: string, input: unknown) => unknown) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   clients.push(queryClient);
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    Promise.resolve().then(() => read(op.path, op.input)).then((data) => {
-      observer.next({ result: { data } });
-      observer.complete();
-    });
-  })] });
+  const trpcClient = fakeTrpcClient((path, input) => {
+    try {
+      return read(path, input);
+    } catch (error) {
+      refused.push(error);
+      throw error;
+    }
+  });
   const wrapper = ({ children }: PropsWithChildren) => (
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
   );
   return { queryClient, wrapper };
 };

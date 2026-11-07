@@ -1,12 +1,8 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { authenticateCronRequest } from "@/server/utils/cron";
+import { restoreEnvAfterEach } from "../../setup/env";
 
-const originalCronSecret = process.env.CRON_SECRET;
-
-afterEach(() => {
-  if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
-  else process.env.CRON_SECRET = originalCronSecret;
-});
+restoreEnvAfterEach("CRON_SECRET");
 
 /** Creates a cron request with an optional Authorization header. */
 const request = (authorization?: string) =>

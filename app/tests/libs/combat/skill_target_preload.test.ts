@@ -1,30 +1,21 @@
 import { describe, expect, it } from "bun:test";
-import type { AiProfile, SkillTree } from "@/drizzle/schema";
+import type { SkillTree } from "@/drizzle/schema";
 import type { CombatQueryUser } from "@/libs/combat/types";
-import { processUsersForBattle } from "@/server/api/routers/combat";
-import type { DrizzleClient } from "@/server/db";
 import { PoisonTag, IncreaseDamageGivenTag } from "@/validators/combat";
+import { flatCombatStats, makeJutsu } from "./helpers/battleScenario";
+import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const skill = (id: string, target: SkillTree["target"], pathType: SkillTree["pathType"] = "SKILL") =>
   ({ id, target, pathType, effects: [target === "ENEMIES" ? PoisonTag.parse({}) : IncreaseDamageGivenTag.parse({})] }) as SkillTree;
 
-const user = (id: string): CombatQueryUser => ({
-  userId: id, username: id, villageId: "village", level: 50, experience: 0,
-  regenAt: new Date(), regeneration: 0, money: 0, longitude: 0, latitude: 0,
-  curHealth: 1000, maxHealth: 1000, curChakra: 1000, maxChakra: 1000,
-  curStamina: 1000, maxStamina: 1000, strength: 100, speed: 100, intelligence: 100, willpower: 100,
-  offence: 100, defence: 100,
-  ninjutsuMastery: 100, genjutsuMastery: 100, taijutsuMastery: 100,
-  bukijutsuMastery: 100, bloodlineMastery: 100, sageMastery: 100,
-  items: [], jutsus: [], effects: [], bloodright: [], userSkills: [],
-}) as unknown as CombatQueryUser;
+const user = (id: string): CombatQueryUser =>
+  makeCombatQueryUser(id, {
+    ...flatCombatStats(100), villageId: "village", level: 50, longitude: 0, latitude: 0,
+    curHealth: 1000, maxHealth: 1000, curChakra: 1000, maxChakra: 1000, curStamina: 1000, maxStamina: 1000,
+  });
 
 const preload = (users: CombatQueryUser[], battleType: "COMBAT" | "RANKED_PVP" = "COMBAT") =>
-  processUsersForBattle({} as DrizzleClient, {
-    users, battleType, leftSideUserIds: ["caster", "ally"], hide: false, isSummon: false,
-    width: 10, height: 10, settings: [], relations: [], wars: [], villages: [],
-    defaultProfile: { id: "default" } as AiProfile,
-  });
+  preloadBattle(users, { battleType, leftSideUserIds: ["caster", "ally"] });
 
 describe("skill targeting at battle initiation", () => {
   it("preloads enemy skill and purchased bloodright without applying them at initiation", async () => {
@@ -64,8 +55,7 @@ describe("skill-gated content at battle initiation", () => {
     const caster = user("caster");
     Object.assign(caster, { rank: "JONIN", bloodlineId: null, isAi: false });
     caster.userSkills = [{ id: "owned", userId: caster.userId, skillId: "required", activated: true, purchasedAt: new Date(), skill: { ...skill("required", "SELF"), effects: [] } }];
-    const { SAGE_MODE_ACTIVATION_JUTSU } = await import("@/libs/sageMode");
-    caster.jutsus = [{ id: "owned-jutsu", jutsuId: "gated", equipped: true, level: 1, experience: 0, jutsu: { ...SAGE_MODE_ACTIVATION_JUTSU, id: "gated", jutsuType: "NORMAL", jutsuRank: "D", requiredSkillId: "required", effects: [], bloodlineId: null, requiredRank: "STUDENT" } }] as unknown as CombatQueryUser["jutsus"];
+    caster.jutsus = [{ id: "owned-jutsu", jutsuId: "gated", equipped: true, level: 1, experience: 0, jutsu: makeJutsu({ id: "gated", requiredSkillId: "required" }) }] as unknown as CombatQueryUser["jutsus"];
     caster.items = [{ id: "owned-item", itemId: "gear", equipped: "HAND_1", level: 1, quantity: 1, durability: 100, imbuements: [], item: { id: "gear", itemType: "WEAPON", effects: [], battleUsageType: "BOTH", cooldown: 0, requiredSkillId: "required" } }] as unknown as CombatQueryUser["items"];
     const active = await preload([caster], battleType);
     expect(active.usersState[0]!.activeSkillIds).toEqual(["required"]);

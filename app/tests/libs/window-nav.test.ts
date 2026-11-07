@@ -1,46 +1,22 @@
 import { describe, expect, it } from "bun:test";
-import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
-import type {
-  NormalizedSectorMap,
-  NormalizedSectorTile,
-} from "@/libs/sector-map/types";
 import { buildWindowNav, type WindowNavEntry } from "@/libs/sector-map/navigation";
+import { sectorMap } from "../setup/sectorMap";
 
 const makeMap = (
   width: number,
   height: number,
   blocked: (x: number, y: number) => boolean = () => false,
   ocean: (x: number, y: number) => boolean = () => false,
-): NormalizedSectorMap => {
-  const tiles: NormalizedSectorTile[] = [];
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const isBlocked = blocked(x, y);
-      const isOcean = !isBlocked && ocean(x, y);
-      tiles.push({
-        x,
-        y,
-        terrain: isOcean ? "ocean" : "ground",
-        walkCost: isBlocked ? 0 : 1,
-        blocked: isBlocked,
-        zone: "wilderness",
-        battleBiome: isOcean ? "ocean" : "ground",
-      });
-    }
-  }
-  return {
-    formatVersion: SECTOR_MAP_VERSION,
-    sector: 0,
-    name: "test",
+) =>
+  sectorMap(
     width,
     height,
-    tiles,
-    objects: [],
-    anchors: [{ key: "spawn.default", x: 0, y: 0 }],
-    exits: [],
-    metadata: { importedAt: "2026-01-01T00:00:00.000Z", source: "tiled" },
-  };
-};
+    (x, y) => {
+      if (blocked(x, y)) return { walkCost: 0, blocked: true };
+      return ocean(x, y) ? { terrain: "ocean", battleBiome: "ocean" } : {};
+    },
+    { sector: 0, name: "test" },
+  );
 
 const HEXSIZE = 10;
 

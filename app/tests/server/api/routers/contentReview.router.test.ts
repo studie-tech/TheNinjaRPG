@@ -30,6 +30,7 @@ import { profileRouter } from "@/server/api/routers/profile";
 import type { AgentSubmission } from "@/validators/contentReview";
 import { insertItems, insertQuests, insertUsers } from "../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { deferred } from "../../../setup/deferred";
 
 const EDITOR = "review-editor";
 const MODERATOR = "review-moderator";
@@ -270,10 +271,8 @@ describeWithDatabase("content review", () => {
     const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
     const id = submitted.accepted[0]!.id;
     const initial = (await readAgentProposal(database, id))!;
-    let release: () => void = () => {};
-    let preparing: () => void = () => {};
-    const ready = new Promise<void>((resolve) => { preparing = resolve; });
-    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const { promise: ready, resolve: preparing } = deferred<void>();
+    const { promise: wait, resolve: release } = deferred<void>();
     const deleted = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
     vi.spyOn(media, "collectCandidates").mockImplementation(async () => {
       preparing();
@@ -301,11 +300,9 @@ describeWithDatabase("content review", () => {
     const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
     const id = submitted.accepted[0]!.id;
     const initial = (await readAgentProposal(database, id))!;
-    let release: () => void = () => {};
-    let bothPreparing: () => void = () => {};
     let calls = 0;
-    const ready = new Promise<void>((resolve) => { bothPreparing = resolve; });
-    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const { promise: ready, resolve: bothPreparing } = deferred<void>();
+    const { promise: wait, resolve: release } = deferred<void>();
     const deleted = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
     vi.spyOn(media, "collectCandidates").mockImplementation(async () => {
       const key = `revision-${++calls}`;
@@ -342,10 +339,8 @@ describeWithDatabase("content review", () => {
     const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
     const id = submitted.accepted[0]!.id;
     const initial = (await readAgentProposal(database, id))!;
-    let release: () => void = () => {};
-    let preparing: () => void = () => {};
-    const ready = new Promise<void>((resolve) => { preparing = resolve; });
-    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const { promise: ready, resolve: preparing } = deferred<void>();
+    const { promise: wait, resolve: release } = deferred<void>();
     const deleted = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
     vi.spyOn(media, "collectCandidates").mockImplementation(async () => {
       preparing();
@@ -1115,14 +1110,10 @@ describeWithDatabase("content review", () => {
       path: "image", kind: "IMAGE", source: "GENERATED", title: "Old image",
       url: "https://ui0arpl8sm.ufs.sh/f/old-candidate.webp", fileKey: "old-candidate-file" });
     const original = (await readAgentProposal(database, id))!;
-    let cleanupStarted: () => void = () => {};
-    let releaseCleanup: () => void = () => {};
-    let mediaPrepared: () => void = () => {};
-    let releaseMedia: () => void = () => {};
-    const mediaRelease = new Promise<void>((resolve) => { releaseMedia = resolve; });
-    const started = new Promise<void>((resolve) => { cleanupStarted = resolve; });
-    const release = new Promise<void>((resolve) => { releaseCleanup = resolve; });
-    const prepared = new Promise<void>((resolve) => { mediaPrepared = resolve; });
+    const { promise: mediaRelease, resolve: releaseMedia } = deferred<void>();
+    const { promise: started, resolve: cleanupStarted } = deferred<void>();
+    const { promise: release, resolve: releaseCleanup } = deferred<void>();
+    const { promise: prepared, resolve: mediaPrepared } = deferred<void>();
     const deleted = vi.spyOn(media, "deleteStoredFiles").mockImplementation(async (keys) => {
       if (keys.includes("old-candidate-file")) { cleanupStarted(); await release; }
     });

@@ -12,6 +12,7 @@ import {
   selectVillageWallTowerVertices,
   usesVillageWalls,
 } from "@/libs/sector-map/village-walls";
+import { sectorMap } from "../setup/sectorMap";
 
 describe("usesVillageWalls", () => {
   it("only enables walls for village and town settlements", () => {
@@ -39,30 +40,10 @@ describe("getVillageWallAxis", () => {
   });
 });
 
-const makeMap = (width = 11, height = 11) => {
-  const tiles: NormalizedSectorTile[] = Array.from(
-    { length: width * height },
-    (_, index) => {
-    const x = index % width;
-    const y = Math.floor(index / width);
-    return {
-      x,
-      y,
-      terrain: "ground",
-      walkCost: 1,
-      blocked: false,
-      zone: "village",
-      battleBiome: "ground",
-      } satisfies NormalizedSectorTile;
-    },
-  );
-  return {
-    width,
-    height,
-    tiles,
+const makeMap = (width = 11, height = 11) =>
+  sectorMap(width, height, () => ({ zone: "village" }), {
     anchors: [{ key: "spawn.default", x: Math.floor(width / 2), y: height - 2 }],
-  };
-};
+  });
 
 const physical = (x: number, y: number) => ({
   longitude: x,

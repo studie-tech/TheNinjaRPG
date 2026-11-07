@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { applyEffects, applySingleEffect } from "@/libs/combat/process";
 import {
   makeBattleUser,
+  makeCompleteBattle,
   makeDamageModifierEffect,
   makeEffect,
 } from "./helpers/battleScenario";
@@ -37,15 +38,7 @@ const runResolution = (
   appliedEffects = new Set<string>(),
   actorId = "attacker",
 ) => {
-  const battle = {
-    id: "battle-1",
-    battleType: "COMBAT",
-    round: 1,
-    usersState: newUsersState,
-    usersEffects: [effect],
-    groundEffects: [],
-    extraState: {},
-  } as unknown as CompleteBattle;
+  const battle = makeCompleteBattle({ usersState: newUsersState, usersEffects: [effect] });
 
   applySingleEffect(
     new Map<string, Consequence>(),
@@ -113,15 +106,7 @@ describe("usedTagTypes — damage-modifier tags", () => {
   const makeBattle = (
     usersState: ReturnType<typeof makeBattleUser>[],
     usersEffects: UserEffect[],
-  ): CompleteBattle =>
-    ({
-      battleType: "COMBAT",
-      round: 1,
-      usersState,
-      usersEffects,
-      groundEffects: [],
-      extraState: {},
-    }) as unknown as CompleteBattle;
+  ): CompleteBattle => makeCompleteBattle({ usersState, usersEffects });
 
   it("records a damage-modifier tag applied via the dedicated loop", () => {
     const attacker = makeBattleUser("attacker");

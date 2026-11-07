@@ -4,7 +4,7 @@ import { CLAN_CREATE_RYO_COST } from "@/drizzle/constants";
 import { clan, userData, userRequest, village, villageStructure } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { clanRouter } from "@/server/api/routers/clan";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertClans } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("clan request visibility", () => {
@@ -12,7 +12,7 @@ describeWithDatabase("clan request visibility", () => {
     await resetTables(userRequest, clan, userData);
     await insertUsers(["leader", "coleader", "member", "applicant", "outsider"].map((userId) => ({ userId, username: userId, clanId: ["leader", "coleader", "member"].includes(userId) ? "clan" : null })));
     const db = await getTestDatabase();
-    await db.insert(clan).values({ id: "clan", name: "Clan", image: "", villageId: "v", founderId: "leader", leaderId: "leader", leaderOrderId: "order", coLeader1: "coleader" });
+    await insertClans([{ id: "clan", name: "Clan", villageId: "v", leaderId: "leader", coLeader1: "coleader" }]);
     await db.insert(userRequest).values([
       { id: "join", senderId: "applicant", receiverId: "leader", status: "PENDING", type: "CLAN" },
       { id: "private", senderId: "outsider", receiverId: "member", status: "PENDING", type: "CLAN" },
@@ -46,9 +46,7 @@ describeWithDatabase("clan request authorization", () => {
       { userId: "applicant", villageId: "v", rank: "GENIN" },
     ]);
     const db = await getTestDatabase();
-    await db.insert(clan).values(
-      ["a", "b"].map((id) => ({ id, name: id, image: "", villageId: "v", founderId: `leader-${id}`, leaderId: `leader-${id}`, leaderOrderId: id })),
-    );
+    await insertClans(["a", "b"].map((id) => ({ id, villageId: "v", leaderId: `leader-${id}`, leaderOrderId: id })));
     await db.insert(userRequest).values({ id: "join-b", senderId: "applicant", receiverId: "leader-b", status: "PENDING", type: "CLAN" });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
@@ -104,7 +102,7 @@ describeWithDatabase("clan creation and leadership", () => {
       { userId: "co2", clanId: "a", villageId: "v", rank: "JONIN" },
       { userId: "member", clanId: "a", villageId: "v", rank: "JONIN", money: CLAN_CREATE_RYO_COST, villagePrestige: 1000 },
     ]);
-    await db.insert(clan).values({ id: "a", name: "Alpha", image: "", villageId: "v", founderId: "leader", leaderId: "leader", leaderOrderId: "a", coLeader1: "co1", coLeader2: "co2" });
+    await insertClans([{ id: "a", name: "Alpha", villageId: "v", leaderId: "leader", coLeader1: "co1", coLeader2: "co2" }]);
   });
 
   it("keeps existing members from founding another clan or paying for one", async () => {

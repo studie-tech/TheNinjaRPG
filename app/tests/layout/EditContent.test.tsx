@@ -22,6 +22,7 @@ import {
   ItemValidator,
   type ZodAllTags,
 } from "@/validators/combat";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const save = vi.fn(async (_input: { id: string; data: { effects: ZodAllTags[] } }) => ({
   success: true,
@@ -692,54 +693,12 @@ const CoordinateDraftForm = () => {
 };
 
 describe("effect drafts", () => {
-  const globals = [
-    "Event",
-    "CustomEvent",
-    "ResizeObserver",
-    "requestAnimationFrame",
-    "cancelAnimationFrame",
-  ] as const;
-  const descriptors = globals.map((key) =>
-    Object.getOwnPropertyDescriptor(globalThis, key),
-  );
-  const scrollDescriptor = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "scrollIntoView",
-  );
   beforeEach(() => {
-    Object.defineProperties(globalThis, {
-      Event: { configurable: true, value: window.Event },
-      CustomEvent: { configurable: true, value: window.CustomEvent },
-      requestAnimationFrame: {
-        configurable: true,
-        value: (callback: FrameRequestCallback) =>
-          Number(setTimeout(() => callback(Date.now()), 0)),
-      },
-      cancelAnimationFrame: {
-        configurable: true,
-        value: (id: number) => clearTimeout(id),
-      },
-      ResizeObserver: {
-        configurable: true,
-        value: class {
-          observe() {}
-          unobserve() {}
-          disconnect() {}
-        },
-      },
-    });
-    HTMLElement.prototype.scrollIntoView = () => {};
+    installBrowserGlobals({ resizeObserver: true, scrollIntoView: true, animationFrame: true });
   });
   afterEach(() => {
     cleanup();
-    globals.forEach((key, index) => {
-      const descriptor = descriptors[index];
-      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-      else Reflect.deleteProperty(globalThis, key);
-    });
-    if (scrollDescriptor)
-      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
-    else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    restoreBrowserGlobals();
   });
 
   describe("MassEffectEditor selects", () => {

@@ -8,7 +8,7 @@ import { clan, conversation, sector, userData, village, villageStructure } from 
 import * as clanLogic from "@/libs/clan";
 import { fetchStructures } from "@/queries/village";
 import { clanRouter } from "@/server/api/routers/clan";
-import { insertUsers } from "../setup/factories";
+import { insertUsers, insertClans } from "../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../setup/testDatabase";
 
 const migration = await readFile(new URL("../../drizzle/migrations/0127_faction_auction_house.sql", import.meta.url), "utf8");
@@ -72,7 +72,13 @@ describeWithDatabase("faction Auction House migration", () => {
   it("keeps newly purchased hideouts inheriting the Auction House and skips them during backfill", async () => {
     const db = await getTestDatabase();
     await insertUsers([{ userId: "buyer", username: "FactionBuyer", villageId: VILLAGE_SYNDICATE_ID, clanId: "buyer-faction", isOutlaw: true }]);
-    await db.insert(clan).values({ id: "buyer-faction", name: "Buyer Faction", image: "faction.webp", villageId: VILLAGE_SYNDICATE_ID, founderId: "buyer", leaderId: "buyer", leaderOrderId: "buyer-order", bank: HIDEOUT_COST });
+    await insertClans([{
+      id: "buyer-faction",
+      name: "Buyer Faction",
+      villageId: VILLAGE_SYNDICATE_ID,
+      leaderId: "buyer",
+      bank: HIDEOUT_COST,
+    }]);
     const available = spyOn(clanLogic, "checkIfSectorIsAvailable").mockResolvedValue(true);
     try {
       const caller = await callerFor(clanRouter, "buyer");

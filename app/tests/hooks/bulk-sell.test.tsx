@@ -7,6 +7,7 @@ import { useBulkSellItems } from "@/hooks/useBulkSellItems";
 import * as inventory from "@/hooks/useInventoryCacheUpdate";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
+import { deferred } from "../setup/deferred";
 
 type Result = client.RouterOutputs["item"]["sellUserItems"];
 type Input = client.RouterInputs["item"]["sellUserItems"];
@@ -23,8 +24,7 @@ it.each([false, true])("reconciles inventory and profile for an unconfirmed sale
     refused: [{ userItemId: "blade-row", name: "Blade", reason: "sale could not be confirmed" }],
   };
   const queryClient = new QueryClient();
-  let finishRecovery!: () => void;
-  const recovery = new Promise<void>((resolve) => { finishRecovery = resolve; });
+  const { promise: recovery, resolve: finishRecovery } = deferred<void>();
   const updateUser = vi.fn(() => recovery);
   const invalidateInventory = vi.fn(() => recovery);
   const updateInventory = vi.fn();

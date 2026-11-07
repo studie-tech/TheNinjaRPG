@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import type { NormalizedSectorTile } from "@/libs/sector-map/types";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import {
   filterLiveSectorBattleUsers,
@@ -9,31 +8,12 @@ import {
   optimisticGlobalTravelStart,
   SECTOR_BATTLE_STALE_SECONDS,
 } from "@/libs/travel";
+import { sectorMap, sectorTile as makeTile } from "../setup/sectorMap";
 
-const makeTile = (
-  x: number,
-  y: number,
-  blocked = false,
-): NormalizedSectorTile => ({
-  x,
-  y,
-  terrain: "ground",
-  walkCost: blocked ? 0 : 1,
-  blocked,
-  zone: "wilderness",
-  battleBiome: "ground",
-});
-
-const makeMap = (width: number, height: number, blocked: Set<string> = new Set()) => ({
-  width,
-  height,
-  tiles: Array.from({ length: width * height }, (_, index) => {
-    const x = index % width;
-    const y = Math.floor(index / width);
-    return makeTile(x, y, blocked.has(`${x},${y}`));
-  }),
-  anchors: [{ key: "spawn.default", x: 0, y: 0 }],
-});
+const makeMap = (width: number, height: number, blocked: Set<string> = new Set()) =>
+  sectorMap(width, height, (x, y) =>
+    blocked.has(`${x},${y}`) ? { walkCost: 0, blocked: true } : {},
+  );
 
 describe("findGlobalTravelDestination", () => {
   it("lands in the center of a standard sector", () => {

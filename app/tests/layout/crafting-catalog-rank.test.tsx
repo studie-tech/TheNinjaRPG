@@ -1,17 +1,15 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import type { ItemRarity } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
-import * as combatActions from "@/layout/CombatActions";
 import * as contentImage from "@/layout/ContentImage";
 import { CraftingCatalog } from "@/layout/CraftingCatalog";
-import * as itemWithEffects from "@/layout/ItemWithEffects";
-import * as modal from "@/layout/Modal";
 import type { UserWithRelations } from "@/routers/profile";
 import * as userContext from "@/utils/UserContext";
 import { DecreaseCraftingTime } from "@/validators/combat";
+import { stubCraftingCatalog } from "./helpers/craftingCatalog";
 
 type CatalogProps = ComponentProps<typeof CraftingCatalog>;
 type CraftableItem = NonNullable<CatalogProps["craftableItems"]>[number];
@@ -62,52 +60,7 @@ describe("CraftingCatalog crafting rank gate", () => {
   beforeEach(() => {
     // Keep context metadata local so another suite cannot supply the catalog's clock.
     vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
-    Object.assign(vi.spyOn(client, "api" as never), {
-      useUtils: () => ({}),
-      occupation: {
-        craftItem: {
-          useMutation: () => ({ mutate: vi.fn(), isPending: false }),
-        },
-      },
-    });
-    vi.spyOn(modal, "default").mockImplementation(
-      ({
-        children,
-        isOpen,
-        proceed_label,
-        proceedDisabled,
-      }: {
-        children: ReactNode;
-        isOpen: boolean;
-        proceed_label?: string | null;
-        proceedDisabled?: boolean;
-      }) =>
-        isOpen ? (
-          <div>
-            {children}
-            {proceed_label && (
-              <button type="button" disabled={proceedDisabled}>
-                {proceed_label}
-              </button>
-            )}
-          </div>
-        ) : null,
-    );
-    vi.spyOn(combatActions, "ActionSelector").mockImplementation(
-      ({
-        items,
-        onClick,
-      }: ComponentProps<typeof combatActions.ActionSelector>) => (
-        <>
-          {items?.map((entry) => (
-            <button key={entry.id} type="button" onClick={() => onClick(entry.id)}>
-              {entry.name}
-            </button>
-          ))}
-        </>
-      ),
-    );
-    vi.spyOn(itemWithEffects, "default").mockImplementation(() => null);
+    stubCraftingCatalog();
   });
 
   afterEach(() => {

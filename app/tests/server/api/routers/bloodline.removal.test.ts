@@ -4,7 +4,7 @@ import { COST_SWAP_BLOODLINE, REMOVAL_COST } from "@/drizzle/constants";
 import { actionLog, bloodline, bloodlineRolls, jutsu, userData, userJutsu, userQueue, userVote } from "@/drizzle/schema";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertJutsus, insertUserVotes } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
@@ -18,14 +18,12 @@ describeWithDatabase("bloodline change rejection recovery", () => {
       status: "AWAKE", isOutlaw: true, bloodlineId: "current-line", reputationPoints: 100,
       money: 1000, seichiSilver: 200, bloodrightSpent: 77, bloodright: [{ skillId: "old-tier", cost: 77 }] }]);
     const db = await getTestDatabase();
-    await db.insert(userVote).values({ id: "removal-vote", userId, secret: "removal1", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
     await db.insert(bloodline).values(["current-line", "next-line"].map((id) => ({
       id, name: id, rank: "D" as const, image: "", description: "Removal fixture", effects: [],
     })));
     await db.insert(bloodlineRolls).values({ id: "historic-line", userId, bloodlineId: "next-line", type: "DIRECT" });
-    await db.insert(jutsu).values({ id: "line-jutsu", name: "Line Jutsu", description: "Removal fixture",
-      battleDescription: "", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuRank: "D",
-      jutsuType: "NORMAL", image: "", bloodlineId: "current-line" });
+    await insertJutsus([{ id: "line-jutsu", name: "Line Jutsu", description: "Removal fixture", bloodlineId: "current-line" }]);
     const finish = new Date(Date.now() + 3_600_000);
     await db.insert(userJutsu).values({ id: "owned-line-jutsu", userId, jutsuId: "line-jutsu", level: 2, equipped: true, finishTraining: finish });
     await db.insert(userQueue).values({ id: "waiting-line-jutsu", userId, kind: "JUTSU", position: 1,

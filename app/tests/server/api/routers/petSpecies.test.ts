@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { actionLog, jutsu, petSpecies, userData, userPet } from "@/drizzle/schema";
 import * as socials from "@/libs/socials";
 import { petSpeciesRouter } from "@/server/api/routers/petSpecies";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertUserPets } from "../../../setup/factories";
 import { petJutsuFixture } from "../../../libs/pets/helpers/abilities";
 import { ActionEndTurn } from "@/validators/ai";
 import { BarrierTag, DamageTag } from "@/validators/combat";
@@ -64,12 +64,18 @@ describeWithDatabase("Manual companion species", () => {
   it("retires and edits species without changing owned companions or their artwork", async () => {
     const database = await getTestDatabase();
     await database.insert(petSpecies).values({ id: "owned-species", ...species });
-    await database.insert(userPet).values({
-      id: "companion", userId: staffId, name: "Miso", speciesId: "owned-species",
-      paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 3,
-      experience: 30000, storedExperience: 500, avatar: "https://example.com/miso.webp",
-      artRank: 3, generationStatus: "READY",
-    });
+    await insertUserPets([{
+      id: "companion",
+      userId: staffId,
+      name: "Miso",
+      speciesId: "owned-species",
+      rank: 3,
+      experience: 30000,
+      storedExperience: 500,
+      avatar: "https://example.com/miso.webp",
+      artRank: 3,
+      generationStatus: "READY",
+    }]);
     const before = await database.query.userPet.findFirst();
     const caller = callerForDatabase(petSpeciesRouter, staffId, database);
     const data = { ...species, name: "Mist fox", description: "A fox with a long misty tail", rarity: "EPIC" as const, isActive: false };

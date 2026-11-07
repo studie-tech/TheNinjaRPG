@@ -11,7 +11,12 @@ import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+  insertUserVotes,
+} from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 
 const userId = "reward-confirmation-player";
@@ -24,7 +29,7 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,
       regeneration: 0, money: 0, updatedAt: new Date(), regenAt: new Date() }]);
     const db = await getTestDatabase();
-    await db.insert(userVote).values({ id: "confirmation-vote", userId, secret: "confirm1", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
     await db.insert(rankedSeason).values({ id: "confirmation-season", name: "Confirmation Season", description: "", startDate: new Date(0), endDate: new Date(0), rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_money: 100 }) }] });
     await db.insert(rankedUserRewards).values({ id: "confirmation-receipt", userId, seasonId: "confirmation-season", division: "Wood" });
   });

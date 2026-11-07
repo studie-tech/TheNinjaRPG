@@ -22,7 +22,7 @@ import {
   settleCraftingQueue,
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
-import { insertItems, insertUsers } from "../../../setup/factories";
+import { insertItems, insertJutsus, insertUsers, insertUserVotes, jutsuRow } from "../../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
@@ -30,38 +30,19 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { barrier, aroundStatements, overrideQuery } from "../../../setup/statements";
+import { deferred } from "../../../setup/deferred";
 
 const userId = "queue-settlement";
 const minute = 60_000;
 const initialMoney = 100_000;
-const jutsuRow = (id: string) => ({
-  id,
-  name: id,
-  description: id,
-  battleDescription: id,
-  effects: [],
-  target: "SELF" as const,
-  range: 0,
-  requiredRank: "STUDENT" as const,
-  jutsuRank: "D" as const,
-  jutsuType: "NORMAL" as const,
-  image: `/${id}.png`,
-});
 const costs = [10, 11].map((level) =>
   calcJutsuTrainCost(jutsuRow("b") as never, level),
 );
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
-
 // Alter dispatch timing only: all reads, writes and transactions execute on real MySQL.
 const delayQueueRead = (database: DrizzleClient) => {
-  const activeRead = deferred();
-  const release = deferred();
+  const activeRead = deferred<void>();
+  const release = deferred<void>();
   const wrapBuilder = <T extends object>(builder: T): T =>
     new Proxy(builder, {
       get(target, property) {
@@ -88,21 +69,14 @@ const delayQueueRead = (database: DrizzleClient) => {
         };
       },
     });
-  const client = new Proxy(database, {
+  const gatedQueue = overrideQuery(database, "userQueue", {
+    findMany: async (read, ...args) => {
+      await release.promise;
+      return read(...args);
+    },
+  });
+  const client = new Proxy(gatedQueue, {
     get(target, property) {
-      if (property === "query")
-        return {
-          ...target.query,
-          userQueue: {
-            ...target.query.userQueue,
-            findMany: async (
-              ...args: Parameters<typeof target.query.userQueue.findMany>
-            ) => {
-              await release.promise;
-              return target.query.userQueue.findMany(...args);
-            },
-          },
-        };
       if (property === "select")
         return (...args: unknown[]) =>
           wrapBuilder(Reflect.get(target, property).apply(target, args as never));
@@ -113,40 +87,11 @@ const delayQueueRead = (database: DrizzleClient) => {
 };
 
 const gateEnqueueWrites = (database: DrizzleClient) => {
-  const ready = deferred();
-  let arrivals = 0;
-  const wrap = <T extends object>(builder: T): T =>
-    new Proxy(builder, {
-      get(target, property) {
-        if (property === "then")
-          return async (
-            resolve: (value: unknown) => unknown,
-            reject: (error: unknown) => unknown,
-          ) => {
-            arrivals++;
-            if (arrivals === 2) ready.resolve();
-            await ready.promise;
-            try {
-              return resolve(await (target as unknown as PromiseLike<unknown>));
-            } catch (error) {
-              return reject(error);
-            }
-          };
-        const value = Reflect.get(target, property);
-        if (typeof value !== "function") return value;
-        return (...args: unknown[]) => {
-          const result = value.apply(target, args);
-          return result && typeof result === "object" ? wrap(result) : result;
-        };
-      },
-    });
-  return new Proxy(database, {
-    get(target, property) {
-      if (property !== "update") return Reflect.get(target, property);
-      return (table: Parameters<typeof target.update>[0]) =>
-        table === userData ? wrap(target.update(table)) : target.update(table);
-    },
-  });
+  const bothArrived = barrier(2);
+  return aroundStatements(database, userData, async (run) => {
+    await bothArrived();
+    return run();
+  }, { operations: ["update"] });
 };
 
 const readUser = async () => {
@@ -251,14 +196,8 @@ describeWithDatabase("Queue settlement concurrency and caps", () => {
         regenAt: now,
       },
     ]);
-    const database = await getTestDatabase();
-    await database.insert(userVote).values({
-      id: "queue-settlement-vote",
-      userId,
-      secret: "secret01",
-      lastVoteAt: now,
-    });
-    await database.insert(jutsu).values([jutsuRow("a"), jutsuRow("b"), jutsuRow("c")]);
+    await insertUserVotes([{ userId, lastVoteAt: now }]);
+    await insertJutsus([{ id: "a" }, { id: "b" }, { id: "c" }]);
   });
 
   it("sequential jutsu purchases reserve the correct successive prices", async () => {

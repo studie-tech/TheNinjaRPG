@@ -33,13 +33,14 @@ const timerStore = (time = oldTime, value = 7) => {
     row = { ...row, ...patch };
     return { rowsAffected: 1 };
   });
+  const findFirst = vi.fn(async (_query: { where: SQL }) => ({ ...row }));
   const client = {
-    query: { gameSetting: { findFirst: vi.fn(async () => ({ ...row })) } },
-    update: () => ({ set: (patch: Partial<GameSetting>) => ({
+    query: { gameSetting: { findFirst } },
+    update: vi.fn(() => ({ set: (patch: Partial<GameSetting>) => ({
       where: (predicate: SQL) => where(predicate, patch),
-    }) }),
+    }) })),
   } as unknown as DrizzleClient;
-  return { client, where, read: () => row, replace: (next: GameSetting) => { row = next; } };
+  return { client, where, findFirst, read: () => row, replace: (next: GameSetting) => { row = next; } };
 };
 
 afterEach(() => setSystemTime());
@@ -164,6 +165,43 @@ describe("timer cadence", () => {
     expect(await claim.update(1, marker)).toBe(true);
     expect(await claim.release()).toBe(false);
     expect(store.read()).toEqual(expect.objectContaining({ time: marker, value: 1 }));
+  });
+});
+
+describe("lockWithGameTimer", () => {
+  it("updates the same persisted key that it checked", async () => {
+    setSystemTime(now);
+    const name = "transaction-sync-1h";
+    const store = timerStore(new Date(now.getTime() - 60 * 60_000));
+
+    expect(await lockWithGameTimer(store.client, name, 60 * 60_000)).toBe(false);
+
+    for (const [query] of store.findFirst.mock.calls) {
+      expect(dialect.sqlToQuery(query.where).params).toEqual([name]);
+    }
+    const [predicate, patch] = store.where.mock.calls[0]!;
+    expect(patch).toEqual({ value: 0, time: now });
+    expect(dialect.sqlToQuery(predicate).params).toEqual(["timer-id", "2026-10-21 09:30:10.000"]);
+  });
+
+  it("does not update a timer while its duration has not elapsed", async () => {
+    setSystemTime(now);
+    const store = timerStore(new Date(now.getTime() - 10 * 60_000));
+
+    expect(await lockWithGameTimer(store.client, "transaction-sync-1h", 60 * 60_000)).toBeInstanceOf(Response);
+    expect(store.client.update).not.toHaveBeenCalled();
+  });
+
+  it("reports remaining time from the duration rather than the key's label", async () => {
+    setSystemTime(now);
+    const store = timerStore(new Date(now.getTime() - 2 * 60_000));
+
+    const response = await lockWithGameTimer(store.client, "auction-expire-0.083m", 5 * 60_000);
+
+    expect(response).toBeInstanceOf(Response);
+    if (response) {
+      expect(await response.json()).toBe("Wait 2 mins, 59 secs before running again");
+    }
   });
 });
 

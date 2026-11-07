@@ -1,44 +1,14 @@
-import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { expect, it } from "bun:test";
-import mysql from "mysql2/promise";
-import {
-  baselineTableSql,
-  quoteIdentifier,
-  type SnapshotTable,
-} from "../setup/migrations";
+import type mysql from "mysql2/promise";
+import { readMigration, withMigrationSandbox } from "../setup/migrations";
 import { describeWithDatabase } from "../setup/testDatabase";
 
 describeWithDatabase("Kage defense lifecycle migration", () => {
   it("preserves completed defenses and releases legacy requests before admitting new lifecycle rows", async () => {
-    const connection = await mysql.createConnection({
-      uri: process.env.TEST_MYSQL_URL,
-      multipleStatements: true,
-    });
-    const prefix = `kage_${randomUUID().replaceAll("-", "")}_`;
-    const names = [
-      "KageDefendedChallenges",
-      "UserData",
-      "UserRequest",
-      "Village",
-      "VillageElderVote",
-    ];
-    const query = <T extends mysql.QueryResult = mysql.QueryResult>(
-      statement: string,
-      values?: unknown[],
-    ) =>
-      connection.query<T>(
-        statement.replace(
-          /\b(KageDefendedChallenges|UserData|UserRequest|Village|VillageElderVote)\b/g,
-          `${prefix}$1`,
-        ),
-        values,
-      );
-    try {
-      const snapshot = JSON.parse(
-        await readFile("drizzle/migrations/meta/0088_snapshot.json", "utf8"),
-      ) as { tables: Record<string, SnapshotTable> };
-      for (const name of names) await query(baselineTableSql(snapshot.tables[name]!));
+    await withMigrationSandbox({
+      snapshot: "0088",
+      baseline: ["KageDefendedChallenges", "UserData", "UserRequest", "Village", "VillageElderVote"],
+    }, async ({ query }) => {
       await query(
         "INSERT INTO UserData (userId, username, gender, status, money) VALUES ('challenger', 'Challenger', 'Other', 'KAGE_QUEUED', 123456), ('defender', 'Defender', 'Other', 'AWAKE', 654321)",
       );
@@ -51,11 +21,7 @@ describeWithDatabase("Kage defense lifecycle migration", () => {
       const [historyBefore] = await query<mysql.RowDataPacket[]>(
         "SELECT * FROM KageDefendedChallenges ORDER BY id",
       );
-      const migration = await readFile(
-        "drizzle/migrations/0089_kage_defense_schedule.sql",
-        "utf8",
-      );
-      expect(migration).not.toContain("--> statement-breakpoint");
+      const migration = await readMigration("0089_kage_defense_schedule.sql");
       await query(migration);
       const [history] = await query<mysql.RowDataPacket[]>(
         "SELECT * FROM KageDefendedChallenges ORDER BY id",
@@ -131,11 +97,6 @@ describeWithDatabase("Kage defense lifecycle migration", () => {
           "UPDATE KageDefendedChallenges SET battleId = 'old-battle' WHERE id = 'next-entry'",
         ),
       ).rejects.toMatchObject({ code: "ER_DUP_ENTRY" });
-    } finally {
-      await connection.query(
-        `DROP TABLE IF EXISTS ${names.map((name) => quoteIdentifier(prefix + name)).join(", ")}`,
-      );
-      await connection.end();
-    }
+    });
   }, 30_000);
 });

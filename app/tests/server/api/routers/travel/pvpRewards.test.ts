@@ -16,7 +16,7 @@ import { Pusher } from "@/libs/pusher";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { travelRouter } from "@/server/api/routers/travel";
 import { withAfterTasks } from "../../../../setup/after";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -92,7 +92,7 @@ describeWithDatabase("robbery generated prestige PvP boost", () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ status, curHealth: 1, maxHealth: 1000,
       regeneration: 0, regenAt: new Date(0) }).where(eq(userData.userId, ROBBER));
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.insert(gameSetting).values(Object.entries(DMG_SETTING_DEFAULTS).map(([name, value]) => ({ id: name, name, value, time: new Date() })));
     vi.spyOn(Math, "random").mockReturnValue(0.99);
     const initial = { userData: await fetchActionUser(db, ROBBER), notifications: [] };

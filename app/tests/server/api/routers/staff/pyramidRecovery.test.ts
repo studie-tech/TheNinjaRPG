@@ -14,7 +14,9 @@ import { ObjectiveReward } from "@/validators/rewards";
 import { makeBattleUser, makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
 import { huntingBattleState, huntingHabitatContent } from "../../../../setup/hunting";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../../../../setup/testDatabase";
+import { interceptExecute } from "../../../../setup/statements";
 
 describeWithDatabase("staff Pyramid recovery", () => {
   beforeEach(async () => {
@@ -23,9 +25,7 @@ describeWithDatabase("staff Pyramid recovery", () => {
     await resetTables(huntingHabitat, huntingSession, huntingProgress, huntingReceipt, userItem, questHistory, quest, userData, actionLog, mpvpBattleUser, rankedPvpQueue, battle);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     // Recovery checks exercise combat callers without depending on an external rate limiter.
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
     await insertUsers([
       { userId: "hero", status: "BATTLE", battleId: null, regeneration: 10, curHealth: 100, maxHealth: 1000, updatedAt: new Date(Date.now() - 350_000), regenAt: new Date(Date.now() - 125_000) },
       { userId: "staff", role: "OWNER" },
@@ -136,17 +136,14 @@ describeWithDatabase("staff Pyramid recovery", () => {
 
   it("deletes only the captured fight when a new hunt starts before cleanup", async () => {
     const { database, current } = await setupHuntingEncounter();
-    const client = new Proxy(database, { get(target, property, receiver) {
-      if (property === "execute") return async (...args: Parameters<typeof target.execute>) => {
-        const recovered = await target.execute(...args);
-        // Admit the next fight after recovery commits, while cleanup of the previous fight waits.
-        await target.insert(battle).values({ ...current, id: "next-hunt" });
-        await target.update(huntingSession).set({ battleId: "next-hunt", version: 3 }).where(eq(huntingSession.userId, "hero"));
-        await target.update(userData).set({ status: "BATTLE", battleId: "next-hunt" }).where(eq(userData.userId, "hero"));
-        return recovered;
-      };
-      return Reflect.get(target, property, receiver);
-    } });
+    const client = interceptExecute(database, async (_query, run) => {
+      const recovered = await run();
+      // Admit the next fight after recovery commits, while cleanup of the previous fight waits.
+      await database.insert(battle).values({ ...current, id: "next-hunt" });
+      await database.update(huntingSession).set({ battleId: "next-hunt", version: 3 }).where(eq(huntingSession.userId, "hero"));
+      await database.update(userData).set({ status: "BATTLE", battleId: "next-hunt" }).where(eq(userData.userId, "hero"));
+      return recovered;
+    });
     expect((await callerForDatabase(staffRouter, "staff", client).forceAwake({ userId: "hero", reason: "Recover a stranded hunter" })).success).toBe(true);
     expect(await database.query.battle.findFirst({ where: eq(battle.id, "hunt") })).toBeUndefined();
     expect(await database.query.battle.findFirst({ where: eq(battle.id, "next-hunt") })).toBeDefined();
@@ -201,18 +198,15 @@ describeWithDatabase("staff Pyramid recovery", () => {
     const snapshotAt = new Date(Date.now() + 60_000);
     await db.update(userData).set({ updatedAt: snapshotAt }).where(eq(userData.userId, "hero"));
     let liveSnapshotAt = snapshotAt;
-    const client = new Proxy(db, { get(target, property, receiver) {
-      if (property === "execute") return async (...args: Parameters<typeof target.execute>) => {
-        if (concurrentClaim) {
-          // Advance after staff's initial read so recovery must use the persisted version.
-          const claim = await claimUserSnapshot({ client: target, userId: "hero", updatedAt: snapshotAt });
-          expect(claim.success).toBe(true);
-          liveSnapshotAt = claim.claimedAt;
-        }
-        return target.execute(...args);
-      };
-      return Reflect.get(target, property, receiver);
-    } });
+    const client = interceptExecute(db, async (_query, run) => {
+      if (concurrentClaim) {
+        // Advance after staff's initial read so recovery must use the persisted version.
+        const claim = await claimUserSnapshot({ client: db, userId: "hero", updatedAt: snapshotAt });
+        expect(claim.success).toBe(true);
+        liveSnapshotAt = claim.claimedAt;
+      }
+      return run();
+    });
     const result = await callerForDatabase(staffRouter, "staff", client).forceAwake({ userId: "hero", reason: "Recover a stranded player" });
     const stored = await db.query.userData.findFirst({ where: eq(userData.userId, "hero") });
     expect(result.success).toBe(true);

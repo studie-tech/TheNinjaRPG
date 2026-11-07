@@ -3,77 +3,27 @@ import { insertAction } from "@/libs/combat/actions";
 import { getBattleGrid } from "@/libs/combat/util";
 import { BarrierTag, CloneTag, DamageTag, HealTag, MoveTag, PoisonTag, StealthTag, SummonTag, VisualTag } from "@/validators/combat";
 import { applyEffects } from "@/libs/combat/process";
-import type { CombatAction, CompleteBattle, ReturnedBattle, UserEffect } from "@/libs/combat/types";
-const ITEM_ID = "test-item";
-const makeActor = () => ({
-  userId: "actor",
-  username: "Actor",
-  gender: "Male",
-  villageId: "village-1",
-  direction: "left",
-  level: 100,
-  longitude: 0,
-  latitude: 0,
-  curHealth: 1000,
-  maxHealth: 1000,
-  curChakra: 1000,
-  curStamina: 1000,
-  actionPoints: 100,
-  offence: 100,
-  defence: 100,
-  highestGenerals: ["strength"],
-  fledBattle: false,
-  leftBattle: false,
-  usedActions: [] as { id: string; type: string }[],
-  usedTagTypes: [],
-  damageDealt: 0,
-  items: [
-    {
-      id: "user-item-1",
-      itemId: ITEM_ID,
-      quantity: 10,
-      equipped: "ITEM_6",
-    },
-  ],
-  usedGenerals: { strength: 0, intelligence: 0, willpower: 0, speed: 0 },
-  usedStats: { offence: 0, defence: 0 },
-});
-
-const makeBattle = (actor: ReturnType<typeof makeActor>): CompleteBattle =>
-  ({
-    id: "battle-1",
-    battleType: "COMBAT",
+import type { ReturnedBattle, UserEffect } from "@/libs/combat/types";
+import { makeBasicAttack, makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+const setup = () => {
+  const stats = { curHealth: 1000, maxHealth: 1000, offence: 100, defence: 100 };
+  const actor = makeBattleUser("actor", { ...stats, direction: "left", longitude: 0, latitude: 0 });
+  const enemy = makeBattleUser("enemy", { ...stats, direction: "right", longitude: 1, latitude: 0 });
+  const ally = makeBattleUser("ally", { ...stats, direction: "left", longitude: 0, latitude: 1 });
+  const battle = makeCompleteBattle({
     width: 5,
     height: 5,
-    round: 1,
     createdAt: new Date("2020-01-01T00:00:00Z"),
     updatedAt: new Date("2020-01-01T00:00:00Z"),
     roundStartAt: new Date("2020-01-01T00:00:00Z"),
-    usersState: [actor],
-    usersEffects: [],
-    groundEffects: [],
-    extraState: {
-      items: { [ITEM_ID]: { id: ITEM_ID, name: "Smoke Bomb", destroyOnUse: false } },
-    },
-  }) as unknown as CompleteBattle;
-
-
-const setup = () => {
-  const actor = makeActor();
-  const battle = makeBattle(actor);
-  const enemy = { ...makeActor(), userId: "enemy", controllerId: "enemy", username: "Enemy", direction: "right", longitude: 1 };
-  const ally = { ...makeActor(), userId: "ally", controllerId: "ally", longitude: 0, latitude: 1 };
-  battle.usersState.push(enemy as unknown as CompleteBattle["usersState"][number], ally as unknown as CompleteBattle["usersState"][number]);
+    usersState: [actor, enemy, ally],
+  });
   battle.usersState[0]!.enemySkillIds = ["skill", "bloodright"];
   battle.extraState.enemySkills = {
     skill: [PoisonTag.parse({ power: 20, powerPerLevel: 0, rounds: 3 })],
     bloodright: [PoisonTag.parse({ power: 10, powerPerLevel: 0, rounds: 2 })],
   };
-  const action = {
-    id: "basicAttack", name: "Attack", type: "basic", target: "OTHER_USER", method: "SINGLE", range: 3,
-    battleDescription: "", healthCost: 0, chakraCost: 0, staminaCost: 0, actionCostPerc: 10,
-    cooldown: 0, originalCooldown: 0, level: 1, effects: [DamageTag.parse({ power: 10 })],
-  } as CombatAction;
+  const action = makeBasicAttack({ range: 3 });
   const cast = (longitude = 1, latitude = 0) => insertAction({ battle, grid: getBattleGrid(20, battle as unknown as ReturnedBattle), action, actorId: "actor", longitude, latitude });
   const procs = () => battle.usersEffects.filter((e) => e.fromType === "skill");
   return { actor, battle, action, enemy, cast, procs };

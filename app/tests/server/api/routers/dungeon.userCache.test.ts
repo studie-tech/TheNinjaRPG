@@ -18,9 +18,11 @@ import { ObjectiveReward } from "@/validators/rewards";
 import { type UserDeltaResponse, userDeltaResponseSchema } from "@/validators/userCache";
 import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../../setup/dungeon";
-import { insertQuests, insertUsers } from "../../../setup/factories";
+import { insertQuests, insertUsers, insertUserVotes, insertClans } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
+import { deferred } from "../../../setup/deferred";
+import { overrideQuery } from "../../../setup/statements";
 
 type Profile = RouterOutputs["profile"]["getUser"];
 type DungeonState = RouterOutputs["coop"]["dungeon"]["getState"];
@@ -81,8 +83,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
       money: 0, earnedExperience: 0, reputationPoints: 0, reputationPointsTotal: 0, medicalExperience: 0,
       huntingExperience: 0, craftingExperience: 0, gatheringExperience: 0, regeneration: 0,
       updatedAt: new Date(), regenAt: new Date() }]);
-    const db = await getTestDatabase();
-    await db.insert(userVote).values({ id: "dungeon-cache-vote", userId, secret: "dungeon1", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
     await insertQuests([{ id: "dungeon-completion", questType: "achievement", content: {
       objectives: [SimpleObjective.parse({ id: "completion", task: "dungeons_completed", value: 1 })],
       reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
@@ -430,27 +431,24 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     const initial = await profile.getUser();
     expect(initial.userData).toMatchObject({ money: 0, dungeonsCompleted: 1 });
     const cache = cachedProfile(initial, () => profile.getUser());
-    let releaseMember = () => {};
-    const memberGate = new Promise<void>((resolve) => { releaseMember = resolve; });
-    let actorRead = (_money: number | undefined) => {};
-    const openingMoney = new Promise<number | undefined>((resolve) => { actorRead = resolve; });
-    const delayed = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "query") return Reflect.get(target, property, receiver);
-        return {
-          ...target.query,
-          userData: { ...target.query.userData, findFirst: async (...args: Parameters<typeof target.query.userData.findFirst>) => {
-            const actor = await target.query.userData.findFirst(...args);
-            actorRead(actor?.money);
-            return actor;
-          } },
-          dungeonMember: { ...target.query.dungeonMember, findFirst: async (...args: Parameters<typeof target.query.dungeonMember.findFirst>) => {
-            await memberGate;
-            return target.query.dungeonMember.findFirst(...args);
-          } },
-        };
+    const { promise: memberGate, resolve: releaseMember } = deferred<void>();
+    const { promise: openingMoney, resolve: actorRead } = deferred<number | undefined>();
+    const delayed = overrideQuery(
+      overrideQuery(db, "userData", {
+        findFirst: async (read, ...args) => {
+          const actor = await read(...args);
+          actorRead(actor?.money);
+          return actor;
+        },
+      }),
+      "dungeonMember",
+      {
+        findFirst: async (read, ...args) => {
+          await memberGate;
+          return read(...args);
+        },
       },
-    });
+    );
     const revision = cache.callbacks.onMutate();
     const pending = callerForDatabase(dungeonRouter, userId, delayed).claim({ id: "completed-run" });
     try {
@@ -481,8 +479,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
       { id: "cached-village", name: "Cached village", sector: 1, kageId: "" },
       { id: "other-village", name: "Other village", sector: 2, kageId: "" },
     ]);
-    await db.insert(clan).values({ id: "cached-clan", name: "Cached clan", image: "clan.png",
-      villageId: "cached-village", founderId: userId, leaderId: userId, leaderOrderId: "order" });
+    await insertClans([{ id: "cached-clan", name: "Cached clan", villageId: "cached-village", leaderId: userId }]);
     await db.update(userData).set({ isOutlaw: false, villageId: "cached-village", clanId: "cached-clan" }).where(eq(userData.userId, userId));
     const profile = callerForDatabase(profileRouter, userId, db);
     await profile.getUser();

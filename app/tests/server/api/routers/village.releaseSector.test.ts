@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, it } from "bun:test";
 import { eq, getTableName, type SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import mysql from "mysql2/promise";
-import { setTimeout } from "node:timers/promises";
 import {
   actionLog,
   gameSetting,
@@ -26,7 +25,10 @@ import {
   getTestDatabase,
   recordQueries,
   resetTables,
+  lockWaitObserved,
 } from "../../../setup/testDatabase";
+import { deferred } from "../../../setup/deferred";
+import { interceptExecute, withoutTransactions, inTransactions, overrideQuery } from "../../../setup/statements";
 
 const sectorId = 205;
 const leader = "defender-kage";
@@ -46,50 +48,16 @@ const declaration = {
 /** Exercise the procedure's real SQL while rejecting an application transaction. */
 const releaseClient = (
   database: DrizzleClient,
-  run: (
-    query: SQL,
-    execute: () => ReturnType<DrizzleClient["execute"]>,
-  ) => ReturnType<DrizzleClient["execute"]> = (_query, execute) => execute(),
+  run: Parameters<typeof interceptExecute>[1] = (_query, execute) => execute(),
 ) =>
-  new Proxy(database, {
-    get(target, property, receiver) {
-      if (property === "transaction")
-        return () => {
-          throw new Error("Sector release must use one guarded statement");
-        };
-      if (property === "execute")
-        return (query: SQL) => run(query, () => target.execute(query));
-      return Reflect.get(target, property, receiver);
-    },
-  });
-
-const gate = () => {
-  let open = () => {};
-  const wait = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { wait, open: () => open() };
-};
+  interceptExecute(
+    withoutTransactions(database, "Sector release must use one guarded statement"),
+    run,
+  );
 
 /** Observe the contested parent row, rather than relying on a timing delay. */
-const expectVillageLockWait = async (
-  observer: mysql.Connection,
-  requestedMode: "S" | "X",
-) => {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const [locks] = await observer.query<mysql.RowDataPacket[]>(`
-      SELECT requested.LOCK_MODE AS mode FROM performance_schema.data_lock_waits AS waits
-      INNER JOIN performance_schema.data_locks AS requested
-        ON requested.ENGINE_LOCK_ID = waits.REQUESTING_ENGINE_LOCK_ID
-      INNER JOIN performance_schema.data_locks AS blocking
-        ON blocking.ENGINE_LOCK_ID = waits.BLOCKING_ENGINE_LOCK_ID
-      WHERE requested.OBJECT_SCHEMA = DATABASE() AND requested.OBJECT_NAME = ?
-        AND blocking.OBJECT_NAME = ? AND requested.LOCK_MODE LIKE ?
-    `, [getTableName(village), getTableName(village), `${requestedMode}%`]);
-    if (locks.length > 0) return;
-    await setTimeout(10);
-  }
-  throw new Error(`No ${requestedMode} lock wait on the village row`);
+const expectVillageLockWait = async (requestedMode: "S" | "X") => {
+  expect(await lockWaitObserved({ table: getTableName(village), requestedMode })).toBe(true);
 };
 
 const seed = async () => {
@@ -213,38 +181,22 @@ describeWithDatabase("guarded sector release", () => {
   it("preserves an objective committed while release waits for the declaring village", async () => {
     const database = await seed();
     await enableObjectives(database);
-    const locked = gate();
-    const resume = gate();
-    const observer = await mysql.createConnection(process.env.TEST_MYSQL_URL!);
-    const declarationClient = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property !== "transaction") return Reflect.get(target, property, receiver);
-        return (callback: Parameters<DrizzleClient["transaction"]>[0]) =>
-          target.transaction((tx) => callback(new Proxy(tx, {
-            get(transaction, key, txReceiver) {
-              if (key !== "query") return Reflect.get(transaction, key, txReceiver);
-              return {
-                ...transaction.query,
-                war: {
-                  ...transaction.query.war,
-                  findMany: async (options: Parameters<typeof transaction.query.war.findMany>[0]) => {
-                    locked.open();
-                    await resume.wait;
-                    return transaction.query.war.findMany(options);
-                  },
-                },
-              };
-            },
-          })));
+    const locked = deferred<void>();
+    const resume = deferred<void>();
+    const declarationClient = inTransactions(database, (tx) => overrideQuery(tx, "war", {
+      findMany: async (read, ...args) => {
+        locked.resolve();
+        await resume.promise;
+        return read(...args);
       },
-    });
+    }));
     const started = startDeclaredWar(declarationClient, declaration);
     let released: ReturnType<typeof release> | undefined;
     try {
-      await locked.wait;
+      await locked.promise;
       released = release(releaseClient(database));
-      await expectVillageLockWait(observer, "S");
-      resume.open();
+      await expectVillageLockWait("S");
+      resume.resolve();
       expect(await started).toBe(true);
       expect(await released).toMatchObject({ success: false, message: rejection });
       const current = await database.query.war.findFirst();
@@ -252,9 +204,8 @@ describeWithDatabase("guarded sector release", () => {
       expect(await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) })).toBeDefined();
       expect(await database.query.actionLog.findMany()).toHaveLength(0);
     } finally {
-      resume.open();
+      resume.resolve();
       await Promise.allSettled([started, ...(released ? [released] : [])]);
-      await observer.end();
     }
   });
 
@@ -262,25 +213,25 @@ describeWithDatabase("guarded sector release", () => {
     const database = await seed();
     await enableObjectives(database);
     const connection = await mysql.createConnection(process.env.TEST_MYSQL_URL!);
-    const deleted = gate();
-    const resume = gate();
+    const deleted = deferred<void>();
+    const resume = deferred<void>();
     const client = releaseClient(database, async (query) => {
       // Keep this real procedure statement uncommitted only to observe the declaration's wait.
       await connection.beginTransaction();
-      const compiled = dialect.sqlToQuery(query);
+      const compiled = dialect.sqlToQuery(query as SQL);
       const [result] = await connection.query<mysql.ResultSetHeader>(compiled.sql, compiled.params);
-      deleted.open();
-      await resume.wait;
+      deleted.resolve();
+      await resume.promise;
       await connection.commit();
       return { rowsAffected: result.affectedRows } as Awaited<ReturnType<DrizzleClient["execute"]>>;
     });
     const released = release(client);
     let started: ReturnType<typeof startDeclaredWar> | undefined;
     try {
-      await deleted.wait;
+      await deleted.promise;
       started = startDeclaredWar(database, declaration);
-      await expectVillageLockWait(connection, "X");
-      resume.open();
+      await expectVillageLockWait("X");
+      resume.resolve();
       expect((await released).success).toBe(true);
       expect(await started).toBe(false);
       expect(await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) })).toBeUndefined();
@@ -288,7 +239,7 @@ describeWithDatabase("guarded sector release", () => {
       expect((await database.query.village.findFirst({ where: eq(village.id, "attacker") }))?.tokens).toBe(defaultWarRules.declarationCost * 2);
       expect(await database.query.actionLog.findMany()).toHaveLength(1);
     } finally {
-      resume.open();
+      resume.resolve();
       await Promise.allSettled([released, ...(started ? [started] : [])]);
       await connection.rollback();
       await connection.end();

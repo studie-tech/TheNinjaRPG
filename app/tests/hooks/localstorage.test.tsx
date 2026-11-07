@@ -1,16 +1,12 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const customEventDescriptor = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
 
 describe("useLocalStorage URL anchors", () => {
   beforeEach(() => {
-    // Events dispatched on jsdom's window must use its own constructors.
-    Object.defineProperty(globalThis, "CustomEvent", {
-      configurable: true,
-      value: window.CustomEvent,
-    });
+    installBrowserGlobals({ events: ["CustomEvent"] });
     window.history.replaceState({}, "", "/battlearena");
     window.localStorage.clear();
   });
@@ -19,11 +15,7 @@ describe("useLocalStorage URL anchors", () => {
     cleanup();
     window.history.replaceState({}, "", "/");
     window.localStorage.clear();
-    if (customEventDescriptor) {
-      Object.defineProperty(globalThis, "CustomEvent", customEventDescriptor);
-    } else {
-      Reflect.deleteProperty(globalThis, "CustomEvent");
-    }
+    restoreBrowserGlobals();
   });
 
   it.each(["%", "%2", "%GG", "%E0%A4%A"])(

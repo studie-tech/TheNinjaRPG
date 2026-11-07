@@ -18,7 +18,7 @@ import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter } from "@/server/api/routers/profile";
 import { spriteAnimationRouter } from "@/server/api/routers/spriteAnimation";
-import { insertUsers } from "../../setup/factories";
+import { insertUsers, insertDefaultAiProfile } from "../../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("sprite animation administration and battle snapshots", () => {
@@ -31,7 +31,7 @@ describeWithDatabase("sprite animation administration and battle snapshots", () 
       { userId: "ai", username: "AI", isAi: true, rank: "JONIN", level: 50 },
     ]);
     const db = await getTestDatabase();
-    await db.insert(aiProfile).values({ id: "Default", userId: "ai", rules: [] });
+    await insertDefaultAiProfile({ userId: "ai" });
     await db.insert(spriteAnimation).values(["idle", "move"].map((id) => ({ id, name: id, url: `https://example.com/${id}.png`, columns: 6, rows: 4, frameCount: 24, fps: 12.5, facing: "left" as const, createdByUserId: "editor" })));
   });
   afterEach(() => vi.restoreAllMocks());

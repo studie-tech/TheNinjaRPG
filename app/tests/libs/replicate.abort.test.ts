@@ -4,23 +4,21 @@ import sharp from "sharp";
 import { UTApi } from "uploadthing/server";
 import { Images } from "openai/resources/images";
 import { createThumbnail, fastTxt2imgReplicate, generateSpriteGPT, removeBackgroundReplicate, removeBackgroundToBuffer, txt2imgNanoBanana } from "@/libs/replicate";
+import { restoreEnvAfterEach } from "../setup/env";
 
 const upload = { data: { ufsUrl: "https://example.com/upload.webp" }, error: null };
 let savedWindow: PropertyDescriptor | undefined;
-let savedToken: string | undefined;
+restoreEnvAfterEach("UPLOADTHING_TOKEN");
 beforeEach(() => {
   // Server SDK configuration still runs before the stubbed upload methods.
   savedWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   Reflect.deleteProperty(globalThis, "window");
-  savedToken = process.env.UPLOADTHING_TOKEN;
   process.env.UPLOADTHING_TOKEN = Buffer.from(JSON.stringify({ apiKey: "sk_test_not_a_real_key", appId: "abort-test", regions: ["fra1"] })).toString("base64");
 });
 afterEach(() => {
   vi.restoreAllMocks();
   if (savedWindow) Object.defineProperty(globalThis, "window", savedWindow);
   else Reflect.deleteProperty(globalThis, "window");
-  if (savedToken === undefined) delete process.env.UPLOADTHING_TOKEN;
-  else process.env.UPLOADTHING_TOKEN = savedToken;
 });
 
 describe("image provider abort propagation", () => {

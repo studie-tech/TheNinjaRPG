@@ -1,25 +1,18 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "bun:test";
 import { useCombatPreferences } from "@/hooks/combat";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const customEventDescriptor = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
 
 beforeEach(() => {
-  Object.defineProperty(globalThis, "CustomEvent", {
-    configurable: true,
-    value: window.CustomEvent,
-  });
+  installBrowserGlobals({ events: ["CustomEvent"] });
   window.localStorage.clear();
 });
 
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
-  if (customEventDescriptor) {
-    Object.defineProperty(globalThis, "CustomEvent", customEventDescriptor);
-  } else {
-    Reflect.deleteProperty(globalThis, "CustomEvent");
-  }
+  restoreBrowserGlobals();
 });
 
 it("restores the desktop panel preference independently of battle focus", () => {

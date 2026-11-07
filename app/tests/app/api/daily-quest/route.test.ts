@@ -105,10 +105,7 @@ const bandCombos = [
 const assignedQuestIds = () =>
   mocks.upsertQuestEntries.mock.calls.map((call) => (call[1] as { id: string }).id);
 
-const cronRequest = () =>
-  new Request("https://example.com/api/daily-quest", {
-    headers: { authorization: "Bearer test-cron" },
-  });
+const cronRequest = () => new Request("https://example.com/api/daily-quest");
 
 const dayStart = (now: number) => {
   const d = new Date(now);
@@ -162,11 +159,7 @@ describe("daily-quest cron", () => {
     // fully-done tracker, which getReward reads as resolved and pays out again.
     seedHappyPath();
 
-    await GET(
-      new Request("https://example.com/api/daily-quest", {
-        headers: { authorization: "Bearer test-cron" },
-      }),
-    );
+    await GET(cronRequest());
 
     const closeIndex = mocks.calls.indexOf("update:completed,endAt");
     const assignIndex = mocks.calls.indexOf("upsertQuestEntries");
@@ -203,11 +196,7 @@ describe("daily-quest cron", () => {
   it("assigns one daily per rank/village/level combo without changing tutorial preferences", async () => {
     seedHappyPath();
 
-    const response = await GET(
-      new Request("https://example.com/api/daily-quest", {
-        headers: { authorization: "Bearer test-cron" },
-      }),
-    );
+    const response = await GET(cronRequest());
 
     expect(await response.json()).toBe("OK");
     expect(mocks.upsertQuestEntries).toHaveBeenCalledTimes(1);
@@ -234,11 +223,7 @@ describe("daily-quest cron", () => {
       })),
     });
 
-    await GET(
-      new Request("https://example.com/api/daily-quest", {
-        headers: { authorization: "Bearer test-cron" },
-      }),
-    );
+    await GET(cronRequest());
 
     const dialect = new MySqlDialect();
     const selectors = mocks.upsertQuestEntries.mock.calls.map((call) =>
@@ -271,11 +256,7 @@ describe("daily-quest cron", () => {
       }),
     }));
 
-    const response = await GET(
-      new Request("https://example.com/api/daily-quest", {
-        headers: { authorization: "Bearer test-cron" },
-      }),
-    );
+    const response = await GET(cronRequest());
 
     expect(await response.json()).toBe("OK");
     expect(attempts).toBe(2);
@@ -285,11 +266,7 @@ describe("daily-quest cron", () => {
   it("skips the reset when the daily timer says it is not a new day", async () => {
     mocks.lock.mockResolvedValue({ isClaimed: false, isNewDay: false, response: new Response("locked") });
 
-    await GET(
-      new Request("https://example.com/api/daily-quest", {
-        headers: { authorization: "Bearer test-cron" },
-      }),
-    );
+    await GET(cronRequest());
 
     expect(mocks.findQuests).not.toHaveBeenCalled();
     expect(mocks.upsertQuestEntries).not.toHaveBeenCalled();
@@ -415,11 +392,7 @@ describe("daily-quest cron", () => {
     mocks.upsertQuestEntries.mockRejectedValue(new Error("reset failed"));
     mocks.handleError.mockResolvedValue(new Response("error", { status: 500 }));
 
-    await GET(
-      new Request("https://example.com/api/daily-quest", {
-        headers: { authorization: "Bearer test-cron" },
-      }),
-    );
+    await GET(cronRequest());
 
     expect(mocks.rollback).toHaveBeenCalledTimes(1);
     expect(mocks.rollback).toHaveBeenCalledWith();

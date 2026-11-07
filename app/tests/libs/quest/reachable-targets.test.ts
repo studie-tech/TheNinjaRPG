@@ -11,6 +11,8 @@ import {
 } from "@/libs/quest";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
+import { trackerQuest, trackerUser } from "../../setup/quest";
+import { sectorTile } from "../../setup/sectorMap";
 
 /** Small map with the given tiles missing and spawn.default at `spawn`. */
 const makeMap = (
@@ -23,15 +25,7 @@ const makeMap = (
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
       if (missingKeys.has(`${x},${y}`)) continue;
-      tiles.push({
-        x,
-        y,
-        terrain: "ground",
-        walkCost: 1,
-        blocked: false,
-        zone: "wilderness",
-        battleBiome: "ground",
-      });
+      tiles.push(sectorTile(x, y));
     }
   }
   return {
@@ -61,55 +55,11 @@ const moveObjective = (id: string, overrides: Record<string, unknown> = {}) => (
   ...overrides,
 });
 
-const makeQuest = (id: string, objectives: Record<string, unknown>[]) => ({
-  id,
-  name: `Quest ${id}`,
-  questType: "mission" as const,
-  hidden: false,
-  consecutiveObjectives: false,
-  maxAttempts: 100,
-  maxCompletes: 100,
-  requiredVillage: null,
-  requiredBloodlineId: null,
-  prerequisiteQuestId: null,
-  requiredLevel: null,
-  maxLevel: null,
-  medicalRank: null,
-  huntingRank: null,
-  gatheringRank: null,
-  endsAt: null,
-  content: { objectives, reward: {}, sceneBackground: "", sceneCharacters: [] },
-});
+const makeQuest = (id: string, objectives: Record<string, unknown>[]) =>
+  trackerQuest(id, objectives, "mission");
 
 const makeUser = (quest: ReturnType<typeof makeQuest>, questData: unknown[] = []) =>
-  ({
-    userId: "u1",
-    level: 50,
-    rank: "JONIN",
-    role: "USER",
-    villageId: "v1",
-    isOutlaw: false,
-    bloodlineId: null,
-    sector: 1,
-    longitude: 0,
-    latitude: 0,
-    village: { id: "v1", sector: 1 },
-    activeWars: [],
-    completedQuests: [],
-    dailyMissions: 0,
-    senseiId: null,
-    questData,
-    userQuests: [
-      {
-        id: `uq-${quest.id}`,
-        questId: quest.id,
-        completed: 0,
-        previousAttempts: 0,
-        previousCompletes: 0,
-        quest,
-      },
-    ],
-  }) as unknown as Parameters<typeof getNewTrackers>[0];
+  trackerUser([quest], questData, { longitude: 0, latitude: 0 });
 
 afterEach(() => {
   vi.restoreAllMocks();

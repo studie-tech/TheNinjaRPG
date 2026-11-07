@@ -1,8 +1,6 @@
 import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as clerk from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
 import {
   accountDeletion,
   actionLog,
@@ -17,7 +15,6 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { profileRouter } from "@/routers/profile";
-import { registerRouter } from "@/server/api/routers/register";
 import type { DrizzleClient } from "@/server/db";
 import { reportsRouter } from "@/server/api/routers/reports";
 import { deleteUser } from "@/server/api/routers/staff";
@@ -32,82 +29,52 @@ import {
   type SanctionIdentity,
 } from "@/server/utils/sanctionTombstone";
 import { insertUsers } from "../../setup/factories";
-import { beforeStatements, failStatements } from "../../setup/statements";
+import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
+import { insertSanctionReports, sanctionIdentity, stubClerkUsers } from "../../setup/sanctions";
+import { beforeStatements, failStatements, interceptExecute, sqlText, overrideQuery, aroundStatements } from "../../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
 
 const DAY = 86_400_000;
 const SANCTIONED = "user_sanctioned";
 
-const identity = (
-  email: string,
-  accounts: SanctionIdentity["externalAccounts"] = [],
-): SanctionIdentity => ({
-  primaryEmailAddressId: "email_primary",
-  emailAddresses: [
-    { id: "email_primary", emailAddress: email, verification: { status: "verified" } },
-  ],
-  externalAccounts: accounts,
-});
-
-/** Answer Clerk lookups from this map; a missing id behaves like a deleted Clerk user. */
-const stubClerk = (users: Record<string, SanctionIdentity>) => {
-  const getUser = vi.fn(async (userId: string) => {
-    const user = users[userId];
-    if (!user) throw Object.assign(new Error("not found"), { status: 404 });
-    return user;
+/** Answer Clerk lookups from this map. */
+const stubClerk = (users: Record<string, SanctionIdentity>) =>
+  stubClerkUsers((userId) => users[userId], {
+    getUserOauthAccessToken: vi.fn(async () => ({ data: [] })),
   });
-  vi.spyOn(clerk, "clerkClient").mockResolvedValue({
-    users: {
-      getUser,
-      deleteUser: vi.fn(async () => {}),
-      getUserOauthAccessToken: vi.fn(async () => ({ data: [] })),
-    },
-  } as never);
-  return getUser;
-};
 
-const addSanction = async (
+const addSanction = (
   userId: string,
   status: "BAN_ACTIVATED" | "SILENCE_ACTIVATED" | "TIMEOUT_ACTIVATED",
   banEnd: Date,
   id = `report-${status}`,
-) => {
-  const database = await getTestDatabase();
-  await database.insert(userReport).values({
-    id,
-    reporterUserId: "reporter",
-    reportedUserId: userId,
-    system: "tavern_comment",
-    infraction: { content: "offending message" },
-    reason: "Spam",
-    aiInterpretation: "",
-    status,
-    banEnd,
-  });
-};
+) =>
+  insertSanctionReports([
+    {
+      id,
+      reporterUserId: "reporter",
+      reportedUserId: userId,
+      infraction: { content: "offending message" },
+      status,
+      banEnd,
+    },
+  ]);
 
-const register = async (userId: string, database?: DrizzleClient, userIp?: string) =>
-  registerRouter
-    .createCaller({ drizzle: database ?? (await getTestDatabase()), userId, userIp } as never)
-    .createCharacter({
+const register = (userId: string, database?: DrizzleClient, userIp?: string) =>
+  registerCharacter(
+    userId,
+    {
       username: `n${userId.slice(-11)}`.replace(/[^a-zA-Z0-9]/g, ""),
-      gender: "Male",
-      hair_color: "Black",
-      eye_color: "Blue",
-      skin_color: "Light",
-      attribute_1: "Soft features",
-      attribute_2: "Glasses",
-      attribute_3: "Short Hair",
-      read_tos: true,
-      read_privacy: true,
-      read_earlyaccess: true,
       bloodlineId: "tombstone-bloodline",
-    });
+    },
+    { database, userIp },
+  );
 
 const tombstonesOf = async (userId: string) =>
   (await getTestDatabase()).query.sanctionTombstone.findMany({
@@ -117,14 +84,8 @@ const tombstonesOf = async (userId: string) =>
 /** Hold web deletion after capture, before any report cleanup can start. */
 const pauseWebDeletion = async () => {
   const capture = sanctions.recordSanctionTombstone;
-  let enter!: () => void;
-  let release!: () => void;
-  const entered = new Promise<void>((resolve) => {
-    enter = resolve;
-  });
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise: entered, resolve: enter } = deferred<void>();
+  const { promise: gate, resolve: release } = deferred<void>();
   vi.spyOn(sanctions, "recordSanctionTombstone").mockImplementation(async (...args) => {
     await capture(...args);
     enter();
@@ -175,25 +136,7 @@ describeWithDatabase("sanction tombstones", () => {
       userReportComment,
       village,
     );
-    const database = await getTestDatabase();
-    await Promise.all([
-      database
-        .insert(village)
-        .values({
-          id: "tombstone-horizon",
-          name: "Horizon",
-          sector: 1,
-          kageId: "kage",
-        }),
-      database.insert(bloodline).values({
-        id: "tombstone-bloodline",
-        name: "tombstone bloodline",
-        image: "/bloodline.png",
-        description: "test",
-        effects: [],
-        rank: "D",
-      }),
-    ]);
+    await insertRegistrationContent("tombstone");
   });
   afterEach(async () => {
     vi.restoreAllMocks();
@@ -233,17 +176,11 @@ describeWithDatabase("sanction tombstones", () => {
       await insertUsers([{ userId: "staff", username: "StaffAccount", role: "OWNER" }]);
       vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue();
       stubClerk({
-        [SANCTIONED]: identity("original@example.com"),
-        user_returned: identity("returned@example.com"),
+        [SANCTIONED]: sanctionIdentity("original@example.com"),
+        user_returned: sanctionIdentity("returned@example.com"),
       });
-      let enterIp!: () => void;
-      const ipEntered = new Promise<void>((resolve) => {
-        enterIp = resolve;
-      });
-      let releaseIp!: () => void;
-      const ipGate = new Promise<void>((resolve) => {
-        releaseIp = resolve;
-      });
+      const { promise: ipEntered, resolve: enterIp } = deferred<void>();
+      const { promise: ipGate, resolve: releaseIp } = deferred<void>();
       const profileClient = beforeStatements(database, historicalIp, [async () => {
         enterIp();
         await ipGate;
@@ -256,54 +193,31 @@ describeWithDatabase("sanction tombstones", () => {
         } as never)
         .getUser();
       await ipEntered;
-      let enterDeletion!: () => void;
-      const deletionEntered = new Promise<void>((resolve) => {
-        enterDeletion = resolve;
-      });
-      let releaseDeletion!: () => void;
-      const deletionGate = new Promise<void>((resolve) => {
-        releaseDeletion = resolve;
-      });
-      // Read/delete gates must pause after execution; beforeStatements only provides
-      // a before-write hook, so those boundaries need the custom proxy below.
-      const deletionClient = boundary === "before sources"
-        ? beforeStatements(database, sanctionTombstone, [async () => {
-            enterDeletion();
-            await deletionGate;
-          }])
-        : new Proxy(database, {
-            get(target, property, receiver) {
-              if (property === "query" && boundary === "history snapshot")
-                return {
-                  ...target.query,
-                  historicalIp: {
-                    ...target.query.historicalIp,
-                    findMany: async (
-                      ...args: Parameters<typeof target.query.historicalIp.findMany>
-                    ) => {
-                      const result = await target.query.historicalIp.findMany(...args);
-                      enterDeletion();
-                      await deletionGate;
-                      return result;
-                    },
-                  },
-                };
-              if (property === "delete" && boundary === "history removed")
-                return (table: Parameters<typeof target.delete>[0]) => {
-                  const builder = target.delete(table);
-                  if (table !== historicalIp) return builder;
-                  return {
-                    where: async (...args: Parameters<typeof builder.where>) => {
-                      const result = await builder.where(...args);
-                      enterDeletion();
-                      await deletionGate;
-                      return result;
-                    },
-                  };
-                };
-              return Reflect.get(target, property, receiver);
-            },
-          });
+      const { promise: deletionEntered, resolve: enterDeletion } = deferred<void>();
+      const { promise: deletionGate, resolve: releaseDeletion } = deferred<void>();
+      const pauseDeletion = async () => {
+        enterDeletion();
+        await deletionGate;
+      };
+      // The read and delete gates pause after their statement executes.
+      const deletionClient =
+        boundary === "before sources"
+          ? beforeStatements(database, sanctionTombstone, [pauseDeletion])
+          : boundary === "history snapshot"
+            ? overrideQuery(database, "historicalIp", {
+                findMany: async (read, ...args) => {
+                  const result = await read(...args);
+                  await pauseDeletion();
+                  return result;
+                },
+              })
+            : boundary === "history removed"
+              ? aroundStatements(database, historicalIp, async (run) => {
+                  const result = await run();
+                  await pauseDeletion();
+                  return result;
+                }, { operations: ["delete"] })
+              : database;
       const capture = sanctions.recordSanctionTombstone;
       if (boundary === "captured")
         vi.spyOn(sanctions, "recordSanctionTombstone").mockImplementation(
@@ -377,8 +291,8 @@ describeWithDatabase("sanction tombstones", () => {
         "original",
       );
       stubClerk({
-        [SANCTIONED]: identity("original@example.com"),
-        user_returned: identity("returned@example.com"),
+        [SANCTIONED]: sanctionIdentity("original@example.com"),
+        user_returned: sanctionIdentity("returned@example.com"),
       });
       await sanctions.recordSanctionTombstone(database, SANCTIONED);
       await database
@@ -394,14 +308,8 @@ describeWithDatabase("sanction tombstones", () => {
         await sanctions.recordSanctionTombstone(database, SANCTIONED);
         expect(await tombstonesOf(SANCTIONED)).toEqual(before);
       }
-      let enter!: () => void;
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => {
-        release = resolve;
-      });
+      const { promise: entered, resolve: enter } = deferred<void>();
+      const { promise: gate, resolve: release } = deferred<void>();
       const paused = beforeStatements(database, sanctionTombstone, [
         async () => {}, // Let report closure run before pausing source deletion.
         async () => {
@@ -453,9 +361,9 @@ describeWithDatabase("sanction tombstones", () => {
       ]);
       await addSanction(SANCTIONED, status, endsAt);
       stubClerk({
-        [SANCTIONED]: identity("old@example.com"),
-        replacement: identity("new@example.com"),
-        cleared: identity("cleared@example.com"),
+        [SANCTIONED]: sanctionIdentity("old@example.com"),
+        replacement: sanctionIdentity("new@example.com"),
+        cleared: sanctionIdentity("cleared@example.com"),
       });
       await deleteUser(database, SANCTIONED);
       const sources = await tombstonesOf(SANCTIONED);
@@ -512,7 +420,7 @@ describeWithDatabase("sanction tombstones", () => {
       Object.fromEntries(
         [SANCTIONED, "otherip", "noip", "expiredip"].map((id) => [
           id,
-          identity(`${id}@example.com`),
+          sanctionIdentity(`${id}@example.com`),
         ]),
       ),
     );
@@ -535,8 +443,8 @@ describeWithDatabase("sanction tombstones", () => {
     await insertUsers([{ userId: SANCTIONED, lastIp: "192.0.2.1" }]);
     await addSanction(SANCTIONED, "BAN_ACTIVATED", new Date(Date.now() + DAY));
     stubClerk({
-      [SANCTIONED]: identity("old@example.com"),
-      retryip: identity("new@example.com"),
+      [SANCTIONED]: sanctionIdentity("old@example.com"),
+      retryip: sanctionIdentity("new@example.com"),
     });
     await database.insert(historicalIp).values({ userId: SANCTIONED, ip: "192.0.2.2" });
     await sanctions.recordSanctionTombstone(database, SANCTIONED);
@@ -569,7 +477,7 @@ describeWithDatabase("sanction tombstones", () => {
     await addSanction(SANCTIONED, "SILENCE_ACTIVATED", silenceEnd);
     await addSanction(SANCTIONED, "TIMEOUT_ACTIVATED", new Date(Date.now() + DAY));
     stubClerk({
-      [SANCTIONED]: identity("Player+evade@Example.com", [
+      [SANCTIONED]: sanctionIdentity("Player+evade@Example.com", [
         { provider: "oauth_google", providerUserId: "google-123" },
       ]),
     });
@@ -615,7 +523,7 @@ describeWithDatabase("sanction tombstones", () => {
     await insertUsers([{ userId: SANCTIONED, isBanned: true }]);
     await addSanction(SANCTIONED, "BAN_ACTIVATED", new Date(Date.now() + 7 * DAY));
     const clerkUsers: Record<string, SanctionIdentity> = {
-      [SANCTIONED]: identity("native@example.com"),
+      [SANCTIONED]: sanctionIdentity("native@example.com"),
     };
     stubClerk(clerkUsers);
 
@@ -635,7 +543,7 @@ describeWithDatabase("sanction tombstones", () => {
     const banEnd = new Date(Date.now() + 10 * DAY);
     await insertUsers([{ userId: SANCTIONED, isBanned: true }]);
     await addSanction(SANCTIONED, "BAN_ACTIVATED", banEnd, "original-ban");
-    stubClerk({ [SANCTIONED]: identity("web@example.com") });
+    stubClerk({ [SANCTIONED]: sanctionIdentity("web@example.com") });
     await deleteUser(await getTestDatabase(), SANCTIONED);
 
     expect(await register(SANCTIONED)).toMatchObject({ success: true });
@@ -689,18 +597,12 @@ describeWithDatabase("sanction tombstones", () => {
         await addSanction(SANCTIONED, "BAN_ACTIVATED", shorterEnd, "shorter-case");
         await addSanction(SANCTIONED, "SILENCE_ACTIVATED", silenceEnd, "silence-case");
       }
-      const clerkIdentity = identity("capture@example.com", [
+      const clerkIdentity = sanctionIdentity("capture@example.com", [
         { provider: "oauth_google", providerUserId: "capture-subject" },
       ]);
       const getUser = stubClerk({ [SANCTIONED]: clerkIdentity });
-      let enter!: () => void;
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => {
-        release = resolve;
-      });
+      const { promise: entered, resolve: enter } = deferred<void>();
+      const { promise: gate, resolve: release } = deferred<void>();
       getUser.mockImplementationOnce(async () => {
         enter();
         await gate;
@@ -825,7 +727,7 @@ describeWithDatabase("sanction tombstones", () => {
       new Date(Date.now() + 10 * DAY),
       "original-case",
     );
-    const capturedIdentity = identity("capture@example.com");
+    const capturedIdentity = sanctionIdentity("capture@example.com");
     stubClerk({ [SANCTIONED]: capturedIdentity });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue();
     await sanctions.recordSanctionTombstone(database, SANCTIONED);
@@ -885,7 +787,7 @@ describeWithDatabase("sanction tombstones", () => {
       new Date(Date.now() + 20 * DAY),
       "separate-silence",
     );
-    const clerkUsers = { [SANCTIONED]: identity("first-web@example.com") };
+    const clerkUsers = { [SANCTIONED]: sanctionIdentity("first-web@example.com") };
     stubClerk(clerkUsers);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue();
     await deleteUser(database, SANCTIONED);
@@ -920,7 +822,7 @@ describeWithDatabase("sanction tombstones", () => {
           source.sanctionEndsAt.getTime() === revised!.banEnd!.getTime(),
       ),
     ).toBe(true);
-    clerkUsers[SANCTIONED] = identity("changed-web@example.com");
+    clerkUsers[SANCTIONED] = sanctionIdentity("changed-web@example.com");
     await deleteUser(database, SANCTIONED);
     expect(await tombstonesOf(SANCTIONED)).toEqual(
       expect.arrayContaining(originalSources),
@@ -968,7 +870,7 @@ describeWithDatabase("sanction tombstones", () => {
         accountHashes: [],
       }),
     );
-    stubClerk({ user_returning: identity("R.e.t.u.r.n.e.r+2@GoogleMail.com") });
+    stubClerk({ user_returning: sanctionIdentity("R.e.t.u.r.n.e.r+2@GoogleMail.com") });
 
     expect(await register("user_returning")).toMatchObject({ success: true });
 
@@ -1023,7 +925,7 @@ describeWithDatabase("sanction tombstones", () => {
   it("lets a silenced player delete through the web flow", async () => {
     await insertUsers([{ userId: SANCTIONED, isSilenced: true }]);
     await addSanction(SANCTIONED, "SILENCE_ACTIVATED", new Date(Date.now() + DAY));
-    stubClerk({ [SANCTIONED]: identity("silenced@example.com") });
+    stubClerk({ [SANCTIONED]: sanctionIdentity("silenced@example.com") });
     const caller = await callerFor(profileRouter, SANCTIONED);
 
     expect(await caller.toggleDeletionTimer({ userId: SANCTIONED, confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({
@@ -1049,11 +951,11 @@ describeWithDatabase("sanction tombstones", () => {
   it("does not retain an unverified primary email or sanction its verified owner", async () => {
     await insertUsers([{ userId: SANCTIONED, isBanned: true }]);
     await addSanction(SANCTIONED, "BAN_ACTIVATED", new Date(Date.now() + DAY));
-    const unverified = identity("another-owner@example.com");
+    const unverified = sanctionIdentity("another-owner@example.com");
     unverified.emailAddresses[0]!.verification = { status: "unverified" };
     stubClerk({
       [SANCTIONED]: unverified,
-      user_owner: identity("another-owner@example.com"),
+      user_owner: sanctionIdentity("another-owner@example.com"),
     });
 
     await deleteUser(await getTestDatabase(), SANCTIONED);
@@ -1074,10 +976,10 @@ describeWithDatabase("sanction tombstones", () => {
     await insertUsers([{ userId: SANCTIONED, isBanned: true }]);
     await addSanction(SANCTIONED, "BAN_ACTIVATED", new Date(Date.now() + DAY));
     stubClerk({
-      [SANCTIONED]: identity("old@example.com", [
+      [SANCTIONED]: sanctionIdentity("old@example.com", [
         { provider: "oauth_google", providerUserId: "same-subject" },
       ]),
-      user_oauth: identity("new@example.com", [
+      user_oauth: sanctionIdentity("new@example.com", [
         { provider: "google", providerUserId: "same-subject" },
       ]),
     });
@@ -1098,17 +1000,11 @@ describeWithDatabase("sanction tombstones", () => {
   it("keeps a sanctioned character invisible until its reports are durable", async () => {
     await insertUsers([{ userId: SANCTIONED, isBanned: true }]);
     await addSanction(SANCTIONED, "BAN_ACTIVATED", new Date(Date.now() + DAY));
-    stubClerk({ [SANCTIONED]: identity("atomic@example.com") });
+    stubClerk({ [SANCTIONED]: sanctionIdentity("atomic@example.com") });
     const database = await getTestDatabase();
     await deleteUser(database, SANCTIONED);
-    let enter!: () => void;
-    const entered = new Promise<void>((resolve) => {
-      enter = resolve;
-    });
-    let release!: () => void;
-    const paused = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: entered, resolve: enter } = deferred<void>();
+    const { promise: paused, resolve: release } = deferred<void>();
     const reapply = sanctions.reapplySanctions;
     vi.spyOn(sanctions, "reapplySanctions").mockImplementation(async (...args) => {
       const guard = await reapply(...args);
@@ -1136,23 +1032,13 @@ describeWithDatabase("sanction tombstones", () => {
   it("leaves no character or partial carryover if a supporting record cannot be saved", async () => {
     await insertUsers([{ userId: SANCTIONED, isBanned: true }]);
     await addSanction(SANCTIONED, "BAN_ACTIVATED", new Date(Date.now() + DAY));
-    stubClerk({ [SANCTIONED]: identity("partial@example.com") });
+    stubClerk({ [SANCTIONED]: sanctionIdentity("partial@example.com") });
     const database = await getTestDatabase();
     await deleteUser(database, SANCTIONED);
-    const failingDatabase = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "execute")
-          return async (query: Parameters<DrizzleClient["execute"]>[0]) => {
-            const statement =
-              typeof query === "string"
-                ? query
-                : new MySqlDialect().sqlToQuery(query.getSQL()).sql;
-            if (statement.includes("INSERT INTO `ActionLog`"))
-              throw new Error("Failed to save supporting record");
-            return target.execute(query);
-          };
-        return Reflect.get(target, property, receiver);
-      },
+    const failingDatabase = interceptExecute(database, async (query, run) => {
+      if (sqlText(query).includes("INSERT INTO `ActionLog`"))
+        throw new Error("Failed to save supporting record");
+      return run();
     });
     await expect(register(SANCTIONED, failingDatabase)).rejects.toThrow(
       "Failed to save supporting record",
@@ -1170,8 +1056,8 @@ describeWithDatabase("sanction tombstones", () => {
     await insertUsers([{ userId: SANCTIONED, isBanned: true }]);
     await addSanction(SANCTIONED, "BAN_ACTIVATED", new Date(Date.now() + DAY));
     stubClerk({
-      [SANCTIONED]: identity("cleared@example.com"),
-      user_cleared: identity("cleared@example.com"),
+      [SANCTIONED]: sanctionIdentity("cleared@example.com"),
+      user_cleared: sanctionIdentity("cleared@example.com"),
     });
     const database = await getTestDatabase();
     await deleteUser(database, SANCTIONED);
@@ -1213,8 +1099,8 @@ describeWithDatabase("sanction tombstones", () => {
       await insertUsers([{ userId: SANCTIONED }]);
       await addSanction(SANCTIONED, status, new Date(Date.now() + DAY));
       stubClerk({
-        [SANCTIONED]: identity("replaced@example.com"),
-        user_replaced: identity("replaced@example.com"),
+        [SANCTIONED]: sanctionIdentity("replaced@example.com"),
+        user_replaced: sanctionIdentity("replaced@example.com"),
       });
       vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue();
       await deleteUser(database, SANCTIONED);
@@ -1269,8 +1155,8 @@ describeWithDatabase("sanction tombstones", () => {
       );
       await addSanction(SANCTIONED, "BAN_ACTIVATED", independentEnd, "original-ban");
       stubClerk({
-        [SANCTIONED]: identity("independent@example.com"),
-        user_revised: identity("independent@example.com"),
+        [SANCTIONED]: sanctionIdentity("independent@example.com"),
+        user_revised: sanctionIdentity("independent@example.com"),
       });
       vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue();
       await deleteUser(database, SANCTIONED);
@@ -1318,8 +1204,8 @@ describeWithDatabase("sanction tombstones", () => {
     await addSanction(SANCTIONED, "BAN_ACTIVATED", new Date(Date.now() + DAY));
     await addSanction(SANCTIONED, "SILENCE_ACTIVATED", new Date(Date.now() + DAY));
     stubClerk({
-      [SANCTIONED]: identity("multiple@example.com"),
-      user_multiple: identity("multiple@example.com"),
+      [SANCTIONED]: sanctionIdentity("multiple@example.com"),
+      user_multiple: sanctionIdentity("multiple@example.com"),
     });
     const database = await getTestDatabase();
     await deleteUser(database, SANCTIONED);
@@ -1370,16 +1256,16 @@ describeWithDatabase("sanction tombstones", () => {
       await insertUsers([{ userId: SANCTIONED }]);
       await addSanction(SANCTIONED, status, originalEnd, "original-sanction");
       const clerkUsers: Record<string, SanctionIdentity> = {
-        [SANCTIONED]: identity("appeal@example.com"),
-        user_appealed: identity("appeal@example.com"),
-        user_old_email: identity("appeal@example.com"),
+        [SANCTIONED]: sanctionIdentity("appeal@example.com"),
+        user_appealed: sanctionIdentity("appeal@example.com"),
+        user_old_email: sanctionIdentity("appeal@example.com"),
       };
       stubClerk(clerkUsers);
       await removeAccountIdentity(SANCTIONED);
       delete clerkUsers[SANCTIONED];
       await deleteUser(database, SANCTIONED);
       expect(await register("user_appealed")).toMatchObject({ success: true });
-      clerkUsers.user_appealed = identity("changed@example.com");
+      clerkUsers.user_appealed = sanctionIdentity("changed@example.com");
       await insertUsers([{ userId: "staff", role: "OWNER" }]);
       const report = await database.query.userReport.findFirst({
         where: eq(userReport.reportedUserId, "user_appealed"),
@@ -1427,7 +1313,7 @@ describeWithDatabase("sanction tombstones", () => {
     await addSanction(SANCTIONED, "BAN_ACTIVATED", banEnd, "original-ban");
     await addSanction(SANCTIONED, "SILENCE_ACTIVATED", silenceEnd, "original-silence");
     const clerkUsers: Record<string, SanctionIdentity> = {
-      [SANCTIONED]: identity("original@example.com"),
+      [SANCTIONED]: sanctionIdentity("original@example.com"),
     };
     stubClerk(clerkUsers);
     let previousUserId = SANCTIONED;
@@ -1436,8 +1322,8 @@ describeWithDatabase("sanction tombstones", () => {
       ["user_third", "changed@example.com"],
       ["user_fourth", "changed-again@example.com"],
     ] as const) {
-      clerkUsers[previousUserId] = identity(email);
-      clerkUsers[userId] = identity(email);
+      clerkUsers[previousUserId] = sanctionIdentity(email);
+      clerkUsers[userId] = sanctionIdentity(email);
       await removeAccountIdentity(previousUserId);
       delete clerkUsers[previousUserId];
       await deleteUser(database, previousUserId);
@@ -1475,7 +1361,7 @@ describeWithDatabase("sanction tombstones", () => {
     expect(retained.map((source) => source.sanctionEndsAt)).toEqual([
       silenceEnd, silenceEnd, silenceEnd,
     ]);
-    clerkUsers[previousUserId] = identity("original@example.com");
+    clerkUsers[previousUserId] = sanctionIdentity("original@example.com");
     await deleteUser(database, previousUserId);
     expect(await register(previousUserId)).toMatchObject({ success: true });
     expect(
@@ -1500,16 +1386,16 @@ describeWithDatabase("sanction tombstones", () => {
       await addSanction(SANCTIONED, originalStatus, new Date(Date.now() + 10 * DAY));
       await addSanction(SANCTIONED, status, new Date(Date.now() + 20 * DAY));
       const clerkUsers: Record<string, SanctionIdentity> = {
-        [SANCTIONED]: identity("conversion@example.com"),
-        user_converted: identity("conversion@example.com"),
-        user_old_identity: identity("conversion@example.com"),
+        [SANCTIONED]: sanctionIdentity("conversion@example.com"),
+        user_converted: sanctionIdentity("conversion@example.com"),
+        user_old_identity: sanctionIdentity("conversion@example.com"),
       };
       stubClerk(clerkUsers);
       await removeAccountIdentity(SANCTIONED);
       delete clerkUsers[SANCTIONED];
       await deleteUser(database, SANCTIONED);
       await register("user_converted");
-      clerkUsers.user_converted = identity("new-conversion@example.com");
+      clerkUsers.user_converted = sanctionIdentity("new-conversion@example.com");
       await insertUsers([{ userId: "staff", role: "OWNER" }]);
       const staff = await callerFor(reportsRouter, "staff");
       const reports = await database.query.userReport.findMany({
@@ -1580,7 +1466,7 @@ describeWithDatabase("sanction tombstones", () => {
         new Date(Date.now() + 10 * DAY),
         "original",
       );
-      stubClerk({ [SANCTIONED]: identity("web-cleanup@example.com") });
+      stubClerk({ [SANCTIONED]: sanctionIdentity("web-cleanup@example.com") });
       vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue();
     });
 

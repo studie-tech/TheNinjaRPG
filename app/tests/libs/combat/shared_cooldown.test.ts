@@ -6,14 +6,14 @@ import {
   getDefaultBasicActions,
 } from "@/libs/combat/actions";
 import type { CompleteBattle } from "@/libs/combat/types";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import {
   makeBattleUser,
   makeBattleUserItem,
-  makeBattleWithWeapon,
   makeEffect,
   makeInjectBattle,
+  makeJutsu,
   makeTag,
+  makeWeapon,
 } from "./helpers/battleScenario";
 
 /**
@@ -33,37 +33,28 @@ type SharedTag =
   | "elementaldamage";
 
 const sharedJutsu = (id: string, cooldown: number, tag: SharedTag) =>
-  ({
-    ...SAGE_MODE_ACTIVATION_JUTSU,
+  makeJutsu({
     id,
     name: id,
     cooldown,
     effects: [makeTag(tag, { rounds: 2 })],
-  }) as Jutsu;
-
-const sharedConsumable = (id: string, cooldown: number, tags: SharedTag[]) => {
-  const { extraState } = makeBattleWithWeapon({
-    itemId: id,
-    item: {
-      name: id,
-      itemType: "CONSUMABLE",
-      target: "SELF",
-      battleUsageType: "BOTH",
-      preventBattleUsage: false,
-      cooldown,
-      effects: tags.map((tag) => makeTag(tag, { rounds: 1 })),
-    },
   });
-  return extraState.items?.[id] as Item;
-};
+
+const sharedConsumable = (id: string, cooldown: number, tags: SharedTag[]) =>
+  makeWeapon({
+    id,
+    name: id,
+    itemType: "CONSUMABLE",
+    target: "SELF",
+    battleUsageType: "BOTH",
+    preventBattleUsage: false,
+    cooldown,
+    effects: tags.map((tag) => makeTag(tag, { rounds: 1 })),
+  });
 
 /** Battle whose user state matches what initiateBattle stores for a fresh fight. */
 const makeGcdBattle = (jutsus: Jutsu[], items: Item[] = []) => {
   const user = makeBattleUser(USER, {
-    curChakra: 5000,
-    maxChakra: 5000,
-    curStamina: 5000,
-    maxStamina: 5000,
     jutsus: jutsus.map((j) => ({
       id: `user-${j.id}`,
       jutsuId: j.id,

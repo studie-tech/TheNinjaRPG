@@ -49,9 +49,10 @@ import { eventTournamentConfigSchema, type EventParticipant } from "@/validators
 import { ObjectiveReward } from "@/validators/rewards";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { withAfterTasks } from "../../../setup/after";
-import { insertItems, insertUsers } from "../../../setup/factories";
+import { insertItems, insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
-import { beforeStatements } from "../../../setup/statements";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
+import { beforeStatements, inTransactions } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -60,6 +61,7 @@ import {
   resetTables,
   recordQueries,
 } from "../../../setup/testDatabase";
+import { deferred } from "../../../setup/deferred";
 
 describeWithDatabase("event tournament persistence", () => {
   beforeEach(async () => {
@@ -67,13 +69,7 @@ describeWithDatabase("event tournament persistence", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(pusherModule, "getServerPusher").mockReturnValue(new Pusher("", "", "", ""));
     // Rate limiting is external to settlement; SQL tests must not contact Redis.
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     await resetTables(
       tournamentRewardClaim,
       tournamentMatch,
@@ -303,9 +299,7 @@ describeWithDatabase("event tournament persistence", () => {
             maxStamina: 1000,
           })),
         );
-        await database
-          .insert(aiProfile)
-          .values({ id: "Default", userId: "ai", rules: [] });
+        await insertDefaultAiProfile({ userId: "ai" });
         if (isEvent || battleType === "TOURNAMENT") {
           await database.insert(tournament).values({
             id: "prior-tournament",
@@ -427,9 +421,7 @@ describeWithDatabase("event tournament persistence", () => {
           })),
         );
         if (queued) await queueEnergy("hero", [{ stat: "strength", energy: 50 }]);
-        await database
-          .insert(aiProfile)
-          .values({ id: "Default", userId: "ai", rules: [] });
+        await insertDefaultAiProfile({ userId: "ai" });
         await database.insert(tournamentMatch).values({
           id: "game",
           tournamentId: "event",
@@ -557,7 +549,7 @@ describeWithDatabase("event tournament persistence", () => {
         curEnergy: 100,
       })),
     );
-    await database.insert(aiProfile).values({ id: "Default", userId: "ai", rules: [] });
+    await insertDefaultAiProfile({ userId: "ai" });
     const event = createEventState({ ...eventConfig("Launch race"), rules });
     event.participants = userIds.map((userId, i) => ({
       id: `seat-${i}`,
@@ -690,8 +682,8 @@ describeWithDatabase("event tournament persistence", () => {
       cache.setQueryData(key, initial);
       const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
       const unsubscribe = observer.subscribe(() => {});
-      const reserved = deferred();
-      const release = deferred();
+      const reserved = deferred<void>();
+      const release = deferred<void>();
       const opponent = callerForDatabase(tournamentRouter, game.userIds[0]!, phase === "STARTING"
         ? beforeTransactionalWrite(database, battle, async () => { reserved.resolve(); await release.promise; })
         : database);
@@ -793,7 +785,7 @@ describeWithDatabase("event tournament persistence", () => {
         maxStamina: 1000,
       })),
     );
-    await database.insert(aiProfile).values({ id: "Default", userId: "ai", rules: [] });
+    await insertDefaultAiProfile({ userId: "ai" });
     const event = createEventState(eventConfig("Queue guard"));
     event.status = "REGISTRATION";
     event.participants = [
@@ -878,10 +870,10 @@ describeWithDatabase("event tournament persistence", () => {
 
   it("leaves recovery in control when a delayed launch collides with its missing-token tombstone", async () => {
     const { database, game, accept } = await readyEvent();
-    const inserting = deferred();
-    const releaseLaunch = deferred();
-    const savingRecovery = deferred();
-    const releaseRecovery = deferred();
+    const inserting = deferred<void>();
+    const releaseLaunch = deferred<void>();
+    const savingRecovery = deferred<void>();
+    const releaseRecovery = deferred<void>();
     const launching = accept(
       game.userIds[1]!,
       beforeStatements(database, tournamentMatch, [
@@ -937,12 +929,12 @@ describeWithDatabase("event tournament persistence", () => {
 
   it("keeps a valid battle when launch wins after recovery reads a missing token and battle", async () => {
     const { database, game, accept } = await readyEvent();
-    const inserting = deferred();
-    const releaseLaunch = deferred();
-    const committedBattle = deferred();
-    const releaseFighting = deferred();
-    const insertingRecovery = deferred();
-    const releaseRecovery = deferred();
+    const inserting = deferred<void>();
+    const releaseLaunch = deferred<void>();
+    const committedBattle = deferred<void>();
+    const releaseFighting = deferred<void>();
+    const insertingRecovery = deferred<void>();
+    const releaseRecovery = deferred<void>();
     const launching = accept(
       game.userIds[1]!,
       beforeStatements(
@@ -1074,8 +1066,8 @@ describeWithDatabase("event tournament persistence", () => {
 
   it("recovers a stalled launch without exposing claims or allowing its late battle", async () => {
     const { database, game, accept } = await readyEvent();
-    const reached = deferred();
-    const release = deferred();
+    const reached = deferred<void>();
+    const release = deferred<void>();
     const stalled = beforeTransactionalWrite(database, battle, async () => {
       reached.resolve();
       await release.promise;
@@ -1147,9 +1139,9 @@ describeWithDatabase("event tournament persistence", () => {
           })
           .where(eq(battle.id, game.battleId));
         const before = await database.query.userData.findMany();
-        const firstReached = deferred();
-        const secondReached = deferred();
-        const release = deferred();
+        const firstReached = deferred<void>();
+        const secondReached = deferred<void>();
+        const release = deferred<void>();
         // Delay the first player's ordinary result write. The last player's claim
         // must make deletion and the outcome visible together even in this gap.
         const first = callerForDatabase(
@@ -1236,10 +1228,10 @@ describeWithDatabase("event tournament persistence", () => {
   for (const inFlight of [false, true]) {
     it(`arbitrates launch against recovery's stale missing-battle read (inFlight=${inFlight})`, async () => {
       const { database, game, accept } = await readyEvent();
-      const reached = deferred();
-      const release = deferred();
-      const revoking = deferred();
-      const releaseRecovery = deferred();
+      const reached = deferred<void>();
+      const release = deferred<void>();
+      const revoking = deferred<void>();
+      const releaseRecovery = deferred<void>();
       const stalled = beforeTransactionalWrite(database, battleHistory, async () => {
         reached.resolve();
         await release.promise;
@@ -1830,14 +1822,6 @@ describeWithDatabase("event tournament persistence", () => {
   });
 });
 
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
-
 /** Interleave a real SQL write inside or outside a transaction. */
 const beforeTransactionalWrite = (
   client: DrizzleClient,
@@ -1850,20 +1834,9 @@ const beforeTransactionalWrite = (
     pending = false;
     await hook();
   };
-  return new Proxy(beforeStatements(client, table, [once]), {
-    get(target, property, receiver) {
-      if (property === "transaction")
-        return (callback: Parameters<typeof client.transaction>[0]) =>
-          client.transaction((tx) =>
-            callback(
-              beforeStatements(tx as unknown as DrizzleClient, table, [
-                once,
-              ]) as typeof tx,
-            ),
-          );
-      return Reflect.get(target, property, receiver);
-    },
-  });
+  return inTransactions(beforeStatements(client, table, [once]), (tx) =>
+    beforeStatements(tx, table, [once]),
+  );
 };
 
 /** Pause after the first real SQL transaction commits, before its caller can continue. */

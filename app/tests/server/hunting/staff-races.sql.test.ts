@@ -10,14 +10,21 @@ import { itemRouter } from "@/server/api/routers/item";
 import { profileRouter } from "@/server/api/routers/profile";
 import { staffRouter } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
-import { insertItems, insertUsers, insertUserItems } from "../../setup/factories";
-import { huntingContract, huntingHabitatContent, huntingMap } from "../../setup/hunting";
-import { beforeStatements } from "../../setup/statements";
+import {
+  insertItems,
+  insertUsers,
+  insertUserItems,
+  insertDefaultAiProfile,
+} from "../../setup/factories";
+import { acceptReadySession, huntingContract, huntingHabitatContent, insertHuntingWorld } from "../../setup/hunting";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
+import { beforeStatements, holdReads, beforeTransaction, overrideQuery } from "../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
 
 describeWithDatabase("staff changes during hunting admission", () => {
   beforeEach(async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json([{ result: [59, 60] }]));
+    stubRateLimitTransport({ answerOtherRequests: true });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingReceipt, huntingSession, item, mpvpBattleUser, questHistory, rankedPvpQueue, sectorMap, storeUserIdAlias, userData, userItem);
     await insertUsers([
@@ -26,33 +33,14 @@ describeWithDatabase("staff changes during hunting admission", () => {
       { userId: "staff", username: "Terriator", role: "CODING-ADMIN" },
     ]);
     await insertItems([{ id: "hide", canBeHunted: true }, { id: "tusk", canBeHunted: true }]);
-    const db = await getTestDatabase();
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
-    await db.insert(huntingHabitat).values({ id: "forest", content: huntingHabitatContent(), updatedAt: new Date() });
-    await db.insert(sectorMap).values({ id: "map", sector: 1, name: "Forest", width: 1, height: 1, status: "PUBLISHED", normalizedJson: huntingMap() });
+    await insertDefaultAiProfile();
+    await insertHuntingWorld();
   });
   afterEach(() => { setSystemTime(); vi.restoreAllMocks(); });
 
   it("assigns distinct contract IDs to concurrent saves with the same draft ID", async () => {
     const db = await getTestDatabase();
-    let reads = 0;
-    let release!: () => void;
-    const bothRead = new Promise<void>((resolve) => { release = resolve; });
-    const habitatQuery = new Proxy(db.query.huntingHabitat, { get(target, key, receiver) {
-      if (key === "findMany") return async (...args: Parameters<typeof target.findMany>) => {
-        const rows = await target.findMany(...args);
-        if (++reads === 2) release();
-        await bothRead;
-        return rows;
-      };
-      return Reflect.get(target, key, receiver);
-    } });
-    const query = new Proxy(db.query, { get(target, key, receiver) {
-      return key === "huntingHabitat" ? habitatQuery : Reflect.get(target, key, receiver);
-    } });
-    const client = new Proxy(db, { get(target, key, receiver) {
-      return key === "query" ? query : Reflect.get(target, key, receiver);
-    } });
+    const client = holdReads(db, "huntingHabitat", 2, "findMany");
     const staff = callerForDatabase(huntingRouter, "staff", client);
     const saved = await Promise.all(["First", "Second"].map((name) => {
       const content = huntingHabitatContent();
@@ -101,14 +89,6 @@ describeWithDatabase("staff changes during hunting admission", () => {
     expect(await staff.save({ content: first.content })).toMatchObject({ success: false, message: "A contract ID is already used by another habitat." });
   });
 
-  const prepare = async () => {
-    const db = await getTestDatabase();
-    const hunter = callerForDatabase(huntingRouter, "hunter", db);
-    expect((await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).success).toBe(true);
-    await db.update(huntingSession).set({ readyAt: new Date(0) });
-    const session = (await db.query.huntingSession.findFirst())!;
-    return { db, hunter, id: session.id, version: session.version };
-  };
   const settleVictory = async (db: DrizzleClient, userId = "hunter") => {
     const current = (await db.query.battle.findFirst()) as CompleteBattle;
     for (const enemy of current.usersState.filter((u) => u.isAi)) enemy.curHealth = 0;
@@ -182,7 +162,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it("keeps accepted material references through settlement and releases them on finish", async () => {
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     expect((await hunter.start({ id })).success).toBe(true);
     const content = huntingHabitatContent();
     content.contracts[0]!.rewards = [{ itemId: "tusk", quantity: 4, chance: 100 }];
@@ -205,32 +185,27 @@ describeWithDatabase("staff changes during hunting admission", () => {
     const material = await db.query.item.findFirst({ where: eq(item.id, "hide") });
     const inventory = await db.query.userItem.findMany({ where: eq(userItem.itemId, "hide") });
     let pendingActiveCheck: Promise<unknown> | undefined;
-    const sessions = new Proxy(db.query.huntingSession, { get(target, key, receiver) {
-      if (key === "findFirst") return (...args: Parameters<typeof target.findFirst>) => {
-        pendingActiveCheck = Promise.resolve(target.findFirst(...args));
-        return pendingActiveCheck;
-      };
-      return Reflect.get(target, key, receiver);
-    } });
-    const habitats = new Proxy(db.query.huntingHabitat, { get(target, key, receiver) {
-      if (key === "findMany") return async (...args: Parameters<typeof target.findMany>) => {
-        // Let an independently started session check finish before publishing the new snapshot.
-        await Promise.resolve();
-        await pendingActiveCheck;
-        expect((await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).success).toBe(true);
-        const content = huntingHabitatContent();
-        content.contracts[0]!.rewards = [{ itemId: "tusk", quantity: 1, chance: 100 }];
-        expect((await callerForDatabase(huntingRouter, "staff", db).save({ id: "forest", content })).success).toBe(true);
-        return target.findMany(...args);
-      };
-      return Reflect.get(target, key, receiver);
-    } });
-    const query = new Proxy(db.query, { get(target, key, receiver) {
-      return key === "huntingSession" ? sessions : key === "huntingHabitat" ? habitats : Reflect.get(target, key, receiver);
-    } });
-    const client = new Proxy(db, { get(target, key, receiver) {
-      return key === "query" ? query : Reflect.get(target, key, receiver);
-    } });
+    const client = overrideQuery(
+      overrideQuery(db, "huntingSession", {
+        findFirst: (read, ...args) => {
+          pendingActiveCheck = Promise.resolve(read(...args));
+          return pendingActiveCheck;
+        },
+      }),
+      "huntingHabitat",
+      {
+        findMany: async (read, ...args) => {
+          // Let an independently started session check finish before publishing the new snapshot.
+          await Promise.resolve();
+          await pendingActiveCheck;
+          expect((await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).success).toBe(true);
+          const content = huntingHabitatContent();
+          content.contracts[0]!.rewards = [{ itemId: "tusk", quantity: 1, chance: 100 }];
+          expect((await callerForDatabase(huntingRouter, "staff", db).save({ id: "forest", content })).success).toBe(true);
+          return read(...args);
+        },
+      },
+    );
     expect(await callerForDatabase(itemRouter, "staff", client).delete({ id: "hide" })).toMatchObject({ success: false, message: expect.stringContaining("active hunting session") });
     expect(await db.query.item.findFirst({ where: eq(item.id, "hide") })).toEqual(material);
     expect(await db.query.userItem.findMany({ where: eq(userItem.itemId, "hide") })).toEqual(inventory);
@@ -241,7 +216,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it("keeps accepted creature references through admission and releases them on switch", async () => {
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await insertUsers([{ userId: "replacement-ai", username: "replacement-ai", isAi: true }]);
     const content = huntingHabitatContent();
     content.contracts[0]!.aiId = "replacement-ai";
@@ -260,7 +235,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it.each(["AI", "material"] as const)("rejects unauthorized %s deletion before loading hunting sessions", async (kind) => {
-    const { db } = await prepare();
+    const { db } = await acceptReadySession();
     await insertUsers([{ userId: "unused-ai", username: "UnusedAI", isAi: true }]);
     await insertItems([{ id: "unused-item", name: "Unused material" }]);
     const recorded = await recordQueries(() => kind === "AI"
@@ -271,7 +246,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it.each(["AI", "material"] as const)("checks only selected legacy contract references for %s deletion", async (kind) => {
-    const { db } = await prepare();
+    const { db } = await acceptReadySession();
     await insertUsers([{ userId: "unused-ai", username: "UnusedAI", isAi: true }, { userId: "ai_%", username: "WildcardAI", isAi: true }]);
     await insertItems([{ id: "unused-item", name: "Unused material" }, { id: "item_%", name: "Wildcard material" }]);
     const content = huntingHabitatContent();
@@ -296,7 +271,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it("retains the accepted AI when a moderator confirms an elapsed deletion timer", async () => {
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await insertUsers([{ userId: "moderator", username: "Moderator", role: "HEAD_MODERATOR" }, { userId: "replacement-ai", username: "ReplacementAI", isAi: true }]);
     const moderator = callerForDatabase(profileRouter, "moderator", db);
     expect((await moderator.toggleDeletionTimer({ userId: "enemy" })).success).toBe(true);
@@ -316,7 +291,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it("allows a hunter to delete their own account and accepted session", async () => {
-    const { db } = await prepare();
+    const { db } = await acceptReadySession();
     const profile = callerForDatabase(profileRouter, "hunter", db);
     expect((await profile.toggleDeletionTimer({ userId: "hunter", confirmation: CHARACTER_DELETION_CONFIRMATION })).success).toBe(true);
     const target = (await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") }))!;
@@ -328,7 +303,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it("allows staff edits during combat and settles the accepted rewards and final cooldown exactly once", async () => {
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await db.update(huntingProgress).set({ used: 2 });
     expect((await hunter.start({ id })).success).toBe(true);
     const before = (await db.query.huntingProgress.findFirst())!;
@@ -353,26 +328,19 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it("admits accepted terms when a staff save overlaps battle admission", async () => {
-    const { db, id } = await prepare();
-    let edited = false;
-    const client = new Proxy(db, { get(target, key, receiver) {
-      if (key === "transaction") return async (...args: Parameters<typeof target.transaction>) => {
-        if (!edited) {
-          edited = true;
-          const content = huntingHabitatContent();
-          content.contracts = [];
-          expect((await callerForDatabase(huntingRouter, "staff", db).save({ id: "forest", content })).success).toBe(true);
-        }
-        return target.transaction(...args);
-      };
-      return Reflect.get(target, key, receiver);
-    } });
+    const { db, id } = await acceptReadySession();
+    const client = beforeTransaction(db, async (call) => {
+      if (call !== 1) return;
+      const content = huntingHabitatContent();
+      content.contracts = [];
+      expect((await callerForDatabase(huntingRouter, "staff", db).save({ id: "forest", content })).success).toBe(true);
+    });
     expect((await callerForDatabase(huntingRouter, "hunter", client).start({ id })).success).toBe(true);
     await settleVictory(db);
   });
 
   it("rejects stale force-awake recovery without clearing the admitted hunt or its queues", async () => {
-    const { db, hunter, id, version } = await prepare();
+    const { db, hunter, id, version } = await acceptReadySession();
     const client = beforeStatements(db, userData, [async () => {
       expect((await hunter.start({ id })).success).toBe(true);
       await db.insert(rankedPvpQueue).values({ id: "queued", userId: "hunter", rankedLp: 100 });
@@ -389,7 +357,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it.each(["identity", "version"] as const)("preserves a hunting session whose %s changed before recovery", async (change) => {
-    const { db, id, version } = await prepare();
+    const { db, id, version } = await acceptReadySession();
     const next = change === "identity" ? { id: "replacement" } : { version: version + 1 };
     const client = beforeStatements(db, userData, [async () => {
       await db.update(huntingSession).set(next).where(eq(huntingSession.userId, "hunter"));
@@ -411,7 +379,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   });
 
   it("rejects a stale rename before ownership moves and permits retry after the admitted hunt settles", async () => {
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await db.insert(userItem).values({ id: "inventory", userId: "hunter", itemId: "hide", quantity: 1 });
     const client = beforeStatements(db, storeUserIdAlias, [async () => { expect((await hunter.start({ id })).success).toBe(true); }]);
     const result = await callerForDatabase(staffRouter, "staff", client).updateUserId({ userId: "hunter", newUserId: "renamed" });
@@ -436,15 +404,10 @@ describeWithDatabase("staff changes during hunting admission", () => {
 
   for (const operation of ["forceAwake", "updateUserId"] as const) {
     it(`rejects a stale hunt when ${operation} finishes before its admission, then settles a fresh hunt`, async () => {
-      const { db, id } = await prepare();
-      let paused!: () => void;
-      let resume!: () => void;
-      const reached = new Promise<void>((resolve) => { paused = resolve; });
-      const wait = new Promise<void>((resolve) => { resume = resolve; });
-      const client = new Proxy(db, { get(target, key, receiver) {
-        if (key === "transaction") return async (...args: Parameters<typeof target.transaction>) => { paused(); await wait; return target.transaction(...args); };
-        return Reflect.get(target, key, receiver);
-      } });
+      const { db, id } = await acceptReadySession();
+      const { promise: reached, resolve: paused } = deferred<void>();
+      const { promise: wait, resolve: resume } = deferred<void>();
+      const client = beforeTransaction(db, async () => { paused(); await wait; });
       const pending = callerForDatabase(huntingRouter, "hunter", client).start({ id });
       try {
         await reached;

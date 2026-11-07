@@ -3,8 +3,16 @@ import {
   SAGE_MODE_DEFAULT_ACTION_COST_PERC,
 } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
-import { makeEffect } from "./battleScenario";
-import type { UserEffect } from "@/libs/combat/types";
+import { applySingleEffect } from "@/libs/combat/process";
+import { makeBattleUser, makeEffect } from "./battleScenario";
+import type {
+  ActionEffect,
+  BattleUserState,
+  CompleteBattle,
+  Consequence,
+  GroundEffect,
+  UserEffect,
+} from "@/libs/combat/types";
 
 type EffectRuntimeOverrides = Partial<UserEffect> & Record<string, unknown>;
 
@@ -52,3 +60,36 @@ export const makeActivateSageEffect = (
       ...runtime,
     },
   );
+
+/** Actor `sage` with mode `sage-1` equipped, unused this battle, no daily activations. */
+export const makeSageUser = (
+  overrides: Partial<BattleUserState> = {},
+): BattleUserState =>
+  makeBattleUser("sage", {
+    sageModeId: "sage-1",
+    sageModeUsedThisBattle: false,
+    sageMasteryExperience: 0,
+    dailySageActivations: 0,
+    ...overrides,
+  });
+
+/** Runs one Activation through `applySingleEffect` and returns the effects it realized. */
+export const activateSageMode = (
+  user: BattleUserState,
+  battle: CompleteBattle,
+  runtime: EffectRuntimeOverrides = {},
+): UserEffect[] => {
+  const usersEffects: UserEffect[] = [];
+  applySingleEffect(
+    new Map<string, Consequence>(),
+    [user],
+    usersEffects,
+    [] as GroundEffect[],
+    [] as ActionEffect[],
+    new Set<string>(),
+    battle,
+    user.userId,
+    makeActivateSageEffect(user.userId, runtime),
+  );
+  return usersEffects;
+};

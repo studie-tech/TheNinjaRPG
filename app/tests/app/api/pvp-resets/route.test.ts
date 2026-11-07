@@ -35,10 +35,7 @@ const mocks: PvpResetTestMocks = {
   candidates: [],
 };
 
-const cronRequest = (path: string) =>
-  new Request(`https://example.com/api/${path}`, {
-    headers: { authorization: "Bearer test-cron" },
-  });
+const cronRequest = (path: string) => new Request(`https://example.com/api/${path}`);
 
 const setsFor = (table: unknown) =>
   mocks.updates.filter((u) => u.table === table).map((u) => u.set);

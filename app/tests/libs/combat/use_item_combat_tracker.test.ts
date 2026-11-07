@@ -2,7 +2,7 @@ import { trackerQuest as makeQuest } from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
 import { buildCombatTrackerTasks, hydrateUserForQuests } from "@/libs/combat/util";
 import { getNewTrackers } from "@/libs/quest";
-import { makeBattleUser } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 
 // Exercise combat task construction, quest hydration and objective credit together.
@@ -31,21 +31,17 @@ const battleWith = (
   foe: ReturnType<typeof makeBattleUser>,
   quest: ReturnType<typeof makeQuest>,
 ): CompleteBattle =>
-  ({
-    id: "battle-1",
-    battleType: "COMBAT",
+  makeCompleteBattle({
     round: 3,
     usersState: [me, foe],
-    usersEffects: [],
-    groundEffects: [],
     extraState: {
       userQuests: {
         [me.controllerId]: [{ id: "uq-q", questId: quest.id, completed: 0, quest }],
       },
       completedQuests: { [me.controllerId]: [] },
       questData: { [me.controllerId]: [] },
-    },
-  }) as unknown as CompleteBattle;
+    } as unknown as CompleteBattle["extraState"],
+  });
 
 describe("use_specific_item_combat — updateUser seam", () => {
   const useItemObjective = {

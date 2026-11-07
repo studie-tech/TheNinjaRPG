@@ -15,10 +15,11 @@ import { questsRouter } from "@/server/api/routers/quests";
 import { QuestValidator, RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { actualGameSettings } from "../../../setup/preload";
+import { restoreEnvAfterEach } from "../../../setup/env";
+import { deferred } from "../../../setup/deferred";
 
 const env = process.env as Record<string, string | undefined>;
-const keys = ["NODE_ENV", "DISCORD_EVENT_UPDATES", "DISCORD_RAIDS_ROLE_ID", "DISCORD_WARS_ROLE_ID", "DISCORD_TERRITORY_WARS_ROLE_ID"];
-const saved = Object.fromEntries(keys.map(key => [key, env[key]]));
+restoreEnvAfterEach("NODE_ENV", "DISCORD_EVENT_UPDATES", "DISCORD_RAIDS_ROLE_ID", "DISCORD_WARS_ROLE_ID", "DISCORD_TERRITORY_WARS_ROLE_ID");
 const now = new Date("2026-10-29T12:00:00Z");
 let posts: ReturnType<typeof vi.spyOn<typeof globalThis, "fetch">>;
 beforeEach(() => {
@@ -28,7 +29,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const key of keys) { if (saved[key] === undefined) delete env[key]; else env[key] = saved[key]; }
 });
 it("restricts mentions and caps Discord content length", () => {
   const payload = discordEventPayload("111", "@everyone <@&222> " + "x".repeat(2500));
@@ -88,10 +88,8 @@ describeWithDatabase("Discord event delivery receipts", () => {
   it("keeps an end behind a pending start across overlapping minute ticks", async () => {
     const db = await seed();
     setSystemTime(new Date("2026-10-29T12:00:55Z"));
-    let release!: () => void;
-    let entered!: () => void;
-    const blocked = new Promise<void>(resolve => { release = resolve; });
-    const started = new Promise<void>(resolve => { entered = resolve; });
+    const { promise: blocked, resolve: release } = deferred<void>();
+    const { promise: started, resolve: entered } = deferred<void>();
     const accepted: string[] = [];
     posts.mockImplementation(async (_url, options) => {
       const message = JSON.parse(String(options?.body)).content as string;

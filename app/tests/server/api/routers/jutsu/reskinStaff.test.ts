@@ -4,7 +4,7 @@ import { actionLog, jutsu, jutsuReskin, userData, userJutsu } from "@/drizzle/sc
 import * as actualModerator from "@/libs/moderator";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import type { JutsuReskinUpdateSchema } from "@/validators/jutsu";
-import { insertUsers } from "../../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -22,19 +22,6 @@ const OWNER = "owner-user";
 const OTHER = "other-user";
 
 const caller = (userId: string) => callerFor(jutsuRouter, userId);
-
-const jutsuRow = (id: string) => ({
-  id,
-  name: `Jutsu ${id}`,
-  description: id,
-  battleDescription: id,
-  effects: [],
-  target: "SELF" as const,
-  range: 0,
-  requiredRank: "GENIN" as const,
-  jutsuType: "NORMAL" as const,
-  image: `/${id}.png`,
-});
 
 const reskinRow = (patch: Partial<typeof jutsuReskin.$inferInsert> = {}) => ({
   id: "reskin-1",
@@ -82,8 +69,7 @@ describeWithDatabase("jutsu reskin staff editing against a real MySQL", () => {
       { userId: OWNER, username: "Owner" },
       { userId: OTHER, username: "Other" },
     ] as never);
-    const database = await getTestDatabase();
-    await database.insert(jutsu).values([jutsuRow("jutsu-a"), jutsuRow("jutsu-b")]);
+    await insertJutsus(["jutsu-a", "jutsu-b"].map((id) => ({ id, requiredRank: "GENIN" })));
   });
 
   describe("getReskin", () => {

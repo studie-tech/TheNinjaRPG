@@ -2,13 +2,18 @@ import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import type {
   BattleUserState,
-  CombatAction,
   CompleteBattle,
   UserEffect,
 } from "@/libs/combat/types";
 import { applyPoolAdjustmentsToBase, getEffectiveMaxPool } from "@/libs/combat/util";
 import type { PoolType } from "@/drizzle/constants";
-import { makeBattleUser, makeDamageEffect, makeEffect } from "./helpers/battleScenario";
+import {
+  makeBattleUser,
+  makeCombatAction,
+  makeCompleteBattle,
+  makeDamageEffect,
+  makeEffect,
+} from "./helpers/battleScenario";
 
 /**
  * Equipment with `increasemaxpools` raises a combatant's maximum pools for the
@@ -22,20 +27,10 @@ const ROUND = 2;
 const BASE_MAX = 5050;
 const BONUS = 1200;
 
-const makeAction = (): CombatAction => ({ chakraCost: 0, staminaCost: 0 }) as CombatAction;
-
 const makeBattle = (
   usersState: BattleUserState[],
   usersEffects: UserEffect[],
-): CompleteBattle =>
-  ({
-    battleType: "COMBAT",
-    round: ROUND,
-    usersState,
-    usersEffects,
-    groundEffects: [],
-    extraState: {},
-  }) as unknown as CompleteBattle;
+): CompleteBattle => makeCompleteBattle({ round: ROUND, usersState, usersEffects });
 
 /** Armor-granted pool bonus, realized the way battle initiation realizes gear tags. */
 const makeArmorPoolBonus = (
@@ -136,7 +131,7 @@ describe("armor pool bonus survives in-battle healing", () => {
       [armor, makeHeal("player", ["Health", "Chakra", "Stamina"], 10)],
     );
 
-    const { newBattle } = applyEffects(battle, "player", makeAction());
+    const { newBattle } = applyEffects(battle, "player", makeCombatAction());
     const after = findUser(newBattle, "player");
 
     expect(after.curHealth).toBe(BASE_MAX + BONUS - 200);
@@ -151,7 +146,7 @@ describe("armor pool bonus survives in-battle healing", () => {
     const enemy = makeBattleUser("enemy");
     const battle = makeBattle([player, enemy], [armor, makeHeal("player", ["Health"], 50)]);
 
-    const { newBattle } = applyEffects(battle, "player", makeAction());
+    const { newBattle } = applyEffects(battle, "player", makeCombatAction());
 
     expect(findUser(newBattle, "player").curHealth).toBe(BASE_MAX + BONUS);
   });
@@ -178,7 +173,7 @@ describe("armor pool bonus survives in-battle healing", () => {
       [armor, absorb, makeAttack("enemy", "player", 10)],
     );
 
-    const { newBattle } = applyEffects(battle, "enemy", makeAction());
+    const { newBattle } = applyEffects(battle, "enemy", makeCombatAction());
     const after = findUser(newBattle, "player");
 
     // The hit plus partial absorb leaves the player below full, but far above the base max
@@ -193,7 +188,7 @@ describe("armor pool bonus survives in-battle healing", () => {
     let battle = makeBattle([player, enemy], [armor]);
 
     for (let i = 0; i < 3; i++) {
-      battle = applyEffects(battle, "player", makeAction()).newBattle;
+      battle = applyEffects(battle, "player", makeCombatAction()).newBattle;
       battle.round += 1;
     }
 

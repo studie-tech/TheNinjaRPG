@@ -30,8 +30,9 @@ import { warRouter } from "@/routers/war";
 import * as serverSentry from "@/server/utils/sentry";
 import { applyVillageMissionShrineDamage } from "@/server/utils/villageMission";
 import { startDeclaredWar, handleWarEnd, applyRaidHealthDecay } from "@/server/utils/war";
-import { insertUsers } from "../../../setup/factories";
-import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { insertUsers, insertClans } from "../../../setup/factories";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables, lockWaitObserved } from "../../../setup/testDatabase";
+import { beforeTransaction } from "../../../setup/statements";
 
 const FACTION = "faction-hideout";
 const TARGET = "target-village";
@@ -77,7 +78,7 @@ const seedWorld = async (attackerType: "HIDEOUT" | "VILLAGE" = "HIDEOUT") => {
     status: "ENEMY",
   });
   if (attackerType === "HIDEOUT") {
-    await database.insert(clan).values({ id: "raiding-faction", name: "Raiding Faction", image: "/clan.webp", villageId: FACTION, founderId: LEADER, leaderId: LEADER, leaderOrderId: LEADER, hasHideout: true });
+    await insertClans([{ id: "raiding-faction", name: "Raiding Faction", villageId: FACTION, leaderId: LEADER, hasHideout: true }]);
   }
   await database.insert(villageStructure).values([{
     id: "target-training",
@@ -98,6 +99,26 @@ const seedWorld = async (attackerType: "HIDEOUT" | "VILLAGE" = "HIDEOUT") => {
   factionMembers[0] = { ...factionMembers[0]!, userId: LEADER, username: "FactionLeader" };
   targetMembers[0] = { ...targetMembers[0]!, userId: TARGET_KAGE, username: "TargetKage" };
   await insertUsers([...factionMembers.map((member) => ({ ...member, clanId: attackerType === "HIDEOUT" ? "raiding-faction" : null })), ...targetMembers] as never);
+};
+
+/** The target's Town Hall and enough faction elders to vote on a declaration against it. */
+const seedElderVote = async () => {
+  const database = await getTestDatabase();
+  await database.insert(villageStructure).values({
+    id: "target-townhall",
+    name: "Town Hall",
+    image: "/townhall.webp",
+    villageId: TARGET,
+    route: "/townhall",
+  });
+  const elders = Array.from({ length: ELDER_MIN_VOTING_COUNT }, (_, index) => ({
+    userId: `elder-${index}`,
+    username: `Elder${index}`,
+    villageId: FACTION,
+    rank: "ELDER" as const,
+  }));
+  await insertUsers(elders);
+  return elders;
 };
 
 const readFaction = async () => {
@@ -224,7 +245,13 @@ describeWithDatabase("faction war declarations", () => {
         tokens: TOKENS,
         type: "HIDEOUT",
       });
-      await database.insert(clan).values({ id: "other-faction", name: "Other Faction", image: "/clan.webp", villageId: "other-village", founderId: LEADER, leaderId: LEADER, leaderOrderId: LEADER, hasHideout: true });
+      await insertClans([{
+        id: "other-faction",
+        name: "Other Faction",
+        villageId: "other-village",
+        leaderId: LEADER,
+        hasHideout: true,
+      }]);
       await insertUsers(Array.from({ length: FACTION_RAID_MIN_MEMBERS }, (_, i) => ({ userId: `other-${i}`, username: `Other${i}`, villageId: "other-village", clanId: "other-faction", isOutlaw: true })) as never);
       await database.insert(villageStructure).values({ id: "other-training", name: "Training Grounds", route: "/traininggrounds", image: "/training.webp", villageId: "other-village" });
       const declaration = {
@@ -268,20 +295,7 @@ describeWithDatabase("faction war declarations", () => {
   it("preserves the Town Hall through a village declaration and elder approval", async () => {
     await seedWorld("VILLAGE");
     const database = await getTestDatabase();
-    await database.insert(villageStructure).values({
-      id: "target-townhall",
-      name: "Town Hall",
-      image: "/townhall.webp",
-      villageId: TARGET,
-      route: "/townhall",
-    });
-    const elders = Array.from({ length: ELDER_MIN_VOTING_COUNT }, (_, index) => ({
-      userId: `elder-${index}`,
-      username: `Elder${index}`,
-      villageId: FACTION,
-      rank: "ELDER" as const,
-    }));
-    await insertUsers(elders);
+    const elders = await seedElderVote();
     const result = await (await callerFor(warRouter, LEADER)).declareVillageWarOrRaid({
       userVillageId: FACTION,
       targetVillageId: TARGET,
@@ -321,20 +335,7 @@ describeWithDatabase("faction war declarations", () => {
   it("releases the approved vote back to pending when the war start throws", async () => {
     await seedWorld("VILLAGE");
     const database = await getTestDatabase();
-    await database.insert(villageStructure).values({
-      id: "target-townhall",
-      name: "Town Hall",
-      image: "/townhall.webp",
-      villageId: TARGET,
-      route: "/townhall",
-    });
-    const elders = Array.from({ length: ELDER_MIN_VOTING_COUNT }, (_, index) => ({
-      userId: `elder-${index}`,
-      username: `Elder${index}`,
-      villageId: FACTION,
-      rank: "ELDER" as const,
-    }));
-    await insertUsers(elders);
+    const elders = await seedElderVote();
     await (await callerFor(warRouter, LEADER)).declareVillageWarOrRaid({
       userVillageId: FACTION,
       targetVillageId: TARGET,
@@ -350,12 +351,8 @@ describeWithDatabase("faction war declarations", () => {
       });
     }
     // Simulate the driver rejecting the war-start transaction after the vote is claimed.
-    const failingTransactions = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "transaction")
-          return () => Promise.reject(new Error("transaction in use"));
-        return Reflect.get(target, property, receiver);
-      },
+    const failingTransactions = beforeTransaction(database, () => {
+      throw new Error("transaction in use");
     });
     await expect(
       callerForDatabase(warRouter, majority.at(-1)!.userId, failingTransactions).voteOnWarDeclaration({
@@ -488,18 +485,7 @@ describeWithDatabase("faction war declarations", () => {
       await blocker.beginTransaction();
       await blocker.query("SELECT id FROM War WHERE id = ? FOR UPDATE", [raid!.id]);
       hit = applyVillageMissionShrineDamage(db, null, LEADER, raid!.id, "defenderShrineHp", 20, true);
-      let waiting = false;
-      for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
-        const [locks] = await blocker.query<mysql.RowDataPacket[]>(`
-          SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits AS waits
-          INNER JOIN performance_schema.data_locks AS blocking
-            ON blocking.ENGINE_LOCK_ID = waits.BLOCKING_ENGINE_LOCK_ID
-          WHERE blocking.OBJECT_SCHEMA = DATABASE() AND blocking.OBJECT_NAME = ?
-        `, [getTableName(war)]);
-        waiting = Number(locks[0]?.waiting) > 0;
-        if (!waiting) await setTimeout(10);
-      }
-      expect(waiting).toBe(true);
+      expect(await lockWaitObserved({ table: getTableName(war) })).toBe(true);
       const [clock] = await blocker.query<mysql.RowDataPacket[]>(`
         SELECT TIMESTAMPDIFF(MICROSECOND, SYSDATE(3), startedAt + INTERVAL ? HOUR) / 1000 AS remainingMs
         FROM War WHERE id = ?

@@ -1,5 +1,4 @@
 import { fetchBattle } from "@/queries/combat";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import * as nextServer from "next/server";
 import { eq, sql } from "drizzle-orm";
 import superjson from "superjson";
@@ -17,7 +16,7 @@ import {
   userItemImbuement,
   userQueue,
 } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot, combatProfilePatch } from "@/deltas/combat";
+import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { combatEnergyRecoverySql, updateBattle, updateUser } from "@/libs/combat/database";
 import { applyEffects } from "@/libs/combat/process";
@@ -29,11 +28,17 @@ import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { updateUserCache } from "@/utils/userCache";
 import { getTagSchema } from "@/validators/combat";
-import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertDefaultAiProfile,
+} from "../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../setup/queues";
-import { beforeStatements } from "../../setup/statements";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
+import { beforeStatements, aroundStatements } from "../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -48,6 +53,8 @@ import {
   makeCompleteBattle,
   makeEffect,
 } from "./helpers/battleScenario";
+import { deferred } from "../../setup/deferred";
+import { observeProfile, soloPveResult } from "./helpers/profileCache";
 
 const trigger = vi.fn(async () => {});
 const pusher = { trigger } as unknown as PusherClient;
@@ -149,13 +156,7 @@ describeWithDatabase("CAS combat settlement", () => {
     });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     // Rate limiting is external to settlement; SQL tests must not contact Redis.
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     vi.spyOn(nextServer, "after").mockImplementation(() => {});
     await insertUsers(
       ["winner", "loser"].map((userId) => ({
@@ -273,7 +274,7 @@ describeWithDatabase("CAS combat settlement", () => {
     ]);
     await insertUserItems([{ id: "imbue-stack", userId: "imbue-player", itemId: "imbue-chest", quantity: 1, equipped: "CHEST", durability: 100 }]);
     await database.insert(userItemImbuement).values({ id: "imbue-row", userItemId: "imbue-stack", imbuementItemId: "imbue-crystal", craftingFinishedAt: new Date(Date.now() - 86_400_000) });
-    await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     const original = (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user!;
     const started = await initiateBattle({ client: database, userIds: ["imbue-player"], targetIds: ["imbue-ai"] }, "ARENA");
     expect(started.success).toBe(true);
@@ -284,23 +285,17 @@ describeWithDatabase("CAS combat settlement", () => {
     const enemy = snapshot.usersState.find((user) => user.isAi)!;
     enemy.curHealth = 0;
     enemy.leftBattle = true;
-    const result = calcBattleResult(snapshot, "imbue-player", [])!;
-    // Relation rewards require profile reconciliation; isolate the eligible solo PvE outcome.
-    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    const result = soloPveResult(snapshot, "imbue-player");
     await updateUser(database, pusher, snapshot, result, "imbue-player");
     expect(result.profileUpdate).toBeDefined();
 
-    const key = [["profile", "getUser"], { type: "query" }];
-    const client = new QueryClient();
     const current = { ...original, status: "BATTLE" as const, battleId: started.battleId! };
-    client.setQueryData(key, { userData: current, notifications: [] });
-    let reads = 0;
-    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
-      queryFn: async () => { reads++; return { userData: (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user }; } });
-    const close = observer.subscribe(() => {});
+    const profile = observeProfile({ userData: current, notifications: [] }, async () => ({
+      userData: (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user,
+    }));
     try {
-      await updateUserCache(client, key, (user) => combatProfilePatch(user, result.profileUpdate!), { revision: prepareUserUpdate(client, key), delta: result.profileUpdate!.userDelta });
-      const cached = client.getQueryData<{ userData: typeof current }>(key)!.userData;
+      await profile.apply(result.profileUpdate);
+      const cached = profile.user();
       const authoritative = (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user!;
       expect(authoritative.maxEnergy).toBe(650);
       expect(authoritative.effectiveMasteries.ninjutsuMastery).toBe(110);
@@ -310,11 +305,10 @@ describeWithDatabase("CAS combat settlement", () => {
       expect(authoritative.items[0]!.durability).toBe(100);
       expect(cached.status).toBe<NonNullable<UserWithRelations>["status"]>("AWAKE");
       expect(cached.battleId).toBeNull();
-      expect(client.getQueryState(key)?.isInvalidated).toBe(false);
-      expect(reads).toBe(0);
+      expect(profile.client.getQueryState(profile.key)?.isInvalidated).toBe(false);
+      expect(profile.reads()).toBe(0);
     } finally {
-      close();
-      client.clear();
+      profile.close();
     }
   });
 
@@ -336,18 +330,15 @@ describeWithDatabase("CAS combat settlement", () => {
         curStamina: 100, maxStamina: 100, curEnergy: 10, regeneration: 1, regenAt: new Date(Date.now() - 60_000) },
       { userId: "counter-ai", username: "CounterAI", isAi: true, isSummon: false, inArena: true, rank: "NONE", level: 1, curHealth: 100 },
     ]);
-    await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     const original = (await database.query.userData.findFirst({ where: eq(userData.userId, "counter-player") }))!;
     const initial = { ...original, items: [], titles: [], questData: [], userQuests: [], completedQuests: [] } as unknown as NonNullable<UserWithRelations>;
-    const key = [["profile", "getUser"], { type: "query" }];
-    const client = new QueryClient();
-    client.setQueryData(key, { userData: initial });
-    let reads = 0;
-    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
-      queryFn: async () => { reads++; return { userData: (await fetchUpdatedUser({ client: database, userId: "counter-player" })).user }; } });
-    const close = observer.subscribe(() => {});
+    const profile = observeProfile({ userData: initial }, async () => ({
+      userData: (await fetchUpdatedUser({ client: database, userId: "counter-player" })).user,
+    }));
+    const { client, key } = profile;
     try {
-      const revision = prepareUserUpdate(client, key);
+      const revision = profile.revision();
       const started = await initiateBattle({ client: database, userIds: ["counter-player"], targetIds: ["counter-ai"], actionUserId: "counter-player" }, "ARENA");
       expect(started.success).toBe(true);
       const packet = events.mock.calls.find(([channel, event, data]) => channel === "counter-player" &&
@@ -371,16 +362,15 @@ describeWithDatabase("CAS combat settlement", () => {
       else await updateUserCache(client, key, { status: "BATTLE", battleId: packet.battleId }, {
         refetch: false, userRecovery,
       });
-      expect(client.getQueryData<{ userData: typeof initial }>(key)?.userData).toMatchObject({
+      expect(profile.user()).toMatchObject({
         status: "BATTLE", battleId: started.battleId, pveFights: admission === "socket" ? 10 : 11,
       });
-      expect(reads).toBe(0);
+      expect(profile.reads()).toBe(0);
       snapshot.usersState.find((user) => !user.isAi)!.curHealth = 100;
       const enemy = snapshot.usersState.find((user) => user.isAi)!;
       enemy.curHealth = 0;
       enemy.leftBattle = true;
-      const result = calcBattleResult(snapshot, "counter-player", [])!;
-      result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+      const result = soloPveResult(snapshot, "counter-player");
       const settlement = await recordQueries(() => updateUser(database, pusher, snapshot, result, "counter-player"));
       expect(settlement.statements.some((statement) => /^select\b/i.test(statement))).toBe(false);
       const after = (await database.query.userData.findFirst({ where: eq(userData.userId, "counter-player") }))!;
@@ -388,17 +378,15 @@ describeWithDatabase("CAS combat settlement", () => {
       expect(result.profileUpdate?.userPatch.pveFights).toBe(after.pveFights);
       // MySQL fractional-tick division rounds at four decimal places.
       expect(result.profileUpdate?.userPatch.curEnergy).toBeCloseTo(after.curEnergy, 3);
-      await updateUserCache(client, key, (user) => combatProfilePatch(user, result.profileUpdate!), {
-        revision: prepareUserUpdate(client, key), delta: result.profileUpdate!.userDelta,
-      });
-      const cached = client.getQueryData<{ userData: typeof initial }>(key)!.userData;
+      await profile.apply(result.profileUpdate);
+      const cached = profile.user();
       expect(cached).toMatchObject({ status: "AWAKE", battleId: null, pveFights: after.pveFights,
         money: after.money, experience: after.experience, earnedExperience: after.earnedExperience });
       expect(cached.curEnergy).toBeCloseTo(after.curEnergy, 3);
       expect(cached.regenAt.getTime()).toBe(after.regenAt.getTime());
       expect(client.getQueryState(key)?.isInvalidated).toBe(false);
-      expect(reads).toBe(0);
-    } finally { close(); client.clear(); }
+      expect(profile.reads()).toBe(0);
+    } finally { profile.close(); }
   });
 
   it("returns confirmed compact PvE progression only for the player whose battle guard commits", async () => {
@@ -411,8 +399,7 @@ describeWithDatabase("CAS combat settlement", () => {
     snapshot.extraState.profileCacheSnapshots = { winner: captureCombatCacheSnapshot({ ...original, items: [] }) };
     snapshot.extraState.energyCapacity = { winner: 100 };
     snapshot.extraState.energyRegeneration = { winner: 0 };
-    const result = calcBattleResult(snapshot, "winner", [])!;
-    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    const result = soloPveResult(snapshot, "winner");
     result.money = -0.5; result.experience = 0.75; result.earnedExperience = 0.25; result.seichiSilver = 0.5;
     result.curHealth = 90.75; result.curChakra = 80.25; result.curStamina = 70.5;
     await updateUser(database, pusher, snapshot, result, "winner");
@@ -444,8 +431,7 @@ describeWithDatabase("CAS combat settlement", () => {
     snapshot.extraState.profileCacheSnapshots = { winner: captureCombatCacheSnapshot({ ...original, items: [] }) };
     snapshot.extraState.energyCapacity = { winner: 100 };
     snapshot.extraState.energyRegeneration = { winner: 0 };
-    const result = calcBattleResult(snapshot, "winner", [])!;
-    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    const result = soloPveResult(snapshot, "winner");
     await database.update(userData).set({ battleId: "replacement" }).where(eq(userData.userId, "winner"));
     await updateUser(database, pusher, snapshot, result, "winner");
     expect(result.profileUpdate).toBeUndefined();
@@ -471,28 +457,10 @@ describeWithDatabase("CAS combat settlement", () => {
     await fetchUpdatedUser({client: database, userId: "winner", forceRegen: true});
     await database.update(userData).set({regenAt: new Date(Date.now() - 120_000), regeneration: 3}).where(eq(userData.userId, "winner"));
     let enteredCombat = false;
-    const delayedDatabase = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof database.update>[0]) => {
-          const builder = database.update(table);
-          return {
-            set(values: Parameters<typeof builder.set>[0]) {
-              const update = builder.set(values);
-              return {
-                async where(condition: Parameters<typeof update.where>[0]) {
-                  if (table === userData && "primaryElement" in values && !enteredCombat) {
-                    enteredCombat = true;
-                    await database.update(userData).set({status: "BATTLE", battleId: "settlement"}).where(eq(userData.userId, "winner"));
-                  }
-                  return update.where(condition);
-                },
-              };
-            },
-          };
-        };
-      },
-    });
+    const delayedDatabase = beforeStatements(database, userData, [async () => {
+      enteredCombat = true;
+      await database.update(userData).set({status: "BATTLE", battleId: "settlement"}).where(eq(userData.userId, "winner"));
+    }], { when: (set) => "primaryElement" in set });
     const {user} = await fetchUpdatedUser({client: delayedDatabase, userId: "winner", forceRegen: true});
     expect(enteredCombat).toBe(true);
     expect(user?.status).toBe("BATTLE");
@@ -707,9 +675,7 @@ describeWithDatabase("CAS combat settlement", () => {
         rank: "JONIN",
         isOutlaw: true,
       });
-      await database
-        .insert(aiProfile)
-        .values({ id: "Default", userId: "default-ai", rules: [] });
+      await insertDefaultAiProfile();
       await database.insert(battleHistory).values({
         battleId: "previous",
         battleType: "COMBAT",
@@ -770,62 +736,21 @@ describeWithDatabase("CAS combat settlement", () => {
       const snapshot = scenario(true);
       const database = await getTestDatabase();
       await database.insert(battle).values(snapshot);
-      let releaseCleanup!: () => void;
-      const cleanupGate = new Promise<void>((resolve) => {
-        releaseCleanup = resolve;
-      });
-      let rewardWritten!: () => void;
-      const rewardReady = new Promise<void>((resolve) => {
-        rewardWritten = resolve;
-      });
-      const client = new Proxy(database, {
-        get(target, key, receiver) {
-          if (key === "insert")
-            return (table: Parameters<typeof database.insert>[0]) => {
-              if (table !== logBattleLengths) return database.insert(table);
-              return {
-                values: (values: typeof logBattleLengths.$inferInsert) => ({
-                  onDuplicateKeyUpdate: async (
-                    config: Parameters<
-                      ReturnType<
-                        ReturnType<typeof database.insert>["values"]
-                      >["onDuplicateKeyUpdate"]
-                    >[0],
-                  ) => {
-                    await cleanupGate;
-                    return database
-                      .insert(logBattleLengths)
-                      .values(values)
-                      .onDuplicateKeyUpdate(config);
-                  },
-                }),
-              };
-            };
-          if (key === "update")
-            return (table: Parameters<typeof database.update>[0]) => {
-              if (table !== userData) return database.update(table);
-              return {
-                set: (
-                  values: Parameters<ReturnType<typeof database.update>["set"]>[0],
-                ) => ({
-                  where: async (
-                    condition: Parameters<
-                      ReturnType<ReturnType<typeof database.update>["set"]>["where"]
-                    >[0],
-                  ) => {
-                    const result = await database
-                      .update(userData)
-                      .set(values)
-                      .where(condition);
-                    rewardWritten();
-                    return result;
-                  },
-                }),
-              };
-            };
-          return Reflect.get(target, key, receiver);
+      const { promise: cleanupGate, resolve: releaseCleanup } = deferred<void>();
+      const { promise: rewardReady, resolve: rewardWritten } = deferred<void>();
+      const client = aroundStatements(
+        aroundStatements(database, logBattleLengths, async (run) => {
+          await cleanupGate;
+          return run();
+        }, { operations: ["insert"] }),
+        userData,
+        async (run) => {
+          const result = await run();
+          rewardWritten();
+          return result;
         },
-      });
+        { operations: ["update"] },
+      );
       const api = callerForDatabase(combatRouter, "winner", client);
       const request =
         route === "getBattle"
@@ -859,16 +784,10 @@ describeWithDatabase("CAS combat settlement", () => {
       await (await getTestDatabase()).insert(battle).values(snapshot);
       let attempts = 0;
       const database = await getTestDatabase();
-      const client = new Proxy(database, {
-        get(target, key, receiver) {
-          if (key !== "delete") return Reflect.get(target, key, receiver);
-          return (...args: Parameters<typeof database.delete>) => {
-            if (args[0] === battle && ++attempts === 1)
-              throw new Error("Deadlock found when trying to get lock");
-            return database.delete(...args);
-          };
-        },
-      });
+      const client = aroundStatements(database, battle, async (run) => {
+        if (++attempts === 1) throw new Error("Deadlock found when trying to get lock");
+        return run();
+      }, { operations: ["delete"] });
       const api = callerForDatabase(combatRouter, "winner", client);
       const response =
         route === "getBattle"

@@ -26,7 +26,7 @@ import { calcMaxEnergy } from "@/libs/profile";
 import { fetchMasterySources } from "@/queries/skillTree";
 import { itemRouter } from "@/server/api/routers/item";
 import { countUserReads } from "../../../setup/userReads";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, overrideQuery } from "../../../setup/statements";
 import { makeEffect } from "../../../libs/combat/helpers/battleScenario";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
@@ -111,18 +111,8 @@ describeWithDatabase("committed profile cache patches", () => {
 
   it("returns confirmed slot deltas without needing an optional cache read", async () => {
     const db = await getTestDatabase();
-    const failingCacheRead = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "query")
-          return {
-            ...target.query,
-            userData: {
-              ...target.query.userData,
-              findFirst: () => Promise.reject(new Error("Cache read unavailable")),
-            },
-          };
-        return Reflect.get(target, key, receiver);
-      },
+    const failingCacheRead = overrideQuery(db, "userData", {
+      findFirst: () => Promise.reject(new Error("Cache read unavailable")),
     });
     const caller = callerForDatabase(blackMarketRouter, userId, failingCacheRead);
     const result = await caller.buyItemSlot();

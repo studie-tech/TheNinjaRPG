@@ -79,6 +79,18 @@ describe("content-gated objective matcher", () => {
     expect(goalOf(result, "q1", "o2")?.value).toBe(0);
   });
 
+  it("credits two buy_item objectives independently by their own id-lists", () => {
+    const quest = makeQuest("q1", [
+      buyObjective("o1", ["item-A"], 5),
+      buyObjective("o2", ["item-B"], 5),
+    ]);
+    const result = getNewTrackers(makeUser([quest]), [
+      { task: "buy_item", increment: 2, contentId: "item-A" },
+    ]);
+    expect(goalOf(result, "q1", "o1")?.value).toBe(2);
+    expect(goalOf(result, "q1", "o2")?.value).toBe(0);
+  });
+
   it("defaults increment to 1 and auto-completes at value", () => {
     const quest = makeQuest("q1", [craftObjective("o1", ["item-A"], 1)]);
     const result = getNewTrackers(makeUser([quest]), [

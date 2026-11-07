@@ -23,14 +23,15 @@ import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { profileRouter } from "@/server/api/routers/profile";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { insertUsers } from "../../../../setup/factories";
-import { beforeStatements, failStatements } from "../../../../setup/statements";
+import { insertUsers, insertClans } from "../../../../setup/factories";
+import { beforeStatements, failStatements, pollUntil, overrideQuery } from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 describeWithDatabase("clan queue claim ownership", () => {
   beforeEach(async () => {
@@ -56,17 +57,7 @@ describeWithDatabase("clan queue claim ownership", () => {
       })),
     );
     const db = await getTestDatabase();
-    await db.insert(clan).values(
-      ["a", "b"].map((id) => ({
-        id,
-        name: id,
-        image: "/clan.png",
-        villageId: "v",
-        founderId: id === "a" ? "leader" : "enemy",
-        leaderId: id === "a" ? "leader" : "enemy",
-        leaderOrderId: id,
-      })),
-    );
+    await insertClans(["a", "b"].map((id) => ({ id, villageId: "v", leaderId: id === "a" ? "leader" : "enemy", leaderOrderId: id })));
     await db.insert(mpvpBattleQueue).values(
       ["old", "new"].map((id) => ({
         id,
@@ -255,14 +246,8 @@ describeWithDatabase("clan queue claim ownership", () => {
               .set({ status: "QUEUED" })
               .where(eq(userData.userId, "leader"));
           }
-          let signalReady = () => {};
-          let releaseInsert = () => {};
-          const ready = new Promise<void>((resolve) => {
-            signalReady = resolve;
-          });
-          const wait = new Promise<void>((resolve) => {
-            releaseInsert = resolve;
-          });
+          const { promise: ready, resolve: signalReady } = deferred<void>();
+          const { promise: wait, resolve: releaseInsert } = deferred<void>();
           let joining: ReturnType<typeof join> | undefined;
           let replacement: Promise<void> | undefined;
           const replace = () =>
@@ -285,23 +270,11 @@ describeWithDatabase("clan queue claim ownership", () => {
           let client = db;
           if (cleanup === "undo") {
             let reads = 0;
-            client = new Proxy(db, {
-              get(target, property, receiver) {
-                if (property !== "query")
-                  return Reflect.get(target, property, receiver);
-                return {
-                  ...target.query,
-                  mpvpBattleQueue: {
-                    ...target.query.mpvpBattleQueue,
-                    findFirst: async (
-                      ...args: Parameters<typeof target.query.mpvpBattleQueue.findFirst>
-                    ) => {
-                      // Delete the old join's lobby after insertion but before validation.
-                      if (++reads === 2) await replace();
-                      return target.query.mpvpBattleQueue.findFirst(...args);
-                    },
-                  },
-                };
+            client = overrideQuery(db, "mpvpBattleQueue", {
+              findFirst: async (read, ...args) => {
+                // Delete the old join's lobby after insertion but before validation.
+                if (++reads === 2) await replace();
+                return read(...args);
               },
             });
           } else {
@@ -378,10 +351,7 @@ describeWithDatabase("clan queue claim ownership", () => {
       const client = beforeStatements(db, rankedPvpQueue, [
         async () => {
           // Ranked leave wakes in parallel; keep its old claimed row until clan queuing finishes.
-          for (let attempts = 0; attempts < 100; attempts++) {
-            if ((await storedUser())?.status === "AWAKE") break;
-            await new Promise((resolve) => setTimeout(resolve, 1));
-          }
+          await pollUntil(async () => (await storedUser())?.status === "AWAKE");
           expect(await storedUser()).toEqual({ status: "AWAKE", battleId: null });
           expect((await join(db)).success).toBe(false);
         },
@@ -447,10 +417,7 @@ describeWithDatabase("clan queue claim ownership", () => {
         async () => {
           if (operation === "challenge") {
             // Wait for the parallel challenge-lobby insert before reserving it.
-            for (let attempts = 0; attempts < 100; attempts++) {
-              if ((await db.query.mpvpBattleQueue.findMany()).length === 3) break;
-              await new Promise((resolve) => setTimeout(resolve, 1));
-            }
+            await pollUntil(async () => (await db.query.mpvpBattleQueue.findMany()).length === 3);
           }
           const lobbies = await db.query.mpvpBattleQueue.findMany();
           const lobby = lobbies.find((q) =>
@@ -495,10 +462,7 @@ describeWithDatabase("clan queue claim ownership", () => {
 
   it("settles a delayed challenge-lobby insert before compensating a lost membership", async () => {
     const db = await getTestDatabase();
-    let signalMemberFailed = () => {};
-    const memberFailed = new Promise<void>((resolve) => {
-      signalMemberFailed = resolve;
-    });
+    const { promise: memberFailed, resolve: signalMemberFailed } = deferred<void>();
     // Hold the lobby insertion until the membership insertion has already rejected.
     let client = beforeStatements(db, mpvpBattleQueue, [
       async () => {

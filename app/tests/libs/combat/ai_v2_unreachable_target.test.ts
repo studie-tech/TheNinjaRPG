@@ -1,13 +1,15 @@
 import { describe, it, expect } from "bun:test";
 import { Grid, rectangle, ring } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
+import type { BattleUserState, ExtraState } from "@/libs/combat/types";
 import { TerrainHex } from "@/libs/hexgrid";
 import {
   ActionMoveTowardsOpponent,
   ActionWithEffectHighestPower,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
+import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
+import { makeJutsu, makeTag } from "./helpers/battleScenario";
 
 /**
  * An AI whose chosen action turns out to be impossible must fall through to its
@@ -25,42 +27,26 @@ const WIDTH = 13;
 const HEIGHT = 9;
 
 const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
-  ({
-    userId: "x", username: "x", controllerId: "dragon-template",
-    isAi: true, isSummon: false, isPiloted: false, aiProfileId: PROFILE,
-    curHealth: 5000, maxHealth: 5000, curChakra: 5000, maxChakra: 5000,
-    curStamina: 5000, maxStamina: 5000, villageId: "village-ai",
-    fledBattle: false, leftBattle: false, longitude: 0, latitude: 0,
-    actionPoints: 100, effects: [], jutsus: [], items: [], basicActions: [],
-    round: 0, direction: "right", isAggressor: false,
-    highestGenerals: [], iAmHere: true, level: 60,
-    originalLevel: 60, originalLongitude: 0, originalLatitude: 0,
-    isOriginal: true, usedGenerals: {}, usedStats: {}, moneyStolen: 0,
-    allyVillage: false, usedActions: [], usedTagTypes: [], damageDealt: 0, initiative: 0,
-    relationIds: [],
-    offence: 100, defence: 100,
-    ninjutsuMastery: 100, genjutsuMastery: 100, taijutsuMastery: 100,
-    bukijutsuMastery: 100, bloodlineMastery: 100, sageMastery: 100,
-    strength: 100, intelligence: 100, willpower: 100, speed: 100,
+  makeAiUser({
+    controllerId: "dragon-template", aiProfileId: PROFILE, villageId: "village-ai",
+    longitude: 0, latitude: 0, originalLongitude: 0, originalLatitude: 0,
+    level: 60, originalLevel: 60,
     ...over,
-  }) as unknown as BattleUserState;
+  });
 
-const heavyJutsu = {
+const heavyJutsu = makeJutsu({
   id: HEAVY_JUTSU,
   name: "Heavy Strike",
-  image: "", description: "", battleDescription: "%user strikes %target",
-  jutsuType: "AI", jutsuRank: "D", requiredRank: "STUDENT", requiredLevel: 1,
-  target: "OTHER_USER", range: 5, method: "SINGLE", cooldown: 0,
-  actionCostPerc: 60, staminaCost: 0, chakraCost: 0, healthCost: 0,
-  staminaCostReducePerLvl: 0, chakraCostReducePerLvl: 0, healthCostReducePerLvl: 0,
-  extraBaseCost: 0, jutsuWeapon: "NONE", bloodlineId: null, villageId: null,
-  hidden: false, injectableInBattle: false, battleUsageType: "BOTH",
-  effects: [{
-    type: "damage", power: 40, powerPerLevel: 0, level: 1,
-    calculation: "formula", statTypes: ["Highest"], generalTypes: [], elements: [],
+  battleDescription: "%user strikes %target",
+  jutsuType: "AI",
+  range: 5,
+  actionCostPerc: 60,
+  effects: [makeTag("damage", {
+    power: 40, powerPerLevel: 0,
+    calculation: "formula", statTypes: ["None"], generalTypes: [], elements: [],
     rounds: 0, target: "INHERIT", friendlyFire: "ENEMIES", description: "dmg",
-  }],
-};
+  })],
+});
 
 /** Places the player in a corner, fills every neighbouring tile, and parks one AI behind them. */
 const mkCorneredBattle = (grid: Grid<TerrainHex>) => {
@@ -91,17 +77,11 @@ const mkCorneredBattle = (grid: Grid<TerrainHex>) => {
                equipped: true, lastUsedRound: -99, originalCooldown: 0 }],
   } as Partial<BattleUserState>);
 
-  return {
-    id: "b1", battleType: "QUEST", round: 1, version: 1, activeUserId: stuck.userId,
-    createdAt: new Date(0), updatedAt: new Date(0), roundStartAt: new Date(0),
-    background: "", width: WIDTH, height: HEIGHT, rewardScaling: 1, forceKeepPools: false,
+  return makeAiBattle({
+    battleType: "QUEST", activeUserId: stuck.userId, width: WIDTH, height: HEIGHT,
     usersState: [player, ...blockers, stuck],
-    usersEffects: [], groundEffects: [],
     extraState: {
       jutsus: { [HEAVY_JUTSU]: heavyJutsu },
-      jutsuReskins: {}, items: {}, bloodlines: {}, villages: {}, anbuSquads: {},
-      keystoneItems: {}, wars: {}, relations: {}, clans: {},
-      userQuests: {}, completedQuests: {}, questData: {}, bounties: {}, bountySignups: {},
       aiProfiles: {
         [PROFILE]: {
           id: PROFILE, name: "baby diamond", includeDefaultRules: true,
@@ -116,9 +96,9 @@ const mkCorneredBattle = (grid: Grid<TerrainHex>) => {
             },
           ],
         },
-      },
+      } as unknown as ExtraState["aiProfiles"],
     },
-  } as unknown as CompleteBattle;
+  });
 };
 
 describe("performAIaction with an unreachable target", () => {

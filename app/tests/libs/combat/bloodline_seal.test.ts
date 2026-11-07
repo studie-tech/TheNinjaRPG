@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import type { Jutsu } from "@/drizzle/schema";
 import { availableUserActions, getActionPointCost, performBattleAction } from "@/libs/combat/actions";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { applyEffects } from "@/libs/combat/process";
 import { applyFinalStandDamage, applyPreventTag, heal } from "@/libs/combat/tags";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
@@ -17,6 +17,7 @@ import {
   makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
+  makeJutsu,
   makeTag,
 } from "./helpers/battleScenario";
 import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
@@ -181,7 +182,7 @@ describe("Bloodline Seal", () => {
 
 /** A granted skill already on cooldown when its bloodline becomes sealed. */
 const injectedFixture = () => {
-  const jutsu = { ...SAGE_MODE_ACTIVATION_JUTSU, id: "injected-skill", name: "Injected skill", cooldown: 10, effects: [makeTag("heal")] };
+  const jutsu = makeJutsu({ id: "injected-skill", name: "Injected skill", cooldown: 10, effects: [makeTag("heal")] });
   const user = makeBattleUser("defender", {
     jutsus: [{ id: "owned-injection", jutsuId: jutsu.id, origin: "injected", equipped: true, level: 1, experience: 0, originalCooldown: 10, lastUsedRound: 3 }],
   });
@@ -290,9 +291,9 @@ describe("Bloodline Seal poison pool costs", () => {
 /** Exercise action selection, resource spending and effect processing together. */
 const actionFixture = (
   effects: UserEffect[],
-  tags: typeof SAGE_MODE_ACTIVATION_JUTSU.effects = [makeTag("damage", { power: 0, calculation: "static", rounds: 0, target: "SELF" })],
+  tags: Jutsu["effects"] = [makeTag("damage", { power: 0, calculation: "static", rounds: 0, target: "SELF" })],
 ) => {
-  const jutsu = { ...SAGE_MODE_ACTIVATION_JUTSU, id: "test-action", name: "Test action", chakraCost: 100, actionCostPerc: 40, effects: tags };
+  const jutsu = makeJutsu({ id: "test-action", name: "Test action", target: "SELF", range: 0, chakraCost: 100, actionCostPerc: 40, effects: tags });
   const user = makeBattleUser("defender", {
     jutsus: [{ id: "owned-action", jutsuId: jutsu.id, origin: "user", equipped: true, level: 1, experience: 0, originalCooldown: 0, lastUsedRound: -10 }],
   });

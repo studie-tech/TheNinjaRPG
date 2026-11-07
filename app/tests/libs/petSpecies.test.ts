@@ -4,7 +4,7 @@ import { PET_ABILITY_SLOTS_BY_RARITY, PetRarities } from "@/drizzle/constants";
 import { ActionEndTurn } from "@/validators/ai";
 import { AllTags, isActivityBonus, SuperRefineEffects, SuperRefinePassiveEffects, BarrierTag, IncreaseStatTag, MoveTag, SummonTag } from "@/validators/combat";
 import { PetSpeciesValidator } from "@/validators/petSpecies";
-import { petAiProfileSchema, updatePetAiSchema } from "@/validators/pets";
+import { assignPetExperienceSchema, petAiProfileSchema, petNameSchema, updatePetAiSchema } from "@/validators/pets";
 
 const species = { name: "Mist fox", description: "A fox with silver ears.", rarity: "COMMON" as const, isActive: true };
 
@@ -70,5 +70,24 @@ describe("authored companion species contracts", () => {
         message: `${effect.type === "barrier" ? "Barrier" : "Move"} tags require an empty-ground combat action.`,
       }));
     }
+  });
+});
+
+describe("companion owner input contracts", () => {
+  it("restricts names and stat allocations without accepting free-form art prompts", () => {
+    expect(petNameSchema.parse("  Kumo  ")).toBe("Kumo");
+    expect(petNameSchema.safeParse("Kumo\u202e").success).toBe(false);
+    expect(petNameSchema.safeParse("Kumo\n").success).toBe(true);
+    expect(petNameSchema.safeParse("Ku\nmo").success).toBe(false);
+    expect(assignPetExperienceSchema.safeParse({ offence: Number.POSITIVE_INFINITY }).success).toBe(false);
+    expect(assignPetExperienceSchema.safeParse({ strength: -1 }).success).toBe(false);
+  });
+
+  it("only accepts AI actions and effects supplied by the pet's basic loadout", () => {
+    const config = { petId: "owned-pet", includeDefaultRules: true, rules: [{ conditions: [], action: { type: "use_highest_power_action", effect: "damage" } }] };
+    expect(updatePetAiSchema.safeParse(config).success).toBe(true);
+    expect(updatePetAiSchema.safeParse({ ...config, rules: [{ conditions: [], action: { type: "use_highest_power_action", effect: "shield" } }] }).success).toBe(true);
+    expect(updatePetAiSchema.safeParse({ ...config, rules: [{ conditions: [], action: { type: "use_specific_jutsu", jutsuId: "unowned-jutsu" } }] }).success).toBe(false);
+    expect(updatePetAiSchema.safeParse({ ...config, rules: [{ conditions: [], action: { type: "use_highest_power_action", effect: "summon" } }] }).success).toBe(false);
   });
 });

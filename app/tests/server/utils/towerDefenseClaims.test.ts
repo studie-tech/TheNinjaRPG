@@ -5,6 +5,7 @@ import {
   parseSpacetimeSqlRows,
   towerDefenseClaimKey,
 } from "@/server/utils/towerDefenseClaims";
+import { restoreEnvAfterEach } from "../../setup/env";
 
 // Response shape recorded from a SpacetimeDB `/v1/database/:name/sql` call
 const sqlResponse = (row: unknown[] | null) => [
@@ -23,11 +24,7 @@ const sqlResponse = (row: unknown[] | null) => [
 ];
 
 describe("tower defense claim switch", () => {
-  const original = process.env.TOWER_DEFENSE_CLAIMS_ENABLED;
-  afterEach(() => {
-    if (original === undefined) delete process.env.TOWER_DEFENSE_CLAIMS_ENABLED;
-    else process.env.TOWER_DEFENSE_CLAIMS_ENABLED = original;
-  });
+  restoreEnvAfterEach("TOWER_DEFENSE_CLAIMS_ENABLED");
 
   it("is paused unless explicitly enabled", () => {
     delete process.env.TOWER_DEFENSE_CLAIMS_ENABLED;

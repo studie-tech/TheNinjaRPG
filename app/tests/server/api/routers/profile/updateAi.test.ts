@@ -4,7 +4,7 @@ import { actionLog, jutsu, userData, userJutsu } from "@/drizzle/schema";
 import * as socials from "@/libs/socials";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { InsertAiSchemaInput } from "@/validators/aiInput";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertJutsus } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -42,19 +42,7 @@ describeWithDatabase("profile.updateAi username uniqueness", () => {
       { userId: AI, username: "Guardian Bot", isAi: true, level: 10 },
       { userId: PLAYER, username: "Guardian", role: "USER" },
     ]);
-    const database = await getTestDatabase();
-    await database.insert(jutsu).values({
-      id: "ai-jutsu",
-      name: "AI Jutsu",
-      description: "Test jutsu",
-      battleDescription: "Test jutsu",
-      image: "/jutsu.png",
-      effects: [],
-      target: "SELF",
-      range: 0,
-      requiredRank: "GENIN",
-      jutsuType: "NORMAL",
-    });
+    await insertJutsus([{ id: "ai-jutsu", name: "AI Jutsu", requiredRank: "GENIN" }]);
   });
 
   it("rejects a username another user has before writing anything", async () => {

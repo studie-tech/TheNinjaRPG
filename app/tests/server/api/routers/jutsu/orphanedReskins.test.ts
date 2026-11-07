@@ -12,7 +12,7 @@ import {
 } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { DamageTag, JutsuValidator } from "@/validators/combat";
-import { insertUsers } from "../../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -30,19 +30,6 @@ const STAFF = "staff-user";
 const OWNER = "owner-user";
 
 const caller = (userId: string) => callerFor(jutsuRouter, userId);
-
-const jutsuRow = (id: string) => ({
-  id,
-  name: `Jutsu ${id}`,
-  description: id,
-  battleDescription: id,
-  effects: [],
-  target: "SELF" as const,
-  range: 0,
-  requiredRank: "GENIN" as const,
-  jutsuType: "NORMAL" as const,
-  image: `/${id}.png`,
-});
 
 const reskinRow = (id: string, jutsuId: string) => ({
   id,
@@ -70,10 +57,7 @@ describeWithDatabase("orphaned jutsu reskins against a real MySQL", () => {
       { userId: STAFF, username: "Staff", role: "CONTENT" },
       { userId: OWNER, username: "Owner", extraReskinSlots: 0, reputationPoints: 500 },
     ] as never);
-    const database = await getTestDatabase();
-    await database
-      .insert(jutsu)
-      .values([jutsuRow("jutsu-a"), jutsuRow("jutsu-b"), jutsuRow("jutsu-c")]);
+    await insertJutsus(["jutsu-a", "jutsu-b", "jutsu-c"].map((id) => ({ id, name: `Jutsu ${id}`, requiredRank: "GENIN" })));
   });
 
   afterEach(() => {

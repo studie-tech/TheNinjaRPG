@@ -7,7 +7,9 @@ import { GET } from "@/app/api/daily-hideout-downgrade/route";
 import * as gamesettings from "@/libs/gamesettings";
 import { resetServerModuleStubs, stubCronAuth, stubDatabase } from "../../../setup/serverModules";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { barrier } from "../../../setup/statements";
 
+import { insertClans } from "../../../setup/factories";
 const cost = STRONGHOLD_MONTHLY_MAINTENANCE;
 const dueAt = new Date(Date.now() - 31 * 86400_000);
 const request = () => new Request("https://example.com/api/daily-hideout-downgrade");
@@ -16,33 +18,29 @@ const request = () => new Request("https://example.com/api/daily-hideout-downgra
 const seedMaintenance = async (points: number) => {
   const db = await getTestDatabase();
   await db.insert(village).values({ id: "stronghold", name: "Stronghold", sector: 301, type: "STRONGHOLD", kageId: "leader", lastMaintenancePaidAt: dueAt });
-  await db.insert(clan).values({ id: "faction", name: "Faction", image: "/clan.webp", villageId: "stronghold", founderId: "leader", leaderId: "leader", leaderOrderId: "order", hasHideout: true, points });
+  await insertClans([{ id: "faction", name: "Faction", villageId: "stronghold", leaderId: "leader", hasHideout: true, points }]);
   return db;
 };
 
 describeWithDatabase("Stronghold monthly maintenance", () => {
-  const spies: { mockRestore: () => void }[] = [];
   beforeEach(async () => {
     await resetTables(clan, village);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewDay: true, prevTime: new Date(0), prevValue: 0, response: Response.json("Ready") }));
+    vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewDay: true, prevTime: new Date(0), prevValue: 0, response: Response.json("Ready") });
   });
   afterEach(() => {
-    for (const spy of spies.splice(0)) spy.mockRestore();
+    vi.restoreAllMocks();
     resetServerModuleStubs();
   });
 
   it.each([cost - 1, cost, cost * 2])("charges or downgrades once when duplicate claims start with %s points", async (points) => {
     const db = await seedMaintenance(points);
-    let release!: () => void;
-    const ready = new Promise<void>((resolve) => { release = resolve; });
-    let writes = 0;
+    const bothPrefetched = barrier(2);
     stubDatabase({
       select: db.select.bind(db),
       execute: async (...args: Parameters<typeof db.execute>) => {
         // Both requests must finish their prefetch before either maintenance claim runs.
-        if (++writes === 2) release();
-        await ready;
+        await bothPrefetched();
         return db.execute(...args);
       },
     });

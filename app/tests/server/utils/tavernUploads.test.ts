@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { createTavernUploadGuard } from "@/server/utils/tavernUploads";
+import { restoreEnvAfterEach } from "../../setup/env";
 
 const env = process.env as Record<string, string | undefined>;
-const originalEnvironment = env.NODE_ENV;
-afterEach(() => { if (originalEnvironment === undefined) delete env.NODE_ENV; else env.NODE_ENV = originalEnvironment; vi.restoreAllMocks(); });
+restoreEnvAfterEach("NODE_ENV");
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe("tavern image upload allowance", () => {
   it.each([true, false])("returns the account-specific allowance (%s)", async (success) => {

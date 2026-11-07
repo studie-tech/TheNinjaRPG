@@ -11,6 +11,7 @@ import * as Modal from "@/layout/Modal";
 import * as UserContext from "@/utils/UserContext";
 import * as routing from "@/utils/routing";
 import { huntingContract } from "../setup/hunting";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 let store: ReturnType<typeof createStore>;
 let isLoading: boolean;
@@ -22,8 +23,6 @@ let encounterError: Error | null;
 const refetch = vi.fn();
 const storageKey = "huntingArrival:popup-hunter";
 const user = { userId: "popup-hunter", occupation: "HUNTER", status: "AWAKE", sector: 1, tutorialOn: false };
-const browserEvents = ["Event", "CustomEvent"] as const;
-const eventDescriptors = browserEvents.map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 
 beforeEach(() => {
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
@@ -33,7 +32,7 @@ beforeEach(() => {
 });
 
 beforeEach(() => {
-  for (const key of browserEvents) Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
+  installBrowserGlobals();
   window.sessionStorage.removeItem(storageKey);
   window.localStorage.removeItem("streakPopupDismissedDateX");
   store = createStore();
@@ -63,15 +62,11 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  // Radix restores focus asynchronously using the DOM's event constructors.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   vi.restoreAllMocks();
   window.sessionStorage.removeItem(storageKey);
   window.localStorage.removeItem("streakPopupDismissedDateX");
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 
 // Match the shell: route children mount before the global daily-reward popup.

@@ -9,31 +9,11 @@ import { ShrineHall } from "@/layout/ShrineHall";
 import * as table from "@/layout/Table";
 import type { UserWithRelations } from "@/routers/profile";
 import * as UserContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 describe("ShrineHall reserve boost locks", () => {
-  let animationFrameDescriptor: PropertyDescriptor | undefined;
-  let cancelAnimationFrameDescriptor: PropertyDescriptor | undefined;
-
   beforeEach(() => {
-    animationFrameDescriptor = Object.getOwnPropertyDescriptor(
-      globalThis,
-      "requestAnimationFrame",
-    );
-    cancelAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(
-      globalThis,
-      "cancelAnimationFrame",
-    );
-    Object.defineProperties(globalThis, {
-      requestAnimationFrame: {
-        configurable: true,
-        value: (callback: FrameRequestCallback) =>
-          Number(setTimeout(() => callback(Date.now()), 0)),
-      },
-      cancelAnimationFrame: {
-        configurable: true,
-        value: (id: number) => clearTimeout(id),
-      },
-    });
+    installBrowserGlobals({ events: [], animationFrame: true });
     vi.spyOn(contentBox, "default").mockImplementation(
       ({ children }: { children: ReactNode }) => <>{children}</>,
     );
@@ -44,13 +24,7 @@ describe("ShrineHall reserve boost locks", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
-    for (const [key, descriptor] of [
-      ["requestAnimationFrame", animationFrameDescriptor],
-      ["cancelAnimationFrame", cancelAnimationFrameDescriptor],
-    ] as const) {
-      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-      else Reflect.deleteProperty(globalThis, key);
-    }
+    restoreBrowserGlobals();
   });
 
   it.each([

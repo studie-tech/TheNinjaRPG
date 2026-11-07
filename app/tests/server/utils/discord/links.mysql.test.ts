@@ -42,6 +42,7 @@ import {
   indexColumns,
   resetTables,
 } from "../../../setup/testDatabase";
+import { restoreEnvAfterEach } from "../../../setup/env";
 
 const DAY = 86_400_000;
 const GUILD = "2222222222222222222";
@@ -63,9 +64,6 @@ const ENV = {
   DISCORD_TOKEN_ENCRYPTION_KEY: KEY.toString("base64"),
   NEXT_PUBLIC_BASE_URL: "http://localhost:3000",
 };
-const originalEnv = Object.fromEntries(
-  Object.keys(ENV).map((key) => [key, process.env[key]]),
-);
 const originalFetch = globalThis.fetch;
 
 type Call = {
@@ -225,6 +223,7 @@ const addSanction = async (
   });
 
 describeWithDatabase("Discord links (SQL)", () => {
+  restoreEnvAfterEach(...Object.keys(ENV));
   beforeEach(async () => {
     Object.assign(process.env, ENV);
     calls = [];
@@ -253,10 +252,6 @@ describeWithDatabase("Discord links (SQL)", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     globalThis.fetch = originalFetch;
-    for (const [key, value] of Object.entries(originalEnv)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
   });
 
   it("keeps one link per character and at most two per Discord account", async () => {

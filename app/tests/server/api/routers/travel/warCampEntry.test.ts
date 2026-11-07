@@ -8,8 +8,10 @@ import { travelRouter } from "@/server/api/routers/travel";
 import type { DrizzleClient } from "@/server/db";
 import { getSectorNeighborIds, invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import { defaultWarRules } from "@/validators/war";
+import { sectorMap } from "../../../../setup/sectorMap";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const SECTOR = 1538;
 const neighbors = getSectorNeighborIds(SECTOR);
@@ -20,14 +22,8 @@ const reservedWar = {
   combatStartedAt: new Date(Date.now() - 60_000), rules: defaultWarRules,
   warAllies: [], warMercenaries: [],
 };
-const makeMap = (width = SECTOR_WIDTH, height = SECTOR_HEIGHT): NormalizedSectorMap => ({
-  formatVersion: 1, sector: SECTOR, name: "Test sector", width, height,
-  anchors: [], objects: [], exits: [], metadata: { importedAt: "2026-01-01", source: "tiled" },
-  tiles: Array.from({ length: width * height }, (_, index) => ({
-    x: index % width, y: Math.floor(index / width), terrain: "ground", battleBiome: "ground",
-    walkCost: 1, blocked: false, zone: "wilderness",
-  })),
-});
+const makeMap = (width = SECTOR_WIDTH, height = SECTOR_HEIGHT): NormalizedSectorMap =>
+  sectorMap(width, height, undefined, { sector: SECTOR, anchors: [] });
 
 const fixture = ({ width = SECTOR_WIDTH, height = SECTOR_HEIGHT,
   reservedSectors = [] as number[], queued = false, settledVillage = "neutral",
@@ -36,10 +32,8 @@ const fixture = ({ width = SECTOR_WIDTH, height = SECTOR_HEIGHT,
   const reads: string[] = [];
   const campSectors: number[] = [];
   let writes = 0;
-  let releaseUser!: () => void;
-  let signalUserRead!: () => void;
-  const userStarted = new Promise<void>((resolve) => { signalUserRead = resolve; });
-  const userReady = new Promise<void>((resolve) => { releaseUser = resolve; });
+  const { promise: userStarted, resolve: signalUserRead } = deferred<void>();
+  const { promise: userReady, resolve: releaseUser } = deferred<void>();
   const user = {
     userId: "visitor", username: "Visitor", sector: SECTOR, villageId: "neutral",
     status: "AWAKE", updatedAt: new Date(), energyQueueHead: 0, energyQueueTail: queued ? 1 : 0,

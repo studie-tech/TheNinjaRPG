@@ -1,21 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import {
-  QueryClient,
-  QueryClientProvider,
-  focusManager,
-  onlineManager,
-} from "@tanstack/react-query";
+import { QueryClient, focusManager, onlineManager } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
+import { getQueryKey } from "@trpc/react-query";
 import type { PropsWithChildren } from "react";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { useActiveWars } from "@/hooks/useActiveWars";
 import { defaultWarRules } from "@/validators/war";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 type Wars = RouterOutputs["war"]["getActiveWars"];
 type Props = {
   villageId: string;
@@ -70,18 +63,9 @@ const setup = (initial: Wars = [], props: Partial<Props> = {}) => {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(queryClient);
-  const trpcClient = testApi.createClient({
-    links: [() => ({ op }) => observable((observer) => {
-      void Promise.resolve().then(() => read(op.input)).then((data) => {
-        observer.next({ result: { data } });
-        observer.complete();
-      }, (error) => observer.error(error));
-    })],
-  });
+  const trpcClient = fakeTrpcClient((_path, input) => read(input));
   const wrapper = ({ children }: PropsWithChildren) => (
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
   );
   const initialProps: Props = {
     villageId: "own", enabled: true, polling: "discovery", timeDiff: 0, ...props,

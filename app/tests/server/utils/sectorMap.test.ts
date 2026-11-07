@@ -10,6 +10,7 @@ import {
   invalidatePublishedMapCache,
 } from "@/server/utils/sectorMap";
 import { planetScaleFixture } from "../../setup/planetscale";
+import { deferred } from "../../setup/deferred";
 
 const makeMap = (sector: number, name = "map"): NormalizedSectorMap => ({
   formatVersion: SECTOR_MAP_VERSION,
@@ -186,10 +187,7 @@ describe("published sector map cache", () => {
         findMany.mockImplementationOnce(async () => [{ sector: 3, version: 2 }]);
       }
       let release: (rows: MapRow[]) => void = () => {};
-      let markStarted = () => {};
-      const started = new Promise<void>((resolve) => {
-        markStarted = resolve;
-      });
+      const { promise: started, resolve: markStarted } = deferred<void>();
       findMany.mockImplementationOnce(() => {
         markStarted();
         return new Promise<MapRow[]>((resolve) => {

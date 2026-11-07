@@ -11,7 +11,14 @@ import { questsRouter } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
 import { DialogObjective } from "@/validators/objectives";
 import { QuestReward } from "@/validators/rewardPackages";
-import { insertItems, insertPetSpecies, insertQuests, insertUserItems, insertUsers } from "../../../setup/factories";
+import {
+  insertItems,
+  insertPetSpecies,
+  insertQuests,
+  insertUserItems,
+  insertUsers,
+  insertUserPets,
+} from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
@@ -30,10 +37,27 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await insertUsers([{ userId: ownerId, username: "TaskOwner", rank: "CHUNIN", level: 30, status: "AWAKE", occupation: "HUNTER", money: 1000, earnedExperience: 1000, petExperience: 777, activePetId: petId, regeneration: 0, isOutlaw: true, primaryElement: "Fire", secondaryElement: "Water" }]);
     await insertPetSpecies([{ id: "task-species", name: "Task Fox" }]);
-    const database = await getTestDatabase();
-    await database.insert(userPet).values([
-      { id: petId, userId: ownerId, name: "Kumo", speciesId: "task-species", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 5, artRank: 5, generationStatus: "READY", avatar: "/pet.webp" },
-      { id: "parked-pet", userId: ownerId, name: "Haru", speciesId: "task-species", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 5, artRank: 5, generationStatus: "READY", avatar: "/pet2.webp" },
+    await insertUserPets([
+      {
+        id: petId,
+        userId: ownerId,
+        name: "Kumo",
+        speciesId: "task-species",
+        rank: 5,
+        artRank: 5,
+        generationStatus: "READY",
+        avatar: "/pet.webp",
+      },
+      {
+        id: "parked-pet",
+        userId: ownerId,
+        name: "Haru",
+        speciesId: "task-species",
+        rank: 5,
+        artRank: 5,
+        generationStatus: "READY",
+        avatar: "/pet2.webp",
+      },
     ]);
     await insertQuests([
       { id: contractId, name: "Hunting contract", questType: "hunting", petTaskMinutes: 1, hidden: false, maxAttempts: 100, maxCompletes: 2, retryDelay: "daily", content },

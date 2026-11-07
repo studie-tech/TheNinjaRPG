@@ -1,11 +1,8 @@
 import { afterEach, beforeEach, expect, it, setDefaultTimeout, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createTRPCReact } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
+import { QueryClient } from "@tanstack/react-query";
 import * as navigation from "next/navigation";
 import { Suspense } from "react";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import ManualCompanions from "@/app/[shell]/manual/companions/page";
@@ -22,11 +19,12 @@ import { ActionEndTurn } from "@/validators/ai";
 import { IncreaseStatTag } from "@/validators/combat";
 import { PET_RANK_APPEARANCES } from "@/libs/pets/catalogue";
 import { PetSpeciesValidator } from "@/validators/petSpecies";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
 
-const testApi = createTRPCReact<AppRouter>();
 const usePetSpeciesEditForm = petSpecies.usePetSpeciesEditForm;
 const defaults = { artDirection: null, rankConcepts: [], preferredDamageElement: null, role: "ASSAULT" as const, defaultJutsuIds: [], aiRules: [], includeDefaultRules: true, effects: [] };
 let queryClient: QueryClient;
@@ -38,15 +36,9 @@ let update: ReturnType<typeof vi.fn>;
 let failQuery: boolean;
 let requested: string[];
 let push: ReturnType<typeof vi.fn>;
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true });
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   role = "CONTENT";
   failQuery = false;
@@ -86,33 +78,26 @@ afterEach(() => {
   cleanup();
   queryClient.clear();
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 /** Real client queries and forms exercise our screen behavior without unrelated game panels. */
 const mount = async (edit = false) => {
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    requested.push(op.path);
-    const respond = async () => {
-      if (op.path === "petSpecies.getAll" || op.path === "petSpecies.get") {
-        if (failQuery) throw new Error("Please try again.");
-        return op.path.endsWith("getAll") ? species : species.find((entry) => entry.id === (op.input as { id: string }).id);
-      }
-      if (op.path === "petSpecies.create") return create(op.input);
-      if (op.path === "petSpecies.update") return update(op.input);
-      if (op.path === "jutsu.getAll") return { data: [], nextCursor: null };
-      throw new Error(`Unexpected query ${op.path}`);
-    };
-    void respond().then((data) => { observer.next({ result: { data } }); observer.complete(); }, (error) => observer.error(error));
-  })] });
+  const trpcClient = fakeTrpcClient(async (path, input) => {
+    requested.push(path);
+    if (path === "petSpecies.getAll" || path === "petSpecies.get") {
+      if (failQuery) throw new Error("Please try again.");
+      return path.endsWith("getAll") ? species : species.find((entry) => entry.id === (input as { id: string }).id);
+    }
+    if (path === "petSpecies.create") return create(input);
+    if (path === "petSpecies.update") return update(input);
+    if (path === "jutsu.getAll") return { data: [], nextCursor: null };
+    throw new Error(`Unexpected query ${path}`);
+  });
   const params = Promise.resolve({ speciesid: "fox" });
   let view: ReturnType<typeof render>;
   await act(async () => {
-    view = render(<testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}><Suspense fallback={null}>{edit ? <PetSpeciesEdit params={params} /> : <ManualCompanions />}</Suspense></QueryClientProvider></testApi.Provider>);
+    view = render(<TrpcTestProviders client={trpcClient} queryClient={queryClient}><Suspense fallback={null}>{edit ? <PetSpeciesEdit params={params} /> : <ManualCompanions />}</Suspense></TrpcTestProviders>);
   });
   return view!;
 };

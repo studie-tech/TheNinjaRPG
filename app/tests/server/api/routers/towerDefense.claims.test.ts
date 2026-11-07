@@ -13,6 +13,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { restoreEnvAfterEach } from "../../../setup/env";
 
 const upgradeDefinitions = [
   { id: "u1", maxLevel: 5, baseCost: 10, costMultiplier: 1.5, effectValue: 1, upgradeType: "DAMAGE" },
@@ -81,7 +82,7 @@ const points = async (userId: string) => {
 };
 
 describeWithDatabase("towerDefense.claimCompletedRun", () => {
-  const original = process.env.TOWER_DEFENSE_CLAIMS_ENABLED;
+  restoreEnvAfterEach("TOWER_DEFENSE_CLAIMS_ENABLED");
 
   beforeEach(async () => {
     process.env.TOWER_DEFENSE_CLAIMS_ENABLED = "true";
@@ -90,8 +91,6 @@ describeWithDatabase("towerDefense.claimCompletedRun", () => {
   });
   afterEach(() => {
     vi.restoreAllMocks();
-    if (original === undefined) delete process.env.TOWER_DEFENSE_CLAIMS_ENABLED;
-    else process.env.TOWER_DEFENSE_CLAIMS_ENABLED = original;
   });
 
   it("refuses every claim while rewards are paused", async () => {

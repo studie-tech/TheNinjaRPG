@@ -16,7 +16,6 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { profileRouter } from "@/server/api/routers/profile";
-import { registerRouter } from "@/server/api/routers/register";
 import { reportsRouter } from "@/server/api/routers/reports";
 import { removeAccountGameData } from "@/server/utils/accountDeletion/cleanup";
 import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
@@ -25,7 +24,9 @@ import { hashSanctionIdentifier, hashSanctionIp, recordSanctionTombstone, type S
 import { fetchActiveSanctionTombstones } from "@/queries/reports";
 
 import { insertUsers } from "../../setup/factories";
-import { beforeStatements } from "../../setup/statements";
+import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
+import { insertSanctionReports, sanctionIdentity, stubClerkUsers } from "../../setup/sanctions";
+import { beforeStatements, interceptExecute, aroundStatements } from "../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -33,41 +34,23 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
 
 const DAY = 86_400_000;
 const NATIVE_USER = "native-deleting";
-const identity: SanctionIdentity = {
-  primaryEmailAddressId: "primary",
-  emailAddresses: [
-    {
-      id: "primary",
-      emailAddress: "native-appeal@example.com",
-      verification: { status: "verified" },
-    },
-  ],
-  externalAccounts: [{ provider: "oauth_google", providerUserId: "native-subject" }],
-};
+const identity = sanctionIdentity("native-appeal@example.com", [
+  { provider: "oauth_google", providerUserId: "native-subject" },
+]);
 const hashes = {
   emailHash: hashSanctionIdentifier("email", "native-appeal@example.com"),
   accountHashes: [hashSanctionIdentifier("oauth", "google:native-subject")],
 };
 
-const addReport = async (
+const addReport = (
   id: string,
   status: "BAN_ACTIVATED" | "SILENCE_ACTIVATED" | "TIMEOUT_ACTIVATED",
   end: Date,
-) =>
-  (await getTestDatabase()).insert(userReport).values({
-    id,
-    reporterUserId: "staff",
-    reportedUserId: NATIVE_USER,
-    system: "tavern_comment",
-    infraction: {},
-    reason: "Spam",
-    aiInterpretation: "",
-    status,
-    banEnd: end,
-  });
+) => insertSanctionReports([{ id, reportedUserId: NATIVE_USER, status, banEnd: end }]);
 
 const startDeletion = async () => {
   const database = await getTestDatabase();
@@ -116,26 +99,11 @@ const finishDeletion = async (userId = NATIVE_USER) => {
 
 const register = async (userId: string, userIp?: string) => {
   expect(
-    await registerRouter
-      .createCaller({
-        drizzle: await getTestDatabase(),
-        userId,
-        userIp,
-      } as never)
-      .createCharacter({
-        username: userId,
-        gender: "Male",
-        hair_color: "Black",
-        eye_color: "Blue",
-        skin_color: "Light",
-        attribute_1: "Soft features",
-        attribute_2: "Glasses",
-        attribute_3: "Short Hair",
-        read_tos: true,
-        read_privacy: true,
-        read_earlyaccess: true,
-        bloodlineId: "native-bloodline",
-      }),
+    await registerCharacter(
+      userId,
+      { username: userId, bloodlineId: "native-bloodline" },
+      { userIp },
+    ),
   ).toMatchObject({ success: true });
   return (await getTestDatabase()).query.userReport.findMany({
     where: eq(userReport.reportedUserId, userId),
@@ -152,19 +120,12 @@ const decisionInput = {
 /** Native re-registration can reuse an identity only after its Clerk owner is deleted. */
 const stubSingleIdentity = (afterDelete?: () => Promise<void>) => {
   const liveOwners = new Map([[NATIVE_USER, identity]]);
-  vi.spyOn(clerk, "clerkClient").mockResolvedValue({
-    users: {
-      getUser: vi.fn(async (userId: string) => {
-        const owner = liveOwners.get(userId);
-        if (!owner) throw Object.assign(new Error("not found"), { status: 404 });
-        return owner;
-      }),
-      deleteUser: vi.fn(async (userId: string) => {
-        liveOwners.delete(userId);
-        await afterDelete?.();
-      }),
+  stubClerkUsers((userId) => liveOwners.get(userId), {
+    deleteUser: async (userId) => {
+      liveOwners.delete(userId);
+      await afterDelete?.();
     },
-  } as never);
+  });
   return {
     register: async (userId: string, ownerIdentity = identity, userIp?: string) => {
       expect(liveOwners.size).toBe(0);
@@ -192,36 +153,22 @@ const deleteReplacement = async () => {
 /** Pause an atomic decision write to interleave authorized actions and cleanup. */
 const pauseNextDecision = async (beforeWrite = false) => {
   const database = await getTestDatabase();
-  const execute = database.execute.bind(database);
-  let enter!: () => void;
-  const entered = new Promise<void>((resolve) => {
-    enter = resolve;
-  });
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise: entered, resolve: enter } = deferred<void>();
+  const { promise: gate, resolve: release } = deferred<void>();
   let paused = false;
-  const client = new Proxy(database, {
-    get(target, property, receiver) {
-      if (property === "execute") {
-        return async (...args: Parameters<typeof execute>) => {
-          if (paused) return execute(...args);
-          paused = true;
-          if (beforeWrite) {
-            enter();
-            await gate;
-          }
-          const result = await execute(...args);
-          if (!beforeWrite) {
-            enter();
-            await gate;
-          }
-          return result;
-        };
-      }
-      return Reflect.get(target, property, receiver);
-    },
+  const client = interceptExecute(database, async (_query, run) => {
+    if (paused) return run();
+    paused = true;
+    if (beforeWrite) {
+      enter();
+      await gate;
+    }
+    const result = await run();
+    if (!beforeWrite) {
+      enter();
+      await gate;
+    }
+    return result;
   });
   return { client, entered, release };
 };
@@ -240,34 +187,16 @@ describeWithDatabase("original sanctions during native deletion", () => {
       userReportComment,
       village,
     );
-    const database = await getTestDatabase();
     await Promise.all([
       insertUsers([{ userId: "staff", role: "OWNER" }, { userId: NATIVE_USER }]),
-      database
-        .insert(village)
-        .values({ id: "native-horizon", name: "Horizon", sector: 1, kageId: "kage" }),
-      database.insert(bloodline).values({
-        id: "native-bloodline",
-        name: "Native bloodline",
-        image: "/bloodline.png",
-        description: "test",
-        effects: [],
-        rank: "D",
-      }),
+      insertRegistrationContent("native"),
     ]);
     const deletedIdentities = new Set<string>();
-    vi.spyOn(clerk, "clerkClient").mockResolvedValue({
-      users: {
-        getUser: vi.fn(async (userId: string) => {
-          if (deletedIdentities.has(userId))
-            throw Object.assign(new Error("not found"), { status: 404 });
-          return identity;
-        }),
-        deleteUser: vi.fn(async (userId: string) => {
-          deletedIdentities.add(userId);
-        }),
+    stubClerkUsers((userId) => (deletedIdentities.has(userId) ? undefined : identity), {
+      deleteUser: async (userId) => {
+        deletedIdentities.add(userId);
       },
-    } as never);
+    });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue();
   });
   afterEach(async () => {
@@ -287,28 +216,19 @@ describeWithDatabase("original sanctions during native deletion", () => {
       await addReport("original", "BAN_ACTIVATED", new Date(Date.now() + 10 * DAY));
       let failsOnce = true;
       const deleted = new Set<string>();
-      vi.spyOn(clerk, "clerkClient").mockResolvedValue({
-        users: {
-          getUser: vi.fn(async (userId: string) => {
-            if (deleted.has(userId))
-              throw Object.assign(new Error("not found"), { status: 404 });
-            return {
-              ...identity,
-              emailAddresses: [
-                { ...identity.emailAddresses[0]!, emailAddress: `${userId}@example.com` },
-              ],
-              externalAccounts: [],
-            };
-          }),
-          deleteUser: vi.fn(async (userId: string) => {
+      stubClerkUsers(
+        (userId) =>
+          deleted.has(userId) ? undefined : sanctionIdentity(`${userId}@example.com`),
+        {
+          deleteUser: async (userId) => {
             if (failsOnce) {
               failsOnce = false;
               throw new Error("Clerk temporarily unavailable");
             }
             deleted.add(userId);
-          }),
+          },
         },
-      } as never);
+      );
       await database.insert(accountDeletion).values({ userId: NATIVE_USER });
       expect(await processAccountDeletions(NATIVE_USER)).toEqual({
         processed: 0,
@@ -385,30 +305,17 @@ describeWithDatabase("original sanctions during native deletion", () => {
         .where(eq(userData.userId, NATIVE_USER));
       await recordSanctionTombstone(database, NATIVE_USER, identity);
       let attempts = 0;
-      const injected = new Proxy(database, {
-        get(target, property, receiver) {
-          if (property === "delete")
-            return (table: Parameters<typeof target.delete>[0]) => {
-              if (table !== sanctionTombstone) return target.delete(table);
-              return {
-                where: async (
-                  ...args: Parameters<ReturnType<typeof target.delete>["where"]>
-                ) => {
-                  attempts += 1;
-                  if (deadlock && attempts === 1)
-                    throw Object.assign(
-                      new Error(
-                        "Deadlock found when trying to get lock; try restarting transaction",
-                      ),
-                      { errno: 1213, code: "ER_LOCK_DEADLOCK", sqlState: "40001" },
-                    );
-                  return target.delete(table).where(...args);
-                },
-              };
-            };
-          return Reflect.get(target, property, receiver);
-        },
-      });
+      const injected = aroundStatements(database, sanctionTombstone, async (run) => {
+        attempts += 1;
+        if (deadlock && attempts === 1)
+          throw Object.assign(
+            new Error(
+              "Deadlock found when trying to get lock; try restarting transaction",
+            ),
+            { errno: 1213, code: "ER_LOCK_DEADLOCK", sqlState: "40001" },
+          );
+        return run();
+      }, { operations: ["delete"] });
       expect(
         await callerForDatabase(reportsRouter, "staff", injected).clear(decisionInput),
       ).toMatchObject({ success: true });
@@ -642,14 +549,8 @@ describeWithDatabase("original sanctions during native deletion", () => {
         updatedAt: new Date(Date.now() - 360_000),
       })
       .where(eq(userData.userId, NATIVE_USER));
-    let enter!: () => void;
-    const entered = new Promise<void>((resolve) => {
-      enter = resolve;
-    });
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: entered, resolve: enter } = deferred<void>();
+    const { promise: gate, resolve: release } = deferred<void>();
     const paused = beforeStatements(database, historicalIp, [async () => {
       enter();
       await gate;
@@ -822,12 +723,7 @@ describeWithDatabase("original sanctions during native deletion", () => {
       ).toEqual(withLateIp);
 
       // Release the replacement's sign-in identity before another account reuses it.
-      await database.insert(accountDeletion).values({ userId: "DuringDelay" });
-      expect(await processAccountDeletions("DuringDelay")).toEqual({
-        processed: 1,
-        failed: 0,
-      });
-      await finishDeletion("DuringDelay");
+      await deleteReplacement();
       const returned = await register("AfterCleanup");
       const expected = [
         ...(decision === "ban"
@@ -1336,14 +1232,8 @@ describeWithDatabase("original sanctions during native deletion", () => {
   );
 
   it("requires a captured source while a deleted Clerk identity's response is pending", async () => {
-    let enter!: () => void;
-    let release!: () => void;
-    const entered = new Promise<void>((resolve) => {
-      enter = resolve;
-    });
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: entered, resolve: enter } = deferred<void>();
+    const { promise: gate, resolve: release } = deferred<void>();
     const { register: registerIdentity } = stubSingleIdentity(async () => {
       enter();
       await gate;

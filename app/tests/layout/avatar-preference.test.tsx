@@ -5,8 +5,8 @@ import { renderToString } from "react-dom/server";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useAvatarRenditionWidth } from "@/layout/Avatar";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const customEventDescriptor = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
 
 const Probe = ({ record }: { record?: (width: number) => void }) => {
   const width = useAvatarRenditionWidth(100);
@@ -16,14 +16,13 @@ const Probe = ({ record }: { record?: (width: number) => void }) => {
 
 describe("avatar preference snapshots", () => {
   beforeEach(() => {
-    Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
+    installBrowserGlobals({ events: ["CustomEvent"] });
     window.localStorage.clear();
   });
 
   afterEach(() => {
     cleanup();
-    if (customEventDescriptor) Object.defineProperty(globalThis, "CustomEvent", customEventDescriptor);
-    else Reflect.deleteProperty(globalThis, "CustomEvent");
+    restoreBrowserGlobals();
     window.localStorage.clear();
   });
 

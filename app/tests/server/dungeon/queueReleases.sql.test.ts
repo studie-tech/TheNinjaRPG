@@ -18,10 +18,17 @@ import { tournamentRouter } from "@/server/api/routers/tournament";
 import { Pusher } from "@/libs/pusher";
 import { makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";
 import { dungeonContent } from "../../setup/dungeon";
-import { insertPetSpecies, insertQuests, insertUsers } from "../../setup/factories";
+import {
+  insertPetSpecies,
+  insertQuests,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertClans,
+  insertUserPets,
+} from "../../setup/factories";
 import { initialPetSpecies } from "../../libs/pets/helpers/species";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements } from "../../setup/statements";
+import { beforeStatements, overrideQuery } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("activity releases preserve dungeon reservations", () => {
@@ -31,10 +38,20 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
     await resetTables(actionLog, aiProfile, battle, clan, dungeon, dungeonMember, dungeonRun, mpvpBattleQueue, mpvpBattleUser, petSpecies, quest, tournament, tournamentMatch, tournamentRecord, userData, userPet, userRewards, village);
     const db = await getTestDatabase();
     await db.insert(village).values({id:"v", name:"V", sector:1, kageId:"leader"});
-    await db.insert(clan).values({id:"clan", name:"Clan", image:"/clan.webp", villageId:"v", founderId:"leader", leaderId:"leader", leaderOrderId:"order"});
+    await insertClans([{ id:"clan", name:"Clan", villageId:"v", leaderId:"leader" }]);
     await insertUsers([{userId:"leader", username:"Leader", clanId:"clan", villageId:"v", rank:"JONIN", status:"AWAKE", sector:1}, {userId:"member", username:"Member", clanId:"clan", villageId:"v", rank:"JONIN", status:"AWAKE", sector:1}]);
     await insertPetSpecies(initialPetSpecies);
-    await db.insert(userPet).values(["one","two"].map(id=>({id, userId:"member", name:id, speciesId:initialPetSpecies[0]!.id, paletteIndex:0, characteristicIndex:0, auraIndex:0, rank:1, artRank:1, generationStatus:"READY" as const, battleEnabled:true, avatar:"https://example.com/pet.webp"})));
+    await insertUserPets(["one","two"].map(id=>({
+      id,
+      userId:"member",
+      name:id,
+      speciesId:initialPetSpecies[0]!.id,
+      rank:1,
+      artRank:1,
+      generationStatus:"READY" as const,
+      battleEnabled:true,
+      avatar:"https://example.com/pet.webp",
+    })));
     await db.insert(dungeon).values({id:"definition",content:dungeonContent(),updatedAt:new Date()});
   });
   afterEach(() => vi.restoreAllMocks());
@@ -68,7 +85,7 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
   const createTournamentMatch = async (actor = "member") => {
     const db = await getTestDatabase();
     const startedAt = new Date(Date.now() - 10000);
-    await db.insert(aiProfile).values({id:"Default",userId:"member",rules:[]});
+    await insertDefaultAiProfile({ userId:"member" });
     await db.insert(tournament).values({id:"tour",name:"Clan tournament",image:"/test.webp",description:"",type:"CLAN",status:"IN_PROGRESS",round:1,rewards:ObjectiveReward.parse({reward_money:1000}),startedAt,roundStartedAt:startedAt});
     await db.update(userData).set({money:0});
     await db.insert(tournamentMatch).values({id:"match",tournamentId:"tour",round:1,match:1,state:"WAITING",userId1:actor,userId2:actor === "member" ? "leader" : "member",startedAt});
@@ -229,20 +246,16 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
     await db.update(userData).set({status:"QUEUED"}).where(eq(userData.userId,"member"));
     let interposed = false;
     // Both cleanups capture the same roster before the first releases it.
-    const queue = new Proxy(db.query.mpvpBattleQueue,{get(target,key,receiver){
-      if(key!=="findMany") return Reflect.get(target,key,receiver);
-      return async (...args:Parameters<typeof target.findMany>)=>{
-        const rows = await target.findMany(...args);
-        if(!interposed){
-          interposed=true;
-          await checkAndCleanupExpiredRaid(db,"raid");
-          const created=await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]});
-          expect(created.success).toBe(true);
-        }
-        return rows;
-      };
+    const delayed = overrideQuery(db,"mpvpBattleQueue",{findMany: async (read,...args)=>{
+      const rows = await read(...args);
+      if(!interposed){
+        interposed=true;
+        await checkAndCleanupExpiredRaid(db,"raid");
+        const created=await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]});
+        expect(created.success).toBe(true);
+      }
+      return rows;
     }});
-    const delayed=new Proxy(db,{get(target,key,receiver){return key==="query"?{...target.query,mpvpBattleQueue:queue}:Reflect.get(target,key,receiver);}});
     await checkAndCleanupExpiredRaid(delayed,"raid");
     expect(await db.query.mpvpBattleQueue.findFirst()).toBeUndefined();
     expect(await db.query.mpvpBattleUser.findFirst()).toBeUndefined();
@@ -252,25 +265,21 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
   it("preserves a new dungeon when a leaving raider makes the old launcher roll back", async () => {
     const db = await getTestDatabase();
     await insertUsers([{userId:"boss",username:"Boss",isAi:true,rank:"GENIN",level:5,status:"AWAKE",inArena:true}]);
-    await db.insert(aiProfile).values({id:"Default",userId:"default-ai",rules:[]});
+    await insertDefaultAiProfile();
     await insertQuests([{id:"raid",questType:"raid",raidBossCurrentHealth:100,raidBossMaxHealth:100,raidEndsAt:new Date(Date.now()+3600000),content:{objectives:[RaidObjective.parse({id:"raid-goal",task:"open_raid",sector:1,opponentAIs:[{ids:["boss"],number:100,quantity:1}]})],reward:ObjectiveReward.parse({}),sceneBackground:"",sceneCharacters:[]}}]);
     await db.insert(mpvpBattleQueue).values({id:"raid-team",battleType:"RAID_BATTLE",attackerEntityId:"raid",defenderEntityId:"raid",sector:1,createdAt:new Date(Date.now()-120000)});
     await db.insert(mpvpBattleUser).values({id:"old-member",clanBattleId:"raid-team",userId:"member",side:"ATTACKER",slot:0});
     await db.update(userData).set({status:"QUEUED"}).where(eq(userData.userId,"member"));
     let interposed = false;
     // The launcher captured this raider before they left and entered the dungeon.
-    const users = new Proxy(db.query.userData,{get(target,key,receiver){
-      if(key!=="findMany") return Reflect.get(target,key,receiver);
-      return async (...args:Parameters<typeof target.findMany>)=>{
-        if(!interposed){
-          interposed=true;
-          expect((await (await callerFor(raidsRouter,"member")).leaveRaidQueue()).success).toBe(true);
-          expect((await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]})).success).toBe(true);
-        }
-        return await target.findMany(...args);
-      };
+    const delayed = overrideQuery(db,"userData",{findMany: async (read,...args)=>{
+      if(!interposed){
+        interposed=true;
+        expect((await (await callerFor(raidsRouter,"member")).leaveRaidQueue()).success).toBe(true);
+        expect((await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]})).success).toBe(true);
+      }
+      return await read(...args);
     }});
-    const delayed=new Proxy(db,{get(target,key,receiver){return key==="query"?{...target.query,userData:users}:Reflect.get(target,key,receiver);}});
     const result=await callerForDatabase(raidsRouter,"member",delayed).startRaidBattle({teamId:"raid-team"});
     expect(result.success).toBe(false);
     expect(await db.query.mpvpBattleQueue.findFirst()).toBeUndefined();

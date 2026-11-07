@@ -8,7 +8,7 @@ import { villageRouter } from "@/server/api/routers/village";
 import * as profileApi from "@/server/api/routers/profile";
 import { InstantNewQuestObjective, MoveToObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuests, insertUsers } from "../../../setup/factories";
+import { insertQuests, insertUsers, insertUserVotes } from "../../../setup/factories";
 import { comparableTrackers } from "../../../setup/quest";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
@@ -29,7 +29,7 @@ describeWithDatabase("village membership quest reconciliation", () => {
     await insertUsers([{ userId, username: "MembershipActor", role: "OWNER", rank: "JONIN", level: 50,
       status: "AWAKE", villageId: "old-home", regeneration: 0, primaryElement: "Fire", secondaryElement: "Water",
       updatedAt: new Date(), regenAt: new Date(), reputationPoints: 100000 }]);
-    await db.insert(userVote).values({ id: "membership-vote", userId, secret: "member1", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
   });
 
   it.each(["joinVillage", "leaveVillage", "swapVillage"] as const)("%s reconciles destination achievements without post-mutation hydration", async (method) => {

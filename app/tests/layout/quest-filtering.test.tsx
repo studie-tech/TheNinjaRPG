@@ -10,12 +10,11 @@ import {
 } from "@/layout/ContentFiltering";
 import { makeQuestFilteringSchema } from "@/layout/QuestFiltering";
 import { questFilteringSchema } from "@/validators/quest";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 // The app's React Compiler keeps this stable; without it a schema per render never settles.
 const schema = makeQuestFilteringSchema();
 let state: ReturnType<typeof useContentFiltering<typeof schema.fields>>;
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 
 const Harness = () => {
   state = useContentFiltering(schema);
@@ -45,8 +44,7 @@ const settledFilter = async (input: HTMLInputElement, value: string) => {
 
 describe("quest user level filter", () => {
   beforeEach(() => {
-    globalThis.Event = window.Event;
-    globalThis.CustomEvent = window.CustomEvent;
+    installBrowserGlobals();
     // ContentFiltering always calls its built-in option queries.
     const options = { useQuery: () => ({ data: [] }) };
     Object.assign(vi.spyOn(client, "api" as never), {
@@ -61,8 +59,7 @@ describe("quest user level filter", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
-    globalThis.Event = originalEvent;
-    globalThis.CustomEvent = originalCustomEvent;
+    restoreBrowserGlobals();
   });
 
   it("stops the native stepper at the server's bounds, so it can't go below zero", () => {

@@ -4,7 +4,7 @@ import { jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import { fetchUserJutsus, jutsuRouter } from "@/server/api/routers/jutsu";
 import { DamageTag } from "@/validators/combat";
 import type { JutsuFilteringSchema } from "@/validators/jutsu";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertJutsus } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const USER = "filtered-loadout-player";
@@ -19,9 +19,9 @@ describeWithDatabase("owned jutsu filters and equipped loadouts", () => {
       { userId: "other-player", username: "other-player" },
     ]);
     const db = await getTestDatabase();
-    await db.insert(jutsu).values([...pve, ...pvp, "ai-only"].map((id) => ({
-      id, name: id, image: "", description: id, battleDescription: id,
-      target: "SELF" as const, range: 0, requiredRank: "GENIN" as const,
+    await insertJutsus([...pve, ...pvp, "ai-only"].map((id) => ({
+      id,
+      requiredRank: "GENIN" as const,
       jutsuType: id === "ai-only" ? "AI" as const : "NORMAL" as const,
       effects: [DamageTag.parse({ statTypes: [id.endsWith("nin") ? "Ninjutsu" : "Taijutsu"] })],
     })));

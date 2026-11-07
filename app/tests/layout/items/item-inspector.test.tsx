@@ -8,16 +8,12 @@ import * as contentImage from "@/layout/ContentImage";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
 import { ItemInspector } from "@/layout/items/ItemInspector";
 import * as itemLib from "@/libs/item";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 let equip: ReturnType<typeof vi.fn>;
-// Radix dispatches DOM events through the global constructors.
-const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
-  }
+  installBrowserGlobals();
   equip = vi.fn();
   vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => <span>{alt} art</span>);
   vi.spyOn(itemWithEffects, "default").mockImplementation(() => <p>Item effects</p>);
@@ -37,11 +33,7 @@ afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 type Fixture = { equipped?: ItemSlot; itemType?: string; quantity?: number; canStack?: boolean; isEventItem?: boolean; inShop?: boolean };

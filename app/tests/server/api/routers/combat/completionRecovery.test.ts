@@ -3,6 +3,7 @@ import type { RouterOutputs } from "@/app/_trpc/client";
 import * as queries from "@/queries/combat";
 import { combatRouter } from "@/server/api/routers/combat";
 import * as completion from "@/server/utils/combatCompletion";
+import { resolverOf } from "../../../../setup/testDatabase";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -11,12 +12,10 @@ it.each(["getBattle", "performAction"] as const)("%s recovers a deleted arena ba
   const saved = { battle: { id: "finished-arena" }, result: { outcome: "Won" } } as RouterOutputs["combat"]["getBattle"];
   const recover = vi.fn(async () => saved);
   vi.spyOn(completion, "combatCompletionStore").mockReturnValue({ recover, save: vi.fn() } as never);
-  const resolver = (combatRouter[procedure]._def as unknown as {
-    resolver: (args: unknown) => Promise<unknown>;
-  }).resolver;
+  const resolver = resolverOf(combatRouter[procedure]);
   // No writable database surface is supplied: receipt recovery must be display-only.
   const database = {};
-  const response = await resolver({ ctx: { userId: "viewer", drizzle: database, waitForRateLimit: async () => {} }, input: { battleId: "finished-arena" } });
+  const response: unknown = await resolver({ ctx: { userId: "viewer", drizzle: database, waitForRateLimit: async () => {} }, input: { battleId: "finished-arena" } as never });
   expect(response).toEqual(procedure === "getBattle" ? saved : {
     updateClient: true, battleUpdate: saved.battle, result: saved.result, logEntries: [], updatedQuestIds: [],
   });

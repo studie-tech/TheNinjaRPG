@@ -20,10 +20,10 @@ import {
 import { HOME_FURNITURE_STARTERS } from "@/drizzle/constants";
 import { profileRouter } from "@/routers/profile";
 import { updateRewards } from "@/server/api/routers/quests";
-import { registerRouter } from "@/server/api/routers/register";
 import { hashIp } from "@/server/utils/ipHash";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";
+import { insertRegistrationContent, registerCharacter } from "../../../../setup/registration";
 import {
   callerFor,
   describeWithDatabase,
@@ -47,30 +47,17 @@ const backfill = readFileSync(
   .map((statement) => statement.trim())
   .filter(Boolean);
 
-const register = async (userId: string, signupIp: string | undefined) => {
-  const database = await getTestDatabase();
-  const caller = registerRouter.createCaller({
-    drizzle: database,
+const register = (userId: string, signupIp: string | undefined) =>
+  registerCharacter(
     userId,
-    userIp: signupIp,
-  } as never);
-  return caller.createCharacter({
-    // Usernames are alphanumeric and at most 12 characters.
-    username: userId.replace(/[^a-zA-Z0-9]/g, "").slice(-12),
-    gender: "Male",
-    hair_color: "Black",
-    eye_color: "Blue",
-    skin_color: "Light",
-    attribute_1: "Soft features",
-    attribute_2: "Glasses",
-    attribute_3: "Short Hair",
-    read_tos: true,
-    read_privacy: true,
-    read_earlyaccess: true,
-    recruiter_userid: RECRUITER,
-    bloodlineId: "recruit-bloodline",
-  });
-};
+    {
+      // Usernames are alphanumeric and at most 12 characters.
+      username: userId.replace(/[^a-zA-Z0-9]/g, "").slice(-12),
+      recruiter_userid: RECRUITER,
+      bloodlineId: "recruit-bloodline",
+    },
+    { userIp: signupIp },
+  );
 
 const referralOf = async (userId: string) => {
   const database = await getTestDatabase();
@@ -113,20 +100,7 @@ describeWithDatabase("recruit rank milestones end to end", () => {
       },
       { userId: OTHER, username: "router-other", lastIp: "198.51.100.9" },
     ]);
-    const database = await getTestDatabase();
-    await Promise.all([
-      database
-        .insert(village)
-        .values({ id: "recruit-horizon", name: "Horizon", sector: 1, kageId: OTHER }),
-      database.insert(bloodline).values({
-        id: "recruit-bloodline",
-        name: "recruit bloodline",
-        image: "/bloodline.png",
-        description: "test",
-        effects: [],
-        rank: "D",
-      }),
-    ]);
+    await insertRegistrationContent("recruit", OTHER);
   });
 
   it("adds a recruit from a shared IP as a recruit but marks it ineligible", async () => {

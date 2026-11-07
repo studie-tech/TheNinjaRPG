@@ -1,30 +1,19 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCReact } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
 import { ResetPetImageGeneration } from "@/layout/PublicUser";
 import * as toast from "@/libs/toast";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
 let reset: ReturnType<typeof vi.fn>;
-let scrollDescriptor: PropertyDescriptor | undefined;
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   reset = vi.fn((_input: RouterInputs["profile"]["resetPetImageGeneration"]) => ({ success: false, message: "Generation is still running." }));
 });
@@ -33,13 +22,7 @@ afterEach(() => {
   cleanup();
   queryClient.clear();
   vi.restoreAllMocks();
-  if (scrollDescriptor) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 /** Render the real staff dialog with a scoped tRPC link and controllable server outcomes. */
@@ -49,24 +32,18 @@ const mount = () => {
     pets: testApi.pets,
     useUtils: testApi.useUtils,
   });
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    const respond = async () => {
-      if (op.path === "profile.getPetImageGenerationForStaff") return [
-        { id: "first-pet", name: "Miso", generationAttempts: 2, generationStatus: "FAILED" },
-        { id: "second-pet", name: "Tama", generationAttempts: 1, generationStatus: "FAILED" },
-      ];
-      if (op.path === "profile.resetPetImageGeneration") return reset(op.input);
-      throw new Error(`Unexpected procedure ${op.path}`);
-    };
-    void respond().then((data) => { observer.next({ result: { data } }); observer.complete(); },
-      (error) => observer.error(TRPCClientError.from(error)));
-  })] });
+  const trpcClient = fakeTrpcClient(async (path, input) => {
+    if (path === "profile.getPetImageGenerationForStaff") return [
+      { id: "first-pet", name: "Miso", generationAttempts: 2, generationStatus: "FAILED" },
+      { id: "second-pet", name: "Tama", generationAttempts: 1, generationStatus: "FAILED" },
+    ];
+    if (path === "profile.resetPetImageGeneration") return reset(input);
+    throw new Error(`Unexpected procedure ${path}`);
+  });
   return render(
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <ResetPetImageGeneration userId="player" username="Player" />
-      </QueryClientProvider>
-    </testApi.Provider>,
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      <ResetPetImageGeneration userId="player" username="Player" />
+    </TrpcTestProviders>,
   );
 };
 

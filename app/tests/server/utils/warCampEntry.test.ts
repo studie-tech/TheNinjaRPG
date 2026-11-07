@@ -6,6 +6,7 @@ import {
   fetchWarCampEntry,
 } from "@/server/utils/warMercenary";
 import { defaultWarRules } from "@/validators/war";
+import { deferred } from "../../setup/deferred";
 
 type Entry = Awaited<ReturnType<typeof fetchWarCampEntry>>;
 const outsider = { userId: "visitor", villageId: "neutral", sector: 11 };
@@ -72,8 +73,7 @@ describe("war camp entry snapshots", () => {
 
   it("starts both independent reads before either resolves", async () => {
     const reads: string[] = [];
-    let finishWars!: (wars: Entry["wars"]) => void;
-    const wars = new Promise<Entry["wars"]>((resolve) => { finishWars = resolve; });
+    const { promise: wars, resolve: finishWars } = deferred<Entry["wars"]>();
     const client = {
       query: { war: { findMany: () => { reads.push("wars"); return wars; } } },
       select: () => ({

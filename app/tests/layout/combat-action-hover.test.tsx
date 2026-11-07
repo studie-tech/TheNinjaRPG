@@ -8,14 +8,11 @@ import type { CombatAction } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
 import { DamageTag } from "@/validators/combat";
 import { coordinateTargetingSchema } from "@/validators/coordinateTargeting";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent"] as const;
-const saved = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  // Radix dispatches jsdom events, which must come from the jsdom window.
-  for (const key of browserGlobals)
-    Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
+  installBrowserGlobals();
   vi.spyOn(userContext, "useUserData").mockReturnValue({ data: undefined } as never);
   vi.spyOn(contentImage, "default").mockImplementation(({ alt, onClick }) => <img alt={`${alt} art`} onClick={onClick} />);
 });
@@ -24,11 +21,7 @@ afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = saved[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const fireball = {

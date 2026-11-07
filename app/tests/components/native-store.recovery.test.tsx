@@ -6,6 +6,7 @@ import { STORE_FEDERAL_PRODUCTS } from "@/drizzle/constants";
 import { purchases as nativePurchases } from "@/libs/native";
 import type { StorePackage } from "@/libs/native/purchases";
 import { createToastMock } from "../setup/toastMock";
+import { capacitorWindow, installCapacitor, removeCapacitor } from "../setup/native";
 
 type AsyncMock = ReturnType<
   typeof vi.fn<(...args: unknown[]) => Promise<unknown>>
@@ -161,13 +162,6 @@ const rawCustomerInfo = (info: TestCustomerInfo) => ({
     productIdentifier: transaction.productId,
   })),
 });
-const capacitorWindow = window as typeof window & {
-  Capacitor?: {
-    getPlatform: () => string;
-    isNativePlatform: () => boolean;
-    Plugins: Record<string, Record<string, unknown>>;
-  };
-};
 const recoveredSheetLock = () => [
   {
     accountId: "player-1",
@@ -220,57 +214,53 @@ beforeEach(() => {
   });
 
   let syncedCustomerInfo: TestCustomerInfo | undefined;
-  capacitorWindow.Capacitor = {
-    getPlatform: () => "ios",
-    isNativePlatform: () => true,
-    Plugins: {
-      Purchases: {
-        isConfigured: async () => ({ isConfigured: false }),
-        configure: (...args: unknown[]) => mocks.configure(...args),
-        logIn: (...args: unknown[]) => mocks.logIn(...args),
-        logOut: (...args: unknown[]) => mocks.logOut(...args),
-        getOfferings: async () => ({
-          current: { availablePackages: [storePackage] },
-        }),
-        invalidateCustomerInfoCache: async () => undefined,
-        getCustomerInfo: async () => {
-          const info =
-            syncedCustomerInfo ??
-            ((await mocks.getCustomerInfo()) as TestCustomerInfo | undefined);
-          syncedCustomerInfo = undefined;
-          return { customerInfo: info ? rawCustomerInfo(info) : undefined };
-        },
-        syncPurchases: async () => {
-          syncedCustomerInfo = (await mocks.syncCustomerInfo()) as
-            | TestCustomerInfo
-            | undefined;
-          return {};
-        },
-        purchasePackage: async (...args: unknown[]) => {
-          const outcome = (await mocks.purchase(...args)) as
-            | { status: "purchased"; transactionId?: string }
-            | { status: "cancelled" }
-            | { status: "error"; code?: string; message: string };
-          if (outcome.status === "cancelled") return { userCancelled: true };
-          if (outcome.status === "error") {
-            throw { code: outcome.code, message: outcome.message };
-          }
-          return {
-            transaction: { transactionIdentifier: outcome.transactionId },
-          };
-        },
-        restorePurchases: async (...args: unknown[]) => {
-          const info = (await mocks.restore(...args)) as TestCustomerInfo | undefined;
-          return { customerInfo: info ? rawCustomerInfo(info) : undefined };
-        },
+  installCapacitor({
+    Purchases: {
+      isConfigured: async () => ({ isConfigured: false }),
+      configure: (...args: unknown[]) => mocks.configure(...args),
+      logIn: (...args: unknown[]) => mocks.logIn(...args),
+      logOut: (...args: unknown[]) => mocks.logOut(...args),
+      getOfferings: async () => ({
+        current: { availablePackages: [storePackage] },
+      }),
+      invalidateCustomerInfoCache: async () => undefined,
+      getCustomerInfo: async () => {
+        const info =
+          syncedCustomerInfo ??
+          ((await mocks.getCustomerInfo()) as TestCustomerInfo | undefined);
+        syncedCustomerInfo = undefined;
+        return { customerInfo: info ? rawCustomerInfo(info) : undefined };
+      },
+      syncPurchases: async () => {
+        syncedCustomerInfo = (await mocks.syncCustomerInfo()) as
+          | TestCustomerInfo
+          | undefined;
+        return {};
+      },
+      purchasePackage: async (...args: unknown[]) => {
+        const outcome = (await mocks.purchase(...args)) as
+          | { status: "purchased"; transactionId?: string }
+          | { status: "cancelled" }
+          | { status: "error"; code?: string; message: string };
+        if (outcome.status === "cancelled") return { userCancelled: true };
+        if (outcome.status === "error") {
+          throw { code: outcome.code, message: outcome.message };
+        }
+        return {
+          transaction: { transactionIdentifier: outcome.transactionId },
+        };
+      },
+      restorePurchases: async (...args: unknown[]) => {
+        const info = (await mocks.restore(...args)) as TestCustomerInfo | undefined;
+        return { customerInfo: info ? rawCustomerInfo(info) : undefined };
       },
     },
-  };
+  });
 });
 
 afterEach(() => {
   cleanup();
-  delete capacitorWindow.Capacitor;
+  removeCapacitor();
   vi.restoreAllMocks();
 });
 

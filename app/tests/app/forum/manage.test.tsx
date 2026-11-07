@@ -1,9 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { createTRPCReact } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import ForumManagement from "@/app/[shell]/forum/manage/page";
@@ -11,8 +9,9 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import { testApi, TrpcTestProviders } from "../../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
 let hasLocations: boolean;
 let requests: RouterInputs["forum"]["saveGrant"][];
@@ -23,11 +22,9 @@ let reviewPosts: NonNullable<RouterOutputs["forum"]["administration"]>["posts"];
 let reviewRequests: { path: string; input: unknown }[];
 let canModerate: boolean;
 let hasMoreReviews: boolean;
-let scrollDescriptor: PropertyDescriptor | undefined;
 
 beforeEach(() => {
-  scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
+  installBrowserGlobals({ events: [], scrollIntoView: true });
   hasLocations = true;
   requests = [];
   response = { success: true, message: "Capabilities saved" };
@@ -52,8 +49,7 @@ afterEach(() => {
   cleanup();
   queryClient.clear();
   vi.restoreAllMocks();
-  if (scrollDescriptor) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  restoreBrowserGlobals();
 });
 
 /** Exercise the actual staff form with controlled application responses and the existing picker contract. */
@@ -78,7 +74,7 @@ async function renderManagement(tab = "Staff") {
     observer.next({ result: { data } });
     observer.complete();
   })] });
-  const view = render(<testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}><ForumManagement /></QueryClientProvider></testApi.Provider>);
+  const view = render(<TrpcTestProviders client={trpcClient} queryClient={queryClient}><ForumManagement /></TrpcTestProviders>);
   const target = await view.findByRole("button", { name: tab });
   if (tab !== "Approvals") fireEvent.click(target);
   return view;

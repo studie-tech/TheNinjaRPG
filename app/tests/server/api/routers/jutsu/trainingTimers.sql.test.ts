@@ -15,7 +15,7 @@ import { getTrainingJutsus, getJutsuTrainingTimers, getUnchangedJutsuTrainingQue
 import { updateUserJutsuForStartTraining, updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically, updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically } from "@/queries/jutsu";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { profileRouter } from "@/server/api/routers/profile";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertJutsus, insertUserVotes } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -61,21 +61,8 @@ describeWithDatabase("jutsu training progress timestamps", () => {
         regenAt: new Date(),
       },
     ]);
-    await db
-      .insert(userVote)
-      .values({ id: "timer-vote", userId, secret: "secret01", lastVoteAt: new Date() });
-    await db.insert(jutsu).values({
-      id: jutsuId,
-      name: "Timer Jutsu",
-      description: "Timer",
-      battleDescription: "Timer",
-      effects: [],
-      target: "SELF",
-      range: 0,
-      ...info,
-      jutsuType: "NORMAL",
-      image: "/timer.png",
-    });
+    await insertUserVotes([{ userId }]);
+    await insertJutsus([{ id: jutsuId, name: "Timer Jutsu", ...info }]);
   });
 
   it.each([false, true])(

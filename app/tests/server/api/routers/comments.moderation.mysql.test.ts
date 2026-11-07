@@ -1,7 +1,6 @@
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
-import { eq } from "drizzle-orm";
 import * as next from "next/server";
 import OpenAI from "openai";
 import { FORUM_MIN_LEVEL } from "@/drizzle/constants";
@@ -10,7 +9,6 @@ import { classifyNsfwImage, moderateContent } from "@/libs/moderator";
 import { commentsRouter } from "@/server/api/routers/comments";
 import { insertUsers } from "../../../setup/factories";
 import { unflaggedModeration } from "../../../setup/moderation";
-import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -42,10 +40,8 @@ describeWithDatabase("comment and image moderation provider recovery", () => {
     await db.insert(forumThread).values({
       id: "thread", title: "Game discussion", userId: "poster", boardId: "board",
     });
-    stubProfile("fetchUser", async (_client: unknown, id: string) =>
-      db.query.userData.findFirst({ where: eq(userData.userId, id) }));
   });
-  afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
+  afterEach(() => vi.restoreAllMocks());
 
   it.each([429, 503])("posts once when moderation recovers from HTTP %i", async (status) => {
     // Stub HTTP responses, preserving the module's real SDK client and retry handling.

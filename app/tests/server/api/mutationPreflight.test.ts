@@ -13,6 +13,7 @@ import { QUERY_RATE_LIMIT_MESSAGE, rateLimitFine, rateLimitFineMessage } from "@
 import type { DrizzleClient } from "@/server/db";
 import { resetServerModuleStubs } from "../../setup/serverModules";
 import { callerForDatabase } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
 
 const source = (path: string) => readFileSync(join(import.meta.dirname, "../../../src", path), "utf8");
 /** Scope architecture assertions to one protected procedure's source. */
@@ -23,12 +24,6 @@ const procedureSource = (router: string, name: string) => {
   const body = file.slice(start + 1);
   const end = body.search(/\n  \w+: protectedProcedure/);
   return end === -1 ? body : body.slice(0, end);
-};
-/** Control completion gates to assert concurrent ordering without sleeps. */
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
 };
 let identity = 0;
 const caller = <Context, Caller>(router: { createCaller: (context: Context) => Caller }, db: object) =>

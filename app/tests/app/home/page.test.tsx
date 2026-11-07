@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import * as navigation from "next/navigation";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import HomePage from "@/app/[shell]/home/page";
@@ -19,6 +18,9 @@ import { HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
 import * as Kitchen from "@/layout/Kitchen";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { deferred } from "../../setup/deferred";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import { testApi, TrpcTestProviders } from "../../setup/trpc";
 
 const furniture: HomeFurniture[] = [
   { id: "owned-bed", itemId: "home-bed", name: "Bed", image: "/images/home/furniture/bed.webp", width: 34, groundAnchor: 91.1, action: "sleep", isFloor: false, quantity: 1, views: {} },
@@ -48,26 +50,12 @@ const essentialHome: NonNullable<RouterOutputs["home"]["getUserHome"]> = {
   furniture: basics, furnitureRevision: 3, styles: [], isPublic: false, layout: [...layout],
 };
 
-const testApi = createTRPCReact<AppRouter>();
 const emptyPetCollection = { pets: [], activePetId: null };
-let savedEvent: typeof Event;
-let savedCustomEvent: typeof CustomEvent;
-let savedAnimationFrame: PropertyDescriptor | undefined;
-let savedCancelAnimationFrame: PropertyDescriptor | undefined;
 let searchParams: URLSearchParams;
 let replaceRoute: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  savedEvent = globalThis.Event;
-  savedCustomEvent = globalThis.CustomEvent;
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
-  savedAnimationFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
-  savedCancelAnimationFrame = Object.getOwnPropertyDescriptor(globalThis, "cancelAnimationFrame");
-  Object.defineProperties(globalThis, {
-    requestAnimationFrame: { configurable: true, value: (callback: FrameRequestCallback) => Number(setTimeout(() => callback(Date.now()), 0)) },
-    cancelAnimationFrame: { configurable: true, value: (id: number) => clearTimeout(id) },
-  });
+  installBrowserGlobals({ animationFrame: true });
   searchParams = new URLSearchParams();
   replaceRoute = vi.fn((href: string) => {
     searchParams = new URLSearchParams(href.split("?")[1]);
@@ -117,27 +105,18 @@ beforeEach(() => {
 });
 afterEach(async () => {
   cleanup();
-  // Radix restores focus on a timer while unmounting its dialog.
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  globalThis.Event = savedEvent;
-  globalThis.CustomEvent = savedCustomEvent;
-  for (const [key, descriptor] of [["requestAnimationFrame", savedAnimationFrame], ["cancelAnimationFrame", savedCancelAnimationFrame]] as const) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  await flushRadixFocus();
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
 
 for (const hasCachedInventory of [false, true]) {
   it(`refreshes home storage after ${hasCachedInventory ? "cached" : "initial"} parallel inventory reads miss newly granted furniture`, async () => {
-    let finishHome = () => {};
-    const homeReady = new Promise<void>((resolve) => { finishHome = resolve; });
-    let finishInventory = () => {};
-    const inventoryReady = new Promise<void>((resolve) => { finishInventory = resolve; });
+    const { promise: homeReady, resolve: finishHome } = deferred<void>();
+    const { promise: inventoryReady, resolve: finishInventory } = deferred<void>();
     let homeQueries = 0;
     let itemQueries = 0;
-    let finishPregrantRead = () => {};
-    const pregrantRead = new Promise<void>((resolve) => { finishPregrantRead = resolve; });
+    const { promise: pregrantRead, resolve: finishPregrantRead } = deferred<void>();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
     const itemKey = getQueryKey(testApi.item.getUserItems, undefined, "query");
     if (hasCachedInventory) {
@@ -172,9 +151,7 @@ for (const hasCachedInventory of [false, true]) {
     })] });
     try {
       const view = render(
-        <testApi.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-        </testApi.Provider>,
+        <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
       );
       await waitFor(() => expect(queryClient.getQueryData<RouterOutputs["item"]["getUserItems"]>(itemKey)).toEqual([]));
       expect(homeQueries).toBe(1);
@@ -233,9 +210,7 @@ for (const hasMissingInventory of [false, true]) {
     })] });
     try {
       const view = render(
-        <testApi.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-        </testApi.Provider>,
+        <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
       );
       fireEvent.click(await view.findByRole("button", { name: "Storage Box: Open home storage" }));
       const dialog = within(view.getByRole("dialog"));
@@ -284,9 +259,7 @@ it("links every owned companion image to its selected profile and identifies onl
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     for (const pet of collection.pets) {
       const image = await view.findByAltText(pet.name);
@@ -342,9 +315,7 @@ it("does not refresh disabled owner inventory or expose cached pets for a guest"
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     await view.findByRole("button", { name: "Go to sleep" });
     expect(requests).not.toHaveBeenCalled();
@@ -389,9 +360,7 @@ it("refreshes a selected furniture variant when returning from inventory", async
     observer.complete();
   })] });
   const mount = () => render(
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-    </testApi.Provider>,
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
   );
   try {
     const firstVisit = mount();
@@ -440,9 +409,7 @@ it("refreshes furniture storage after a downgrade stores a carried piece from a 
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     fireEvent.click(await view.findByRole("button", { name: "Manage home" }));
     const management = within(view.getByRole("dialog"));
@@ -466,8 +433,7 @@ it("refreshes furniture storage after a downgrade stores a carried piece from a 
 it("refreshes furniture storage after placing a carried piece and waits for its inventory", async () => {
   let home = { ...essentialHome, furniture: [...basics, rug] };
   let items = [...ownedItems, { ...ownedItems[0]!, id: rug.id, itemId: rug.itemId, storedAtHome: false, item: { ...ownedItems[0]!.item, id: rug.itemId, name: rug.name, image: rug.image } }];
-  let finishInventory = () => {};
-  const inventoryReady = new Promise<void>((resolve) => { finishInventory = resolve; });
+  const { promise: inventoryReady, resolve: finishInventory } = deferred<void>();
   let itemQueries = 0;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   const itemKey = getQueryKey(testApi.item.getUserItems, undefined, "query");
@@ -496,9 +462,7 @@ it("refreshes furniture storage after placing a carried piece and waits for its 
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     fireEvent.click(await view.findByRole("button", { name: "Decorate" }));
     fireEvent.click(view.getByRole("button", { name: /Woven Rug.*Place$/ }));
@@ -519,10 +483,7 @@ it("refreshes furniture storage after placing a carried piece and waits for its 
 
 for (const success of [true, false]) {
   it(`keeps the editor disabled through refreshing a ${success ? "successful" : "rejected"} save`, async () => {
-    let finishRefresh = () => {};
-    const refreshed = new Promise<void>((resolve) => {
-      finishRefresh = resolve;
-    });
+    const { promise: refreshed, resolve: finishRefresh } = deferred<void>();
     let homeQueries = 0;
     const home: NonNullable<RouterOutputs["home"]["getUserHome"]> = {
       homeType: "NONE",
@@ -582,11 +543,9 @@ for (const success of [true, false]) {
       ],
     });
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <HomePage />
-        </QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+        <HomePage />
+      </TrpcTestProviders>,
     );
     const decorate = await view.findByRole("button", { name: "Decorate" });
     fireEvent.click(decorate);
@@ -639,8 +598,7 @@ for (const success of [true, false]) {
 
 // Real dialog focus and query refresh need an integration-test budget.
 it("opens home management from the header and waits for refreshed inventory before decorating", async () => {
-  let finishRefresh = () => {};
-  const refreshed = new Promise<void>((resolve) => { finishRefresh = resolve; });
+  const { promise: refreshed, resolve: finishRefresh } = deferred<void>();
   let homeQueries = 0;
   const home: NonNullable<RouterOutputs["home"]["getUserHome"]> = {
     homeType: "NONE", biome: "ground", regen: HomeTypeDetails.NONE.regen, storage: HomeTypeDetails.NONE.storage,
@@ -667,9 +625,7 @@ it("opens home management from the header and waits for refreshed inventory befo
   let invalidated: Promise<void> | undefined;
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     const trigger = await view.findByRole("button", { name: "Manage home" });
     await view.findByRole("button", { name: "Decorate" });
@@ -727,9 +683,7 @@ it("preserves a draft across a tier refresh and requires recovery before saving"
   })] });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
     );
     fireEvent.click(await view.findByRole("button", { name: "Decorate" }));
     fireEvent.change(view.getByLabelText("Wall paint"), { target: { value: "sage" } });
@@ -838,9 +792,7 @@ it("opens the kitchen from an accessible owner deep link or scene action and pre
     })] });
     try {
       const view = render(
-        <testApi.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-        </testApi.Provider>,
+        <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>,
       );
       const trigger = await view.findByRole("button", { name: "Kitchen" });
       expect(view.queryByRole("link", { name: /ramen shop/i })).toBeNull();
@@ -875,9 +827,7 @@ function mountHome() {
     observer.complete();
   })] });
   const page = () => (
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}><HomePage /></QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}><HomePage /></TrpcTestProviders>
   );
   const view = render(page());
   return { view, queryClient, rerender: () => view.rerender(page()) };

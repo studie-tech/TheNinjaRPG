@@ -11,8 +11,16 @@ import { questsRouter } from "@/server/api/routers/quests";
 import { EncountersAtLocation, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { queueMasteries } from "../../../setup/queues";
-import { insertItems, insertQuestHistory, insertQuests, insertUsers } from "../../../setup/factories";
-import { beforeStatements } from "../../../setup/statements";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
+  insertUserVotes,
+} from "../../../setup/factories";
+import { beforeStatements, overrideQuery } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -65,23 +73,8 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
       },
     ]);
     const db = await getTestDatabase();
-    await db
-      .insert(userVote)
-      .values({ id: "profile-drop-vote", userId, secret: "secret01", lastVoteAt: now });
-    await db.insert(jutsu).values({
-      id: "hidden-drop",
-      name: "Hidden",
-      description: "Hidden",
-      battleDescription: "Hidden",
-      effects: [],
-      target: "SELF",
-      range: 0,
-      requiredRank: "STUDENT",
-      jutsuRank: "D",
-      jutsuType: "NORMAL",
-      image: "/hidden.png",
-      hidden: true,
-    });
+    await insertUserVotes([{ userId, lastVoteAt: now }]);
+    await insertJutsus([{ id: "hidden-drop", name: "Hidden", hidden: true }]);
     await db.insert(userQueue).values({
       id: "profile-drop-row",
       userId,
@@ -163,7 +156,7 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
     await db.insert(gameSetting).values(Object.entries(DMG_SETTING_DEFAULTS).map(([name, value]) =>
       ({ id: name, name, value, time: now })));
     await insertUsers([{ userId: "ambusher", isAi: true, rank: "GENIN", level: 20 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "ambusher", rules: [] });
+    await insertDefaultAiProfile({ userId: "ambusher" });
     await insertQuests([{
       id: "ambush-quest", questType: "mission", hidden: false,
       content: { objectives: [EncountersAtLocation.parse({
@@ -177,23 +170,15 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
       goals: [{ id: "ambush", value: 0, done: false, sector: 0, longitude: 0, latitude: 0 }],
     })] }).where(eq(userData.userId, userId));
     let profileReads = 0;
-    const client = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "query") return Reflect.get(target, property, receiver);
-        return { ...target.query, userData: new Proxy(target.query.userData, {
-          get(queries, method, queryReceiver) {
-            if (method !== "findFirst") return Reflect.get(queries, method, queryReceiver);
-            return async (options: Parameters<typeof queries.findFirst>[0]) => {
-              const user = await queries.findFirst(options);
-              if (options?.with?.queue) {
-                profileReads++;
-                // Hydration captured `now` before this read; battle setup uses the later clock.
-                setSystemTime(new Date(now.getTime() + 180_000));
-              }
-              return user;
-            };
-          },
-        }) };
+    const client = overrideQuery(db, "userData", {
+      findFirst: async (read, options) => {
+        const user = await read(options);
+        if (options?.with?.queue) {
+          profileReads++;
+          // Hydration captured `now` before this read; battle setup uses the later clock.
+          setSystemTime(new Date(now.getTime() + 180_000));
+        }
+        return user;
       },
     });
     const result = await callerForDatabase(questsRouter, userId, client).checkLocationQuest();
@@ -210,19 +195,7 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
   it("does not reject new training as queue-full after refunding its only hidden queued job", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ money: 1000 }).where(eq(userData.userId, userId));
-    await db.insert(jutsu).values({
-      id: "valid-training",
-      name: "Valid",
-      description: "Valid",
-      battleDescription: "Valid",
-      effects: [],
-      target: "SELF",
-      range: 0,
-      requiredRank: "STUDENT",
-      jutsuRank: "D",
-      jutsuType: "NORMAL",
-      image: "/valid.png",
-    });
+    await insertJutsus([{ id: "valid-training", name: "Valid" }]);
     const caller = await callerFor(jutsuRouter, userId);
     const first = await caller.startTraining({ jutsuId: "valid-training" });
     const dropped = await db.query.userData.findFirst({

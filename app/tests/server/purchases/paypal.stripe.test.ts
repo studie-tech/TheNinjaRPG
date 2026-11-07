@@ -4,7 +4,6 @@ import type Stripe from "stripe";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { paypalSubscription, paypalTransaction, stripeCheckout, stripePayment, storeUserIdAlias, userData, webStoreOrder } from "@/drizzle/schema";
 import { MAX_REPS_PER_MONTH } from "@/drizzle/constants";
-import { env } from "@/env/server.mjs";
 import { paypalRouter, reconcilePaypalSubscription, syncTransactions, updateReps, updateSubscription } from "@/server/api/routers/paypal";
 import { reserveStoreOrder, deliverStoreOrder } from "@/server/utils/webStore";
 import { stripeRouter } from "@/server/api/routers/stripe";
@@ -15,13 +14,14 @@ import { calcFedUgradeCost, dollars2reps, fedStatusRepsCost, reps2dollars } from
 import { beforeStatements, failStatements } from "../../setup/statements";
 import { insertUsers } from "../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { restoreEnvAfterEach } from "../../setup/env";
+import { useStripeTestEnv } from "../../setup/stripe";
 
 const BUYER = "web_buyer";
 const TARGET = "web_recipient";
 const OTHER = "web_other";
 const orders = new Map<string, Record<string, unknown>>();
 const subscriptions = new Map<string, Record<string, unknown>>();
-const paypalPlans = Object.fromEntries(["NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL", "NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER", "NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD"].map((key) => [key, process.env[key]]));
 let captureResponseMinimal = false;
 const storeRequest = (reputationPoints = 20) => ({ recipientId: TARGET, selection: { type: "custom" as const, reputationPoints } });
 const stripeRequest = (points: number) => ({ requestId: nanoid().replace(/[-_]/g, "a"), expectedUserId: BUYER, userId: TARGET, purchase: { type: "reputation" as const, reputationPoints: points } });
@@ -57,21 +57,21 @@ const stripeApi = { checkout: { sessions: {
   create: vi.fn(async (params: Stripe.Checkout.SessionCreateParams) => { const session = { id: `cs_test_${params.client_reference_id}`, url: "https://checkout.stripe.com/test", metadata: params.metadata } as Stripe.Checkout.Session; stripeSessions.set(session.id, session); return session; }),
   retrieve: vi.fn(async (id: string) => stripeSessions.get(id)),
 } } } as unknown as Stripe;
-const original = { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_NORMAL: env.STRIPE_PRICE_NORMAL, STRIPE_PRICE_SILVER: env.STRIPE_PRICE_SILVER, STRIPE_PRICE_GOLD: env.STRIPE_PRICE_GOLD };
 const paid = async (points = 20, overrides: Partial<Parameters<typeof updateReps>[0]> = {}) => { const value = reps2dollars(points); return updateReps({ client: await getTestDatabase(), createdById: BUYER, affectedUserId: TARGET, transactionId: "legacy_capture", transactionUpdatedDate: new Date().toISOString(), value, currency: "USD", status: "COMPLETED", reps: dollars2reps(value), type: "REP_PURCHASE", raw: {}, ...overrides }); };
 const target = async () => (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, TARGET) });
 
 describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
+  useStripeTestEnv();
+  restoreEnvAfterEach("NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL", "NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER", "NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD");
   beforeEach(async () => {
     await resetTables(paypalSubscription, paypalTransaction, stripeCheckout, stripePayment, storeUserIdAlias, webStoreOrder, userData);
     await insertUsers([BUYER, TARGET, OTHER].map((userId) => ({ userId, username: userId, reputationPoints: 0, reputationPointsTotal: 0 })));
-    Object.assign(env, { STRIPE_SECRET_KEY: "sk_test_placeholder", STRIPE_WEBHOOK_SECRET: "whsec_placeholder", STRIPE_PRICE_NORMAL: "price_normal", STRIPE_PRICE_SILVER: "price_silver", STRIPE_PRICE_GOLD: "price_gold" });
     orders.clear(); subscriptions.clear(); stripeSessions.clear();
     Object.assign(process.env, { NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL: "plan_test_normal", NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER: "plan_test_silver", NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD: "plan_test_gold" }); captureResponseMinimal = false; fetchProvider.mockClear();
     vi.spyOn(globalThis, "fetch").mockImplementation(fetchProvider as unknown as typeof fetch);
     vi.spyOn(stripeClient, "getStripe").mockReturnValue(stripeApi);
   });
-  afterEach(() => { for (const [key, value] of Object.entries(paypalPlans)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } vi.restoreAllMocks(); Object.assign(env, original); });
+  afterEach(() => { vi.restoreAllMocks(); });
   const completeStripe = (input: ReturnType<typeof stripeRequest>, created = Date.now()) => {
     const session = stripeSessions.get(`cs_test_${input.requestId}`);
     Object.assign(session ?? {}, { status: "complete", payment_status: "paid", mode: "payment", payment_intent: `pi_${input.requestId}`, livemode: false, currency: "usd", amount_total: Math.round(reps2dollars(input.purchase.reputationPoints) * 100), client_reference_id: input.requestId, managed_payments: { enabled: true }, automatic_tax: { enabled: true, status: "complete" }, created: Math.floor(created / 1000) });

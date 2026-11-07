@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
 import {
   mergeTerrainSpecs,
   resolveStructureTerrainSpec,
@@ -14,38 +13,13 @@ import {
   isReachableCoordinate,
   validateNormalizedSectorMap,
 } from "@/libs/sector-map/validation";
-
-const makeTestTile = (
-  x: number,
-  y: number,
-  overrides: Partial<NormalizedSectorTile> = {},
-): NormalizedSectorTile => ({
-  x,
-  y,
-  terrain: "ground",
-  walkCost: 1,
-  blocked: false,
-  zone: "wilderness",
-  battleBiome: "ground",
-  ...overrides,
-});
+import { sectorMap, sectorTile as makeTestTile } from "../setup/sectorMap";
 
 const makeTestMap = (
   width: number,
   height: number,
   tiles: NormalizedSectorTile[],
-): NormalizedSectorMap => ({
-  formatVersion: SECTOR_MAP_VERSION,
-  sector: 1,
-  name: "Test Sector",
-  width,
-  height,
-  tiles,
-  objects: [],
-  anchors: [{ key: "spawn.default", x: 0, y: 0 }],
-  exits: [],
-  metadata: { importedAt: "2026-01-01T00:00:00.000Z", source: "tiled" },
-});
+): NormalizedSectorMap => sectorMap(width, height, undefined, { tiles });
 
 describe("sector map normalization", () => {
   it("normalizes a finite hexagonal Tiled map into the stored format", () => {

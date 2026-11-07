@@ -6,24 +6,26 @@ import { calcBattleResult } from "@/libs/combat/util";
 import type { PusherClient } from "@/libs/pusher";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { profileRouter } from "@/server/api/routers/profile";
-import { insertUsers } from "../../../../setup/factories";
+import { insertJutsus, insertUsers, jutsuRow } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { makeBattleUser, makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
 
 const USER = "elite-progression";
 /** Minimal catalog definition shared by training, evolution and combat fixtures. */
-const definition = (id: string, requiredRank: "JONIN" | "ELITE JONIN" = "ELITE JONIN") => ({
-  id, name: id, description: id, battleDescription: id, image: "/jutsu.webp",
-  effects: [], target: "SELF" as const, range: 0, jutsuType: "NORMAL" as const,
-  jutsuRank: "S" as const, requiredRank,
-});
+const definition = (id: string, requiredRank: "JONIN" | "ELITE JONIN" = "ELITE JONIN") =>
+  jutsuRow(id, { jutsuRank: "S", requiredRank });
 
 describeWithDatabase("Elite Jonin jutsu progression", () => {
   beforeEach(async () => {
     await resetTables(userQueue, userJutsu, jutsuLoadout, jutsu, actionLog, userData);
     await insertUsers([{ userId: USER, username: USER, rank: "ELITE JONIN", level: 100, role: "OWNER", status: "AWAKE", isOutlaw: true, money: 1_000_000, regeneration: 0 }]);
     const db = await getTestDatabase();
-    await db.insert(jutsu).values([definition("elite"), definition("target"), definition("ordinary", "JONIN"), { ...definition("evolved"), parentJutsuId: "elite" }]);
+    await insertJutsus([
+      definition("elite"),
+      definition("target"),
+      definition("ordinary", "JONIN"),
+      { ...definition("evolved"), parentJutsuId: "elite" },
+    ]);
     await db.insert(userJutsu).values([
       { id: "owned-elite", userId: USER, jutsuId: "elite", level: 25 },
       { id: "owned-target", userId: USER, jutsuId: "target", level: 24 },

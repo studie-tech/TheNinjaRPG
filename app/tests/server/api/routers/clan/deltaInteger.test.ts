@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
 import { actionLog, clan, userData } from "@/drizzle/schema";
 import { clanRouter } from "@/server/api/routers/clan";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertClans } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   callerForDatabase,
@@ -22,19 +22,13 @@ describeWithDatabase("clan donation integer treasury projection", () => {
         isOutlaw: true,
       },
     ]);
-    const database = await getTestDatabase();
-    await database
-      .insert(clan)
-      .values({
-        id: "fractional-faction",
-        name: "Fractional Faction",
-        image: "/clan.png",
-        founderId: "fractional-donor",
-        leaderId: "fractional-donor",
-        leaderOrderId: "fractional-order",
-        villageId: "fractional-village",
-        repTreasury: 0,
-      });
+    await insertClans([{
+      id: "fractional-faction",
+      name: "Fractional Faction",
+      leaderId: "fractional-donor",
+      villageId: "fractional-village",
+      repTreasury: 0,
+    }]);
   });
 
   it.each([0.4, 0.5, 1.5])(

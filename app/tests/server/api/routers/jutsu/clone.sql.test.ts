@@ -2,7 +2,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { actionLog, jutsu, userData } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertJutsus } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -15,19 +15,7 @@ describeWithDatabase("jutsu clone audit atomicity", () => {
   beforeEach(async () => {
     await resetTables(actionLog, jutsu, userData);
     await insertUsers([{ userId: "clone-editor", username: "Editor", role: "CONTENT" }]);
-    const database = await getTestDatabase();
-    await database.insert(jutsu).values({
-      id: "clone-source",
-      name: "Fireball",
-      description: "A fire technique",
-      battleDescription: "%user uses %jutsu",
-      effects: [],
-      target: "SELF",
-      range: 0,
-      requiredRank: "GENIN",
-      jutsuType: "NORMAL",
-      image: "/fireball.webp",
-    });
+    await insertJutsus([{ id: "clone-source", name: "Fireball", requiredRank: "GENIN" }]);
   });
 
   it("rolls back the copy when its audit fails, then allows one clean retry", async () => {

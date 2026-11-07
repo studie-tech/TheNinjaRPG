@@ -10,6 +10,7 @@ import { forumRouter } from "@/routers/forum";
 import { profileRouter, updateNindo } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { callerForDatabase } from "../../../setup/testDatabase";
+import { deferred } from "../../../setup/deferred";
 
 const user = {
   userId: "poster", username: "Poster", role: "USER", isBanned: false, isSilenced: false,
@@ -70,10 +71,8 @@ afterEach(() => vi.restoreAllMocks());
 describe("posting moderation scheduling", () => {
   it.each(cases)("returns from $name after storage without waiting for moderation", async ({ run, table, relationType }) => {
     let saved = false;
-    let release!: () => void;
-    let started!: () => void;
-    const writing = new Promise<void>((resolve) => { started = resolve; });
-    const stored = new Promise<void>((resolve) => { release = resolve; });
+    const { promise: writing, resolve: started } = deferred<void>();
+    const { promise: stored, resolve: release } = deferred<void>();
     const db = makeClient(async (target) => {
       if (target === table) { started(); await stored; saved = true; }
       return { rowsAffected: 1 };

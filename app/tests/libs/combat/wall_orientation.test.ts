@@ -5,29 +5,19 @@ import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { BarrierTag } from "@/validators/combat";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCombatAction, makeCompleteBattle } from "./helpers/battleScenario";
 
 // Adamantine Fortress as configured in prod: a large wall stretched by two rows.
-const fortress = (overrides: Partial<CombatAction> = {}): CombatAction => ({
-  id: "adamantine-fortress",
-  name: "Adamantine Fortress",
-  type: "jutsu",
-  image: "",
-  battleDescription: "",
-  method: "AOE_LARGE_WALL_SHOOT",
-  target: "EMPTY_GROUND",
-  range: 1,
-  methodSize: { x: 0, y: 2 },
-  healthCost: 0,
-  chakraCost: 0,
-  staminaCost: 0,
-  actionCostPerc: 10,
-  cooldown: 0,
-  originalCooldown: 0,
-  updatedAt: 0,
-  effects: [BarrierTag.parse({ target: "INHERIT", rounds: 2, power: 100 })],
-  ...overrides,
-});
+const fortress = (overrides: Partial<CombatAction> = {}): CombatAction =>
+  makeCombatAction({
+    id: "adamantine-fortress",
+    name: "Adamantine Fortress",
+    method: "AOE_LARGE_WALL_SHOOT",
+    target: "EMPTY_GROUND",
+    methodSize: { x: 0, y: 2 },
+    effects: [BarrierTag.parse({ target: "INHERIT", rounds: 2, power: 100 })],
+    ...overrides,
+  });
 
 const CASTERS = [
   { col: 6, row: 7 },

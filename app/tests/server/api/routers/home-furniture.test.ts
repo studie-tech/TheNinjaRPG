@@ -9,7 +9,7 @@ import { clampHomeFurniturePlacement } from "@/libs/home";
 import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/itemFurniture";
 import type { HomePlacement } from "@/validators/home";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, withoutTransactions } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 const basicFurniture = [
@@ -82,12 +82,7 @@ describeWithDatabase("owned furniture persistence", () => {
     const db = await getTestDatabase();
     await db.update(userItem).set({ storedAtHome }).where(eq(userItem.id, "material-row"));
     const before = await snapshot();
-    const noTransactions = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "transaction") return () => { throw Error("Storage must use one atomic update"); };
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const noTransactions = withoutTransactions(db, "Storage must use one atomic update");
     const api = callerForDatabase(homeRouter, userId, noTransactions);
     const measured = await recordQueries(() => api.toggleStoreItem({ userItemId: "material-row" }));
     expect(measured.result.success).toBe(true);

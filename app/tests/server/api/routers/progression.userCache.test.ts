@@ -16,7 +16,7 @@ import { trainRouter } from "@/server/api/routers/train";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { IncreaseMasteryTag, IncreaseMaxPoolsTag } from "@/validators/combat";
 import { petSkillFixture } from "../../../libs/pets/helpers/abilities";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertUserVotes } from "../../../setup/factories";
 import { countUserReads } from "../../../setup/userReads";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
@@ -35,7 +35,7 @@ describeWithDatabase("confirmed progression cache responses", () => {
       regeneration: 20, ninjutsuMastery: 100, reputationPoints: 1000, seichiSilver: 200,
       skillPoints: 5, updatedAt: new Date(), regenAt: new Date(), }]);
     const db = await getTestDatabase();
-    await db.insert(userVote).values({ id: "progress-votes", userId, secret: "cache0001", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
     await db.insert(bloodline).values({ id: "cache-line", name: "Cache Line", rank: "D", image: "",
       description: "Cache fixture", regenIncrease: 7, effects });
   });

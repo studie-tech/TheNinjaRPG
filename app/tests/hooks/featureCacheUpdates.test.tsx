@@ -1,17 +1,16 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
-import type { AppRouter } from "@/api/root";
 import * as appClient from "@/app/_trpc/client";
 import type { UserItem } from "@/drizzle/schema";
 import { getEquippedInventory } from "@/deltas/item";
 import type { useInventoryCacheUpdate as InventoryCacheHook } from "@/hooks/useInventoryCacheUpdate";
 import { useJutsuCacheUpdate } from "@/hooks/useJutsuCacheUpdate";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 let useInventoryCacheUpdate: typeof InventoryCacheHook;
 /** Bind the real typed procedures to this suite's provider without retaining other suites' mocks. */
 const installApi = () => Object.assign(vi.spyOn(appClient, "api" as never), {
@@ -37,7 +36,7 @@ const harness = () => {
     throw new Error(`Unexpected request: ${op.path}`);
   })] });
   const wrapper = ({ children }: { children: ReactNode }) =>
-    <testApi.Provider client={trpc} queryClient={client}><QueryClientProvider client={client}>{children}</QueryClientProvider></testApi.Provider>;
+    <TrpcTestProviders client={trpc} queryClient={client}>{children}</TrpcTestProviders>;
   return { client, requests, wrapper };
 };
 

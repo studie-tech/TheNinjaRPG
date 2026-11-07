@@ -10,7 +10,8 @@ import {
   sageRanksAtOrBelow,
   filterRollableSageModes,
 } from "@/libs/sageMode";
-import type { SageMode, UserData } from "@/drizzle/schema";
+import type { UserData } from "@/drizzle/schema";
+import { makeSageMode } from "./combat/helpers/sageMode";
 
 describe("getSageMasteryRank", () => {
   it("maps sage mastery experience to the correct rank at each threshold", () => {
@@ -93,35 +94,11 @@ describe("sage rank ordering helpers", () => {
 });
 
 describe("filterRollableSageModes (rank-less)", () => {
-  const mode = (over: Partial<SageMode>): SageMode =>
-    ({
-      id: "m1",
-      name: "Mode",
-      image: "i.webp",
-      description: "d",
-      battleDescription: null,
-      effects: [],
-      afterEffects: [],
-      level2Effects: [],
-      activationRounds: 5,
-      afterEffectRounds: 3,
-      chakraCostPerc: 20,
-      staminaCostPerc: 20,
-      actionCostPerc: 80,
-      level: 1,
-      requiredSageMastery: 0,
-      hidden: false,
-      villageId: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      ...over,
-    }) as SageMode;
-
   const user = { villageId: "v1" } as UserData;
 
   it("returns level-1, non-hidden, village-matching, not-yet-rolled modes", () => {
     const pool = filterRollableSageModes({
-      sageModes: [mode({ id: "a" })],
+      sageModes: [makeSageMode({ id: "a" })],
       user,
       previousRolls: [],
     });
@@ -131,11 +108,11 @@ describe("filterRollableSageModes (rank-less)", () => {
   it("excludes hidden, non-level-1, wrong-village, and previously-rolled modes", () => {
     const pool = filterRollableSageModes({
       sageModes: [
-        mode({ id: "hidden", hidden: true }),
-        mode({ id: "lvl2", level: 2 }),
-        mode({ id: "otherVillage", villageId: "v2" }),
-        mode({ id: "rolled" }),
-        mode({ id: "keep" }),
+        makeSageMode({ id: "hidden", hidden: true }),
+        makeSageMode({ id: "lvl2", level: 2 }),
+        makeSageMode({ id: "otherVillage", villageId: "v2" }),
+        makeSageMode({ id: "rolled" }),
+        makeSageMode({ id: "keep" }),
       ],
       user,
       previousRolls: [{ sageModeId: "rolled" }],
@@ -145,7 +122,7 @@ describe("filterRollableSageModes (rank-less)", () => {
 
   it("keeps village-less (global) modes regardless of user village", () => {
     const pool = filterRollableSageModes({
-      sageModes: [mode({ id: "global", villageId: null })],
+      sageModes: [makeSageMode({ id: "global", villageId: null })],
       user,
       previousRolls: [],
     });

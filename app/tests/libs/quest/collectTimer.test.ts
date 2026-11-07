@@ -3,6 +3,7 @@ import { getNewTrackers } from "@/libs/quest";
 import { getCollectDeadline } from "@/utils/time";
 import { DecreaseGatheringTime, IncreaseGatheringYield } from "@/validators/combat";
 import { QuestTracker } from "@/validators/objectives";
+import { trackerQuest, trackerUser } from "../../setup/quest";
 
 // Timed collect_item objectives compare Date.now() with the saved deadline, falling
 // back to timestamp plus configured duration for older trackers. The spy controls
@@ -29,41 +30,20 @@ const makeCollectUser = (collectTimeMinutes: number, timestamp?: string) => {
     item_name: "Herb",
     collect_time_minutes: collectTimeMinutes,
   };
-  const quest = {
-    id: "timed-collect-quest",
-    name: "Timed collect quest",
-    questType: "mission",
-    hidden: false,
-    consecutiveObjectives: false,
-    maxAttempts: 100,
-    maxCompletes: 100,
+  const quest = trackerQuest("timed-collect-quest", [objective], "mission", {
     retryDelay: "none",
-    requiredVillage: null,
-    content: { objectives: [objective], reward: {} },
-  };
-  return {
-    userId: "collector",
-    level: 50,
-    rank: "JONIN",
-    role: "USER",
-    villageId: "v1",
-    isOutlaw: false,
-    bloodlineId: null,
-    ...location,
-    status: "AWAKE",
-    village: { id: "v1", sector: 1 },
-    activeWars: [],
-    completedQuests: [],
-    useritems: [],
-    questData: [
+  });
+  return trackerUser(
+    [quest],
+    [
       {
         id: quest.id,
         startAt: "2026-01-01T00:00:00.000Z",
         goals: [{ id: objective.id, ...(timestamp ? { timestamp } : {}) }],
       },
     ],
-    userQuests: [{ id: "history", questId: quest.id, completed: 0, quest }],
-  } as unknown as Parameters<typeof getNewTrackers>[0];
+    { userId: "collector", ...location, status: "AWAKE", useritems: [] },
+  );
 };
 
 const evaluate = (user: Parameters<typeof getNewTrackers>[0]) => {

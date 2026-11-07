@@ -9,6 +9,7 @@ import * as audioPreferences from "@/libs/audioPreferences";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as timeUtils from "@/utils/time";
+import { capacitorWindow, removeCapacitor, type CapacitorBridge } from "../setup/native";
 
 type RemoteCommand = "play" | "pause" | "toggle";
 type AudioTestMocks = {
@@ -78,6 +79,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  removeCapacitor();
   cleanup();
   vi.restoreAllMocks();
   const audio = getAudioTestMocks();
@@ -89,6 +91,11 @@ afterEach(() => {
   audio.enabled = true;
   audio.remoteCommand = undefined;
 });
+
+/** Only the platform, so the shell reads as present without any native plugins. */
+const setShellPlatform = (platform: string) => {
+  capacitorWindow.Capacitor = { getPlatform: () => platform } as CapacitorBridge;
+};
 
 describe("GlobalAudioProvider", () => {
   it("switches Halloween music only after login and restores welcome music on logout", () => {
@@ -118,11 +125,7 @@ describe("GlobalAudioProvider", () => {
   });
 
   it("ignores Android remote commands while the saved music preference is off", async () => {
-    const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
-    Object.defineProperty(window, "Capacitor", {
-      configurable: true,
-      value: { getPlatform: () => "android" },
-    });
+    setShellPlatform("android");
     const audio = getAudioTestMocks();
     const view = render(
       <GlobalAudioProvider userData={user(1, false)}>
@@ -150,20 +153,11 @@ describe("GlobalAudioProvider", () => {
       expect(audio.setEnabled).toHaveBeenCalledWith(true);
     } finally {
       view.unmount();
-      if (originalCapacitor) {
-        Object.defineProperty(window, "Capacitor", originalCapacitor);
-      } else {
-        Reflect.deleteProperty(window, "Capacitor");
-      }
     }
   });
 
   it("starts iOS remote Play during the gesture and keeps a later Pause authoritative", async () => {
-    const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
-    Object.defineProperty(window, "Capacitor", {
-      configurable: true,
-      value: { getPlatform: () => "ios" },
-    });
+    setShellPlatform("ios");
     const audio = getAudioTestMocks();
     audio.enabled = false;
     const view = render(
@@ -198,20 +192,11 @@ describe("GlobalAudioProvider", () => {
     } finally {
       resolveActivation(true);
       view.unmount();
-      if (originalCapacitor) {
-        Object.defineProperty(window, "Capacitor", originalCapacitor);
-      } else {
-        Reflect.deleteProperty(window, "Capacitor");
-      }
     }
   });
 
   it("retries iOS session activation after a failed attempt", async () => {
-    const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
-    Object.defineProperty(window, "Capacitor", {
-      configurable: true,
-      value: { getPlatform: () => "ios" },
-    });
+    setShellPlatform("ios");
     const audio = getAudioTestMocks();
     audio.isPlaying = true;
     audio.activate.mockResolvedValueOnce(false);
@@ -236,19 +221,10 @@ describe("GlobalAudioProvider", () => {
     );
     await waitFor(() => expect(audio.activate).toHaveBeenCalledTimes(2));
     view.unmount();
-    if (originalCapacitor) {
-      Object.defineProperty(window, "Capacitor", originalCapacitor);
-    } else {
-      Reflect.deleteProperty(window, "Capacitor");
-    }
   });
 
   it("keeps the iOS audio session through a brief pause and releases it when music is off", async () => {
-    const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
-    Object.defineProperty(window, "Capacitor", {
-      configurable: true,
-      value: { getPlatform: () => "ios" },
-    });
+    setShellPlatform("ios");
     const audio = getAudioTestMocks();
     audio.isPlaying = true;
     const view = render(
@@ -275,11 +251,6 @@ describe("GlobalAudioProvider", () => {
     );
     await waitFor(() => expect(audio.deactivate).toHaveBeenCalledTimes(1));
     view.unmount();
-    if (originalCapacitor) {
-      Object.defineProperty(window, "Capacitor", originalCapacitor);
-    } else {
-      Reflect.deleteProperty(window, "Capacitor");
-    }
   });
 
   it("keeps a remote pause through unrelated profile refreshes", async () => {

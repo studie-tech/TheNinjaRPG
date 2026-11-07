@@ -21,8 +21,9 @@ import { initiateBattle } from "@/server/api/routers/combat";
 import { deleteUserRankedQueueRow, pvpRankRouter } from "@/server/api/routers/pvprank";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
-import { insertUsers } from "../../../../setup/factories";
-import { beforeStatements } from "../../../../setup/statements";
+import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
+import { beforeStatements, interceptExecute, overrideQuery } from "../../../../setup/statements";
+import { readUser } from "../../../../setup/userReads";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -30,6 +31,7 @@ import {
   resetTables,
   runRawSql,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   beforeEach(async () => {
@@ -58,28 +60,14 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
       })),
     );
     const db = await getTestDatabase();
-    await db.insert(clan).values(
-      ["a", "b"].map((id) => ({
-        id,
-        name: id,
-        image: "/clan.png",
-        villageId: "v",
-        founderId: id === "a" ? "leader" : "enemy",
-        leaderId: id === "a" ? "leader" : "enemy",
-        leaderOrderId: id,
-      })),
-    );
+    await insertClans(["a", "b"].map((id) => ({ id, villageId: "v", leaderId: id === "a" ? "leader" : "enemy", leaderOrderId: id })));
     await db.insert(mpvpBattleQueue).values({
       id: "q",
       attackerEntityId: "a",
       defenderEntityId: "b",
       createdAt: new Date(0),
     });
-    await db.insert(aiProfile).values({
-      id: "Default",
-      userId: "default-ai",
-      rules: [],
-    });
+    await insertDefaultAiProfile();
     await db.insert(rankedLoadout).values(
       ["member", "leader"].map((userId) => ({
         id: userId,
@@ -92,10 +80,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  const storedUser = async (userId = "member") =>
-    (await getTestDatabase()).query.userData.findFirst({
-      where: eq(userData.userId, userId),
-    });
+  const storedUser = (userId = "member") => readUser(userId);
   const queueRows = async () =>
     (await getTestDatabase()).query.rankedPvpQueue.findMany();
   const claimClanQueue = async () => {
@@ -112,6 +97,44 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
       slot: 0,
     });
   };
+  /** Every user queued, with both sides of the `q` lobby filled. */
+  const queueFullLobby = async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "QUEUED" });
+    await db.insert(mpvpBattleUser).values([
+      {
+        id: "leader-q",
+        clanBattleId: "q",
+        userId: "leader",
+        side: "ATTACKER",
+        slot: 0,
+        createdAt: new Date(0),
+      },
+      {
+        id: "member-q",
+        clanBattleId: "q",
+        userId: "member",
+        side: "ATTACKER",
+        slot: 1,
+        createdAt: new Date(1),
+      },
+      {
+        id: "enemy-q",
+        clanBattleId: "q",
+        userId: "enemy",
+        side: "DEFENDER",
+        slot: 0,
+        createdAt: new Date(0),
+      },
+    ]);
+  };
+  const depart = (
+    caller: ReturnType<typeof clanRouter.createCaller>,
+    operation: "leave" | "kick",
+  ) =>
+    operation === "leave"
+      ? caller.leaveClanBattle({ clanBattleId: "q" })
+      : caller.kickFromClanBattle({ clanBattleId: "q", targetId: "member", clanId: "a" });
 
   it("keeps existing queue entries claimed when applying the migration", async () => {
     const db = await getTestDatabase();
@@ -267,13 +290,10 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   it("allows one of two simultaneous joins to own status and keeps only its row", async () => {
     const db = await getTestDatabase();
     let published = 0;
-    let release: (() => void) | undefined;
-    const ready = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: ready, resolve: release } = deferred<void>();
     const barrier = async () => {
       published += 1;
-      if (published === 2) release?.();
+      if (published === 2) release();
       await ready;
     };
     const client = beforeStatements(db, rankedPvpQueue, [barrier, barrier]);
@@ -327,14 +347,9 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
 
   it("preserves ownership when a committed claim loses its response", async () => {
     const db = await getTestDatabase();
-    const client = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "execute") return Reflect.get(target, property, receiver);
-        return async (query: Parameters<typeof target.execute>[0]) => {
-          await target.execute(query);
-          throw new Error("Claim response lost");
-        };
-      },
+    const client = interceptExecute(db, async (_query, run) => {
+      await run();
+      throw new Error("Claim response lost");
     });
     await expect(
       callerForDatabase(pvpRankRouter, "member", client).queueForRankedPvp(),
@@ -372,25 +387,12 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   it("preserves a newer ranked owner during delayed failed-clan-join compensation", async () => {
     const db = await getTestDatabase();
     let reads = 0;
-    const queried = new Proxy(db, {
-      get(target, property, receiver) {
-        if (property !== "query") return Reflect.get(target, property, receiver);
-        return {
-          ...target.query,
-          mpvpBattleQueue: {
-            ...target.query.mpvpBattleQueue,
-            findFirst: async (
-              ...args: Parameters<typeof target.query.mpvpBattleQueue.findFirst>
-            ) => {
-              reads += 1;
-              if (reads === 2)
-                expect(await deleteClanBattle(db, { id: "q", battleId: null })).toBe(
-                  true,
-                );
-              return target.query.mpvpBattleQueue.findFirst(...args);
-            },
-          },
-        };
+    const queried = overrideQuery(db, "mpvpBattleQueue", {
+      findFirst: async (read, ...args) => {
+        reads += 1;
+        if (reads === 2)
+          expect(await deleteClanBattle(db, { id: "q", battleId: null })).toBe(true);
+        return read(...args);
       },
     });
     const client = beforeStatements(queried, userData, [
@@ -432,14 +434,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
           operation === "leave" ? "member" : "leader",
           db,
         );
-        const result =
-          operation === "leave"
-            ? await caller.leaveClanBattle({ clanBattleId: "q" })
-            : await caller.kickFromClanBattle({
-                clanBattleId: "q",
-                targetId: "member",
-                clanId: "a",
-              });
+        const result = await depart(caller, operation);
         expect(result.success).toBe(true);
         expect(await storedUser()).toMatchObject({ status: "AWAKE", battleId: null });
         expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(
@@ -487,14 +482,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
         operation === "leave" ? "member" : "leader",
         client,
       );
-      const result =
-        operation === "leave"
-          ? await caller.leaveClanBattle({ clanBattleId: "q" })
-          : await caller.kickFromClanBattle({
-              clanBattleId: "q",
-              targetId: "member",
-              clanId: "a",
-            });
+      const result = await depart(caller, operation);
       expect(result.success).toBe(true);
       expect(await storedUser()).toMatchObject({ status: "QUEUED", battleId: null });
       await callerForDatabase(pvpRankRouter, "member", db).checkRankedPvpMatches();
@@ -508,33 +496,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
 
   it("preserves a newer queue when deletion races the final surplus-player wake", async () => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ status: "QUEUED" });
-    await db.insert(mpvpBattleUser).values([
-      {
-        id: "leader-q",
-        clanBattleId: "q",
-        userId: "leader",
-        side: "ATTACKER",
-        slot: 0,
-        createdAt: new Date(0),
-      },
-      {
-        id: "member-q",
-        clanBattleId: "q",
-        userId: "member",
-        side: "ATTACKER",
-        slot: 1,
-        createdAt: new Date(1),
-      },
-      {
-        id: "enemy-q",
-        clanBattleId: "q",
-        userId: "enemy",
-        side: "DEFENDER",
-        slot: 0,
-        createdAt: new Date(0),
-      },
-    ]);
+    await queueFullLobby();
     const client = beforeStatements(db, userData, [
       async () => {},
       async () => {
@@ -561,33 +523,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
 
   it("retries a deadlocked surplus wake without tearing down started clan combat", async () => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ status: "QUEUED" });
-    await db.insert(mpvpBattleUser).values([
-      {
-        id: "leader-q",
-        clanBattleId: "q",
-        userId: "leader",
-        side: "ATTACKER",
-        slot: 0,
-        createdAt: new Date(0),
-      },
-      {
-        id: "member-q",
-        clanBattleId: "q",
-        userId: "member",
-        side: "ATTACKER",
-        slot: 1,
-        createdAt: new Date(1),
-      },
-      {
-        id: "enemy-q",
-        clanBattleId: "q",
-        userId: "enemy",
-        side: "DEFENDER",
-        slot: 0,
-        createdAt: new Date(0),
-      },
-    ]);
+    await queueFullLobby();
     const client = beforeStatements(db, userData, [
       async () => {},
       async () => {

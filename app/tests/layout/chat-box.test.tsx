@@ -1,15 +1,14 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { createTRPCReact } from "@trpc/react-query";
 import type { TextStreamPart, ToolSet } from "ai";
 import { createUIMessageStreamResponse, toUIMessageStream } from "ai";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { PropsWithChildren } from "react";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import ChatBox from "@/layout/ChatBox";
 import * as richInput from "@/layout/RichInput";
 import * as userContext from "@/utils/UserContext";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
 const storageKey = "seichiAiChat:history-reader";
@@ -30,14 +29,13 @@ afterEach(() => {
 });
 
 const session = () => {
-  const testApi = createTRPCReact<AppRouter>();
-  Object.assign(vi.spyOn(client, "api" as never), { misc: testApi.misc });
+    Object.assign(vi.spyOn(client, "api" as never), { misc: testApi.misc });
   vi.spyOn(userContext, "useUserData").mockReturnValue({ data: { userId: "history-reader", username: "Me", level: 50 } } as never);
   vi.spyOn(richInput, "default").mockReturnValue(<textarea aria-label="Question" />);
   const queryClient = new QueryClient();
   clients.push(queryClient);
   const trpcClient = testApi.createClient({ links: [] });
-  const wrapper = ({ children }: PropsWithChildren) => <testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></testApi.Provider>;
+  const wrapper = ({ children }: PropsWithChildren) => <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>;
   return { wrapper };
 };
 

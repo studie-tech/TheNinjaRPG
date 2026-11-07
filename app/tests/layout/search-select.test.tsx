@@ -1,27 +1,14 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { SearchSelect } from "@/layout/SearchSelect";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-// SearchSelect needs browser-native events, measurements and scrolling absent from the DOM shim.
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const originalGlobals = browserGlobals.map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
-const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
 });
 afterEach(() => {
   cleanup();
-  for (const [key, descriptor] of originalGlobals) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
-  if (originalScroll) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScroll);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  restoreBrowserGlobals();
 });
 
 const select = (props: { disabled?: boolean; searchLabel?: string; emptyText?: string } = {}) => (

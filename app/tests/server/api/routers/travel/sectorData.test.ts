@@ -5,18 +5,13 @@ import type { UserData } from "@/drizzle/schema";
 import { travelRouter } from "@/server/api/routers/travel";
 import { buildSectorWindowLayout } from "@/server/utils/sectorMap";
 import { MoveToObjective, ObjectiveTracker, QuestTracker } from "@/validators/objectives";
+import { deferred } from "../../../../setup/deferred";
 
 const SECTOR = 500;
 const STALE_SECTOR = 10;
 const dialect = new MySqlDialect();
 const queryParams = (options: { where: SQL }) =>
   dialect.sqlToQuery(options.where).params;
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
-};
-
 const placement = (sector: number, isAi: boolean | null = true) => ({
   id: `npc-${sector}`,
   aiTemplateUserId: "npc",

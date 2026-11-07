@@ -1,5 +1,5 @@
 import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
-const competitor = { id: "village:home", name: "Home", villageId: "home", clanId: null };
+export const competitor = { id: "village:home", name: "Home", villageId: "home", clanId: null };
 
 /**
  * Decided one-to-three human victory with frozen competitor metadata. Explicit

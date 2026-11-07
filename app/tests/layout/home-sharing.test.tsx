@@ -1,13 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createTRPCReact } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
+import { QueryClient } from "@tanstack/react-query";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
 import type { ComponentProps } from "react";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import { HomeSharing } from "@/layout/HomeSharing";
 import * as Link from "@/layout/Link";
@@ -15,15 +12,14 @@ import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
 import type UserRequestSystem from "@/layout/UserRequestSystem";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
+import { deferred } from "../setup/deferred";
+import { testRouter } from "../setup/router";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
 type HomeRequest = ComponentProps<typeof UserRequestSystem>["requests"][number];
 type Result = { success: boolean; message: string };
-const testApi = createTRPCReact<AppRouter>();
 const queryClients: QueryClient[] = [];
-const router = {
-  back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), push: vi.fn(),
-  replace: vi.fn(), prefetch: vi.fn(), bfcacheId: "home-sharing",
-};
+const router = testRouter("home-sharing");
 const player = (username: string) => ({ username, level: 50, rank: "JONIN" as const, village: { name: "Konoki" } });
 const request = (overrides: Partial<HomeRequest> = {}): HomeRequest => ({
   id: "invitation", senderId: "owner", receiverId: "visitor", type: "HOME", status: "PENDING",
@@ -52,21 +48,14 @@ const setup = (
 ) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   queryClients.push(queryClient);
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    void Promise.resolve().then(() => handle(op.path, op.input)).then(
-      (data) => { observer.next({ result: { data } }); observer.complete(); },
-      (error) => observer.error(error),
-    );
-  })] });
+  const trpcClient = fakeTrpcClient(handle);
   const onChanged = vi.fn(async () => undefined);
   const wrap = (nextProps: Partial<ComponentProps<typeof HomeSharing>> = {}) => (
     <AppRouterContext.Provider value={router}>
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          {listenForInvitations && <PusherListener />}
-          <HomeSharing isPublic={false} revision={3} userId="owner" onChanged={onChanged} {...props} {...nextProps} />
-        </QueryClientProvider>
-      </testApi.Provider>
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+        {listenForInvitations && <PusherListener />}
+        <HomeSharing isPublic={false} revision={3} userId="owner" onChanged={onChanged} {...props} {...nextProps} />
+      </TrpcTestProviders>
     </AppRouterContext.Provider>
   );
   const view = render(wrap());
@@ -89,8 +78,7 @@ it("refreshes a mounted home invitation list before showing its incoming invitat
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/home");
   const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   showToast.mockClear();
-  let finishRefresh = () => {};
-  const refreshReady = new Promise<void>((resolve) => { finishRefresh = resolve; });
+  const { promise: refreshReady, resolve: finishRefresh } = deferred<void>();
   const query = vi.fn(async () => {
     if (query.mock.calls.length === 1) return [];
     await refreshReady;
@@ -196,8 +184,7 @@ it("shows sent and received history with accepted visit and revoke actions", asy
 });
 
 it("keeps visibility controls pending through revision recovery and retries with the refreshed revision", async () => {
-  let finishRefresh = () => {};
-  const refreshReady = new Promise<void>((resolve) => { finishRefresh = resolve; });
+  const { promise: refreshReady, resolve: finishRefresh } = deferred<void>();
   const sharing = vi.fn((_input: unknown): Result => sharing.mock.calls.length === 1
     ? { success: false, message: "Your home changed. Refresh and try again" }
     : { success: true, message: "Your home is public" });
@@ -224,8 +211,7 @@ it("keeps visibility controls pending through revision recovery and retries with
 });
 
 it("shows invitation loading and recovers a failed query from its nearby retry control", async () => {
-  let finishQuery = () => {};
-  const queryReady = new Promise<void>((resolve) => { finishQuery = resolve; });
+  const { promise: queryReady, resolve: finishQuery } = deferred<void>();
   let queries = 0;
   const view = setup(async (path) => {
     if (path !== "home.getHomeRequests") throw new Error(`Unexpected procedure ${path}`);

@@ -28,42 +28,15 @@ import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS, ItemVariantValidator }
 import type { FurnitureGeometry } from "@/validators/itemFurniture";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import * as UserContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { validItemInput } from "../setup/items";
 
-const validItem = ItemValidator.parse({
+const validItem = ItemValidator.parse(validItemInput({
   name: "Shop item",
-  image: "item.webp",
   description: "Shop item",
   battleDescription: "",
   stackSize: 10,
-  chakraCost: 0,
-  healthCost: 0,
-  staminaCost: 0,
-  healthCostReducePerLvl: 0,
-  chakraCostReducePerLvl: 0,
-  staminaCostReducePerLvl: 0,
-  actionCostPerc: 100,
-  maxImbueNumber: 1,
-  maxDurability: 100,
-  hidden: false,
-  cooldown: 0,
-  cost: 1,
-  repsCost: 0,
-  seichiSilverCost: 0,
-  range: 0,
-  maxEquips: 0,
-  method: "SINGLE",
-  target: "SELF",
-  itemType: "MATERIAL",
-  weaponType: "NONE",
-  rarity: "COMMON",
-  slot: "NONE",
-  expireFromStoreAt: null,
-  effects: [],
-  farmYieldItemId: null,
-  farmExtractSeedItemId: null,
-  crystalTargetTypes: null,
-  bloodlineId: null,
-});
+}));
 const data = {
   ...validItem,
   id: "shop-item",
@@ -78,15 +51,12 @@ const catalogueInvalidations = {
   getItemVariants: vi.fn(async (_input: { itemId: string }) => undefined),
 };
 const itemUtils = { item: Object.fromEntries(Object.entries(catalogueInvalidations).map(([name, invalidate]) => [name, { invalidate }])) };
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 const ActualFurnitureViewsEditor = furnitureEditor.FurnitureViewsEditor;
 const ActualEditContent = EditContent;
 const actualUseItemEditForm = useItemEditForm;
 
 beforeEach(() => {
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   updateItem.mockReset();
   for (const invalidate of Object.values(catalogueInvalidations)) invalidate.mockClear();
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -108,8 +78,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 describe("staff item economy editor", () => {
@@ -391,11 +360,10 @@ describe("staff item economy editor", () => {
 
 describe("staff item selector refreshes", () => {
   let queryClient: QueryClient;
-  const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   beforeEach(() => {
     queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
+    installBrowserGlobals({ events: [], scrollIntoView: true });
     vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
     vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
     vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
@@ -406,8 +374,7 @@ describe("staff item selector refreshes", () => {
   });
   afterEach(() => {
     queryClient.clear();
-    if (originalScroll) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScroll);
-    else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    restoreBrowserGlobals();
   });
 
   it.each([true, false])("refreshes token bindings and variant labels only after a successful item save (success=%s)", async (success) => {

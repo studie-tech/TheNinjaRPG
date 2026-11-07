@@ -17,7 +17,7 @@ import {
   warAlly,
 } from "@/drizzle/schema";
 import { warRouter } from "@/routers/war";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertClans } from "../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -54,16 +54,7 @@ const seedWorld = async (type: "VILLAGE" | "HIDEOUT" | "STRONGHOLD") => {
     },
   ]);
   if (type !== "VILLAGE") {
-    await db.insert(clan).values({
-      id: "sector-faction",
-      name: "Sector Faction",
-      image: "/clan.webp",
-      villageId: ATTACKER,
-      founderId: LEADER,
-      leaderId: LEADER,
-      leaderOrderId: LEADER,
-      hasHideout: true,
-    });
+    await insertClans([{ id: "sector-faction", name: "Sector Faction", villageId: ATTACKER, leaderId: LEADER, hasHideout: true }]);
   }
   await insertUsers(
     [ATTACKER, DEFENDER].flatMap((villageId) =>

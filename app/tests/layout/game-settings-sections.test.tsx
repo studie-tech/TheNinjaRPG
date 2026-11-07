@@ -20,12 +20,8 @@ import * as toast from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as userContext from "@/utils/UserContext";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-// Radix popovers dispatch DOM events, so tests use the window's Event classes.
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) =>
-  Object.getOwnPropertyDescriptor(globalThis, key),
-);
 
 const MUSIC = "Music";
 const SFX = "Combat sounds";
@@ -36,18 +32,7 @@ let preferenceCallbacks: Parameters<typeof client.api.profile.updatePreferences.
 
 beforeEach(() => {
   window.localStorage.clear();
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: {
-      configurable: true,
-      value: class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    },
-  });
+  installBrowserGlobals({ resizeObserver: true });
   vi.spyOn(audioPreferences, "isLocalAudioSession").mockReturnValue(false);
   vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
     isPlaying: false,
@@ -80,17 +65,10 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  // Radix restores focus on the next task, while it still needs DOM Event globals.
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
+  await act(flushRadixFocus);
   vi.restoreAllMocks();
   document.body.innerHTML = "";
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const renderInAudio = (node: React.ReactNode) =>

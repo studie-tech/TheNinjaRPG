@@ -4,13 +4,12 @@ import { applyEffects } from "@/libs/combat/process";
 import { cleanse, clear, copy, mirror } from "@/libs/combat/tags";
 import type {
   BattleUserState,
-  CombatAction,
   CompleteBattle,
   UserEffect,
 } from "@/libs/combat/types";
 import { alignBattle } from "@/libs/combat/util";
 import { DiffuseTag, getTagSchema, tagTypes } from "@/validators/combat";
-import { makeBattleUser, makeDamageEffect, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCombatAction, makeDamageEffect, makeEffect } from "./helpers/battleScenario";
 
 const ROUND = 3;
 const runtime = (targetId = "defender") => ({
@@ -176,7 +175,7 @@ describe("Diffuse damage resolution", () => {
       };
       const dr = () => makeEffect("decreasedamagetaken", { power: 50, calculation: "percentage", rounds: 3 }, runtime());
       const effects = () => [...(type === "afterburn" ? [attack()] : []), secondary(), dr()];
-      const action = { chakraCost: 100, staminaCost: 100 } as CombatAction;
+      const action = makeCombatAction({ chakraCost: 100, staminaCost: 100 });
       const actorId = type === "pierce" ? "attacker" : "defender";
       const baseline = applyEffects(battle(effects()), actorId, action).newBattle;
       const current = applyEffects(battle([...effects(), diffuse({ power: 1 })]), actorId, action).newBattle;
@@ -342,10 +341,11 @@ describe("Diffuse damage resolution", () => {
         creatorId: "attacker",
       },
     );
-    const { newBattle } = applyEffects(battle([poison, diffuse()]), "defender", {
-      chakraCost: 100,
-      staminaCost: 100,
-    } as CombatAction);
+    const { newBattle } = applyEffects(
+      battle([poison, diffuse()]),
+      "defender",
+      makeCombatAction({ chakraCost: 100, staminaCost: 100 }),
+    );
     expect(debt(defender(newBattle))).toBeCloseTo(50);
     expect(defender(newBattle).curHealth).toBeCloseTo(950);
   });

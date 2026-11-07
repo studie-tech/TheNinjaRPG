@@ -9,15 +9,23 @@ import { clanRouter } from "@/server/api/routers/clan";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { syncStrongholdMembership } from "@/server/utils/faction";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertClans } from "../../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../../setup/testDatabase";
+import { holdReads } from "../../../../setup/statements";
 
 const legacyDowngradeBackfill = readFileSync(resolve(process.cwd(), "drizzle/migrations/0076_brave_nico_minoru.sql"), "utf8").split(";").find((statement) => statement.includes("SET `wasDowngraded` = 1"));
 
 const seedFaction = async (type: "HIDEOUT" | "STRONGHOLD", wasDowngraded = true) => {
   const db = await getTestDatabase();
   await db.insert(village).values({ id: "stronghold", name: "Stronghold", sector: 301, kageId: "leader", type, wasDowngraded });
-  await db.insert(clan).values({ id: "faction", name: "Faction", image: "/clan.webp", villageId: "stronghold", founderId: "leader", leaderId: "leader", leaderOrderId: "leader-order", hasHideout: true, bank: STRONGHOLD_REESTABLISH_COST * 2 });
+  await insertClans([{
+    id: "faction",
+    name: "Faction",
+    villageId: "stronghold",
+    leaderId: "leader",
+    hasHideout: true,
+    bank: STRONGHOLD_REESTABLISH_COST * 2,
+  }]);
   await insertUsers(Array.from({ length: 30 }, (_, i) => ({ userId: i === 0 ? "leader" : `member-${i}`, username: `Member${i}`, villageId: "stronghold", clanId: "faction", isOutlaw: true })) as never);
 };
 
@@ -165,21 +173,4 @@ describeWithDatabase("Stronghold membership and restoration", () => {
 });
 
 /** Competing purchases must read the same boost level before their guarded writes race. */
-const holdClanSnapshots = (database: DrizzleClient, count: number): DrizzleClient => {
-  let pending = 0;
-  let release = () => {};
-  const barrier = new Promise<void>((resolve) => { release = resolve; });
-  const clanQueries = new Proxy(database.query.clan, {
-    get(target, property, receiver) {
-      if (property !== "findFirst") return Reflect.get(target, property, receiver);
-      return async (...args: Parameters<typeof target.findFirst>) => {
-        const result = await target.findFirst(...args);
-        pending += 1;
-        if (pending >= count) release();
-        await barrier;
-        return result;
-      };
-    },
-  });
-  return new Proxy(database, { get(target, property, receiver) { return property === "query" ? { ...target.query, clan: clanQueries } : Reflect.get(target, property, receiver); } });
-};
+const holdClanSnapshots = (database: DrizzleClient, count: number) => holdReads(database, "clan", count);

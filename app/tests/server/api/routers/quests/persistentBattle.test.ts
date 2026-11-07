@@ -14,7 +14,12 @@ import { createTRPCRouter } from "@/server/api/trpc";
 import { DialogObjective, InstantStartBattleObjective, QuestTracker, ResetQuestObjective } from "@/validators/objectives";
 import { periodStart } from "@/utils/time";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+  insertDefaultAiProfile,
+} from "../../../../setup/factories";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -42,8 +47,7 @@ describeWithDatabase("persistent isolated Pyramid battle status", () => {
     ]);
     await insertQuests([{ id: "pyramid", name: "Pyramid", questType: "battlepyramid", hidden: false, maxAttempts: 100, maxCompletes: 100, content },
       { id: "other", name: "Other", questType: "story", hidden: false, content: { ...content, isolated: false, objectives: [dialog("other")] } }]);
-    const client = await getTestDatabase();
-    await client.insert(aiProfile).values({ id: "Default", userId: "foe", rules: [] });
+    await insertDefaultAiProfile({ userId: "foe" });
   });
   afterEach(async () => { vi.restoreAllMocks(); await resetTables(questHistory); });
 

@@ -5,6 +5,7 @@ import * as next from "next/server";
 import { deferModeration } from "@/libs/moderation/defer";
 import * as moderator from "@/libs/moderator";
 import type { DrizzleClient } from "@/server/db";
+import { deferred } from "../../setup/deferred";
 
 const callbacks: Array<() => unknown> = [];
 const client = {} as DrizzleClient;
@@ -23,8 +24,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("deferred moderation", () => {
   it("retains pending provider work until the after callback finishes", async () => {
-    let finish!: () => void;
-    const provider = new Promise<void>((resolve) => { finish = resolve; });
+    const { promise: provider, resolve: finish } = deferred<void>();
     const moderate = vi.spyOn(moderator, "moderateContent").mockReturnValue(provider);
     const before = Date.now();
     expect(deferModeration(client, info)).toBeUndefined();

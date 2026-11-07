@@ -6,6 +6,7 @@ import { GameLayoutPicker } from "@/layout/GameLayoutPicker";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import { GAME_LAYOUTS, type GameLayoutId } from "@/libs/gameLayouts";
 import { LayoutContextProvider, useActiveLayout } from "@/utils/LayoutContext";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 type PickerRouter = { refresh: ReturnType<typeof vi.fn>; push: ReturnType<typeof vi.fn>; replace: ReturnType<typeof vi.fn> };
 // Module mocks persist across suites, so this file installs its own router.
@@ -15,29 +16,19 @@ function getRouter(): PickerRouter {
   return globals.__layoutPickerRouter;
 }
 vi.mock("next/navigation", () => ({ useRouter: () => getRouter() }));
-const browserGlobals = ["Event", "CustomEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
-const scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 
 beforeEach(() => {
   localStorage.removeItem(LAYOUT_PREFERENCE_COOKIE);
   document.cookie = `${LAYOUT_PREFERENCE_COOKIE}=; path=/; max-age=0`;
-  for (const key of browserGlobals) Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => {} });
+  installBrowserGlobals({ scrollIntoView: true });
 });
 
 afterEach(async () => {
   await act(async () => {
     cleanup();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushRadixFocus();
   });
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
-  if (scrollDescriptor) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  restoreBrowserGlobals();
 });
 
 const openPicker = async (layout: GameLayoutId = "default") => {

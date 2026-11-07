@@ -4,6 +4,7 @@ import { isAvailableUserQuests } from "@/libs/quest";
 import { questsRouter } from "@/routers/quests";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const input = {
   type: "crime" as const,
@@ -49,12 +50,6 @@ const candidate = {
   retryDelay: "none",
   content: { objectives: [], reward: {}, sceneBackground: "", sceneCharacters: [] },
 } as unknown as Quest;
-
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
-};
 
 const makeClient = (rows: Quest[] = []) => {
   const findVillage = vi.fn().mockResolvedValue(null);

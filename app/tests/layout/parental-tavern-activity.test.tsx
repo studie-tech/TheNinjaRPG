@@ -1,12 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { createTRPCReact } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import { useTavernActivity } from "@/hooks/useTavernActivity";
 import * as taverns from "@/hooks/useTaverns";
@@ -15,23 +13,15 @@ import { usePusherHandler } from "@/layout/PusherHandler";
 import { chatTavernActivityAtom, chatViewedConversationsAtom } from "@/libs/chatPanel";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const store = getDefaultStore();
 const clients: QueryClient[] = [];
 type Handler = (event: { type?: string; message?: string; fromId?: string; commentId?: string }) => void;
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const originalGlobals = browserGlobals.map((name) =>
-  Object.getOwnPropertyDescriptor(globalThis, name),
-);
 
 beforeEach(() => {
-  Object.defineProperty(globalThis, "Event", { configurable: true, value: window.Event });
-  Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
-  Object.defineProperty(globalThis, "ResizeObserver", {
-    configurable: true,
-    value: class { observe() {} unobserve() {} disconnect() {} },
-  });
+  installBrowserGlobals({ resizeObserver: true });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
   vi.spyOn(taverns, "useTaverns").mockReturnValue({
@@ -52,11 +42,7 @@ afterEach(() => {
   for (const queryClient of clients.splice(0)) queryClient.clear();
   store.set(chatTavernActivityAtom, {});
   store.set(chatViewedConversationsAtom, {});
-  browserGlobals.forEach((name, index) => {
-    const original = originalGlobals[index];
-    if (original) Object.defineProperty(globalThis, name, original);
-    else Reflect.deleteProperty(globalThis, name);
-  });
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
 
@@ -125,11 +111,9 @@ for (const source of ["save", "event"] as const) {
         return source === "save" ? <ParentalControls /> : null;
       };
       const view = render(
-        <testApi.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}>
-            <LiveTab />
-          </QueryClientProvider>
-        </testApi.Provider>,
+        <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+          <LiveTab />
+        </TrpcTestProviders>,
       );
       await waitFor(() => expect(readTaverns).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(handlers.has("global")).toBe(!startingBlocked));

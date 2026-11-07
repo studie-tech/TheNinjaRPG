@@ -7,9 +7,8 @@ import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
 import * as questTeams from "@/layout/QuestTeams";
 import * as userContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 let startQuest: ReturnType<typeof vi.fn>;
 let mutationOptions: NonNullable<Parameters<typeof client.api.quests.startQuest.useMutation>[0]>;
 let prepareUserUpdate: ReturnType<typeof vi.fn>;
@@ -35,9 +34,7 @@ const tower = (id: string, name: string, extra: Record<string, unknown> = {}) =>
 });
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
-  }
+  installBrowserGlobals();
   startQuest = vi.fn();
   prepareUserUpdate = vi.fn(() => 7);
   updateUser = vi.fn(async () => true);
@@ -107,11 +104,7 @@ afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const card = (name: string) => screen.getByRole("article", { name });

@@ -11,7 +11,13 @@ import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertQuests,
+  insertUsers,
+  insertUserVotes,
+  insertClans,
+} from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { countUserReads } from "../../../../setup/userReads";
 
@@ -35,16 +41,14 @@ const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
 
 describeWithDatabase("ranked reward progression recovery", () => {
   beforeEach(async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
     await resetTables(raidDamageThreshold, raidParticipation, rankedUserRewards, rankedSeason, questHistory, quest, userVote, userData, gameSetting, anbuSquad, clan, village, war);
     await insertUsers([{ userId, username: "RewardProgress", role: "USER", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,
       regeneration: 0, money: 0, reputationPoints: 0, reputationPointsTotal: 0, medicalExperience: 0,
       huntingExperience: 0, craftingExperience: 0, gatheringExperience: 0, updatedAt: new Date(), regenAt: new Date() }]);
     const db = await getTestDatabase();
-    await db.insert(userVote).values({ id: "reward-progress-vote", userId, secret: "reward01", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
     await db.insert(rankedSeason).values({ id: "reward-season", name: "Reward Season", description: "", startDate: new Date(0), endDate: new Date(0), rewards: [] });
     await db.insert(rankedUserRewards).values({ id: "reward-receipt", userId, seasonId: "reward-season", division: "Wood" });
   });
@@ -123,7 +127,7 @@ describeWithDatabase("ranked reward progression recovery", () => {
     const db = await getTestDatabase();
     await db.insert(village).values([{ id: "reward-home", name: "Home", sector: 10, type: "VILLAGE", kageId: "other" }, { id: VILLAGE_SYNDICATE_ID, name: "Syndicate", sector: 20, type: "OUTLAW", kageId: "other" }]);
     await db.insert(anbuSquad).values({ id: "reward-squad", name: "Reward squad", memberCount: 2, image: "", villageId: "reward-home", kageOrderId: "", leaderOrderId: "" });
-    await db.insert(clan).values({ id: "reward-clan", name: "Reward clan", image: "", leaderOrderId: "", villageId: "reward-home", founderId: "other", leaderId: "other" });
+    await insertClans([{ id: "reward-clan", name: "Reward clan", leaderOrderId: "", villageId: "reward-home", leaderId: "other" }]);
     await db.insert(war).values({ id: "reward-home-war", type: "SECTOR_WAR", status: "ACTIVE", attackerVillageId: "other", defenderVillageId: "reward-home", sector: 30 });
     await db.update(userData).set({ isOutlaw: false, villageId: "reward-home", villagePrestige: 0, anbuId: "reward-squad", clanId: "reward-clan", joinedVillageAt: new Date(Date.now() - 100 * 86_400_000) }).where(eq(userData.userId, userId));
     await db.update(rankedSeason).set({ rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_prestige: -1 }) }] }).where(eq(rankedSeason.id, "reward-season"));

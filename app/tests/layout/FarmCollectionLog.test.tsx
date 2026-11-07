@@ -1,51 +1,14 @@
-import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
+import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 
-import * as dialogComponents from "@/components/ui/dialog";
+import { stubDialog } from "../setup/dialog";
 
-const dialogMocks = {
-  Dialog: ({ open, children }: { open?: boolean; children: ReactNode }) =>
-    open ? children : null,
-  DialogContent: ({
-    className,
-    children,
-    id,
-  }: HTMLAttributes<HTMLDivElement> & { id?: string }) => (
-    <div role="dialog" id={id} className={className}>
-      {children}
-    </div>
-  ),
-  DialogHeader: ({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) => (
-    <div className={className} {...props}>
-      {children}
-    </div>
-  ),
-  DialogFooter: ({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) => (
-    <div className={className} {...props}>
-      {children}
-    </div>
-  ),
-  DialogTitle: ({
-    className,
-    children,
-    ...props
-  }: HTMLAttributes<HTMLHeadingElement>) => (
-    <h2 className={className} {...props}>
-      {children}
-    </h2>
-  ),
-};
-
-const dialogSpies: { mockRestore: () => void }[] = [];
+let restoreDialog: () => void;
 beforeEach(() => {
-  for (const [name, implementation] of Object.entries(dialogMocks)) {
-    dialogSpies.push(vi.spyOn(dialogComponents, name as keyof typeof dialogMocks).mockImplementation(implementation as never));
-  }
+  restoreDialog = stubDialog();
 });
-afterEach(() => {
-  for (const spy of dialogSpies.splice(0)) spy.mockRestore();
-});
+afterEach(() => restoreDialog());
 
 vi.mock("@/layout/Image", () => ({
   default: (props: ComponentProps<"img">) => <img {...props} />,

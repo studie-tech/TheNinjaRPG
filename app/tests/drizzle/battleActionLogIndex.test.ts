@@ -1,8 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { expect, it } from "bun:test";
-import mysql from "mysql2/promise";
-import { baselineTableSql, quoteIdentifier, type SnapshotTable } from "../setup/migrations";
+import type mysql from "mysql2/promise";
+import { readMigration, withMigrationSandbox } from "../setup/migrations";
 import { describeWithDatabase, indexColumns } from "../setup/testDatabase";
 
 const logIndex = "BattleAction_battleId_battleRound_battleVersion_idx";
@@ -18,17 +16,7 @@ describeWithDatabase("battle action log index", () => {
   });
 
   it("migrates populated logs without changing pages or requiring a latest-log sort", async () => {
-    const connection = await mysql.createConnection({ uri: process.env.TEST_MYSQL_URL });
-    const table = `BattleAction_${randomUUID().replaceAll("-", "")}`;
-    const query = <T extends mysql.QueryResult = mysql.QueryResult>(statement: string, values?: unknown[]) =>
-      connection.query<T>(statement.replaceAll("`BattleAction`", quoteIdentifier(table)), values);
-    try {
-      const snapshot = JSON.parse(await readFile("drizzle/migrations/meta/0108_snapshot.json", "utf8")) as { tables: Record<string, SnapshotTable> };
-      const baseline = snapshot.tables.BattleAction!;
-      await query(baselineTableSql(baseline));
-      for (const index of Object.values(baseline.indexes).filter((entry) => !entry.isUnique)) {
-        await query(`CREATE INDEX ${quoteIdentifier(index.name)} ON \`BattleAction\` (${index.columns.map(quoteIdentifier).join(", ")})`);
-      }
+    await withMigrationSandbox({ snapshot: "0108", baseline: ["BattleAction"], secondaryIndexes: true }, async ({ query, tables }) => {
       const values = Array.from({ length: 1000 }, (_, index) => [
         `action-${index}`, "fight", index + 1, Math.floor(index / 4),
         index % 3 ? "strike" : "wait", index % 2 ? "hero" : "opponent", "An action.", "[]",
@@ -45,8 +33,7 @@ describeWithDatabase("battle action log index", () => {
       );
       const before = [];
       for (const statement of variants) before.push((await query<mysql.RowDataPacket[]>(statement))[0]);
-      const migration = await readFile("drizzle/migrations/0109_great_black_knight.sql", "utf8");
-      expect(migration).not.toContain("--> statement-breakpoint");
+      const migration = await readMigration("0109_great_black_knight.sql");
       await query(migration);
       await query("ANALYZE TABLE `BattleAction`");
       for (const [index, statement] of variants.entries()) {
@@ -64,12 +51,9 @@ describeWithDatabase("battle action log index", () => {
       expect(claims.filter((claim) => claim.status === "fulfilled")).toHaveLength(1);
       expect(claims.filter((claim) => claim.status === "rejected")).toHaveLength(1);
       const [indexes] = await query<mysql.RowDataPacket[]>("SHOW INDEX FROM `BattleAction`");
-      for (const name of Object.keys(baseline.indexes)) {
+      for (const name of Object.keys(tables.BattleAction!.indexes)) {
         expect(indexes.some((index) => index.Key_name === name)).toBe(true);
       }
-    } finally {
-      await query("DROP TABLE IF EXISTS `BattleAction`");
-      await connection.end();
-    }
+    });
   });
 });

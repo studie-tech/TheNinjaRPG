@@ -1,11 +1,16 @@
 import type { QuestType } from "@/drizzle/constants";
 import type { getNewTrackers } from "@/libs/quest";
+import type { RewardChoiceOwnership } from "@/libs/rewardChoice";
 
-/** In-memory quest definition; individual tests supply only the objectives and quest kind. */
+/**
+ * In-memory quest definition. `overrides` replaces quest columns; its `content` is merged into
+ * the default envelope.
+ */
 export const trackerQuest = (
   id: string,
   objectives: object[],
   questType: QuestType = "daily",
+  { content, ...overrides }: { content?: object } & Record<string, unknown> = {},
 ) => ({
   id,
   name: `Quest ${id}`,
@@ -24,16 +29,20 @@ export const trackerQuest = (
   huntingRank: null,
   gatheringRank: null,
   endsAt: null,
-  content: { objectives, reward: {}, sceneBackground: "", sceneCharacters: [] },
+  ...overrides,
+  content: { objectives, reward: {}, sceneBackground: "", sceneCharacters: [], ...content },
 });
 
-/** Fresh tracker state with independent quest rows and optional persisted progress. */
+type TrackerQuest = ReturnType<typeof trackerQuest>;
+
+/**
+ * Fresh tracker state with independent quest rows and optional persisted progress. A
+ * `{ quest, ...row }` entry overrides that history row; `overrides` replaces user fields.
+ */
 export const trackerUser = (
-  quests: Array<
-    | ReturnType<typeof trackerQuest>
-    | { quest: ReturnType<typeof trackerQuest>; completed: number }
-  >,
+  quests: Array<TrackerQuest | ({ quest: TrackerQuest } & Record<string, unknown>)>,
   questData: unknown[] = [],
+  overrides: object = {},
 ) =>
   ({
     userId: "u1",
@@ -56,17 +65,42 @@ export const trackerUser = (
     senseiId: null,
     questData,
     userQuests: quests.map((entry) => {
-      const quest = "quest" in entry ? entry.quest : entry;
+      const { quest, ...row } = "quest" in entry ? entry : { quest: entry };
       return {
         id: `uq-${quest.id}`,
         questId: quest.id,
-        completed: "quest" in entry ? entry.completed : 0,
+        completed: 0,
         previousAttempts: 0,
         previousCompletes: 0,
         quest,
+        ...row,
       };
     }),
+    ...overrides,
   }) as unknown as Parameters<typeof getNewTrackers>[0];
+
+/** Player holding one repeatable quest, for the reward calculators. */
+export const rewardUser = (content: object, questType: QuestType = "mission") =>
+  trackerUser([
+    trackerQuest("q1", [], questType, {
+      name: "Quest",
+      maxAttempts: 10,
+      maxCompletes: 10,
+      content,
+    }),
+  ]);
+
+/** Reward-choice ownership holding only the supplied content ids. */
+export const rewardOwnership = (
+  owned: Partial<Record<keyof Omit<RewardChoiceOwnership, "hasSageMode">, string[]>> = {},
+  hasSageMode = false,
+): RewardChoiceOwnership => ({
+  jutsuIds: new Set(owned.jutsuIds),
+  bloodlineIds: new Set(owned.bloodlineIds),
+  badgeIds: new Set(owned.badgeIds),
+  sageModeIds: new Set(owned.sageModeIds),
+  hasSageMode,
+});
 
 /** Find an objective result without duplicating traversal in every tracker suite. */
 export const trackerGoal = (

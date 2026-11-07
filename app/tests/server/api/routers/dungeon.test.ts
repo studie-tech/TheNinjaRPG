@@ -5,11 +5,16 @@ import { actionLog, aiProfile, battleHistory, battle, dungeon, dungeonRun, dunge
 import { ObjectiveReward } from "@/validators/rewards";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
-import type { DrizzleClient } from "@/server/db";
 import { settleDungeonBattle, expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import { dungeonContent, dungeonBattleState } from "../../../setup/dungeon";
-import { insertUsers, insertItems } from "../../../setup/factories";
+import {
+  insertUsers,
+  insertItems,
+  insertJutsus,
+  insertDefaultAiProfile,
+} from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
+import { inTransactions, failStatements, withoutTransactions, aroundStatements } from "../../../setup/statements";
 import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battleScenario";
 
 describeWithDatabase("Dungeon parties and settlement", () => {
@@ -49,7 +54,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const first = await completedLobby(content);
     expect(await first.a.claim({id: first.id})).toMatchObject({success: true, reward: {items: [], jutsus: [], rewards: {reward_items: [], reward_jutsus: []}, grantedDrops: []}});
     await insertItems([{id: "missing-item", canStack: false}, {id: "missing-cache", canStack: false}]);
-    await db.insert(jutsu).values({id: "missing-jutsu", name: "Technique", description: "Technique", battleDescription: "Technique", image: "/jutsu.png", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuType: "NORMAL"});
+    await insertJutsus([{ id: "missing-jutsu", name: "Technique" }]);
     const second = await completedLobby(content);
     expect(await second.a.claim({id: second.id})).toMatchObject({success: true, reward: {items: ["missing-item", "missing-item", "missing-cache"], jutsus: ["missing-jutsu"], grantedDrops: content.rewards.drops.map((drop) => JSON.stringify([drop.type, drop.id]))}});
     expect(await db.query.userItem.findMany({where: eq(userItem.userId, "a")})).toHaveLength(3);
@@ -182,19 +187,11 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   it("retries a rolled-back leader reservation without recreating the lobby", async () => {
     const db = await getTestDatabase();
     let attempts = 0;
-    const retrying = new Proxy(withoutTransactions(db), {
-      get(target, property, receiver) {
-        if (property === "insert") return (table: Parameters<typeof db.insert>[0]) =>
-          table === dungeonMember
-            ? { values: async (values: typeof dungeonMember.$inferInsert) => {
-                attempts += 1;
-                if (attempts === 1) throw new Error("Wrapped query", { cause: new Error("Deadlock found when trying to get lock") });
-                return target.insert(dungeonMember).values(values);
-              } }
-            : target.insert(table);
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const retrying = aroundStatements(withoutTransactions(db), dungeonMember, async (run) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("Wrapped query", { cause: new Error("Deadlock found when trying to get lock") });
+      return run();
+    }, {operations: ["insert"]});
     const api = callerForDatabase(dungeonRouter, "a", retrying);
     expect((await api.create({ id: "definition" })).success).toBe(true);
     expect(attempts).toBe(2);
@@ -203,18 +200,10 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   });
   it.each([false, true])("cleans only an empty failed lobby, preserving a committed membership (%p)", async (committed) => {
     const db = await getTestDatabase();
-    const failing = new Proxy(withoutTransactions(db), {
-      get(target, key, receiver) {
-        if (key === "insert") return (table: Parameters<typeof db.insert>[0]) =>
-          table === dungeonMember
-            ? {values: async (values: typeof dungeonMember.$inferInsert) => {
-                if (committed) await target.insert(dungeonMember).values(values);
-                throw new Error("Injected membership failure");
-              }}
-            : target.insert(table);
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const failing = aroundStatements(withoutTransactions(db), dungeonMember, async (run) => {
+      if (committed) await run();
+      throw new Error("Injected membership failure");
+    }, {operations: ["insert"]});
     const a = callerForDatabase(dungeonRouter, "a", failing);
     await expect(a.create({id: "definition"})).rejects.toThrow("Injected membership failure");
     expect(await db.query.dungeonRun.findMany()).toHaveLength(committed ? 1 : 0);
@@ -309,7 +298,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const db = await getTestDatabase();
     const { a, id } = await lobby();
     await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0, primaryElement: "Fire", secondaryElement: "Water" });
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.insert(userCookingJob).values({ id: "dungeon-cooking", userId: "a", experience: 23, finishesAt: new Date(0) });
     await db.update(dungeonRun).set({ state: { ...dungeonBattleState().runState, readyIds: ["a", "b", "c"] } }).where(eq(dungeonRun.id, id));
     await db.insert(dungeonMember).values(["b", "c"].map(userId => ({ runId: id, userId, activeUserId: userId })));
@@ -371,26 +360,12 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   it("rolls back failed grants and delivers item and jutsu drops with the receipt once", async () => {
     const {a, id} = await lobby(); const db = await getTestDatabase();
     await insertItems([{id: "drop", canStack: false}]);
-    await db.insert(jutsu).values({id: "technique", name: "Technique", description: "Technique", battleDescription: "Technique", image: "/jutsu.png", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuType: "NORMAL"});
+    await insertJutsus([{ id: "technique", name: "Technique" }]);
     const content = dungeonContent(); content.rewards.drops = [{type: "item", id: "drop", chance: 100, quantity: 1}, {type: "jutsu", id: "technique", chance: 100, quantity: 1}];
     await db.update(dungeonRun).set({content, status: "COMPLETED", state: {...dungeonBattleState().runState, memberIds: ["a"], floor: 5, clearedFloors: [0,1,2,3,4]}}).where(eq(dungeonRun.id, id));
     // Fail after scalar and jutsu grants, so the receipt cannot hide a partial reward.
-    const failing = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "transaction") return (callback: Parameters<typeof db.transaction>[0]) =>
-          target.transaction(tx => callback(new Proxy(tx, {
-            get(transaction, property, txReceiver) {
-              if (property === "insert") return (table: Parameters<typeof tx.insert>[0]) => {
-                if (table === userItem) throw new Error("Injected item grant failure");
-                return transaction.insert(table);
-              };
-              return Reflect.get(transaction, property, txReceiver);
-            },
-          })));
-        return Reflect.get(target, key, receiver);
-      },
-    });
-    await expect(callerForDatabase(dungeonRouter, "a", failing).claim({id})).rejects.toThrow("Injected item grant failure");
+    const failing = inTransactions(db, (tx) => failStatements(tx, userItem, 1, {operations: ["insert"]}));
+    await expect(callerForDatabase(dungeonRouter, "a", failing).claim({id})).rejects.toThrow("Statement failed on purpose");
     expect(await db.query.dungeonMember.findFirst()).toMatchObject({reward: null, activeUserId: "a"});
     expect((await db.query.userData.findFirst({where:eq(userData.userId,"a")}))?.money).toBe(0);
     expect((await db.query.village.findFirst())?.tokens).toBe(0);
@@ -404,7 +379,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   });
   it("keeps owned jutsu eligible until delivered after forgetting", async () => {
     const db = await getTestDatabase();
-    await db.insert(jutsu).values({id: "technique", name: "Technique", description: "Technique", battleDescription: "Technique", image: "/jutsu.png", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuType: "NORMAL"});
+    await insertJutsus([{ id: "technique", name: "Technique" }]);
     await db.insert(userJutsu).values({id: "owned", userId: "a", jutsuId: "technique"});
     const content = dungeonContent();
     content.rewards.drops = [{type: "jutsu", id: "technique", chance: 100, quantity: 1, onlyOnce: true}];
@@ -482,16 +457,10 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   });
   it.each(["wake", "history"] as const)("keeps a failed %s cleanup recoverable through getState", async (failure) => {
     const {db, original} = await interruptedStart();
-    const failing = new Proxy(withoutTransactions(db), {
-      get(target, key, receiver) {
-        if (key === "update" && failure === "wake") return (table: Parameters<typeof db.update>[0]) =>
-          table === userData ? {set: () => ({where: () => Promise.reject(new Error("Injected cleanup failure"))})} : target.update(table);
-        if (key === "delete" && failure === "history") return (table: Parameters<typeof db.delete>[0]) =>
-          table === battleHistory ? {where: () => Promise.reject(new Error("Injected cleanup failure"))} : target.delete(table);
-        return Reflect.get(target, key, receiver);
-      },
-    });
-    await expect(rollbackDungeonStart(failing, original, "partial", 1)).rejects.toThrow("Injected cleanup failure");
+    const failing = failure === "wake"
+      ? failStatements(withoutTransactions(db), userData, Infinity, {operations: ["update"]})
+      : failStatements(withoutTransactions(db), battleHistory, Infinity, {operations: ["delete"]});
+    await expect(rollbackDungeonStart(failing, original, "partial", 1)).rejects.toThrow("Statement failed on purpose");
     expect((await db.query.dungeonRun.findFirst())?.status).toBe("STARTING");
     expect(await db.query.battle.findMany()).toHaveLength(0);
     const a = callerForDatabase(dungeonRouter, "a", withoutTransactions(db));
@@ -526,14 +495,6 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     }
     expect(await db.query.userData.findFirst({where: eq(userData.userId, "b")})).toEqual(expect.objectContaining({status: "BATTLE", battleId: "newer", bracketImmunityPausedAt: pausedAt, bracketImmunityLiftedUntil: liftedUntil}));
   });
-});
-
-/** Assert that a procedure's ordinary guarded writes never acquire a transaction session. */
-const withoutTransactions = (db: DrizzleClient) => new Proxy(db, {
-  get(target, key, receiver) {
-    if (key === "transaction") return () => { throw new Error("Unexpected dungeon transaction"); };
-    return Reflect.get(target, key, receiver);
-  },
 });
 
 /** Model a start whose battle and user writes committed before its caller failed. */

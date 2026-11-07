@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { QuestType } from "@/drizzle/constants";
 import { getNewTrackers } from "@/libs/quest";
+import { trackerGoal as goalOf, trackerQuest, trackerUser } from "../../setup/quest";
 
 // ---------------------------------------------------------------------------
 // getNewTrackers ordering: for a consecutiveObjectives quest, the bound-placement
@@ -26,25 +26,8 @@ const boundObjective = (
   }) as unknown;
 
 /** Creates a minimal consecutive quest fixture containing the supplied objectives. */
-const makeConsecutiveQuest = (id: string, objectives: unknown[]) => ({
-  id,
-  name: `Quest ${id}`,
-  questType: "mission" as QuestType,
-  hidden: false,
-  consecutiveObjectives: true,
-  maxAttempts: 100,
-  maxCompletes: 100,
-  requiredVillage: null,
-  requiredBloodlineId: null,
-  prerequisiteQuestId: null,
-  requiredLevel: null,
-  maxLevel: null,
-  medicalRank: null,
-  huntingRank: null,
-  gatheringRank: null,
-  endsAt: null,
-  content: { objectives, reward: {}, sceneBackground: "", sceneCharacters: [] },
-});
+const makeConsecutiveQuest = (id: string, objectives: unknown[]) =>
+  trackerQuest(id, objectives as object[], "mission", { consecutiveObjectives: true });
 
 /**
  * Builds a user whose tracker contains exactly the supplied goals.
@@ -53,45 +36,13 @@ const makeConsecutiveQuest = (id: string, objectives: unknown[]) => ({
 const makeUser = (
   quest: ReturnType<typeof makeConsecutiveQuest>,
   goals: { id: string; done?: boolean; selectedNextObjectiveId?: string }[],
-) =>
-  ({
-    userId: "u1",
-    level: 50,
-    rank: "JONIN",
-    role: "USER",
-    villageId: "v1",
-    isOutlaw: false,
-    bloodlineId: null,
-    sector: 1,
-    village: { id: "v1", sector: 1 },
-    activeWars: [],
-    completedQuests: [],
-    questData: [{ id: quest.id, startAt: new Date(), goals }],
-    userQuests: [
-      {
-        id: `uq-${quest.id}`,
-        questId: quest.id,
-        completed: 0,
-        previousAttempts: 0,
-        previousCompletes: 0,
-        quest,
-      },
-    ],
-  }) as unknown as Parameters<typeof getNewTrackers>[0];
+) => trackerUser([quest], [{ id: quest.id, startAt: new Date(), goals }]);
 
 /** Returns whether tracker evaluation emitted a failure consequence for the quest. */
 const questFailed = (result: ReturnType<typeof getNewTrackers>, questId: string) =>
   result.consequences.some(
     (c) => c.type === "fail_quest" && c.ids.includes(questId),
   );
-
-/** Finds one objective goal in the tracker evaluation result. */
-const goalOf = (
-  result: ReturnType<typeof getNewTrackers>,
-  questId: string,
-  objectiveId: string,
-) =>
-  result.trackers.find((t) => t.id === questId)?.goals.find((g) => g.id === objectiveId);
 
 describe("getNewTrackers — bound-placement check respects consecutive reachability", () => {
   it("does NOT fail the quest when an unreached objective's placement was deleted", () => {

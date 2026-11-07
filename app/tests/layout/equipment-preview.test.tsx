@@ -4,21 +4,17 @@ import { EquipmentPreview } from "@/layout/EquipmentPreview";
 import { resolveSpriteAppearance, type SpriteUser } from "@/libs/lpc/appearance";
 import type { SpriteAppearance } from "@/validators/lpc";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const browserEvents = ["Event", "CustomEvent"] as const;
-const originalEvents = browserEvents.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
 beforeEach(() => {
-  for (const name of browserEvents) Object.defineProperty(globalThis, name, { configurable: true, value: window[name] });
+  installBrowserGlobals();
   vi.spyOn(characterPreview, "CharacterPreview").mockImplementation(({ user }) => (
     <output data-testid="equipment-appearance">{JSON.stringify(resolveSpriteAppearance(user))}</output>
   ));
 });
 afterEach(() => {
   cleanup();
-  for (const [name, descriptor] of originalEvents) {
-    if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-    else Reflect.deleteProperty(globalThis, name);
-  }
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
 

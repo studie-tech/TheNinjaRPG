@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeEach, expect, it, spyOn, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { GET } from "@/app/api/transactions/route";
 import { paypalTransaction, recruitmentRewards, stripePayment, userData, webStoreOrder } from "@/drizzle/schema";
@@ -12,15 +12,14 @@ import { resetServerModuleStubs, stubCronAuth } from "../../../setup/serverModul
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 describeWithDatabase("PayPal transaction reconciliation", () => {
-  const spies: { mockRestore: () => void }[] = [];
   beforeEach(async () => {
     await resetTables(webStoreOrder, paypalTransaction, recruitmentRewards, stripePayment, userData);
     stubCronAuth(() => null);
-    spies.push(spyOn(stripeClient, "stripeIsLive").mockReturnValue(false));
-    spies.push(spyOn(gamesettings, "lockWithGameTimer").mockResolvedValue(false));
+    spyOn(stripeClient, "stripeIsLive").mockReturnValue(false);
+    spyOn(gamesettings, "lockWithGameTimer").mockResolvedValue(false);
   });
   afterEach(() => {
-    for (const spy of spies.splice(0)) spy.mockRestore();
+    vi.restoreAllMocks();
     resetServerModuleStubs();
   });
 
@@ -53,10 +52,10 @@ describeWithDatabase("PayPal transaction reconciliation", () => {
       },
       cart_info: { item_details: [] },
     }));
-    spies.push(spyOn(globalThis, "fetch").mockImplementation(async url => {
-      if (String(url).endsWith("/v1/oauth2/token")) return Response.json({ access_token: "test-only" });
-      return Response.json({ transaction_details: transactions });
-    }));
+spyOn(globalThis, "fetch").mockImplementation(async url => {
+    if (String(url).endsWith("/v1/oauth2/token")) return Response.json({ access_token: "test-only" });
+    return Response.json({ transaction_details: transactions });
+  });
 
     const response = await GET(new Request("https://example.com/api/transactions"));
     expect(response.status).toBe(200);
@@ -90,9 +89,9 @@ describeWithDatabase("PayPal transaction reconciliation", () => {
       { userId: "buyer", username: "Buyer", createdAt, recruiterId: "recruiter" },
       { userId: "recipient", username: "Recipient", createdAt, recruiterId: "other-recruiter" },
     ]);
-    spies.push(spyOn(globalThis, "fetch").mockImplementation(async url =>
-      Response.json(String(url).endsWith("/v1/oauth2/token")
-        ? { access_token: "test-only" } : { transaction_details: [] })));
+spyOn(globalThis, "fetch").mockImplementation(async url =>
+    Response.json(String(url).endsWith("/v1/oauth2/token")
+      ? { access_token: "test-only" } : { transaction_details: [] }));
     return db;
   };
   const stripeReceipt = (id: string) => ({

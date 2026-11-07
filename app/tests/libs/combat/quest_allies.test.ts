@@ -14,7 +14,12 @@ import { calcBattleResult, getDistanceToClosestEnemy } from "@/libs/combat/util"
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { dataRouter } from "@/server/api/routers/data";
-import { insertUsers, insertQuests, insertQuestHistory } from "../../setup/factories";
+import {
+  insertUsers,
+  insertQuests,
+  insertQuestHistory,
+  insertDefaultAiProfile,
+} from "../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 
@@ -69,8 +74,7 @@ describeWithDatabase("NPC ally battle initiation", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     // Keep the statistics middleware active without contacting external Redis.
     stubRateLimitTransport();
-    const database = await getTestDatabase();
-    await database.insert(aiProfile).values({ id: "Default", userId: "template", rules: [] });
+    await insertDefaultAiProfile({ userId: "template" });
     await insertUsers([
       { userId: "hero", username: "hero", status: "AWAKE", level: 50, experience: 20000000, rank: "JONIN" },
       { userId: "template", username: "template", isAi: true, level: 10, rank: "GENIN" },

@@ -4,7 +4,7 @@ import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as clans from "@/server/api/routers/clan";
 import * as staff from "@/server/api/routers/staff";
 import * as grant from "@/server/utils/purchases/grant";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertClans } from "../../../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -75,16 +75,13 @@ describeWithDatabase("account deletion clan departure retries", () => {
         kageId: "departing",
         type: "HIDEOUT",
       });
-      await db.insert(clan).values({
+      await insertClans([{
         id: "faction",
         name: "Faction",
-        image: "",
         villageId: "hideout",
-        founderId: "departing",
         leaderId: "departing",
-        leaderOrderId: "",
         coLeader1: lastMember ? null : "successor",
-      });
+      }]);
       vi.spyOn(clans, "removeFromClan").mockImplementationOnce(async (...args) => {
         await depart(...args);
         expect(

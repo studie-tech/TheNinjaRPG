@@ -8,7 +8,13 @@ import { getEnergyQueue } from "@/libs/queue";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { MoveToObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuests, insertUsers, insertUserItems } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertQuests,
+  insertUsers,
+  insertUserItems,
+  insertUserVotes,
+} from "../../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../../setup/queues";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
@@ -16,7 +22,7 @@ import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, re
 const USER_ID = "progression-user";
 const seed = async (changes: Partial<typeof userData.$inferInsert> = {}) => {
   await insertUsers([{ userId: USER_ID, username: "ProgressionUser", rank: "JONIN", role: "USER", level: 30, experience: calcLevelRequirements(40), isOutlaw: true, status: "AWAKE", regeneration: 0, primaryElement: "Fire", secondaryElement: "Water", curHealth: 20, curChakra: 30, curStamina: 40, curEnergy: 50, ...changes }]);
-  await (await getTestDatabase()).insert(userVote).values({ id: "progression-vote", userId: USER_ID, secret: "prog001", lastVoteAt: new Date() });
+  await insertUserVotes([{ userId: USER_ID }]);
 };
 const read = async () => {
   const user = await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, USER_ID) });

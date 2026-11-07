@@ -1,16 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import type { AiProfile, Item } from "@/drizzle/schema";
+import type { Item } from "@/drizzle/schema";
 import { availableUserActions } from "@/libs/combat/actions";
 import type { CombatQueryUser } from "@/libs/combat/types";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import { processUsersForBattle } from "@/server/api/routers/combat";
-import type { DrizzleClient } from "@/server/db";
 import {
   makeBattleUser,
   makeBattleUserItem,
   makeCompleteBattle,
+  makeJutsu,
   makeTag,
 } from "./helpers/battleScenario";
+import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const furniture = {
   id: "chair",
@@ -31,17 +30,10 @@ const furniture = {
   ],
 } as unknown as Item;
 
-const combatUser = (isAi: boolean): CombatQueryUser => ({
-  ...makeBattleUser("owner"),
+const combatUser = (isAi: boolean): CombatQueryUser => makeCombatQueryUser("owner", {
   isAi,
   rank: "JONIN",
-  regenAt: new Date(),
-  regeneration: 0,
-  money: 0,
-  effects: [],
-  bloodright: [],
   bloodlineId: null,
-  userSkills: [],
   items: [
     {
       id: "chair-row", itemId: furniture.id, equipped: "HEAD", level: 20,
@@ -57,16 +49,10 @@ const combatUser = (isAi: boolean): CombatQueryUser => ({
       },
     },
   ],
-  jutsus: [],
-}) as unknown as CombatQueryUser;
+});
 
 const preload = (user: CombatQueryUser, battleType: "COMBAT" | "RANKED_PVP") =>
-  processUsersForBattle({} as DrizzleClient, {
-    users: [user], battleType, leftSideUserIds: [user.userId],
-    hide: false, isSummon: false, width: 10, height: 10,
-    settings: [], relations: [], wars: [], villages: [],
-    defaultProfile: { id: "default" } as AiProfile,
-  });
+  preloadBattle([user], { battleType });
 
 describe("furniture combat exclusion", () => {
   for (const isAi of [false, true]) {
@@ -91,15 +77,11 @@ describe("furniture combat exclusion", () => {
   it("cannot satisfy equipped weapon or bloodline-item requirements", async () => {
     const user = combatUser(false);
     user.jutsus = [
-      { id: "sword-jutsu", jutsuWeapon: "SWORD", requiredBloodlineItemId: null },
-      { id: "chair-jutsu", jutsuWeapon: "NONE", requiredBloodlineItemId: "chair" },
-    ].map((override) => ({
-      id: `owned-${override.id}`, jutsuId: override.id, equipped: true,
-      level: 1, experience: 0,
-      jutsu: {
-        ...SAGE_MODE_ACTIVATION_JUTSU, jutsuType: "NORMAL", jutsuRank: "D",
-        effects: [], bloodlineId: null, requiredRank: "STUDENT", ...override,
-      },
+      makeJutsu({ id: "sword-jutsu", jutsuWeapon: "SWORD" }),
+      makeJutsu({ id: "chair-jutsu", requiredBloodlineItemId: "chair" }),
+    ].map((jutsu) => ({
+      id: `owned-${jutsu.id}`, jutsuId: jutsu.id, equipped: true,
+      level: 1, experience: 0, jutsu,
     })) as unknown as CombatQueryUser["jutsus"];
     const result = await preload(user, "COMBAT");
     expect(result.usersState[0]!.jutsus).toEqual([]);

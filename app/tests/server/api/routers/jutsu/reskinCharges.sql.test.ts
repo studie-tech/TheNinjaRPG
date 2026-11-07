@@ -3,17 +3,11 @@ import { eq } from "drizzle-orm";
 import { COST_RESKIN_JUTSU } from "@/drizzle/constants";
 import { jutsu, jutsuReskin, userData, userJutsu } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
-import { insertUsers } from "../../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const OWNER = "reskin-owner";
-
-const jutsuRow = (id: string) => ({
-  id, name: `Jutsu ${id}`, description: id, battleDescription: id, effects: [],
-  target: "SELF" as const, range: 0, requiredRank: "GENIN" as const,
-  jutsuType: "NORMAL" as const, image: `/${id}.png`,
-});
 
 const reskinInput = (jutsuId: string) => ({
   jutsuId, name: "New reskin", description: "New reskin description", battleDescription: "New reskin battle text",
@@ -26,7 +20,7 @@ describeWithDatabase("jutsu reskin charges", () => {
   beforeEach(async () => {
     await resetTables(jutsuReskin, userJutsu, jutsu, userData);
     const db = await getTestDatabase();
-    await db.insert(jutsu).values([jutsuRow("jutsu-a"), jutsuRow("jutsu-b")]);
+    await insertJutsus(["jutsu-a", "jutsu-b"].map((id) => ({ id, requiredRank: "GENIN" })));
     await db.insert(userJutsu).values([
       { id: "uj-a", userId: OWNER, jutsuId: "jutsu-a" },
       { id: "uj-b", userId: OWNER, jutsuId: "jutsu-b" },

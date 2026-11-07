@@ -19,7 +19,6 @@ import { getMasteryQueue } from "@/libs/queue";
 import { calcJutsuTrainCost, calcJutsuTrainTime, findJutsuInTraining } from "@/libs/train";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { occupationRouter } from "@/server/api/routers/occupation";
-import type { DrizzleClient } from "@/server/db";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
 import {
@@ -27,10 +26,18 @@ import {
   settleCraftingQueue,
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
-import { queueMasteries } from "../../../setup/queues";
-import { beforeStatements, failStatements } from "../../../setup/statements";
+import {
+  insertItems,
+  insertJutsus,
+  insertUserItems,
+  insertUsers,
+  jutsuRow,
+  insertUserVotes,
+} from "../../../setup/factories";
+import { queueMasteries, readMasteryQueue } from "../../../setup/queues";
+import { beforeStatements, failStatements, inTransactions } from "../../../setup/statements";
 import type { MasteryTrainingQueueEntry } from "@/validators/train";
+import { requireUser } from "../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
@@ -45,20 +52,8 @@ const MINUTE = 60_000;
 const START_MONEY = 100_000;
 const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * MINUTE);
 
-const jutsuRow = (id: string, patch: Partial<typeof jutsu.$inferInsert> = {}) => ({
-  id,
-  name: `Jutsu ${id}`,
-  description: id,
-  battleDescription: id,
-  effects: [],
-  target: "SELF" as const,
-  range: 0,
-  requiredRank: "STUDENT" as const,
-  jutsuRank: "D" as const,
-  jutsuType: "NORMAL" as const,
-  image: `/${id}.png`,
-  ...patch,
-});
+const queuedJutsu = (id: string, patch: Partial<typeof jutsu.$inferInsert> = {}) =>
+  jutsuRow(id, { name: `Jutsu ${id}`, ...patch });
 
 const insertUser = async ({
   masteryQueue,
@@ -77,11 +72,7 @@ const insertUser = async ({
       ...patch,
     } as never,
   ]);
-  // fetchUpdatedUser creates a missing vote row, and parallel requests would race on it
-  const database = await getTestDatabase();
-  await database
-    .insert(userVote)
-    .values({ id: "vote-queuer", userId: USER_ID, secret: "secret01", lastVoteAt: new Date() });
+  await insertUserVotes([{ userId: USER_ID }]);
   if (masteryQueue) await queueMasteries(USER_ID, masteryQueue);
 };
 
@@ -90,12 +81,7 @@ const setFederalStatus = async (federalStatus: "NONE" | "NORMAL" | "SILVER" | "G
   await database.update(userData).set({ federalStatus }).where(eq(userData.userId, USER_ID));
 };
 
-const readUser = async () => {
-  const database = await getTestDatabase();
-  const [user] = await database.select().from(userData).where(eq(userData.userId, USER_ID));
-  if (!user) throw new Error("user missing");
-  return user;
-};
+const readUser = () => requireUser(USER_ID);
 
 const readUserJutsu = async (jutsuId: string) => {
   const database = await getTestDatabase();
@@ -116,10 +102,6 @@ const readQueue = async (kind: (typeof userQueue.$inferSelect)["kind"]) => {
 };
 
 const readJutsuQueue = () => readQueue("JUTSU");
-
-/** The live mastery queue, as the client derives it. */
-const liveMasteryQueue = async () =>
-  getMasteryQueue({ ...(await readUser()), queue: await readQueue("MASTERY") });
 
 /** Next free position of a kind, as `appendQueueEntries` would pick it. */
 const nextPosition = async (kind: (typeof userQueue.$inferSelect)["kind"]) =>
@@ -149,7 +131,7 @@ const queueJutsu = async (
 /** jutsu-a is in training until `finishTraining`. */
 const trainingJutsuA = async (finishTraining: Date) => {
   const database = await getTestDatabase();
-  await database.insert(jutsu).values([jutsuRow("jutsu-a"), jutsuRow("jutsu-b")]);
+  await insertJutsus([queuedJutsu("jutsu-a"), queuedJutsu("jutsu-b")]);
   await database.insert(userJutsu).values({
     id: "uj-a",
     userId: USER_ID,
@@ -172,7 +154,7 @@ describeWithDatabase("jutsu training queue", () => {
       jutsuId: "jutsu-b",
     });
     expect(result.success).toBe(true);
-    const cost = calcJutsuTrainCost(jutsuRow("jutsu-b") as never, 0);
+    const cost = calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0);
     const [queued] = await readJutsuQueue();
     expect(queued?.reservedRyo).toBe(cost);
     expect(queued?.startsAt).toEqual(finish);
@@ -205,7 +187,7 @@ describeWithDatabase("jutsu training queue", () => {
     expect(queue).toHaveLength(4);
     // Each queued level is priced at the level it trains, and the levels run back to back.
     expect(queue.map((entry) => entry.reservedRyo)).toEqual(
-      [0, 1, 2, 3].map((level) => calcJutsuTrainCost(jutsuRow("jutsu-b") as never, level)),
+      [0, 1, 2, 3].map((level) => calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, level)),
     );
     for (let i = 1; i < queue.length; i++) {
       expect(queue[i]?.startsAt).toEqual(queue[i - 1]?.finishesAt);
@@ -222,19 +204,19 @@ describeWithDatabase("jutsu training queue", () => {
     expect(await settleJutsuTrainingQueue(client, USER_ID)).toBe(2);
     const user = await readUser();
     const learned = await readUserJutsu("jutsu-b");
-    const firstFinish = finished.getTime() + calcJutsuTrainTime(jutsuRow("jutsu-b"), 0, user);
+    const firstFinish = finished.getTime() + calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, user);
     expect(learned?.level).toBe(1);
     expect(learned?.finishTraining?.getTime()).toBe(firstFinish);
     const leveled = await readUserJutsu("jutsu-a");
     expect(leveled?.level).toBe(3);
     expect(leveled?.finishTraining?.getTime()).toBe(
-      firstFinish + calcJutsuTrainTime(jutsuRow("jutsu-a"), 2, user),
+      firstFinish + calcJutsuTrainTime(queuedJutsu("jutsu-a"), 2, user),
     );
     expect(await readJutsuQueue()).toEqual([]);
     // The level-0 price is below the 500 ryo reserved; the difference comes back.
     const refund =
-      500 - calcJutsuTrainCost(jutsuRow("jutsu-b") as never, 0) +
-      (500 - calcJutsuTrainCost(jutsuRow("jutsu-a") as never, 2));
+      500 - calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0) +
+      (500 - calcJutsuTrainCost(queuedJutsu("jutsu-a") as never, 2));
     expect(user.money).toBe(START_MONEY + refund);
   });
 
@@ -287,7 +269,7 @@ describeWithDatabase("jutsu training queue", () => {
     const before = Date.now();
     await (await callerFor(jutsuRouter, USER_ID)).stopTraining();
     const learned = await readUserJutsu("jutsu-b");
-    const trainTime = calcJutsuTrainTime(jutsuRow("jutsu-b"), 0, await readUser());
+    const trainTime = calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, await readUser());
     expect(learned?.finishTraining?.getTime()).toBeGreaterThanOrEqual(before + trainTime);
     expect(learned?.finishTraining?.getTime()).toBeLessThan(Date.now() + trainTime);
     expect((await readUserJutsu("jutsu-a"))?.level).toBe(1);
@@ -297,7 +279,7 @@ describeWithDatabase("jutsu training queue", () => {
     await insertUser();
     await trainingJutsuA(minutesFromNow(-5));
     const database = await getTestDatabase();
-    await database.insert(jutsu).values(jutsuRow("jutsu-bl", { bloodlineId: "bloodline-x" }));
+    await insertJutsus([queuedJutsu("jutsu-bl", { bloodlineId: "bloodline-x" })]);
     await queueJutsu("q-1", "jutsu-bl", minutesFromNow(-5), { reservedRyo: 900 });
     expect(await settleJutsuTrainingQueue(database, USER_ID)).toBe(0);
     expect(await readUserJutsu("jutsu-bl")).toBeUndefined();
@@ -315,7 +297,7 @@ describeWithDatabase("jutsu training queue", () => {
     const queue = await readJutsuQueue();
     // jutsu-a is at level 2 (in training), so the queued entries train levels 3, 4 and 5.
     const costs = [2, 3, 4].map((level) =>
-      calcJutsuTrainCost(jutsuRow("jutsu-a") as never, level),
+      calcJutsuTrainCost(queuedJutsu("jutsu-a") as never, level),
     );
     expect(queue.map((entry) => entry.reservedRyo)).toEqual(costs);
     expect(queue[0]?.startsAt).toEqual(finish);
@@ -336,8 +318,7 @@ describeWithDatabase("jutsu training queue", () => {
 
   it("starts the first level and queues the rest when nothing is training", async () => {
     await insertUser({ federalStatus: "NORMAL" });
-    const database = await getTestDatabase();
-    await database.insert(jutsu).values(jutsuRow("jutsu-b"));
+    await insertJutsus([queuedJutsu("jutsu-b")]);
     const result = await (await callerFor(jutsuRouter, USER_ID)).startTraining({
       jutsuId: "jutsu-b",
       levels: 3,
@@ -349,7 +330,7 @@ describeWithDatabase("jutsu training queue", () => {
     expect(queue).toHaveLength(2);
     expect(queue[0]?.startsAt).toEqual(learned?.finishTraining);
     const costs = [0, 1, 2].map((level) =>
-      calcJutsuTrainCost(jutsuRow("jutsu-b") as never, level),
+      calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, level),
     );
     expect(queue.map((entry) => entry.reservedRyo)).toEqual(costs.slice(1));
     expect((await readUser()).money).toBe(START_MONEY - costs.reduce((a, b) => a + b, 0));
@@ -426,7 +407,7 @@ describeWithDatabase("jutsu training queue", () => {
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
     expect(await readJutsuQueue()).toHaveLength(1);
-    const cost = calcJutsuTrainCost(jutsuRow("jutsu-b") as never, 0);
+    const cost = calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0);
     expect((await readUser()).money).toBe(START_MONEY - cost);
   });
 
@@ -463,7 +444,7 @@ describeWithDatabase("jutsu training queue", () => {
     } else {
       expect(started).toBe(1);
       expect(learned?.level).toBe(1);
-      const cost = calcJutsuTrainCost(jutsuRow("jutsu-b") as never, 0);
+      const cost = calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0);
       expect(money).toBe(START_MONEY + 700 - cost);
     }
     expect(await readJutsuQueue()).toEqual([]);
@@ -627,17 +608,7 @@ describeWithDatabase("crafting queue", () => {
       finishesAt: new Date(now.getTime() + MINUTE),
     });
     const before = await readCraftQueue();
-    const client = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "transaction") {
-          return (callback: (tx: DrizzleClient) => Promise<unknown>) =>
-            target.transaction((tx) =>
-              callback(failStatements(tx as unknown as DrizzleClient, userItem)),
-            );
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
+    const client = inTransactions(database, (tx) => failStatements(tx, userItem));
     await expect(settleCraftingQueue(client, USER_ID, now)).rejects.toThrow(
       "Statement failed on purpose",
     );
@@ -908,7 +879,7 @@ describeWithDatabase("mastery training queue", () => {
     expect(user.masteryTrainingStartedAt).toBeNull();
     expect(user.ninjutsuMastery).toBeGreaterThan(0);
     expect(user.dailyTrainings).toBe(1);
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
     const logs = await database.select().from(trainingLog).where(eq(trainingLog.userId, USER_ID));
     expect(logs).toHaveLength(1);
     expect(logs[0]?.trainingFinishedAt?.getTime()).toBe(startedAt.getTime() + 15 * MINUTE);
@@ -933,7 +904,7 @@ describeWithDatabase("mastery training queue", () => {
     expect(user.genjutsuMastery).toBeGreaterThan(0);
     expect(user.dailyTrainings).toBe(2);
     expect(user.masteryQueueHead).toBe(1);
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
     expect(await readQueue("MASTERY")).toHaveLength(1);
     await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
     expect((await readUser()).ninjutsuMastery).toBe(user.ninjutsuMastery);
@@ -958,7 +929,7 @@ describeWithDatabase("mastery training queue", () => {
     expect(user.currentlyTrainingMastery).toBe("genjutsuMastery");
     expect(user.trainingSpeed).toBe("1hr");
     expect(user.masteryTrainingStartedAt?.getTime()).toBe(startedAt.getTime() + 15 * MINUTE);
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
     expect(user.dailyTrainings).toBe(1);
     const database = await getTestDatabase();
     const logs = await database
@@ -983,7 +954,7 @@ describeWithDatabase("mastery training queue", () => {
     const user = await readUser();
     expect(user.currentlyTrainingMastery).toBe("taijutsuMastery");
     expect(user.trainingSpeed).toBe("15min");
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
   });
 
   it("limits waiting masteries to the federal waiting slots", async () => {
@@ -1008,7 +979,7 @@ describeWithDatabase("mastery training queue", () => {
       (await caller.updateMasteryTrainingQueue({ expectedEntries: [], entries: [] }))
         .success,
     ).toBe(false);
-    expect(await liveMasteryQueue()).toEqual(one);
+    expect(await readMasteryQueue(USER_ID)).toEqual(one);
   });
 
   it("validates a changed entry even when the queue length stays the same", async () => {
@@ -1047,7 +1018,7 @@ describeWithDatabase("mastery training queue", () => {
     await queueMasteries(USER_ID, current);
     const caller = await callerFor(trainRouter, USER_ID);
     expect(await caller.updateMasteryTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "You are asleep. Wake up before taking this action." });
-    expect(await liveMasteryQueue()).toEqual(current);
+    expect(await readMasteryQueue(USER_ID)).toEqual(current);
     expect(await readUser()).toMatchObject({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery" });
   });
 
@@ -1057,9 +1028,9 @@ describeWithDatabase("mastery training queue", () => {
     await queueMasteries(USER_ID, entries);
     const caller = await callerFor(trainRouter, USER_ID);
     expect(await caller.updateMasteryTrainingQueue({ expectedEntries: entries, entries: [entries[1]!] })).toMatchObject({ success: true });
-    expect(await liveMasteryQueue()).toEqual([entries[1]!]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([entries[1]!]);
     expect(await caller.updateMasteryTrainingQueue({ expectedEntries: [entries[1]!], entries: [] })).toMatchObject({ success: true });
-    expect(await liveMasteryQueue()).toEqual([]);
+    expect(await readMasteryQueue(USER_ID)).toEqual([]);
     expect((await readUser()).status).toBe("ASLEEP");
   });
 
@@ -1089,7 +1060,7 @@ describeWithDatabase("lazy queue settlement", () => {
     expect(learned?.level).toBe(1);
     // It started when jutsu-a finished, not when the player came back.
     expect(learned?.finishTraining?.getTime()).toBe(
-      finished.getTime() + calcJutsuTrainTime(jutsuRow("jutsu-b"), 0, await readUser()),
+      finished.getTime() + calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, await readUser()),
     );
     expect(await readJutsuQueue()).toEqual([]);
     // The refresh returns the user as it is after the start.

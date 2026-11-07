@@ -8,6 +8,7 @@ import {
   callTwitterNews,
   isExternalPostingDisabled,
 } from "@/libs/socials";
+import { restoreEnvAfterEach } from "../setup/env";
 
 // Placeholder credentials so every helper passes its own "configured?" check;
 // only the test-runner guard can stop the post.
@@ -39,24 +40,17 @@ const postEverywhere = () =>
 
 describe("social posting under the test runner", () => {
   const env = process.env as Record<string, string | undefined>;
-  const saved: Record<string, string | undefined> = {};
+  restoreEnvAfterEach(...Object.keys(FAKE_ENV), "NODE_ENV");
   let fetchSpy: ReturnType<typeof vi.spyOn<typeof globalThis, "fetch">>;
 
   beforeEach(() => {
-    for (const [key, value] of Object.entries({ ...FAKE_ENV, NODE_ENV: "" })) {
-      saved[key] = env[key];
-      if (key !== "NODE_ENV") env[key] = value;
-    }
+    Object.assign(env, FAKE_ENV);
     fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((async () =>
       new Response(JSON.stringify({ id: "x", access_token: "x" }))) as never);
   });
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    for (const [key, value] of Object.entries(saved)) {
-      if (value === undefined) delete env[key];
-      else env[key] = value;
-    }
   });
 
   it("runs with NODE_ENV=test, so posting is disabled", () => {

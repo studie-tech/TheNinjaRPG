@@ -18,6 +18,7 @@ import {
   getObjectiveSchema,
   QuestTracker,
 } from "@/validators/objectives";
+import { trackerQuest, trackerUser } from "../setup/quest";
 
 const line = (id: string, rank: Bloodline["rank"] = "A", hidden = false) => ({
   id,
@@ -42,53 +43,19 @@ const makeUser = (bloodlineRanks: LetterRank[] = [...LetterRanks]) => {
     task: "bloodline_collection",
     bloodlineRanks,
   });
-  const quest = {
-    id: "collection",
+  const quest = trackerQuest("collection", [objective], "achievement", {
     name: "Collector",
-    questType: "achievement",
-    hidden: false,
-    consecutiveObjectives: false,
     maxAttempts: 1,
     maxCompletes: 1,
-    requiredVillage: null,
-    requiredBloodlineId: null,
-    prerequisiteQuestId: null,
     requiredLevel: 1,
-    requiredFarmingLevel: 0,
     maxLevel: 100,
-    medicalRank: null,
-    huntingRank: null,
-    gatheringRank: null,
     startsAt: null,
-    endsAt: null,
-    content: {
-      objectives: [objective],
-      reward: { reward_badges: ["collector-badge"] },
-      sceneBackground: "",
-      sceneCharacters: [],
-    },
-  };
-  return {
+    content: { reward: { reward_badges: ["collector-badge"] } },
+  });
+  return trackerUser([{ quest, id: quest.id }], [], {
     userId: "collector",
-    role: "USER",
-    level: 50,
-    rank: "JONIN",
     villageId: null,
-    isOutlaw: false,
-    bloodlineId: null,
-    questData: [],
-    completedQuests: [],
-    userQuests: [
-      {
-        id: quest.id,
-        questId: quest.id,
-        completed: 0,
-        previousAttempts: 0,
-        previousCompletes: 0,
-        quest,
-      },
-    ],
-  } as unknown as Parameters<typeof getNewTrackers>[0];
+  });
 };
 
 const goal = (user: ReturnType<typeof makeUser>) => {
