@@ -177,6 +177,29 @@ describe("rich input composer", () => {
     expect(submit.mock.calls[0]?.[0]).toEqual({ comment: "<p><strong>Source draft</strong></p>" });
   });
 
+  it("returns to the visual editor once a sent HTML draft is cleared", async () => {
+    const view = render(<Composer />);
+    await editorFor(view);
+    fireEvent.click(view.getByRole("button", { name: "HTML" }));
+    expect(view.getByText(/Press <\/> to go back to the visual editor/)).toBeDefined();
+    fireEvent.change(view.getByRole("textbox", { name: "Message" }), { target: { value: '<div style="text-align:center">Hi</div>' } });
+    fireEvent.click(view.getByRole("button", { name: "Reset draft" }));
+    await editorFor(view);
+    expect(view.getByRole("button", { name: "HTML" }).getAttribute("aria-pressed")).toBe("false");
+    expect(view.queryByText(/Press <\/> to go back/)).toBeNull();
+  });
+
+  it("stays in HTML mode while the author empties the draft themselves", async () => {
+    const view = render(<Composer />);
+    await editorFor(view);
+    fireEvent.click(view.getByRole("button", { name: "HTML" }));
+    const source = view.getByRole("textbox", { name: "Message" });
+    fireEvent.change(source, { target: { value: "<b>Hi</b>" } });
+    fireEvent.change(source, { target: { value: "" } });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(view.getByRole("button", { name: "Visual editor" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   it.each(['<h2 id="custom">Combat</h2>', '<a name="custom"></a><h2>Combat</h2>'])("preserves guide anchors while editing the body (%s)", async (anchor) => {
     const initial = `<a href="#custom">Jump to combat</a>${anchor}<p>Details</p>`;
     const view = render(<Composer initial={initial} />);
