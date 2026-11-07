@@ -825,45 +825,7 @@ export const itemRouter = createTRPCRouter({
       // Server-side enforcement: preserve existing reward_reputation for users without permission
       // Match effects by content (excluding reward_reputation) to handle reordering
       if (!canAwardReputation(user.role)) {
-        type EffectWithReputation = Record<string, unknown> & {
-          type: string;
-          reward_reputation?: number;
-        };
-        const existingEffects = entry.effects as EffectWithReputation[];
-        const existingReputationEffects = existingEffects.filter(
-          (e) => e.type === "noncombatconsumereward" && (e.reward_reputation ?? 0) > 0,
-        );
-
-        // Create signature for matching (all properties except reward_reputation)
-        const getEffectSignature = (effect: EffectWithReputation): string => {
-          const { reward_reputation: _unused, ...rest } = effect;
-          void _unused; // Explicitly mark as intentionally unused
-          return JSON.stringify(rest, Object.keys(rest).sort());
-        };
-
-        // Build lookup map from existing effects' signatures to their reward_reputation
-        // Use an array to track multiple identical effects and prevent reputation multiplication
-        const signatureToReputations = new Map<string, number[]>();
-        for (const existing of existingReputationEffects) {
-          const sig = getEffectSignature(existing);
-          const reputations = signatureToReputations.get(sig) ?? [];
-          reputations.push(existing.reward_reputation ?? 0);
-          signatureToReputations.set(sig, reputations);
-        }
-
-        // Preserve reputation for matching effects, set to 0 for new/modified effects
-        // Each reputation value can only be used once (prevents duplication exploit)
-        input.data.effects.forEach((effect) => {
-          if (effect.type === "noncombatconsumereward") {
-            const typedEffect = effect as EffectWithReputation;
-            const sig = getEffectSignature(typedEffect);
-            const reputations = signatureToReputations.get(sig);
-            // Pop the first available reputation value to prevent reuse
-            const existingReputation = reputations?.shift() ?? 0;
-            (effect as { reward_reputation?: number }).reward_reputation =
-              existingReputation;
-          }
-        });
+        preserveEffectReputation(entry.effects, input.data.effects);
       }
       // Calculate diff
       const diff = calculateContentDiff(entry, {
@@ -3839,6 +3801,54 @@ export const itemRouter = createTRPCRouter({
 });
 
 /** Pet rewards address authored species, while each delivery creates a new owned individual. */
+type EffectWithReputation = Record<string, unknown> & {
+  type: string;
+  reward_reputation?: number;
+};
+
+/**
+ * Keep stored `reward_reputation` on incoming effects that match by content, so reordering
+ * survives while editors without award permission cannot add or move reputation.
+ */
+const preserveEffectReputation = (
+  existing: Item["effects"],
+  incoming: Item["effects"],
+) => {
+  const existingEffects = existing as EffectWithReputation[];
+  const existingReputationEffects = existingEffects.filter(
+    (e) => e.type === "noncombatconsumereward" && (e.reward_reputation ?? 0) > 0,
+  );
+
+  // Create signature for matching (all properties except reward_reputation)
+  const getEffectSignature = (effect: EffectWithReputation): string => {
+    const { reward_reputation: _reputation, ...rest } = effect;
+    return JSON.stringify(rest, Object.keys(rest).sort());
+  };
+
+  // Build lookup map from existing effects' signatures to their reward_reputation
+  // Use an array to track multiple identical effects and prevent reputation multiplication
+  const signatureToReputations = new Map<string, number[]>();
+  for (const effect of existingReputationEffects) {
+    const sig = getEffectSignature(effect);
+    const reputations = signatureToReputations.get(sig) ?? [];
+    reputations.push(effect.reward_reputation ?? 0);
+    signatureToReputations.set(sig, reputations);
+  }
+
+  // Preserve reputation for matching effects, set to 0 for new/modified effects
+  // Each reputation value can only be used once (prevents duplication exploit)
+  incoming.forEach((effect) => {
+    if (effect.type === "noncombatconsumereward") {
+      const typedEffect = effect as EffectWithReputation;
+      const sig = getEffectSignature(typedEffect);
+      const reputations = signatureToReputations.get(sig);
+      // Pop the first available reputation value to prevent reuse
+      const existingReputation = reputations?.shift() ?? 0;
+      (effect as { reward_reputation?: number }).reward_reputation = existingReputation;
+    }
+  });
+};
+
 const rewardPetSpeciesIds = (effects: Item["effects"]) =>
   effects.flatMap((effect) =>
     effect.type === "noncombatconsumereward" ? (effect.reward_pets ?? []) : [],
