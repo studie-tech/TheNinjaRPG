@@ -59,6 +59,29 @@ const sectorId = 205;
 const tokens = WAR_PURCHASE_SHRINE_TOKEN_COST * 3;
 const intercept = (db: DrizzleClient, run: Parameters<typeof interceptExecute>[1]) =>
   interceptExecute(withoutTransactions(db, "Settlement must not open a transaction"), run);
+/** Resolve the acting Kage as a minimal profile of their village's live row. */
+const stubKage = (db: DrizzleClient, villageId: string | (() => string)) =>
+  stubProfile("fetchUpdatedUser", async () => {
+    const id = typeof villageId === "string" ? villageId : villageId();
+    return {
+      user: {
+        userId: `${id}-kage`,
+        villageId: id,
+        village: await db.query.village.findFirst({ where: eq(village.id, id) }),
+      },
+      requiresUserRefresh: false,
+    };
+  });
+/** Resolve the acting user as their live row with the relations the procedure reads. */
+const stubUser = (
+  db: DrizzleClient,
+  userId: string,
+  relations: NonNullable<Parameters<DrizzleClient["query"]["userData"]["findFirst"]>[0]>["with"],
+) =>
+  stubProfile("fetchUpdatedUser", async () => ({
+    user: await db.query.userData.findFirst({ where: eq(userData.userId, userId), with: relations }),
+    requiresUserRefresh: false,
+  }));
 const seed = async (type: WarType = "VILLAGE_WAR") => {
   const db = await getTestDatabase();
   await db.insert(village).values(
@@ -624,7 +647,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     const db = await seed();
     await db.update(war).set({ rules: { ...defaultWarRules, enabled: true }, objectiveState: { attackerEspionage: 0, defenderEspionage: 0, objectives: [{ sector: sectorId, villageId: "defender", hp: 5000, maxHp: 5000, isReserve: false, destroyed: false }] } }).where(eq(war.id, warId));
     await insertUsers([{ userId: "defender-kage", username: "release-kage", villageId: "defender" }]);
-    stubProfile("fetchUpdatedUser", async () => ({ user: await db.query.userData.findFirst({ where: eq(userData.userId, "defender-kage"), with: { village: true } }), requiresUserRefresh: false }));
+    stubUser(db, "defender-kage", { village: true });
     const caller = callerForDatabase(villageRouter, "defender-kage", db);
     const blocked = await caller.releaseSector({ sector: sectorId });
     expect(blocked.success).toBe(false);
@@ -652,13 +675,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
         })),
       ),
     );
-    stubProfile("fetchUpdatedUser", async () => ({
-      user: await db.query.userData.findFirst({
-        where: eq(userData.userId, "attacker-kage"),
-        with: { village: { with: { sectors: true } } },
-      }),
-      requiresUserRefresh: false,
-    }));
+    stubUser(db, "attacker-kage", { village: { with: { sectors: true } } });
     expect(
       (
         await callerForDatabase(warRouter, "attacker-kage", db).declareSectorWar({
@@ -693,13 +710,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
           villageId: "defender",
         })),
       ]);
-      stubProfile("fetchUpdatedUser", async () => ({
-        user: await db.query.userData.findFirst({
-          where: eq(userData.userId, "other-kage"),
-          with: { village: { with: { sectors: true } } },
-        }),
-        requiresUserRefresh: false,
-      }));
+      stubUser(db, "other-kage", { village: { with: { sectors: true } } });
       const connection = waitForLock
         ? await mysql.createConnection(process.env.TEST_MYSQL_URL!)
         : undefined;
@@ -785,16 +796,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
 
   it("a failed shrine claim leaves tokens intact; overlapping requests charge once", async () => {
     const db = await seed("SECTOR_WAR");
-    stubProfile("fetchUpdatedUser", async () => ({
-      user: {
-        userId: "attacker-kage",
-        villageId: "attacker",
-        village: await db.query.village.findFirst({
-          where: eq(village.id, "attacker"),
-        }),
-      },
-      requiresUserRefresh: false,
-    }));
+    stubKage(db, "attacker");
     const fail = intercept(db, async (query, execute) => {
       if (sqlText(query).trimStart().startsWith("UPDATE `War`"))
         throw new Error("Claim unavailable");
@@ -866,16 +868,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
         await db.update(war).set({ defenderWarHealth: 100 });
         await addOffer(db);
         let actorVillageId = "ally";
-        stubProfile("fetchUpdatedUser", async () => ({
-          user: {
-            userId: `${actorVillageId}-kage`,
-            villageId: actorVillageId,
-            village: await db.query.village.findFirst({
-              where: eq(village.id, actorVillageId),
-            }),
-          },
-          requiresUserRefresh: false,
-        }));
+        stubKage(db, () => actorVillageId);
         const paymentFailure = intercept(db, async (query, execute) => {
           if (sqlText(query).includes("UPDATE `UserRequest` r"))
             throw new Error("Payment unavailable");
@@ -943,16 +936,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     it(`${operation} overlapping acceptance commits either closure or the complete payment`, async () => {
       const db = await seed();
       await addOffer(db);
-      stubProfile("fetchUpdatedUser", async () => ({
-        user: {
-          userId: `${closingVillageId}-kage`,
-          villageId: closingVillageId,
-          village: await db.query.village.findFirst({
-            where: eq(village.id, closingVillageId),
-          }),
-        },
-        requiresUserRefresh: false,
-      }));
+      stubKage(db, closingVillageId);
       const [closed, accepted] = await Promise.all([
         closeOffer(db),
         acceptWarAllyOffer(db, offer),
@@ -974,16 +958,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     it(`${operation} cannot remove membership or payment when acceptance wins its status claim`, async () => {
       const db = await seed();
       await addOffer(db);
-      stubProfile("fetchUpdatedUser", async () => ({
-        user: {
-          userId: `${closingVillageId}-kage`,
-          villageId: closingVillageId,
-          village: await db.query.village.findFirst({
-            where: eq(village.id, closingVillageId),
-          }),
-        },
-        requiresUserRefresh: false,
-      }));
+      stubKage(db, closingVillageId);
       const acceptanceFirst = intercept(db, async (_query, execute) => {
         expect((await acceptWarAllyOffer(db, offer)).success).toBe(true);
         return execute();
@@ -1015,16 +990,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       it(`${operation} before delayed ${phase} cannot leave an unpaid reservation`, async () => {
         const db = await seed();
         await addOffer(db);
-        stubProfile("fetchUpdatedUser", async () => ({
-          user: {
-            userId: `${closingVillageId}-kage`,
-            villageId: closingVillageId,
-            village: await db.query.village.findFirst({
-              where: eq(village.id, closingVillageId),
-            }),
-          },
-          requiresUserRefresh: false,
-        }));
+        stubKage(db, closingVillageId);
         const delayed = intercept(db, async (query, execute) => {
           if (
             sqlText(query).includes(
@@ -1079,13 +1045,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
   for (const waitForLock of [false, true])
     it(`cleans preclaim shrine queues and quests ${waitForLock ? "while the terminal update waits on a row lock" : "before the terminal update"}`, async () => {
       const db = await seed("SECTOR_WAR");
-      stubProfile("fetchUpdatedUser", async () => ({
-        user: await db.query.userData.findFirst({
-          where: eq(userData.userId, "attacker-user"),
-          with: { village: true },
-        }),
-        requiresUserRefresh: false,
-      }));
+      stubUser(db, "attacker-user", { village: true });
       const trigger = spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
       const connection = waitForLock
         ? await mysql.createConnection(process.env.TEST_MYSQL_URL!)
