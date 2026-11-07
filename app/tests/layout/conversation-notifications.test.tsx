@@ -25,19 +25,14 @@ import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider } from "@/utils/UserContext";
 import { actualUserContext } from "../setup/preload";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
-const eventDescriptors = ["Event", "CustomEvent"].map(
-  (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
-);
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
 let pathname = "/tavern";
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-  });
+  installBrowserGlobals();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
   // Bun retains other suites' module mocks; exercise the provider's real cache observers.
@@ -86,17 +81,14 @@ beforeEach(() => {
 });
 afterEach(async () => {
   cleanup();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   for (const qc of clients.splice(0)) qc.clear();
   getDefaultStore().set(chatMentionsAtom, {});
   vi.restoreAllMocks();
   if (hiddenDescriptor) Object.defineProperty(document, "hidden", hiddenDescriptor);
   else Reflect.deleteProperty(document, "hidden");
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 function mount(
   kind: "public" | "private",

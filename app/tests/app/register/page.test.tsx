@@ -10,6 +10,7 @@ import * as characterPreview from "@/layout/CharacterPreview";
 import { BOTID_BLOCKED_MESSAGE } from "@/libs/botid";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 const { default: RegisterPage } = await import("@/app/[shell]/register/page");
 
@@ -20,17 +21,11 @@ const clients: QueryClient[] = [];
 /** jsdom has no layout, so the carousel's position cannot be read; the steps staying mounted preserves it. */
 const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
 
-class NoopResizeObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-
 afterEach(() => {
   cleanup();
   clients.splice(0).forEach((queryClient) => queryClient.clear());
   vi.restoreAllMocks();
-  Reflect.deleteProperty(globalThis, "ResizeObserver");
+  restoreBrowserGlobals();
 });
 
 /** Mount the real page with the form valid, so a submit reaches `createCharacter`. */
@@ -40,10 +35,7 @@ const mount = (createCharacter: () => Promise<Outcome>) => {
     defaultOptions: { mutations: { onError: globalOnError } },
   });
   clients.push(queryClient);
-  Object.defineProperty(globalThis, "ResizeObserver", {
-    configurable: true,
-    value: NoopResizeObserver,
-  });
+  installBrowserGlobals({ events: [], resizeObserver: true });
   for (const part of ["Carousel", "CarouselContent", "CarouselItem"] as const) {
     vi.spyOn(carousel, part).mockImplementation(Passthrough as never);
   }

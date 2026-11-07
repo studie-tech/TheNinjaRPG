@@ -15,6 +15,7 @@ import type { MutateCommentSchema } from "@/validators/comments";
 import * as Parse from "@/utils/parse";
 import { conversationQueryOptions } from "../setup/conversationQueryOptions";
 import { createToastMock } from "../setup/toastMock";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const edit = vi.fn();
 vi.mock("@/app/_trpc/client", () => ({
@@ -319,12 +320,7 @@ describe("conversation comment row isolation", () => {
 
 describe("compact chat identity", () => {
   it("uses Tavern title colours and preserves the custom avatar in the larger preview", async () => {
-    const descriptors = ["Event", "CustomEvent", "ResizeObserver"].map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
-    Object.defineProperties(globalThis, {
-      Event: { configurable: true, value: window.Event },
-      CustomEvent: { configurable: true, value: window.CustomEvent },
-      ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-    });
+    installBrowserGlobals({ resizeObserver: true });
     const avatar = vi.spyOn(Avatar, "default").mockImplementation((props) => <img src={props.href ?? undefined} alt={props.alt} width={props.size} />);
     try {
       const styledUser = { ...user, displayTitle: "Village Guardian", tavernTitleColor: "COBALT" as const, avatar: "https://example.com/custom-avatar.gif" };
@@ -336,14 +332,10 @@ describe("compact chat identity", () => {
       expect(images.some((image) => image.width === 160 && image.src === styledUser.avatar)).toBe(true);
       expect(view.getByRole("menuitem", { name: "See profile" }).getAttribute("href")).toBe("/username/Friend");
       view.unmount();
-      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+      await act(flushRadixFocus);
     } finally {
       avatar.mockRestore();
-      ["Event", "CustomEvent", "ResizeObserver"].forEach((name, index) => {
-        const descriptor = descriptors[index];
-        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-        else Reflect.deleteProperty(globalThis, name);
-      });
+      restoreBrowserGlobals();
     }
   });
 });

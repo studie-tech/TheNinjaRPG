@@ -35,6 +35,7 @@ import { IncreaseStatTag } from "@/validators/combat";
 import type { PetTask } from "@/validators/petTasks";
 import { actualShowMutationToast } from "../setup/preload";
 import { deferred } from "../setup/deferred";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
@@ -67,21 +68,12 @@ let timeDiff: number;
 let previousBattleEnabled: boolean;
 const prepareUserUpdate = vi.fn<() => number | undefined>(() => 17);
 const updateUser = vi.fn<(patch: UserPatch | undefined, mutation?: UserUpdateOptions) => Promise<boolean>>(async () => false);
-let scrollDescriptor: PropertyDescriptor | undefined;
 
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
   prepareUserUpdate.mockReset().mockReturnValue(17);
   updateUser.mockReset().mockResolvedValue(false);
-  scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   timeDiff = 0;
   previousBattleEnabled = PET_BATTLE_CONFIG.enabled;
   PET_BATTLE_CONFIG.enabled = true;
@@ -153,13 +145,7 @@ afterEach(() => {
   queryClient.clear();
   PET_BATTLE_CONFIG.enabled = previousBattleEnabled;
   vi.restoreAllMocks();
-  if (scrollDescriptor) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const mount = (strictMode = false) => {

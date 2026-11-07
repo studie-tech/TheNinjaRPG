@@ -8,15 +8,12 @@ import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
 import * as userContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 const setAutoCombat = vi.fn();
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
-  }
+  installBrowserGlobals();
   Object.assign(vi.spyOn(client, "api" as never), {
     sparring: {
       getUserChallenges: {
@@ -51,11 +48,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   setAutoCombat.mockReset();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const renderShell = (mode: "Arena" | "Sparring" = "Arena") => {

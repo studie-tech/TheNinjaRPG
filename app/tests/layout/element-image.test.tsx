@@ -1,23 +1,16 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "bun:test";
 import ElementImage from "@/layout/ElementImage";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent"] as const;
-const saved = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
-// Radix dispatches jsdom events, which must come from the jsdom window.
 beforeEach(() => {
-  for (const key of browserGlobals)
-    Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
+  installBrowserGlobals();
 });
 
 afterEach(() => {
   cleanup();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = saved[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 it("shows its label above the page so a scrolling side panel cannot clip it", async () => {

@@ -7,16 +7,13 @@ import { ChatPanel } from "@/layout/ChatPanel";
 import * as content from "@/layout/ChatPanelContent";
 import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as context from "@/utils/UserContext";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 let level: number;
 
 beforeEach(() => {
   level = MESSAGING_MIN_LEVEL;
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-  });
+  installBrowserGlobals();
   vi.spyOn(media, "useMediaQuery").mockReturnValue(true);
   vi.spyOn(context, "useUserData").mockImplementation(() => ({ data: { userId: "reader", level, tutorialOn: true, chatMuted: false, mutedConversationIds: [], unmutedTavernIds: [] } }) as never);
   vi.spyOn(content, "default").mockImplementation(({ onClose }) => <button type="button" onClick={onClose}>Close chat</button>);
@@ -26,14 +23,11 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   getDefaultStore().set(chatMentionsAtom, {});
   vi.restoreAllMocks();
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 
 const openPhoneChat = async () => {

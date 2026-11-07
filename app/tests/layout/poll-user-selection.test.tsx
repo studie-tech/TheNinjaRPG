@@ -10,14 +10,12 @@ import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
 import type { CreatePollSchema } from "@/validators/poll";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const createPoll = vi.fn<(data: CreatePollSchema) => void>();
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   createPoll.mockClear();
   vi.spyOn(useSize, "useSize").mockReturnValue({ width: 0, height: 0 });
   const utils = { poll: { getPolls: { invalidate: vi.fn() } } };
@@ -49,8 +47,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 it("preserves edited text options when selected users are added, replaced and removed", async () => {

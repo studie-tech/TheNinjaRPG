@@ -14,17 +14,13 @@ import * as trainingMode from "@/layout/battlearena/TrainingMode";
 import * as contentBox from "@/layout/ContentBox";
 import * as userContext from "@/utils/UserContext";
 import { actualContentBox } from "../../setup/preload";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
-// Local storage sync dispatches DOM events through the global constructors.
-const browserGlobals = ["Event", "CustomEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 let tutorialStep: unknown;
 let arenaProps: { aiId?: string } = {};
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
-  }
+  installBrowserGlobals();
   window.localStorage.clear();
   window.history.replaceState({}, "", "/battlearena");
   tutorialStep = undefined;
@@ -62,11 +58,7 @@ afterEach(() => {
   window.localStorage.clear();
   window.history.replaceState({}, "", "/");
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 it("opens the overview without a hash", () => {

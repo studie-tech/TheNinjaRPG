@@ -5,13 +5,12 @@ import { StoreBundles } from "@/app/[shell]/points/StoreBundles";
 import * as checkout from "@/app/[shell]/points/StoreCheckout";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as UserContext from "@/utils/UserContext";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 let purchaseCount: number;
-const browserEvents = ["Event", "CustomEvent"] as const;
-const eventDescriptors = browserEvents.map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 
 beforeEach(() => {
-  for (const key of browserEvents) Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
+  installBrowserGlobals();
   purchaseCount = 0;
   Object.assign(vi.spyOn(client, "api" as never), {
     paypal: {
@@ -38,12 +37,9 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   vi.restoreAllMocks();
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 
 it.each(["Escape", "Close"])("returns focus to the bundle after delivery disables its opener (%s)", async (dismiss) => {

@@ -8,29 +8,17 @@ import HuntingEditor from "@/app/[shell]/manual/hunting/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as UserContext from "@/utils/UserContext";
 import { huntingHabitatContent } from "../setup/hunting";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 type SaveInput = RouterInputs["hunting"]["save"];
 type SaveResult = RouterOutputs["hunting"]["save"];
 
-const browserEvents = ["Event", "CustomEvent"] as const;
-const originalEvents = browserEvents.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
-const originalResizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
-const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 beforeEach(() => {
-  for (const name of browserEvents) Object.defineProperty(globalThis, name, { configurable: true, value: window[name] });
-  Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } });
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
 });
 afterEach(() => {
-  if (originalResizeObserver) Object.defineProperty(globalThis, "ResizeObserver", originalResizeObserver);
-  else Reflect.deleteProperty(globalThis, "ResizeObserver");
-  if (originalScroll) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScroll);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
   cleanup();
-  for (const [name, descriptor] of originalEvents) {
-    if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-    else Reflect.deleteProperty(globalThis, name);
-  }
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
 

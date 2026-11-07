@@ -13,6 +13,7 @@ import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import type { CreatePollSchema } from "@/validators/poll";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 type Response = { success: boolean; message: string };
 let onSuccess: (response: Response) => void;
@@ -22,12 +23,9 @@ const players = [
   { userId: "user-1", username: "Player One", avatar: null, level: 10, rank: "GENIN", federalStatus: "NONE" },
   { userId: "user-2", username: "Player Two", avatar: null, level: 10, rank: "GENIN", federalStatus: "NONE" },
 ];
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   vi.clearAllMocks();
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ poll: { getPolls: { invalidate } } }),
@@ -60,8 +58,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 function renderPollForm() {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { NewAuctionListingDialog } from "@/app/[shell]/auctionhouse/page";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const row = (name: string, patch: object = {}) => ({
   id: name,
@@ -14,26 +15,9 @@ const row = (name: string, patch: object = {}) => ({
   ...patch,
 });
 
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) =>
-  Object.getOwnPropertyDescriptor(globalThis, key),
-);
-const scrollIntoView = window.HTMLElement.prototype.scrollIntoView;
 
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: {
-      configurable: true,
-      value: class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    },
-  });
-  window.HTMLElement.prototype.scrollIntoView = () => {};
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   Object.assign(vi.spyOn(client, "api" as never), {
     item: {
       getUserItems: {
@@ -63,12 +47,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 it("leaves items still being imbued out of the listing picker", async () => {

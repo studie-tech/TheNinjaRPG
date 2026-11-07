@@ -5,10 +5,8 @@ import type { UserItemWithRelations } from "@/drizzle/schema";
 import type { HotkeyTarget } from "@/layout/HotkeyControls";
 import { HotkeyCaptureDialog } from "@/layout/HotkeyControls";
 import { ItemContextMenu } from "@/layout/items/ItemContextMenu";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
-// Radix dispatches DOM events through the global constructors.
-const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
 
 const setFinePointer = (fine: boolean) =>
@@ -18,9 +16,7 @@ const setFinePointer = (fine: boolean) =>
   });
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
-  }
+  installBrowserGlobals();
   setFinePointer(true);
 });
 
@@ -30,11 +26,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
   else Reflect.deleteProperty(window, "matchMedia");
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 type Fixture = { id: string; itemType?: string; slot?: string; equipped?: ItemSlot; quantity?: number; canStack?: boolean; durability?: number; variants?: unknown[]; inShop?: boolean };

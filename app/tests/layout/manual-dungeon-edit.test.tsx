@@ -10,30 +10,17 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { dungeonContent } from "../setup/dungeon";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 type SaveInput = RouterInputs["coop"]["dungeon"]["save"];
 type SaveResult = RouterOutputs["coop"]["dungeon"]["save"];
 
-// SearchSelect needs browser-native events, measurements and scrolling absent from the DOM shim.
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const originalGlobals = browserGlobals.map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
-const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
 });
 afterEach(() => {
   cleanup();
-  for (const [key, descriptor] of originalGlobals) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
-  if (originalScroll) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScroll);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
 

@@ -28,10 +28,10 @@ import * as toast from "@/libs/toast";
 import * as uploadthing from "@/utils/uploadthing";
 import * as userContext from "@/utils/UserContext";
 import { actualRichInput } from "../setup/preload";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
-const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 const user = {
   userId: "me", username: "Me", role: "USER", level: 50, rank: "CHUNIN",
   isBanned: false, isSilenced: false, tutorialOn: true,
@@ -48,10 +48,7 @@ beforeEach(() => {
   // Tavern counts are covered by their own suites.
   vi.spyOn(tavernActivity, "useTavernIds").mockReturnValue([]);
   vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-  });
+  installBrowserGlobals();
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: testApi.comments, profile: testApi.profile, reports: testApi.reports, useUtils: testApi.useUtils,
   });
@@ -62,18 +59,14 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  // Radix restores focus on a deferred turn, using the DOM's Event constructor.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   for (const queryClient of clients.splice(0)) queryClient.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   getDefaultStore().set(chatDraftsAtom, {});
   getDefaultStore().set(chatViewedConversationsAtom, {});
   localStorage.removeItem("selectedTavern2");
   vi.restoreAllMocks();
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 
 /** Keep the actual tRPC hooks, keys and invalidation behavior while replacing only transport. */

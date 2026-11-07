@@ -8,20 +8,14 @@ import * as toast from "@/libs/toast";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { actualRichInput as RichInput } from "../setup/preload";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const startUpload = vi.fn();
 const submit = vi.fn();
 const uploadPending = vi.fn();
 let spies: { mockRestore: () => void }[];
-const eventDescriptors = ["Event", "CustomEvent", "requestAnimationFrame", "cancelAnimationFrame"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    // Keep frame callbacks independent of jsdom intervals cleared by fake timers.
-    requestAnimationFrame: { configurable: true, value: (callback: FrameRequestCallback) => Number(setTimeout(() => callback(Date.now()), 0)) },
-    cancelAnimationFrame: { configurable: true, value: (id: number) => clearTimeout(id) },
-  });
+  installBrowserGlobals({ animationFrame: true });
   vi.clearAllMocks();
   startUpload.mockReset();
   spies = [
@@ -33,13 +27,9 @@ beforeEach(() => {
 });
 afterEach(async () => {
   cleanup();
-  // Radix restores focus on a deferred turn, using the DOM's Event constructor.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   for (const spy of spies) spy.mockRestore();
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 
 const Composer = ({ initial = "", resetValue = "", disabled = false, plainText = false, autoFocus = false, refreshKey = 0, allowClipboardPaste = true, allowImages }: { initial?: string; resetValue?: string; disabled?: boolean; plainText?: boolean; autoFocus?: boolean; refreshKey?: number; allowClipboardPaste?: boolean; allowImages?: boolean }) => {

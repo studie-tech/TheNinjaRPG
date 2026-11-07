@@ -22,6 +22,7 @@ import * as statusBar from "@/layout/StatusBar";
 import * as menus from "@/libs/menus";
 import * as toast from "@/libs/toast";
 import { resolveHotkeys } from "@/libs/combat/hotkeys";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];
@@ -38,27 +39,20 @@ scene.mockRestore();
 type Response = RouterOutputs["combat"]["getBattle"];
 const empty: Response = { battle: null, result: null };
 const clients: QueryClient[] = [];
-const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-  });
+  installBrowserGlobals();
 });
 
 afterEach(async () => {
   cleanup();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   getDefaultStore().set(userContext.combatActionIdAtom, undefined);
   getDefaultStore().set(userContext.userBattleAtom, undefined);
   clients.splice(0).forEach((queryClient) => queryClient.clear());
   loadingEvents.length = 0;
   vi.restoreAllMocks();
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 
 const mount = (battleId: string | null, read: (id: string) => Promise<Response>, config: Partial<ReturnType<typeof preferences.useCombatPreferences>> = {}, spectate = false, arena: { heal?: () => Promise<{ success: boolean; message: string }>; start?: () => Promise<{ success: boolean; message: string; battleId?: string }> } = {}) => {

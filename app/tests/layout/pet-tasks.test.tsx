@@ -12,6 +12,7 @@ import * as RewardChoice from "@/layout/RewardChoice";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { updateUserCache } from "@/utils/userCache";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
@@ -22,14 +23,9 @@ let collect: ReturnType<typeof vi.fn>;
 let cancel: ReturnType<typeof vi.fn>;
 let updateUser: ReturnType<typeof vi.fn>;
 const receipt = { petId: "pet", questHistoryId: "attempt", questId: "contract", startedAt: 1000, questVersion: 500, finishesAt: Date.now() + 60_000 };
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event }, CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true });
   updateUser = vi.fn().mockResolvedValue(undefined);
   owner = { userId: "owner", rank: "CHUNIN", status: "AWAKE", level: 30, occupation: "HUNTER", activePetId: "pet", battleId: null, petTask: null, isBanned: false, isAi: false };
   task = { task: null, petName: "Kumo", questName: "Contract", blockMessage: null, dispatchBlockMessage: null };
@@ -45,7 +41,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup(); queryClient.clear(); vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => { const descriptor = browserDescriptors[index]; if (descriptor) Object.defineProperty(globalThis, key, descriptor); else Reflect.deleteProperty(globalThis, key); });
+  restoreBrowserGlobals();
 });
 
 const mount = (dispatch = false) => {

@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as controller from "@/hooks/useSharedCooldowns";
 import { SharedCooldownForm } from "@/layout/SharedCooldownForm";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const save = vi.fn();
 const remove = vi.fn();
@@ -9,12 +10,9 @@ const refetch = vi.fn();
 let loading = false;
 let failed = false;
 let pending = false;
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   loading = failed = pending = false;
   vi.clearAllMocks();
   vi.spyOn(controller, "useSharedCooldowns").mockImplementation(() => ({
@@ -27,8 +25,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 describe("shared cooldown form", () => {

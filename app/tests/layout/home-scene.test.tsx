@@ -9,6 +9,7 @@ import { HOME_ART_PLANS, HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
 import { bunnyImageUrl, transformImageUrl } from "@/utils/image";
 import { type HomePlacement, homeFurnitureSaveInputSchema } from "@/validators/home";
 import { deferred } from "../setup/deferred";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 // The image stub exposes art failures without relying on a browser image loader.
 vi.mock("@/layout/Image", () => ({
@@ -68,20 +69,13 @@ const centeredEssentialsLayout = [
   { id: "owned-kitchen", x: 73, y: 15.15, rotation: 0 as const },
 ];
 
-let savedEvent: typeof Event;
-let savedCustomEvent: typeof CustomEvent;
 
 beforeEach(() => {
-  savedEvent = globalThis.Event;
-  savedCustomEvent = globalThis.CustomEvent;
-  // Radix dispatches global constructors against the JSDOM document.
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
 });
 afterEach(() => {
   cleanup();
-  globalThis.Event = savedEvent;
-  globalThis.CustomEvent = savedCustomEvent;
+  restoreBrowserGlobals();
 });
 
 /** Regression coverage for residence navigation, owner access, and artwork recovery. */

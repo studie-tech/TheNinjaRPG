@@ -17,21 +17,16 @@ import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { initialPetSpecies } from "../libs/pets/helpers/species";
 import { deferred } from "../setup/deferred";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const testApi = createTRPCReact<AppRouter>();
 const dayKey = "2026-10-16";
 const options = getDailyPetOptions("owner", "NONE", initialPetSpecies, dayKey);
 let owner: { status: string; reputationPoints: number; seichiSilver: number };
 
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true });
   owner = { status: "AWAKE", reputationPoints: 1000, seichiSilver: 100 };
   Object.assign(vi.spyOn(client, "api" as never), {
     pets: testApi.pets,
@@ -47,11 +42,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 it("keeps a successful adoption intact while its claimed species leaves the daily offers and artwork is pending", async () => {

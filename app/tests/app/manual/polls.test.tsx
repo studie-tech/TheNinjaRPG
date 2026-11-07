@@ -12,6 +12,7 @@ import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 type Result = RouterOutputs["poll"]["createPoll"];
 type CreateInput = RouterInputs["poll"]["createPoll"];
@@ -31,12 +32,9 @@ const create = vi.fn((_input: CreateInput) => new Promise<Result>((resolve) => {
 const update = vi.fn((_input: UpdateInput) => new Promise<Result>((resolve) => { resolveSave = resolve; }));
 const invalidate = vi.fn(() => new Promise<void>((resolve) => { resolveRefresh = resolve; }));
 const noMutation = () => ({ mutate: vi.fn(), isPending: false });
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   vi.clearAllMocks();
   vi.spyOn(useSize, "useSize").mockReturnValue({ width: 0, height: 0 });
   queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
@@ -64,12 +62,10 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  // Radix restores focus asynchronously when its dialog unmounts.
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   queryClient.clear();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 it("preserves a rejected create draft for retry and leaves the editor after a committed save", async () => {

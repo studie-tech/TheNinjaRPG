@@ -20,6 +20,7 @@ import * as Kitchen from "@/layout/Kitchen";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { deferred } from "../../setup/deferred";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 const furniture: HomeFurniture[] = [
   { id: "owned-bed", itemId: "home-bed", name: "Bed", image: "/images/home/furniture/bed.webp", width: 34, groundAnchor: 91.1, action: "sleep", isFloor: false, quantity: 1, views: {} },
@@ -51,24 +52,11 @@ const essentialHome: NonNullable<RouterOutputs["home"]["getUserHome"]> = {
 
 const testApi = createTRPCReact<AppRouter>();
 const emptyPetCollection = { pets: [], activePetId: null };
-let savedEvent: typeof Event;
-let savedCustomEvent: typeof CustomEvent;
-let savedAnimationFrame: PropertyDescriptor | undefined;
-let savedCancelAnimationFrame: PropertyDescriptor | undefined;
 let searchParams: URLSearchParams;
 let replaceRoute: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  savedEvent = globalThis.Event;
-  savedCustomEvent = globalThis.CustomEvent;
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
-  savedAnimationFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
-  savedCancelAnimationFrame = Object.getOwnPropertyDescriptor(globalThis, "cancelAnimationFrame");
-  Object.defineProperties(globalThis, {
-    requestAnimationFrame: { configurable: true, value: (callback: FrameRequestCallback) => Number(setTimeout(() => callback(Date.now()), 0)) },
-    cancelAnimationFrame: { configurable: true, value: (id: number) => clearTimeout(id) },
-  });
+  installBrowserGlobals({ animationFrame: true });
   searchParams = new URLSearchParams();
   replaceRoute = vi.fn((href: string) => {
     searchParams = new URLSearchParams(href.split("?")[1]);
@@ -118,14 +106,8 @@ beforeEach(() => {
 });
 afterEach(async () => {
   cleanup();
-  // Radix restores focus on a timer while unmounting its dialog.
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  globalThis.Event = savedEvent;
-  globalThis.CustomEvent = savedCustomEvent;
-  for (const [key, descriptor] of [["requestAnimationFrame", savedAnimationFrame], ["cancelAnimationFrame", savedCancelAnimationFrame]] as const) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  await flushRadixFocus();
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
 

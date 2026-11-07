@@ -15,9 +15,8 @@ import * as image from "@/layout/Image";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
 import * as userContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 let finderInputs: Record<string, unknown>[];
 let finderOptions: Record<string, unknown>[];
@@ -65,9 +64,7 @@ const challenges = [
 ];
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
-  }
+  installBrowserGlobals();
   finderInputs = [];
   finderOptions = [];
   finderUpdatedAt = Date.now();
@@ -129,11 +126,7 @@ afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const lastInput = () => finderInputs.at(-1) ?? {};

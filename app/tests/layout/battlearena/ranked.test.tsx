@@ -7,18 +7,15 @@ import { RankedMode } from "@/layout/battlearena/RankedMode";
 import * as pvpRank from "@/layout/PvpRank";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 const mutations: Record<string, ReturnType<typeof vi.fn>> = {};
 let user: Record<string, unknown>;
 let inQueue = false;
 let season: unknown;
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
-  }
+  installBrowserGlobals();
   user = { userId: "me", status: "AWAKE", rankedLp: 180, villagePrestige: 50000, isBanned: false };
   inQueue = false;
   season = { name: "Season 4", paused: false };
@@ -53,11 +50,7 @@ afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 it("shows the division and LP to the next one", () => {

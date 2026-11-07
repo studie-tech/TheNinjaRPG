@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import OccupationFarming from "@/layout/OccupationFarming";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const refetch = vi.fn(async () => undefined);
 const query = {
@@ -107,13 +108,12 @@ beforeEach(() => {
   })) as unknown as typeof window.matchMedia;
   Element.prototype.scrollIntoView = vi.fn();
   window.scrollBy = vi.fn() as unknown as typeof window.scrollBy;
-  globalThis.ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  } as unknown as typeof ResizeObserver;
+  installBrowserGlobals({ events: [], resizeObserver: true });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  restoreBrowserGlobals();
+});
 
 /** Initial farm failures must leave loading and remain recoverable inside a residence. */
 describe("OccupationFarming load recovery", () => {

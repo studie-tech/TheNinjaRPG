@@ -24,6 +24,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { FetchActiveWarsReturnType } from "@/routers/war";
 import * as UserContext from "@/utils/UserContext";
 import { defaultWarRules } from "@/validators/war";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 // Exercise declarations through WarMap while isolating map rendering and transport.
 vi.spyOn(dynamic, "default").mockImplementation(
@@ -111,8 +112,6 @@ const structures = [
 let user: NonNullable<UserWithRelations>;
 let ownsSector = false;
 let relationshipStatus: VillageAlliance["status"] = "ENEMY";
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
   // Isolate globe rendering when another page has already loaded WarSystem.
@@ -123,8 +122,7 @@ beforeEach(() => {
       <button type="button" onClick={() => props.onTileClick?.(105)}>Sector tile</button>
     </>
   ));
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   vi.clearAllMocks();
   ownsSector = false;
   relationshipStatus = "ENEMY";
@@ -202,11 +200,9 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  // Radix restores focus in a deferred unmount callback before DOM constructors are reset.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 const mount = () =>

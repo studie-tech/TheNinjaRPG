@@ -6,20 +6,16 @@ import * as tutorial from "@/hooks/tutorial";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import type { UserWithRelations } from "@/routers/profile";
 import { deferred } from "../setup/deferred";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
 
 const inputPreferenceKey = "statsDistributionUseInputBoxes";
 let savedInputPreference: string | null;
-let savedEvent: typeof Event;
-let savedCustomEvent: typeof CustomEvent;
 
 beforeEach(() => {
-  savedEvent = globalThis.Event;
-  savedCustomEvent = globalThis.CustomEvent;
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   savedInputPreference = localStorage.getItem(inputPreferenceKey);
   localStorage.setItem(inputPreferenceKey, "true");
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
@@ -30,8 +26,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  globalThis.Event = savedEvent;
-  globalThis.CustomEvent = savedCustomEvent;
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
   if (savedInputPreference === null) localStorage.removeItem(inputPreferenceKey);
   else localStorage.setItem(inputPreferenceKey, savedInputPreference);

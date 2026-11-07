@@ -24,6 +24,7 @@ import * as UserContext from "@/utils/UserContext";
 import type { ActivityStreakFormType } from "@/validators/activityStreak";
 import type { FurnitureViews } from "@/validators/itemFurniture";
 import { actualContentImageSelector as ActualContentImageSelector } from "../setup/preload";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 type SelectorProps = ComponentProps<typeof ContentImageSelector.default>;
 type GenerationResult = { success: boolean; url?: string; message?: string };
@@ -63,21 +64,12 @@ const props: SelectorProps = {
   maxDim: 768,
   onUploadComplete,
 };
-const eventDescriptors = ["Event", "CustomEvent", "requestAnimationFrame", "cancelAnimationFrame"].map((key) => [
-  key,
-  Object.getOwnPropertyDescriptor(globalThis, key),
-] as const);
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(ContentImageSelector, "default").mockImplementation(ActualContentImageSelector);
   requests.length = 0;
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    requestAnimationFrame: { configurable: true, value: (callback: FrameRequestCallback) => Number(setTimeout(() => callback(Date.now()), 0)) },
-    cancelAnimationFrame: { configurable: true, value: (id: number) => clearTimeout(id) },
-  });
+  installBrowserGlobals({ animationFrame: true });
   Object.assign(vi.spyOn(client, "api" as never), {
     item: { getFurnitureImageGeometry: { useQuery: () => ({ data: undefined, isFetching: false }) } },
     useQueries: () => [0, 1, 2].map(() => ({ data: undefined, isFetching: false })),
@@ -116,13 +108,9 @@ beforeEach(() => {
 });
 afterEach(async () => {
   cleanup();
-  // Radix restores focus on a deferred turn; keep the DOM's Event constructor until it finishes.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   vi.restoreAllMocks();
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 
 /** Open the actual selector dialog; generation itself stays an application-boundary stub. */

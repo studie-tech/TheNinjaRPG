@@ -3,15 +3,11 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as contentImage from "@/layout/ContentImage";
 import { BackpackList } from "@/layout/items/BackpackList";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
-// Local storage sync dispatches DOM events through the global constructors.
-const browserGlobals = ["Event", "CustomEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
-  }
+  installBrowserGlobals();
   window.localStorage.clear();
   // Canvas-drawn art is irrelevant to the list's behaviour.
   vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => <span>{alt} art</span>);
@@ -22,11 +18,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   window.localStorage.clear();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 type Fixture = { id: string; itemType?: string; slot?: string; rarity?: string; hidden?: boolean; durability?: number; maxDurability?: number };

@@ -9,22 +9,14 @@ import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
 import { ResetPetImageGeneration } from "@/layout/PublicUser";
 import * as toast from "@/libs/toast";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
 let reset: ReturnType<typeof vi.fn>;
-let scrollDescriptor: PropertyDescriptor | undefined;
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   reset = vi.fn((_input: RouterInputs["profile"]["resetPetImageGeneration"]) => ({ success: false, message: "Generation is still running." }));
 });
@@ -33,13 +25,7 @@ afterEach(() => {
   cleanup();
   queryClient.clear();
   vi.restoreAllMocks();
-  if (scrollDescriptor) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 /** Render the real staff dialog with a scoped tRPC link and controllable server outcomes. */

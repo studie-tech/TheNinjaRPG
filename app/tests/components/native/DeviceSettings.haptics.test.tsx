@@ -6,12 +6,11 @@ import DeviceSettings from "@/components/native/DeviceSettings";
 import * as permission from "@/hooks/useNativePush";
 import * as shell from "@/hooks/useNativeShell";
 import { haptics } from "@/libs/native";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 const impact = vi.fn();
-let previousCustomEvent: typeof CustomEvent;
 beforeEach(() => {
-  previousCustomEvent = globalThis.CustomEvent;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals({ events: ["CustomEvent"] });
   window.localStorage.clear();
   window.localStorage.setItem(haptics.HAPTICS_STORAGE_KEY, "false");
   impact.mockClear();
@@ -34,7 +33,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
-  cleanup(); vi.restoreAllMocks(); globalThis.CustomEvent = previousCustomEvent; window.localStorage.clear();
+  cleanup(); vi.restoreAllMocks(); restoreBrowserGlobals(); window.localStorage.clear();
   delete (window as Window & { Capacitor?: unknown }).Capacitor;
 });
 

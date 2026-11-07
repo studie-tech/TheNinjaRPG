@@ -9,6 +9,7 @@ import Modal, {
 } from "@/layout/Modal";
 import { NumberInput } from "@/components/ui/number-input";
 import AutoAttackModal from "@/layout/AutoAttackModal";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const dialogMocks = {
   Dialog: ({ open, children }: { open?: boolean; children: ReactNode }) =>
@@ -51,6 +52,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   for (const spy of dialogSpies.splice(0)) spy.mockRestore();
+  restoreBrowserGlobals();
 });
 
 describe("Modal", () => {
@@ -237,8 +239,7 @@ describe("Modal", () => {
   });
 
   it("keeps invalid auto-attack drafts out of storage and commits before enabling", () => {
-    const originalCustomEvent = globalThis.CustomEvent;
-    globalThis.CustomEvent = window.CustomEvent;
+    installBrowserGlobals({ events: ["CustomEvent"] });
     localStorage.setItem("autoAttackMinLevel", "1");
     localStorage.setItem("autoAttackDelay", "5");
     const enabled = vi.fn(() => {
@@ -255,7 +256,6 @@ describe("Modal", () => {
     expect(enabled).toHaveBeenCalledTimes(1);
     localStorage.removeItem("autoAttackMinLevel");
     localStorage.removeItem("autoAttackDelay");
-    globalThis.CustomEvent = originalCustomEvent;
   });
 
   it("reads saved auto-attack settings and falls back to their defaults", () => {

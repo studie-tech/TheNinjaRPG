@@ -15,19 +15,17 @@ import { RankedLoadoutSelector } from "@/layout/PvpRank";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const api = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 const cap: JutsuEquipLimit[] = [{ category: "parry", unrankedMaxEquipped: 1, rankedMaxEquipped: 1 }];
 const jutsus = ["First parry", "Second parry"].map((name) => ({
   id: name, name, jutsuType: "NORMAL", effects: [{ type: "parry" }],
 }) as Jutsu);
 
 beforeEach(() => {
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   Object.assign(vi.spyOn(appClient, "api" as never), {
     misc: api.misc, item: api.item, jutsu: api.jutsu, pvpRank: api.pvpRank, useUtils: api.useUtils,
   });
@@ -42,11 +40,9 @@ beforeEach(() => {
 afterEach(async () => {
   cleanup();
   clients.splice(0).forEach((client) => client.clear());
-  // Radix restores focus after unmount using a timer.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 /** Keep the real query observer and dialog; control only API responses and artwork. */

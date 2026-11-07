@@ -11,6 +11,7 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
@@ -23,11 +24,9 @@ let reviewPosts: NonNullable<RouterOutputs["forum"]["administration"]>["posts"];
 let reviewRequests: { path: string; input: unknown }[];
 let canModerate: boolean;
 let hasMoreReviews: boolean;
-let scrollDescriptor: PropertyDescriptor | undefined;
 
 beforeEach(() => {
-  scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
+  installBrowserGlobals({ events: [], scrollIntoView: true });
   hasLocations = true;
   requests = [];
   response = { success: true, message: "Capabilities saved" };
@@ -52,8 +51,7 @@ afterEach(() => {
   cleanup();
   queryClient.clear();
   vi.restoreAllMocks();
-  if (scrollDescriptor) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  restoreBrowserGlobals();
 });
 
 /** Exercise the actual staff form with controlled application responses and the existing picker contract. */
