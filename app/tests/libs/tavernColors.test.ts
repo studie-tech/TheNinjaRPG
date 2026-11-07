@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  COST_TAVERN_COLOR_CHANGE,
-  getTavernColorChangeCost,
-  TavernColorPresets,
-} from "@/drizzle/constants";
+import { TavernColorPresets } from "@/drizzle/constants";
 import {
   resolveTavernColorClasses,
   TAVERN_COLOR_STYLES,
@@ -18,10 +14,6 @@ const LIGHT_TAVERN_SURFACE = parseHexColor("#ffffff")!;
 const DARK_TAVERN_SURFACE = parseHexColor("#334155")!;
 
 describe("tavern color styling", () => {
-  it.each([...TavernColorPresets])("charges the configured cost for %s", (preset) => {
-    expect(getTavernColorChangeCost(preset)).toBe(COST_TAVERN_COLOR_CHANGE);
-  });
-
   it.each(TavernColorPresets.filter((preset) => preset !== "DEFAULT"))(
     "styles %s usernames with bold light/dark text colors",
     (preset) => {

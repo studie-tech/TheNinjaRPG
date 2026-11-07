@@ -1640,8 +1640,6 @@ export const TavernColorPresets = [
   "LIME",
 ] as const;
 export type TavernColorPreset = (typeof TavernColorPresets)[number];
-export const getTavernColorChangeCost = (_color: TavernColorPreset) =>
-  COST_TAVERN_COLOR_CHANGE;
 export const BLOODLINE_ROLL_TYPES = [
   "NATURAL",
   "ITEM",
