@@ -1,13 +1,11 @@
 import { oddQHexDistance, oddQToCube } from "@/libs/hexgrid";
-import type {
-  NormalizedSectorAnchor,
-  NormalizedSectorTile,
-  SectorCoordinate,
-} from "@/libs/sector-map/types";
+import type { NormalizedSectorMap, SectorCoordinate } from "@/libs/sector-map/types";
 import {
   getNeighborCoordinates,
+  getSectorTile,
   getSectorTileKey,
   isCoordinateInSectorMap,
+  resolveSectorAnchor,
 } from "@/libs/sector-map/validation";
 
 export const VILLAGE_STRUCTURE_FOOTPRINT_RADIUS = 1;
@@ -87,12 +85,10 @@ export const getVillageWallFoundationKeys = (
   return keys;
 };
 
-interface VillageWallMap {
-  width: number;
-  height: number;
-  tiles?: NormalizedSectorTile[];
-  anchors?: NormalizedSectorAnchor[];
-}
+type VillageWallMap = Pick<
+  NormalizedSectorMap,
+  "width" | "height" | "tiles" | "anchors"
+>;
 
 const coordinateSort = (a: SectorCoordinate, b: SectorCoordinate) =>
   a.x - b.x || a.y - b.y;
@@ -101,11 +97,6 @@ const parseCoordinateKey = (key: string): SectorCoordinate => {
   const [x = "0", y = "0"] = key.split(",");
   return { x: Number(x), y: Number(y) };
 };
-
-const inBounds = (
-  map: Pick<VillageWallMap, "width" | "height">,
-  point: SectorCoordinate,
-) => isCoordinateInSectorMap(map, point);
 
 /**
  * Structure art occupies its center and first ring. The wall sits beyond one
@@ -117,14 +108,14 @@ export const isVillageStructurePlacementAllowed = (
   point: SectorCoordinate,
   margin = VILLAGE_STRUCTURE_BORDER_MARGIN,
 ) => {
-  if (!inBounds(map, point)) return false;
+  if (!isCoordinateInSectorMap(map, point)) return false;
   let frontier = [point];
   const visited = new Set([getSectorTileKey(point.x, point.y)]);
   for (let distance = 0; distance < margin; distance++) {
     const next: SectorCoordinate[] = [];
     for (const current of frontier) {
       for (const neighbor of getNeighborCoordinates(current)) {
-        if (!inBounds(map, neighbor)) return false;
+        if (!isCoordinateInSectorMap(map, neighbor)) return false;
         const key = getSectorTileKey(neighbor.x, neighbor.y);
         if (visited.has(key)) continue;
         visited.add(key);
@@ -273,19 +264,15 @@ export const selectVillageWallTowerVertices = (
   return chosen.map(({ vertex }) => vertex);
 };
 
-const chooseGateEdges = (
-  edges: VillageWallEdge[],
-  map: VillageWallMap,
-  tileByKey: Map<string, NormalizedSectorTile>,
-) => {
+const chooseGateEdges = (edges: VillageWallEdge[], map: VillageWallMap) => {
   const candidates = edges
     .map((edge, index) => ({ edge, index }))
     .filter(({ edge }) => {
       const outside = getNeighborCoordinates(edge.tile)[edge.direction];
       if (!outside) return false;
       return (
-        tileByKey.get(getSectorTileKey(edge.tile.x, edge.tile.y))?.zone === "road" &&
-        tileByKey.get(getSectorTileKey(outside.x, outside.y))?.zone === "road"
+        getSectorTile(map, edge.tile)?.zone === "road" &&
+        getSectorTile(map, outside)?.zone === "road"
       );
     });
 
@@ -315,7 +302,7 @@ const chooseGateEdges = (
     return;
   }
 
-  const spawn = map.anchors?.find((anchor) => anchor.key === "spawn.default");
+  const spawn = resolveSectorAnchor(map, "spawn.default");
   if (!spawn || edges.length === 0) return;
   const chosen = edges
     .map((edge, index) => ({
@@ -374,7 +361,7 @@ export const planVillageWalls = (
   for (const structure of structures) {
     if (structure.hasPage === 0) continue;
     const point = { x: structure.longitude, y: structure.latitude };
-    if (!inBounds(map, point)) continue;
+    if (!isCoordinateInSectorMap(map, point)) continue;
     structureKeys.add(getSectorTileKey(point.x, point.y));
   }
   const structurePoints = [...structureKeys]
@@ -404,10 +391,7 @@ export const planVillageWalls = (
     (a, b) => a.tile.x - b.tile.x || a.tile.y - b.tile.y || a.direction - b.direction,
   );
 
-  const tileByKey = new Map(
-    map.tiles?.map((tile) => [getSectorTileKey(tile.x, tile.y), tile]) ?? [],
-  );
-  chooseGateEdges(edges, map, tileByKey);
+  chooseGateEdges(edges, map);
 
   const verticesById = new Map<string, VillageWallVertex>();
   edges.forEach((edge, edgeIndex) => {
@@ -466,7 +450,7 @@ export const planVillageWallWindow = (
         !target ||
         target.map.width !== width ||
         target.map.height !== height ||
-        !inBounds(target.map, local)
+        !isCoordinateInSectorMap(target.map, local)
       )
         continue;
       let targetPlan = plans.get(target.sector);
