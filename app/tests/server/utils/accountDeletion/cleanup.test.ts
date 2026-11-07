@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as clans from "@/server/api/routers/clan";
-import * as staff from "@/server/api/routers/staff";
+import * as deleteUserData from "@/server/utils/accountDeletion/deleteUserData";
 import * as grant from "@/server/utils/purchases/grant";
 import { insertUsers, insertClans } from "../../../setup/factories";
 import {
@@ -22,13 +22,13 @@ describeWithDatabase("account deletion clan departure retries", () => {
     vi.spyOn(grant, "retireStoreUserId").mockResolvedValue(undefined);
     vi.spyOn(processors, "removeAccountProcessorData").mockResolvedValue(undefined);
     // Exercise clan cleanup without deleting the fixture character or calling processors.
-    vi.spyOn(staff, "deleteUser").mockResolvedValue(undefined);
+    vi.spyOn(deleteUserData, "deleteUser").mockResolvedValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());
 
   it("keeps a rejected shared deletion retryable instead of completing account cleanup", async () => {
     await insertUsers([{ userId: "departing" }]);
-    vi.spyOn(staff, "deleteUser").mockResolvedValueOnce({
+    vi.spyOn(deleteUserData, "deleteUser").mockResolvedValueOnce({
       success: false,
       message: "This AI is used by an active hunting session. Wait for it to finish.",
     });

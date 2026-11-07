@@ -270,7 +270,6 @@ import { fetchJutsuQueueSummary } from "@/queries/train";
 import { fetchVillage, fetchVillages } from "@/queries/village";
 import { removeFromSquad } from "@/routers/anbu";
 import { removeFromClan } from "@/routers/clan";
-import { deleteUser } from "@/server/api/routers/staff";
 import {
   baseServerResponse,
   cdnCachedProcedure,
@@ -282,6 +281,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
+import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import {
   actionReadinessResponse,
   prepareActionReadiness,
