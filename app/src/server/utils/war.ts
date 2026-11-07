@@ -65,7 +65,7 @@ import {
   updateWarMercenaryForFinishWarSettlement,
 } from "@/queries/war";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
-import { type DrizzleClient, drizzleDB } from "@/server/db";
+import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchWarRules, settleObjectiveWarSchedule } from "@/server/utils/objectiveWar";
 import { notifyWarVillages } from "@/server/utils/push/war";
@@ -76,7 +76,7 @@ import type { WarSettlement } from "@/validators/war";
 /** Close a war and change balances in one guarded statement; finish durable delivery receipts afterward. */
 export const handleWarEnd = async (
   activeWar: FetchActiveWarsReturnType,
-  client: DrizzleClient = drizzleDB,
+  client: DrizzleClient,
   options: {
     losingVillageId?: string;
     shrineBuilderId?: string;
@@ -115,10 +115,9 @@ export const handleWarEnd = async (
     const now = new Date();
     const endedAt = new Date(Math.min(now.getTime(), combatDeadline ?? now.getTime()));
     const isRaid = current.type === "WAR_RAID";
-    const canSurrenderRaid = isRaid && !shouldEndRaid(current, endedAt);
-    const losingVillageId =
-      !isRaid || canSurrenderRaid ? options.losingVillageId : undefined;
-    if (isRaid && !losingVillageId && !shouldEndRaid(current, endedAt)) return current;
+    const raidEnded = isRaid && shouldEndRaid(current, endedAt);
+    const losingVillageId = raidEnded ? undefined : options.losingVillageId;
+    if (isRaid && !raidEnded && !losingVillageId) return current;
     if (
       !isRaid &&
       !options.losingVillageId &&
