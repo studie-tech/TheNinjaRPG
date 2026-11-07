@@ -1002,6 +1002,13 @@
       "when": 1793971732245,
       "tag": "0143_backfill_sprite_small_urls",
       "breakpoints": false
+    },
+    {
+      "idx": 144,
+      "version": "5",
+      "when": 1794039583665,
+      "tag": "0144_seed_ai_action_animations",
+      "breakpoints": false
     }
   ]
 }
