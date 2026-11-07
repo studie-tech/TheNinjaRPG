@@ -188,6 +188,8 @@ export const createTravelActors = (
             orderB = movementOrder.get(b.key);
           return (
             Number(ownB) - Number(ownA) ||
+            Number(b.user.username === CREATOR_USERNAME) -
+              Number(a.user.username === CREATOR_USERNAME) ||
             Number(b.onScreen) - Number(a.onScreen) ||
             // Visible quest/hostile NPCs retain their controls within the same body budget.
             Number(Boolean(b.user.isNpc)) - Number(Boolean(a.user.isNpc)) ||
@@ -389,16 +391,7 @@ export const createTravelActors = (
     for (const [key, record] of records) {
       const target = record.recipe.user;
       const isHovered = key === hovered && !!viewer && target?.userId !== viewer.userId;
-      const alone =
-        isHovered &&
-        target &&
-        users.filter(
-          (candidate) =>
-            !candidate.isNpc &&
-            candidate.userId !== viewer?.userId &&
-            candidate.longitude === target.longitude &&
-            candidate.latitude === target.latitude,
-        ).length === 1;
+      const alone = isHovered && target && isAloneOnTile(users, target, viewer?.userId);
       const actions =
         isHovered && target && viewer
           ? travelActionAvailability(viewer, target, friendlyAttack, wars)
@@ -406,7 +399,12 @@ export const createTravelActors = (
       for (const entry of record.art?.entries ?? []) {
         if (!target || target.isNpc) continue;
         if (entry.description.kind === "attack")
-          entry.sprite.visible = !!(isHovered && alone && actions.attack);
+          // The creator's trial takes any number of challengers, however crowded the tile.
+          entry.sprite.visible = !!(
+            isHovered &&
+            (alone || target.username === CREATOR_USERNAME) &&
+            actions.attack
+          );
         if (entry.description.kind === "heal")
           entry.sprite.visible = !!(isHovered && alone && actions.heal);
         if (entry.description.kind === "info")
@@ -742,9 +740,12 @@ export const travelActorRecipes = (
         spread: shown.length > 1,
       });
     });
+    // Fights on the creator's tile are trials: a pin there would cover their attack control,
+    // and the Colosseum already lists them.
+    const hostsTrial = awake.some((user) => user.username === CREATOR_USERNAME);
     const battles = new Map<string, SectorUser[]>();
     for (const user of tileUsers)
-      if (user.status === "BATTLE" && user.battleId) {
+      if (!hostsTrial && user.status === "BATTLE" && user.battleId) {
         const fighters = battles.get(user.battleId) ?? [];
         fighters.push(user);
         battles.set(user.battleId, fighters);
@@ -818,6 +819,21 @@ export const travelActorRecipes = (
 };
 
 /** Viewer-specific hover controls use the same allegiance and masking contract as scouting. */
+/** Whether a player is the only awake one the viewer could mean on their tile. */
+export const isAloneOnTile = (
+  users: SectorUser[],
+  target: SectorUser,
+  viewerId?: string,
+) =>
+  users.filter(
+    (candidate) =>
+      !candidate.isNpc &&
+      candidate.status === "AWAKE" &&
+      candidate.userId !== viewerId &&
+      candidate.longitude === target.longitude &&
+      candidate.latitude === target.latitude,
+  ).length === 1;
+
 export const travelActionAvailability = (
   viewer: NonNullable<UserWithRelations>,
   target: SectorUser,

@@ -122,6 +122,7 @@ export default function ColosseumPage() {
                 "RANKED_PVP",
                 "SPARRING",
                 "RANKED_SPARRING",
+                "OVERWORLD",
               ].includes(type),
             ).map((type, i) => (
               <SelectItem key={`${type}-${i}`} value={type}>

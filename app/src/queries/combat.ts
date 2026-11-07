@@ -537,7 +537,9 @@ export const executeResultsForListOngoingBattles = (
             Battle.id, Battle.battleType, Battle.createdAt, Battle.round, Battle.updatedAt,
             JSON_EXTRACT(Battle.usersState, '$[*].userId') as userIds,
             JSON_EXTRACT(Battle.usersState, '$[*].username') as usernames,
-            JSON_EXTRACT(Battle.usersState, '$[*].avatar') as avatars
+            JSON_EXTRACT(Battle.usersState, '$[*].avatar') as avatars,
+            JSON_EXTRACT(Battle.usersState, '$[*].isSummon') as summons,
+            JSON_EXTRACT(Battle.usersState, '$[*].leftBattle') as departures
           FROM Battle
           LEFT JOIN UserRequest ON Battle.id = UserRequest.relatedId
             AND UserRequest.type = 'SPAR'
