@@ -878,6 +878,17 @@ export const combatRouter = createTRPCRouter({
             newBattle.round === originalRound &&
             newBattle.activeUserId === originalActiveUserId
           ) {
+            // An automatic tick can arrive after control returns to the player.
+            // Reconcile its snapshot quietly so the client stops driving that turn.
+            if (input.actionId === undefined) {
+              return {
+                updateClient: true,
+                battleUpdate: maskBattle(newBattle, suid),
+                result: null,
+                logEntries: [],
+                updatedQuestIds: [],
+              };
+            }
             return { notification: `Battle state was not changed` };
           }
 

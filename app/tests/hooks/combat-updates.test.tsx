@@ -110,6 +110,27 @@ const respond = async (version = 2) => {
   await waitFor(() => expect(queryClient.isMutating()).toBe(0));
 };
 
+it("settles an automatic tick after taking control without another battle read", async () => {
+  const autoBattle = {
+    ...stateAt(1).battle!,
+    usersState: [{ userId: "viewer", isAutoCombat: true }],
+  } as BattleState["battle"];
+  mount(stateAt(1, { battle: autoBattle }));
+  await beginAction();
+  const manualBattle = {
+    ...autoBattle!,
+    version: 2,
+    usersState: [{ userId: "viewer", isAutoCombat: false }],
+  } as NonNullable<BattleState["battle"]>;
+  await act(async () => finishAction({ ...actionResponse(2), battleUpdate: manualBattle }));
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  expect(latestState.isPending).toBe(false);
+  expect(latestState.battle?.usersState[0]?.isAutoCombat).toBe(false);
+  const key = getQueryKey(testApi.combat.getBattle, { battleId: "battle" }, "query");
+  await waitFor(() => expect(queryClient.getQueryData<BattleState>(key)?.battle?.usersState[0]?.isAutoCombat).toBe(false));
+  expect(reads).toHaveLength(1);
+});
+
 it("avoids the extra getBattle request when the actor broadcast precedes the same response version", async () => {
   mount();
   await beginAction();
