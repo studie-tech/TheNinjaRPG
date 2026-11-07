@@ -113,6 +113,44 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
       slot: 0,
     });
   };
+  /** Every user queued, with both sides of the `q` lobby filled. */
+  const queueFullLobby = async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "QUEUED" });
+    await db.insert(mpvpBattleUser).values([
+      {
+        id: "leader-q",
+        clanBattleId: "q",
+        userId: "leader",
+        side: "ATTACKER",
+        slot: 0,
+        createdAt: new Date(0),
+      },
+      {
+        id: "member-q",
+        clanBattleId: "q",
+        userId: "member",
+        side: "ATTACKER",
+        slot: 1,
+        createdAt: new Date(1),
+      },
+      {
+        id: "enemy-q",
+        clanBattleId: "q",
+        userId: "enemy",
+        side: "DEFENDER",
+        slot: 0,
+        createdAt: new Date(0),
+      },
+    ]);
+  };
+  const depart = (
+    caller: ReturnType<typeof clanRouter.createCaller>,
+    operation: "leave" | "kick",
+  ) =>
+    operation === "leave"
+      ? caller.leaveClanBattle({ clanBattleId: "q" })
+      : caller.kickFromClanBattle({ clanBattleId: "q", targetId: "member", clanId: "a" });
 
   it("keeps existing queue entries claimed when applying the migration", async () => {
     const db = await getTestDatabase();
@@ -430,14 +468,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
           operation === "leave" ? "member" : "leader",
           db,
         );
-        const result =
-          operation === "leave"
-            ? await caller.leaveClanBattle({ clanBattleId: "q" })
-            : await caller.kickFromClanBattle({
-                clanBattleId: "q",
-                targetId: "member",
-                clanId: "a",
-              });
+        const result = await depart(caller, operation);
         expect(result.success).toBe(true);
         expect(await storedUser()).toMatchObject({ status: "AWAKE", battleId: null });
         expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(
@@ -485,14 +516,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
         operation === "leave" ? "member" : "leader",
         client,
       );
-      const result =
-        operation === "leave"
-          ? await caller.leaveClanBattle({ clanBattleId: "q" })
-          : await caller.kickFromClanBattle({
-              clanBattleId: "q",
-              targetId: "member",
-              clanId: "a",
-            });
+      const result = await depart(caller, operation);
       expect(result.success).toBe(true);
       expect(await storedUser()).toMatchObject({ status: "QUEUED", battleId: null });
       await callerForDatabase(pvpRankRouter, "member", db).checkRankedPvpMatches();
@@ -506,33 +530,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
 
   it("preserves a newer queue when deletion races the final surplus-player wake", async () => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ status: "QUEUED" });
-    await db.insert(mpvpBattleUser).values([
-      {
-        id: "leader-q",
-        clanBattleId: "q",
-        userId: "leader",
-        side: "ATTACKER",
-        slot: 0,
-        createdAt: new Date(0),
-      },
-      {
-        id: "member-q",
-        clanBattleId: "q",
-        userId: "member",
-        side: "ATTACKER",
-        slot: 1,
-        createdAt: new Date(1),
-      },
-      {
-        id: "enemy-q",
-        clanBattleId: "q",
-        userId: "enemy",
-        side: "DEFENDER",
-        slot: 0,
-        createdAt: new Date(0),
-      },
-    ]);
+    await queueFullLobby();
     const client = beforeStatements(db, userData, [
       async () => {},
       async () => {
@@ -559,33 +557,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
 
   it("retries a deadlocked surplus wake without tearing down started clan combat", async () => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ status: "QUEUED" });
-    await db.insert(mpvpBattleUser).values([
-      {
-        id: "leader-q",
-        clanBattleId: "q",
-        userId: "leader",
-        side: "ATTACKER",
-        slot: 0,
-        createdAt: new Date(0),
-      },
-      {
-        id: "member-q",
-        clanBattleId: "q",
-        userId: "member",
-        side: "ATTACKER",
-        slot: 1,
-        createdAt: new Date(1),
-      },
-      {
-        id: "enemy-q",
-        clanBattleId: "q",
-        userId: "enemy",
-        side: "DEFENDER",
-        slot: 0,
-        createdAt: new Date(0),
-      },
-    ]);
+    await queueFullLobby();
     const client = beforeStatements(db, userData, [
       async () => {},
       async () => {
