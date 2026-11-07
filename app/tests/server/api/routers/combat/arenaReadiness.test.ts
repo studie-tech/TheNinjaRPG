@@ -3,7 +3,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { UserCache } from "@/deltas/profile";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import type { inferProcedureInput, inferProcedureOutput } from "@trpc/server";
+import type { inferProcedureInput } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
@@ -32,24 +32,14 @@ import {
 } from "../../../../setup/factories";
 import { queueEnergy, queueMasteries } from "../../../../setup/queues";
 import { beforeStatements } from "../../../../setup/statements";
-import {
-  describeWithDatabase, getTestDatabase, recordQueries, resetTables,
-} from "../../../../setup/testDatabase";
+import { describeWithDatabase, getTestDatabase, recordQueries, resetTables, resolverOf } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
 
 const userId = "arena-ready";
 const aiId = "arena-ai";
-type ArenaResolver = (options: {
-  ctx: { drizzle: DrizzleClient; userId: string };
-  input: inferProcedureInput<typeof combatRouter.startArenaBattle>;
-  type: "mutation";
-  path: string;
-}) => Promise<inferProcedureOutput<typeof combatRouter.startArenaBattle>>;
 
 // Exercise the full SQL resolver; authentication and Redis middleware have separate suites.
-const arenaResolver = (combatRouter.startArenaBattle._def as unknown as {
-  resolver: ArenaResolver;
-}).resolver;
+const arenaResolver = resolverOf(combatRouter.startArenaBattle);
 const launch = (client: DrizzleClient, input: inferProcedureInput<typeof combatRouter.startArenaBattle> = { aiId }) =>
   withAfterTasks({ start: () => withRequestScope(() => arenaResolver({
     ctx: { drizzle: client, userId }, input, type: "mutation", path: "combat.startArenaBattle",

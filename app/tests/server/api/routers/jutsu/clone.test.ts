@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
 import { actionLog, jutsu } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
+import { resolverOf } from "../../../../setup/testDatabase";
 
 const source = {
   id: "source",
@@ -30,12 +31,7 @@ const setup = (
   const insert = vi.fn((table: object) => ({
     values: table === actionLog ? logValues : values,
   }));
-  const { resolver } = jutsuRouter._def.procedures.clone._def as unknown as {
-    resolver: (options: {
-      ctx: { drizzle: object; userId: string };
-      input: { id: string };
-    }) => Promise<{ success: boolean; message: string }>;
-  };
+  const resolver = resolverOf(jutsuRouter.clone);
   const clone = () =>
     resolver({
       ctx: {

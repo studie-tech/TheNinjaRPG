@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { ADDITIONAL_MISSION_REWARD_MULTIPLIER, QuestRewardMetrics, type QuestType } from "@/drizzle/constants";
+import { ADDITIONAL_MISSION_REWARD_MULTIPLIER, QuestRewardMetrics } from "@/drizzle/constants";
 import { dataRouter } from "@/routers/data";
 import { collapseRewards } from "@/libs/rewards";
 import { getRewardArray } from "@/libs/objectives";
 import { masteryQuestTemplates } from "../setup/mastery";
 import { rewardOwnership, rewardUser as makeUser } from "../setup/quest";
+import { resolverOf } from "../setup/testDatabase";
 import { QuestValidator, SimpleObjective } from "@/validators/objectives";
 import { villageMissionContentError } from "@/validators/villageMission";
 import { getReward, postProcessRewards } from "@/libs/quest";
@@ -19,12 +20,7 @@ import type { QuestContentType } from "@/validators/objectives";
 const packageReward = (id: string, data: object) => ({ id, packageId: `source-${id}`, name: `Package ${id}`, description: "", rewards: ObjectiveReward.parse(data) });
 const ownership = rewardOwnership();
 // These calculation tests supply a query stub and exercise the resolver without Redis middleware.
-const { resolver: questRewardStatistics } = dataRouter._def.procedures.getQuestRewardStatistics._def as unknown as {
-  resolver: (options: {
-    ctx: { drizzle: object };
-    input: { reward: (typeof QuestRewardMetrics)[number]; questTypes?: QuestType[] };
-  }) => Promise<{ value: number }[]>;
-};
+const questRewardStatistics = resolverOf(dataRouter.getQuestRewardStatistics);
 
 // Exercise the editor's actual copy handler, including the payload it sends to validation.
 const copyExpression = readFileSync(

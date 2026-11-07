@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import type { UserRole } from "@/drizzle/constants";
 import { logsRouter } from "@/routers/logs";
+import { resolverOf } from "../../../setup/testDatabase";
 
 type ContentChanges = ReturnType<typeof logsRouter.createCaller>["getContentChanges"];
 type Input = Parameters<ContentChanges>[0];
@@ -51,12 +52,7 @@ const setup = (
     },
   };
   // Query planning and masking use the real resolver and fetchUser with a local database stub.
-  const { resolver } = logsRouter.getContentChanges._def as unknown as {
-    resolver: (options: {
-      ctx: { drizzle: typeof drizzle; userId: string | null };
-      input: Input;
-    }) => ReturnType<ContentChanges>;
-  };
+  const resolver = resolverOf(logsRouter.getContentChanges);
   const query = (input: Partial<Input> = {}) =>
     resolver({
       ctx: {

@@ -12,6 +12,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { describe } from "bun:test";
+import type { AnyProcedure, inferProcedureInput, inferProcedureOutput } from "@trpc/server";
 import { getTableName, type Table } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
@@ -316,6 +317,22 @@ export const closeTestDatabase = async () => {
   pool = undefined;
   client = undefined;
 };
+
+/**
+ * A procedure's resolver without its middleware or input parsing, for suites that exercise
+ * the handler itself on an explicit context.
+ */
+export const resolverOf = <Procedure extends AnyProcedure>(procedure: Procedure) =>
+  (
+    procedure._def as unknown as {
+      resolver: (options: {
+        ctx: object;
+        input: inferProcedureInput<Procedure>;
+        type?: string;
+        path?: string;
+      }) => Promise<inferProcedureOutput<Procedure>>;
+    }
+  ).resolver;
 
 /**
  * Build a tRPC caller for `router`, backed by the throwaway database and acting as `userId`.

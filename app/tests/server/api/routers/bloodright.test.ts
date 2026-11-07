@@ -8,7 +8,7 @@ import { bloodlineRouter, updateBloodline } from "@/server/api/routers/bloodline
 import { staffRouter } from "@/server/api/routers/staff";
 import { bloodrightRouter } from "@/server/api/routers/bloodright";
 import { calcEnergy } from "@/libs/profile";
-import { callerForDatabase } from "../../../setup/testDatabase";
+import { callerForDatabase, resolverOf } from "../../../setup/testDatabase";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { requireUser } from "../../../setup/userReads";
@@ -17,9 +17,7 @@ import { describeWithDatabase, getTestDatabase, resetTables } from "../../../set
 const userId = "bloodright-player";
 const invoke = async (name: "purchase" | "refund" | "reset", input?: unknown) => {
   const db = await getTestDatabase();
-  const procedure = bloodrightRouter._def.procedures[name];
-  const { resolver } = procedure._def as unknown as { resolver: (args: { ctx: { drizzle: typeof db; userId: string }; input: unknown }) => Promise<{ success: boolean }> };
-  return resolver({ ctx: { drizzle: db, userId }, input });
+  return resolverOf(bloodrightRouter[name])({ ctx: { drizzle: db, userId }, input: input as never });
 };
 const read = () => requireUser(userId);
 const tier = (id: string, tier = 1, requiredSkillIds: string[] = []) => ({ id, name: id, image: "", description: "Bloodright fixture", effects: [], tier, requiredSkillIds, pathType: "BLOODRIGHT" as const, bloodlineId: "line", seichiSilverCost: 100 });
@@ -81,7 +79,7 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     expect((await invoke("reset")).success).toBe(true);
     expect((await read()).reputationPoints).toBe(100);
     const db = await getTestDatabase();
-    const { resolver } = skillTreeRouter._def.procedures.resetSkillPoints._def as unknown as { resolver: (args: {ctx: {drizzle: typeof db; userId: string}; input: undefined}) => Promise<{success: boolean}> };
+    const resolver = resolverOf(skillTreeRouter.resetSkillPoints);
     expect((await resolver({ctx: {drizzle: db, userId}, input: undefined})).success).toBe(true);
     expect((await read()).reputationPoints).toBe(70);
     expect((await read()).monthlySkillResets.count).toBe(2);
@@ -142,7 +140,7 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
   it("supports repeated staff resets after allowance initialization", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ role: "OWNER", staffAccount: true }).where(eq(userData.userId, userId));
-    const { resolver } = skillTreeRouter._def.procedures.resetSkillPoints._def as unknown as { resolver: (args: {ctx: {drizzle: typeof db; userId: string}; input: undefined}) => Promise<{success: boolean}> };
+    const resolver = resolverOf(skillTreeRouter.resetSkillPoints);
     for (let i = 0; i < 2; i++) expect((await resolver({ctx: {drizzle: db, userId}, input: undefined})).success).toBe(true);
     expect((await read()).reputationPoints).toBe(100);
     expect((await read()).monthlySkillResets.count).toBe(0);
@@ -151,10 +149,10 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     const db = await getTestDatabase();
     await db.update(userData).set({role: "OWNER"}).where(eq(userData.userId, userId));
     const root = await db.query.skillTree.findFirst({where: eq(skillTree.id, "root")});
-    const update = skillTreeRouter._def.procedures.update._def as unknown as { resolver: (args: {ctx: {drizzle: typeof db; userId: string}; input: unknown}) => Promise<{success: boolean}> };
-    const deletion = skillTreeRouter._def.procedures.delete._def as unknown as { resolver: (args: {ctx: {drizzle: typeof db; userId: string}; input: unknown}) => Promise<{success: boolean}> };
-    expect((await update.resolver({ctx: {drizzle: db, userId}, input: {id: "root", data: {...root, tier: 5}}})).success).toBe(false);
-    expect((await deletion.resolver({ctx: {drizzle: db, userId}, input: {id: "root"}})).success).toBe(false);
+    const update = resolverOf(skillTreeRouter.update);
+    const deletion = resolverOf(skillTreeRouter.delete);
+    expect((await update({ctx: {drizzle: db, userId}, input: {id: "root", data: {...root, tier: 5}} as never})).success).toBe(false);
+    expect((await deletion({ctx: {drizzle: db, userId}, input: {id: "root"}})).success).toBe(false);
     expect(await db.query.skillTree.findFirst({where: eq(skillTree.id, "root")})).toBeDefined();
   });
   it("rejects tiers of another bloodline and changes during battle", async () => {
@@ -169,13 +167,13 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, userId));
     await db.update(skillTree).set({ pathType: "SKILL", bloodlineId: null });
     await db.update(skillTree).set({ tier: 5 }).where(eq(skillTree.id, "root"));
-    const update = skillTreeRouter._def.procedures.update._def as unknown as { resolver: (args: {ctx: {drizzle: typeof db; userId: string}; input: unknown}) => Promise<{success: boolean}> };
+    const update = resolverOf(skillTreeRouter.update);
     for (const id of ["root", "child"]) {
       const skill = await db.query.skillTree.findFirst({ where: eq(skillTree.id, id) });
-      expect((await update.resolver({ ctx: { drizzle: db, userId }, input: { id, data: { ...skill, description: "Updated description" } } })).success).toBe(true);
+      expect((await update({ ctx: { drizzle: db, userId }, input: { id, data: { ...skill, description: "Updated description" } } as never })).success).toBe(true);
     }
     const root = await db.query.skillTree.findFirst({ where: eq(skillTree.id, "root") });
-    expect((await update.resolver({ ctx: { drizzle: db, userId }, input: { id: "root", data: { ...root, tier: 6 } } })).success).toBe(false);
+    expect((await update({ ctx: { drizzle: db, userId }, input: { id: "root", data: { ...root, tier: 6 } } as never })).success).toBe(false);
   });
   it("rejects bloodline swaps and natural removals during battle without refunding", async () => {
     const db = await getTestDatabase();
@@ -183,8 +181,7 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     const awake = await read();
     await db.update(userData).set({ status: "BATTLE" }).where(eq(userData.userId, userId));
     for (const name of ["removeBloodline", "swapBloodline"] as const) {
-      const { resolver } = bloodlineRouter._def.procedures[name]._def as unknown as { resolver: (args: { ctx: { drizzle: typeof db; userId: string }; input: unknown }) => Promise<{ success: boolean; message: string }> };
-      const result = await resolver({ ctx: { drizzle: db, userId }, input: name === "swapBloodline" ? { bloodlineId: "line" } : undefined });
+      const result = await resolverOf(bloodlineRouter[name])({ ctx: { drizzle: db, userId }, input: (name === "swapBloodline" ? { bloodlineId: "line" } : undefined) as never });
       expect(result).toMatchObject({ success: false, message: "You cannot change bloodline during battle" });
     }
     await expect(updateBloodline(db, awake, null, 0, "Bloodline Removed")).rejects.toThrow("Bloodline or battle status changed. Refresh and try again");
@@ -209,7 +206,7 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     await invoke("purchase", { skillId: "root" });
     await db.insert(userData).values({ userId: "clone-target", username: "CloneTarget", gender: "Other", bloodlineId: "other-line", seichiSilver: 250, bloodright: [{ skillId: "target-tier", cost: 77 }], bloodrightSpent: 77 });
     stubProfile("fetchAttributes", async () => []);
-    const { resolver } = staffRouter._def.procedures.cloneUserForDebug._def as unknown as { resolver: (args: { ctx: { drizzle: typeof db; userId: string }; input: { userId: string } }) => Promise<{ success: boolean }> };
+    const resolver = resolverOf(staffRouter.cloneUserForDebug);
     for (let i = 0; i < 2; i++) {
       expect((await resolver({ ctx: { drizzle: db, userId }, input: { userId: "clone-target" } })).success).toBe(true);
       expect(await read()).toMatchObject({ bloodlineId: "other-line", seichiSilver: 250, bloodright: [{ skillId: "target-tier", cost: 77 }], bloodrightSpent: 77 });
@@ -223,7 +220,7 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     await invoke("purchase", { skillId: "root" });
     await db.update(userData).set({ role: "OWNER", isAi: true, status: "BATTLE" }).where(eq(userData.userId, userId));
     await db.insert(userData).values({ userId: "awake-ai", username: "AwakeAI", gender: "Other", isAi: true, bloodlineId: "line", seichiSilver: 250, bloodright: [{ skillId: "root", cost: 77 }], bloodrightSpent: 77 });
-    const { resolver } = bloodlineRouter._def.procedures.delete._def as unknown as { resolver: (args: { ctx: { drizzle: typeof db; userId: string }; input: { id: string } }) => Promise<{ success: boolean }> };
+    const resolver = resolverOf(bloodlineRouter.delete);
     expect((await resolver({ ctx: { drizzle: db, userId }, input: { id: "line" } })).success).toBe(true);
     expect(await db.query.bloodline.findFirst({ where: eq(bloodline.id, "line") })).toBeUndefined();
     expect(await read()).toMatchObject({ bloodlineId: null, seichiSilver: 900, bloodright: [{ skillId: "root", cost: 100 }], bloodrightSpent: 100 });

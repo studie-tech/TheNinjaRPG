@@ -8,6 +8,7 @@ import { dataRouter } from "@/server/api/routers/data";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
+import { resolverOf } from "../../../setup/testDatabase";
 
 const excluded: UserRole[] = [
   "USER",
@@ -60,14 +61,7 @@ const invoke = async (
   input?: unknown,
   userId: string | null = "viewer",
 ) => {
-  const procedure = skillTreeRouter._def.procedures[name];
-  const { resolver } = procedure._def as unknown as {
-    resolver: (options: {
-      ctx: { drizzle: object; userId: string | null };
-      input: unknown;
-    }) => Promise<unknown>;
-  };
-  return resolver({ ctx: { drizzle, userId }, input });
+  return resolverOf(skillTreeRouter[name])({ ctx: { drizzle, userId }, input: input as never }) as Promise<unknown>;
 };
 
 const setup = (role: UserRole | null) => {
@@ -243,13 +237,7 @@ describe("hidden skill-tree permissions", () => {
     "enforces balance statistics visibility for %s when hidden is omitted or requested",
     async (role) => {
       const { drizzle, skills } = setup(role);
-      const { resolver } = dataRouter._def.procedures
-        .getSkillTreeEffectsBalanceStatistics._def as unknown as {
-        resolver: (options: {
-          ctx: { drizzle: object; userId: string | null };
-          input: { hidden?: boolean };
-        }) => Promise<unknown>;
-      };
+      const resolver = resolverOf(dataRouter.getSkillTreeEffectsBalanceStatistics);
       const allowed = role !== null && !excluded.includes(role);
       const project = ({
         id,
@@ -301,13 +289,7 @@ describe("hidden skill-tree permissions", () => {
             ]),
         }),
       }));
-      const { resolver } = dataRouter._def.procedures.getSkillTreeBalanceStatistics
-        ._def as unknown as {
-        resolver: (options: {
-          ctx: { drizzle: object; userId: string | null };
-          input: { minCount: number };
-        }) => Promise<{ skillId: string; userCount: number }[]>;
-      };
+      const resolver = resolverOf(dataRouter.getSkillTreeBalanceStatistics);
       const allowed = role !== null && !excluded.includes(role);
       const rows = await resolver({
         ctx: { drizzle: { ...drizzle, select }, userId: role ? "viewer" : null },

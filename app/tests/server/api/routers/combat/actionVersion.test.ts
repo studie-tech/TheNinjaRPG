@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { inferProcedureInput, inferProcedureOutput } from "@trpc/server";
+import type { inferProcedureInput } from "@trpc/server";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import type { z } from "zod";
@@ -10,18 +10,11 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { makeBattleUser, makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
+import { resolverOf } from "../../../../setup/testDatabase";
 
 type ActionInput = inferProcedureInput<typeof combatRouter.performAction>;
-type ActionResolver = (options: {
-  ctx: { drizzle: DrizzleClient; userId: string; waitForRateLimit: () => Promise<void> };
-  input: ActionInput;
-  type: "mutation";
-  path: string;
-}) => Promise<inferProcedureOutput<typeof combatRouter.performAction>>;
 
-const resolver = (combatRouter.performAction._def as unknown as {
-  resolver: ActionResolver;
-}).resolver;
+const resolver = resolverOf(combatRouter.performAction);
 const schema = combatRouter.performAction._def.inputs[0] as z.ZodType<ActionInput>;
 const manual = { battleId: "version-battle", actionId: "wait", longitude: 0, latitude: 0 };
 
