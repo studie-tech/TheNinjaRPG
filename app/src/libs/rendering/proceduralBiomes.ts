@@ -98,7 +98,7 @@ export const getProceduralTerrain = (
   hex: Pick<TerrainHex, "level">,
   biome: CombatBiome,
 ) => {
-  // Battle snapshots may carry no biome; those render as the default.
+  // A battle without a biome renders as the default.
   const { below, top } = BIOME_LEVEL_BANDS[biome] ?? BIOME_LEVEL_BANDS.default;
   const band = below.find(([limit]) => hex.level < limit);
   const [key, variant] = band ? [band[1], band[2]] : top;
