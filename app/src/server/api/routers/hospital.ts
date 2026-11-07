@@ -116,7 +116,7 @@ export const hospitalRouter = createTRPCRouter({
       if (isSelfHeal) t = u;
       // Derived
       const pools = calcHospitalHealPools(u, isSelfHeal);
-      const { toHeal } = calcHowMuchToHeal(u, t, input.healPercentage, pools);
+      const toHeal = calcHowMuchToHeal(t, input.healPercentage, pools);
       const chakraCost = calcHealthToChakra(u, toHeal);
       // Calculate experience gain, capped at 4 million. Self-heals award half.
       const baseExpGain = calcHospitalHealExperience({

@@ -91,10 +91,9 @@ describe("calcHospitalHealPools", () => {
       curStamina: 100,
       maxStamina: 100,
     } as UserData;
-    expect(calcHowMuchToHeal(legendary, target, 100).toHeal).toBe(4000);
+    expect(calcHowMuchToHeal(target, 100, calcMedninHealablePool(legendary))).toBe(4000);
     expect(
-      calcHowMuchToHeal(legendary, target, 100, calcHospitalHealPools(legendary, true))
-        .toHeal,
+      calcHowMuchToHeal(target, 100, calcHospitalHealPools(legendary, true)),
     ).toBe(0);
   });
 });
