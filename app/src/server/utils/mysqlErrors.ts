@@ -28,7 +28,13 @@ export const isDatabaseFailure = (error: unknown): boolean =>
   someErrorInChain(
     error,
     (current) =>
-      current instanceof DrizzleQueryError || current instanceof DatabaseError,
+      current instanceof DrizzleQueryError ||
+      current instanceof DatabaseError ||
+      // Next's runtime bundles can share a cached client but have separate error classes.
+      ("query" in current &&
+        typeof current.query === "string" &&
+        "params" in current &&
+        Array.isArray(current.params)),
   );
 
 /**

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { createRequire } from "node:module";
 import { DatabaseError } from "@planetscale/database";
 import { TRPCError } from "@trpc/server";
 import { DrizzleQueryError, eq } from "drizzle-orm";
@@ -104,10 +105,25 @@ describe("tRPC errorFormatter", () => {
     );
   });
 
+  it("hides statements from another runtime copy of Drizzle", () => {
+    const { DrizzleQueryError: OtherDrizzleQueryError } = createRequire(import.meta.url)(
+      "drizzle-orm/errors",
+    ) as { DrizzleQueryError: typeof DrizzleQueryError };
+    const failure = new OtherDrizzleQueryError(STATEMENT, [SECRET], new TypeError("fetch failed"));
+    expect(failure).not.toBeInstanceOf(DrizzleQueryError);
+    expect(format(failure).message).toBe(DATABASE_FAILURE_MESSAGE);
+    expect(format(new Error(failure.message, { cause: failure })).message).toBe(
+      DATABASE_FAILURE_MESSAGE,
+    );
+  });
+
   it("leaves errors without a database cause alone", () => {
     expect(format(new Error("plain")).message).toBe("plain");
     expect(format(new TRPCError({ code: "FORBIDDEN", message: "Not yours" })).message).toBe(
       "Not yours",
+    );
+    expect(format(Object.assign(new Error("plain"), { query: "search", params: "input" })).message).toBe(
+      "plain",
     );
   });
 
