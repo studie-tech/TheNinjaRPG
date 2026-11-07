@@ -536,14 +536,19 @@ export const battleObjectiveFields = {
   applyDebuffs: questStartingEffectsSchema(questDebuffTypes),
 };
 
+/** Scene shown behind a quest or objective. */
+const sceneFields = {
+  sceneBackground: z.string().prefault(""),
+  sceneCharacters: z.array(z.string()).prefault([]),
+};
+
 export const baseObjectiveFields = {
   ...mapLocationFields,
   id: z.string(),
   description: z.string().prefault(""),
   successDescription: z.string().prefault(""),
   nextObjectiveId: z.string().optional(),
-  sceneBackground: z.string().prefault(""),
-  sceneCharacters: z.array(z.string()).prefault([]),
+  ...sceneFields,
   // Default not set, but used for e.g. dialog objectives
   sector: z.coerce.number().optional(),
   longitude: z.coerce.number().optional(),
@@ -954,8 +959,7 @@ export const QuestValidatorRawSchema = z.object({
     objectives: z.array(AllObjectives),
     reward: QuestReward,
     ...questRewardModeFields,
-    sceneBackground: z.string().prefault(""),
-    sceneCharacters: z.array(z.string()).prefault([]),
+    ...sceneFields,
   }),
   hidden: z.coerce.boolean(),
   teamEnabled: z.boolean().prefault(false),
@@ -1242,16 +1246,12 @@ export type ZodQuestType = z.infer<typeof QuestValidator>;
 // - Reward fields at top level (for easy form binding)
 // - Scene fields at top level (for easy form binding)
 // - The superRefine validations
-export const QuestFormRawSchema = QuestValidatorRawSchema.extend(
-  QuestReward.shape,
-).extend(
-  z.object({
-    ...questRunFields,
-    ...questRewardModeFields,
-    sceneBackground: z.string().prefault(""),
-    sceneCharacters: z.array(z.string()).prefault([]),
-  }).shape,
-);
+export const QuestFormRawSchema = QuestValidatorRawSchema.extend({
+  ...QuestReward.shape,
+  ...questRunFields,
+  ...questRewardModeFields,
+  ...sceneFields,
+});
 /**
  * Normalize flattened run settings and milestone-relevant rewards before shared validation.
  * Clear run settings hidden by a quest-type change.
