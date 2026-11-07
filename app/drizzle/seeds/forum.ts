@@ -66,12 +66,8 @@ const boards = [
   },
 ];
 
-// Bookkeeping
-let counter = 0;
-const total = boards.length;
-
 /** Add a missing built-in board without overwriting staff-managed configuration on existing boards. */
-const upsertBoard = async (
+const insertMissingBoard = async (
   client: DrizzleClient,
   board: { name: string; summary: string; section: keyof typeof sections },
 ) => {
@@ -80,21 +76,13 @@ const upsertBoard = async (
   const section = sections[board.section];
   await client.insert(forumSection).values({ ...section, policy: {} }).onDuplicateKeyUpdate({ set: { id: section.id } });
   await client.insert(forumBoard).values({ id: nanoid(), name: board.name, summary: board.summary, sectionId: section.id, policy: board.name === "News" ? { create: "STAFF" } : {} });
-  // Progress
-  counter++;
-  process.stdout.moveCursor?.(0, -1);
-  process.stdout.clearLine?.(1);
-  console.log(`Syncing board ${counter}/${total}`);
 };
 
 /** Ensure built-in destinations exist while preserving their stable migrated hierarchy. */
 export const seedForum = async (client: DrizzleClient) => {
   console.log("\nSyncing forum boards...\n");
-  const promises: Promise<void>[] = [];
   for (const board of boards) {
-    promises.push(upsertBoard(client, board));
+    await insertMissingBoard(client, board);
   }
-  await Promise.all(promises).then(() => {
-    console.log("Done syncing boards!");
-  });
+  console.log("Done syncing boards!");
 };
