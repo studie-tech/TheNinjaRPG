@@ -44,7 +44,7 @@ import type {
   CompleteBattle,
 } from "@/libs/combat/types";
 import { getItem, getJutsu } from "@/libs/combat/util";
-import { claimVillageMissionCombatEvents } from "@/libs/combat/villageMission";
+import { claimVillageMissionPvpKills } from "@/libs/combat/villageMission";
 import { getPvpFarmActivityReductionSeconds } from "@/libs/farming";
 import { getJutsuMaxLevel } from "@/libs/jutsuProgression";
 import { allocateMasteryGains } from "@/libs/masteryProgression";
@@ -187,8 +187,11 @@ export const updateBattle = async (
       : null;
   }
   if (result) {
-    result.villageMissionPvpKills =
-      claimVillageMissionCombatEvents(newBattle, userId, result).pvp_kills ?? 0;
+    result.villageMissionPvpKills = claimVillageMissionPvpKills(
+      newBattle,
+      userId,
+      result,
+    );
   }
   // Calculations
   // raidBossDefeated: the boss specifically died (kill).
