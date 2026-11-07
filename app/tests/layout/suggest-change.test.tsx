@@ -1,9 +1,8 @@
 import { createToastMock } from "../setup/toastMock";
+import { stubDialog } from "../setup/dialog";
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import type { HTMLAttributes, ReactNode } from "react";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as dialogComponents from "@/components/ui/dialog";
 import * as UserContext from "@/utils/UserContext";
 
 type MutationOptions = { onError?: (err: { message: string; data?: unknown }) => void };
@@ -30,27 +29,11 @@ vi.mock("@radix-ui/react-use-size", () => ({
 
 const { SuggestChange } = await import("@/layout/SuggestChange");
 
-const dialogMocks = {
-  Dialog: ({ open, children }: { open?: boolean; children: ReactNode }) =>
-    open ? children : null,
-  DialogContent: ({ children }: HTMLAttributes<HTMLDivElement>) => (
-    <div role="dialog">{children}</div>
-  ),
-  DialogHeader: ({ children }: HTMLAttributes<HTMLDivElement>) => <div>{children}</div>,
-  DialogFooter: ({ children }: HTMLAttributes<HTMLDivElement>) => <div>{children}</div>,
-  DialogTitle: ({ children }: HTMLAttributes<HTMLHeadingElement>) => <h2>{children}</h2>,
-};
-
 const spies: { mockRestore: () => void }[] = [];
+let restoreDialog: () => void;
 beforeEach(() => {
   mutate.mockClear();
-  for (const [name, implementation] of Object.entries(dialogMocks)) {
-    spies.push(
-      vi
-        .spyOn(dialogComponents, name as keyof typeof dialogMocks)
-        .mockImplementation(implementation as never),
-    );
-  }
+  restoreDialog = stubDialog();
   spies.push(
     vi
       .spyOn(UserContext, "useRequiredUserData")
@@ -60,6 +43,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   for (const spy of spies.splice(0)) spy.mockRestore();
+  restoreDialog();
 });
 
 // THENINJARPG-33K: a 9-character rationale ("BL Rework") reached the server, which

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import type { HTMLAttributes, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
 import { AUTO_ATTACK_SETTINGS, readAutoAttackSetting } from "@/hooks/autoAttack";
@@ -10,48 +10,14 @@ import Modal, {
 import { NumberInput } from "@/components/ui/number-input";
 import AutoAttackModal from "@/layout/AutoAttackModal";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { stubDialog } from "../setup/dialog";
 
-const dialogMocks = {
-  Dialog: ({ open, children }: { open?: boolean; children: ReactNode }) =>
-    open ? children : null,
-  DialogContent: ({
-    className,
-    children,
-    id,
-  }: HTMLAttributes<HTMLDivElement> & { id?: string }) => (
-    <div role="dialog" id={id} className={className}>
-      {children}
-    </div>
-  ),
-  DialogHeader: ({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) => (
-    <div className={className} {...props}>
-      {children}
-    </div>
-  ),
-  DialogFooter: ({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) => (
-    <div className={className} {...props}>
-      {children}
-    </div>
-  ),
-  DialogTitle: ({
-    className,
-    children,
-    ...props
-  }: HTMLAttributes<HTMLHeadingElement>) => (
-    <h2 className={className} {...props}>
-      {children}
-    </h2>
-  ),
-};
-
-const dialogSpies: { mockRestore: () => void }[] = [];
+let restoreDialog: () => void;
 beforeEach(() => {
-  for (const [name, implementation] of Object.entries(dialogMocks)) {
-    dialogSpies.push(vi.spyOn(dialogComponents, name as keyof typeof dialogMocks).mockImplementation(implementation as never));
-  }
+  restoreDialog = stubDialog();
 });
 afterEach(() => {
-  for (const spy of dialogSpies.splice(0)) spy.mockRestore();
+  restoreDialog();
   restoreBrowserGlobals();
 });
 
@@ -208,7 +174,7 @@ describe("Modal", () => {
   }
 
   it("runs onClose when the dialog's own close control dismisses it", () => {
-    const dialogSpy = vi.spyOn(dialogComponents, "Dialog").mockImplementation((({
+    vi.spyOn(dialogComponents, "Dialog").mockImplementation((({
       open,
       onOpenChange,
       children,
@@ -225,7 +191,6 @@ describe("Modal", () => {
           {children}
         </>
       ) : null) as never);
-    dialogSpies.push(dialogSpy);
     const onClose = vi.fn();
     const setIsOpen = vi.fn();
     const { getByRole } = render(
