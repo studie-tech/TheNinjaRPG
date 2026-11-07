@@ -683,244 +683,265 @@ export const overworldAiRouter = createTRPCRouter({
       }
 
       // 3) Quest-giver sub-path: only reached when no bound objective is actionable.
-      // Each pool row carries its own per-quest grant chance.
-      const poolQuestIds = placement.questPool.map((p) => p.questId);
-      if (poolQuestIds.length === 0) {
-        return recoverIdleInteraction(ctx.drizzle, readiness, {
-          success: true,
-          message: "The NPC has nothing for you.",
-          userPatch: noUserChange,
-        });
-      }
-      const now = new Date();
-      const poolPromise = listQuestsByIds(ctx.drizzle, poolQuestIds);
-      // War lookup depends on the pool contents, but chaining it from the pool promise lets it
-      // overlap the independent history and cooldown reads instead of adding another DB round-trip.
-      const activeWarsPromise = poolPromise.then((pool) =>
-        activeUser.villageId && pool.some((q) => q.questType === "war")
-          ? fetchActiveWars(ctx.drizzle, activeUser.villageId)
-          : [],
-      );
-      const [pool, prevByQuest, attemptRows, activeWars] = await Promise.all([
-        poolPromise,
-        listQuestHistoryForInteractWithOverworldAi(ctx.drizzle, ctx, poolQuestIds),
-        selectUserQuestAttemptForInteractWithOverworldAi(
-          ctx.drizzle,
-          ctx,
-          poolQuestIds,
-        ),
-        activeWarsPromise,
-      ]);
-      const attemptByQuest = new Map(
-        attemptRows.map((r) => [r.questId, r.lastAttemptAt]),
-      );
-      const historyByQuest = new Map(prevByQuest.map((r) => [r.questId, r]));
-      const questsById = new Map(pool.map((q) => [q.id, q]));
-      const allowedRanks = availableQuestLetterRanks(activeUser.rank);
-
-      // Build the eligible pool, keeping each entry's chance. isAvailableUserQuests now
-      // includes the per-period cap, so period-capped quests drop out here automatically.
-      const eligible = placement.questPool
-        .map((p) => {
-          const q = questsById.get(p.questId);
-          if (!q) return null;
-          // Skip types the overworld pool can't grant: ones the centralized assigner can't start
-          // (e.g. errand, whose daily cap only startRandom enforces — reaching assignQuestToUser
-          // with one throws and strands the claimed slot), plus occupation/structure-gated types
-          // (hunting/gathering/anbu/story/event) whose UI gate the overworld path can't enforce.
-          if (!OVERWORLD_ASSIGNABLE_QUEST_TYPES.includes(q.questType)) return null;
-          const prev = historyByQuest.get(q.id);
-          const quota = questDailyQuota(q.questType, activeUser);
-          const warEligible =
-            q.questType !== "war" || (!!activeUser.villageId && activeWars.length > 0);
-          const available =
-            isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&
-            allowedRanks.includes(q.questRank) &&
-            (!quota || quota.current < quota.limit) &&
-            warEligible &&
-            !questTypeConcurrentBlockMessage(q, activeUser) &&
-            !attemptCapReached(
-              { attemptDelay: q.attemptDelay, lastAttemptAt: attemptByQuest.get(q.id) },
-              now,
-            );
-          if (!available) return null;
-          return { quest: q, chance: p.chance, prev };
-        })
-        .filter((e): e is NonNullable<typeof e> => e !== null);
-
-      // Eligible-empty check BEFORE the daily-roll CAS so an empty pool costs no roll.
-      if (eligible.length === 0) {
-        return recoverIdleInteraction(ctx.drizzle, readiness, {
-          success: true,
-          message: "The NPC has nothing available for you right now.",
-          userPatch: noUserChange,
-        });
-      }
-
-      // The slot, rather than quest type, determines whether another NPC mission may start.
-      const activeNpcQuestId = activeUser.activeNpcQuestId;
-      const slottedQuestIsActive =
-        !!activeNpcQuestId &&
-        (activeUser.userQuests ?? []).some(
-          (q) => q.questId === activeNpcQuestId && !q.endAt,
-        );
-      if (slottedQuestIsActive) {
-        return recoverIdleInteraction(ctx.drizzle, readiness, {
-          success: true,
-          message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE,
-          userPatch: noUserChange,
-        });
-      }
-
-      // Consume one daily roll via CAS before rolling so a failed roll still costs a slot.
-      // A stale slot belongs to another quest and can be cleared in parallel with this counter.
-      const clearStale = activeNpcQuestId
-        ? clearActiveNpcQuest({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            questId: activeNpcQuestId,
-          })
-        : Promise.resolve();
-      const [clearedStale, claim] = await Promise.all([
-        clearStale,
-        updateUserDataForInteractWithOverworldAi(ctx.drizzle, ctx, readiness),
-      ]);
-      if (claim.rowsAffected === 0) {
-        return errorResponse("You've reached your daily mission allowance.");
-      }
-
-      // Record an attempt for every eligible cooldown quest, including a roll that grants nothing.
-      const attemptRowsToInsert = eligible
-        .filter((e) => e.quest.attemptDelay !== "none")
-        .map((e) => ({
-          userId: ctx.userId,
-          questId: e.quest.id,
-          lastAttemptAt: now,
-        }));
-      // This write is independent of the selected quest and may run alongside the slot claim.
-      const attemptPromise =
-        attemptRowsToInsert.length > 0
-          ? insertUserQuestAttemptForInteractWithOverworldAi(
-              ctx.drizzle,
-              attemptRowsToInsert,
-              now,
-            )
-          : Promise.resolve();
-
-      // Each quest owns [acc, acc+chance); a roll past the total grants nothing.
-      const chosenId = pickWeightedQuest(
-        eligible.map((e) => ({ questId: e.quest.id, chance: e.chance })),
-        Math.random() * 100,
-      );
-      const chosen = chosenId
-        ? eligible.find((e) => e.quest.id === chosenId)
-        : undefined;
-      if (!chosen) {
-        await attemptPromise;
-        return actionReadinessResponse(
-          {
-            success: true,
-            message: "The NPC had nothing for you this time.",
-            ...getOverworldRollUserUpdate({
-              requiresUserRefresh,
-              activeNpcQuestId,
-              clearedStaleRowsAffected: clearedStale?.rowsAffected,
-              activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
-            }),
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
-      // Claim the single active-NPC-mission slot atomically before granting. If the slot is
-      // already taken (e.g. a concurrent interaction won the race), don't grant a second one.
-      const [, claimed] = await Promise.all([
-        attemptPromise,
-        claimActiveNpcQuest({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          questId: chosen.quest.id,
-        }),
-      ]);
-      if (!claimed) {
-        return actionReadinessResponse(
-          {
-            success: true,
-            message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE,
-            userPatch: undefined,
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
-      // Release the slot we just claimed on ANY assign failure — a `!success` return or an
-      // unexpected throw — so a failed assign never strands the player behind a claim that
-      // produced no quest.
-      /** Releases the NPC-mission slot claimed for this quest when assignment does not complete. */
-      const releaseClaimedSlot = () =>
-        clearActiveNpcQuest({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          questId: chosen.quest.id,
-        });
-      let result: Awaited<ReturnType<typeof assignQuestToUser>>;
-      try {
-        result = await assignQuestToUser({
-          client: ctx.drizzle,
-          user: activeUser,
-          quest: chosen.quest,
-          source: "overworld_npc",
-          overworldPlacementId: placement.id,
-          prevAttempt: chosen.prev,
-        });
-      } catch (e) {
-        await releaseClaimedSlot();
-        throw e;
-      }
-      if (!result.success) {
-        // Assign failed (e.g. cap/availability raced).
-        const released = await releaseClaimedSlot();
-        return actionReadinessResponse(
-          {
-            ...errorResponse(result.message),
-            ...getReleasedOverworldQuestUserUpdate({
-              requiresUserRefresh,
-              releasedRowsAffected: released.rowsAffected,
-              activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
-            }),
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
-      const cacheUpdate =
-        result.userCacheEligible &&
-        !requiresProgressionRefresh &&
-        chosen.quest.questType !== "war"
-          ? getUserProgressionUpdate(activeUser, publishedAchievementIds)
-          : undefined;
-      return actionReadinessResponse(
-        {
-          success: true,
-          message: result.message,
-          grantedQuestId: chosen.quest.id,
-          ...(cacheUpdate
-            ? {
-                ...cacheUpdate,
-                ...getAssignedOverworldQuestUserUpdate({
-                  cacheUpdateUserPatch: cacheUpdate.userPatch,
-                  chosenQuestId: chosen.quest.id,
-                  activeUserDailyOverworldQuestRolls:
-                    activeUser.dailyOverworldQuestRolls,
-                }),
-              }
-            : {}),
-        },
+      return rollOverworldQuestGiver({
+        ctx,
+        placement,
         readiness,
-        ctx.drizzle,
-      );
+        requiresUserRefresh,
+        requiresProgressionRefresh,
+        publishedAchievementIds,
+      });
     }),
 });
+
+/**
+ * Spend the actor's daily roll on an NPC's quest pool, granting at most one quest.
+ * Each pool row carries its own per-quest grant chance.
+ */
+const rollOverworldQuestGiver = async ({
+  ctx,
+  placement,
+  readiness,
+  requiresUserRefresh,
+  requiresProgressionRefresh,
+  publishedAchievementIds,
+}: {
+  ctx: { drizzle: DrizzleClient; userId: string };
+  placement: NonNullable<Awaited<ReturnType<typeof fetchPlacement>>>;
+  readiness: ActionReadiness<OverworldActor>;
+} & Pick<
+  Awaited<ReturnType<typeof fetchUpdatedUser>>,
+  "requiresUserRefresh" | "requiresProgressionRefresh" | "publishedAchievementIds"
+>) => {
+  const activeUser = readiness.user;
+  const noUserChange = getOverworldUnchangedPatch(requiresUserRefresh);
+  const poolQuestIds = placement.questPool.map((p) => p.questId);
+  if (poolQuestIds.length === 0) {
+    return recoverIdleInteraction(ctx.drizzle, readiness, {
+      success: true,
+      message: "The NPC has nothing for you.",
+      userPatch: noUserChange,
+    });
+  }
+  const now = new Date();
+  const poolPromise = listQuestsByIds(ctx.drizzle, poolQuestIds);
+  // War lookup depends on the pool contents, but chaining it from the pool promise lets it
+  // overlap the independent history and cooldown reads instead of adding another DB round-trip.
+  const activeWarsPromise = poolPromise.then((pool) =>
+    activeUser.villageId && pool.some((q) => q.questType === "war")
+      ? fetchActiveWars(ctx.drizzle, activeUser.villageId)
+      : [],
+  );
+  const [pool, prevByQuest, attemptRows, activeWars] = await Promise.all([
+    poolPromise,
+    listQuestHistoryForInteractWithOverworldAi(ctx.drizzle, ctx, poolQuestIds),
+    selectUserQuestAttemptForInteractWithOverworldAi(ctx.drizzle, ctx, poolQuestIds),
+    activeWarsPromise,
+  ]);
+  const attemptByQuest = new Map(attemptRows.map((r) => [r.questId, r.lastAttemptAt]));
+  const historyByQuest = new Map(prevByQuest.map((r) => [r.questId, r]));
+  const questsById = new Map(pool.map((q) => [q.id, q]));
+  const allowedRanks = availableQuestLetterRanks(activeUser.rank);
+
+  // Build the eligible pool, keeping each entry's chance. isAvailableUserQuests now
+  // includes the per-period cap, so period-capped quests drop out here automatically.
+  const eligible = placement.questPool
+    .map((p) => {
+      const q = questsById.get(p.questId);
+      if (!q) return null;
+      // Skip types the overworld pool can't grant: ones the centralized assigner can't start
+      // (e.g. errand, whose daily cap only startRandom enforces — reaching assignQuestToUser
+      // with one throws and strands the claimed slot), plus occupation/structure-gated types
+      // (hunting/gathering/anbu/story/event) whose UI gate the overworld path can't enforce.
+      if (!OVERWORLD_ASSIGNABLE_QUEST_TYPES.includes(q.questType)) return null;
+      const prev = historyByQuest.get(q.id);
+      const quota = questDailyQuota(q.questType, activeUser);
+      const warEligible =
+        q.questType !== "war" || (!!activeUser.villageId && activeWars.length > 0);
+      const available =
+        isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&
+        allowedRanks.includes(q.questRank) &&
+        (!quota || quota.current < quota.limit) &&
+        warEligible &&
+        !questTypeConcurrentBlockMessage(q, activeUser) &&
+        !attemptCapReached(
+          { attemptDelay: q.attemptDelay, lastAttemptAt: attemptByQuest.get(q.id) },
+          now,
+        );
+      if (!available) return null;
+      return { quest: q, chance: p.chance, prev };
+    })
+    .filter((e): e is NonNullable<typeof e> => e !== null);
+
+  // Eligible-empty check BEFORE the daily-roll CAS so an empty pool costs no roll.
+  if (eligible.length === 0) {
+    return recoverIdleInteraction(ctx.drizzle, readiness, {
+      success: true,
+      message: "The NPC has nothing available for you right now.",
+      userPatch: noUserChange,
+    });
+  }
+
+  // The slot, rather than quest type, determines whether another NPC mission may start.
+  const activeNpcQuestId = activeUser.activeNpcQuestId;
+  const slottedQuestIsActive =
+    !!activeNpcQuestId &&
+    (activeUser.userQuests ?? []).some(
+      (q) => q.questId === activeNpcQuestId && !q.endAt,
+    );
+  if (slottedQuestIsActive) {
+    return recoverIdleInteraction(ctx.drizzle, readiness, {
+      success: true,
+      message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE,
+      userPatch: noUserChange,
+    });
+  }
+
+  // Consume one daily roll via CAS before rolling so a failed roll still costs a slot.
+  // A stale slot belongs to another quest and can be cleared in parallel with this counter.
+  const clearStale = activeNpcQuestId
+    ? clearActiveNpcQuest({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        questId: activeNpcQuestId,
+      })
+    : Promise.resolve();
+  const [clearedStale, claim] = await Promise.all([
+    clearStale,
+    updateUserDataForInteractWithOverworldAi(ctx.drizzle, ctx, readiness),
+  ]);
+  if (claim.rowsAffected === 0) {
+    return errorResponse("You've reached your daily mission allowance.");
+  }
+
+  // Record an attempt for every eligible cooldown quest, including a roll that grants nothing.
+  const attemptRowsToInsert = eligible
+    .filter((e) => e.quest.attemptDelay !== "none")
+    .map((e) => ({
+      userId: ctx.userId,
+      questId: e.quest.id,
+      lastAttemptAt: now,
+    }));
+  // This write is independent of the selected quest and may run alongside the slot claim.
+  const attemptPromise =
+    attemptRowsToInsert.length > 0
+      ? insertUserQuestAttemptForInteractWithOverworldAi(
+          ctx.drizzle,
+          attemptRowsToInsert,
+          now,
+        )
+      : Promise.resolve();
+
+  // Each quest owns [acc, acc+chance); a roll past the total grants nothing.
+  const chosenId = pickWeightedQuest(
+    eligible.map((e) => ({ questId: e.quest.id, chance: e.chance })),
+    Math.random() * 100,
+  );
+  const chosen = chosenId ? eligible.find((e) => e.quest.id === chosenId) : undefined;
+  if (!chosen) {
+    await attemptPromise;
+    return actionReadinessResponse(
+      {
+        success: true,
+        message: "The NPC had nothing for you this time.",
+        ...getOverworldRollUserUpdate({
+          requiresUserRefresh,
+          activeNpcQuestId,
+          clearedStaleRowsAffected: clearedStale?.rowsAffected,
+          activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
+        }),
+      },
+      readiness,
+      ctx.drizzle,
+    );
+  }
+  // Claim the single active-NPC-mission slot atomically before granting. If the slot is
+  // already taken (e.g. a concurrent interaction won the race), don't grant a second one.
+  const [, claimed] = await Promise.all([
+    attemptPromise,
+    claimActiveNpcQuest({
+      client: ctx.drizzle,
+      userId: ctx.userId,
+      questId: chosen.quest.id,
+    }),
+  ]);
+  if (!claimed) {
+    return actionReadinessResponse(
+      {
+        success: true,
+        message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE,
+        userPatch: undefined,
+      },
+      readiness,
+      ctx.drizzle,
+    );
+  }
+  // Release the slot we just claimed on ANY assign failure — a `!success` return or an
+  // unexpected throw — so a failed assign never strands the player behind a claim that
+  // produced no quest.
+  /** Releases the NPC-mission slot claimed for this quest when assignment does not complete. */
+  const releaseClaimedSlot = () =>
+    clearActiveNpcQuest({
+      client: ctx.drizzle,
+      userId: ctx.userId,
+      questId: chosen.quest.id,
+    });
+  let result: Awaited<ReturnType<typeof assignQuestToUser>>;
+  try {
+    result = await assignQuestToUser({
+      client: ctx.drizzle,
+      user: activeUser,
+      quest: chosen.quest,
+      source: "overworld_npc",
+      overworldPlacementId: placement.id,
+      prevAttempt: chosen.prev,
+    });
+  } catch (e) {
+    await releaseClaimedSlot();
+    throw e;
+  }
+  if (!result.success) {
+    // Assign failed (e.g. cap/availability raced).
+    const released = await releaseClaimedSlot();
+    return actionReadinessResponse(
+      {
+        ...errorResponse(result.message),
+        ...getReleasedOverworldQuestUserUpdate({
+          requiresUserRefresh,
+          releasedRowsAffected: released.rowsAffected,
+          activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
+        }),
+      },
+      readiness,
+      ctx.drizzle,
+    );
+  }
+  const cacheUpdate =
+    result.userCacheEligible &&
+    !requiresProgressionRefresh &&
+    chosen.quest.questType !== "war"
+      ? getUserProgressionUpdate(activeUser, publishedAchievementIds)
+      : undefined;
+  return actionReadinessResponse(
+    {
+      success: true,
+      message: result.message,
+      grantedQuestId: chosen.quest.id,
+      ...(cacheUpdate
+        ? {
+            ...cacheUpdate,
+            ...getAssignedOverworldQuestUserUpdate({
+              cacheUpdateUserPatch: cacheUpdate.userPatch,
+              chosenQuestId: chosen.quest.id,
+              activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
+            }),
+          }
+        : {}),
+    },
+    readiness,
+    ctx.drizzle,
+  );
+};
 
 /**
  * Start an OVERWORLD PvE battle against a placement's AI for a HOSTILE interaction
@@ -985,3 +1006,5 @@ const recoverIdleInteraction = async <T extends { message?: string }>(
     ? actionReadinessResponse(response, readiness, client)
     : errorResponse("Your activity changed. Please try again.");
 };
+
+type OverworldActor = NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>;
