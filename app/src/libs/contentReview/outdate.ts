@@ -41,12 +41,7 @@ export const outdateProposalsFor = async (
       (live.get(entityKey(entityType, row.entityId))?.version ?? MISSING_VERSION) !==
       row.version,
   );
-  await markOutdated(
-    client,
-    changed.map((row) => row.id),
-    reason,
-    changed,
-  );
+  await markOutdated(client, changed, reason);
 };
 
 /** Reason shown for an edit made through one of the content editors. */
@@ -127,17 +122,14 @@ export const refreshProposalFreshness = async (
       proposals.flatMap((proposal) => proposal.basis),
     ));
   const now = Date.now();
-  const byReason = new Map<string, string[]>();
-  const add = (reason: string, id: string) => {
-    byReason.set(reason, [...(byReason.get(reason) ?? []), id]);
-    outdated.set(id, reason);
+  const byReason = new Map<string, typeof proposals>();
+  const add = (reason: string, proposal: (typeof proposals)[number]) => {
+    byReason.set(reason, [...(byReason.get(reason) ?? []), proposal]);
+    outdated.set(proposal.id, reason);
   };
   for (const proposal of proposals) {
     if (proposal.expiresAt && proposal.expiresAt.getTime() < now) {
-      add(
-        `Its usage data is older than ${CONTENT_PROPOSAL_EVIDENCE_DAYS} days`,
-        proposal.id,
-      );
+      add(EXPIRED_EVIDENCE_REASON, proposal);
       continue;
     }
     for (const basis of proposal.basis) {
@@ -149,19 +141,14 @@ export const refreshProposalFreshness = async (
         entity
           ? `${label} ${entity.name} changed since the suggestion was made`
           : `${label} ${basis.entityId} no longer exists`,
-        proposal.id,
+        proposal,
       );
       break;
     }
   }
   await Promise.all(
-    [...byReason.entries()].map(([reason, ids]) =>
-      markOutdated(
-        client,
-        ids,
-        reason,
-        proposals.filter((proposal) => ids.includes(proposal.id)),
-      ),
+    [...byReason.entries()].map(([reason, revisions]) =>
+      markOutdated(client, revisions, reason),
     ),
   );
   return outdated;
@@ -170,21 +157,17 @@ export const refreshProposalFreshness = async (
 /** Outdate pending suggestions whose usage data has expired. */
 export const expireStaleEvidence = async (client: DrizzleClient) => {
   const rows = await selectContentProposalForExpireStaleEvidence(client);
-  await markOutdated(
-    client,
-    rows.map((row) => row.id),
-    `Its usage data is older than ${CONTENT_PROPOSAL_EVIDENCE_DAYS} days`,
-    rows,
-  );
+  await markOutdated(client, rows, EXPIRED_EVIDENCE_REASON);
 };
 
-/** Outdate those of `ids` that are still pending, with `reason` cut to fit its column. */
+const EXPIRED_EVIDENCE_REASON = `Its usage data is older than ${CONTENT_PROPOSAL_EVIDENCE_DAYS} days`;
+
+/** Outdate those of `revisions` that are still pending, with `reason` cut to fit its column. */
 const markOutdated = async (
   client: DrizzleClient,
-  ids: string[],
-  reason: string,
   revisions: { id: string; statusChangedAt: Date }[],
+  reason: string,
 ) => {
-  if (ids.length === 0) return;
+  if (revisions.length === 0) return;
   await updateContentProposalForMarkOutdated(client, reason, revisions);
 };
