@@ -59,7 +59,5 @@ export const getTimeFrameinSeconds = (
       return YEAR_S;
     case "All Time":
       return null;
-    default:
-      return null;
   }
 };
