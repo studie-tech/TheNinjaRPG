@@ -323,6 +323,7 @@ export const assignQuestToUser = async (args: {
   // stamp without a quest — the same fail-safe leak the equivalent merge in initiateBattle
   // accepts, and harmless since it only makes the user more attackable.
   let assignment: Awaited<ReturnType<typeof upsertQuestEntry>>;
+  const entryChangedMessage = "Your entry items changed. Please try again.";
   // Rolls back the claim, history and any debited stack when a ticket stack changed.
   const entryRejected = new Error("Quest entry rejected");
   const dailyLimitReached = new Error("Daily quest limit reached");
@@ -337,21 +338,11 @@ export const assignQuestToUser = async (args: {
       prevAttempt ?? null,
       true,
     );
-    if (entryCharges.length > 0) {
-      if (
-        !(await payQuestEntryAtStart({
-          client,
-          userId: user.userId,
-          questId: questData.id,
-          charges: entryCharges,
-        }))
-      )
-        return errorResponse("Your entry items changed. Please try again.");
-      assignment.entry = { ...assignment.entry, entryPaid: true };
-      user.userQuests = user.userQuests.map((row) =>
-        row.questId === questData.id ? { ...row, entryPaid: true } : row,
-      );
-    }
+    if (
+      entryCharges.length > 0 &&
+      !(await payEntryAndMarkReceipt(client, user, questData, entryCharges, assignment))
+    )
+      return errorResponse(entryChangedMessage);
   } else if (questData.questType === "war" && entryCharges.length > 0) {
     // With entry items the slot, history row and item debit must commit together, so a
     // changed ticket stack refunds the daily slot instead of burning it.
@@ -378,28 +369,23 @@ export const assignQuestToUser = async (args: {
           true,
         );
         if (
-          !(await payQuestEntryAtStart({
-            client: database,
-            userId: user.userId,
-            questId: questData.id,
-            charges: entryCharges,
-          }))
+          !(await payEntryAndMarkReceipt(
+            database,
+            warUser,
+            questData,
+            entryCharges,
+            result,
+          ))
         )
           throw entryRejected;
-        result.entry = { ...result.entry, entryPaid: true };
-        warUser.userQuests = warUser.userQuests.map((row) =>
-          row.questId === questData.id ? { ...row, entryPaid: true } : row,
-        );
         return { result, user: warUser };
       }),
     ).catch((error: unknown) => {
-      if (error === dailyLimitReached) return undefined;
-      if (error === entryRejected) return null;
+      if (error === dailyLimitReached) return errorResponse(dailyClaimMessage);
+      if (error === entryRejected) return errorResponse(entryChangedMessage);
       throw error;
     });
-    if (paid === undefined) return errorResponse(dailyClaimMessage);
-    if (paid === null)
-      return errorResponse("Your entry items changed. Please try again.");
+    if ("success" in paid) return paid;
     Object.assign(user, paid.user);
     assignment = paid.result;
   } else if (questData.questType === "war") {
@@ -435,7 +421,10 @@ export const assignQuestToUser = async (args: {
               : []),
           ],
         });
-        if (!claim.success) return undefined;
+        if (!claim.success)
+          return errorResponse(
+            "Your account changed or another Pyramid started. Refresh and try again.",
+          );
         const claimedUser = { ...user, updatedAt: claim.claimedAt };
         if (!(await claimDailyQuestSlot(database, claimedUser, questData.questType)))
           throw dailyLimitReached;
@@ -449,34 +438,23 @@ export const assignQuestToUser = async (args: {
         );
         if (
           entryCharges.length > 0 &&
-          !(await payQuestEntryAtStart({
-            client: database,
-            userId: user.userId,
-            questId: questData.id,
-            charges: entryCharges,
-          }))
+          !(await payEntryAndMarkReceipt(
+            database,
+            claimedUser,
+            questData,
+            entryCharges,
+            result,
+          ))
         )
           throw entryRejected;
-        if (entryCharges.length > 0) {
-          result.entry = { ...result.entry, entryPaid: true };
-          claimedUser.userQuests = claimedUser.userQuests.map((row) =>
-            row.questId === questData.id ? { ...row, entryPaid: true } : row,
-          );
-        }
         return { result, user: claimedUser };
       }),
     ).catch((error: unknown) => {
-      if (error === entryRejected) return null;
-      if (error === dailyLimitReached) return false;
+      if (error === entryRejected) return errorResponse(entryChangedMessage);
+      if (error === dailyLimitReached) return errorResponse(dailyLimitMessage);
       throw error;
     });
-    if (assigned === false) return errorResponse(dailyLimitMessage);
-    if (assigned === null)
-      return errorResponse("Your entry items changed. Please try again.");
-    if (!assigned)
-      return errorResponse(
-        "Your account changed or another Pyramid started. Refresh and try again.",
-      );
+    if ("success" in assigned) return assigned;
     Object.assign(user, assigned.user);
     assignment = assigned.result;
   } else {
@@ -938,6 +916,31 @@ export const insertNextQuest = async (
     return { ...logEntry.entry, quest: nextQuest };
   }
   return undefined;
+};
+
+/**
+ * Debit entry items and mark the new attempt paid. False leaves the receipt unmarked so
+ * the caller can reject or roll back the start.
+ */
+const payEntryAndMarkReceipt = async (
+  client: DrizzleClient,
+  user: NonNullable<UserWithRelations>,
+  questData: Quest,
+  charges: NonNullable<ReturnType<typeof getQuestEntryCharges>>,
+  assignment: Awaited<ReturnType<typeof upsertQuestEntry>>,
+) => {
+  const paid = await payQuestEntryAtStart({
+    client,
+    userId: user.userId,
+    questId: questData.id,
+    charges,
+  });
+  if (!paid) return false;
+  assignment.entry = { ...assignment.entry, entryPaid: true };
+  user.userQuests = user.userQuests.map((row) =>
+    row.questId === questData.id ? { ...row, entryPaid: true } : row,
+  );
+  return true;
 };
 
 /** True when a quest type can only ever be acquired from its assigned overworld NPC. */
