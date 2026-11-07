@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { computeTemplateActivations } from "@/app/api/shrine-maintenance/route";
+import { computeTemplateActivations } from "@/server/utils/shrineMaintenance";
 
 // Helper: build a Date at a specific UTC time
 function utcDate(dayOfWeek: number, hour: number, minute = 0): Date {
