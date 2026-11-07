@@ -100,6 +100,26 @@ const seedWorld = async (attackerType: "HIDEOUT" | "VILLAGE" = "HIDEOUT") => {
   await insertUsers([...factionMembers.map((member) => ({ ...member, clanId: attackerType === "HIDEOUT" ? "raiding-faction" : null })), ...targetMembers] as never);
 };
 
+/** The target's Town Hall and enough faction elders to vote on a declaration against it. */
+const seedElderVote = async () => {
+  const database = await getTestDatabase();
+  await database.insert(villageStructure).values({
+    id: "target-townhall",
+    name: "Town Hall",
+    image: "/townhall.webp",
+    villageId: TARGET,
+    route: "/townhall",
+  });
+  const elders = Array.from({ length: ELDER_MIN_VOTING_COUNT }, (_, index) => ({
+    userId: `elder-${index}`,
+    username: `Elder${index}`,
+    villageId: FACTION,
+    rank: "ELDER" as const,
+  }));
+  await insertUsers(elders);
+  return elders;
+};
+
 const readFaction = async () => {
   const database = await getTestDatabase();
   const [row] = await database.select().from(village).where(eq(village.id, FACTION));
@@ -268,20 +288,7 @@ describeWithDatabase("faction war declarations", () => {
   it("preserves the Town Hall through a village declaration and elder approval", async () => {
     await seedWorld("VILLAGE");
     const database = await getTestDatabase();
-    await database.insert(villageStructure).values({
-      id: "target-townhall",
-      name: "Town Hall",
-      image: "/townhall.webp",
-      villageId: TARGET,
-      route: "/townhall",
-    });
-    const elders = Array.from({ length: ELDER_MIN_VOTING_COUNT }, (_, index) => ({
-      userId: `elder-${index}`,
-      username: `Elder${index}`,
-      villageId: FACTION,
-      rank: "ELDER" as const,
-    }));
-    await insertUsers(elders);
+    const elders = await seedElderVote();
     const result = await (await callerFor(warRouter, LEADER)).declareVillageWarOrRaid({
       userVillageId: FACTION,
       targetVillageId: TARGET,
@@ -321,20 +328,7 @@ describeWithDatabase("faction war declarations", () => {
   it("releases the approved vote back to pending when the war start throws", async () => {
     await seedWorld("VILLAGE");
     const database = await getTestDatabase();
-    await database.insert(villageStructure).values({
-      id: "target-townhall",
-      name: "Town Hall",
-      image: "/townhall.webp",
-      villageId: TARGET,
-      route: "/townhall",
-    });
-    const elders = Array.from({ length: ELDER_MIN_VOTING_COUNT }, (_, index) => ({
-      userId: `elder-${index}`,
-      username: `Elder${index}`,
-      villageId: FACTION,
-      rank: "ELDER" as const,
-    }));
-    await insertUsers(elders);
+    const elders = await seedElderVote();
     await (await callerFor(warRouter, LEADER)).declareVillageWarOrRaid({
       userVillageId: FACTION,
       targetVillageId: TARGET,
