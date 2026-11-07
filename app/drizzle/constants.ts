@@ -983,7 +983,7 @@ export const ALLIANCEHALL_LAT = 7;
 export const HOSPITAL_LONG = 13;
 export const HOSPITAL_LAT = 8;
 
-// Structure adjacent positions
+// The structure's own tile plus its neighbours under either hex column parity
 export const STRUCTURE_ADJACENTS = [
   { dCol: -1, dRow: 0 },
   { dCol: -1, dRow: 1 },
@@ -994,9 +994,6 @@ export const STRUCTURE_ADJACENTS = [
   { dCol: 0, dRow: 0 },
   { dCol: 0, dRow: 1 },
   { dCol: 0, dRow: -1 },
-  { dCol: 0, dRow: -1 },
-  { dCol: 0, dRow: 1 },
-  { dCol: 0, dRow: 0 },
 ];
 
 export const TournamentTypes = ["CLAN", "EVENT"] as const;

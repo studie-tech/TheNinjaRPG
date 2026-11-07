@@ -49,8 +49,8 @@ export const prepareSectorGrid = (
   // Create the grid first
   // Precompute the tiles occupied by (or adjacent to) a structure once, so the
   // per-tile check below is an O(1) Set lookup rather than scanning every
-  // structure x 12 adjacents for all 676 tiles (a village sector redraw is
-  // otherwise O(tiles x structures x 12)).
+  // structure x 9 adjacents for all 676 tiles (a village sector redraw is
+  // otherwise O(tiles x structures x 9)).
   const structureTileKeys = new Set<string>();
   for (const s of allStructures) {
     structureTileKeys.add(`${s.longitude},${s.latitude}`);
