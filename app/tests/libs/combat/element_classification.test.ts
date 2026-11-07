@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { ElementNames, type ElementName } from "@/drizzle/constants";
-import type { Jutsu } from "@/drizzle/schema";
 import {
   availableUserActions,
   getActionPointCost,
@@ -8,21 +7,19 @@ import {
 } from "@/libs/combat/actions";
 import { resolvePotencyTags } from "@/libs/combat/potency";
 import type { BattleUserJutsu } from "@/libs/combat/types";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { canTrainJutsu, canUseJutsu, checkJutsuElements } from "@/libs/train";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import {
   makeBattleUser,
   makeCompleteBattle,
   makeEffect,
+  makeJutsu,
   makeTag,
 } from "./helpers/battleScenario";
 
 const fixture = (elementClassification: ElementName | null = "Fire") => {
-  const jutsu: Jutsu = {
-    ...SAGE_MODE_ACTIVATION_JUTSU,
+  const jutsu = makeJutsu({
     id: "classified-jutsu",
-    hidden: false,
     elementClassification,
     effects: [
       makeTag("damage", { elements: ["Water"], power: 40, powerPerLevel: 1 }),
@@ -30,7 +27,7 @@ const fixture = (elementClassification: ElementName | null = "Fire") => {
       makeTag("decreaseheal", { power: 40 }),
     ],
     actionCostPerc: 40,
-  };
+  });
   const owned: BattleUserJutsu = {
     id: "owned",
     jutsuId: jutsu.id,
@@ -148,7 +145,7 @@ describe("classification combat restrictions", () => {
         const { jutsu, battle } = fixture(classification);
         jutsu.effects = tagElements
           ? [makeTag("damage", { elements: [...tagElements] })]
-          : SAGE_MODE_ACTIVATION_JUTSU.effects;
+          : [makeTag("activatesagemode")];
         const owned = battle.usersState[0]!.jutsus[0]!;
         const action = userJutsuToAction(owned, battle);
         const matches = tagElements?.[0] === "None";

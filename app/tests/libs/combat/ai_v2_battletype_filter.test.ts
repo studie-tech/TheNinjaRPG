@@ -1,9 +1,11 @@
-import { makeAiUser as mkUser } from "./helpers/aiScenario";
+import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
+import { makeJutsu, makeTag } from "./helpers/battleScenario";
 import { describe, it, expect } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { ActionUseSpecificJutsu } from "@/validators/ai";
-import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
+import type { BattleType } from "@/drizzle/constants";
+import type { CompleteBattle, ExtraState } from "@/libs/combat/types";
 
 /**
  * Integration cover for the ai_v2 candidate filter -- the CALL SITE, not just the
@@ -20,28 +22,22 @@ import { TerrainHex } from "@/libs/hexgrid";
 const SUMMON_JUTSU = "j-summon";
 const PROFILE = "profile-1";
 
-const summonJutsu = {
+const summonJutsu = makeJutsu({
   id: SUMMON_JUTSU,
   name: "Test Summon",
-  image: "", description: "", battleDescription: "summons",
-  jutsuType: "NORMAL", jutsuRank: "D", requiredRank: "STUDENT", requiredLevel: 1,
-  target: "EMPTY_GROUND", range: 4, method: "SINGLE", cooldown: 0,
-  actionCostPerc: 40, staminaCost: 0, chakraCost: 0, healthCost: 0,
-  staminaCostReducePerLvl: 0, chakraCostReducePerLvl: 0, healthCostReducePerLvl: 0,
-  extraBaseCost: 0, jutsuWeapon: "NONE", bloodlineId: null, villageId: null,
-  hidden: false, injectableInBattle: false, battleUsageType: "BOTH",
-  effects: [{
-    type: "summon", aiId: "creature-1", aiHp: 1000, rounds: 4,
-    power: 70, powerPerLevel: 0, level: 1, calculation: "percentage",
+  battleDescription: "summons",
+  target: "EMPTY_GROUND",
+  range: 4,
+  effects: [makeTag("summon", {
+    aiId: "creature-1", aiHp: 1000, rounds: 4,
+    power: 70, powerPerLevel: 0, calculation: "percentage",
     target: "INHERIT", friendlyFire: "ENEMIES", description: "summon",
-  }],
-};
+  })],
+});
 
-const mkBattle = (battleType: string): CompleteBattle =>
-  ({
-    id: "b1", battleType, round: 1, version: 1, activeUserId: "ai1",
-    createdAt: new Date(0), updatedAt: new Date(0), roundStartAt: new Date(0),
-    background: "", width: 10, height: 10, rewardScaling: 1, forceKeepPools: false,
+const mkBattle = (battleType: BattleType): CompleteBattle =>
+  makeAiBattle({
+    battleType, activeUserId: "ai1", width: 10, height: 10,
     usersState: [
       mkUser({ userId: "ai1", username: "Caster", controllerId: "ai1",
         aiProfileId: PROFILE, longitude: 2, latitude: 2,
@@ -54,12 +50,8 @@ const mkBattle = (battleType: string): CompleteBattle =>
         isSummon: true, isSummonTemplate: true, curHealth: 0,
         longitude: 0, latitude: 0 }),
     ],
-    usersEffects: [], groundEffects: [],
     extraState: {
       jutsus: { [SUMMON_JUTSU]: summonJutsu },
-      jutsuReskins: {}, items: {}, bloodlines: {}, villages: {}, anbuSquads: {},
-      keystoneItems: {}, wars: {}, relations: {}, clans: {},
-      userQuests: {}, completedQuests: {}, questData: {}, bounties: {}, bountySignups: {},
       aiProfiles: {
         [PROFILE]: {
           id: PROFILE, name: "always summon", includeDefaultRules: false,
@@ -73,9 +65,9 @@ const mkBattle = (battleType: string): CompleteBattle =>
             }),
           }],
         },
-      },
+      } as unknown as ExtraState["aiProfiles"],
     },
-  }) as unknown as CompleteBattle;
+  });
 
 /**
  * Assert on what the AI SELECTED, not on the resulting ground effect. Counting
@@ -84,7 +76,7 @@ const mkBattle = (battleType: string): CompleteBattle =>
  * the effect in the same pass -- the count is 0 in KAGE_AI whether or not the
  * candidate filter exists, which makes that assertion blind to this filter.
  */
-const actionPickedByAi = (battleType: string) => {
+const actionPickedByAi = (battleType: BattleType) => {
   const grid = new Grid(TerrainHex, rectangle({ width: 10, height: 10 }));
   const { nextActionId } = performAIaction(mkBattle(battleType), grid, "ai1");
   return nextActionId;

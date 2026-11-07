@@ -1,5 +1,5 @@
-import type { BattleUserState } from "@/libs/combat/types";
-import { makeBattleUser } from "./battleScenario";
+import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
+import { makeBattleUser, makeCompleteBattle } from "./battleScenario";
 
 /** Shared AI actor defaults; each suite supplies its own opponents, rules and catalog. */
 export const makeAiUser = (over: Partial<BattleUserState>): BattleUserState =>
@@ -33,4 +33,18 @@ export const makeAiUser = (over: Partial<BattleUserState>): BattleUserState =>
     willpower: 100,
     speed: 100,
     ...over,
+  });
+
+/** Shared AI-turn battle metadata; each suite supplies its battle type, board, roster and catalogs. */
+export const makeAiBattle = (
+  overrides: Parameters<typeof makeCompleteBattle>[0],
+): CompleteBattle =>
+  makeCompleteBattle({
+    version: 1,
+    rewardScaling: 1,
+    forceKeepPools: false,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    roundStartAt: new Date(0),
+    ...overrides,
   });

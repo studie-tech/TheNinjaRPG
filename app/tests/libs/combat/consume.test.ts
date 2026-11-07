@@ -11,6 +11,7 @@ import {
   makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
+  makeJutsu,
 } from "./helpers/battleScenario";
 import { makeSageMode } from "./helpers/sageMode";
 
@@ -514,13 +515,14 @@ describe("active Consume damage conversion", () => {
       extraState: { sageModes: { [sageMode.id]: sageMode } },
     });
     const groundAction = {
-      ...JutsuValidatorRawSchema.parse({
-        ...SAGE_MODE_ACTIVATION_JUTSU,
-        name: "Ground attack",
-        target: "GROUND",
-        range: 3,
-        effects: [DamageTag.parse({ power: 100, calculation: "static", rounds: 3, statTypes: ["None"] })],
-      }),
+      ...JutsuValidatorRawSchema.parse(
+        makeJutsu({
+          name: "Ground attack",
+          target: "GROUND",
+          range: 3,
+          effects: [DamageTag.parse({ power: 100, calculation: "static", rounds: 3, statTypes: ["None"] })],
+        }),
+      ),
       id: "ground-hit",
       type: "jutsu",
       updatedAt: 0,
@@ -599,19 +601,22 @@ describe("active Consume damage conversion", () => {
   });
 
   it("does not convert reflected damage from a self-targeted cast", () => {
-    const jutsu = JutsuValidatorRawSchema.parse({
-      ...SAGE_MODE_ACTIVATION_JUTSU,
-      effects: [
-        DamageTag.parse({
-          power: 100,
-          calculation: "static",
-          rounds: 0,
-          target: "SELF",
-          friendlyFire: "FRIENDLY",
-          statTypes: ["None"],
-        }),
-      ],
-    });
+    const jutsu = JutsuValidatorRawSchema.parse(
+      makeJutsu({
+        target: "SELF",
+        range: 0,
+        effects: [
+          DamageTag.parse({
+            power: 100,
+            calculation: "static",
+            rounds: 0,
+            target: "SELF",
+            friendlyFire: "FRIENDLY",
+            statTypes: ["None"],
+          }),
+        ],
+      }),
+    );
     const action: CombatAction = {
       ...jutsu,
       id: "self-hit",
@@ -684,16 +689,14 @@ describe("active Consume damage conversion", () => {
   });
   it("accepts standalone active buffs but requires a hit for instant Consume", () => {
     expect(
-      JutsuValidatorRawSchema.safeParse({
-        ...SAGE_MODE_ACTIVATION_JUTSU,
-        effects: [ConsumeTag.parse({ rounds: 3 })],
-      }).success,
+      JutsuValidatorRawSchema.safeParse(
+        makeJutsu({ effects: [ConsumeTag.parse({ rounds: 3 })] }),
+      ).success,
     ).toBe(true);
     expect(
-      JutsuValidatorRawSchema.safeParse({
-        ...SAGE_MODE_ACTIVATION_JUTSU,
-        effects: [ConsumeTag.parse({ rounds: 0 })],
-      }).success,
+      JutsuValidatorRawSchema.safeParse(
+        makeJutsu({ effects: [ConsumeTag.parse({ rounds: 0 })] }),
+      ).success,
     ).toBe(false);
   });
 

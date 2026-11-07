@@ -1,51 +1,44 @@
-import { makeAiUser as mkUser } from "./helpers/aiScenario";
+import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
+import { makeJutsu, makeTag } from "./helpers/battleScenario";
 import { describe, it, expect } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { TerrainHex } from "@/libs/hexgrid";
-import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
+import type { BattleUserState, CompleteBattle, ExtraState, UserEffect } from "@/libs/combat/types";
 import { getActionSchema, type ZodAllAiAction, ActionMoveTowardsOpponent, ActionUseSpecificJutsu, ActionEndTurn, AiRule, ConditionPlayerWithinRange, ConditionSummonWithinRange, ConditionSpecificRound, ConditionHealthBelow, getBackupRules, enforceExtraRules, type AvailableTarget, type ZodAllAiCondition } from "@/validators/ai";
 const DAMAGE_JUTSU = "j-damage";
 const PROFILE = "profile-1";
 
-const damageJutsu = {
+const damageJutsu = makeJutsu({
   id: DAMAGE_JUTSU,
   name: "Test Strike",
-  image: "", description: "", battleDescription: "%user strikes %target",
-  jutsuType: "NORMAL", jutsuRank: "D", requiredRank: "STUDENT", requiredLevel: 1,
-  target: "CHARACTER", range: 20, method: "SINGLE", cooldown: 0,
-  actionCostPerc: 40, staminaCost: 10, chakraCost: 0, healthCost: 0,
-  staminaCostReducePerLvl: 0, chakraCostReducePerLvl: 0, healthCostReducePerLvl: 0,
-  extraBaseCost: 0, jutsuWeapon: "NONE", bloodlineId: null, villageId: null,
-  hidden: false, injectableInBattle: false, battleUsageType: "BOTH",
-  effects: [{
-    type: "damage", power: 20, powerPerLevel: 0, level: 1,
+  battleDescription: "%user strikes %target",
+  target: "CHARACTER",
+  range: 20,
+  staminaCost: 10,
+  effects: [makeTag("damage", {
+    power: 20, powerPerLevel: 0,
     calculation: "formula", statTypes: ["Ninjutsu"], generalTypes: [], elements: [],
     rounds: 0, target: "INHERIT", friendlyFire: "ALL", description: "dmg",
-  }],
-};
+  })],
+});
 
 const mkBattle = (human: BattleUserState): CompleteBattle =>
-  ({
-    id: "b1", battleType: "ARENA", round: 1, version: 1, activeUserId: human.userId,
-    createdAt: new Date(0), updatedAt: new Date(0), roundStartAt: new Date(0),
-    background: "", width: 10, height: 10, rewardScaling: 1, forceKeepPools: false,
+  makeAiBattle({
+    battleType: "ARENA", activeUserId: human.userId, width: 10, height: 10,
     usersState: [human],
-    usersEffects: [], groundEffects: [],
     extraState: {
       jutsus: { [DAMAGE_JUTSU]: structuredClone(damageJutsu) },
-      jutsuReskins: {}, items: {}, bloodlines: {}, villages: {}, anbuSquads: {},
-      keystoneItems: {}, wars: {}, relations: {}, clans: {},
-      userQuests: {}, completedQuests: {}, questData: {}, bounties: {}, bountySignups: {},
+      items: {},
       aiProfiles: {
         [PROFILE]: {
           id: PROFILE, name: "always strike", includeDefaultRules: false,
           rules: [],
         },
-      },
+      } as unknown as ExtraState["aiProfiles"],
     },
-  }) as unknown as CompleteBattle;
+  });
 
 const setup = (target: AvailableTarget = "CLOSEST_OPPONENT", conditions: ZodAllAiCondition[] = []) => {
   const actor = mkUser({ userId: "actor", controllerId: "actor", villageId: "ally", aiProfileId: PROFILE,

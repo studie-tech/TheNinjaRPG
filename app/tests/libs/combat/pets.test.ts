@@ -6,13 +6,13 @@ import { availableUserActions, insertAction } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { addPetsToBattle, getPetSpawnLocation, petsAllowedInBattle } from "@/libs/combat/pets";
 import { applyEffects } from "@/libs/combat/process";
-import type { CombatAction, CombatQueryUser, ReturnedBattle } from "@/libs/combat/types";
+import type { CombatQueryUser, ReturnedBattle } from "@/libs/combat/types";
 import { hasLiveSummon, isClone, spliceOrphanedSummons } from "@/libs/combat/summon";
 import { applyPoolAdjustmentsToBase, getBattleGrid, getTurnControl, resolveDamageCreditUser } from "@/libs/combat/util";
 import { TerrainHex } from "@/libs/hexgrid";
 import { processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
-import { makeBattleUser, makeBattleUserItem, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeBasicAttack, makeBattleUser, makeBattleUserItem, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
 import { AiRule } from "@/validators/ai";
 import { BarrierTag, CloneTag, DamageTag, IncreaseMaxPoolsTag, InjectJutsusTag, IncreaseStatTag, DecreaseStatTag, MoveTag, PoisonTag, ShieldTag, SummonTag, VisualTag } from "@/validators/combat";
 import { updatePetAiSchema } from "@/validators/pets";
@@ -465,9 +465,7 @@ describe("owned pets in combat", () => {
     expect(actor.enemySkillIds ?? []).toEqual([]);
     Object.assign(species.effects[1]!, { power: 999 });
     expect(passives.filter((effect) => effect.type === "decreasestat").every((effect) => effect.power === 25)).toBe(true);
-    const action = { id: "basicAttack", name: "Attack", type: "basic", target: "OTHER_USER", method: "SINGLE", range: 5,
-      battleDescription: "", healthCost: 0, chakraCost: 0, staminaCost: 0, actionCostPerc: 10,
-      cooldown: 0, originalCooldown: 0, level: 1, effects: [DamageTag.parse({ power: 10 })] } as CombatAction;
+    const action = makeBasicAttack({ range: 5 });
     for (const actorId of ["owner", actor.userId, "owner", actor.userId]) {
       expect(insertAction({ battle, grid: getBattleGrid(20, battle), action, actorId, longitude: 4, latitude: 3 })).toBe(true);
     }

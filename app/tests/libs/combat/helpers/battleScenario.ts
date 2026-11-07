@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Item, Jutsu } from "@/drizzle/schema";
 import { GenNames, StatNames } from "@/libs/combat/constants";
 import { emptyPreBattleGearModifiers, computeDamagePacket } from "@/libs/combat/process";
 import { clear, cleanse } from "@/libs/combat/tags";
@@ -8,6 +9,7 @@ import type {
   BattleUserItem,
   BattleUserJutsu,
   BattleUserState,
+  CombatAction,
   CompleteBattle,
   ExtraState,
   GroundEffect,
@@ -332,20 +334,117 @@ export const defaultTestGearModifiers = (): Record<
 });
 
 /**
- * Creates a battle fixture with one weapon in `extraState.items`.
+ * Creates a complete jutsu catalog row: an ordinary single-target player jutsu
+ * with no costs, effects or requirements. `JutsuValidatorRawSchema` accepts it,
+ * so validator tests can override only the fields they are about.
+ */
+export const makeJutsu = (overrides: Partial<Jutsu> = {}): Jutsu => ({
+  id: "jutsu-1",
+  name: "Test Jutsu",
+  image: "",
+  description: "",
+  battleDescription: "",
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  extraBaseCost: 0,
+  effects: [],
+  target: "OTHER_USER",
+  range: 1,
+  method: "SINGLE",
+  coordinateTargeting: null,
+  methodSize: null,
+  cooldown: 0,
+  actionCostPerc: 40,
+  healthCost: 0,
+  chakraCost: 0,
+  staminaCost: 0,
+  healthCostReducePerLvl: 0,
+  chakraCostReducePerLvl: 0,
+  staminaCostReducePerLvl: 0,
+  jutsuType: "NORMAL",
+  jutsuRank: "D",
+  jutsuWeapon: "NONE",
+  statClassification: "None",
+  elementClassification: "None",
+  requiredLevel: 1,
+  requiredRank: "STUDENT",
+  bloodlineId: null,
+  villageId: null,
+  hidden: false,
+  injectableInBattle: false,
+  battleUsageType: "BOTH",
+  parentJutsuId: null,
+  reskinParentJutsuId: null,
+  bloodlineReskinId: null,
+  requiredPetSpeciesId: null,
+  requiredNinjutsuMastery: null,
+  requiredGenjutsuMastery: null,
+  requiredTaijutsuMastery: null,
+  requiredBukijutsuMastery: null,
+  requiredBloodlineMastery: null,
+  requiredSageMastery: null,
+  requiredStrength: null,
+  requiredSpeed: null,
+  requiredIntelligence: null,
+  requiredWillpower: null,
+  requiredSkillId: null,
+  requiredBloodlineItemId: null,
+  ...overrides,
+});
+
+/**
+ * Creates a free single-target jutsu action. Pool-cost stubs for `applyEffects`
+ * are `makeCombatAction()` or `makeCombatAction({ chakraCost, staminaCost })`.
+ */
+export const makeCombatAction = (
+  overrides: Partial<CombatAction> = {},
+): CombatAction => ({
+  id: "action-1",
+  name: "Test Action",
+  image: "",
+  battleDescription: "",
+  type: "jutsu",
+  target: "OTHER_USER",
+  method: "SINGLE",
+  range: 1,
+  healthCost: 0,
+  chakraCost: 0,
+  staminaCost: 0,
+  actionCostPerc: 10,
+  updatedAt: 0,
+  cooldown: 0,
+  originalCooldown: 0,
+  effects: [],
+  ...overrides,
+});
+
+/** Creates the basic attack action; pass the `range` the scenario needs. */
+export const makeBasicAttack = (
+  overrides: Partial<CombatAction> = {},
+): CombatAction =>
+  makeCombatAction({
+    id: "basicAttack",
+    name: "Attack",
+    type: "basic",
+    level: 1,
+    effects: [makeTag("damage", { power: 10 })],
+    ...overrides,
+  });
+
+/**
+ * Creates a weapon catalog row.
  *
  * The default weapon has a 22 EP formula damage tag with per-level scaling set,
  * matching the weapon regression that ensures item actions do not inherit
- * character level scaling.
+ * character level scaling. `damage` adjusts that tag; `overrides` replace row
+ * fields, including `effects`.
  */
-export const makeBattleWithWeapon = (params: {
-  itemId?: string;
-  damage?: TagFields<"damage">;
-  item?: Record<string, unknown>;
-} = {}): ReturnedBattle => {
-  const weaponId = params.itemId ?? "weapon-1";
-  const weapon = {
-    id: weaponId,
+export const makeWeapon = (
+  overrides: Record<string, unknown> = {},
+  damage: TagFields<"damage"> = {},
+): Item =>
+  ({
+    id: "weapon-1",
     name: "Regression Weapon",
     image: "/weapon.png",
     battleDescription: "",
@@ -369,11 +468,22 @@ export const makeBattleWithWeapon = (params: {
         calculation: "formula",
         statTypes: ["None"],
         generalTypes: ["Highest"],
-        ...params.damage,
+        ...damage,
       }),
     ],
-    ...params.item,
-  };
+    ...overrides,
+  }) as unknown as Item;
+
+/** Creates a battle fixture with one `makeWeapon` row in `extraState.items`. */
+export const makeBattleWithWeapon = (params: {
+  itemId?: string;
+  damage?: TagFields<"damage">;
+  item?: Record<string, unknown>;
+} = {}): ReturnedBattle => {
+  const weapon = makeWeapon(
+    { id: params.itemId ?? "weapon-1", ...params.item },
+    params.damage,
+  );
 
   return {
     extraState: {

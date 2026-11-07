@@ -14,86 +14,34 @@ import type { CompleteBattle, BattleUserState } from "@/libs/combat/types";
 
 // Avoid loading the real DB/env when transitive imports touch @/server/db.
 import { TerrainHex } from "@/libs/hexgrid";
+import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
 
+/** Summon-shaped AI with empty pools, so nothing is affordable. */
 const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
-  ({
-    userId: "x",
-    username: "x",
-    controllerId: "x",
-    isAi: true,
-    isSummon: false,
-    isPiloted: false,
+  makeAiUser({
     curHealth: 100,
     maxHealth: 100,
     curChakra: 0,
     maxChakra: 0,
     curStamina: 0,
     maxStamina: 0,
-    fledBattle: false,
-    leftBattle: false,
-    longitude: 1,
-    latitude: 1,
-    actionPoints: 100,
-    effects: [],
-    jutsus: [],
-    items: [],
-    basicActions: [],
-    round: 0,
-    direction: "right",
-    isAggressor: false,
-    highestGenerals: [],
-    iAmHere: true,
     originalLevel: 1,
-    originalLongitude: 1,
-    originalLatitude: 1,
     isOriginal: false,
-    usedGenerals: {} as Record<string, number>,
-    usedStats: {} as Record<string, number>,
-    moneyStolen: 0,
-    allyVillage: false,
-    usedActions: [],
-    initiative: 0,
-    relationIds: [],
     ...over,
-  } as unknown as BattleUserState);
+  });
 
 const makeBattle = (users: BattleUserState[]): CompleteBattle =>
-  ({
-    id: "test-battle",
-    round: 1,
+  makeAiBattle({
     battleType: "COMBAT",
     activeUserId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     roundStartAt: new Date(),
-    background: "None",
     width: 5,
     height: 5,
-    version: 1,
-    rewardScaling: 1,
-    forceKeepPools: false,
     usersState: users,
-    usersEffects: [],
-    groundEffects: [],
-    extraState: {
-      jutsus: {},
-      jutsuReskins: {},
-      items: {},
-      bloodlines: {},
-      aiProfiles: {},
-      villages: {},
-      clans: {},
-      questData: {},
-      anbuSquads: {},
-      keystoneItems: {},
-      wars: {},
-      relations: {},
-      userQuests: {},
-      completedQuests: {},
-      bounties: {},
-      bountySignups: {},
-    },
-  } as unknown as CompleteBattle);
+    extraState: { aiProfiles: {} },
+  });
 
 describe("performAIaction piloted-summon defensive guard", () => {
   it("does NOT self-kill a piloted summon that has no affordable action", () => {

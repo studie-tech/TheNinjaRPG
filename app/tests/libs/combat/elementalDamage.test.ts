@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { BasicElementName, type BattleType, type BasicElement } from "@/drizzle/constants";
-import type { AiProfile, Jutsu } from "@/drizzle/schema";
+import type { AiProfile } from "@/drizzle/schema";
 import { availableUserActions, insertAction } from "@/libs/combat/actions";
 import { getPreferredDamageElement, resolveElementalDamage } from "@/libs/combat/elementalDamage";
 import { resolvePotencyTags } from "@/libs/combat/potency";
@@ -8,12 +8,11 @@ import { computeDamagePacket, emptyPreBattleGearModifiers } from "@/libs/combat/
 import { clone, realizeTag } from "@/libs/combat/tags";
 import type { BattleUserJutsu, CombatQueryUser, GroundEffect, UserEffect } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { ElementalDamageTag, JutsuValidatorRawSchema } from "@/validators/combat";
 import { updateUserPreferencesSchema } from "@/validators/user";
-import { makeBattleUser, makeCompleteBattle, makeEffect, makeTag } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle, makeEffect, makeJutsu, makeTag } from "./helpers/battleScenario";
 
 /** Supply the fetched-character shape consumed by battle initiation. */
 const sourceUser = (patch: Partial<CombatQueryUser> = {}): CombatQueryUser => ({
@@ -35,12 +34,12 @@ const owned: BattleUserJutsu = {
 };
 /** Share one catalog entry between actors with independent damage preferences. */
 const fixture = (element: BasicElement = "Wind") => {
-  const jutsu: Jutsu = {
-    ...SAGE_MODE_ACTIVATION_JUTSU, id: owned.jutsuId, name: "Elemental strike",
-    elementClassification: "None", jutsuType: "NORMAL", actionCostPerc: 60,
+  const jutsu = makeJutsu({
+    id: owned.jutsuId, name: "Elemental strike",
+    elementClassification: "None", actionCostPerc: 60,
     effects: [ElementalDamageTag.parse({ power: 100, calculation: "static", rounds: 3 })],
-    cooldown: 0, range: 3, target: "OPPONENT", method: "SINGLE",
-  };
+    range: 3, target: "OPPONENT",
+  });
   const caster = makeBattleUser("caster", {
     rank: "JONIN", direction: "left", preferredDamageElement: element, primaryElement: "Fire",
     isAi: false, jutsus: [owned], longitude: 0, latitude: 0,

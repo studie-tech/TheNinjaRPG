@@ -6,7 +6,7 @@ import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { insertAction } from "@/libs/combat/actions";
 import { DamageTag, JutsuValidatorRawSchema, JutsuValidator, MoveTag } from "@/validators/combat";
 import { methodSizeSchema } from "@/validators/methodSize";
-import { makeCompleteBattle, makeBattleUser } from "./helpers/battleScenario";
+import { makeCombatAction, makeCompleteBattle, makeBattleUser, makeJutsu } from "./helpers/battleScenario";
 
 const actor = () => makeBattleUser("actor", { longitude: 0, latitude: 0, direction: "left" });
 const setup = () => {
@@ -15,7 +15,7 @@ const setup = () => {
   const grid = getBattleGrid(20, battle as ReturnedBattle);
   const a = grid.getHex({ col: 0, row: 0 })!;
   const b = grid.getHex({ col: 3, row: 3 })!;
-  const action: CombatAction = { id: "expanded", name: "Expanded", type: "jutsu", image: "", battleDescription: "", method: "SINGLE", target: "GROUND", range: 5, healthCost: 0, chakraCost: 0, staminaCost: 0, actionCostPerc: 10, cooldown: 0, originalCooldown: 0, updatedAt: 0, effects: [DamageTag.parse({ rounds: 2 })] };
+  const action = makeCombatAction({ id: "expanded", name: "Expanded", target: "GROUND", range: 5, effects: [DamageTag.parse({ rounds: 2 })] });
   return { user, battle, grid, a, b, action };
 };
 const positions = (tiles: Iterable<{ col: number; row: number }>) => [...tiles].map((tile) => `${tile.col},${tile.row}`).sort();
@@ -105,7 +105,7 @@ describe("method size", () => {
     expect(methodSizeSchema.safeParse(size).success).toBe(false);
   });
   it("rejects expanded movement", () => {
-    const draft = JutsuValidatorRawSchema.parse({ ...setup().action, methodSize: { x: 1, y: 0 }, target: "EMPTY_GROUND", effects: [MoveTag.parse({})], bloodlineId: null, villageId: null, requiredBloodlineItemId: null, description: "", extraBaseCost: 0, requiredLevel: 1, requiredRank: "STUDENT", jutsuWeapon: "NONE", jutsuType: "AI", jutsuRank: "D", chakraCostReducePerLvl: 0, staminaCostReducePerLvl: 0, healthCostReducePerLvl: 0 });
+    const draft = JutsuValidatorRawSchema.parse(makeJutsu({ methodSize: { x: 1, y: 0 }, target: "EMPTY_GROUND", jutsuType: "AI", actionCostPerc: 10, effects: [MoveTag.parse({})] }));
     expect(JutsuValidator.safeParse(draft).success).toBe(false);
   });
 });

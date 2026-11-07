@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { Bloodline, Jutsu } from "@/drizzle/schema";
+import type { Bloodline } from "@/drizzle/schema";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { advanceEncounterWave } from "@/libs/combat/encounters";
 import type { CompleteBattle } from "@/libs/combat/types";
@@ -10,10 +10,11 @@ import { dungeonBattleState, encounterWaveState } from "../../setup/dungeon";
 import {
   makeBattleUser,
   makeBattleUserItem,
-  makeBattleWithWeapon,
   makeCompleteBattle,
   makeEffect,
+  makeJutsu,
   makeTag,
+  makeWeapon,
 } from "./helpers/battleScenario";
 
 describe("AI action catalog isolation", () => {
@@ -128,14 +129,13 @@ describe("AI action catalog isolation", () => {
 });
 
 const scenario = (action: ZodAllAiAction): CompleteBattle => {
-  const weaponBattle = makeBattleWithWeapon({
-    item: { range: 10, cooldown: 2, preventBattleUsage: false },
-    damage: { calculation: "static", power: 100, powerPerLevel: 0 },
+  const weapon = makeWeapon(
+    { range: 10, cooldown: 2, preventBattleUsage: false },
+    { calculation: "static", power: 100, powerPerLevel: 0 },
+  );
+  const strike = makeJutsu({
+    id: "strike", jutsuType: "AI", range: 10, cooldown: 2, effects: weapon.effects,
   });
-  const weapon = weaponBattle.extraState.items["weapon-1"]!;
-  const strike = {
-    ...weapon, id: "strike", jutsuType: "AI", jutsuWeapon: "NONE", battleUsageType: "BOTH",
-  } as unknown as Jutsu;
   return makeCompleteBattle({
     width: 8, height: 5, battleType: "QUEST", round: 1, activeUserId: "actor",
     createdAt: new Date(0), updatedAt: new Date(0), roundStartAt: new Date(0),
