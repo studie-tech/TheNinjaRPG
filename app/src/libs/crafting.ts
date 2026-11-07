@@ -183,7 +183,7 @@ export const calculateItemConsumption = (
     remaining -= toConsume;
   }
 
-  return { consumptions, hasEnough: remaining === 0 };
+  return { consumptions };
 };
 
 /**
