@@ -232,16 +232,37 @@ export const listJutsuForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
     orderBy: (table, { asc }) => [asc(table.name)],
   });
 
-/** Build the `jutsu` listing for `getAll`, using predicates on `jutsuType`. */
+/**
+ * Build the `jutsu` listing for `getAll`, using predicates on `jutsuType`. `favoriteIds` come
+ * first, then the opening active/queued IDs, then with an `ownerId` that player's jutsu by
+ * level. Callers reconcile cached pages when training changes ownership levels.
+ */
 export const listJutsuForGetAll = (
   client: Pick<DrizzleClient, "query">,
   baseFilters: (undefined | SQL<unknown>)[],
   input: { hideAi?: undefined | false | true; limit: number },
   skip: number,
-) =>
-  client.query.jutsu.findMany({
+  priority: { ownerId?: string; favoriteIds?: string[]; trainingIds?: string[] } = {},
+) => {
+  const { ownerId, favoriteIds, trainingIds } = priority;
+  const owned = sql.identifier("ownedJutsu");
+  return client.query.jutsu.findMany({
     where: and(...baseFilters, ...(input.hideAi ? [ne(jutsu.jutsuType, "AI")] : [])),
-    orderBy: (table) => desc(table.updatedAt),
+    // The id breaks updatedAt ties for deterministic offset pages.
+    orderBy: (table) => [
+      ...(favoriteIds?.length ? [desc(inArray(table.id, favoriteIds))] : []),
+      ...(trainingIds?.length ? [desc(inArray(table.id, trainingIds))] : []),
+      ...(ownerId
+        ? [
+            desc(
+              // Relational queries re-alias table columns, so the subquery names its own.
+              sql`(select ${owned}.${sql.identifier("level")} from ${userJutsu} ${owned} where ${owned}.${sql.identifier("userId")} = ${ownerId} and ${owned}.${sql.identifier("jutsuId")} = ${table.id})`,
+            ),
+          ]
+        : []),
+      desc(table.updatedAt),
+      asc(table.id),
+    ],
     offset: skip,
     with: {
       bloodline: {
@@ -252,6 +273,7 @@ export const listJutsuForGetAll = (
     },
     limit: input.limit,
   });
+};
 
 /** Build the `jutsuLoadout` insert for `insertMissing`, updating duplicate keys. */
 export const insertJutsuLoadoutForInsertMissing = (

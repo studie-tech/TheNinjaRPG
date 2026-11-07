@@ -4,17 +4,13 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment, UserReportComment } from "@/drizzle/schema";
 import { CompactComment } from "@/layout/CompactComment";
 import Confirm from "@/layout/Confirm";
 import { EmojiPicker } from "@/layout/EmojiPicker";
 import { ModerationSummary } from "@/layout/ModerationSummary";
+import { ReactionPill } from "@/layout/ReactionPill";
 import ReportUser from "@/layout/Report";
 import type { ChatStartUser } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
@@ -183,42 +179,21 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
 
   // Derived
   const isAuthor = props.user && userData?.userId === props.user.userId;
-  const reactions = [];
-  if ("reactions" in props.comment && props.comment.reactions) {
-    for (const [reaction, users] of Object.entries(props.comment.reactions)) {
-      reactions.push(
-        <Tooltip key={`${props.comment.id}-${reaction}`} delayDuration={300}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className="cursor-pointer rounded-md border-2 bg-popover px-1 px-1 pt-1 text-lg hover:bg-poppopover/80"
-              onClick={() => {
-                props.toggleReaction?.(reaction);
-              }}
-            >
-              {reaction} {users.length}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent
-            side="top"
-            className="w-auto max-w-[250px] rounded-md border bg-poppopover p-2 text-poppopover-foreground shadow-md"
-          >
-            <div className="mb-1 border-b pb-1 text-center font-semibold">
-              {users.length} {users.length === 1 ? "user" : "users"} reacted with{" "}
-              {reaction}
-            </div>
-            <div className="max-h-40 overflow-y-auto">
-              {users.map((username, i) => (
-                <div key={`${username}-${i}`} className="px-2 py-0.5 text-sm">
-                  {username}
-                </div>
-              ))}
-            </div>
-          </TooltipContent>
-        </Tooltip>,
-      );
-    }
-  }
+  const reactions =
+    "reactions" in props.comment && props.comment.reactions
+      ? Object.entries(props.comment.reactions).map(([reaction, users]) => (
+          <ReactionPill
+            key={`${props.comment.id}-${reaction}`}
+            emoji={reaction}
+            usernames={users}
+            size="md"
+            isMine={!!userData && users.includes(userData.username)}
+            onToggle={
+              props.toggleReaction ? () => props.toggleReaction?.(reaction) : undefined
+            }
+          />
+        ))
+      : [];
 
   // Also dismiss while the picker chunk is loading, before its own outside-click
   // handler is available. Closed comments do not need a document listener.

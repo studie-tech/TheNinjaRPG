@@ -431,6 +431,12 @@ export const jutsuRouter = createTRPCRouter({
         cursor: z.number().nullish(),
         limit: z.number().min(1).max(1000),
         hideAi: z.boolean().optional(),
+        /** List the signed-in player's jutsu first, highest level first. */
+        ownedFirst: z.boolean().optional(),
+        /** Jutsu listed before all others, such as the player's favorites. */
+        favoriteIds: z.array(z.string()).max(500).optional(),
+        /** Opening active/queued jutsu, after favorites and before other learned jutsu. */
+        trainingIds: z.array(z.string()).max(500).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -439,7 +445,12 @@ export const jutsuRouter = createTRPCRouter({
       // Build the base DB filter
       const baseFilters = jutsuDatabaseFilter(input);
 
-      const results = await listJutsuForGetAll(ctx.drizzle, baseFilters, input, skip);
+      const ownerId = input.ownedFirst ? (ctx.userId ?? undefined) : undefined;
+      const results = await listJutsuForGetAll(ctx.drizzle, baseFilters, input, skip, {
+        ownerId,
+        favoriteIds: input.favoriteIds,
+        trainingIds: input.trainingIds,
+      });
 
       // Post-filter to ensure constraints are satisfied within the same effect
       const filtered = filterByEffectConstraints(results, input);

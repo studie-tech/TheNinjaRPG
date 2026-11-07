@@ -87,6 +87,8 @@ export interface ItemWithEffectsProps {
   hideDetails?: boolean;
   showEvolutions?: boolean;
   imageExtra?: React.ReactNode;
+  /** Actions shown after the entry's description, requirements and effects. */
+  footer?: React.ReactNode;
   showEdit?:
     | "bloodline"
     | "bloodline/reskins"
@@ -1469,6 +1471,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               );
             })}
         </div>
+        {props.footer && <div className="mt-3 border-t pt-3">{props.footer}</div>}
       </div>
     </div>
   );

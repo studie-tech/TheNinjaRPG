@@ -71,15 +71,16 @@ test("htmlToPlainText discards script and style contents", () => {
 test("buildQuoteBlock stores the author and date without nested quotes", () => {
   expect(
     buildQuoteBlock({
+      id: "comment-1",
       username: "Terriator",
       createdAt: new Date(2026, 0, 31),
       content: "<blockquote>Old</blockquote><p>New</p>",
     }),
-  ).toBe('<blockquote author="Terriator" date="01/31/2026"><p>New</p></blockquote>');
+  ).toBe('<blockquote author="Terriator" date="01/31/2026" data-comment-id="comment-1"><p>New</p></blockquote>');
 });
 
 test("buildQuoteBlock names a deleted author Unknown", () => {
   expect(
-    buildQuoteBlock({ username: null, createdAt: new Date(2026, 0, 31), content: "x" }),
+    buildQuoteBlock({ id: "comment-2", username: null, createdAt: new Date(2026, 0, 31), content: "x" }),
   ).toContain('author="Unknown"');
 });

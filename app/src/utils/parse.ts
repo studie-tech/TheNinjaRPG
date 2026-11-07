@@ -1,6 +1,6 @@
 import React from "react";
 import type { Transform } from "react-html-parser";
-import ReactHtmlParser from "react-html-parser";
+import ReactHtmlParser, { processNodes } from "react-html-parser";
 import { Quote } from "@/components/ui/quote";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { ConsentGatedIframe } from "@/layout/ConsentGatedIframe";
@@ -153,29 +153,27 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
   );
 };
 
-const getTextFromNode = (node: HtmlNode): string => {
-  if (node.type === "text") return node.data ?? "";
-  if (node.children) return node.children.map(getTextFromNode).join("");
-  return "";
-};
-
 /**
- * Transform blockquote nodes to Quote component
+ * Render quote children with the same media transforms and filtering as the post.
  */
-const transformBlockquoteNode = (blockquoteNode: HtmlNode): React.ReactElement => {
-  const content = blockquoteNode.children?.map(getTextFromNode).join("");
-
+const transformBlockquoteNode = (
+  blockquoteNode: HtmlNode,
+  index: number,
+  transform: Transform,
+): React.ReactElement => {
   const author = blockquoteNode.attribs?.author || undefined;
   const date = blockquoteNode.attribs?.date || undefined;
+  const commentId = blockquoteNode.attribs?.["data-comment-id"] || undefined;
 
   return React.createElement(
     Quote,
     {
       author,
       date,
-      key: `quote-${author ?? ""}-${date ?? ""}-${content?.slice(0, 32) ?? ""}`,
+      commentId,
+      key: index,
     },
-    content,
+    processNodes(blockquoteNode.children ?? [], transform),
   );
 };
 
@@ -285,7 +283,7 @@ const shouldFilterNode = (htmlNode: HtmlNode): boolean => {
 export const parseHtml = (html: string) => {
   const preprocessedHtml = preprocessHtml(html);
 
-  const transform: Transform = (node: HtmlNode) => {
+  const transform: Transform = (node: HtmlNode, index) => {
     if (shouldFilterNode(node)) {
       return null;
     }
@@ -312,7 +310,7 @@ export const parseHtml = (html: string) => {
           // Authored rich-text quotes keep their formatting; attributed reply quotes
           // use the shared Quote presentation and its author/date metadata.
           if (node.attribs?.author || node.attribs?.date)
-            return transformBlockquoteNode(node);
+            return transformBlockquoteNode(node, index, transform);
           node.attribs = {
             ...node.attribs,
             class: "my-3 border-l-4 border-primary bg-accent p-3 italic",
