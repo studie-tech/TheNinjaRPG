@@ -39,7 +39,7 @@ import {
   updateWarDamageForUpdateRewards,
   updateWarHealingForUpdateRewards,
 } from "@/queries/quests";
-import { deleteRequests } from "@/queries/sensei";
+import { deleteRequests } from "@/queries/sparring";
 import { incrementVillageTokens } from "@/queries/village";
 import type { UserWithRelations } from "@/routers/profile";
 import { fetchActiveWars } from "@/routers/war";
