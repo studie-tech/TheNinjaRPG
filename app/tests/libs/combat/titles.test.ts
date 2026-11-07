@@ -1,24 +1,20 @@
 import { expect, it } from "bun:test";
 import { RANKED_PVP_STATS, REGEN_SECONDS } from "@/drizzle/constants";
-import type { AiProfile } from "@/drizzle/schema";
 import { applyEffects } from "@/libs/combat/process";
 import { clear } from "@/libs/combat/tags";
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
 import { hasMasteryRequirements } from "@/libs/mastery";
-import { processUsersForBattle } from "@/server/api/routers/combat";
-import type { DrizzleClient } from "@/server/db";
-import { makeCompleteBattle, makeEffect, makeUser } from "./helpers/battleScenario";
+import { makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
-const titleUser = () => ({ ...makeUser({ userId: "title-caster", ninjutsuMastery: 100, activeTitleId: null }),
-    effects: [], bloodright: [], regenAt: new Date(), regeneration: 0, bloodline: null, village: null, aiProfile: null, items: [], jutsus: [], userSkills: [],
-    titles: [{ userId: "title-caster", titleId: "hero", createdAt: new Date(), effects: [{ type: "increasemastery", power: 15, masteryTypes: ["Ninjutsu"] }] }],
-  } as unknown as CombatQueryUser);
+const titleUser = () => makeCombatQueryUser("title-caster", {
+  ninjutsuMastery: 100, activeTitleId: null,
+  titles: [{ userId: "title-caster", titleId: "hero", createdAt: new Date(), effects: [{ type: "increasemastery", power: 15, masteryTypes: ["Ninjutsu"] }] }],
+});
 
-const preload = (caster: CombatQueryUser, battleType: "COMBAT" | "RANKED_PVP" | "RANKED_SPARRING" = "COMBAT") => processUsersForBattle({} as DrizzleClient, {
-    users: [caster], battleType, leftSideUserIds: [caster.userId], hide: false, isSummon: false,
-    width: 10, height: 10, settings: [], relations: [], wars: [], villages: [], defaultProfile: { id: "default" } as AiProfile,
-  });
+const preload = (caster: CombatQueryUser, battleType: "COMBAT" | "RANKED_PVP" | "RANKED_SPARRING" = "COMBAT") =>
+  preloadBattle([caster], { battleType });
 
 it.each(["increasemastery", "increaseregeneration"] as const)(
   "reprocesses a JSON combatant with a %s title after regeneration ticks elapse",

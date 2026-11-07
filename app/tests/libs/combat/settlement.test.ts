@@ -1,5 +1,4 @@
 import { fetchBattle } from "@/queries/combat";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import * as nextServer from "next/server";
 import { eq, sql } from "drizzle-orm";
 import superjson from "superjson";
@@ -17,7 +16,7 @@ import {
   userItemImbuement,
   userQueue,
 } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot, combatProfilePatch } from "@/deltas/combat";
+import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { combatEnergyRecoverySql, updateBattle, updateUser } from "@/libs/combat/database";
 import { applyEffects } from "@/libs/combat/process";
@@ -29,7 +28,7 @@ import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { updateUserCache } from "@/utils/userCache";
 import { getTagSchema } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../setup/queues";
@@ -50,6 +49,7 @@ import {
   makeEffect,
 } from "./helpers/battleScenario";
 import { deferred } from "../../setup/deferred";
+import { observeProfile, soloPveResult } from "./helpers/profileCache";
 
 const trigger = vi.fn(async () => {});
 const pusher = { trigger } as unknown as PusherClient;
@@ -280,23 +280,17 @@ describeWithDatabase("CAS combat settlement", () => {
     const enemy = snapshot.usersState.find((user) => user.isAi)!;
     enemy.curHealth = 0;
     enemy.leftBattle = true;
-    const result = calcBattleResult(snapshot, "imbue-player", [])!;
-    // Relation rewards require profile reconciliation; isolate the eligible solo PvE outcome.
-    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    const result = soloPveResult(snapshot, "imbue-player");
     await updateUser(database, pusher, snapshot, result, "imbue-player");
     expect(result.profileUpdate).toBeDefined();
 
-    const key = [["profile", "getUser"], { type: "query" }];
-    const client = new QueryClient();
     const current = { ...original, status: "BATTLE" as const, battleId: started.battleId! };
-    client.setQueryData(key, { userData: current, notifications: [] });
-    let reads = 0;
-    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
-      queryFn: async () => { reads++; return { userData: (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user }; } });
-    const close = observer.subscribe(() => {});
+    const profile = observeProfile({ userData: current, notifications: [] }, async () => ({
+      userData: (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user,
+    }));
     try {
-      await updateUserCache(client, key, (user) => combatProfilePatch(user, result.profileUpdate!), { revision: prepareUserUpdate(client, key), delta: result.profileUpdate!.userDelta });
-      const cached = client.getQueryData<{ userData: typeof current }>(key)!.userData;
+      await profile.apply(result.profileUpdate);
+      const cached = profile.user();
       const authoritative = (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user!;
       expect(authoritative.maxEnergy).toBe(650);
       expect(authoritative.effectiveMasteries.ninjutsuMastery).toBe(110);
@@ -306,11 +300,10 @@ describeWithDatabase("CAS combat settlement", () => {
       expect(authoritative.items[0]!.durability).toBe(100);
       expect(cached.status).toBe<NonNullable<UserWithRelations>["status"]>("AWAKE");
       expect(cached.battleId).toBeNull();
-      expect(client.getQueryState(key)?.isInvalidated).toBe(false);
-      expect(reads).toBe(0);
+      expect(profile.client.getQueryState(profile.key)?.isInvalidated).toBe(false);
+      expect(profile.reads()).toBe(0);
     } finally {
-      close();
-      client.clear();
+      profile.close();
     }
   });
 
@@ -335,15 +328,12 @@ describeWithDatabase("CAS combat settlement", () => {
     await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
     const original = (await database.query.userData.findFirst({ where: eq(userData.userId, "counter-player") }))!;
     const initial = { ...original, items: [], titles: [], questData: [], userQuests: [], completedQuests: [] } as unknown as NonNullable<UserWithRelations>;
-    const key = [["profile", "getUser"], { type: "query" }];
-    const client = new QueryClient();
-    client.setQueryData(key, { userData: initial });
-    let reads = 0;
-    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
-      queryFn: async () => { reads++; return { userData: (await fetchUpdatedUser({ client: database, userId: "counter-player" })).user }; } });
-    const close = observer.subscribe(() => {});
+    const profile = observeProfile({ userData: initial }, async () => ({
+      userData: (await fetchUpdatedUser({ client: database, userId: "counter-player" })).user,
+    }));
+    const { client, key } = profile;
     try {
-      const revision = prepareUserUpdate(client, key);
+      const revision = profile.revision();
       const started = await initiateBattle({ client: database, userIds: ["counter-player"], targetIds: ["counter-ai"], actionUserId: "counter-player" }, "ARENA");
       expect(started.success).toBe(true);
       const packet = events.mock.calls.find(([channel, event, data]) => channel === "counter-player" &&
@@ -367,16 +357,15 @@ describeWithDatabase("CAS combat settlement", () => {
       else await updateUserCache(client, key, { status: "BATTLE", battleId: packet.battleId }, {
         refetch: false, userRecovery,
       });
-      expect(client.getQueryData<{ userData: typeof initial }>(key)?.userData).toMatchObject({
+      expect(profile.user()).toMatchObject({
         status: "BATTLE", battleId: started.battleId, pveFights: admission === "socket" ? 10 : 11,
       });
-      expect(reads).toBe(0);
+      expect(profile.reads()).toBe(0);
       snapshot.usersState.find((user) => !user.isAi)!.curHealth = 100;
       const enemy = snapshot.usersState.find((user) => user.isAi)!;
       enemy.curHealth = 0;
       enemy.leftBattle = true;
-      const result = calcBattleResult(snapshot, "counter-player", [])!;
-      result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+      const result = soloPveResult(snapshot, "counter-player");
       const settlement = await recordQueries(() => updateUser(database, pusher, snapshot, result, "counter-player"));
       expect(settlement.statements.some((statement) => /^select\b/i.test(statement))).toBe(false);
       const after = (await database.query.userData.findFirst({ where: eq(userData.userId, "counter-player") }))!;
@@ -384,17 +373,15 @@ describeWithDatabase("CAS combat settlement", () => {
       expect(result.profileUpdate?.userPatch.pveFights).toBe(after.pveFights);
       // MySQL fractional-tick division rounds at four decimal places.
       expect(result.profileUpdate?.userPatch.curEnergy).toBeCloseTo(after.curEnergy, 3);
-      await updateUserCache(client, key, (user) => combatProfilePatch(user, result.profileUpdate!), {
-        revision: prepareUserUpdate(client, key), delta: result.profileUpdate!.userDelta,
-      });
-      const cached = client.getQueryData<{ userData: typeof initial }>(key)!.userData;
+      await profile.apply(result.profileUpdate);
+      const cached = profile.user();
       expect(cached).toMatchObject({ status: "AWAKE", battleId: null, pveFights: after.pveFights,
         money: after.money, experience: after.experience, earnedExperience: after.earnedExperience });
       expect(cached.curEnergy).toBeCloseTo(after.curEnergy, 3);
       expect(cached.regenAt.getTime()).toBe(after.regenAt.getTime());
       expect(client.getQueryState(key)?.isInvalidated).toBe(false);
-      expect(reads).toBe(0);
-    } finally { close(); client.clear(); }
+      expect(profile.reads()).toBe(0);
+    } finally { profile.close(); }
   });
 
   it("returns confirmed compact PvE progression only for the player whose battle guard commits", async () => {
@@ -407,8 +394,7 @@ describeWithDatabase("CAS combat settlement", () => {
     snapshot.extraState.profileCacheSnapshots = { winner: captureCombatCacheSnapshot({ ...original, items: [] }) };
     snapshot.extraState.energyCapacity = { winner: 100 };
     snapshot.extraState.energyRegeneration = { winner: 0 };
-    const result = calcBattleResult(snapshot, "winner", [])!;
-    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    const result = soloPveResult(snapshot, "winner");
     result.money = -0.5; result.experience = 0.75; result.earnedExperience = 0.25; result.seichiSilver = 0.5;
     result.curHealth = 90.75; result.curChakra = 80.25; result.curStamina = 70.5;
     await updateUser(database, pusher, snapshot, result, "winner");
@@ -440,8 +426,7 @@ describeWithDatabase("CAS combat settlement", () => {
     snapshot.extraState.profileCacheSnapshots = { winner: captureCombatCacheSnapshot({ ...original, items: [] }) };
     snapshot.extraState.energyCapacity = { winner: 100 };
     snapshot.extraState.energyRegeneration = { winner: 0 };
-    const result = calcBattleResult(snapshot, "winner", [])!;
-    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    const result = soloPveResult(snapshot, "winner");
     await database.update(userData).set({ battleId: "replacement" }).where(eq(userData.userId, "winner"));
     await updateUser(database, pusher, snapshot, result, "winner");
     expect(result.profileUpdate).toBeUndefined();

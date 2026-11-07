@@ -1,7 +1,6 @@
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { fetchRewardChoiceOwnership } from "@/queries/quests";
 import { readFile } from "node:fs/promises";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -17,12 +16,12 @@ import { getUnavailableRewardCards, buildRewardChoiceCards } from "@/libs/reward
 import { postProcessRewards } from "@/libs/quest";
 import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
 import { ObjectiveReward } from "@/validators/rewards";
-import { captureCombatCacheSnapshot, combatCacheDerived, combatProfilePatch, type CombatProfileUpdate } from "@/deltas/combat";
+import { captureCombatCacheSnapshot, combatCacheDerived, type CombatProfileUpdate } from "@/deltas/combat";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers, insertQuests, insertQuestHistory } from "../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../../../setup/testDatabase";
+import { observeProfile } from "../../../libs/combat/helpers/profileCache";
 
 const player = "title-player";
 const effects = [{ type: "increaseregeneration" as const, power: 7 }, { type: "increasemastery" as const, power: 15, masteryTypes: ["Ninjutsu" as const] }];
@@ -166,20 +165,14 @@ describeWithDatabase("title ownership, account recovery and presentation", () =>
       ...combatCacheDerived(snapshot, [], {}),
     } };
     expect(update.userPatch.effectiveMasteries.ninjutsuMastery).toBe(100);
-    const key = [["profile", "getUser"], { type: "query" }];
-    const client = new QueryClient();
-    client.setQueryData(key, { userData: current });
-    let reads = 0;
-    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity, queryFn: async () => {
-      reads++;
-      return { userData: { ...current, status: "AWAKE", battleId: null } };
-    } });
-    const close = observer.subscribe(() => {});
+    const profile = observeProfile({ userData: current }, async () => ({
+      userData: { ...current, status: "AWAKE", battleId: null },
+    }));
     try {
-      await updateUserCache(client, key, (user) => combatProfilePatch(user, update), { revision: prepareUserUpdate(client, key), delta: update.userDelta });
-      expect(client.getQueryData<{ userData: typeof current }>(key)?.userData.effectiveMasteries?.ninjutsuMastery).toBe(125);
-      expect(reads).toBe(1);
-    } finally { close(); client.clear(); }
+      await profile.apply(update);
+      expect(profile.user().effectiveMasteries?.ninjutsuMastery).toBe(125);
+      expect(profile.reads()).toBe(1);
+    } finally { profile.close(); }
   });
 });
 

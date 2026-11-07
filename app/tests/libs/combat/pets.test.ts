@@ -1,18 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Grid, rectangle } from "honeycomb-grid";
 import { BattleTypes, COMBAT_ENMITY_PER_DAMAGE, PET_BASE_STAT, PET_BATTLE_CONFIG } from "@/drizzle/constants";
 import type { AiProfile, UserPet } from "@/drizzle/schema";
 import { availableUserActions, insertAction } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { addPetsToBattle, getPetSpawnLocation, petsAllowedInBattle } from "@/libs/combat/pets";
 import { applyEffects } from "@/libs/combat/process";
-import type { CombatQueryUser, ReturnedBattle } from "@/libs/combat/types";
 import { hasLiveSummon, isClone, spliceOrphanedSummons } from "@/libs/combat/summon";
 import { applyPoolAdjustmentsToBase, getBattleGrid, getTurnControl, resolveDamageCreditUser } from "@/libs/combat/util";
-import { TerrainHex } from "@/libs/hexgrid";
-import { processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { makeBasicAttack, makeBattleUser, makeBattleUserItem, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 import { AiRule } from "@/validators/ai";
 import { BarrierTag, CloneTag, DamageTag, IncreaseMaxPoolsTag, InjectJutsusTag, IncreaseStatTag, DecreaseStatTag, MoveTag, PoisonTag, ShieldTag, SummonTag, VisualTag } from "@/validators/combat";
 import { updatePetAiSchema } from "@/validators/pets";
@@ -193,8 +190,7 @@ describe("owned pets in combat", () => {
       abilitiesByOwner: { owner: { jutsus: [petJutsuFixture()], skills: [] } },
     });
     const actor = battle.usersState.find((u) => u.petId)!;
-    const grid = new Grid(TerrainHex, rectangle({ width: 13, height: 9 }))
-      .map((tile) => { tile.cost = 1; return tile; });
+    const grid = getBattleGrid(20, battle);
     const before = battle.usersState[1]!.curHealth;
     const result = performAIaction(battle, grid, actor.userId);
     expect(result.nextActionId).toBe("pet-strike");
@@ -228,16 +224,13 @@ describe("owned pets in combat", () => {
     const jutsu = petJutsuFixture();
     for (const isAi of [false, true]) {
       for (const isSummon of [false, true]) {
-        const caster = { ...makeBattleUser("owner", { isAi, rank: "JONIN" }),
-          regeneration: 0, regenAt: new Date(), money: 0, bloodright: [],
-          effects: [], userSkills: [], items: [],
+        const caster = makeCombatQueryUser("owner", { isAi, rank: "JONIN",
           jutsus: [{ id: "owned", userId: "owner", jutsuId: jutsu.id, jutsu,
             createdAt: new Date(0), updatedAt: new Date(0), level: 1, experience: 0,
             equipped: true, finishTraining: null, reskinId: null }],
-        } as unknown as CombatQueryUser;
-        const processed = await processUsersForBattle({} as DrizzleClient, {
-          users: [caster], battleType, leftSideUserIds: ["owner"], hide: false, isSummon,
-          width: 13, height: 9, settings: [], relations: [], wars: [], villages: [],
+        });
+        const processed = await preloadBattle([caster], {
+          battleType, isSummon, width: 13, height: 9,
           defaultProfile: { id: "Default" } as AiProfile,
         });
         expect(processed.usersState[0]!.jutsus).toEqual([]);
@@ -280,8 +273,7 @@ describe("owned pets in combat", () => {
       abilitiesByOwner: { owner: { jutsus: [jutsu], skills: [] } },
     });
     const actor = battle.usersState.find((user) => user.petId)!;
-    const grid = new Grid(TerrainHex, rectangle({ width: 13, height: 9 }))
-      .map((tile) => { tile.cost = 1; return tile; });
+    const grid = getBattleGrid(20, battle);
     const result = performAIaction(battle, grid, actor.userId);
     expect(result.nextActionId).toBe(jutsu.id);
     expect(result.nextBattle.usersEffects.filter((effect) => effect.type === "shield"))
@@ -627,15 +619,12 @@ describe("owned pets in combat", () => {
   });
 
   it.each(["SELF", "ENEMIES"] as const)("preloads species summons and returns %s effects from battle initiation", async (skillTarget) => {
-    const participant = (id: string, isAi: boolean) => ({
-      ...makeBattleUser(id, { isAi, rank: "GENIN", activePetId: isAi ? null : "pet-1" }),
-      regeneration: 0, regenAt: new Date(), money: 0, bloodright: [],
-      effects: [], userSkills: [], items: [], jutsus: [],
-    }) as unknown as CombatQueryUser;
+    const participant = (id: string, isAi: boolean) =>
+      makeCombatQueryUser(id, { isAi, rank: "GENIN", activePetId: isAi ? null : "pet-1" });
     const findMany = vi.fn(async () => [participant("summoned-ai", true)]);
-    const processed = await processUsersForBattle({ query: { userData: { findMany } } } as unknown as DrizzleClient, {
-      users: [participant("owner", false)], battleType: "QUEST", leftSideUserIds: ["owner"],
-      hide: false, isSummon: false, width: 13, height: 9, settings: [], relations: [], wars: [], villages: [],
+    const processed = await preloadBattle([participant("owner", false)], {
+      client: { query: { userData: { findMany } } } as unknown as DrizzleClient,
+      battleType: "QUEST", width: 13, height: 9,
       defaultProfile: { id: "Default" } as AiProfile,
       petPreload: { pets: [petFixture({ species: petSpeciesFixture({
         effects: [{ ...SummonTag.parse({ aiId: "summoned-ai" }), skillTarget }],
@@ -655,8 +644,7 @@ describe("owned pets in combat", () => {
     const battle = scenario(); add(battle);
     const actor = battle.usersState.find((u) => u.petId)!;
     const start = { x: actor.longitude, y: actor.latitude };
-    const grid = new Grid(TerrainHex, rectangle({ width: 13, height: 9 }))
-      .map((tile) => { tile.cost = 1; return tile; });
+    const grid = getBattleGrid(20, battle);
     const { nextBattle } = performAIaction(battle, grid, actor.userId);
     const moved = nextBattle.usersState.find((u) => u.userId === actor.userId)!;
     expect(moved.curHealth).toBeGreaterThan(0);
@@ -679,8 +667,7 @@ describe("owned pets in combat", () => {
     expect(battle.extraState.aiProfiles[actor.aiProfileId!]!).toMatchObject({ rules: [], includeDefaultRules: true });
     battle.usersState.sort((left, right) => right.initiative - left.initiative);
     battle.activeUserId = actor.userId;
-    const grid = new Grid(TerrainHex, rectangle({ width: battle.width, height: battle.height }))
-      .map((tile) => { tile.cost = 1; return tile; });
+    const grid = getBattleGrid(20, battle);
     const random = vi.spyOn(Math, "random").mockReturnValue(0);
     try {
       const { nextBattle, nextActionId } = performAIaction(battle, grid, actor.userId);

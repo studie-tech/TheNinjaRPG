@@ -1,32 +1,25 @@
 import { describe, expect, it } from "bun:test";
 import { ELEMENTAL_MASTERY_BOOST, ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
-import type { AiProfile } from "@/drizzle/schema";
 import { applyEffects, computeDamagePacket, emptyPreBattleGearModifiers } from "@/libs/combat/process";
 import { clear, copy } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
 import { activeTrainedElement, elementalGainRoom } from "@/libs/elementalMastery";
-import { processUsersForBattle } from "@/server/api/routers/combat";
-import type { DrizzleClient } from "@/server/db";
 import { DamageTag, IncreaseDamageGivenTag } from "@/validators/combat";
 import { getUserElements } from "@/validators/user";
-import { makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { flatCombatStats, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
-const user = (patch: Partial<CombatQueryUser> = {}): CombatQueryUser => ({
-  userId: "caster", username: "caster", villageId: "village", level: 50, experience: 0,
-  regenAt: new Date(), regeneration: 0, money: 0, longitude: 0, latitude: 0,
-  curHealth: 1000, maxHealth: 1000, curChakra: 1000, maxChakra: 1000,
-  curStamina: 1000, maxStamina: 1000, strength: 100, speed: 100, intelligence: 100, willpower: 100,
-  offence: 100, defence: 100, ninjutsuMastery: 100, genjutsuMastery: 100, taijutsuMastery: 100,
-  bukijutsuMastery: 100, bloodlineMastery: 100, sageMastery: 100,
-  items: [], jutsus: [], effects: [], bloodright: [], userSkills: [], primaryElement: "Fire", secondaryElement: "Water",
-  elementalMastery: { Wind: ELEMENTAL_MASTERY_CAP, Earth: ELEMENTAL_MASTERY_CAP }, activeTrainedElement: "Wind", ...patch,
-}) as unknown as CombatQueryUser;
+const user = (patch: Partial<CombatQueryUser> = {}): CombatQueryUser =>
+  makeCombatQueryUser(patch.userId ?? "caster", {
+    ...flatCombatStats(100), username: "caster", villageId: "village", level: 50, longitude: 0, latitude: 0,
+    curHealth: 1000, maxHealth: 1000, curChakra: 1000, maxChakra: 1000, curStamina: 1000, maxStamina: 1000,
+    primaryElement: "Fire", secondaryElement: "Water",
+    elementalMastery: { Wind: ELEMENTAL_MASTERY_CAP, Earth: ELEMENTAL_MASTERY_CAP }, activeTrainedElement: "Wind", ...patch,
+  });
 
-const preload = (caster: CombatQueryUser, battleType: "COMBAT" | "RANKED_PVP" = "COMBAT") => processUsersForBattle({} as DrizzleClient, {
-  users: [caster], battleType, leftSideUserIds: ["caster"], hide: false, isSummon: false,
-  width: 10, height: 10, settings: [], relations: [], wars: [], villages: [], defaultProfile: { id: "default" } as AiProfile,
-});
+const preload = (caster: CombatQueryUser, battleType: "COMBAT" | "RANKED_PVP" = "COMBAT") =>
+  preloadBattle([caster], { battleType, leftSideUserIds: ["caster"] });
 
 const packet = (effects: UserEffect[], element: "Wind" | "Fire" | "None", battleRound = 1) => computeDamagePacket({
   rawDamage: 1000,

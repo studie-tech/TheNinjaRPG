@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { BasicElementName, type BattleType, type BasicElement } from "@/drizzle/constants";
-import type { AiProfile } from "@/drizzle/schema";
 import { availableUserActions, insertAction } from "@/libs/combat/actions";
 import { getPreferredDamageElement, resolveElementalDamage } from "@/libs/combat/elementalDamage";
 import { resolvePotencyTags } from "@/libs/combat/potency";
@@ -8,26 +7,15 @@ import { computeDamagePacket, emptyPreBattleGearModifiers } from "@/libs/combat/
 import { clone, realizeTag } from "@/libs/combat/tags";
 import type { BattleUserJutsu, CombatQueryUser, GroundEffect, UserEffect } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
-import { processUsersForBattle } from "@/server/api/routers/combat";
-import type { DrizzleClient } from "@/server/db";
 import { ElementalDamageTag, JutsuValidatorRawSchema } from "@/validators/combat";
 import { updateUserPreferencesSchema } from "@/validators/user";
 import { makeBattleUser, makeCompleteBattle, makeEffect, makeJutsu, makeTag } from "./helpers/battleScenario";
+import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
-/** Supply the fetched-character shape consumed by battle initiation. */
-const sourceUser = (patch: Partial<CombatQueryUser> = {}): CombatQueryUser => ({
-  ...makeBattleUser("caster", { primaryElement: "Fire", preferredDamageElement: null }),
-  regenAt: new Date(), regeneration: 0, money: 0, bloodright: [], effects: [],
-  bloodline: null, userSkills: [], village: null, clan: null, anbuSquad: null,
-  aiProfile: null, ...patch,
-}) as unknown as CombatQueryUser;
-/** Exercise initiation with preloaded inputs; these scenarios require no database calls. */
+const sourceUser = (patch: Partial<CombatQueryUser> = {}): CombatQueryUser =>
+  makeCombatQueryUser("caster", { primaryElement: "Fire", preferredDamageElement: null, ...patch });
 const preload = (user: CombatQueryUser, battleType: BattleType = "COMBAT", isSummon = false) =>
-  processUsersForBattle({} as DrizzleClient, {
-    users: [user], battleType, leftSideUserIds: [user.userId], hide: false, isSummon,
-    width: 10, height: 10, settings: [], relations: [], wars: [], villages: [],
-    defaultProfile: { id: "default" } as AiProfile,
-  });
+  preloadBattle([user], { battleType, isSummon });
 const owned: BattleUserJutsu = {
   id: "owned", jutsuId: "elemental-jutsu", level: 1, experience: 0,
   equipped: true, lastUsedRound: -10, originalCooldown: 0, origin: "user",

@@ -202,6 +202,18 @@ export const makeBattleUser = (
   }) as BattleUserState;
 };
 
+/** One value for every combat stat, general and mastery. */
+export const flatCombatStats = (value: number) => ({
+  ...recordWith(StatNames, value),
+  ...recordWith(GenNames, value),
+  ninjutsuMastery: value,
+  genjutsuMastery: value,
+  taijutsuMastery: value,
+  bukijutsuMastery: value,
+  bloodlineMastery: value,
+  sageMastery: value,
+});
+
 /**
  * Convenience wrapper for formula tests that stores the user id inside the
  * override object. Prefer `makeBattleUser(id, overrides)` when the id is already
