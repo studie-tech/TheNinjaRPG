@@ -4,7 +4,7 @@ import { computeAutoEquipAssignments, computeLoadoutAssignments } from "@/libs/i
 import { effectiveMasteries } from "@/libs/mastery";
 import { getRepairKits } from "@/libs/repair";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
-import { canTrainJutsu, jutsuRequirementWarning } from "@/libs/train";
+import { canTrainJutsu, jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import type { UserWithRelations } from "@/routers/profile";
 
 const user = {

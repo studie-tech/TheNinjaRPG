@@ -13,7 +13,7 @@ import {
   getJutsuCapFlags,
 } from "@/libs/jutsu";
 import type { UserWithRelations } from "@/routers/profile";
-import * as train from "@/libs/train";
+import * as jutsuRequirements from "@/libs/jutsuRequirements";
 
 let calcJutsuEquipLimitMock: {
   mockReturnValue: (value: number) => void;
@@ -22,10 +22,10 @@ let calcJutsuEquipLimitMock: {
 
 // Restore dependency spies between tests: Bun shares modules with requirement suites.
 beforeEach(() => {
-  vi.spyOn(train, "canUseJutsu").mockImplementation(
+  vi.spyOn(jutsuRequirements, "canUseJutsu").mockImplementation(
     (jutsu) => (jutsu as typeof jutsu & { usable?: boolean })?.usable !== false,
   );
-  calcJutsuEquipLimitMock = vi.spyOn(train, "calcJutsuEquipLimit").mockReturnValue(100);
+  calcJutsuEquipLimitMock = vi.spyOn(jutsuRequirements, "calcJutsuEquipLimit").mockReturnValue(100);
 });
 afterEach(() => vi.restoreAllMocks());
 

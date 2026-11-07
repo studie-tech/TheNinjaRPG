@@ -61,15 +61,11 @@ import {
   getFreeTransfers,
 } from "@/libs/jutsu";
 import { getJutsuMaxLevel, getJutsuXpToLevel } from "@/libs/jutsuProgression";
+import { calcJutsuEquipLimit, jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import type { MasterySources } from "@/libs/mastery";
 import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
-import {
-  calcJutsuEquipLimit,
-  isJutsuInTraining,
-  jutsuRequirementWarning,
-  remainingXpToLevel,
-} from "@/libs/train";
+import { isJutsuInTraining, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { canReskinFreely, canTransferJutsu } from "@/utils/permissions";
 import { DAY_S, secondsFromDate } from "@/utils/time";

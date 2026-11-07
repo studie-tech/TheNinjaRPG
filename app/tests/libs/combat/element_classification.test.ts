@@ -7,7 +7,11 @@ import {
 } from "@/libs/combat/actions";
 import { resolvePotencyTags } from "@/libs/combat/potency";
 import type { BattleUserJutsu } from "@/libs/combat/types";
-import { canTrainJutsu, canUseJutsu, checkJutsuElements } from "@/libs/train";
+import {
+  canTrainJutsu,
+  canUseJutsu,
+  checkJutsuElements,
+} from "@/libs/jutsuRequirements";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import {
   makeBattleUser,

@@ -7,7 +7,7 @@ import { userJutsuToAction } from "@/libs/combat/actions";
 import { applyEffects } from "@/libs/combat/process";
 import { refreshMasteries } from "@/libs/combat/mastery";
 import { effectiveMasteries } from "@/libs/mastery";
-import { jutsuRequirementWarning } from "@/libs/train";
+import { jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import type { UserWithRelations } from "@/routers/profile";
 import { calcCP, calcHP, calcSP, manuallyAssignUserStats } from "@/libs/profile";
 import { validateItemLoadout } from "@/libs/ranked_pvp";

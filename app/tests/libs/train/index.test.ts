@@ -4,7 +4,7 @@ import {
   checkJutsuBloodline,
   checkJutsuBloodlineItem,
   type JutsuBloodlineItemUserItems,
-} from "@/libs/train";
+} from "@/libs/jutsuRequirements";
 
 type MinimalJutsu = Pick<Jutsu, "requiredBloodlineItemId">;
 type MinimalUserItemWithItem = JutsuBloodlineItemUserItems[number];

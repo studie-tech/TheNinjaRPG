@@ -37,7 +37,6 @@ import {
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
 } from "@/libs/profile";
-
 import { getBloodlineElements } from "@/libs/userElements";
 import {
   addElementRoll,

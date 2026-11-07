@@ -5,7 +5,7 @@ import { eliteJoninMilestoneBlockMessage, eliteJoninMilestoneUpdate } from "@/li
 import { calcHP, canAttackBracket, canAssignExperience, eliteJoninExamBlockMessage, experienceAssignmentBlockMessage, getEffectiveLevel, getExpBracket, levelUpBlockMessage, passesBracketFilter } from "@/libs/profile";
 import { getReward } from "@/libs/quest/rewards";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
-import { calcJutsuEquipLimit } from "@/libs/train";
+import { calcJutsuEquipLimit } from "@/libs/jutsuRequirements";
 import { ItemValidator, JutsuValidator } from "@/validators/combat";
 import { bracketSliderSchema } from "@/validators/travel";
 import { QuestFormSchema, QuestValidator } from "@/validators/objectives";
