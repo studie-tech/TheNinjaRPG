@@ -10,9 +10,7 @@ export const availableJutsuLetterRanks = (userrank: UserRank): LetterRank[] => {
     case "CHUNIN":
       return ["D", "C", "B", "A"];
     case "JONIN":
-      return ["D", "C", "B", "A", "S", "H"];
     case "ELDER":
-      return ["D", "C", "B", "A", "S", "H"];
     case "ELITE JONIN":
       return ["D", "C", "B", "A", "S", "H"];
   }
@@ -28,9 +26,7 @@ export const availableQuestLetterRanks = (userrank: UserRank): LetterRank[] => {
     case "CHUNIN":
       return ["D", "C", "B"];
     case "JONIN":
-      return ["D", "C", "B", "A", "S", "H"];
     case "ELDER":
-      return ["D", "C", "B", "A", "S", "H"];
     case "ELITE JONIN":
       return ["D", "C", "B", "A", "S", "H"];
   }
@@ -41,6 +37,7 @@ export const hasRequiredLevel = (userLevel: number, requiredLevel: number) => {
   return userLevel >= requiredLevel;
 };
 
+/** Compares along the shinobi progression, which ranks Elder below Elite Jonin. */
 export const hasRequiredRank = (userRank?: UserRank, requiredRank?: UserRank) => {
   if (!userRank) return false;
   if (!requiredRank) return true;
@@ -64,25 +61,20 @@ export const hasRequiredRank = (userRank?: UserRank, requiredRank?: UserRank) =>
 export const availableRanks = (letterRank?: LetterRank | UserRank): UserRank[] => {
   switch (letterRank) {
     case "D":
-      return ["STUDENT"];
-    case "C":
-      return ["STUDENT", "GENIN"];
-    case "B":
-      return ["STUDENT", "GENIN", "CHUNIN"];
-    case "A":
-      return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER"];
-    case "S":
-      return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER", "ELITE JONIN"];
     case "STUDENT":
       return ["STUDENT"];
+    case "C":
     case "GENIN":
       return ["STUDENT", "GENIN"];
+    case "B":
     case "CHUNIN":
       return ["STUDENT", "GENIN", "CHUNIN"];
     case "JONIN":
       return ["STUDENT", "GENIN", "CHUNIN", "JONIN"];
+    case "A":
     case "ELDER":
       return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER"];
+    case "S":
     case "ELITE JONIN":
       return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER", "ELITE JONIN"];
     default:
