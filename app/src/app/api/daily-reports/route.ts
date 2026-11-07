@@ -35,14 +35,14 @@ export async function GET(request: Request) {
     }
 
     // Group reports by user ID and type
-    const userBanReports = new Map<string, boolean>();
-    const userSilenceReports = new Map<string, boolean>();
-    const userTradeBanReports = new Map<string, boolean>();
+    const userBanReports = new Set<string>();
+    const userSilenceReports = new Set<string>();
+    const userTradeBanReports = new Set<string>();
 
     // Track users who are currently banned, silenced, or trade banned
-    const bannedUsers = new Map<string, boolean>();
-    const silencedUsers = new Map<string, boolean>();
-    const tradeBannedUsers = new Map<string, boolean>();
+    const bannedUsers = new Set<string>();
+    const silencedUsers = new Set<string>();
+    const tradeBannedUsers = new Set<string>();
 
     for (const report of expiredReports) {
       if (!report.reportedUser?.userId) continue;
@@ -51,24 +51,24 @@ export async function GET(request: Request) {
 
       // Track if user is currently banned, silenced, or trade banned
       if (report.reportedUser.isBanned) {
-        bannedUsers.set(userId, true);
+        bannedUsers.add(userId);
       }
 
       if (report.reportedUser.isSilenced) {
-        silencedUsers.set(userId, true);
+        silencedUsers.add(userId);
       }
 
       if (report.reportedUser.isTradeBanned) {
-        tradeBannedUsers.set(userId, true);
+        tradeBannedUsers.add(userId);
       }
 
       // Track which type of report is expiring
       if (ActiveBanStates.includes(report.status)) {
-        userBanReports.set(userId, true);
+        userBanReports.add(userId);
       } else if (ActiveSilenceStates.includes(report.status)) {
-        userSilenceReports.set(userId, true);
+        userSilenceReports.add(userId);
       } else if (report.status === "TRADE_BAN_ACTIVATED") {
-        userTradeBanReports.set(userId, true);
+        userTradeBanReports.add(userId);
       }
     }
 
@@ -81,19 +81,19 @@ export async function GET(request: Request) {
     );
 
     // Group active reports by user and type
-    const userHasActiveBan = new Map<string, boolean>();
-    const userHasActiveSilence = new Map<string, boolean>();
-    const userHasActiveTradeBan = new Map<string, boolean>();
+    const userHasActiveBan = new Set<string>();
+    const userHasActiveSilence = new Set<string>();
+    const userHasActiveTradeBan = new Set<string>();
 
     for (const report of activeReports) {
       if (!report.reportedUserId) continue;
 
       if (ActiveBanStates.includes(report.status)) {
-        userHasActiveBan.set(report.reportedUserId, true);
+        userHasActiveBan.add(report.reportedUserId);
       } else if (ActiveSilenceStates.includes(report.status)) {
-        userHasActiveSilence.set(report.reportedUserId, true);
+        userHasActiveSilence.add(report.reportedUserId);
       } else if (report.status === "TRADE_BAN_ACTIVATED") {
-        userHasActiveTradeBan.set(report.reportedUserId, true);
+        userHasActiveTradeBan.add(report.reportedUserId);
       }
     }
 
@@ -103,7 +103,7 @@ export async function GET(request: Request) {
     const usersToUntradeBan: string[] = [];
 
     // For each banned user, check if they have any active ban reports
-    for (const [userId] of bannedUsers) {
+    for (const userId of bannedUsers) {
       // Only unban if they had an expired ban report and have no active ban reports
       if (userBanReports.has(userId) && !userHasActiveBan.has(userId)) {
         usersToUnban.push(userId);
@@ -111,7 +111,7 @@ export async function GET(request: Request) {
     }
 
     // For each silenced user, check if they have any active silence reports
-    for (const [userId] of silencedUsers) {
+    for (const userId of silencedUsers) {
       // Only unsilence if they had an expired silence report and have no active silence reports
       if (userSilenceReports.has(userId) && !userHasActiveSilence.has(userId)) {
         usersToUnsilence.push(userId);
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
     }
 
     // For each trade banned user, check if they have any active trade ban reports
-    for (const [userId] of tradeBannedUsers) {
+    for (const userId of tradeBannedUsers) {
       // Only untrade ban if they had an expired trade ban report and have no active trade ban reports
       if (userTradeBanReports.has(userId) && !userHasActiveTradeBan.has(userId)) {
         usersToUntradeBan.push(userId);

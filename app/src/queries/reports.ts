@@ -87,16 +87,16 @@ export const listUserReportForGET = (client: Pick<DrizzleClient, "query">) =>
 /** Build the `userReport` listing for `GET`, using predicates on `reportedUserId`, `status`, `banEnd`. */
 export const listUserReportForGET2 = (
   client: Pick<DrizzleClient, "query">,
-  bannedUsers: Map<string, boolean>,
-  silencedUsers: Map<string, boolean>,
-  tradeBannedUsers: Map<string, boolean>,
+  bannedUsers: Set<string>,
+  silencedUsers: Set<string>,
+  tradeBannedUsers: Set<string>,
 ) =>
   client.query.userReport.findMany({
     where: and(
       inArray(userReport.reportedUserId, [
-        ...bannedUsers.keys(),
-        ...silencedUsers.keys(),
-        ...tradeBannedUsers.keys(),
+        ...bannedUsers,
+        ...silencedUsers,
+        ...tradeBannedUsers,
       ]),
       inArray(userReport.status, [
         ...ActiveBanStates,
