@@ -43,7 +43,7 @@ export const fetchSageMode = async (client: DrizzleClient, sageModeId: string) =
   });
 };
 
-import { and, gte, isNull, sql } from "drizzle-orm";
+import { and, gte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   IMG_AVATAR_DEFAULT,
@@ -171,11 +171,11 @@ export const insertActionLogForUpdate = (
     relatedImage: entry.image,
   });
 
-/** Build the `userData` update for `updateSageMode`, including predicates on `userId`, `status`, `reputationPoints`. */
-export const updateUserDataForUpdateSageMode = (
+/** Build the `userData` update for `removeSageMode`, including predicates on `userId`, `status`, `reputationPoints`. */
+export const updateUserDataForRemoveSageMode = (
   client: Pick<DrizzleClient, "update">,
   repCost: number,
-  user: { userId: string; sageModeId: null | string },
+  user: { userId: string; sageModeId: string },
   readiness?: ActionReadiness,
 ) =>
   client
@@ -194,14 +194,12 @@ export const updateUserDataForUpdateSageMode = (
         gte(userData.reputationPoints, repCost),
         // Compare-and-swap on the current mode: if another request already changed
         // it, rowsAffected is 0 and we abort rather than double-debit reputation.
-        user.sageModeId
-          ? eq(userData.sageModeId, user.sageModeId)
-          : isNull(userData.sageModeId),
+        eq(userData.sageModeId, user.sageModeId),
       ),
     );
 
-/** Build the `actionLog` insert for `updateSageMode`. */
-export const insertActionLogForUpdateSageMode = (
+/** Build the `actionLog` insert for `removeSageMode`. */
+export const insertActionLogForRemoveSageMode = (
   client: Pick<DrizzleClient, "insert">,
   user: { userId: string; avatarLight: null | string; avatar: null | string },
   logMsg: string,
