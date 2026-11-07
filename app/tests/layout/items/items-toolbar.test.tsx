@@ -95,4 +95,5 @@ it("keeps auto equip in view when damaged gear cannot be repaired here", () => {
   render(<ItemsToolbar userData={player("NONE")} userItems={[sword(40)]} />);
   expect(buttons(screen, /Repair all/)).toHaveLength(0);
   expect(buttons(moreActions(), /Auto equip/)).toHaveLength(0);
+  expect(buttons(screen, /Auto equip/)).toHaveLength(1);
 });
