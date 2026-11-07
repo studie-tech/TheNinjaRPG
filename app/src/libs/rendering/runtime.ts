@@ -1,4 +1,5 @@
 import { Container, GlProgram, UniformGroup, WebGLRenderer } from "pixi.js";
+import { setGameSceneVisible } from "@/libs/gameSceneVisibility";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { premultipliedClearColor } from "@/libs/rendering/color";
@@ -135,8 +136,11 @@ export const createGameRenderer = async (options: {
       previousTime = null;
     }
   };
+  // Previews are incidental to their page, so its decoration keeps running around them.
+  const isScene = !options.surface.endsWith("-preview");
   const observer = new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? true;
+    if (isScene) setGameSceneVisible(canvas, visible);
     updateSubscription();
   });
   observer.observe(canvas);
@@ -198,6 +202,7 @@ export const createGameRenderer = async (options: {
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    setGameSceneVisible(canvas, false);
     telemetry.dispose();
     updateSubscription();
     signal.removeEventListener("abort", dispose);
