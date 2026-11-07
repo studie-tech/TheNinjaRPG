@@ -1,27 +1,22 @@
 import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import { DAMAGE_LEECH_CAP_RATIO } from "@/libs/combat/constants";
-import type { CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";
-import { makeBattleUser, makeDamageEffect, makeEffect } from "./helpers/battleScenario";
+import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
+import {
+  makeBattleUser,
+  makeCombatAction,
+  makeCompleteBattle,
+  makeDamageEffect,
+  makeEffect,
+  makeShield,
+} from "./helpers/battleScenario";
 
 const ROUND = 3;
 
-/** Minimal action fixture — effects drive the packet, not the action. */
-const makeAction = (): CombatAction =>
-  ({ chakraCost: 0, staminaCost: 0 }) as CombatAction;
-
 const makeBattle = (
-  usersState: ReturnType<typeof makeBattleUser>[],
+  usersState: BattleUserState[],
   usersEffects: UserEffect[],
-): CompleteBattle =>
-  ({
-    battleType: "COMBAT",
-    round: ROUND,
-    usersState,
-    usersEffects,
-    groundEffects: [],
-    extraState: {},
-  }) as unknown as CompleteBattle;
+): CompleteBattle => makeCompleteBattle({ round: ROUND, usersState, usersEffects });
 
 /**
  * Attacker with almost no current HP but a huge max, so any heal is fully
@@ -41,7 +36,7 @@ const makeDefender = (overrides: Record<string, unknown> = {}) =>
  * without them `damageUser`'s `instant`/`residual` check is false and no consequence (and
  * thus no damage) is ever recorded — `applySingleEffect` also gates every effect type on
  * `effect.targetType === "user"` before dispatching, and that field has no schema default
- * either. See `summon_damage_credit.test.ts` for the same two fields on its instant-damage
+ * either. See `damage_dealt_credit.test.ts` for the same two fields on its instant-damage
  * fixture.
  */
 const makeAttack = (id = "damage-1"): UserEffect =>
@@ -100,35 +95,6 @@ const makeLifesteal = (power: number): UserEffect =>
     },
   );
 
-/**
- * Active shield on the target that guarantees activation and absorbs a large
- * chunk of a hit's damage.
- *
- * `shield()` (process.ts) only rolls/activates on `isNew` when `effect.rounds`
- * is truthy; `ShieldTag.rounds` has a schema prefault of 3, so the default
- * (unset) rounds already satisfies that gate. On activation it rolls
- * `Math.random() < power/100` and, on success, sets `effect.power =
- * shieldEffect.health` — the absorption pass later reads that `power` as
- * remaining shield capacity (process.ts:549, 566-568). `power: 100` makes the
- * roll always succeed (`Math.random()` is always `< 1`); `health` sets the
- * post-activation capacity.
- */
-const makeShield = (targetId: string): UserEffect =>
-  makeEffect(
-    "shield",
-    { power: 100, health: 100_000 },
-    {
-      id: `shield-${targetId}`,
-      creatorId: targetId,
-      targetId,
-      isNew: true,
-      castThisRound: true,
-      createdRound: ROUND,
-      actionId: "shield-action",
-      targetType: "user",
-    },
-  );
-
 /** A reflect buff on the defender: reflects a % of received damage back at the attacker. */
 const makeReflect = (power: number): UserEffect =>
   makeEffect(
@@ -166,7 +132,7 @@ const makeHealPrevent = (targetId: string, createdRound: number): UserEffect =>
 /** Runs one packet and returns the observed HP deltas. */
 const runLeech = (effects: UserEffect[], attacker = makeAttacker(), defender = makeDefender()) => {
   const battle = makeBattle([attacker, defender], effects);
-  const { newBattle } = applyEffects(battle, "attacker", makeAction());
+  const { newBattle } = applyEffects(battle, "attacker", makeCombatAction());
   const a = newBattle.usersState.find((u) => u.userId === "attacker");
   const d = newBattle.usersState.find((u) => u.userId === "defender");
   return {
@@ -250,7 +216,7 @@ describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
     // No-shield reference: vamp (40%) heals 0.4 * full damage D; healthLost == D.
     const ref = runLeech([makeAttack(), makeVamp(40)]);
     // Same hit, but the defender has a shield that absorbs a large chunk of it.
-    const shielded = runLeech([makeAttack(), makeVamp(40), makeShield("defender")]);
+    const shielded = runLeech([makeAttack(), makeVamp(40), makeShield("defender", ROUND)]);
     expect(ref.healthLost).toBeGreaterThan(0);
     // The shield absorbed damage, so less HP was lost than the unshielded reference.
     expect(shielded.healthLost).toBeLessThan(ref.healthLost);
@@ -266,7 +232,7 @@ describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
     const attacker = makeAttacker({ curHealth: 1, maxHealth: 100_000_000 });
     const defender = makeDefender();
     const battle = makeBattle([attacker, defender], [makeAttack(), makeLifesteal(60), makeReflect(60)]);
-    const { newBattle } = applyEffects(battle, "attacker", makeAction());
+    const { newBattle } = applyEffects(battle, "attacker", makeCombatAction());
     const a = newBattle.usersState.find((u) => u.userId === "attacker");
     expect(a?.curHealth).toBe(0);
   });

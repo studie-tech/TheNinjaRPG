@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
-import type { CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";
+import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { calcPoolCost } from "@/libs/combat/util";
-import { makeBattleUser, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCombatAction, makeEffect } from "./helpers/battleScenario";
 
 const runtime = (id: string, creatorId: string) => ({
   id,
@@ -18,7 +18,7 @@ const runtime = (id: string, creatorId: string) => ({
 const poison = () =>
   makeEffect("poison", { power: 100, rounds: 3 }, runtime("poison", "attacker"));
 
-const action = { chakraCost: 200, staminaCost: 300, healthCost: 0 } as CombatAction;
+const action = makeCombatAction({ chakraCost: 200, staminaCost: 300 });
 
 const poolCost = (
   type: "increasepoolcost" | "decreasepoolcost",

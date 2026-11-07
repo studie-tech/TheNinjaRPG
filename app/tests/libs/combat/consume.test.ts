@@ -5,33 +5,24 @@ import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { applyEffects } from "@/libs/combat/process";
 import { getBattleGrid } from "@/libs/combat/util";
 import { ConsumeTag, DamageTag, JutsuValidatorRawSchema, SageModeValidator } from "@/validators/combat";
-import type { CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";
+import type { BattleUserState, CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";
 import {
   makeBattleUser,
+  makeCombatAction,
   makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
   makeJutsu,
+  makeShield,
 } from "./helpers/battleScenario";
 import { makeSageMode } from "./helpers/sageMode";
 
 const ROUND = 3;
 
-const makeAction = (): CombatAction =>
-  ({ chakraCost: 0, staminaCost: 0 }) as CombatAction;
-
 const makeBattle = (
-  usersState: ReturnType<typeof makeBattleUser>[],
+  usersState: BattleUserState[],
   usersEffects: UserEffect[],
-): CompleteBattle =>
-  ({
-    battleType: "COMBAT",
-    round: ROUND,
-    usersState,
-    usersEffects,
-    groundEffects: [],
-    extraState: {},
-  }) as unknown as CompleteBattle;
+): CompleteBattle => makeCompleteBattle({ round: ROUND, usersState, usersEffects });
 
 const makeAttacker = (overrides: Record<string, unknown> = {}) =>
   makeBattleUser("attacker", { curHealth: 1000, maxHealth: 1000, ...overrides });
@@ -74,46 +65,28 @@ const makeConsume = (power: number, shieldRounds = 3, rounds = 3): UserEffect =>
     },
   );
 
-/**
- * Active shield on the target that guarantees activation and absorbs a large
- * chunk of a hit's damage. See vamp_lifesteal_cap.test.ts for the same fixture.
- */
-const makeShield = (targetId: string): UserEffect =>
-  makeEffect(
-    "shield",
-    { power: 100, health: 100_000 },
-    {
-      id: `shield-${targetId}`,
-      creatorId: targetId,
-      targetId,
-      isNew: true,
-      castThisRound: true,
-      createdRound: ROUND,
-      actionId: "shield-action",
-      targetType: "user",
-    },
-  );
-
-const findConsumeShield = (effects: UserEffect[]) =>
-  effects.find(
+const consumeShields = (effects: UserEffect[]) =>
+  effects.filter(
     (e) => e.type === "shield" && e.targetId === "attacker" && (e.power ?? 0) > 0,
   );
+const findConsumeShield = (effects: UserEffect[]) => consumeShields(effects)[0];
+
+/** Health `before` lost by the time `battle` was reached. */
+const healthLostBy = (before: BattleUserState, battle: CompleteBattle) =>
+  before.curHealth -
+  (battle.usersState.find((u) => u.userId === before.userId)?.curHealth ?? 0);
 
 describe("applyEffects — consume", () => {
   it("converts a percentage of damage dealt into a shield on the attacker", () => {
     const attacker = makeAttacker();
     const defender = makeDefender();
     const battle = makeBattle([attacker, defender], [makeAttack(), makeConsume(50)]);
-    const { newBattle, actionEffects } = applyEffects(battle, "attacker", makeAction());
+    const { newBattle, actionEffects } = applyEffects(battle, "attacker", makeCombatAction());
 
-    const healthLost =
-      defender.curHealth -
-      (newBattle.usersState.find((u) => u.userId === "defender")?.curHealth ?? 0);
+    const healthLost = healthLostBy(defender, newBattle);
     expect(healthLost).toBeGreaterThan(0);
 
-    const shields = newBattle.usersEffects.filter(
-      (e) => e.type === "shield" && e.targetId === "attacker" && (e.power ?? 0) > 0,
-    );
+    const shields = consumeShields(newBattle.usersEffects);
     expect(shields).toHaveLength(1);
     expect(shields[0]?.power).toBeCloseTo(Math.floor(healthLost * 0.5), 0);
     expect(shields[0]?.rounds).toBe(3);
@@ -127,7 +100,7 @@ describe("applyEffects — consume", () => {
       [makeAttacker(), makeDefender()],
       [makeAttack(), makeConsume(25, 5)],
     );
-    const { newBattle } = applyEffects(battle, "attacker", makeAction());
+    const { newBattle } = applyEffects(battle, "attacker", makeCombatAction());
 
     expect(newBattle.usersEffects.find((e) => e.type === "consume")?.rounds).toBe(3);
     const shield = newBattle.usersEffects.find(
@@ -143,11 +116,9 @@ describe("applyEffects — consume", () => {
     const { newBattle: ref } = applyEffects(
       makeBattle([makeAttacker(), refDefender], [makeAttack(), makeConsume(50)]),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
-    const refHealthLost =
-      refDefender.curHealth -
-      (ref.usersState.find((u) => u.userId === "defender")?.curHealth ?? 0);
+    const refHealthLost = healthLostBy(refDefender, ref);
     const refShield = findConsumeShield(ref.usersEffects);
     expect(refHealthLost).toBeGreaterThan(0);
     expect(refShield?.power).toBeGreaterThan(0);
@@ -157,14 +128,12 @@ describe("applyEffects — consume", () => {
     const { newBattle: shielded } = applyEffects(
       makeBattle(
         [makeAttacker(), shieldedDefender],
-        [makeAttack(), makeConsume(50), makeShield("defender")],
+        [makeAttack(), makeConsume(50), makeShield("defender", ROUND)],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
-    const shieldedHealthLost =
-      shieldedDefender.curHealth -
-      (shielded.usersState.find((u) => u.userId === "defender")?.curHealth ?? 0);
+    const shieldedHealthLost = healthLostBy(shieldedDefender, shielded);
     const consumeShield = findConsumeShield(shielded.usersEffects);
 
     expect(shieldedHealthLost).toBeLessThan(refHealthLost);
@@ -182,14 +151,10 @@ describe("applyEffects — consume", () => {
         [makeAttack("damage-1"), makeAttack("damage-2"), makeConsume(50)],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
-    const healthLost =
-      defender.curHealth -
-      (newBattle.usersState.find((u) => u.userId === "defender")?.curHealth ?? 0);
-    const shields = newBattle.usersEffects.filter(
-      (e) => e.type === "shield" && e.targetId === "attacker" && (e.power ?? 0) > 0,
-    );
+    const healthLost = healthLostBy(defender, newBattle);
+    const shields = consumeShields(newBattle.usersEffects);
 
     expect(healthLost).toBeGreaterThan(0);
     expect(shields).toHaveLength(1);
@@ -212,18 +177,14 @@ describe("applyEffects — consume", () => {
         ],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     const perDefenderLost = [first, second].map(
       (defender) =>
-        defender.curHealth -
-        (newBattle.usersState.find((u) => u.userId === defender.userId)?.curHealth ??
-          0),
+        healthLostBy(defender, newBattle),
     );
     const healthLost = perDefenderLost.reduce((total, lost) => total + lost, 0);
-    const shields = newBattle.usersEffects.filter(
-      (e) => e.type === "shield" && e.targetId === "attacker" && (e.power ?? 0) > 0,
-    );
+    const shields = consumeShields(newBattle.usersEffects);
 
     // Both targets must actually be hit, else the single-shield assertion is vacuous.
     perDefenderLost.forEach((lost) => expect(lost).toBeGreaterThan(0));
@@ -239,7 +200,7 @@ describe("applyEffects — consume", () => {
     const { newBattle: afterConsume } = applyEffects(
       makeBattle([makeAttacker(), makeDefender()], [makeAttack(), makeConsume(50)]),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     const consumeShield = findConsumeShield(afterConsume.usersEffects);
     expect(consumeShield).toBeDefined();
@@ -257,11 +218,9 @@ describe("applyEffects — consume", () => {
         [makeAttack("retaliation", "defender", "attacker")],
       ),
       "defender",
-      makeAction(),
+      makeCombatAction(),
     );
-    const controlLost =
-      controlAttacker.curHealth -
-      (control.usersState.find((u) => u.userId === "attacker")?.curHealth ?? 0);
+    const controlLost = healthLostBy(controlAttacker, control);
     expect(controlLost).toBeGreaterThan(0);
 
     // Same retaliation with the consume-granted shield carried forward.
@@ -278,11 +237,9 @@ describe("applyEffects — consume", () => {
         ],
       ),
       "defender",
-      makeAction(),
+      makeCombatAction(),
     );
-    const shieldedLost =
-      shieldedAttacker.curHealth -
-      (shielded.usersState.find((u) => u.userId === "attacker")?.curHealth ?? 0);
+    const shieldedLost = healthLostBy(shieldedAttacker, shielded);
     const remainingShield = findConsumeShield(shielded.usersEffects);
 
     expect(shieldedLost).toBeLessThan(controlLost);
@@ -328,7 +285,7 @@ describe("active Consume damage conversion", () => {
     const first = applyEffects(
       makeBattle([makeAttacker(), makeDefender()], [staticHit(), activeConsume()]),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     const firstShield = findConsumeShield(first.usersEffects)!;
     const second = applyEffects(
@@ -340,7 +297,7 @@ describe("active Consume damage conversion", () => {
         ],
       },
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     expect(firstShield.power).toBeGreaterThan(0);
     expect(shieldHp(second)).toBe(firstShield.power * 2);
@@ -357,7 +314,7 @@ describe("active Consume damage conversion", () => {
         round: ROUND + 1,
       },
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     expect(shieldHp(newBattle)).toBeGreaterThan(0);
   });
@@ -366,7 +323,7 @@ describe("active Consume damage conversion", () => {
     const first = applyEffects(
       makeBattle([makeAttacker(), makeDefender()], [staticHit(), activeConsume()]),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     const expired = first.usersEffects.map((e) =>
       e.type === "consume" ? { ...e, rounds: 0 } : e,
@@ -374,7 +331,7 @@ describe("active Consume damage conversion", () => {
     const second = applyEffects(
       { ...first, round: ROUND + 1, usersEffects: [...expired, staticHit()] },
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     expect(shieldHp(second)).toBe(shieldHp(first));
     expect(second.usersEffects.some((e) => e.type === "consume")).toBe(false);
@@ -387,7 +344,7 @@ describe("active Consume damage conversion", () => {
         [staticHit(), makeConsume(50, 3, 0)],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     expect(shieldHp(newBattle)).toBeGreaterThan(0);
     expect(newBattle.usersEffects.some((e) => e.type === "consume")).toBe(false);
@@ -397,7 +354,7 @@ describe("active Consume damage conversion", () => {
         [staticHit(), activeConsume({ rounds: 0 })],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     expect(shieldHp(stale)).toBe(0);
   });
@@ -414,7 +371,7 @@ describe("active Consume damage conversion", () => {
     const { newBattle, actionEffects } = applyEffects(
       makeBattle([makeAttacker(), defender], [residual, activeConsume()]),
       "defender",
-      makeAction(),
+      makeCombatAction(),
     );
     const lost =
       defender.curHealth -
@@ -445,7 +402,7 @@ describe("active Consume damage conversion", () => {
     const { newBattle } = applyEffects(
       makeBattle([makeAttacker(), defender], [drain, activeConsume()]),
       "defender",
-      makeAction(),
+      makeCombatAction(),
     );
     const lost =
       defender.curHealth -
@@ -461,12 +418,12 @@ describe("active Consume damage conversion", () => {
         [staticHit("other"), staticHit(), activeConsume()],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     const reference = applyEffects(
       makeBattle([makeAttacker(), makeDefender()], [staticHit(), activeConsume()]),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     expect(shieldHp(newBattle)).toBe(shieldHp(reference));
   });
@@ -487,7 +444,7 @@ describe("active Consume damage conversion", () => {
     const { newBattle } = applyEffects(
       makeBattle([makeAttacker(), makeDefender()], [staticHit(), reflect, consume]),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     const reflected =
       1000 - newBattle.usersState.find((u) => u.userId === "attacker")!.curHealth;
@@ -579,7 +536,7 @@ describe("active Consume damage conversion", () => {
         ],
       ),
       "defender",
-      makeAction(),
+      makeCombatAction(),
     );
     const healthLost = defender.curHealth - newBattle.usersState[1]!.curHealth;
     expect(healthLost).toBeGreaterThan(100);
@@ -595,7 +552,7 @@ describe("active Consume damage conversion", () => {
         [staticHit("attacker", "attacker"), activeConsume()],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     expect(shieldHp(newBattle)).toBe(0);
   });
@@ -683,7 +640,7 @@ describe("active Consume damage conversion", () => {
         [staticHit(), activeConsume({ fromType: "bloodline" }), seal],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     expect(shieldHp(newBattle)).toBe(0);
   });
@@ -721,7 +678,7 @@ describe("active Consume damage conversion", () => {
         [...drains, activeConsume()],
       ),
       "defender",
-      makeAction(),
+      makeCombatAction(),
     );
     expect(shieldHp(newBattle)).toBe(10);
   });
@@ -741,7 +698,7 @@ describe("active Consume damage conversion", () => {
     const { newBattle } = applyEffects(
       makeBattle([makeAttacker(), makeDefender()], [poison, activeConsume()]),
       "defender",
-      { chakraCost: 100, staminaCost: 100 } as CombatAction,
+      makeCombatAction({ chakraCost: 100, staminaCost: 100 }),
     );
     expect(shieldHp(newBattle)).toBe(50);
   });
@@ -768,7 +725,7 @@ describe("active Consume damage conversion", () => {
         ],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     const returnedDamage =
       1000 - newBattle.usersState.find((u) => u.userId === "attacker")!.curHealth;
@@ -809,13 +766,13 @@ describe("active Consume damage conversion", () => {
         ],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     expect(shieldHp(first, "defender")).toBe(0);
     const second = applyEffects(
       { ...first, round: ROUND + 1 },
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     expect(shieldHp(second, "defender")).toBe(0);
     expect(
@@ -841,7 +798,7 @@ describe("active Consume damage conversion", () => {
         [staticHit(), makeConsume(50, 3, rounds), clear],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     expect(actionEffects.some((e) => e.txt.includes("cleared"))).toBe(true);
     expect(shieldHp(newBattle)).toBe(0);
@@ -872,7 +829,7 @@ describe("active Consume damage conversion", () => {
         [staticHit("summon"), diffuse, consume],
       ),
       "summon",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     const initialShield = shieldHp(first, "summon");
     const debt = first.usersState.find((u) => u.userId === "defender")!
@@ -882,7 +839,7 @@ describe("active Consume damage conversion", () => {
     const second = applyEffects(
       { ...first, round: ROUND + 1 },
       "defender",
-      makeAction(),
+      makeCombatAction(),
     ).newBattle;
     expect(shieldHp(second, "summon")).toBe(
       initialShield + Math.floor((debt.remainingDamage / debt.remainingTurns) * 0.5),
@@ -911,7 +868,7 @@ describe("active Consume damage conversion", () => {
         [...wounds, activeConsume()],
       ),
       "defender",
-      makeAction(),
+      makeCombatAction(),
     );
     expect(shieldHp(newBattle)).toBe(10);
   });
@@ -923,7 +880,7 @@ describe("active Consume damage conversion", () => {
         [{ ...staticHit(), power: 1000000 }, activeConsume({ power: 200 })],
       ),
       "attacker",
-      makeAction(),
+      makeCombatAction(),
     );
     expect(shieldHp(newBattle)).toBe(SHIELD_MAX_HEALTH);
   });
