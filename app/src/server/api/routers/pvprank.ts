@@ -678,44 +678,7 @@ export const pvpRankRouter = createTRPCRouter({
       );
 
       if (result.success && result.battleId) {
-        const rankedPickRows = [
-          ...userEffective.loadout.loadout.jutsuIds.map((jutsuId) => ({
-            type: "jutsu" as const,
-            contentId: jutsuId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...userEffective.loadout.loadout.weaponIds.map((weaponId) => ({
-            type: "item" as const,
-            contentId: weaponId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...userEffective.loadout.loadout.consumableIds.map((consumableId) => ({
-            type: "consumable" as const,
-            contentId: consumableId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...opponentEffective.loadout.loadout.jutsuIds.map((jutsuId) => ({
-            type: "jutsu" as const,
-            contentId: jutsuId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...opponentEffective.loadout.loadout.weaponIds.map((weaponId) => ({
-            type: "item" as const,
-            contentId: weaponId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...opponentEffective.loadout.loadout.consumableIds.map((consumableId) => ({
-            type: "consumable" as const,
-            contentId: consumableId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-        ];
+        const rankedPickRows = [userEffective, opponentEffective].flatMap(rankedPicks);
         const postMatchTasks: PromiseLike<unknown>[] = [
           deleteRankedPvpQueueForCheckRankedPvpMatches(
             ctx.drizzle,
@@ -857,3 +820,16 @@ const keepStoredReputation = (
           ?.reward_reputation ?? 0,
     },
   }));
+
+/** One pick-log row per selection of a ranked loadout: jutsu, weapons, then consumables. */
+const rankedPicks = ({
+  loadout: { loadout },
+}: Awaited<ReturnType<typeof cleanRankedProhibitedSelections>>) =>
+  [
+    ...loadout.jutsuIds.map((contentId) => ({ type: "jutsu" as const, contentId })),
+    ...loadout.weaponIds.map((contentId) => ({ type: "item" as const, contentId })),
+    ...loadout.consumableIds.map((contentId) => ({
+      type: "consumable" as const,
+      contentId,
+    })),
+  ].map((pick) => ({ ...pick, battleType: "RANKED_PVP" as const, count: 1 }));
