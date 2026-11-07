@@ -102,6 +102,9 @@ import type { DrizzleClient } from "../../db";
 const PAYPAL_DECLINED_MESSAGE =
   "PayPal declined the payment. No payment was captured. Start a new checkout with another payment method.";
 
+/** Receipt states a reported payment can still be delivered from. */
+const UNDELIVERED_RECEIPT_STATUSES = ["RESERVED", "CAPTURING", "DELIVERY_PENDING"];
+
 export const paypalRouter = createTRPCRouter({
   /** List offers with the caller's lifetime buyer counts; managers may include drafts. */
   getStoreBundles: protectedProcedure
@@ -835,22 +838,14 @@ export const syncTransactions = async (
             return errorResponse(
               "Payment requires manual support review or refund; no points were delivered.",
             );
-          if (
-            stored?.orderId &&
-            ["RESERVED", "CAPTURING", "DELIVERY_PENDING"].includes(stored.status)
-          ) {
+          if (stored?.orderId && UNDELIVERED_RECEIPT_STATUSES.includes(stored.status)) {
             const order = await getPaypalOrder({ orderId: stored.orderId, token });
             const buyerId = await canonicalStoreUserId(client, createdByUserId);
             return deliverPaypalOrder(client, order, buyerId, stored.orderId);
           }
           if (!Number.isFinite(parsedValue) || parsedValue < 1 || currency !== "USD") {
             return errorResponse(`Transaction ID ${info.transaction_id} invalid value`);
-          } else if (
-            stored &&
-            !["RESERVED", "CAPTURING", "DELIVERY_PENDING", "REVIEW_REQUIRED"].includes(
-              stored.status,
-            )
-          ) {
+          } else if (stored && !UNDELIVERED_RECEIPT_STATUSES.includes(stored.status)) {
             return {
               success: true,
               message: `Transaction ID ${info.transaction_id} already processed`,
@@ -1070,10 +1065,7 @@ export const deliverPaypalReputation = async (input: PaypalReputationPayment) =>
         );
       if (
         stored &&
-        (stored.createdById !== input.createdById ||
-          stored.affectedUserId !== input.affectedUserId ||
-          stored.amount !== input.value ||
-          stored.reputationPoints !== input.reps ||
+        (stored.reputationPoints !== input.reps ||
           (stored.orderId && input.orderId && stored.orderId !== input.orderId))
       )
         throw new Error("PayPal payment does not match reserved terms");
