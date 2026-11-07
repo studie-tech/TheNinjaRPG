@@ -14,10 +14,13 @@ import {
   KAGE_REMOVAL_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
 import { clan, village, villageStructure } from "@/drizzle/schema";
-import { castElderVoteEntry, tallyElderVotes } from "@/libs/elder";
+import { tallyElderVotes } from "@/libs/elder";
 import { isFactionVillage } from "@/libs/war";
 import { fetchClan } from "@/queries/clan";
-import { fetchElderVote } from "@/queries/elder";
+import {
+  fetchElderVote,
+  insertVillageElderVoteEntryForCastElderVoteEntry,
+} from "@/queries/elder";
 import {
   executeResultForUpgradeStructure,
   fetchElders,
@@ -446,14 +449,14 @@ export const kageRouter = createTRPCRouter({
             return errorResponse(
               `At least ${ELDER_MIN_VOTING_COUNT} eligible elders are required`,
             );
-          const inserted = await castElderVoteEntry(
+          // The outcome is settled below, under the removal's own lock.
+          const inserted = await insertVillageElderVoteEntryForCastElderVoteEntry(
             tx,
             input.voteId,
             ctx.userId,
             input.vote,
-            count,
           );
-          return inserted
+          return inserted.rowsAffected
             ? { success: true, message: "Vote recorded" }
             : errorResponse("You have already voted");
         },

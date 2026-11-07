@@ -110,6 +110,16 @@ describeWithDatabase("elder kage removal protection", () => {
     expect((await elder.getRemovalHistory({ villageId: "removal-village" }))[0]).toMatchObject({ status: "APPROVED", yes: 2, no: 0, successorId: "elder-3", reason: "The council requests accountable leadership" });
     expect((await elder.nominateKage({ villageId: "removal-village", voteId: vote.id, userId: "elder-3" })).success).toBe(false);
   });
+  it("counts one ballot per elder and leaves the motion open until a majority", async () => {
+    const elder = await callerFor(kageRouter, "elder-1");
+    await elder.initiateKageRemovalVote({ villageId: "removal-village", reason: "The council requests accountable leadership" });
+    const db = await getTestDatabase(); const vote = (await db.query.villageElderVote.findFirst())!;
+    expect(await elder.voteOnKageRemoval({ voteId: vote.id, vote: "YES" })).toMatchObject({ success: true });
+    await elder.voteOnKageRemoval({ voteId: vote.id, vote: "NO" });
+    expect(await db.select().from(villageElderVoteEntry)).toMatchObject([{ userId: "elder-1", vote: "YES" }]);
+    expect((await db.query.villageElderVote.findFirst())?.status).toBe("PENDING");
+  });
+
   it.each(["missing", "stale", "wrong-village", "wrong-type", "pending", "unresolved"])("rejects an explicit %s motion and associates an omitted ID with only the current removal", async (invalid) => {
     const db = await getTestDatabase();
     await db.update(village).set({
