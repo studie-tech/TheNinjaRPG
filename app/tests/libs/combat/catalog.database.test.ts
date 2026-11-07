@@ -23,7 +23,7 @@ describeWithDatabase("stored battle catalogs", () => {
   it("compacts every jutsu in the row, including those merged in as the battle is written", async () => {
     const db = await getTestDatabase();
     await insertUsers([
-      { userId: "player", username: "Player", rank: "JONIN", level: 50 },
+      { userId: "player", username: "Player", rank: "JONIN", level: 50, ninjutsuMastery: 100 },
       { userId: "ai", username: "AI", isAi: true, inArena: true, rank: "JONIN", level: 50 },
     ]);
     await db.insert(aiProfile).values({ id: "Default", userId: "ai", includeDefaultRules: false, rules: [{ conditions: [], action: ActionEndTurn.parse({}) }] });
@@ -34,7 +34,7 @@ describeWithDatabase("stored battle catalogs", () => {
     ]);
     await db.insert(userJutsu).values([
       { id: "owned-jutsu", userId: "player", jutsuId: "owned", equipped: true },
-      { id: "gated-jutsu", userId: "player", jutsuId: "gated", equipped: false },
+      { id: "gated-jutsu", userId: "player", jutsuId: "gated", equipped: true },
     ]);
     expect((await initiateBattle({ client: db, userIds: ["player"], targetIds: ["ai"] }, "ARENA")).success).toBe(true);
     const stored = (await db.query.battle.findFirst())!;
@@ -45,6 +45,6 @@ describeWithDatabase("stored battle catalogs", () => {
       expect(row).not.toHaveProperty("createdAt");
       expect(row).not.toHaveProperty("requiredSkillId");
     }
-    expect(jutsus.gated?.requiredNinjutsuMastery ?? 10).toBe(10);
+    expect(jutsus.gated?.requiredNinjutsuMastery).toBe(10);
   });
 });

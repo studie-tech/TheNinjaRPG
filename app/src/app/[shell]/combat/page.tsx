@@ -755,7 +755,7 @@ export default function CombatPage() {
       isInBattle,
       battle,
       isAutoCombatActive,
-      results,
+      resultShown,
       actions,
       config.useSmallActions,
       actionId,

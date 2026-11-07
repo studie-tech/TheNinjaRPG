@@ -90,6 +90,14 @@ export const combatHits = (
     return [{ userId: user.userId, amount, severity }];
   });
 
+/** Effects clone fighters between actions, so cues compare by their own identity. */
+const isSameValue = (a: unknown, b: unknown) =>
+  a === b ||
+  (typeof a === "object" &&
+    typeof b === "object" &&
+    (a as { id?: string } | null)?.id !== undefined &&
+    (a as { id?: string } | null)?.id === (b as { id?: string } | null)?.id);
+
 /** Record public per-action changes during a batch, without further reads or masking. */
 export const createCombatPlaybackRecorder = (battle: CompleteBattle) => {
   const fighters = (state: CompleteBattle) =>
@@ -115,7 +123,7 @@ export const createCombatPlaybackRecorder = (battle: CompleteBattle) => {
         users: [...nextUsers].flatMap(([userId, next]) => {
           const before = users.get(userId);
           const changes = PLAYBACK_FIELDS.filter(
-            (key) => !before || before[key] !== next[key],
+            (key) => !before || !isSameValue(before[key], next[key]),
           );
           return changes.length
             ? [

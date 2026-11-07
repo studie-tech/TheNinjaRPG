@@ -55,6 +55,42 @@ describe("combat playback recording", () => {
     expect(steps[1]?.addedEffectIds).toEqual(["hit"]);
   });
 
+  it("does not report a cue as new when effects clone fighters between actions", () => {
+    const state = setup();
+    user(state, "foe").spriteAction = slash;
+    user(state, "foe").spriteAnimationEvent = { id: "event", actionKey: "basic:attack" };
+    const recorder = createCombatPlaybackRecorder(state);
+    const cloned = structuredClone(state);
+    user(cloned, "foe").curHealth = 90;
+    recorder.record(cloned, 10, "foe");
+    expect(recorder.steps[0]?.users).toEqual([{ userId: "foe", curHealth: 90 }]);
+  });
+
+  it("gives an idle action no wind-up from the cue before it", () => {
+    const state = setup();
+    user(state, "foe").spriteAction = slash;
+    const before = structuredClone(state);
+    const recorder = createCombatPlaybackRecorder(state);
+    const cloned = structuredClone(state);
+    user(cloned, "foe").curStamina -= 5;
+    recorder.record(cloned, 10, "foe");
+    const next = asReturned({ ...cloned, version: 11 });
+    next.playback = recorder.steps;
+    const [frame] = buildPlaybackFrames(asReturned(before), next);
+    expect(frame?.windup).toBeUndefined();
+    expect(frame?.cueId).toBeUndefined();
+  });
+
+  it("still reports a repeated attack with a new cue", () => {
+    const state = setup();
+    user(state, "foe").spriteAction = slash;
+    const recorder = createCombatPlaybackRecorder(state);
+    const cloned = structuredClone(state);
+    user(cloned, "foe").spriteAction = { ...slash, id: "second-cue" };
+    recorder.record(cloned, 10, "foe");
+    expect(recorder.steps[0]?.users[0]?.spriteAction?.id).toBe("second-cue");
+  });
+
   it("exposes only public fields, so every viewer can receive the same steps", () => {
     const { steps } = walkThenStrike();
     const allowed = new Set<string>([...publicState, "userId"]);

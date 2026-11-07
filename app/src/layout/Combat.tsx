@@ -188,6 +188,14 @@ const Combat: React.FC<CombatProps> = (props) => {
   const setPresentedLogVersion = useSetAtom(combatPresentedLogVersionAtom);
   // Fighter meters follow the field while it replays actions the server already resolved.
   const [presentedBattle, setPresentedBattle] = useState<ReturnedBattle | null>(null);
+  // A replay ends with its scene; a new one reports nothing until the battle changes.
+  useEffect(
+    () => () => {
+      setPresentedBattle(null);
+      setPresentedLogVersion(undefined);
+    },
+    [battleState.battle?.id, setPresentedLogVersion],
+  );
   const {
     data: userData,
     timeDiff,
