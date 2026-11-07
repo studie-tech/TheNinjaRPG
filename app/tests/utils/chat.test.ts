@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { processMentions } from "@/utils/chat";
+import { getNewReactions, processMentions } from "@/utils/chat";
 import sanitize from "@/utils/sanitize";
 
 describe("processMentions", () => {
@@ -91,5 +91,50 @@ describe("processMentions", () => {
         '<p style="color:red">Hello <a href="/username/Carol"><b>@Carol</b></a></p>',
       mentionedUserNames: ["Carol"],
     });
+  });
+});
+
+describe("getNewReactions", () => {
+  it("adds a new emoji after the existing ones", () => {
+    const reactions = getNewReactions({ "👍": ["ann"] }, "🔥", "bob");
+    expect(reactions).toEqual({ "👍": ["ann"], "🔥": ["bob"] });
+    expect(Object.keys(reactions)).toEqual(["👍", "🔥"]);
+  });
+
+  it("appends a new user and removes a returning one in place", () => {
+    const old = { "👍": ["ann"], "🔥": ["ann", "bob"], "❤️": ["ann"] };
+    const added = getNewReactions(old, "👍", "bob");
+    expect(added).toEqual({ ...old, "👍": ["ann", "bob"] });
+    expect(Object.keys(added)).toEqual(Object.keys(old));
+    const removed = getNewReactions(old, "🔥", "ann");
+    expect(removed).toEqual({ ...old, "🔥": ["bob"] });
+    expect(Object.keys(removed)).toEqual(Object.keys(old));
+  });
+
+  it("drops an emoji with its last user and lets an empty list gain one", () => {
+    expect(getNewReactions({ "👍": ["ann"], "🔥": ["bob"] }, "👍", "ann")).toEqual({
+      "🔥": ["bob"],
+    });
+    expect(getNewReactions({ "👍": [] }, "👍", "ann")).toEqual({ "👍": ["ann"] });
+  });
+
+  it("removes every copy of a duplicated user", () => {
+    expect(getNewReactions({ "👍": ["ann", "ann", "bob"] }, "👍", "ann")).toEqual({
+      "👍": ["bob"],
+    });
+  });
+
+  it("returns the original object for an unusable emoji and never mutates it", () => {
+    const old = { "👍": ["ann"] };
+    expect(getNewReactions(old, "", "bob")).toBe(old);
+    expect(getNewReactions(old, "<script></script>", "bob")).toBe(old);
+    expect(getNewReactions(old, "a".repeat(11), "bob")).toBe(old);
+    getNewReactions(old, "👍", "ann");
+    getNewReactions(old, "👍", "bob");
+    expect(old).toEqual({ "👍": ["ann"] });
+  });
+
+  it("keys on the sanitized emoji", () => {
+    expect(getNewReactions({}, "<b>x</b>", "ann")).toEqual({ [sanitize("<b>x</b>")]: ["ann"] });
   });
 });
