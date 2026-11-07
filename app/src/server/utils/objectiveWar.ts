@@ -127,9 +127,6 @@ export const applyObjectiveWarAction = async (
         hp,
         activeWar,
         rules,
-
-        destroyed,
-        spyPath,
       );
       if (!claimed.rowsAffected) throw rejected;
       await executeRowsForApplyObjectiveWarAction(
