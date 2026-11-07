@@ -43,6 +43,7 @@ interface TowerDefenseUpgradesProps {
   isGuest?: boolean;
 }
 
+/** Present permanent or in-run upgrades using the corresponding currency, levels and purchase controls. */
 const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
   mode,
   upgradeDefinitions,

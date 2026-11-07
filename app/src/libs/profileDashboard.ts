@@ -154,6 +154,7 @@ const missionGroupDefinitions = [
   },
 ] as const;
 
+/** Match a quest type to the dashboard group's configured mission types. */
 const isInMissionGroup = (
   group: (typeof missionGroupDefinitions)[number],
   questType?: string,
@@ -185,6 +186,7 @@ export const getDashboardContentPriority = (
   return parsed.success ? parsed.data : [...dashboardContentGroups];
 };
 
+/** Map a discovery entry to its dashboard group, defaulting unclassified mission types to missions. */
 const contentGroup = (entry: {
   category: string;
   questType?: string;

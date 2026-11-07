@@ -226,6 +226,7 @@ export const canAlly = (
   return { success: true, message: "OK" };
 };
 
+/** Validate a war declaration from loaded diplomacy state and project the resulting third-party relationships. */
 export const canEnemy = (
   relationships: VillageAlliance[],
   villages: Village[],

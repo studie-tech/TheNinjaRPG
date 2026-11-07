@@ -209,6 +209,7 @@ export const runClaimedCron = async (
   }
 };
 
+/** Describe the remaining claimed timer window without issuing another database query. */
 const gameTimerWaitResponse = (previous: Date, durationMs: number) => {
   const remaining = previous.getTime() + durationMs - Date.now();
   if (remaining <= 0) return Response.json("Timer already claimed; try again later");

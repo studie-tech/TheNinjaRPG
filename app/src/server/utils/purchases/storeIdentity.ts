@@ -29,6 +29,7 @@ import type { DrizzleClient } from "@/server/db";
 
 export const DELETED_STORE_USER_PREFIX = "__tnr_deleted_store_user__:";
 
+/** Recognize identities replaced by a store-deletion tombstone. */
 export const isDeletedStoreUserId = (userId: string): boolean =>
   userId.startsWith(DELETED_STORE_USER_PREFIX);
 

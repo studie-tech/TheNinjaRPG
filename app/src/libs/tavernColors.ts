@@ -17,6 +17,7 @@ type TavernColorStyle = {
 const titleForegroundClass = (titleHex: string) =>
   contrastingTextColor(titleHex) === "#000000" ? "text-black" : "text-white";
 
+/** Derive contrast-safe title text and static Tailwind classes from a tavern color preset. */
 const titleStyle = (
   preset: Omit<TavernColorStyle, "titleClass" | "titleForeground">,
 ): TavernColorStyle => ({

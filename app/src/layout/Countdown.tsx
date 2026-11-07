@@ -12,6 +12,7 @@ interface CountdownProps {
   format?: (msLeft: number) => string;
 }
 
+/** Display a server-adjusted countdown and notify completion once per target date. */
 const Countdown: React.FC<CountdownProps> = (props) => {
   const { targetDate, timeDiff, onFinish, onEndShow, className, format } = props;
 

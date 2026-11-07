@@ -32,11 +32,13 @@ import { hasRequiredSkill } from "@/libs/skillRequirements";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
 
+/** Check the jutsu letter rank against the player's shinobi-rank allowance; missing ranks are unavailable. */
 export const checkJutsuRank = (rank: JutsuRank | undefined, userrank: UserRank) => {
   if (!rank) return false;
   return availableJutsuLetterRanks(userrank).includes(rank);
 };
 
+/** Enforce village ownership, allowing Syndicate jutsu for outlaws. */
 export const checkJutsuVillage = (jutsu: Jutsu | undefined, userdata: UserData) => {
   if (!jutsu) return false;
   return (
@@ -58,6 +60,7 @@ export const checkJutsuBloodline = (jutsu: Jutsu | undefined, userdata: UserData
   );
 };
 
+/** Return a matching effect element after enforcing any explicit classification, or undefined when unavailable. */
 export const checkJutsuElements = (jutsu: Jutsu, userElements: Set<ElementName>) => {
   // A classification is an additional requirement; tag elements still gate legacy jutsu.
   if (
@@ -76,6 +79,7 @@ export const checkJutsuElements = (jutsu: Jutsu, userElements: Set<ElementName>)
   return jutsuElements.find((e) => userElements.has(e));
 };
 
+/** Require an equipped weapon of the jutsu's type when a weapon is specified. */
 export const checkJutsuItems = (
   jutsu: Jutsu,
   userItems: UserItemWithItem[] | undefined,
@@ -90,6 +94,7 @@ export const checkJutsuItems = (
   return true;
 };
 
+/** Require the specified equipped bloodline item, applying combat durability rules to defensive gear. */
 export const checkJutsuBloodlineItem = (
   jutsu: Jutsu,
   userItems: JutsuBloodlineItemUserItems | undefined,
@@ -113,6 +118,7 @@ export const checkJutsuBloodlineItem = (
   });
 };
 
+/** Allow training acquisition for usable base jutsu while leaving activated-skill and bloodline-item gates to use. */
 export const canTrainJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
@@ -218,6 +224,7 @@ const jutsuRequirementChecks = (
 };
 
 /**
+ * Check the shared use requirements; AI bypasses these gates and weapon checks stay with the caller.
  * @param masteries - effectiveMasteries over every source the caller loaded; without it only
  *   the bloodline counts
  */

@@ -179,6 +179,7 @@ const AI_EDITABLE_KEYS = [
   "effects",
 ] as const;
 
+/** Bind a content type to the review desk's name lookup and project only matching names. */
 const findNamesOf =
   (entityType: Parameters<typeof selectContentNames>[1]): EntityConfig["findNames"] =>
   async (client, names) =>

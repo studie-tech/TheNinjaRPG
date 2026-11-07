@@ -51,6 +51,7 @@ const ELDEST_PHENOTYPE: [string, string, string] = [
   "old person wrinkles",
 ];
 
+/** Select rank- and gender-appropriate avatar prompt wording, using the eldest fallback for unknown ranks. */
 const getPhenotype = (rank: UserRank, gender: string) => {
   const [male, female, other] = PHENOTYPES[rank] ?? ELDEST_PHENOTYPE;
   return gender === "Male" ? male : gender === "Female" ? female : other;

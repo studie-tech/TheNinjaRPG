@@ -155,6 +155,7 @@ export const hasNoAvailableActions = (
   );
 };
 
+/** Return the strongest active stun AP penalty, including hostile ground effects on the combatant's tile. */
 export const calcApReduction = (
   battle?: ReturnedBattle | null,
   userId?: string | null,

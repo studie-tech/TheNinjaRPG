@@ -23,6 +23,7 @@ export const getEffectiveColorTheme = (activeLayout?: GameLayoutId): ColorTheme 
     : "light";
 };
 
+/** Choose a contrasting text color for the effective layout theme. */
 export const getEffectiveThemeTextColor = (
   activeLayout?: GameLayoutId,
 ): "#FFFFFF" | "#000000" => {

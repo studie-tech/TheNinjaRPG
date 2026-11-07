@@ -889,6 +889,7 @@ export const fetchUncompletedQuests = async (
     .filter((q) => !q.hidden || canPlayHiddenQuests(user.role));
 };
 
+/** Assign the next unfinished bootstrap quest and return its history with the loaded quest, if any. */
 export const insertNextQuest = async (
   client: DrizzleClient,
   user: NonNullable<UserWithRelations>,

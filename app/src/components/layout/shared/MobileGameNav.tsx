@@ -15,6 +15,7 @@ interface MobileGameNavProps {
   className?: string;
 }
 
+/** Render a configured navigation shortcut, omitting unavailable travel destinations and unknown IDs. */
 const MobileGameNavButton: React.FC<{
   optionId: string;
   location?: NavBarDropdownLink;

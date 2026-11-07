@@ -75,7 +75,7 @@ export const getNavOptionById = (id: string): MobileNavOption | undefined => {
   return MOBILE_NAV_OPTIONS.find((opt) => opt.id === id);
 };
 
-// Validate and normalize config from localStorage
+/** Validate stored shortcuts and fall back to defaults for missing, unknown or duplicate IDs. */
 export const normalizeMobileNavConfig = (config: unknown): MobileNavConfig => {
   const defaults = DEFAULT_MOBILE_NAV_CONFIG;
   if (!config || typeof config !== "object") return defaults;

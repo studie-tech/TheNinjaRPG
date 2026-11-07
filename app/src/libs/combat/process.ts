@@ -837,8 +837,7 @@ const splitParriedDamage = (
   return parryReturns;
 };
 
-// Accumulate before collapseConsequences merges hits from different casters.
-// Grant shields after damage resolves so they cannot absorb the generating action.
+/** Allocate conversion credit before caster hits collapse; shields are granted after the generating action resolves. */
 const accumulateShieldConversion = (
   shieldConversionsByUser: ShieldConversionsByUser,
   userId: string,
@@ -854,7 +853,7 @@ const accumulateShieldConversion = (
   });
 };
 
-// Count each HP loss before any healing, after shields and Final Stand resolve.
+/** Credit enemy-caused HP loss after mitigation and Final Stand, before healing; recoil and self-damage do not count. */
 const accumulateSiphonShield = (
   shieldConversionsByUser: ShieldConversionsByUser,
   consequence: Consequence,

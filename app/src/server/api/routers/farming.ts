@@ -1694,6 +1694,7 @@ const rollbackBulkFertilizer = async (
   );
 };
 
+/** Resolve a purchasable farm entry, rejecting unlisted seeds or fertilizers before purchase planning. */
 const resolveShopEntry = async (
   client: DrizzleClient,
   type: "PLOT" | "EXTRACTOR" | "SEED" | "FERTILIZER",
@@ -1722,6 +1723,7 @@ const resolveShopEntry = async (
   return entry ?? null;
 };
 
+/** Project loaded catalog and farm state into priced entries with level, capacity and stock restrictions. */
 const buildShopEntries = (
   user: Awaited<ReturnType<typeof fetchUser>>,
   [farmShopSeeds, farmShopFertilizers]: Awaited<ReturnType<typeof fetchFarmShopItems>>,

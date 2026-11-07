@@ -313,6 +313,7 @@ export const applyFertilizerReduction = (
   now = new Date(),
 ) => new Date(Math.max(now.getTime(), finishAt.getTime() - reductionSeconds * 1000));
 
+/** Shorten the remaining grow time by the configured watering reduction without moving it before now. */
 export const applyWaterReduction = (finishAt: Date, now = new Date()) =>
   applyFertilizerReduction(finishAt, FARM_WATER_TIME_REDUCTION_SECONDS, now);
 
@@ -369,13 +370,16 @@ export const mapPlotToState = (
   };
 };
 
+/** Read non-negative planting XP from seed data, including values supplied by item forms. */
 export const getFarmPlantExperience = (seedItem: Pick<Item, "farmPlantExperience">) =>
   positiveExperience(seedItem.farmPlantExperience);
 
+/** Read non-negative harvesting XP from yield data, including values supplied by item forms. */
 export const getFarmHarvestExperience = (
   yieldItem: Pick<Item, "farmHarvestExperience">,
 ) => positiveExperience(yieldItem.farmHarvestExperience);
 
+/** Read non-negative application XP from fertilizer data, including values supplied by item forms. */
 export const getFertilizerExperience = (
   fertilizerItem: Pick<Item, "farmFertilizerExperience">,
 ) => positiveExperience(fertilizerItem.farmFertilizerExperience);

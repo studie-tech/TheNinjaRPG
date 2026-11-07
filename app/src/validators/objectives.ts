@@ -973,7 +973,7 @@ export const QuestValidatorRawSchema = z.object({
   raidBossMaxHealth: z.coerce.number().min(1).nullish(),
   raidBossCurrentHealth: z.coerce.number().min(0).nullish(),
 });
-// Shared superRefine logic for quest validation
+/** Validate cross-field quest and objective constraints with errors attached to their form paths. */
 const questSuperRefine = (
   val: z.infer<typeof QuestValidatorRawSchema>,
   ctx: z.RefinementCtx,
@@ -1274,6 +1274,7 @@ export const QuestFormSchema = QuestFormRawSchema.transform((val) => ({
 export type ZodQuestFormType = z.output<typeof QuestFormSchema>;
 export type ZodQuestFormInput = z.input<typeof QuestFormSchema>;
 
+/** Resolve the schema for a supported objective task and reject unknown task names. */
 export const getObjectiveSchema = (type: string) => {
   const schema = AllObjectives.options.find(
     (option) => option.shape.task.safeParse(type).success,

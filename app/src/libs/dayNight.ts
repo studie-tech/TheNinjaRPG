@@ -14,9 +14,11 @@ const NIGHT_MS = WORLD_NIGHT_SECONDS * 1000;
 const lerp = (from: number, to: number, amount: number) =>
   from + (to - from) * Math.max(0, Math.min(1, amount));
 
+/** Identify the world cycle containing a timestamp, independently of the host timezone. */
 export const getWorldDayCycleIndex = (date: Date) =>
   Math.floor(date.getTime() / CYCLE_MS);
 
+/** Locate a timestamp within the configured world day or night phase. */
 export const getWorldCyclePosition = (date: Date) => {
   const ms = date.getTime();
   const cycleStart = Math.floor(ms / CYCLE_MS) * CYCLE_MS;
@@ -33,6 +35,7 @@ export const getWorldCyclePosition = (date: Date) => {
   };
 };
 
+/** Interpolate brightness near each phase boundary using the configured world-cycle timings. */
 export const getWorldCycleBrightness = (now = new Date()) => {
   const { phase, phaseOffset, phaseDuration } = getWorldCyclePosition(now);
   const transitionMs = Math.min(

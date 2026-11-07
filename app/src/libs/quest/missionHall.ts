@@ -412,6 +412,7 @@ export const questStructureRoute = (questType: string) => {
   }
 };
 
+/** Check whether the quest's hall is inaccessible here, allowing outlaw starts that do not require a hall. */
 export const questRequiresTravel = (
   questType: string,
   user: NonNullable<UserWithRelations>,
@@ -438,6 +439,7 @@ export const isWarMissionAvailable = ({
   return isVillageInvolvedInAnyWar(activeWars, villageId);
 };
 
+/** Enforce mission-hall rank limits and reserve village and S-rank missions for their dedicated flows. */
 export const isQuestRankAllowed = (
   quest: Pick<Quest, "questType" | "questRank">,
   user: Pick<UserData, "rank">,

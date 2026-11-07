@@ -1544,6 +1544,7 @@ const matchesContentObjective = (
   );
 };
 
+/** Select the persistent errand, mission or crime counter for a quest type and letter rank. */
 export const getQuestCounterFieldName = (
   type: QuestType | undefined,
   rank: LetterRank | undefined,

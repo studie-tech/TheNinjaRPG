@@ -16,6 +16,7 @@ import { authenticateCronRequest } from "@/server/utils/cron";
 
 const ENDPOINT_NAME = "daily-reports";
 
+/** Clear expired sanctions under the authenticated daily lock, retaining flags backed by active reports. */
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;

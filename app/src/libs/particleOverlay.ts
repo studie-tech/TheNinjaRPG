@@ -26,6 +26,7 @@ export const particleOverlayStyle = (zIndex: number) =>
     zIndex,
   }) as const;
 
+/** Apply shared decorative-overlay positioning and hide the overlay from assistive technology. */
 export const applyParticleOverlayStyle = (
   element: HTMLElement,
   zIndex: number,

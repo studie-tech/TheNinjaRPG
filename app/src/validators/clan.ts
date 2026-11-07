@@ -82,7 +82,7 @@ export const checkAssassin = (userId: string, clanData?: Clan | null) => {
   return CLAN_ASSASSIN_SLOTS.some((slot) => clanData?.[slot] === userId);
 };
 
-// Clan search schema (used in Clan.tsx for searching clans)
+/** Validate a named selection of clans within the caller's configured selection limit. */
 export const getClanSearchSchema = (maxClans: number) =>
   z.object({
     name: z.string(),

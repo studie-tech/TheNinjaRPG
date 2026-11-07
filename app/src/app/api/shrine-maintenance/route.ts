@@ -28,6 +28,7 @@ import type { BoostTemplateEntry } from "@/validators/shrine";
 const ENDPOINT_NAME = "shrine-maintenance";
 const ENDPOINT_NAME_DAILY = "shrine-maintenance-daily";
 
+/** Run authenticated shrine maintenance under minute and daily locks, preserving objective-war timing. */
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;

@@ -76,6 +76,7 @@ export const controlShownQuestLocationInformation = (
   });
 };
 
+/** Project visible, unassigned achievements as initial history entries without persisting them. */
 export const mockAchievementHistoryEntries = (
   achievements: Quest[],
   user: Pick<NonNullable<UserWithRelations>, "userId" | "role" | "userQuests">,

@@ -1207,6 +1207,7 @@ type InitiativeUser = {
   pvpStreak?: number | null;
 };
 
+/** Roll initiative with relative-level, territory and PvP-streak multipliers from the loaded participant snapshot. */
 export const rollInitiative = (
   user: InitiativeUser,
   opponents?: InitiativeUser[],

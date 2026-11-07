@@ -715,6 +715,7 @@ const settleWaitingJobs = async <
   );
 };
 
+/** Persist only shifted queue timings in one statement using the computed schedule. */
 const rescheduleWaiting = async (
   client: DrizzleClient,
   entries: { id: string; startsAt: Date; finishesAt: Date; durationSeconds: number }[],
@@ -956,6 +957,7 @@ const updateQueueOwner = async (
   await updateUserDataForUpdateQueueOwner2(client, amounts, nextSnapshot, owner);
 };
 
+/** Restore a positive Ryo refund with an atomic balance increment. */
 const refundRyo = async (client: DrizzleClient, userId: string, amount: number) => {
   if (amount <= 0) return;
   await incrementUserMoney(client, amount, userId);

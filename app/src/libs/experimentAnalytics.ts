@@ -57,6 +57,7 @@ export interface ExperimentAssignment {
   variant: string;
 }
 
+/** Normalize persisted experiment variants into valid assignments for exposure and completion attribution. */
 export const getExperimentAssignments = (variants: {
   abLemuReplacementVariant?: string | null;
   wallpaperVariant?: string | null;

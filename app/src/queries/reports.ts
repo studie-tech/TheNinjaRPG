@@ -994,6 +994,7 @@ export const insertUserReportForInsertUserReport = (
     additionalContext: info.additionalContext,
   });
 
+/** Persist a moderation report with a generated ID and return that ID after the insert completes. */
 export const insertUserReport = async (
   client: DrizzleClient,
   info: {

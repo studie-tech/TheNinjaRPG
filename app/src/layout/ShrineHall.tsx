@@ -294,6 +294,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 /*                               Boosts Tab                                   */
 /* -------------------------------------------------------------------------- */
 
+/** Manage timed village boosts, refreshing the slot clock only while this tab is active. */
 const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
   const { updateUser } = useRequiredUserData();
@@ -690,6 +691,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
 /*                              Maintenance Tab                               */
 /* -------------------------------------------------------------------------- */
 
+/** Pay shrine upkeep and reconcile confirmed account and village changes through the shared cache hooks. */
 const MaintenanceTab = ({ user }: TabProps) => {
   const utils = api.useUtils();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();

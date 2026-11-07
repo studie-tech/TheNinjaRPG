@@ -37,6 +37,7 @@ export async function OPTIONS() {
   });
 }
 
+/** Probe database reachability with a user lookup and preserve CORS headers on every response. */
 export async function GET() {
   const cors = await corsHeaders();
 

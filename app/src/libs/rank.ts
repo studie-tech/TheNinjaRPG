@@ -1,6 +1,7 @@
 import type { LetterRank } from "@/drizzle/constants";
 import type { UserRank } from "@/drizzle/schema";
 
+/** List jutsu letter ranks unlocked by shinobi rank; Chunin includes A-rank jutsu. */
 export const availableJutsuLetterRanks = (userrank: UserRank): LetterRank[] => {
   switch (userrank) {
     case "STUDENT":
@@ -17,6 +18,7 @@ export const availableJutsuLetterRanks = (userrank: UserRank): LetterRank[] => {
   return ["D"];
 };
 
+/** List quest letter ranks unlocked by shinobi rank; Chunin missions stop at B rank. */
 export const availableQuestLetterRanks = (userrank: UserRank): LetterRank[] => {
   switch (userrank) {
     case "STUDENT":
@@ -33,6 +35,7 @@ export const availableQuestLetterRanks = (userrank: UserRank): LetterRank[] => {
   return ["D"];
 };
 
+/** Check whether the player meets an inclusive content-level requirement. */
 export const hasRequiredLevel = (userLevel: number, requiredLevel: number) => {
   return userLevel >= requiredLevel;
 };
@@ -58,6 +61,7 @@ export const hasRequiredRank = (userRank?: UserRank, requiredRank?: UserRank) =>
   return false;
 };
 
+/** Expand a letter or shinobi rank into its allowed progression range, defaulting to every rank. */
 export const availableRanks = (letterRank?: LetterRank | UserRank): UserRank[] => {
   switch (letterRank) {
     case "D":

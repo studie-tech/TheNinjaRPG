@@ -503,6 +503,7 @@ export const observeUserIframes = (muted: boolean): (() => void) => {
   };
 };
 
+/** Apply the current mute preference to user embeds inserted directly or inside added containers. */
 const muteAddedIframes = (mutations: MutationRecord[]) => {
   mutations.forEach((mutation) => {
     mutation.addedNodes.forEach((node) => {

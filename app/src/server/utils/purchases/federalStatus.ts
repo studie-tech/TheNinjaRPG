@@ -134,6 +134,7 @@ export const reconcileFederalStatuses = async (
   }
 };
 
+/** Read the configured allowlist for sandbox-only federal-status grants. */
 const sandboxGranteeUserIds = (): string[] =>
   (env.STORE_SANDBOX_USER_IDS ?? "")
     .split(",")
@@ -143,6 +144,7 @@ const sandboxGranteeUserIds = (): string[] =>
 /** How long an ACTIVE PayPal row vouches for its tier after its last payment. */
 const PAYPAL_WINDOW_MS = PAYPAL_PAID_PERIOD_DAYS * DAY_S * 1000;
 
+/** Select the strongest verified federal tier, defaulting to NONE when no grants apply. */
 const highest = (statuses: FederalStatus[]): FederalStatus =>
   statuses.reduce<FederalStatus>(
     (best, status) => (rankOf(status) > rankOf(best) ? status : best),

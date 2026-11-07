@@ -195,6 +195,7 @@ export const trpcToModelContextProtocolHandler = <
   return handler;
 };
 
+/** Format a missing tool argument using the existing MCP text-content response contract. */
 const missingArgument = (name: string) => ({
   content: [{ type: "text" as const, text: `Missing required argument: ${name}` }],
 });

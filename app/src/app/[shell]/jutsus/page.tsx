@@ -74,6 +74,7 @@ import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadt
 import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
 
+/** Manage learned jutsu, training and evolutions with shared requirement checks and cache updates. */
 export default function MyJutsu() {
   // tRPC utility
   const utils = api.useUtils();

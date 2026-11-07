@@ -77,6 +77,7 @@ const getBaseUrl = () => {
   return `http://127.0.0.1:${process.env.PORT ?? 3000}`;
 };
 
+/** Keep query clients stable through hydration while observing session changes and request failures. */
 const TrpcClientProvider = (props: {
   cdnCachedQueryPaths: readonly string[];
   children: React.ReactNode;
@@ -209,6 +210,7 @@ const isRateLimitedTrpcError = (error: unknown) =>
   error instanceof TRPCClientError &&
   (error.data as { code?: string } | undefined)?.code === "TOO_MANY_REQUESTS";
 
+/** Route actionable request failures to existing recovery dialogs or toasts after settling pending work. */
 const handleTrpcError = (
   error: unknown,
   operation: "query" | "mutation",

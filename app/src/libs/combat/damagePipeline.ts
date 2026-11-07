@@ -28,6 +28,7 @@ import {
   sortEffects,
 } from "./util";
 
+/** Create independent zeroed totals for gear and keystone damage modifiers. */
 export const emptyPreBattleGearModifiers = (): PreBattleGearModifiers => ({
   incDamageGivenFromGear: 0,
   incDamageTakenFromGear: 0,
@@ -70,9 +71,11 @@ const isStage1NonGearPercentageModifier = (effect: UserEffect): boolean =>
   getEffectStage(effect) === 1 &&
   !("fromType" in effect && isPreBattleConsolidatedPercentageFromType(effect.fromType));
 
+/** Apply fractional damage reduction without allowing the multiplier to become negative. */
 const applyPercentageDrMultiplier = (damage: number, drFraction: number): number =>
   damage * Math.max(0, 1 - drFraction);
 
+/** Aggregate one combatant's unscoped gear and keystone percentages into battle-start totals. */
 export const buildPreBattleGearModifiersForUser = (
   userEffects: UserEffect[],
   userId: string,
@@ -104,6 +107,7 @@ export const buildPreBattleGearModifiersForUser = (
   return mods;
 };
 
+/** Snapshot gear totals per combatant and remove folded effects so the pipeline cannot apply them twice. */
 export const consolidatePreBattleDamageModifiers = (
   userEffects: UserEffect[],
   userIds: string[],
@@ -126,6 +130,7 @@ export const consolidatePreBattleDamageModifiers = (
   return { preBattleGearModifiers, filteredEffects };
 };
 
+/** Identify modifiers whose source follows the bloodline-specific stacking and permission rules. */
 const isBloodlineDamageMod = (effect: UserEffect): boolean =>
   "fromType" in effect && effect.fromType === "bloodline";
 
@@ -185,6 +190,7 @@ export const buildDamageModifierEligibilityById = (
   return eligibilityById;
 };
 
+/** Match an eligible modifier to the attacker or defender side selected for this packet. */
 const modifierAppliesToDamagePacketPair = (
   eligibility: DamageModifierEligibility | undefined,
   attackerId: string,
@@ -199,6 +205,7 @@ const modifierAppliesToDamagePacketPair = (
   return id === eligibility.targetId;
 };
 
+/** Respect a damage effect's bloodline increase and reduction opt-outs without restricting other sources. */
 const allowBloodlineDamageModifier = (
   damageEffect: UserEffect,
   modEffect: UserEffect,
@@ -216,6 +223,7 @@ const allowBloodlineDamageModifier = (
   return true;
 };
 
+/** Normalize reduction effects to negative power for additive modifier stages. */
 const getSignedDrModifierPower = (effect: UserEffect): number => {
   const { power } = getPower(effect);
   if (effect.type === "decreasedamagetaken" || effect.type === "decreasedamagegiven") {

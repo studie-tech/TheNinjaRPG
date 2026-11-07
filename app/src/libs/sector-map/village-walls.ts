@@ -264,6 +264,7 @@ export const selectVillageWallTowerVertices = (
   return chosen.map(({ vertex }) => vertex);
 };
 
+/** Place gates at connected road crossings, falling back to an edge near the spawn anchor. */
 const chooseGateEdges = (edges: VillageWallEdge[], map: VillageWallMap) => {
   const candidates = edges
     .map((edge, index) => ({ edge, index }))
@@ -353,6 +354,7 @@ const traceContours = (
   return contours.sort((a, b) => (a[0] ?? "").localeCompare(b[0] ?? ""));
 };
 
+/** Build a deterministic wall, gate and tower plan around village structures present on the map. */
 export const planVillageWalls = (
   map: VillageWallMap,
   structures: VillageWallStructure[],
