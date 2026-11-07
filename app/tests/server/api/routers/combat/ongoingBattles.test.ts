@@ -64,6 +64,44 @@ describeWithDatabase("combat.listOngoingBattles", () => {
     expect((await caller.listOngoingBattles({})).map((row) => row.id)).toEqual(["ranked"]);
   });
 
+  it("lists only the fighters still in a battle, without summons or fallen boss forms", async () => {
+    const database = await getTestDatabase();
+    await database.insert(battle).values(
+      makeCompleteBattle({
+        id: "trial", battleType: "OVERWORLD", background: "arena",
+        usersState: [
+          makeUser({ userId: "hero", username: "Hero", avatar: "/hero.png", isSummon: false, leftBattle: false }),
+          makeUser({ userId: "fallen", username: "Fallen form", avatar: "/old.png", isSummon: false, leftBattle: true }),
+          makeUser({ userId: "template", username: "Current form", avatar: "/form.png", isSummon: true, leftBattle: false }),
+          makeUser({ userId: "current", username: "Current form", avatar: "/form.png", isSummon: false, leftBattle: false }),
+        ],
+        extraState: {},
+      }),
+    );
+    const caller = await listCaller();
+    expect((await caller.listOngoingBattles({ battleType: "OVERWORLD" }))[0]?.users).toEqual([
+      { userId: "hero", username: "Hero", avatar: "/hero.png" },
+      { userId: "current", username: "Current form", avatar: "/form.png" },
+    ]);
+  });
+
+  it("keeps every fighter listed when stored flags do not line up with them", async () => {
+    const database = await getTestDatabase();
+    await database.insert(battle).values(
+      makeCompleteBattle({
+        id: "partial", battleType: "OVERWORLD", background: "arena",
+        usersState: [
+          makeUser({ userId: "first", username: "First", avatar: "/first.png", isSummon: true }),
+          makeUser({ userId: "second", username: "Second", avatar: "/second.png" }),
+        ],
+        extraState: {},
+      }),
+    );
+    const caller = await listCaller();
+    expect((await caller.listOngoingBattles({ battleType: "OVERWORLD" }))[0]?.users.map((user) => user.userId))
+      .toEqual(["first", "second"]);
+  });
+
   it("indexes the event battle lookup", async () => {
     expect(await indexColumns("TournamentMatch", "TournamentMatch_battleId_idx")).toEqual({ columns: ["battleId"], unique: false });
   });

@@ -1829,16 +1829,30 @@ export const combatRouter = createTRPCRouter({
         userIds: string[] | null;
         usernames: string[] | null;
         avatars: string[] | null;
+        summons: boolean[] | null;
+        departures: boolean[] | null;
       }
 
       // Map the results to the expected format with proper type safety
       const filteredBattles = (results.rows as unknown as RawBattleRow[]).map((row) => {
+        // Summons and fallen boss forms stay in usersState but are not current fighters.
+        // JSON paths skip missing keys, so a shorter array no longer lines up by index.
+        const flags = (values: boolean[] | null) =>
+          values?.length === row?.userIds?.length ? values : undefined;
+        const summons = flags(row.summons);
+        const departures = flags(row.departures);
         const users =
-          row?.userIds?.map((userId, i) => ({
-            userId: userId ?? null,
-            username: row?.usernames?.[i] ?? null,
-            avatar: row?.avatars?.[i] ?? null,
-          })) ?? [];
+          row?.userIds?.flatMap((userId, i) =>
+            summons?.[i] || departures?.[i]
+              ? []
+              : [
+                  {
+                    userId: userId ?? null,
+                    username: row?.usernames?.[i] ?? null,
+                    avatar: row?.avatars?.[i] ?? null,
+                  },
+                ],
+          ) ?? [];
 
         return {
           id: row.id,
