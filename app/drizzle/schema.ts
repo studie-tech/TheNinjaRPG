@@ -236,6 +236,24 @@ export const aiSpriteAnimationRelations = relations(aiSpriteAnimation, ({ one })
   animation: one(spriteAnimation, { fields: [aiSpriteAnimation.animationId], references: [spriteAnimation.id] }),
 }));
 
+/** When this AI falls it rises again as `nextAiId`; the rest stages that arrival. */
+export const aiTransformation = mysqlTable(
+  "AiTransformation",
+  {
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    nextAiId: varchar("nextAiId", { length: 191 }).notNull(),
+    announce: varchar("announce", { length: 32 }).notNull(),
+    log: varchar("log", { length: 200 }).notNull(),
+    tier: tinyint("tier").notNull(),
+    color: int("color").notNull(),
+    glow: int("glow").notNull(),
+  },
+  (table) => ({
+    nextAiIdIdx: index("AiTransformation_nextAiId_idx").on(table.nextAiId),
+  }),
+);
+export type AiTransformation = InferSelectModel<typeof aiTransformation>;
+
 /** Staff requests to gameasset.dev; a reviewed result becomes one `SpriteAnimation`. */
 export const spriteGeneration = mysqlTable("SpriteGeneration", {
   id: varchar("id", { length: 191 }).primaryKey().notNull(),

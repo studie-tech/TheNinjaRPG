@@ -3,6 +3,7 @@ import { z } from "zod";
 import { IMG_ORIENTATIONS } from "@/drizzle/constants";
 import { literalType } from "@/validators/base";
 import { isActivityBonus, tagTypes } from "@/validators/combat";
+import { bossArrivalSchema } from "@/validators/coop";
 
 /** Shared content-generation input; existing callers retain the default provider. */
 export const contentImageInputSchema = z.object({
@@ -18,6 +19,16 @@ export const contentImageInputSchema = z.object({
 
 /** Image-generation providers supported by the content editor. */
 export type ContentImageProvider = z.infer<typeof contentImageInputSchema>["provider"];
+
+/** An AI's next form and its arrival, as edited on the AI page. */
+export const aiTransformationSchema = bossArrivalSchema.extend({
+  nextAiId: z.string().min(1, "Choose the next form."),
+});
+export type AiTransformationInput = z.infer<typeof aiTransformationSchema>;
+export const updateAiTransformationSchema = z.object({
+  aiId: z.string().min(1),
+  transformation: aiTransformationSchema.nullable(),
+});
 
 export const AvailableTargets = [
   "BARRIER_BETWEEN",

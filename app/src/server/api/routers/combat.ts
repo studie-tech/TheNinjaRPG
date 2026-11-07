@@ -27,9 +27,10 @@ import {
   type BattleType,
   BattleTypes,
   type BattleUsageType,
+  BossFightBattleTypes,
   COMBAT_BIOMES,
   type CombatBiome,
-  CREATOR_TRIAL_FORMS,
+  CREATOR_TRIAL_FIRST_FORM,
   DUNGEON_PARTY_SIZE,
   DUNGEON_SOLO_PETS,
   ELEMENTAL_MASTERY_BOOST,
@@ -75,7 +76,7 @@ import {
   stillInBattle,
 } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import { bossFightEncounter } from "@/libs/combat/bossFight";
+import { bossFightEncounter, bossFormsFrom } from "@/libs/combat/bossFight";
 import { compactBattleCatalogs } from "@/libs/combat/catalog";
 import {
   COMBAT_LOBBY_SECONDS,
@@ -207,6 +208,7 @@ import { isActiveEventEntrant } from "@/libs/tournament/events";
 import { getBiomeFromTileType } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import { fetchActionUser } from "@/queries/actionReadiness";
+import { listAiTransformations } from "@/queries/ai";
 import {
   buildQueuedTrainingClaim,
   deleteBattleById,
@@ -2048,6 +2050,7 @@ export const initiateBattle = async (
     pets,
     petJutsus,
     dungeonEntryData,
+    aiTransformations,
   ] = await Promise.all([
     info.territoryWar ??
       (battleType === "COMBAT" && sector !== undefined
@@ -2108,6 +2111,13 @@ export const initiateBattle = async (
     dungeonEncounter && !dungeonEncounter.runState.entryPaidAt
       ? fetchDungeonEntryData(client, userIds)
       : null,
+    // A lone AI opponent may be the first form of a boss; other fights skip the read.
+    BossFightBattleTypes.includes(battleType) &&
+    !encounterWaves &&
+    !allyAiIds.length &&
+    targetIds.length === 1
+      ? listAiTransformations(client)
+      : [],
   ]);
 
   // An open-world attack on the creator never reaches their account. It stays bound to
@@ -2131,11 +2141,28 @@ export const initiateBattle = async (
     return await initiateBattle(
       {
         ...info,
-        ...bossFightEncounter(CREATOR_TRIAL_FORMS),
+        targetIds: [CREATOR_TRIAL_FIRST_FORM],
         creatorTrial: { creatorId: creator.userId, username: creator.username },
       },
       "OVERWORLD",
     );
+  }
+
+  // A lone AI that transforms is a boss: start over with every form as a wave.
+  const [loneTarget] = targetIds;
+  const bossForms =
+    loneTarget && aiTransformations.length
+      ? bossFormsFrom(loneTarget, aiTransformations)
+      : [];
+  if (bossForms.length > 1) {
+    return await initiateBattle(
+      { ...info, ...bossFightEncounter(bossForms) },
+      battleType,
+      scaleGains,
+    );
+  }
+  if (info.creatorTrial && !encounterWaves) {
+    return { success: false, message: "The trial is unavailable" };
   }
 
   // Start due jutsu levels and crafts before the participants are read for the fight,
@@ -2189,9 +2216,10 @@ export const initiateBattle = async (
 
   // Arena selection overlaps readiness, so recheck its rules on the fresh combat
   // participants. Shared AI templates are excluded from the final player claim.
+  // Only a boss's opening form was selected; its later forms need no arena listing.
   if (
     (battleType === "ARENA" || battleType === "TRAINING") &&
-    targetIds.some((id) => {
+    (encounterWaves?.[0]?.aiIds ?? targetIds).some((id) => {
       const target = fetchedUsers.find((user) => user.userId === id);
       return !target?.isAi || target.isSummon || !target.inArena;
     })

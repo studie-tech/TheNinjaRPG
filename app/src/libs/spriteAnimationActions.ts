@@ -1,4 +1,4 @@
-import { NonActionItemTypes } from "@/drizzle/constants";
+import { NonActionItemTypes, TRANSFORMATION_ACTION } from "@/drizzle/constants";
 import { getDefaultBasicActions } from "@/libs/combat/actions";
 import { spriteActionKey } from "@/libs/spriteAnimations";
 import type { fetchAnimationAi } from "@/queries/spriteAnimation";
@@ -6,6 +6,7 @@ import type { fetchAnimationAi } from "@/queries/spriteAnimation";
 /** Use catalogue IDs so reusable sheets follow equipped actions rather than inventory rows. */
 export const animationActions = (ai: AnimationAi) => [
   { key: "idle", name: "Idle", group: "Default" },
+  { key: TRANSFORMATION_ACTION, name: "Boss arrival", group: "Default" },
   ...Object.values(getDefaultBasicActions(ai)).map((action) => ({
     key: spriteActionKey(action),
     name: action.name,

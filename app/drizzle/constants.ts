@@ -2033,49 +2033,24 @@ export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
 export const CREATOR_USERNAME = "Terriator";
 /** Sheet an AI plays as it arrives by transformation, from its previous form to its own. */
 export const TRANSFORMATION_ACTION = "transform";
-/** The creator's boss fight, weakest form first. */
-export const CREATOR_TRIAL_FORMS = [
-  { aiId: "creator-trial-student" },
-  {
-    aiId: "creator-trial-genin",
-    arrival: {
-      announce: "TURBO-MODE",
-      log: "Terriator refuses to fall and reassembles in Turbo-mode!",
-      tier: 1,
-      color: 0x4de8ff,
-      glow: 0xb8f6ff,
-    },
-  },
-  {
-    aiId: "creator-trial-chunin",
-    arrival: {
-      announce: "BLADE-MODE",
-      log: "Terriator refuses to fall and reassembles in Blade-mode!",
-      tier: 2,
-      color: 0xb46bff,
-      glow: 0xff9dff,
-    },
-  },
-  {
-    aiId: "creator-trial-jonin",
-    arrival: {
-      announce: "SIEGE-MODE",
-      log: "Terriator refuses to fall and reassembles in Siege-mode!",
-      tier: 3,
-      color: 0xff6a1f,
-      glow: 0xffc15e,
-    },
-  },
-  {
-    aiId: "creator-trial-elite",
-    arrival: {
-      announce: "GOD-MODE",
-      log: "Terriator refuses to fall and reassembles in God-mode!",
-      tier: 4,
-      color: 0xffd76a,
-      glow: 0xff2a4d,
-    },
-  },
+/** First form of the creator's boss fight; later forms are ordinary `AiTransformation` rows. */
+export const CREATOR_TRIAL_FIRST_FORM = "creator-trial-student";
+/** Longest chain of forms one boss fight can run, opening form included. */
+export const BOSS_FIGHT_MAX_FORMS = 8;
+/** Battles where an AI's transformation applies; raids, wars and events keep their own rules. */
+export const BossFightBattleTypes: BattleType[] = [
+  "ARENA",
+  "QUEST",
+  "RANDOM_ENCOUNTER",
+  "HUNTING",
+  "OVERWORLD",
+];
+/** Intensity of an arrival cinematic, weakest first. */
+export const TRANSFORMATION_TIERS = [
+  { tier: 1, label: "Spark" },
+  { tier: 2, label: "Surge" },
+  { tier: 3, label: "Overload" },
+  { tier: 4, label: "Cataclysm" },
 ] as const;
 export const STREAK_LEVEL_DIFF = 10;
 

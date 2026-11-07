@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { CREATOR_TRIAL_FORMS, CREATOR_USERNAME } from "@/drizzle/constants";
+import { CREATOR_TRIAL_FIRST_FORM, CREATOR_USERNAME } from "@/drizzle/constants";
 import {
   aiProfile,
+  aiTransformation,
   badge,
   battle,
   quest,
@@ -25,7 +26,8 @@ import {
 const HERO = "trial-hero";
 const CREATOR = "trial-creator";
 const SPOT = { sector: 12, longitude: 5, latitude: 6 };
-const IDS = CREATOR_TRIAL_FORMS.map((form) => form.aiId);
+const IDS = [CREATOR_TRIAL_FIRST_FORM, "trial-form-b", "trial-form-c"];
+const ARRIVAL = { log: "It rises", tier: 1, color: 1, glow: 2 };
 
 const attack = async (position = SPOT) =>
   initiateBattle(
@@ -43,7 +45,7 @@ const attack = async (position = SPOT) =>
 describeWithDatabase("creator trial admission", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await resetTables(battle, aiProfile, badge, quest, questHistory, userBadge, userData, userJutsu);
+    await resetTables(battle, aiProfile, aiTransformation, badge, quest, questHistory, userBadge, userData, userJutsu);
     await insertDefaultAiProfile({ userId: IDS[0] });
     await insertUsers([
       { userId: HERO, username: HERO, level: 8, rank: "STUDENT", villageId: "village", ...SPOT },
@@ -63,6 +65,14 @@ describeWithDatabase("creator trial admission", () => {
         rank: "JONIN" as const,
       })),
     ]);
+    await (await getTestDatabase()).insert(aiTransformation).values(
+      IDS.slice(1).map((nextAiId, index) => ({
+        ...ARRIVAL,
+        userId: IDS[index]!,
+        nextAiId,
+        announce: `FORM ${index + 1}`,
+      })),
+    );
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -83,11 +93,7 @@ describeWithDatabase("creator trial admission", () => {
     ).toEqual(IDS.slice(1));
     expect(
       created.extraState.encounter?.pendingWaves.map((wave) => wave.arrival?.announce),
-    ).toEqual(
-      CREATOR_TRIAL_FORMS.flatMap((form) =>
-        "arrival" in form ? [form.arrival.announce] : [],
-      ),
-    );
+    ).toEqual(["FORM 1", "FORM 2"]);
     expect(enemies[0]?.risesAgain).toBe(true);
     expect(created.extraState.creatorTrial).toEqual({
       creatorId: CREATOR,
@@ -115,7 +121,7 @@ describeWithDatabase("creator trial admission", () => {
 
   it("reports a trial whose forms are not seeded instead of opening an empty battle", async () => {
     const client = await getTestDatabase();
-    await client.delete(userData).where(eq(userData.userId, IDS[4]!));
+    await client.delete(userData).where(eq(userData.userId, IDS[2]!));
     expect(await attack()).toMatchObject({
       success: false,
       message: "The trial is unavailable",
