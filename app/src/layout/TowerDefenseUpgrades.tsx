@@ -23,7 +23,6 @@ import {
   getCategoryIcon,
   getCategoryLabel,
   getEffectDisplay,
-  getEffectPerLevelDisplay,
   getUpgradeColor,
   getUpgradeIcon,
   getUpgradesByCategory,
@@ -197,7 +196,7 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
               <div className="space-y-0.5 border-t pt-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Per level:</span>
-                  <span>{getEffectPerLevelDisplay(upgrade)}</span>
+                  <span>{getEffectDisplay(upgrade, 1)}</span>
                 </div>
                 {currentLevel > 0 && (
                   <div className="flex justify-between">
