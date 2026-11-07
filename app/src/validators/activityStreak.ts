@@ -86,9 +86,9 @@ export const purchaseEventPassSchema = z.object({
 export const claimStreakDaySchema = z.object({
   configId: z.string(),
   // If true, user pays rep to continue streak instead of resetting
-  payCatchUp: z.boolean().optional().prefault(false),
+  payCatchUp: z.boolean().prefault(false),
   // If true, user explicitly wants to reset streak to day 1
-  reset: z.boolean().optional().prefault(false),
+  reset: z.boolean().prefault(false),
 });
 
 // Form schema for editing activity streak config (rewards managed separately in state)

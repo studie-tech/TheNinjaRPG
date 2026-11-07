@@ -17,7 +17,7 @@ export const mapAssetValidator = z.object({
     ),
   name: z.string().trim().min(1).max(191),
   category: z.string().trim().min(1).max(191),
-  imageUrl: z.string().url(),
+  imageUrl: z.url(),
   windAffected: z.boolean(),
   small: z.boolean(),
   randomRotation: z.boolean(),

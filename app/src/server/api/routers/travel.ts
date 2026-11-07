@@ -847,8 +847,8 @@ export const travelRouter = createTRPCRouter({
         villageId: z.string().nullish(),
         battleId: z.string().nullish(),
         level: z.int(),
-        avatar: z.preprocess((val) => val || IMG_AVATAR_DEFAULT, z.string().url()),
-        avatarLight: z.preprocess((val) => val || IMG_AVATAR_DEFAULT, z.string().url()),
+        avatar: z.preprocess((val) => val || IMG_AVATAR_DEFAULT, z.url()),
+        avatarLight: z.preprocess((val) => val || IMG_AVATAR_DEFAULT, z.url()),
         username: z.string(),
       }),
     )

@@ -2124,7 +2124,6 @@ export const ItemValidatorRawSchema = z.object({
       }),
     )
     .prefault([])
-    .optional()
     .nullish(),
 });
 export const ItemValidator = ItemValidatorRawSchema.superRefine(SuperRefineBase)
