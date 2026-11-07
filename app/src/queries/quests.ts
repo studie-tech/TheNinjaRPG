@@ -438,18 +438,9 @@ export const selectQuestForStartRandom = (
       completed: questHistory.completed,
       periodCompletes: questHistory.periodCompletes,
       periodStartAt: questHistory.periodStartAt,
-      // Extra history columns, aliased so they do NOT feed isAvailableUserQuests's flat
-      // reads (esp. `previousCompletes`, which would change mission-hall availability).
-      // Used only to reconstruct a prevEntry for upsertQuestEntry below, so it skips its
-      // internal questHistory.findFirst on every random mission start.
-      questHistoryId: questHistory.id,
-      historyPreviousCompletes: questHistory.previousCompletes,
-      historyStartedAt: questHistory.startedAt,
-      historyEndAt: questHistory.endAt,
-      historyPendingRewardChoice: questHistory.pendingRewardChoice,
-      historyEntryPaid: questHistory.entryPaid,
-      historyIsolated: questHistory.isolated,
-      historyQuestVersion: questHistory.questVersion,
+      // Nested so it does NOT feed isAvailableUserQuests's flat reads (esp. `previousCompletes`,
+      // which would change mission-hall availability). Null for a never-attempted quest.
+      history: getTableColumns(questHistory),
     })
     .from(quest)
     .leftJoin(
