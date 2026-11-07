@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import * as pusher from "@/layout/PusherHandler";
-import { UserContextProvider, useRequiredUserData } from "@/utils/UserContext";
+import { UserContextProvider, useRequiredUserDataSelector } from "@/utils/UserContext";
 
 type Snapshot = {
   serverTime: number;
@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 const Consumer = () => {
-  useRequiredUserData();
+  useRequiredUserDataSelector((user) => user.userId);
   return null;
 };
 
@@ -77,7 +77,7 @@ const mount = async (
   });
 };
 
-describe("useRequiredUserData", () => {
+describe("useRequiredUserDataSelector", () => {
   it("waits for Clerk before judging the session", async () => {
     await mount({ isLoaded: false });
     expect(push).not.toHaveBeenCalled();
