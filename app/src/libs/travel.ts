@@ -11,11 +11,7 @@ import {
   findNearestWalkableCoordinate,
   getSectorTile,
 } from "@/libs/sector-map/validation";
-import type {
-  GlobalMapData,
-  GlobalTile,
-  SectorPoint,
-} from "@/libs/sector-map/world-types";
+import type { GlobalMapData, SectorPoint } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { secondsFromNow } from "@/utils/time";
 import type { UserCachePatch } from "@/validators/userCache";

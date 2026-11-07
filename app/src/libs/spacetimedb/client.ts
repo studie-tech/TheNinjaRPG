@@ -11,7 +11,6 @@
  * - Tick rate increased to 150ms with client-side interpolation
  */
 
-import { sleep } from "@/utils/time";
 import { DbConnection, type ErrorContext, type SubscriptionHandle } from "./bindings";
 import type {
   CompletedRun,
