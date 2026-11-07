@@ -1,12 +1,12 @@
 import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
-import { makeJutsu, makeTag } from "./helpers/battleScenario";
+import { makeEffect, makeJutsu, makeTag } from "./helpers/battleScenario";
 import { describe, it, expect } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { TerrainHex } from "@/libs/hexgrid";
 import type { BattleUserState, CompleteBattle, ExtraState, UserEffect } from "@/libs/combat/types";
-import { getActionSchema, type ZodAllAiAction, ActionMoveTowardsOpponent, ActionUseSpecificJutsu, ActionEndTurn, AiRule, ConditionPlayerWithinRange, ConditionSummonWithinRange, ConditionSpecificRound, ConditionHealthBelow, getBackupRules, enforceExtraRules, type AvailableTarget, type ZodAllAiCondition } from "@/validators/ai";
+import { getActionSchema, type ZodAllAiAction, ActionMoveTowardsOpponent, ActionUseSpecificJutsu, ActionEndTurn, AiRule, ConditionHasEffect, ConditionPlayerWithinRange, ConditionSummonWithinRange, ConditionTargetHasEffect, ConditionSpecificRound, ConditionHealthBelow, getBackupRules, enforceExtraRules, type AvailableTarget, type ZodAllAiCondition } from "@/validators/ai";
 const DAMAGE_JUTSU = "j-damage";
 const PROFILE = "profile-1";
 
@@ -178,6 +178,33 @@ describe("AI targeting and clauses", () => {
       expect(run().nextActionId).toBe("wait");
     });
   }
+
+  describe.each([
+    ["has_effect", "actor", "minion", (threshold: number) => ConditionHasEffect.parse({ effectType: "shield", threshold })],
+    ["target_has_effect", "minion", "actor", (threshold: number) => ConditionTargetHasEffect.parse({ effectType: "shield", threshold })],
+  ] as const)("%s", (_name, holder, bystander, condition) => {
+    const shield = (id: string, targetId: string, power: number, type: "shield" | "heal" = "shield") =>
+      makeEffect(type, { power, rounds: 5 }, { id, targetId, creatorId: targetId, isNew: false, castThisRound: false });
+    const matches = (threshold: number, effects: UserEffect[]) => {
+      const { battle, run } = setup("CLOSEST_OPPONENT", [condition(threshold)]);
+      battle.usersEffects.push(...effects);
+      return run().nextActionId === DAMAGE_JUTSU;
+    };
+
+    it("passes a zero threshold without any effect", () => {
+      expect(matches(0, [])).toBe(true);
+    });
+    it("fails without a matching effect on its user", () => {
+      expect(matches(1, [])).toBe(false);
+      expect(matches(1, [shield("other", bystander, 50)])).toBe(false);
+      expect(matches(1, [shield("other", holder, 50, "heal")])).toBe(false);
+    });
+    it("sums matching power up to and including the threshold", () => {
+      const effects = [shield("first", holder, 20), shield("second", holder, 30)];
+      expect(matches(50, effects)).toBe(true);
+      expect(matches(51, effects)).toBe(false);
+    });
+  });
 
   it.each([[1, 100, true], [2, 100, false], [1, 10, false]])("AND clauses round=%s health=%s", (round, health, matches) => {
     const { battle, run } = setup("CLOSEST_OPPONENT", [ConditionSpecificRound.parse({ value: round }), ConditionHealthBelow.parse({ value: health })]);
