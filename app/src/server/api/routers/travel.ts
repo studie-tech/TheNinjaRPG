@@ -427,15 +427,7 @@ export const travelRouter = createTRPCRouter({
       // Filter out stealthed players (unless it's the current user)
       // Then anonymize enemy ANBU squad members
       const processedUsers = filterLiveSectorBattleUsers(users, liveBattleIds)
-        .filter((u) => {
-          // Always show the current user
-          if (u.userId === ctx.userId) return true;
-          // Hide stealthed players from others (only if stealth hasn't expired)
-          if (isUserCurrentlyStealthed(u)) {
-            return false;
-          }
-          return true;
-        })
+        .filter((u) => u.userId === ctx.userId || !isUserCurrentlyStealthed(u))
         .map((u) => {
           const disguise = getMapDisguise(user, u, warData);
           const warRelationship = getWarRelationship(warData, user, u) ?? null;
@@ -564,7 +556,7 @@ export const travelRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       const targetTile = (map as unknown as GlobalMapData).tiles[input.sector];
       if (!targetTile) {
-        return { success: false, message: "Target sector does not exist" };
+        return errorResponse("Target sector does not exist");
       }
       // Fetch the user, destination and camp admission in parallel. Global travel can begin
       // from any local tile; the target map only determines a safe landing.
@@ -671,17 +663,11 @@ export const travelRouter = createTRPCRouter({
       } else {
         const latest = await fetchUser(ctx.drizzle, ctx.userId);
         if (latest.status !== "AWAKE") {
-          return {
-            success: false,
-            message: `Status is: ${latest.status.toLowerCase()}`,
-          };
+          return errorResponse(`Status is: ${latest.status.toLowerCase()}`);
         } else if (latest.sector !== departureSector) {
-          return {
-            success: false,
-            message: "Your location changed; please try again",
-          };
+          return errorResponse("Your location changed; please try again");
         } else {
-          return { success: false, message: "Failed to start travel" };
+          return errorResponse("Failed to start travel");
         }
       }
     }),
@@ -833,15 +819,10 @@ export const travelRouter = createTRPCRouter({
     .meta({ mcp: { description: "Get all sector ownership info" } })
     .query(async ({ ctx }) => {
       const allSectors = await listSectorForGetAllSectors(ctx.drizzle);
-      const groupedSectors = groupBy(allSectors, "villageId");
-      const converted = [...groupedSectors.keys()].map((key) => {
-        const sectors = groupedSectors.get(key) || [];
-        return {
-          villageId: key,
-          sectors: sectors.map((s) => s.sector),
-        };
-      });
-      return converted;
+      return [...groupBy(allSectors, "villageId")].map(([villageId, sectors]) => ({
+        villageId,
+        sectors: sectors.map((s) => s.sector),
+      }));
     }),
   /**
    * Move the user tile-by-tile within their sector, or one step across a
@@ -1083,8 +1064,8 @@ export const travelRouter = createTRPCRouter({
             const chance = getStrucBoost("patrolsPerLvl", sectorVillage.structures);
             if (Math.random() < (travelLength * chance) / 100) {
               // Chance of ANBU squad avoiding attack
-              const anbuChance = user?.anbuId
-                ? anbuStealthChance(user?.anbuSquad?.stealthLevel ?? 0)
+              const anbuChance = user.anbuId
+                ? anbuStealthChance(user.anbuSquad?.stealthLevel ?? 0)
                 : 0;
               if (Math.random() < anbuChance / 100) {
                 return actionReadinessResponse(
@@ -1143,7 +1124,7 @@ export const travelRouter = createTRPCRouter({
         // Only broadcast if user is NOT stealthed (to hide from other players);
         // on a crossing the origin sector is told too so the user disappears.
         // experience/rank ride along so scouting can display the calc'd level.
-        if (user && !isUserCurrentlyStealthed(user)) {
+        if (!isUserCurrentlyStealthed(user)) {
           const broadcast = {
             ...output,
             experience: user.experience,
