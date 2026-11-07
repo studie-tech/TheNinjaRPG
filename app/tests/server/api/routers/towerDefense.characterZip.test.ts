@@ -5,7 +5,7 @@ import * as uploadthing from "uploadthing/server";
 import { towerDefenseCharacter, userData } from "@/drizzle/schema";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { towerDefenseRouter } from "@/server/api/routers/towerDefense";
-import * as ssrf from "@/utils/ssrf";
+import * as ssrf from "@/server/utils/ssrf";
 import { insertUsers } from "../../../setup/factories";
 import { rateLimitResponse } from "../../../setup/rateLimit";
 import {

@@ -1,7 +1,4 @@
-import {
-  SHRINE_BOOST_DURATION_HOURS,
-  shrineLobbyFreshAfter,
-} from "@/drizzle/constants";
+import { SHRINE_BOOST_DURATION_HOURS } from "@/drizzle/constants";
 import type { Village } from "@/drizzle/schema";
 import {
   deleteMpvpBattleQueueForRunStaleShrineLobbyCleanup,
@@ -12,6 +9,7 @@ import {
   updateUserDataForRunStaleShrineLobbyCleanup,
 } from "@/queries/shrine";
 import { drizzleDB } from "@/server/db";
+import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
 import { getCurrentSlotBoundary, getSlotIndex, isNewSlotDue } from "@/utils/time";
 import type { BoostTemplateEntry } from "@/validators/shrine";
 
