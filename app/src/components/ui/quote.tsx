@@ -11,12 +11,8 @@ interface QuoteProps extends Omit<React.HTMLAttributes<HTMLQuoteElement>, "child
   commentId?: string;
   onRemove?: () => void;
   ref?: React.Ref<HTMLQuoteElement>;
-  /**
-   * The quoted post as an already-sanitized HTML string, which parseHtml turns back
-   * into elements. A string rather than React nodes, because serializing nodes needs
-   * react-dom/server, which would then ship to the browser on every page.
-   */
-  children?: string;
+  /** Sanitized post HTML or children already converted by the post parser. */
+  children?: React.ReactNode;
 }
 
 const Quote = ({
@@ -53,7 +49,9 @@ const Quote = ({
           )}
         </div>
       )}
-      <div className="text-foreground italic">{parseHtml(children ?? "")}</div>
+      <div className="text-foreground italic">
+        {typeof children === "string" ? parseHtml(children) : children}
+      </div>
       {onRemove && (
         <button
           type="button"
