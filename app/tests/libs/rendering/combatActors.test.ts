@@ -50,6 +50,31 @@ describe("batched status meters", () => {
     expect(meter.container.children).toHaveLength(3);
     meter.container.destroy({ children: true, texture: false, textureSource: false });
   });
+  it("lingers on lost value, then drains into the new value", () => {
+    const meter = createStatusMeter({ width: 20, height: 2, color: 0xb22222, trailColor: 0xffe08a, y: 30 });
+    const trail = meter.container.children[3]!;
+    meter.set(1); meter.set(0.5);
+    expect(trail.visible).toBe(true);
+    const lost = trail.width;
+    expect(meter.drain(16)).toBe(true);
+    expect(trail.width).toBe(lost);
+    for (let tick = 0; tick < 30; tick++) meter.drain(16);
+    expect(trail.width).toBeLessThan(lost);
+    for (let tick = 0; tick < 300 && meter.drain(16); tick++);
+    expect(meter.drain(16)).toBe(false);
+    expect(trail.visible).toBe(false);
+    meter.container.destroy({ children: true, texture: false, textureSource: false });
+  });
+  it("does not trail healing, and clears at once for reduced motion", () => {
+    const meter = createStatusMeter({ width: 20, height: 2, color: 0xb22222, trailColor: 0xffe08a, y: 30 });
+    const trail = meter.container.children[3]!;
+    meter.set(0.5); meter.set(1);
+    expect(trail.visible).toBe(false);
+    meter.set(0.2);
+    expect(meter.drain(16, true)).toBe(false);
+    expect(trail.visible).toBe(false);
+    meter.container.destroy({ children: true, texture: false, textureSource: false });
+  });
   it("updates threat colors even when the amount stays the same", () => {
     const meter = createStatusMeter({ width: 20, height: 2, color: 0xe9bf75, backgroundColor: 0x15232c, trackColor: 0x35414a, y: 30 });
     const fill = meter.container.children[2];

@@ -88,6 +88,16 @@ export const canAccessStructure = (
 
 export type StructureAttribute = Extract<keyof VillageStructure, `${string}PerLvl`>;
 
+/** What boost calculations read, which battle snapshots keep from each structure. */
+export type BoostStructure = Pick<
+  VillageStructure,
+  | StructureAttribute
+  | "level"
+  | "temporaryLevelBonus"
+  | "temporaryLevelBonusExpiresAt"
+  | "raidBoostExpiresAt"
+>;
+
 /**
  * Calculates the effective level of a structure, including temporary bonuses from war victories.
  * @param structure - The village structure.
@@ -95,7 +105,7 @@ export type StructureAttribute = Extract<keyof VillageStructure, `${string}PerLv
  * @returns The effective level including temporary bonus if not expired.
  */
 export const getEffectiveStructureLevel = (
-  structure: VillageStructure,
+  structure: BoostStructure,
   now: Date = new Date(),
 ): number => {
   const bonusExpiry = structure.temporaryLevelBonusExpiresAt;
@@ -112,7 +122,7 @@ export const getEffectiveStructureLevel = (
  */
 export const getStrucBoost = (
   attribute: StructureAttribute,
-  structures?: VillageStructure[],
+  structures?: BoostStructure[],
 ) => {
   return (
     structures?.reduce(
@@ -226,7 +236,7 @@ export const countMaintainedStructures = (
 
 /** Raid bonuses multiply each benefit supplied by the matching structure. */
 export const getRaidStructureMultiplier = (
-  structure: VillageStructure,
+  structure: BoostStructure,
   now = new Date(),
 ) =>
   structure.raidBoostExpiresAt && new Date(structure.raidBoostExpiresAt) > now

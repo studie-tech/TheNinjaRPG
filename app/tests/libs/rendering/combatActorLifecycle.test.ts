@@ -98,6 +98,101 @@ describe("combat actor reconciliation", () => {
     expect(step).not.toHaveBeenCalled();
     expect(actors.animate({ now: 3000, delta: 0, reducedMotion: false }, user.userId, undefined)).toBe(false);
   });
+  it("walks a whole path in one eased motion and steps once per hex", async () => {
+    const { actors, root, user, battle, step } = await setup();
+    user.longitude = 6; actors.sync({ battle });
+    const positions = [root.x];
+    let now = 1000;
+    while (actors.animate({ now, delta: 1 / 60, reducedMotion: false }, user.userId, undefined)) {
+      positions.push(root.x); now += 1000 / 60;
+      if (now > 3000) break;
+    }
+    expect(now - 1000).toBeLessThan(800);
+    expect(step).toHaveBeenCalledTimes(3);
+    const speeds = positions.slice(1).map((x, index) => Math.abs(x - positions[index]!));
+    const middle = speeds[Math.floor(speeds.length / 2)]!;
+    expect(speeds[0]!).toBeLessThan(middle);
+    expect(speeds.at(-1)!).toBeLessThan(middle);
+    // No hex stops: the fighter never slows mid-path.
+    expect(Math.min(...speeds.slice(speeds.length / 3, (2 * speeds.length) / 3))).toBeGreaterThan(middle * 0.9);
+  });
+  it("reports strike progress only after the walk ends and the cue starts", async () => {
+    const appearance = resolveSpriteAppearance({});
+    const { actors, user, battle } = await setup(false, appearance);
+    const frame = (now: number) => actors.animate({ now, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
+    user.longitude = 4;
+    user.spriteAction = { id: "strike", animation: "slash", longitude: 5, latitude: 1 };
+    actors.sync({ battle });
+    expect(actors.cue(user.userId, "strike")).toBe(0);
+    frame(1000);
+    expect(actors.cue(user.userId, "strike")).toBe(0);
+    for (let tick = 1; tick < 40; tick++) frame(1000 + (tick * 1000) / 60);
+    const start = actors.cue(user.userId, "strike");
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(start).toBeLessThan(1);
+    frame(4000);
+    expect(actors.cue(user.userId, "strike")).toBe(1);
+    expect(actors.cue(user.userId, "another")).toBe(1);
+  });
+  it("throws a struck fighter along the blow and settles back", async () => {
+    const { actors, user, root } = await setup();
+    const art = root.getChildByLabel("combat-art")!;
+    const frame = (now: number) => actors.animate({ now, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
+    frame(1000);
+    actors.react(user.userId, { x: 1, y: 0 }, "heavy");
+    frame(1076);
+    expect(art.position.x).toBeGreaterThan(0);
+    expect(art.tint).toBe(0xff4a3a);
+    frame(1500);
+    expect([art.position.x, art.position.y]).toEqual([0, 0]);
+    expect(art.tint).toBe(0xffffff);
+    expect(art.alpha).toBe(1);
+  });
+  it("throws harder hits further", async () => {
+    const reach = async (severity: "light" | "crushing", ms: number) => {
+      const { actors, user, root } = await setup();
+      actors.animate({ now: 1000, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
+      actors.react(user.userId, { x: 1, y: 0 }, severity);
+      actors.animate({ now: 1000 + ms, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
+      return root.getChildByLabel("combat-art")!.position.x;
+    };
+    expect(await reach("crushing", 100)).toBeGreaterThan(await reach("light", 60));
+  });
+  it("keeps the flash but holds still for reduced motion", async () => {
+    const { actors, user, root } = await setup();
+    const art = root.getChildByLabel("combat-art")!;
+    actors.animate({ now: 1000, delta: 1 / 60, reducedMotion: true }, user.userId, undefined);
+    actors.react(user.userId, { x: 1, y: 0 }, "crushing");
+    actors.animate({ now: 1100, delta: 1 / 60, reducedMotion: true }, user.userId, undefined);
+    expect(art.tint).toBe(0xff4a3a);
+    expect([art.position.x, art.position.y]).toEqual([0, 0]);
+    expect(art.alpha).toBe(1);
+  });
+  it("points a blow from attacker to target, or nowhere without an attacker", async () => {
+    const { actors, user } = await setup();
+    expect(actors.hitDirection(user.userId)).toEqual({ x: 0, y: 0 });
+    expect(actors.hitDirection(user.userId, user.userId)).toEqual({ x: 0, y: 0 });
+  });
+  it("shows a struck fighter's meters while lost health drains", async () => {
+    const { actors, user, battle, health } = await setup();
+    const frame = (now: number) => actors.animate({ now, delta: 1 / 60, reducedMotion: false }, "someone-else", undefined);
+    frame(1000);
+    expect(health.visible).toBe(false);
+    user.curHealth = user.curHealth / 2;
+    actors.sync({ battle });
+    frame(1017);
+    expect(health.visible).toBe(true);
+    for (let tick = 2; tick < 240; tick++) frame(1000 + tick * 17);
+    expect(health.visible).toBe(false);
+  });
+  it("places feedback above a shown fighter and nowhere for one off the field", async () => {
+    const { actors, user, battle, root } = await setup();
+    const head = actors.headPosition(user.userId);
+    expect(head?.y).toBeGreaterThan(root.y);
+    user.leftBattle = true; actors.sync({ battle });
+    expect(actors.headPosition(user.userId)).toBeUndefined();
+    expect(actors.headPosition("missing")).toBeUndefined();
+  });
   it("hides empty threat tracks and reuses them when aggro changes", async () => {
     const { actors, threat, highest, user, battle } = await setup();
     const aggro = new Map([[user.userId, { enmity: 0, ratio: 0, isHighest: false }]]);

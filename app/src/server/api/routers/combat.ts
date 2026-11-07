@@ -57,6 +57,7 @@ import {
   battleAction,
   battleHistory,
   type GameSetting,
+  type Item,
   type Jutsu,
   type RankedLoadout,
   type TerritoryWar,
@@ -77,6 +78,7 @@ import {
   stillInBattle,
 } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
+import { compactBattleCatalogs } from "@/libs/combat/catalog";
 import {
   COMBAT_LOBBY_SECONDS,
   RANKED_BLOODLINE_DAMAGE_TAG,
@@ -91,6 +93,7 @@ import {
   supportsNpcAllies,
 } from "@/libs/combat/participants";
 import { addPetsToBattle, petsAllowedInBattle } from "@/libs/combat/pets";
+import { createCombatPlaybackRecorder } from "@/libs/combat/playback";
 import {
   applyEffects,
   checkFriendlyFire,
@@ -111,11 +114,13 @@ import type {
   BattleUserState,
   BattleWar,
   CombatQueryUser,
+  CombatQueryVillage,
   CompleteBattle,
   ExtraState,
   GroundEffect,
   ProcessedItem,
   ProcessingBattleUser,
+  ReturnedBattle,
   UserEffect,
 } from "@/libs/combat/types";
 import {
@@ -685,6 +690,7 @@ export const combatRouter = createTRPCRouter({
         let newBattle: CompleteBattle = battle;
         let actionPerformed = false;
         let nActions = 0;
+        const playback = createCombatPlaybackRecorder(battle);
 
         // INNER LOOP: Keep updating battle state until all actions have been performed
         while (true) {
@@ -828,6 +834,11 @@ export const combatRouter = createTRPCRouter({
               actionId: performedActionId ?? "unknown",
               userId: performedByUserId ?? actor.userId,
             });
+            playback.record(
+              newBattle,
+              newBattle.version + nActions,
+              performedByUserId ?? actor.userId,
+            );
             nActions += 1;
           }
 
@@ -845,15 +856,19 @@ export const combatRouter = createTRPCRouter({
           // not authorized as an AI turn at the top of the block.
           const { isAITurn: newIsAITurn } = getTurnControl(newActor, suid);
           // Recheck after actions: a hidden animated summon template may now be
-          // alive. Each actor's latest event must reach the client before another
+          // alive. The actor replays a batch from its steps, while other humans only
+          // receive the latest state, so each event must reach them before another
           // action overwrites it; departed participants no longer cap the batch.
-          const needsActionPlayback = newBattle.usersState.some(
-            (u) =>
-              ((!u.isAi && !u.isSummon && u.isAutoCombat) ||
-                Object.keys(u.spriteAnimations ?? {}).length > 0) &&
-              !u.leftBattle &&
-              stillInBattle(u),
+          const fighting = newBattle.usersState.filter(
+            (u) => !u.leftBattle && stillInBattle(u),
           );
+          const needsActionPlayback =
+            fighting.filter((u) => !u.isAi && !u.isSummon).length > 1 &&
+            fighting.some(
+              (u) =>
+                (!u.isAi && !u.isSummon && u.isAutoCombat) ||
+                Object.keys(u.spriteAnimations ?? {}).length > 0,
+            );
           const maxActions =
             AutoBattleTypes.includes(newBattle.battleType) || needsActionPlayback
               ? 1
@@ -926,7 +941,10 @@ export const combatRouter = createTRPCRouter({
               ...settlementWrites(db, pusher, newBattle, result, suid, battleOver),
               finishBattle(),
             ]);
-            const newMaskedBattle = maskBattle(newBattle, suid);
+            const newMaskedBattle: ReturnedBattle = {
+              ...maskBattle(newBattle, suid),
+              playback: playback.steps,
+            };
 
             await combatCompletionStore().save(suid, newMaskedBattle, result);
 
@@ -1200,7 +1218,7 @@ export const combatRouter = createTRPCRouter({
         titles,
       });
       const village = user.villageId
-        ? userBattle.extraState.villages?.[user.villageId]
+        ? (userBattle.extraState.villages?.[user.villageId] as CombatQueryVillage)
         : null;
       const questData = userBattle.extraState.questData?.[user.controllerId];
       const aiProfile =
@@ -1335,14 +1353,18 @@ export const combatRouter = createTRPCRouter({
       };
 
       // Hydrate jutsus and items from extraState if not using new loadouts
-      // We reconstruct CombatQueryUser format from BattleUserState refs + extraState
+      // We reconstruct CombatQueryUser format from BattleUserState refs + extraState.
+      // Compact catalog rows hold everything the gates below read; catalog.test.ts
+      // holds them to the result full rows give.
       const now = new Date();
       const hydratedJutsus =
         newJutsus ??
         user.jutsus
           .filter((ref) => !invalidatedJutsuIds.includes(ref.jutsuId))
           .map((ref) => {
-            const jutsu = userBattle.extraState.jutsus?.[ref.jutsuId];
+            const jutsu = userBattle.extraState.jutsus?.[ref.jutsuId] as
+              | Jutsu
+              | undefined;
             if (!jutsu) return null;
             // Add missing UserJutsu fields needed for CombatQueryUserJutsu
             return {
@@ -1365,7 +1387,7 @@ export const combatRouter = createTRPCRouter({
         newItems ??
         user.items
           .map((ref) => {
-            const item = userBattle.extraState.items?.[ref.itemId];
+            const item = userBattle.extraState.items?.[ref.itemId] as Item | undefined;
             if (!item) return null;
             // Add missing UserItem fields needed for CombatQueryUserItem
             return {
@@ -1453,7 +1475,7 @@ export const combatRouter = createTRPCRouter({
       // actions and summons resolve during battle.
       userBattle.extraState.preBattleGearModifiers =
         userBattle.extraState.preBattleGearModifiers || {};
-      mergeExtraState(userBattle.extraState, extraState);
+      mergeExtraState(userBattle.extraState, compactBattleCatalogs(extraState));
       const updatedBattleUserId = usersState[0]?.userId;
       if (updatedBattleUserId) {
         userBattle.extraState.preBattleGearModifiers[updatedBattleUserId] =
@@ -3450,7 +3472,8 @@ export const initiateBattle = async (
       caps: equipCaps,
       jutsuIds: selected.map((entry) => entry.jutsuId),
       userjutsus: selected.flatMap((entry) => {
-        const definition = extraState.jutsus[entry.jutsuId];
+        // Catalogs stay complete until the battle row is written.
+        const definition = extraState.jutsus[entry.jutsuId] as Jutsu | undefined;
         return definition ? [{ jutsuId: entry.jutsuId, jutsu: definition }] : [];
       }),
       maxEquip: selected.length,

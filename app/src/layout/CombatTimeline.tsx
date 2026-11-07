@@ -1,9 +1,11 @@
 "use client";
 
+import { useAtomValue } from "jotai";
 import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Loader2,
   type LucideIcon,
   User,
   Users,
@@ -35,6 +37,11 @@ import type { ActionEffect, ReturnedBattle } from "@/libs/combat/types";
 import { getItem, getJutsu } from "@/libs/combat/util";
 import { cn } from "@/libs/shadui";
 import { parseHtml } from "@/utils/parse";
+import {
+  type CombatPendingAction,
+  combatPendingActionAtom,
+  combatPresentedLogVersionAtom,
+} from "@/utils/UserContext";
 
 type UserFilter = "all" | "user" | "opponents";
 
@@ -91,6 +98,8 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
+  const pendingAction = useAtomValue(combatPendingActionAtom);
+  const presentedLogVersion = useAtomValue(combatPresentedLogVersionAtom);
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -123,9 +132,26 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
 
   const hasMoreOlder = entries?.length === limit;
 
+  // The server can resolve actions before the field replays them; reveal each as it lands.
+  const presentedEntries = useMemo(
+    () =>
+      presentedLogVersion === undefined
+        ? entries
+        : entries?.filter((entry) => entry.battleVersion <= presentedLogVersion),
+    [entries, presentedLogVersion],
+  );
+  const pendingSlot =
+    pendingAction?.battleId === battleId &&
+    userFilter !== "opponents" &&
+    !presentedEntries?.some((entry) => entry.battleVersion >= pendingAction.version)
+      ? pendingAction
+      : undefined;
+  const pendingUser = battle?.usersState.find((u) => u.userId === pendingSlot?.userId);
+  const slotCount = (presentedEntries?.length ?? 0) + (pendingSlot ? 1 : 0);
+
   const resolvedEntries = useMemo(() => {
-    if (!entries?.length) return [];
-    return [...entries]
+    if (!presentedEntries?.length) return [];
+    return [...presentedEntries]
       .reverse() // Oldest on left, newest on right
       .map((entry) => {
         const user = battle?.usersState.find((u) => u.userId === entry.userId);
@@ -145,16 +171,17 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
         let actionImage: string | undefined;
         let actionItem: GenericObject;
 
+        // Battle catalogs omit descriptions; the details dialog shows the logged text.
         if (jutsu) {
           actionImage = jutsu.image;
-          actionItem = jutsu;
+          actionItem = { ...placeholderObj, ...jutsu };
         } else if (item) {
           actionImage = item.image;
-          actionItem = item;
+          actionItem = { ...placeholderObj, ...item };
         } else {
           actionImage = action?.image ?? user?.avatar ?? undefined;
           actionItem =
-            action?.data ??
+            (action?.data && { ...placeholderObj, ...action.data }) ??
             (action
               ? {
                   ...placeholderObj,
@@ -196,21 +223,21 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
           isNewEffect,
         };
       });
-  }, [entries, battle]);
+  }, [presentedEntries, battle]);
 
   // Auto-scroll to right only when new entries appear (not when loading older)
   useEffect(() => {
-    const grewAtEnd =
-      resolvedEntries.length > prevCountRef.current && limit === TIMELINE_PAGE_SIZE;
+    const grewAtEnd = slotCount > prevCountRef.current && limit === TIMELINE_PAGE_SIZE;
     if (scrollContainerRef.current && grewAtEnd) {
       scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
     }
-    prevCountRef.current = resolvedEntries.length;
-  }, [resolvedEntries.length, limit]);
+    prevCountRef.current = slotCount;
+  }, [slotCount, limit]);
 
   return (
     <div className="relative space-y-3 rounded-lg border bg-slate-100 p-3">
-      {isFetching && (
+      {/* Each action refreshes the log in place; only an explicit page load covers it. */}
+      {isFetching && (!entries || limit > TIMELINE_PAGE_SIZE) && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-slate-950/10 backdrop-blur-sm">
           <Loader noPadding />
         </div>
@@ -278,7 +305,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
             <ChevronLeft className="h-4 w-4 text-gray-700" />
           </Button>
 
-          {resolvedEntries.length === 0 && (
+          {slotCount === 0 && (
             <p className="relative z-10 mt-6 flex-1 text-center text-gray-600 text-xs">
               No actions recorded yet.
             </p>
@@ -375,6 +402,14 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
               </React.Fragment>
             ),
           )}
+          {pendingSlot && (
+            <PendingTimelineSlot
+              action={pendingSlot}
+              avatar={pendingUser?.avatar}
+              round={battle?.round}
+              hasPrevious={resolvedEntries.length > 0}
+            />
+          )}
         </div>
       </div>
 
@@ -436,5 +471,51 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
     </div>
   );
 };
+
+/** Holds the timeline's next position while the server resolves the player's action. */
+const PendingTimelineSlot: React.FC<{
+  action: CombatPendingAction;
+  avatar?: string | null;
+  round?: number;
+  hasPrevious: boolean;
+}> = ({ action, avatar, round, hasPrevious }) => (
+  <>
+    {hasPrevious && (
+      <div className="relative w-4 flex-none">
+        <ChevronRight className="absolute top-1/2 left-0 h-3 w-3 -translate-y-1/2 text-muted-foreground/70" />
+      </div>
+    )}
+    <div
+      role="status"
+      aria-label={`Performing ${action.name}`}
+      title={action.name}
+      className="relative flex w-20 flex-none flex-col items-center rounded-lg px-1 py-1 text-xs"
+    >
+      <div className="relative">
+        <div className="rounded-full border bg-slate-50 opacity-70 shadow-sm">
+          <ContentImage
+            image={action.image}
+            alt={action.name}
+            className="h-16 w-16 rounded-full"
+          />
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/45">
+          <Loader2 className="h-8 w-8 animate-spin text-white" aria-hidden />
+        </div>
+        {avatar && (
+          <div className="absolute -right-1 -bottom-1 rounded-full bg-slate-50 shadow-sm">
+            <ContentImage image={avatar} alt="" className="h-8 w-8 rounded-full" />
+          </div>
+        )}
+      </div>
+      <div className="mt-4 font-medium text-[10px] text-gray-600">
+        <span className="inline-flex items-center gap-1 whitespace-nowrap">
+          <Clock className="h-3 w-3" />
+          <span>{round === undefined ? "Now" : `Round ${round}`}</span>
+        </span>
+      </div>
+    </div>
+  </>
+);
 
 export default CombatTimeline;

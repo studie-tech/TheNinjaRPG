@@ -80,10 +80,13 @@ it("still drives live auto combat while its scene is paused in the background", 
   let drive = () => {};
   let actions = 0;
   const scope = {
-    isPageActive: false, hasAutoCombat: true, isPending: false, result: null,
+    isPageActive: false, hasAutoCombat: true, isPending: false, settledResult: null,
     suid: "viewer", timeDiff: 0, controlledActorId: "viewer",
     battleRef: { current: { id: "live-battle", version: 1, createdAt: new Date(0) } },
     userIdRef: { current: "viewer" }, precomputedActionsRef: { current: [] },
+    lastAutonomousActionRef: { current: 0 }, lastBattleCheckRef: { current: 0 },
+    combat: { scene: { current: { isPresenting: () => false } } },
+    AUTONOMOUS_ACTION_MS: 1100, BATTLE_CHECK_MS: 1000, DRIVER_TICK_MS: 200,
     useEffect(callback: () => void) { callback(); },
     setInterval(callback: () => void) { drive = callback; return 1; },
     calcActiveUser: () => ({ actor: { userId: "ai" }, changedActor: false }),
@@ -94,9 +97,21 @@ it("still drives live auto combat while its scene is paused in the background", 
   new Function("scope", `with (scope) { ${transpiler.transformSync(driver)} }`)(scope);
   drive();
   expect(actions).toBe(1);
+  // Requests stay inside the rate limit however quickly a replay finishes.
+  drive();
+  expect(actions).toBe(1);
+  scope.lastAutonomousActionRef.current = 0;
+  // The field finishes replaying the last response before the next is requested.
+  scope.combat.scene.current.isPresenting = () => true;
+  drive();
+  expect(actions).toBe(1);
+  scope.combat.scene.current.isPresenting = () => false;
   scope.canDrive = () => false;
   drive();
   expect(actions).toBe(1);
+  scope.canDrive = () => true;
+  drive();
+  expect(actions).toBe(2);
 });
 
 it.each([false, true])("displays committed rewards before history recovery and retains them if recovery fails=%s", async (fails) => {
@@ -110,6 +125,7 @@ it.each([false, true])("displays committed rewards before history recovery and r
   new Function("scope", `with (scope) { ${transpiler.transformSync(handlers)} }`)({
     api: { combat: { performAction: { useMutation: (value: typeof options) => { options = value; return {}; } } } },
     battleRef: { current: battle }, resultRef: { current: null }, completionRevisionRef: { current: null }, suid: "player",
+    actionInFlightRef: { current: true }, setPendingAction() {}, combat: { scene: { current: {} } },
     resolveControlledActorId: () => "player", haptics: { notify() {} },
     setBattleState: (update: typeof state | ((current: typeof state) => typeof state)) => { state = typeof update === "function" ? update(state) : update; events.push("result"); },
     setBattleAtom() {}, publishBattle() {}, currentStep: { onCombatWin: "next-step" },
@@ -139,7 +155,7 @@ it("retains a peer's terminal result when an earlier action response arrives", a
   let success!: (data: object) => Promise<void>;
   new Function("scope", `with (scope) { ${transpiler.transformSync(handlers)} }`)({
     api: { combat: { performAction: { useMutation: (options: { onSuccess: typeof success }) => { success = options.onSuccess; return {}; } } } },
-    resultRef: { current: result },
+    resultRef: { current: result }, actionInFlightRef: { current: true }, setPendingAction() {}, combat: { scene: { current: {} } },
     setBattleState: (update: (current: typeof state) => typeof state) => { state = update(state); },
   });
   await success({ updateClient: true, battleUpdate: { ...battle, version: 2 }, result: null });
