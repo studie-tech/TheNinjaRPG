@@ -12,11 +12,7 @@ import {
 import type { Item, UserData, UserItem } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getClanBoost } from "@/libs/clanBoost";
-import {
-  getNextRankExperience,
-  getRankForExperience,
-  getRankProgress,
-} from "@/libs/occupationRank";
+import { getRankForExperience, getRankProgress } from "@/libs/occupationRank";
 import { boostPvpGain } from "@/libs/pvpExperience";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { reduceActivitySeconds } from "@/utils/time";
@@ -129,15 +125,16 @@ export const getTotalItemQuantity = (
   itemId: string,
 ) => {
   return userItems
-    .filter(
-      (item) =>
-        item.itemId === itemId &&
-        item.quantity !== 0 &&
-        !item.isInAuction &&
-        (!item.craftingFinishedAt || item.craftingFinishedAt < new Date()),
-    )
+    .filter(isUsableStack(itemId))
     .reduce((total, item) => total + item.quantity, 0);
 };
+
+/** A stack of the item that holds quantity and is free to use: out of auction and not crafting. */
+const isUsableStack = (itemId: string) => (item: UserItem) =>
+  item.itemId === itemId &&
+  item.quantity !== 0 &&
+  !item.isInAuction &&
+  (!item.craftingFinishedAt || item.craftingFinishedAt < new Date());
 
 /**
  * Calculate how to consume items for crafting
@@ -152,13 +149,7 @@ export const calculateItemConsumption = (
   requiredQuantity: number,
 ) => {
   const availableItems = userItems
-    .filter(
-      (item) =>
-        item.itemId === itemId &&
-        item.quantity !== 0 &&
-        !item.isInAuction &&
-        (!item.craftingFinishedAt || item.craftingFinishedAt < new Date()),
-    )
+    .filter(isUsableStack(itemId))
     .sort((a, b) => a.quantity - b.quantity); // Consume smaller stacks first
 
   const consumptions: {
@@ -196,41 +187,21 @@ export const getCurrentCraftingStatus = (
   userData: UserData,
   userItems: (UserItem & { item: Item })[],
 ) => {
-  if (userData?.occupation !== "CRAFTING") {
-    return {
-      isCurrentlyCrafting: false,
-      craftingRank: null,
-      craftingExperience: 0,
-      currentCraftingItem: null,
-      currentCraftingUserItemId: null,
-      craftingFinishedAt: null,
-      nextRankExperience: 0,
-    };
-  } else {
-    const craftingRank = getCraftingRank(userData.craftingExperience);
+  const craftingRank = getCraftingRank(userData.craftingExperience);
 
-    // Find current crafting item (still in progress)
-    const currentCraftingItem = userItems?.find(
-      (item) =>
-        item.craftingFinishedAt && new Date(item.craftingFinishedAt) > new Date(),
-    );
+  // Find current crafting item (still in progress)
+  const currentCraftingItem = userItems.find(
+    (item) => item.craftingFinishedAt && new Date(item.craftingFinishedAt) > new Date(),
+  );
 
-    const nextRankExperience = getNextRankExperience(
-      CRAFTING_RANKS,
-      CRAFTING_REQUIRED_EXP,
-      craftingRank,
-    );
-
-    return {
-      isCurrentlyCrafting: !!currentCraftingItem,
-      craftingRank,
-      craftingExperience: userData.craftingExperience,
-      currentCraftingItem: currentCraftingItem?.item || null,
-      currentCraftingUserItemId: currentCraftingItem?.id ?? null,
-      craftingFinishedAt: currentCraftingItem?.craftingFinishedAt || null,
-      nextRankExperience,
-    };
-  }
+  return {
+    isCurrentlyCrafting: !!currentCraftingItem,
+    craftingRank,
+    craftingExperience: userData.craftingExperience,
+    currentCraftingItem: currentCraftingItem?.item || null,
+    currentCraftingUserItemId: currentCraftingItem?.id ?? null,
+    craftingFinishedAt: currentCraftingItem?.craftingFinishedAt || null,
+  };
 };
 
 /**
