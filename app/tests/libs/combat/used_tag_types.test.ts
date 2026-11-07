@@ -41,14 +41,16 @@ const runResolution = (
   const battle = makeCompleteBattle({ usersState: newUsersState, usersEffects: [effect] });
 
   applySingleEffect(
-    new Map<string, Consequence>(),
-    newUsersState,
-    [] as UserEffect[],
-    [] as GroundEffect[],
-    [] as ActionEffect[],
-    appliedEffects,
-    battle,
-    actorId,
+    {
+      consequences: new Map<string, Consequence>(),
+      newUsersState,
+      newUsersEffects: [] as UserEffect[],
+      newGroundEffects: [] as GroundEffect[],
+      actionEffects: [] as ActionEffect[],
+      appliedEffects,
+      battle,
+      actorId,
+    },
     effect,
   );
 };

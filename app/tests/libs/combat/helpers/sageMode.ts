@@ -81,14 +81,16 @@ export const activateSageMode = (
 ): UserEffect[] => {
   const usersEffects: UserEffect[] = [];
   applySingleEffect(
-    new Map<string, Consequence>(),
-    [user],
-    usersEffects,
-    [] as GroundEffect[],
-    [] as ActionEffect[],
-    new Set<string>(),
-    battle,
-    user.userId,
+    {
+      consequences: new Map<string, Consequence>(),
+      newUsersState: [user],
+      newUsersEffects: usersEffects,
+      newGroundEffects: [] as GroundEffect[],
+      actionEffects: [] as ActionEffect[],
+      appliedEffects: new Set<string>(),
+      battle,
+      actorId: user.userId,
+    },
     makeActivateSageEffect(user.userId, runtime),
   );
   return usersEffects;

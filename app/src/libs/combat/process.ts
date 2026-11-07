@@ -462,24 +462,24 @@ export const applyEffects = (
       .filter((e) => e.type === "consume" && e.rounds === 0 && e.isNew)
       .map((e) => e.id),
   );
+  const shieldConversionsByUser: ShieldConversionsByUser = new Map();
+  const resolution: EffectResolution = {
+    consequences,
+    newUsersState,
+    newUsersEffects,
+    newGroundEffects,
+    actionEffects,
+    appliedEffects,
+    battle,
+    actorId,
+    action,
+    shieldConversionsByUser,
+    instantConsumeIds,
+  };
+  const resolve = (effect: UserEffect) => applySingleEffect(resolution, effect);
 
   // Apply mirror & copy tags first, so that these get added to usersEffects
-  usersEffects
-    .filter((e) => e.type === "mirror" || e.type === "copy")
-    .forEach((effect) => {
-      applySingleEffect(
-        consequences,
-        newUsersState,
-        newUsersEffects,
-        newGroundEffects,
-        actionEffects,
-        appliedEffects,
-        battle,
-        actorId,
-        effect,
-        action,
-      );
-    });
+  usersEffects.filter((e) => e.type === "mirror" || e.type === "copy").forEach(resolve);
 
   // Separate non-damage-modifier effects from damage modifier effects
   // Note: pierce is explicitly excluded here to maintain the sortEffects ordering
@@ -513,25 +513,8 @@ export const applyEffects = (
     (e) => e.type === "increaseheal" || e.type === "decreaseheal",
   );
 
-  const shieldConversionsByUser: ShieldConversionsByUser = new Map();
-
   // Apply non-damage-modifier effects first (maintains existing ordering)
-  nonDamageModifierEffects.sort(sortEffects).forEach((effect) => {
-    applySingleEffect(
-      consequences,
-      newUsersState,
-      newUsersEffects,
-      newGroundEffects,
-      actionEffects,
-      appliedEffects,
-      battle,
-      actorId,
-      effect,
-      action,
-      shieldConversionsByUser,
-      instantConsumeIds,
-    );
-  });
+  nonDamageModifierEffects.sort(sortEffects).forEach(resolve);
 
   // Instant kills precede Curse activation and seals; account only their resolved HP loss.
   for (const [id, consequence] of consequences) {
@@ -555,21 +538,7 @@ export const applyEffects = (
         (isEffectActive(e) || instantConsumeIds.has(e.id)),
     )
     .sort(sortEffects)
-    .forEach((effect) => {
-      applySingleEffect(
-        consequences,
-        newUsersState,
-        newUsersEffects,
-        newGroundEffects,
-        actionEffects,
-        appliedEffects,
-        battle,
-        actorId,
-        effect,
-        action,
-        shieldConversionsByUser,
-      );
-    });
+    .forEach(resolve);
 
   // Accumulate before collapseConsequences merges hits from different casters.
   // Grant shields after damage resolves so they cannot absorb the generating action.
@@ -748,39 +717,13 @@ export const applyEffects = (
 
   // Apply pierce effects AFTER damage modifiers but BEFORE post-damage modifiers
   // Pierce adds damage that should be included in post-damage calculations (lifesteal, etc.)
-  pierceEffects.sort(sortEffects).forEach((effect) => {
-    applySingleEffect(
-      consequences,
-      newUsersState,
-      newUsersEffects,
-      newGroundEffects,
-      actionEffects,
-      appliedEffects,
-      battle,
-      actorId,
-      effect,
-      action,
-    );
-  });
+  pierceEffects.sort(sortEffects).forEach(resolve);
 
   // Split direct hits before damage-derived effects; delay returns to prevent recursion.
   postDamageModifierEffects
     .filter((e) => e.type === "parry")
     .sort(sortEffects)
-    .forEach((effect) => {
-      applySingleEffect(
-        consequences,
-        newUsersState,
-        newUsersEffects,
-        newGroundEffects,
-        actionEffects,
-        appliedEffects,
-        battle,
-        actorId,
-        effect,
-        action,
-      );
-    });
+    .forEach(resolve);
   const parryReturns: [string, Consequence][] = [];
   for (const [id, consequence] of consequences) {
     if (!consequence.damage || !consequence.parryPercentage) continue;
@@ -815,18 +758,7 @@ export const applyEffects = (
       (parryReturns.length > 0 || diffuseTargets.has(effect.targetId))
     )
       return;
-    applySingleEffect(
-      consequences,
-      newUsersState,
-      newUsersEffects,
-      newGroundEffects,
-      actionEffects,
-      appliedEffects,
-      battle,
-      actorId,
-      effect,
-      action,
-    );
+    resolve(effect);
   });
 
   for (const [id, returned] of parryReturns) consequences.set(id, returned);
@@ -845,37 +777,11 @@ export const applyEffects = (
         e.type === "absorb" &&
         (parryReturns.length > 0 || diffuseTargets.has(e.targetId)),
     )
-    .forEach((effect) => {
-      applySingleEffect(
-        consequences,
-        newUsersState,
-        newUsersEffects,
-        newGroundEffects,
-        actionEffects,
-        appliedEffects,
-        battle,
-        actorId,
-        effect,
-        action,
-      );
-    });
+    .forEach(resolve);
 
   // Apply heal adjustment effects (increaseheal/decreaseheal) AFTER post-damage modifiers
   // These modify lifesteal_hp/absorb_hp/vampRatio values set by lifesteal/absorb/vamp effects
-  healAdjustmentEffects.sort(sortEffects).forEach((effect) => {
-    applySingleEffect(
-      consequences,
-      newUsersState,
-      newUsersEffects,
-      newGroundEffects,
-      actionEffects,
-      appliedEffects,
-      battle,
-      actorId,
-      effect,
-      action,
-    );
-  });
+  healAdjustmentEffects.sort(sortEffects).forEach(resolve);
 
   // Resolve Curse after activation, Clear, and seals; conversion effects resume when it ends.
   const curseHolders = new Set(
@@ -1383,39 +1289,41 @@ const wearArmor = (battle: CompleteBattle, wearer: BattleUserState) => {
   });
 };
 
+/** State shared by the effects resolved for one action; the collections are mutated. */
+export type EffectResolution = {
+  consequences: Map<string, Consequence>;
+  newUsersState: BattleUserState[];
+  newUsersEffects: UserEffect[];
+  newGroundEffects: GroundEffect[];
+  actionEffects: ActionEffect[];
+  appliedEffects: Set<string>;
+  battle: CompleteBattle;
+  actorId: string;
+  action?: CombatAction;
+  /** Per-action totals for outgoing and incoming conversion */
+  shieldConversionsByUser?: ShieldConversionsByUser;
+  /** Shared instant-cast eligibility; Clear removes canceled IDs */
+  instantConsumeIds?: Set<string>;
+};
+
 /**
  * Function for processing a single effect. Note that this function is not pure,
- * but mutates the parameters passed in.
- *
- * @param consequences - Map of consequences - mutated
- * @param newUsersState - New users state - mutated
- * @param newUsersEffects - New users effects - mutated
- * @param newGroundEffects - New ground effects - mutated
- * @param actionEffects - Action effects - mutated
- * @param appliedEffects - Applied effects - mutated
- * @param battle - Battle
- * @param actorId - Actor ID
- * @param effect - Effect to process
- * @param action - Action
- * @param shieldConversionsByUser - Per-action totals for outgoing and incoming conversion
- * @param instantConsumeIds - Shared instant-cast eligibility; Clear removes canceled IDs
+ * but mutates the resolution's collections.
  */
-export const applySingleEffect = (
-  // Mutated parameters
-  consequences: Map<string, Consequence>,
-  newUsersState: BattleUserState[],
-  newUsersEffects: UserEffect[],
-  newGroundEffects: GroundEffect[],
-  actionEffects: ActionEffect[],
-  appliedEffects: Set<string>,
-  battle: CompleteBattle,
-  // Effect context and shared per-action conversion state.
-  actorId: string,
-  effect: UserEffect,
-  action?: CombatAction,
-  shieldConversionsByUser?: ShieldConversionsByUser,
-  instantConsumeIds?: Set<string>,
-) => {
+export const applySingleEffect = (resolution: EffectResolution, effect: UserEffect) => {
+  const {
+    consequences,
+    newUsersState,
+    newUsersEffects,
+    newGroundEffects,
+    actionEffects,
+    appliedEffects,
+    battle,
+    actorId,
+    action,
+    shieldConversionsByUser,
+    instantConsumeIds,
+  } = resolution;
   if (effect.timedBuffExpiresAt && effect.timedBuffExpiresAt <= Date.now()) return;
   // Derive damage config from battle state
   const config = battle.extraState.dmgConfig ?? defaultDmgConfig;
@@ -1646,20 +1554,7 @@ export const applySingleEffect = (
         } else if (effect.type === "injectjutsus") {
           info = injectjutsus(effect, newTarget);
         } else if (effect.type === "activatesagemode") {
-          info = applyActivateSageMode(
-            consequences,
-            newUsersState,
-            newUsersEffects,
-            newGroundEffects,
-            actionEffects,
-            appliedEffects,
-            battle,
-            actorId,
-            effect,
-            action,
-            newTarget,
-            shieldConversionsByUser,
-          );
+          info = applyActivateSageMode(resolution, effect, newTarget);
         } else if (effect.type === "copy") {
           info = copy(effect, usersEffects, curUser, curTarget);
         } else if (effect.type === "mirror") {
@@ -1795,19 +1690,11 @@ function realizeSageTags(props: {
  * @returns Combat-log line, or a gray refusal if a guard fails.
  */
 function applyActivateSageMode(
-  consequences: Map<string, Consequence>,
-  newUsersState: BattleUserState[],
-  newUsersEffects: UserEffect[],
-  newGroundEffects: GroundEffect[],
-  actionEffects: ActionEffect[],
-  appliedEffects: Set<string>,
-  battle: CompleteBattle,
-  actorId: string,
+  resolution: EffectResolution,
   effect: UserEffect,
-  action: CombatAction | undefined,
   newTarget: BattleUserState,
-  shieldConversionsByUser?: ShieldConversionsByUser,
 ): ActionEffect | undefined {
+  const { battle, actorId } = resolution;
   if (effect.actionId !== SAGE_MODE_ACTIVATION_JUTSU_ID) {
     return {
       txt: "Sage mode can only be activated through the Activation action",
@@ -1884,19 +1771,8 @@ function applyActivateSageMode(
     level: activeLevel,
     battle,
   })) {
-    applySingleEffect(
-      consequences,
-      newUsersState,
-      newUsersEffects,
-      newGroundEffects,
-      actionEffects,
-      appliedEffects,
-      battle,
-      actorId,
-      realized,
-      action,
-      shieldConversionsByUser,
-    );
+    // Instant-conversion eligibility stays with the casting pass, out of reach of granted tags.
+    applySingleEffect({ ...resolution, instantConsumeIds: undefined }, realized);
   }
 
   return {
@@ -1993,20 +1869,17 @@ function applyInstantSageAfterEffects(
   const consequences = new Map<string, Consequence>();
   const newUsersEffects: UserEffect[] = [];
   const newGroundEffects: GroundEffect[] = [];
-  const appliedEffects = new Set<string>();
-  for (const tag of instant) {
-    applySingleEffect(
-      consequences,
-      battle.usersState,
-      newUsersEffects,
-      newGroundEffects,
-      [],
-      appliedEffects,
-      battle,
-      sageUserId,
-      tag,
-    );
-  }
+  const resolution: EffectResolution = {
+    consequences,
+    newUsersState: battle.usersState,
+    newUsersEffects,
+    newGroundEffects,
+    actionEffects: [],
+    appliedEffects: new Set(),
+    battle,
+    actorId: sageUserId,
+  };
+  for (const tag of instant) applySingleEffect(resolution, tag);
   battle.usersEffects.push(...newUsersEffects);
   battle.groundEffects.push(...newGroundEffects);
   consequences.forEach((c) => {

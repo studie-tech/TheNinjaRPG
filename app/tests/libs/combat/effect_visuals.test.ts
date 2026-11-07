@@ -25,14 +25,16 @@ describe("applySingleEffect lifecycle visuals", () => {
     );
     const newGroundEffects: GroundEffect[] = [];
     applySingleEffect(
-      new Map(),
-      structuredClone(battle.usersState),
-      [],
-      newGroundEffects,
-      [],
-      new Set(),
-      battle,
-      "caster",
+      {
+        consequences: new Map(),
+        newUsersState: structuredClone(battle.usersState),
+        newUsersEffects: [],
+        newGroundEffects,
+        actionEffects: [],
+        appliedEffects: new Set(),
+        battle,
+        actorId: "caster",
+      },
       effect,
     );
     expect(newGroundEffects).toHaveLength(1);
