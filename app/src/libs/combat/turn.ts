@@ -140,29 +140,19 @@ export const hasNoAvailableActions = (
   precomputedActions?: CombatAction[],
 ) => {
   const actor = battle.usersState.find((u) => u.userId === actorId);
-  if (actor) {
-    const done = actor.curHealth <= 0 || actor.fledBattle || actor.leftBattle;
-    if (!done) {
-      // Public actors omit private loadouts. Their remaining actions are unknown,
-      // even if the timeline has already normalized missing jutsus to an empty list.
-      if (!actor.jutsus || !actor.items) return false;
-      const actions =
-        precomputedActions && precomputedActions.length > 0
-          ? precomputedActions
-          : availableUserActions(battle, actorId, wantsHumanActionSet(actor));
-      for (const j of actions.keys()) {
-        const action = actions[j];
-        if (action) {
-          const notWait = action.id !== "wait";
-          const { canAct } = actionPointsAfterAction(actor, battle, action);
-          if (canAct && notWait) {
-            return false;
-          }
-        }
-      }
-    }
-  }
-  return true;
+  if (!actor || actor.curHealth <= 0 || actor.fledBattle || actor.leftBattle)
+    return true;
+  // Public actors omit private loadouts. Their remaining actions are unknown,
+  // even if the timeline has already normalized missing jutsus to an empty list.
+  if (!actor.jutsus || !actor.items) return false;
+  const actions =
+    precomputedActions && precomputedActions.length > 0
+      ? precomputedActions
+      : availableUserActions(battle, actorId, wantsHumanActionSet(actor));
+  return !actions.some(
+    (action) =>
+      action.id !== "wait" && actionPointsAfterAction(actor, battle, action).canAct,
+  );
 };
 
 export const calcApReduction = (
@@ -187,13 +177,10 @@ export const calcApReduction = (
       return checkFriendlyFire(e, user, battle.usersState);
     }) ?? []),
   ];
-  const apReduction = stunEffects?.reduce((acc, e) => {
-    if (e && "apReduction" in e) {
-      acc = e.apReduction > acc ? e.apReduction : acc;
-    }
-    return acc;
-  }, 0);
-  return apReduction || 0;
+  return stunEffects.reduce(
+    (acc, e) => ("apReduction" in e && e.apReduction > acc ? e.apReduction : acc),
+    0,
+  );
 };
 
 /**

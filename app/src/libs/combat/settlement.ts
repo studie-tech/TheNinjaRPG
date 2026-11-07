@@ -138,7 +138,7 @@ export const calcBattleResult = (
       }
 
       // Calculate ELO change if user had won.
-      let eloDiff = Math.max(calcEloChange(uExp, oExp || 1000, maxGain, true), 0.02);
+      let eloDiff = Math.max(calcEloChange(uExp, oExp || 1000, maxGain), 0.02);
 
       // If killing ally, then no experience (unless in war-torn sector)
       // Note: isInWarTornSector is declared later in the prestige calculation section
@@ -969,11 +969,11 @@ const distributeExpToStat = (
 };
 
 /**
- * Computes change in ELO rating based on original ELO ratings
+ * Computes the winner's change in ELO rating based on original ELO ratings
  */
-const calcEloChange = (user: number, opponent: number, kFactor = 32, won: boolean) => {
+const calcEloChange = (user: number, opponent: number, kFactor: number) => {
   const expectedScore = 1 / (1 + 2 ** ((opponent - user) / (0.03 * (opponent + user))));
-  const ratingChange = kFactor * ((won ? 1 : 0) - expectedScore);
+  const ratingChange = kFactor * (1 - expectedScore);
   return Math.floor(ratingChange * 100) / 100;
 };
 
