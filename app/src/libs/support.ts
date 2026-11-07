@@ -41,8 +41,6 @@ export const getStatusColor = (status: SupportTicketStatus) => {
   return SUPPORT_TICKET_COLORS.STATUS[status];
 };
 
-export { formatTimeAgo } from "@/utils/time";
-
 /** Statuses in which a ticket counts as closed */
 const CLOSED_TICKET_STATUSES: SupportTicketStatus[] = ["RESOLVED", "CLOSED"];
 
