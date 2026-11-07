@@ -344,6 +344,7 @@ import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
+import { groupBy } from "@/utils/grouping";
 import { fetchWithTimeout } from "@/utils/http";
 import { isBunnyCdnUrl, transformImageUrl } from "@/utils/image";
 import { fedItemLoadouts } from "@/utils/paypal";
@@ -1757,58 +1758,19 @@ export const itemRouter = createTRPCRouter({
         ctx,
         storedAtHome,
       );
-      const itemIds = [
-        ...new Set(
-          userItemsAll
-            .filter((r) => r.item && r.item.stackSize > 1)
-            .map((r) => r.itemId),
-        ),
-      ];
-      if (itemIds.length === 0) {
-        const recovery = await updateUserForActionReadiness(
-          ctx.drizzle,
-          readiness,
-          recoveredAt,
-        );
-        if (!recovery.rowsAffected)
-          return errorResponse("Your status changed. Please try again.");
-        return actionReadinessResponse(
-          {
-            success: true,
-            message: "Nothing to merge",
-            inventoryChanges: recovered ? undefined : [],
-            ...getMergedStacksUserUpdate(user, recovered ? undefined : []),
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
-      const itemById = new Map<string, ItemRowForMerge>();
-      for (const row of userItemsAll) {
-        if (row.item) {
-          itemById.set(row.itemId, row.item);
-        }
-      }
-      const userItemsByItemId = new Map<string, typeof userItemsAll>();
-      for (const row of userItemsAll) {
-        const list = userItemsByItemId.get(row.itemId);
-        if (list) {
-          list.push(row);
-        } else {
-          userItemsByItemId.set(row.itemId, [row]);
-        }
-      }
+      // The item relation has no foreign key, so an orphaned stack can have no item.
+      const stacksByItemId = groupBy(
+        userItemsAll.filter((r) => r.item && r.item.stackSize > 1),
+        "itemId",
+      );
       const [results, recovery] = await Promise.all([
         Promise.all(
-          itemIds.map((itemId) =>
+          [...stacksByItemId].map(([itemId, rows]) =>
             executeMergeStacksForItem(
               ctx.drizzle,
               ctx.userId,
               itemId,
-              {
-                userItems: userItemsByItemId.get(itemId) ?? [],
-                item: itemById.get(itemId) ?? undefined,
-              },
+              { userItems: rows, item: rows[0]?.item },
               ownerWhere,
             ),
           ),
@@ -2086,13 +2048,9 @@ export const itemRouter = createTRPCRouter({
         input.slot,
       );
       // If anything happened
-      if (result.success && "promises" in result && result.promises.length > 0) {
-        const outcomes = await Promise.all(
-          result.promises.map((write) => retryOnDeadlock(async () => write)),
-        );
-        if (
-          outcomes.some((saved) => saved.rowsAffected !== result.expectedRowsAffected)
-        )
+      if (result.success && "write" in result) {
+        const saved = await retryOnDeadlock(async () => result.write);
+        if (saved.rowsAffected !== result.expectedRowsAffected)
           return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
         // Save only committed equipment. A hunt starting afterward must not leave
         // its template stale; this write cannot alter the encounter's equipment.
@@ -2144,15 +2102,10 @@ export const itemRouter = createTRPCRouter({
       if (equippedItems.length === 0) {
         if (shouldClearLoadout && currentLoadout) {
           await updateItemLoadoutForUnequipAllItems(ctx.drizzle, currentLoadout, ctx);
-          return {
-            success: true,
-            message: "Cleared active loadout",
-            ...getUnchangedEquipmentUserUpdate({ user }),
-          };
         }
         return {
           success: true,
-          message: "Nothing equipped",
+          message: shouldClearLoadout ? "Cleared active loadout" : "Nothing equipped",
           ...getUnchangedEquipmentUserUpdate({ user }),
         };
       }
@@ -4231,15 +4184,12 @@ export const toggleEquipItem = async (
     useritem.equipped = "NONE";
     message = `Unequipped ${info.name}`;
   }
-  // Swap both rows together so hunting cannot preload two items in the same slot.
-  const promises = [
-    updateUserItemForToggleEquipItem(client, useritem, changedIds, user),
-  ];
   // Return information
   return {
     success: true,
     message,
-    promises,
+    // Swap both rows together so hunting cannot preload two items in the same slot.
+    write: updateUserItemForToggleEquipItem(client, useritem, changedIds, user),
     expectedRowsAffected: changedIds.length,
     newUserItems,
   };
@@ -4522,15 +4472,13 @@ const refundUserMoney = async (
 
 // --- Stack merge (used by mergeStacks / mergeAllStacks; kept at bottom with other helpers)
 
-type ItemRowForMerge = NonNullable<Awaited<ReturnType<typeof fetchItem>>>;
-
 type MergeEligibleUserItemForStackMerge = UserItem & {
   imbuements: readonly unknown[];
 };
 
 type PreloadedStackMergePayload = {
   userItems: MergeEligibleUserItemForStackMerge[];
-  item: ItemRowForMerge | undefined;
+  item: Item | undefined;
 };
 
 type MergeStacksExecutionResult = (
@@ -4717,8 +4665,8 @@ async function executeMergeStacksForItemBucket(
  * `executeMergeStacksForItemBucket`) so concurrent store/retrieve cannot leave a
  * partial merge that duplicates quantities.
  *
- * **mergeAllStacks** passes `preloaded` rows already limited to the requested scope
- * (carried or home), non-auction stacks.
+ * **mergeAllStacks** passes `preloaded` rows of this item, already limited to the
+ * requested scope (carried or home) and to positive, non-auction stacks.
  */
 async function executeMergeStacksForItem(
   drizzle: DrizzleClient,
@@ -4728,14 +4676,12 @@ async function executeMergeStacksForItem(
   ownerWhere?: SQL,
 ): Promise<MergeStacksExecutionResult> {
   let canProject = true;
-  let info: ItemRowForMerge | undefined;
+  let info: Item | undefined;
   let userItems: MergeEligibleUserItemForStackMerge[];
 
   if (preloaded) {
     info = preloaded.item;
-    userItems = preloaded.userItems.filter(
-      (r) => r.userId === userId && r.itemId === itemId && r.quantity > 0,
-    );
+    userItems = preloaded.userItems;
   } else {
     // fetchItem is independent of the user's claim state, so it runs in parallel with the
     // reaper → items chain instead of serializing behind it.
@@ -4746,14 +4692,13 @@ async function executeMergeStacksForItem(
         return listUserItemForExecuteMergeStacksForItem(drizzle, userId, itemId);
       }),
     ]);
-    info = fetchedInfo ?? undefined;
+    info = fetchedInfo;
     userItems = fetchedUserItems;
   }
   const filteredUserItems = userItems.filter(
     (i) =>
       i.imbuements.length === 0 &&
-      (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()) &&
-      !i.isInAuction,
+      (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()),
   );
   if (!info || filteredUserItems.length === 0) {
     return {

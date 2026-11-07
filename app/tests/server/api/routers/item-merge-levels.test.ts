@@ -61,6 +61,37 @@ describeWithDatabase("consumable merges across ownership levels", () => {
     expect(rows.map((row) => row.quantity)).toEqual([3, 3]);
   });
 
+  it("reports nothing to merge for an empty, unstackable or orphaned inventory", async () => {
+    const api = await callerFor(itemRouter, "merge-user");
+    const empty = await api.mergeAllStacks({ storedAtHome: false });
+    expect(empty).toEqual({ success: true, message: "Nothing to merge", inventoryChanges: [], userPatch: {}, userDelta: {} } as never);
+    await resetTables(item);
+    await insertItems([{ id: "single", itemType: "WEAPON", stackSize: 1 }]);
+    await insertUserItems([
+      { id: "single-a", userId: "merge-user", itemId: "single", quantity: 1 },
+      { id: "single-b", userId: "merge-user", itemId: "single", quantity: 1 },
+      { id: "orphan-a", userId: "merge-user", itemId: "deleted-item", quantity: 2 },
+      { id: "orphan-b", userId: "merge-user", itemId: "deleted-item", quantity: 2 },
+    ]);
+    expect(await api.mergeAllStacks({ storedAtHome: false })).toEqual(empty);
+    expect(await (await getTestDatabase()).select().from(userItem)).toHaveLength(4);
+  });
+
+  it("merges every stackable item type in one request and leaves others alone", async () => {
+    await insertItems([{ id: "potion", name: "Potion", itemType: "CONSUMABLE", canStack: true, stackSize: 10 }]);
+    await insertUserItems([
+      { id: "c1", userId: "merge-user", itemId: "consumable", quantity: 2 },
+      { id: "c2", userId: "merge-user", itemId: "consumable", quantity: 2 },
+      { id: "p1", userId: "merge-user", itemId: "potion", quantity: 5 },
+      { id: "p2", userId: "merge-user", itemId: "potion", quantity: 5 },
+      { id: "listed", userId: "merge-user", itemId: "potion", quantity: 4, isInAuction: true },
+    ]);
+    const result = await (await callerFor(itemRouter, "merge-user")).mergeAllStacks({ storedAtHome: false });
+    expect(result).toMatchObject({ success: true, message: "Merged stacks for 2 item types" });
+    const rows = await (await getTestDatabase()).select().from(userItem);
+    expect(rows.map((row) => [row.itemId, row.quantity]).sort()).toEqual([["consumable", 4], ["potion", 10], ["potion", 4]]);
+  });
+
   it.each(["ASLEEP", "HOSPITALIZED"] as const)("reports confirmed %s recovery when only one item type merges", async (status) => {
     const database = await getTestDatabase();
     await database.update(userData).set({
