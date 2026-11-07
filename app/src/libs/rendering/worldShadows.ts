@@ -832,7 +832,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         frameRect.y *= heightRatio;
         frameRect.width *= sourceRatio;
         frameRect.height *= heightRatio;
-        let frame = worldMaterialFrame(material, frameRect);
+        let frame: MaterialFrame;
         if (record.character || (dynamic && material.isBillboard)) {
           let cached = characterFrames.get(sprite.texture);
           if (!cached) {
@@ -847,7 +847,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             characterFrames.set(sprite.texture, cached);
           }
           frame = cached;
-        }
+        } else frame = worldMaterialFrame(material, frameRect);
         sprite.updateLocalTransform();
         const m = p.matrix.clone().append(sprite.localTransform);
         const w = sprite.texture.orig.width,
