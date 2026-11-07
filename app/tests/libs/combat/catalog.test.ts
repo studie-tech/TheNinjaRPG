@@ -5,7 +5,7 @@ import type { CombatQueryUser, ExtraState } from "@/libs/combat/types";
 import { applyLinkedJutsuReskin } from "@/libs/jutsu/reskins";
 import { hasMasteryRequirements, MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
-import { battleJutsuGateFailure, checkJutsuBloodlineItem } from "@/libs/train";
+import { battleJutsuGateFailure, checkJutsuBloodlineItem } from "@/libs/jutsuRequirements";
 import { getStrucBoost, type StructureAttribute } from "@/utils/village";
 
 const jutsu = (overrides: Partial<Jutsu> = {}) =>

@@ -27,6 +27,7 @@ import {
   splitIntoStacks,
 } from "@/libs/item";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
+import { checkJutsuBloodline, checkJutsuVillage } from "@/libs/jutsuRequirements";
 import { getPvpBoost } from "@/libs/pvpExperience";
 import {
   filterQuestTrackersForDbPersist,
@@ -45,8 +46,6 @@ import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import {
   calcJutsuTrainCost,
   calcJutsuTrainTime,
-  checkJutsuBloodline,
-  checkJutsuVillage,
   masteryTrainingFields,
 } from "@/libs/train";
 import { nextSnapshotSql } from "@/queries/concurrency";

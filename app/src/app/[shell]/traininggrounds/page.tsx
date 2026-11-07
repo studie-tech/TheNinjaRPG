@@ -116,6 +116,14 @@ import {
 } from "@/libs/actionReadiness";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { providedElements } from "@/libs/elementalMastery";
+import {
+  canTrainJutsu,
+  canUseJutsu,
+  checkJutsuBloodline,
+  checkJutsuRank,
+  checkJutsuVillage,
+  isJutsuTrainToLearnRestricted,
+} from "@/libs/jutsuRequirements";
 import { effectiveMasteries } from "@/libs/mastery";
 import { getMasteryRank, masteryTotal } from "@/libs/masteryProgression";
 import { useInfinitePagination } from "@/libs/pagination";
@@ -127,16 +135,10 @@ import { showMutationToast } from "@/libs/toast";
 import {
   calcJutsuTrainCost,
   calcJutsuTrainTime,
-  canTrainJutsu,
-  canUseJutsu,
-  checkJutsuBloodline,
-  checkJutsuRank,
-  checkJutsuVillage,
   findJutsuInTraining,
   getMasteryTrainingState,
   getTrainingSections,
   isJutsuInTraining,
-  isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,
   masteryTrainingBlockMessage,
   masteryTrainingGainRoom,

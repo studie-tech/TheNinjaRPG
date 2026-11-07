@@ -156,6 +156,7 @@ import {
   compareByLoadoutOrder,
   computeJutsuLoadoutCapAssignments,
 } from "@/libs/jutsu";
+import { battleJutsuGateFailure, calcJutsuEquipLimit } from "@/libs/jutsuRequirements";
 import { resolveSelectableLoadout } from "@/libs/loadout";
 import {
   anonymousSpriteAppearance,
@@ -205,7 +206,6 @@ import {
 } from "@/libs/timedBuffs";
 import { regenerationBuffs, titleCombatTag } from "@/libs/titles";
 import { isActiveEventEntrant } from "@/libs/tournament/events";
-import { battleJutsuGateFailure, calcJutsuEquipLimit } from "@/libs/train";
 import { getBiomeFromTileType } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import { fetchActionUser } from "@/queries/actionReadiness";

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
 import { item, itemLoadout, jutsu, jutsuLoadout, skillTree, userData, userItem, userJutsu, userSkill } from "@/drizzle/schema";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
-import { jutsuRequirementWarning } from "@/libs/train";
+import { jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import { itemRouter } from "@/server/api/routers/item";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";

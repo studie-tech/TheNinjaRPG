@@ -69,6 +69,13 @@ import {
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import { getJutsuMaxLevel } from "@/libs/jutsuProgression";
 import {
+  calcJutsuEquipLimit,
+  canTrainJutsu,
+  canUseJutsu,
+  checkJutsuBloodlineItem,
+  isJutsuTrainToLearnRestricted,
+} from "@/libs/jutsuRequirements";
+import {
   buildMissingLoadouts,
   decideRename,
   resolveSelectableLoadout,
@@ -86,15 +93,10 @@ import { hasRequiredLevel, hasRequiredRank } from "@/libs/rank";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
 import {
-  calcJutsuEquipLimit,
   calcJutsuTrainCost,
   calcJutsuTrainTime,
-  canTrainJutsu,
-  canUseJutsu,
-  checkJutsuBloodlineItem,
   findJutsuInTraining,
   isJutsuInTraining,
-  isJutsuTrainToLearnRestricted,
 } from "@/libs/train";
 import { fetchItemLoadouts } from "@/queries/item";
 import {

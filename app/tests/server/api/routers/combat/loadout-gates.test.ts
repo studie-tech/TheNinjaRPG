@@ -7,7 +7,7 @@ import type { BattleType } from "@/drizzle/constants";
 import { aiProfile, battle, jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import { effectiveMasteries } from "@/libs/mastery";
 import { Pusher } from "@/libs/pusher";
-import { battleJutsuGateFailure } from "@/libs/train";
+import { battleJutsuGateFailure } from "@/libs/jutsuRequirements";
 import { combatRouter } from "@/server/api/routers/combat";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { insertSnapshotLobby, loadCombatant, preloadLobby } from "../../../../libs/combat/helpers/preload";

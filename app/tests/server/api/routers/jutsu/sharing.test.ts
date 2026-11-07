@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { jutsuLoadout, userJutsu } from "@/drizzle/schema";
 import { FED_JUTSU_LOADOUTS_BASE } from "@/drizzle/constants";
 import { exportJutsuLoadout } from "@/libs/loadout";
-import * as train from "@/libs/train";
+import * as jutsuRequirements from "@/libs/jutsuRequirements";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { resolverOf } from "../../../../setup/testDatabase";
@@ -58,8 +58,8 @@ const setup = () => {
 };
 
 beforeEach(() => {
-  vi.spyOn(train, "calcJutsuEquipLimit").mockReturnValue(10);
-  vi.spyOn(train, "canUseJutsu").mockReturnValue(true);
+  vi.spyOn(jutsuRequirements, "calcJutsuEquipLimit").mockReturnValue(10);
+  vi.spyOn(jutsuRequirements, "canUseJutsu").mockReturnValue(true);
 });
 afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
 
@@ -118,7 +118,7 @@ describe("ordinary jutsu loadout sharing endpoints", () => {
   it.each(["eligibility", "destination", "active selection"])("requires a new preview after changed %s", async (change) => {
     const test = setup();
     const input = await test.preview();
-    if (change === "eligibility") vi.spyOn(train, "canUseJutsu").mockReturnValue(false);
+    if (change === "eligibility") vi.spyOn(jutsuRequirements, "canUseJutsu").mockReturnValue(false);
     if (change === "destination") test.loadouts[0]!.jutsuIds = ["concurrent-edit"];
     if (change === "active selection") test.user.jutsuLoadout = "inactive";
     const result = await test.call("importJutsuLoadout", input);
