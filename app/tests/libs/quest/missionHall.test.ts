@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { MEDNIN_REQUIRED_EXP } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
-import { fallbackQuestsFilter, isQuestRankAllowed } from "@/libs/quest/missionHall";
+import { filterMissionHallQuests, isQuestRankAllowed } from "@/libs/quest/missionHall";
 
 const user = {
   role: "USER",
@@ -42,9 +42,9 @@ const medical = (id: string, medicalRank: Quest["medicalRank"], patch = {}) =>
 
 const ids = (quests: Quest[]) => quests.map((quest) => quest.id);
 
-describe("fallbackQuestsFilter", () => {
+describe("filterMissionHallQuests", () => {
   it("lists available medical quests from the player's rank downward", () => {
-    const { filtered } = fallbackQuestsFilter(
+    const { filtered } = filterMissionHallQuests(
       [
         medical("none-1", "NONE"),
         medical("novice", "NOVICE"),
@@ -71,7 +71,7 @@ describe("fallbackQuestsFilter", () => {
   });
 
   it("drops other types, ranks above the player and unavailable quests", () => {
-    const { filtered } = fallbackQuestsFilter(
+    const { filtered } = filterMissionHallQuests(
       [
         medical("legendary", "LEGENDARY"),
         medical("hidden", "MASTER", { hidden: true }),
@@ -86,21 +86,21 @@ describe("fallbackQuestsFilter", () => {
 
   it("does not reorder the caller's list", () => {
     const quests = [medical("novice", "NOVICE"), medical("master", "MASTER")];
-    fallbackQuestsFilter(quests, user, "medical");
+    filterMissionHallQuests(quests, user, "medical");
     expect(ids(quests)).toEqual(["novice", "master"]);
   });
 
   it("notes when the best available medical rank is below the player's", () => {
-    expect(fallbackQuestsFilter([medical("novice", "NOVICE")], user, "medical").rankInfo).toBe(
+    expect(filterMissionHallQuests([medical("novice", "NOVICE")], user, "medical").rankInfo).toBe(
       " (showing missions up to Novice rank)",
     );
-    expect(fallbackQuestsFilter([medical("master", "MASTER")], user, "medical").rankInfo).toBe("");
-    expect(fallbackQuestsFilter([], user, "medical").rankInfo).toBe("");
+    expect(filterMissionHallQuests([medical("master", "MASTER")], user, "medical").rankInfo).toBe("");
+    expect(filterMissionHallQuests([], user, "medical").rankInfo).toBe("");
   });
 
   it("returns other quest types untouched", () => {
     const quests = [medical("a", "LEGENDARY", { questType: "mission", hidden: true })];
-    expect(fallbackQuestsFilter(quests, user, "mission")).toEqual({
+    expect(filterMissionHallQuests(quests, user, "mission")).toEqual({
       filtered: quests,
       rankInfo: "",
     });
