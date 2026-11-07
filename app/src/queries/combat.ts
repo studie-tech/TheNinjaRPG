@@ -104,7 +104,6 @@ import type { DungeonBattleState } from "@/libs/dungeon";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { withMercenaryParticipation } from "@/libs/objectiveWar";
 import { petExperienceGainSql } from "@/libs/pets/experience";
-import { getIsolatedPyramid } from "@/libs/questRun";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
@@ -2502,7 +2501,7 @@ export const updateUserDataForUpdateUser2 = (
   },
   updatedQuestData: import("@/validators/objectives").QuestTrackerType[],
   tookKageSeat: false | true,
-  hydratedUser: Parameters<typeof getIsolatedPyramid>[0],
+  isIsolated: boolean,
   confirmPetReward = false,
 ) =>
   client
@@ -2585,8 +2584,7 @@ export const updateUserDataForUpdateUser2 = (
             rank: sql`CASE WHEN ${userData.rank} = 'ELDER' THEN 'JONIN' ELSE ${userData.rank} END`,
           }
         : {}),
-      ...(!getIsolatedPyramid(hydratedUser) &&
-      sendsToHospital(curBattle, result.curHealth)
+      ...(!isIsolated && sendsToHospital(curBattle, result.curHealth)
         ? {
             ...hospitalPlacement(curBattle, user),
             immunityUntil:
@@ -2594,7 +2592,7 @@ export const updateUserDataForUpdateUser2 = (
                 ? sql`NOW() + INTERVAL 1 MINUTE`
                 : sql`immunityUntil`,
           }
-        : { status: getIsolatedPyramid(hydratedUser) ? "BATTLE" : "AWAKE" }),
+        : { status: isIsolated ? "BATTLE" : "AWAKE" }),
       // Deactivate stealth and set cooldown after leaving combat (20 seconds)
       stealthActive: false,
       stealthActivatedAt: null,
