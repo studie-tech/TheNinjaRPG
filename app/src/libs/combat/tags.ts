@@ -1576,15 +1576,8 @@ export const heal = (
   applyTimes: number,
 ) => {
   // Prevent?
-  const { pass, preventTag } = preventCheck(
-    usersEffects,
-    "healprevent",
-    target,
-    effect,
-  );
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be healed");
-  }
+  const { pass } = preventCheck(usersEffects, "healprevent", target, effect);
+  if (!pass) return preventResponse(effect, target, "cannot be healed");
   // Calculate healing
   const { power } = getPower(effect);
   // Battles persisted before the counter was floored can still carry a negative round,
@@ -1675,11 +1668,8 @@ export const curse = (
   round: number,
 ) => {
   if (!isEffectActive(effect) || effect.curseState) return;
-  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound && !pass) {
-    effect.rounds = 0;
-    return preventResponse(effect, target, "cannot be buffed");
-  }
+  const prevented = olderPreventResponse(effect, usersEffects, "buffprevent", target);
+  if (prevented) return prevented;
   effect.curseState = {
     storedHealing: 0,
     activatedRound: effect.isNew ? round : effect.createdRound,
@@ -2864,10 +2854,7 @@ export const preventResponse = (
   } as ActionEffect;
 };
 
-/**
- * Prevention from a buff/debuff prevent tag older than the effect. The prevent roll
- * runs for any active tag, whatever its age.
- */
+/** Prevention from a buff/debuff prevent tag older than the effect. */
 const olderPreventResponse = (
   effect: UserEffect,
   usersEffects: UserEffect[],
@@ -2875,11 +2862,8 @@ const olderPreventResponse = (
   target: BattleUserState,
   message = kind === "buffprevent" ? "cannot be buffed" : "cannot be debuffed",
 ) => {
-  const { pass, preventTag } = preventCheck(usersEffects, kind, target);
-  if (preventTag && preventTag.createdRound < effect.createdRound && !pass) {
-    return preventResponse(effect, target, message);
-  }
-  return undefined;
+  const { pass } = preventCheck(usersEffects, kind, target, effect);
+  return pass ? undefined : preventResponse(effect, target, message);
 };
 
 /**
@@ -3042,13 +3026,8 @@ const preventCheck = (
 ) => {
   const preventTag = getActiveTargetEffects(usersEffects, target.userId, type)[0];
 
-  if (preventTag && (preventTag.rounds === undefined || preventTag.rounds > 0)) {
-    // Only prevent if the effect being checked was created after the prevent effect
-    if (effect && preventTag.createdRound >= effect.createdRound) {
-      return { pass: true, preventTag: preventTag };
-    }
-    const power = preventTag.power + preventTag.level * preventTag.powerPerLevel;
-    return { pass: Math.random() > power / 100, preventTag: preventTag };
-  }
-  return { pass: true, preventTag: preventTag };
+  if (!preventTag) return { pass: true };
+  // Only prevent if the effect being checked was created after the prevent effect
+  if (effect && preventTag.createdRound >= effect.createdRound) return { pass: true };
+  return { pass: Math.random() > getEffectPower(preventTag) / 100 };
 };
