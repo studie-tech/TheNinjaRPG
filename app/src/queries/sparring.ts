@@ -1,7 +1,7 @@
 /**
  * Database access for sparring; authorization and transaction scopes stay in callers.
  */
-import { and, eq, gt, inArray, or } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, or } from "drizzle-orm";
 import type { UserRequestState, UserRequestType } from "@/drizzle/constants";
 import { userRequest } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
@@ -115,4 +115,22 @@ export const insertRequest = async (
     useRankedRules: useRankedRules || false,
     spectatable: spectatable || false,
   });
+};
+
+/**
+ * Clears requests affected by village or rank changes while preserving home access.
+ *
+ * @param client - The DrizzleClient instance used to perform the delete operation.
+ * @param userId - The ID of the user whose requests should be deleted.
+ * @returns A Promise that resolves to the result of the delete operation.
+ */
+export const deleteRequests = async (client: DrizzleClient, userId: string) => {
+  return await client
+    .delete(userRequest)
+    .where(
+      and(
+        or(eq(userRequest.senderId, userId), eq(userRequest.receiverId, userId)),
+        ne(userRequest.type, "HOME"),
+      ),
+    );
 };

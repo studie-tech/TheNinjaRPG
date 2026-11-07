@@ -1,4 +1,4 @@
-import { deleteRequests } from "@/queries/sensei";
+import { deleteRequests } from "@/queries/sparring";
 import { beforeEach, expect, it } from "bun:test";
 import { userData, userRequest, village } from "@/drizzle/schema";
 

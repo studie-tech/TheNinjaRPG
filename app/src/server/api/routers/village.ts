@@ -9,8 +9,7 @@ import {
 import type { VillageAlliance } from "@/drizzle/schema";
 import { hasRequiredRank } from "@/libs/train";
 import { fetchUser } from "@/queries/profile";
-import { deleteRequests } from "@/queries/sensei";
-import { fetchRequests, insertRequest } from "@/queries/sparring";
+import { deleteRequests, fetchRequests, insertRequest } from "@/queries/sparring";
 import {
   countVillageSectors,
   executeReleasedForReleaseSector,

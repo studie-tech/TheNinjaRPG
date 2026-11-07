@@ -96,6 +96,7 @@ import {
   REWARD_CHOICE_READY_MESSAGE,
   rewardChoiceContentIds,
   rewardFromChoiceCards,
+  validateQuestRewardPackages,
   validateRewardPicks,
   verifyRewardChoiceForSave,
 } from "@/libs/rewardChoice";
@@ -171,7 +172,6 @@ import {
   type UserWithRelations,
 } from "@/routers/profile";
 import { fetchActiveWars } from "@/routers/war";
-import { validateQuestRewardPackages } from "@/server/api/routers/rewardPackages";
 import {
   baseServerResponse,
   createTRPCRouter,
