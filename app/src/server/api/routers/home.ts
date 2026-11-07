@@ -282,7 +282,7 @@ export const homeRouter = createTRPCRouter({
       const newStatus: UserStatus = user.status === "ASLEEP" ? "AWAKE" : "ASLEEP";
       // Guards
       if (user.isOutlaw) {
-        const sectorVillage = await fetchSectorVillage(ctx.drizzle, user?.sector ?? -1);
+        const sectorVillage = await fetchSectorVillage(ctx.drizzle, user.sector);
         if (
           newStatus === "ASLEEP" &&
           sectorVillage &&
@@ -313,26 +313,14 @@ export const homeRouter = createTRPCRouter({
         return errorResponse("Your status changed. Refresh and try again.");
       }
       // Push status update to sector
-      const output = {
-        longitude: user.longitude,
-        latitude: user.latitude,
+      const pusher = getServerPusher();
+      void updateUserOnMap(pusher, user.sector, {
+        ...user,
         sector: newStatus === "AWAKE" ? user.sector : -1,
-        avatar: user.avatar,
-        avatarLight: user.avatarLight,
-        level: user.level,
-        experience: user.experience,
-        rank: user.rank,
-        villageId: user.villageId,
-        battleId: user.battleId,
-        username: user.username,
         status: newStatus,
         location: "",
-        userId: ctx.userId,
-        curHealth: user.curHealth,
-        maxHealth: user.maxHealth,
-      };
-      const pusher = getServerPusher();
-      void updateUserOnMap(pusher, user.sector, output);
+        stealthActive: false,
+      });
       // Done
       return {
         success: true,
@@ -513,34 +501,20 @@ export const homeRouter = createTRPCRouter({
           return errorResponse(
             "Your furniture storage is full. Retrieve some furniture before downgrading",
           );
-        const storedNormalItems =
-          storedItems.filter((ui) => getHomeStorageBucket(ui.item) === "normal")
-            .length || 0;
-        const storedMaterialItems =
-          storedItems.filter((ui) => getHomeStorageBucket(ui.item) === "materials")
-            .length || 0;
-        const storedCookingItems =
-          storedItems.filter((ui) => getHomeStorageBucket(ui.item) === "cooking")
-            .length || 0;
-        const maxMaterials = getHomeStorageBucketCapacity(
-          "materials",
-          targetHome.storage,
-        );
-        const maxCooking = getHomeStorageBucketCapacity("cooking", targetHome.storage);
-        if (storedNormalItems > targetHome.storage) {
-          return errorResponse(
-            `You need to remove some items from storage first (max ${targetHome.storage})`,
-          );
-        }
-        if (storedMaterialItems > maxMaterials) {
-          return errorResponse(
-            `You need to remove some materials from storage first (max ${maxMaterials})`,
-          );
-        }
-        if (storedCookingItems > maxCooking) {
-          return errorResponse(
-            `You need to remove some cooking items from storage first (max ${maxCooking})`,
-          );
+        for (const [bucket, label] of [
+          ["normal", "items"],
+          ["materials", "materials"],
+          ["cooking", "cooking items"],
+        ] as const) {
+          const stored = storedItems.filter(
+            (ui) => getHomeStorageBucket(ui.item) === bucket,
+          ).length;
+          const max = getHomeStorageBucketCapacity(bucket, targetHome.storage);
+          if (stored > max) {
+            return errorResponse(
+              `You need to remove some ${label} from storage first (max ${max})`,
+            );
+          }
         }
         const downgradeRefund = Math.floor((currentHomeCost - targetHome.cost) * 0.75);
         // As with layout saves, Drizzle needs a joined statement to publish both tables atomically.
