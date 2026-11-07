@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-quer
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import { getFilter, useFiltering } from "@/layout/JutsuFiltering";
-import { availableRanks } from "@/libs/train";
+import { availableRanks } from "@/libs/rank";
 
 afterEach(cleanup);
 

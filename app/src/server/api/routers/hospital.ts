@@ -20,8 +20,8 @@ import {
 } from "@/libs/hospital";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { hasRequiredRank } from "@/libs/rank";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import { hasRequiredRank } from "@/libs/train";
 import {
   executeResultForUserHeal,
   listUserDataForGetHospitalizedUsers,

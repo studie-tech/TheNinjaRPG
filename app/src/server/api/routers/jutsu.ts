@@ -82,6 +82,7 @@ import {
 } from "@/libs/quest";
 import { getPublicQuestUser } from "@/libs/quest/projection";
 import { liveQueueRows } from "@/libs/queue";
+import { hasRequiredLevel, hasRequiredRank } from "@/libs/rank";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
 import {
@@ -92,8 +93,6 @@ import {
   canUseJutsu,
   checkJutsuBloodlineItem,
   findJutsuInTraining,
-  hasRequiredLevel,
-  hasRequiredRank,
   isJutsuInTraining,
   isJutsuTrainToLearnRestricted,
 } from "@/libs/train";

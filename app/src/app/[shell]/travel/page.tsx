@@ -82,6 +82,7 @@ import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
+import { hasRequiredRank } from "@/libs/rank";
 import {
   findNearestWalkableCoordinate,
   isReachableCoordinate,
@@ -90,7 +91,6 @@ import {
 import type { GlobalTile, SectorPoint } from "@/libs/sector-map/world-types";
 import { getRemainingSensoryCooldown, getStealthStatus } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
-import { hasRequiredRank } from "@/libs/train";
 import {
   calcGlobalTravelTime,
   globalTravelFinishPatch,

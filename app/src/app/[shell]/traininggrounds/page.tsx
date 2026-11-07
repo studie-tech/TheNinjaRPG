@@ -120,11 +120,11 @@ import { effectiveMasteries } from "@/libs/mastery";
 import { getMasteryRank, masteryTotal } from "@/libs/masteryProgression";
 import { useInfinitePagination } from "@/libs/pagination";
 import { getEnergyQueue, getMasteryQueue } from "@/libs/queue";
+import { availableRanks, hasRequiredRank } from "@/libs/rank";
 import { cn } from "@/libs/shadui";
 import { getStealthStatus } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
 import {
-  availableRanks,
   calcJutsuTrainCost,
   calcJutsuTrainTime,
   canTrainJutsu,
@@ -135,7 +135,6 @@ import {
   findJutsuInTraining,
   getMasteryTrainingState,
   getTrainingSections,
-  hasRequiredRank,
   isJutsuInTraining,
   isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,

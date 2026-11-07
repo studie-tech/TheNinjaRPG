@@ -13,6 +13,7 @@ import {
   RANKED_SANNIN_TOP_PLAYERS,
 } from "@/drizzle/constants";
 import { postProcessRewards } from "@/libs/quest/rewards";
+import { hasRequiredRank } from "@/libs/rank";
 import {
   getRankedRadius,
   getRankedRank,
@@ -20,7 +21,6 @@ import {
   validateJutsuLoadout,
 } from "@/libs/ranked_pvp";
 import { collapseRewards } from "@/libs/rewards";
-import { hasRequiredRank } from "@/libs/train";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { listJutsuByIds } from "@/queries/jutsu";
 import { fetchJutsuEquipCaps, fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";

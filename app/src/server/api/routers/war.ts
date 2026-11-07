@@ -48,7 +48,7 @@ import {
 } from "@/libs/objectiveWar";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { findActiveExclusiveRaidForSector } from "@/libs/raids";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import {
   canJoinWar,
   getRaidDeclarationBlock,

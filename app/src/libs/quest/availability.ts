@@ -28,10 +28,10 @@ import {
 import { canPromoteMastery } from "@/libs/masteryProgression";
 import { eliteJoninExamBlockMessage } from "@/libs/profile";
 import { isOpenPyramidRun } from "@/libs/questRun";
+import { hasRequiredRank } from "@/libs/rank";
 import { isRewardChoiceQuest } from "@/libs/rewardChoice";
 import { collapseRewards } from "@/libs/rewards";
 import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
-import { hasRequiredRank } from "@/libs/train";
 import { canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { hasEndDatePassed, periodStart } from "@/utils/time";

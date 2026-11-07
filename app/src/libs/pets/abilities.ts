@@ -9,7 +9,7 @@ import {
 import type { Jutsu, PetSpecies, SkillTree, UserPet } from "@/drizzle/schema";
 import type { CombatQueryUserSkill } from "@/libs/combat/types";
 import { getMaxPetRank, getPetLevel, getPetRank } from "@/libs/pets/progression";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import type { ZodAllTags } from "@/validators/combat";
 
 /** Species rarity grants slots immediately; rank limits the combined ability power. */

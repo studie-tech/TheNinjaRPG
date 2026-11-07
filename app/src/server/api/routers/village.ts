@@ -7,7 +7,7 @@ import {
   VILLAGE_LEAVE_REQUIRED_RANK,
 } from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import { fetchUser } from "@/queries/profile";
 import { deleteRequests, fetchRequests, insertRequest } from "@/queries/sparring";
 import {

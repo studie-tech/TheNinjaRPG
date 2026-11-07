@@ -12,7 +12,7 @@ import {
   MEDNIN_REQUIRED_EXP,
 } from "@/drizzle/constants";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import { secondsFromDate } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 

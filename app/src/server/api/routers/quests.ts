@@ -88,6 +88,7 @@ import {
   isManagedQuestRun,
   questAttemptBlockMessage,
 } from "@/libs/questRun";
+import { availableQuestLetterRanks, availableRanks } from "@/libs/rank";
 import {
   buildRewardChoiceCards,
   getUnavailableRewardCards,
@@ -102,7 +103,6 @@ import {
 } from "@/libs/rewardChoice";
 import { collapseRewards } from "@/libs/rewards";
 import { callDiscordContent } from "@/libs/socials";
-import { availableRanks } from "@/libs/train";
 import {
   fetchUser,
   fetchViewerRole,

@@ -7,7 +7,7 @@ import {
   KAGE_RANK_REQUIREMENT,
 } from "@/drizzle/constants";
 import type { UserData, Village } from "@/drizzle/schema";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import type { UserWithRelations } from "@/routers/profile";
 import { getWeeklyWindowSlots, secondsFromDate } from "@/utils/time";
 import type { KageWindow } from "@/validators/kage";
