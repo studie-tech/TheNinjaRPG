@@ -186,15 +186,12 @@ export const logOut = async (): Promise<void> => {
  * off-device or when the offering has not been configured in RevenueCat.
  */
 export const getPackages = async (): Promise<StorePackage[]> => {
-  const result = await invokeSafe<{ all?: Record<string, unknown> }>(
+  const result = await invokeSafe<{ current?: { availablePackages?: unknown[] } }>(
     PLUGIN,
     "getOfferings",
   );
-  const current = (
-    result as { current?: { availablePackages?: unknown[] } } | undefined
-  )?.current;
-  const packages = Array.isArray(current?.availablePackages)
-    ? current.availablePackages
+  const packages = Array.isArray(result?.current?.availablePackages)
+    ? result.current.availablePackages
     : [];
   return packages.filter(
     (entry): entry is StorePackage =>
