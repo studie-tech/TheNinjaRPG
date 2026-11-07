@@ -31,7 +31,7 @@ describe("browser globals", () => {
     expect(globalThis.requestAnimationFrame).not.toBe(nativeFrame);
     restoreBrowserGlobals();
     expect("ResizeObserver" in globalThis).toBe(hadResizeObserver);
-    expect("scrollIntoView" in HTMLElement.prototype).toBe(false);
+    expect(Object.hasOwn(HTMLElement.prototype, "scrollIntoView")).toBe(false);
     expect(globalThis.requestAnimationFrame).toBe(nativeFrame);
   });
 
@@ -39,7 +39,7 @@ describe("browser globals", () => {
     installBrowserGlobals();
     installBrowserGlobals({ events: [], scrollIntoView: true });
     restoreBrowserGlobals();
-    expect("scrollIntoView" in HTMLElement.prototype).toBe(false);
+    expect(Object.hasOwn(HTMLElement.prototype, "scrollIntoView")).toBe(false);
     expect(globalThis.Event).toBe(window.Event);
     restoreBrowserGlobals();
     expect(globalThis.Event).toBe(nativeEvent);
