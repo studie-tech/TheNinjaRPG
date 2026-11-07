@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { ElementNames, RANKED_BLOODLINE_EFFECT_MULT } from "@/drizzle/constants";
 import { RANKED_BLOODLINE_DAMAGE_TAG } from "@/libs/combat/constants";
-import { computeDamagePacket } from "@/libs/combat/process";
+import { computeDamagePacket } from "@/libs/combat/damagePipeline";
 import { getEfficiencyRatio, realizeTag } from "@/libs/combat/tags";
 import type { UserEffect } from "@/libs/combat/types";
 import {

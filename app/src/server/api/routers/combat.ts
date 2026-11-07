@@ -79,6 +79,10 @@ import {
   COMBAT_LOBBY_SECONDS,
   RANKED_BLOODLINE_DAMAGE_TAG,
 } from "@/libs/combat/constants";
+import {
+  consolidatePreBattleDamageModifiers,
+  emptyPreBattleGearModifiers,
+} from "@/libs/combat/damagePipeline";
 import { createAction, settlementWrites, updateBattle } from "@/libs/combat/database";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
@@ -100,12 +104,7 @@ import {
 } from "@/libs/combat/participants";
 import { addPetsToBattle, petsAllowedInBattle } from "@/libs/combat/pets";
 import { createCombatPlaybackRecorder } from "@/libs/combat/playback";
-import {
-  applyEffects,
-  checkFriendlyFire,
-  consolidatePreBattleDamageModifiers,
-  emptyPreBattleGearModifiers,
-} from "@/libs/combat/process";
+import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { addQuestStartingEffects } from "@/libs/combat/questEffects";
 import { filterCombatQuests } from "@/libs/combat/quests";
 import { calcBattleResult } from "@/libs/combat/settlement";

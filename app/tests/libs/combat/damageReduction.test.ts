@@ -4,7 +4,7 @@ import {
   applyDamageModifierPipelineToConsequences,
   buildDamageModifierEligibilityById,
   computeDamagePacket,
-} from "@/libs/combat/process";
+} from "@/libs/combat/damagePipeline";
 import type { Consequence } from "@/libs/combat/types";
 import {
   makeCompleteBattle,
