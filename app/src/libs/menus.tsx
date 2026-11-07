@@ -243,8 +243,7 @@ export const useGameMenu = () => {
   const ownSector = userData?.sector === userData?.village?.sector;
   const isAllied =
     !!sector &&
-    findVillageUserRelationship(sector, userData?.villageId ?? "syndicate")?.status ===
-      "ALLY";
+    findVillageUserRelationship(sector, userData?.villageId)?.status === "ALLY";
   // Position matters only when it changes the structure offered by the menu.
   const { data: arrival } = useUserDataSelector((user) => ({
     canVisit:

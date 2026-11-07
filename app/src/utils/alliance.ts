@@ -12,8 +12,8 @@ import { getWarRelationship } from "@/libs/objectiveWar";
 /** Whether a relationship row links the two villages, in either direction. */
 export const isVillagePair = (
   relationship: Pick<VillageAlliance, "villageIdA" | "villageIdB">,
-  villageIdA: string | null,
-  villageIdB: string | null,
+  villageIdA?: string | null,
+  villageIdB?: string | null,
 ) =>
   (relationship.villageIdA === villageIdA && relationship.villageIdB === villageIdB) ||
   (relationship.villageIdA === villageIdB && relationship.villageIdB === villageIdA);
@@ -27,8 +27,8 @@ export const isVillagePair = (
  */
 export const findRelationship = (
   relationships: VillageAlliance[],
-  villageIdA: string | null,
-  villageIdB: string | null,
+  villageIdA?: string | null,
+  villageIdB?: string | null,
 ) => {
   return relationships.find((a) => isVillagePair(a, villageIdA, villageIdB));
 };
@@ -65,12 +65,7 @@ export const findVillageUserRelationship = (
     ...(villageData.relationshipA ?? []),
     ...(villageData.relationshipB ?? []),
   ];
-  const relationship = findRelationship(
-    relationships,
-    userVillageId ?? "syndicate",
-    villageData.id,
-  );
-  return relationship;
+  return findRelationship(relationships, userVillageId, villageData.id);
 };
 
 /**
@@ -167,14 +162,7 @@ export const getAllyStatus = (
   if (villageData.relationshipB === undefined) return "NEUTRAL";
   if (!userVillageId) return "NEUTRAL";
   // Get relationship
-  const relationship = findVillageUserRelationship(
-    {
-      id: villageData.id,
-      relationshipA: villageData.relationshipA,
-      relationshipB: villageData.relationshipB,
-    },
-    userVillageId,
-  );
+  const relationship = findVillageUserRelationship(villageData, userVillageId);
   return relationship?.status ?? "NEUTRAL";
 };
 
@@ -238,45 +226,39 @@ export const canEnemy = (
   // Derived
   const relation = findRelationship(relationships, villageId, targetId);
   const senderVillage = villages.find((v) => v.id === villageId);
-  // Book keeping
-  let message = "OK";
-  let success = true;
+  // Guards
+  if (!senderVillage) return enemyRejection("Village not found");
+  if (villageId === targetId) return enemyRejection("Cannot be enemy with yourself");
+  if (relation?.status === "ENEMY") return enemyRejection("Already an enemy");
+  if (relation?.status === "ALLY")
+    return enemyRejection("Cannot be enemy with an ally");
+  if (senderVillage.tokens < WAR_FUNDS_COST)
+    return enemyRejection("Insufficient funds");
+  // Figure out consequences of this war
   const newNeutrals: string[] = [];
   const newEnemies: string[] = [];
-  // Guards
-  if (!senderVillage) {
-    success = false;
-    message = "Village not found";
-  } else if (villageId === targetId) {
-    success = false;
-    message = "Cannot be enemy with yourself";
-  } else if (relation?.status === "ENEMY") {
-    success = false;
-    message = "Already an enemy";
-  } else if (relation?.status === "ALLY") {
-    success = false;
-    message = "Cannot be enemy with an ally";
-  } else if (senderVillage.tokens < WAR_FUNDS_COST) {
-    success = false;
-    message = "Insufficient funds";
-  } else {
-    // Figure out consequences of this war
-    for (const village of villages) {
-      if (village.id === villageId || village.id === targetId) continue;
-      const target = findRelationship(relationships, village.id, targetId)?.status;
-      const self = findRelationship(relationships, village.id, villageId)?.status;
-      // Anyone allied with both target and us becomes neutral
-      if (target === "ALLY" && self === "ALLY") {
-        newNeutrals.push(village.id);
-      }
-      // Anyone allied with target and not allied with us becomes enemy
-      if (target === "ALLY" && self !== "ALLY") {
-        newEnemies.push(village.id);
-      }
+  for (const village of villages) {
+    if (village.id === villageId || village.id === targetId) continue;
+    const target = findRelationship(relationships, village.id, targetId)?.status;
+    const self = findRelationship(relationships, village.id, villageId)?.status;
+    // Anyone allied with both target and us becomes neutral
+    if (target === "ALLY" && self === "ALLY") {
+      newNeutrals.push(village.id);
+    }
+    // Anyone allied with target and not allied with us becomes enemy
+    if (target === "ALLY" && self !== "ALLY") {
+      newEnemies.push(village.id);
     }
   }
-  return { success, message, newNeutrals, newEnemies };
+  return { success: true, message: "OK", newNeutrals, newEnemies };
 };
+
+/** A refused war declaration, which has no consequences for other villages. */
+const enemyRejection = (message: string) => ({
+  ...errorResponse(message),
+  newNeutrals: [] as string[],
+  newEnemies: [] as string[],
+});
 
 export const canSurrender = (
   relationships: VillageAlliance[],
