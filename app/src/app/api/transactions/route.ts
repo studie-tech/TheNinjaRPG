@@ -13,14 +13,14 @@ import {
   selectMainTransactionForGET,
   selectStripePaymentForAwardStripeReferralReputation,
 } from "@/queries/recruitment";
-import {
-  getPaypalAccessToken,
-  getPaypalTransactions,
-  syncTransactions,
-} from "@/server/api/routers/paypal";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import {
+  getPaypalAccessToken,
+  getPaypalTransactions,
+} from "@/server/utils/paypal/client";
+import { syncTransactions } from "@/server/utils/paypal/fulfillment";
 
 /** Reconcile PayPal payments and award delivered PayPal/Stripe referrals on the hourly schedule. */
 export async function GET(request: Request) {
