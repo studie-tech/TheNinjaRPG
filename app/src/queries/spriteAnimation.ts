@@ -40,9 +40,9 @@ export const searchSpriteAnimations = (
 ) =>
   client.query.spriteAnimation.findMany({
     where: spriteSheetFilter(client, input),
-    // Retired "[Held]" sheets stay findable but never lead the results.
+    // Sheets with a status prefix, such as "[Held]", stay findable but never lead.
     orderBy: [
-      asc(sql`${spriteAnimation.name} LIKE '[Held]%'`),
+      asc(sql`${spriteAnimation.name} LIKE '[%'`),
       asc(spriteAnimation.name),
       asc(spriteAnimation.id),
     ],
