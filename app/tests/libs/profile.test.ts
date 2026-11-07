@@ -4,18 +4,23 @@ import { describe, expect, it, test } from "bun:test";
 import {
   CombatStatNames,
   getUserCaps,
+  CLAN_BOOST_MAX_LEVEL,
+  CLAN_BOOST_PERCENT_PER_LEVEL,
   MAX_MASTERY_CAP,
+  MAX_STORED_POOL,
   RANKED_PVP_STATS,
   SCALED_AI_STAT_BUDGET_SHARE,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import {
+  calcActiveUserRegen,
   calcLevel,
   calcLevelRequirements,
   canAssignExperience,
   canAttackBracket,
   capUserStats,
+  clampStoredPools,
   experienceToNextLevel,
   getAssignedCombatStatTotal,
   getExpBracket,
@@ -634,3 +639,53 @@ const readSeededAiRows = () => {
   }
   return rows;
 };
+
+test("clampStoredPools caps the six pool fields and leaves lower values", () => {
+  const over = MAX_STORED_POOL + 1;
+  const user = {
+    curHealth: over,
+    maxHealth: over,
+    curStamina: over,
+    maxStamina: over,
+    curChakra: 5,
+    maxChakra: over,
+  } as UserData;
+  clampStoredPools(user);
+  expect(user).toEqual({
+    curHealth: MAX_STORED_POOL,
+    maxHealth: MAX_STORED_POOL,
+    curStamina: MAX_STORED_POOL,
+    maxStamina: MAX_STORED_POOL,
+    curChakra: 5,
+    maxChakra: MAX_STORED_POOL,
+  } as UserData);
+});
+
+describe("calcActiveUserRegen clan boost", () => {
+  const maxBoost = CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL;
+  const regen = (clan: { regenBoost: number } | null, isOutlaw = false) =>
+    calcActiveUserRegen(
+      {
+        regeneration: 100,
+        status: "AWAKE",
+        homeType: "NONE",
+        isOutlaw,
+        rank: "STUDENT",
+        joinedVillageAt: new Date(0),
+        clan,
+      } as unknown as Parameters<typeof calcActiveUserRegen>[0],
+      [],
+    );
+
+  it("applies a boost within the clan's maximum to members only", () => {
+    expect(regen({ regenBoost: maxBoost })).toBeCloseTo(100 + maxBoost);
+    expect(regen({ regenBoost: maxBoost }, true)).toBe(100);
+  });
+
+  it.each([[null], [{ regenBoost: 0 }], [{ regenBoost: -1 }], [{ regenBoost: maxBoost + 1 }]])(
+    "ignores %j",
+    (clan) => {
+      expect(regen(clan)).toBe(100);
+    },
+  );
+});
