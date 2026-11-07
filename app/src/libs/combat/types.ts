@@ -41,7 +41,7 @@ import type {
   WarCamp,
 } from "@/drizzle/schema";
 import type { BattleItem, BattleJutsu, BattleVillage } from "@/libs/combat/catalog";
-import type { GenNames, publicState, StatNames } from "@/libs/combat/constants";
+import type { GenNames, publicState, StatNames, HP_DAMAGE_KEYS } from "@/libs/combat/constants";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type {
   CharacterAnimations,
@@ -663,13 +663,7 @@ export interface BattleState {
   isPending: boolean;
 }
 
-export type EnmityDamageKey =
-  | "damage"
-  | "residual"
-  | "wound"
-  | "afterburn"
-  | "drain_hp"
-  | "poison";
+export type EnmityDamageKey = (typeof HP_DAMAGE_KEYS)[number];
 
 /**
  * Battle Consequence, i.e. the permanent things that happen to a user as a result of an action

@@ -24,6 +24,7 @@ import {
   DAMAGE_LEECH_CAP_RATIO,
   damageModifierTypes,
   dmgConfig as defaultDmgConfig,
+  HP_DAMAGE_KEYS,
 } from "./constants";
 import {
   accumulateCurseConsequence,
@@ -959,12 +960,7 @@ const mitigateConsequence = (
       accumulateShieldConversion(
         shieldConversionsByUser,
         c.userId,
-        Math.max(0, preShieldDamage) +
-          Math.max(0, c.residual ?? 0) +
-          Math.max(0, c.wound ?? 0) +
-          Math.max(0, c.afterburn ?? 0) +
-          Math.max(0, c.drain_hp ?? 0) +
-          Math.max(0, c.poison ?? 0),
+        HP_DAMAGE_KEYS.reduce((sum, key) => sum + Math.max(0, c[key] ?? 0), 0),
         "consume",
       );
     }
@@ -1052,10 +1048,14 @@ const applyConsequence = (
     // already count for the summoner). Summons copy the summoner's direction at
     // spawn, so the opponent predicate is evaluated from the controller too.
     const damageCreditUser = resolveDamageCreditUser(newUsersState, user);
+    // Curse, enmity and Siphon read an HP loss before it reaches the pool.
+    const recordHpLoss = (key: EnmityDamageKey) => {
+      accumulateCurseConsequence(c, key, newUsersEffects, newUsersState, round);
+      creditConsequenceEnmity(c, key, newUsersState, usersEffects);
+      accumulateSiphonShield(shieldConversionsByUser, c, key, target);
+    };
     if (c.damage !== undefined && c.damage >= 0) {
-      accumulateCurseConsequence(c, "damage", newUsersEffects, newUsersState, round);
-      creditConsequenceEnmity(c, "damage", newUsersState, usersEffects);
-      accumulateSiphonShield(shieldConversionsByUser, c, "damage", target);
+      recordHpLoss("damage");
       target.curHealth -= c.damage;
       target.curHealth = Math.max(0, target.curHealth);
       // Accumulate per-attacker damage dealt to real opponents (non-self, non-summon)
@@ -1089,9 +1089,7 @@ const applyConsequence = (
     for (const key of ["residual", "wound"] as const) {
       const amount = c[key];
       if (amount === undefined || amount < 0) continue;
-      accumulateCurseConsequence(c, key, newUsersEffects, newUsersState, round);
-      creditConsequenceEnmity(c, key, newUsersState, usersEffects);
-      accumulateSiphonShield(shieldConversionsByUser, c, key, target);
+      recordHpLoss(key);
       target.curHealth -= amount;
       target.curHealth = Math.max(0, target.curHealth);
       creditDamageDealt(damageCreditUser, target, amount);
@@ -1176,9 +1174,7 @@ const applyConsequence = (
       });
     }
     if (c.afterburn !== undefined && c.afterburn >= 0) {
-      accumulateCurseConsequence(c, "afterburn", newUsersEffects, newUsersState, round);
-      creditConsequenceEnmity(c, "afterburn", newUsersState, usersEffects);
-      accumulateSiphonShield(shieldConversionsByUser, c, "afterburn", target);
+      recordHpLoss("afterburn");
       target.curHealth -= c.afterburn;
       target.curHealth = Math.max(0, target.curHealth);
       creditDamageDealt(damageCreditUser, target, c.afterburn);
@@ -1252,9 +1248,7 @@ const applyConsequence = (
     }
     // Handle drain effects for each pool
     if (c.drain_hp !== undefined && c.drain_hp >= 0 && target.curHealth > 0) {
-      accumulateCurseConsequence(c, "drain_hp", newUsersEffects, newUsersState, round);
-      creditConsequenceEnmity(c, "drain_hp", newUsersState, usersEffects);
-      accumulateSiphonShield(shieldConversionsByUser, c, "drain_hp", target);
+      recordHpLoss("drain_hp");
       target.curHealth = Math.max(0, target.curHealth - c.drain_hp);
       creditDamageDealt(damageCreditUser, target, c.drain_hp);
       actionEffects.push({
@@ -1277,9 +1271,7 @@ const applyConsequence = (
       });
     }
     if (c.poison !== undefined && c.poison >= 0) {
-      accumulateCurseConsequence(c, "poison", newUsersEffects, newUsersState, round);
-      creditConsequenceEnmity(c, "poison", newUsersState, usersEffects);
-      accumulateSiphonShield(shieldConversionsByUser, c, "poison", target);
+      recordHpLoss("poison");
       target.curHealth = Math.max(
         0,
         Math.min(cap(target, "Health"), target.curHealth - c.poison),
@@ -1291,27 +1283,18 @@ const applyConsequence = (
       });
     }
     // Process disappear animation of characters
-    if (target.curHealth <= 0 && !target.isOriginal) {
-      newGroundEffects.push(
-        getVisualOrSound(
-          target.longitude,
-          target.latitude,
-          ID_ANIMATION_SMOKE,
-          undefined,
-          round,
-        ),
-      );
-    }
-    if (user.curHealth <= 0 && !user.isOriginal) {
-      newGroundEffects.push(
-        getVisualOrSound(
-          user.longitude,
-          user.latitude,
-          ID_ANIMATION_SMOKE,
-          undefined,
-          round,
-        ),
-      );
+    for (const fighter of [target, user]) {
+      if (fighter.curHealth <= 0 && !fighter.isOriginal) {
+        newGroundEffects.push(
+          getVisualOrSound(
+            fighter.longitude,
+            fighter.latitude,
+            ID_ANIMATION_SMOKE,
+            undefined,
+            round,
+          ),
+        );
+      }
     }
   }
 };
