@@ -14,9 +14,11 @@ import {
   DURABILITY_USABILITY_THR,
   isPreBattleGearFromType,
   NO_DURABILITY_LOSS_COMBATS,
+  PoolTypes,
   PRE_BATTLE_SOURCE_TYPES,
 } from "@/drizzle/constants";
 import { areBattleAllies } from "@/libs/combat/participants";
+import { getEffectPower } from "@/libs/combat/power";
 import { getTargetTiles } from "@/libs/combat/targeting";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
 import { randomInt, secureRandomInt } from "@/utils/math";
@@ -30,7 +32,6 @@ import {
   damageModifierTypes,
   POST_PIERCE_TAGS,
 } from "./constants";
-import { getPower } from "./tags";
 import type {
   BattleRoundContext,
   BattleUserState,
@@ -356,7 +357,7 @@ const getPoolAdjustment = (
       if (e.type === "increasemaxpools" || e.type === "decreasemaxpools") {
         const pools = getPoolsAffected(e);
         if (pools.includes(pool)) {
-          const { power } = getPower(e);
+          const power = getEffectPower(e);
           const amount =
             e.calculation === "percentage"
               ? Math.floor((power / 100) * baseMax)
@@ -424,70 +425,31 @@ export const applyPoolAdjustmentsToBase = (
   target: BattleUserState,
   usersEffects: UserEffect[],
 ) => {
-  // Store previous adjustments to calculate deltas
-  // We track the previous adjustment amount, not the original max
-  const prevHealthAdj = target._prevHealthAdj ?? 0;
-  const prevChakraAdj = target._prevChakraAdj ?? 0;
-  const prevStaminaAdj = target._prevStaminaAdj ?? 0;
+  const adjustments = PoolTypes.map((pool) => {
+    const { max, cur } = getPoolKeys(pool);
+    // Max pools stay fixed, so each adjustment reads the same base whatever the order.
+    const next = getPoolAdjustment(target, usersEffects, pool);
+    const delta = next - (target[PREV_ADJUSTMENT_KEYS[pool]] ?? 0);
+    // Empty pools stay 0; living pools stay at least 1, clamped to the effective max.
+    target[cur] =
+      target[cur] <= 0
+        ? 0
+        : Math.min(Math.max(1, target[max] + next), Math.max(1, target[cur] + delta));
+    return { pool, next };
+  });
 
-  // Calculate next adjustments from active effects
-  const nextHealthAdj = getPoolAdjustment(target, usersEffects, "Health");
-  const nextChakraAdj = getPoolAdjustment(target, usersEffects, "Chakra");
-  const nextStaminaAdj = getPoolAdjustment(target, usersEffects, "Stamina");
-
-  // Calculate deltas (change in adjustment since last call)
-  const healthDelta = nextHealthAdj - prevHealthAdj;
-  const chakraDelta = nextChakraAdj - prevChakraAdj;
-  const staminaDelta = nextStaminaAdj - prevStaminaAdj;
-
-  // Calculate effective max values for clamping (base + adjustment)
-  const effectiveMaxHealth = Math.max(1, target.maxHealth + nextHealthAdj);
-  const effectiveMaxChakra = Math.max(1, target.maxChakra + nextChakraAdj);
-  const effectiveMaxStamina = Math.max(1, target.maxStamina + nextStaminaAdj);
-
-  // Apply delta to current values with proper clamping
-  // Health: dead stays 0, living stays at least 1
-  if (target.curHealth <= 0) {
-    target.curHealth = 0;
-  } else {
-    target.curHealth = Math.min(
-      effectiveMaxHealth,
-      Math.max(1, target.curHealth + healthDelta),
-    );
-  }
-
-  // Chakra: zero stays 0, otherwise at least 1
-  if (target.curChakra <= 0) {
-    target.curChakra = 0;
-  } else {
-    target.curChakra = Math.min(
-      effectiveMaxChakra,
-      Math.max(1, target.curChakra + chakraDelta),
-    );
-  }
-
-  // Stamina: zero stays 0, otherwise at least 1
-  if (target.curStamina <= 0) {
-    target.curStamina = 0;
-  } else {
-    target.curStamina = Math.min(
-      effectiveMaxStamina,
-      Math.max(1, target.curStamina + staminaDelta),
-    );
-  }
-
-  // Store current adjustments for next delta calculation
-  if (nextHealthAdj !== 0 || nextChakraAdj !== 0 || nextStaminaAdj !== 0) {
-    target._prevHealthAdj = nextHealthAdj;
-    target._prevChakraAdj = nextChakraAdj;
-    target._prevStaminaAdj = nextStaminaAdj;
-  } else {
-    // Clear tracking when all adjustments are 0
-    target._prevHealthAdj = undefined;
-    target._prevChakraAdj = undefined;
-    target._prevStaminaAdj = undefined;
+  // Store current adjustments for the next delta; clear tracking when all are 0.
+  const anyAdjusted = adjustments.some(({ next }) => next !== 0);
+  for (const { pool, next } of adjustments) {
+    target[PREV_ADJUSTMENT_KEYS[pool]] = anyAdjusted ? next : undefined;
   }
 };
+
+const PREV_ADJUSTMENT_KEYS = {
+  Health: "_prevHealthAdj",
+  Chakra: "_prevChakraAdj",
+  Stamina: "_prevStaminaAdj",
+} as const satisfies Record<PoolType, keyof BattleUserState>;
 
 /**
  * Adjust base pools for users with max-pool effects now or tracked from a previous
@@ -523,18 +485,10 @@ export const reconcileLobbyPools = (
   // Retained incoming and sage effects contribute just like regenerated effects.
   // Synchronize even when effects were removed, so the next pass has no stale delta.
   applyPoolAdjustmentsToBase(user, effects);
-  user.curHealth = Math.min(
-    originalPools.curHealth,
-    getEffectiveMaxPool(user, effects, "Health"),
-  );
-  user.curChakra = Math.min(
-    originalPools.curChakra,
-    getEffectiveMaxPool(user, effects, "Chakra"),
-  );
-  user.curStamina = Math.min(
-    originalPools.curStamina,
-    getEffectiveMaxPool(user, effects, "Stamina"),
-  );
+  for (const pool of PoolTypes) {
+    const { cur } = getPoolKeys(pool);
+    user[cur] = Math.min(originalPools[cur], getEffectiveMaxPool(user, effects, pool));
+  }
 };
 
 /**
@@ -548,52 +502,21 @@ export const reconcileLobbyPools = (
  * @returns The default width and height of the battle grid
  */
 export const getDefaultBattleSizes = (battleType: BattleType, userLevel: number) => {
-  switch (battleType) {
-    case "HUNTING":
-    case "RANDOM_ENCOUNTER":
-    case "ARENA":
-    case "TRAINING":
-    case "QUEST":
-      if (userLevel < 20) {
-        return { width: 9, height: 8 };
-      } else if (userLevel < 30) {
-        return { width: 10, height: 9 };
-      } else if (userLevel < 40) {
-        return { width: 11, height: 10 };
-      } else if (userLevel < 50) {
-        return { width: 12, height: 10 };
-      } else {
-        return { width: 12, height: 10 };
-      }
-    case "COMBAT":
-      return { width: 12, height: 10 };
-    case "SPARRING":
-      return { width: 12, height: 10 };
-    case "KAGE_AI":
-      return { width: 12, height: 10 };
-    case "KAGE_PVP":
-      return { width: 12, height: 10 };
-    case "CLAN_CHALLENGE":
-      return { width: 12, height: 10 };
-    case "CLAN_BATTLE":
-      return { width: 12, height: 10 };
-    case "TERRITORY_WAR":
-    case "SHRINE_WAR":
-      return { width: 12, height: 10 };
-    case "TOURNAMENT":
-      return { width: 12, height: 10 };
-    case "VILLAGE_PROTECTOR":
-      return { width: 12, height: 10 };
-    case "OVERWORLD":
-      return { width: 12, height: 10 };
-    case "RANKED_PVP":
-      return { width: 12, height: 10 };
-    case "RANKED_SPARRING":
-      return { width: 12, height: 10 };
-    case "RAID":
-      return { width: 12, height: 10 };
+  if (LEVEL_SCALED_BATTLES.includes(battleType)) {
+    if (userLevel < 20) return { width: 9, height: 8 };
+    if (userLevel < 30) return { width: 10, height: 9 };
+    if (userLevel < 40) return { width: 11, height: 10 };
   }
+  return { width: 12, height: 10 };
 };
+
+const LEVEL_SCALED_BATTLES: BattleType[] = [
+  "HUNTING",
+  "RANDOM_ENCOUNTER",
+  "ARENA",
+  "TRAINING",
+  "QUEST",
+];
 
 /**
  * Retrieves the full battle grid including border tiles for rendering assets.
@@ -1143,9 +1066,11 @@ export const calcPoolCost = (
   usersEffects: UserEffect[],
   target: BattleUserState,
 ) => {
-  let hpCost = action.healthCost;
-  let cpCost = action.chakraCost;
-  let spCost = action.staminaCost;
+  const costs = {
+    Health: action.healthCost,
+    Chakra: action.chakraCost,
+    Stamina: action.staminaCost,
+  };
   usersEffects
     .filter(
       (e) =>
@@ -1155,36 +1080,25 @@ export const calcPoolCost = (
     )
     .forEach((e) => {
       // Get the power to apply (positive or negative)
-      let { power } = getPower(e);
+      let power = getEffectPower(e);
       if (e.type === "increasepoolcost" && power < 0) power *= -1;
       if (e.type === "decreasepoolcost" && power > 0) power *= -1;
       // Apply the power to the pools affected
       if ("poolsAffected" in e) {
         e.poolsAffected?.forEach((pool) => {
-          if (pool === "Health") {
-            hpCost =
-              e.calculation === "static"
-                ? hpCost + power
-                : (hpCost * (100 + power)) / 100;
-          } else if (pool === "Chakra") {
-            cpCost =
-              e.calculation === "static"
-                ? cpCost + power
-                : (cpCost * (100 + power)) / 100;
-          } else if (pool === "Stamina") {
-            spCost =
-              e.calculation === "static"
-                ? spCost + power
-                : (spCost * (100 + power)) / 100;
-          }
+          if (pool === "Energy") return;
+          costs[pool] =
+            e.calculation === "static"
+              ? costs[pool] + power
+              : (costs[pool] * (100 + power)) / 100;
         });
       }
     });
   // A reduction past the cost makes the action free; it never refunds pools.
   return {
-    hpCost: Math.max(0, hpCost),
-    cpCost: Math.max(0, cpCost),
-    spCost: Math.max(0, spCost),
+    hpCost: Math.max(0, costs.Health),
+    cpCost: Math.max(0, costs.Chakra),
+    spCost: Math.max(0, costs.Stamina),
   };
 };
 
@@ -1199,112 +1113,68 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
     if (val.enmitySources) {
       current.enmitySources = (current.enmitySources ?? []).concat(val.enmitySources);
     }
-    if (val.damage) {
-      current.damage = current.damage ? current.damage + val.damage : val.damage;
-    }
-    if (val.residual) {
-      current.residual = current.residual
-        ? current.residual + val.residual
-        : val.residual;
-    }
-    if (val.heal_hp) {
-      current.heal_hp = current.heal_hp
-        ? Math.max(current.heal_hp, val.heal_hp)
-        : val.heal_hp;
-    }
-    if (val.heal_sp) {
-      current.heal_sp = current.heal_sp
-        ? Math.max(current.heal_sp, val.heal_sp)
-        : val.heal_sp;
-    }
-    if (val.heal_cp) {
-      current.heal_cp = current.heal_cp
-        ? Math.max(current.heal_cp, val.heal_cp)
-        : val.heal_cp;
-    }
-    if (val.reflect) {
-      current.reflect = current.reflect ? current.reflect + val.reflect : val.reflect;
-    }
-    if (val.recoil) {
-      current.recoil = current.recoil ? current.recoil + val.recoil : val.recoil;
-    }
-    if (val.lifesteal_hp) {
-      current.lifesteal_hp = current.lifesteal_hp
-        ? current.lifesteal_hp + val.lifesteal_hp
-        : val.lifesteal_hp;
-    }
     if (val.vampRatio) {
-      // Vamp heals off the FULL pre-shield hit (matches lifesteal + the 60% cap, which
-      // both use preShieldDamage). Fallback to damage when preShieldDamage is unset.
-      current.vampHeal =
-        (current.vampHeal ?? 0) +
-        val.vampRatio * (val.preShieldDamage ?? val.damage ?? 0);
+      current.vampHeal = (current.vampHeal ?? 0) + calcVampHeal(val, val.vampRatio);
     }
+    // Reads the running pre-shield total, so it comes before that total is summed.
     if (current.preDiffuseDamage !== undefined || val.preDiffuseDamage !== undefined) {
       current.preDiffuseDamage =
         (current.preDiffuseDamage ?? current.preShieldDamage ?? 0) +
         (val.preDiffuseDamage ?? val.preShieldDamage ?? 0);
     }
-    if (val.preShieldDamage) {
-      current.preShieldDamage = current.preShieldDamage
-        ? current.preShieldDamage + val.preShieldDamage
-        : val.preShieldDamage;
+    for (const key of SUMMED_CONSEQUENCE_KEYS) {
+      const value = val[key];
+      if (value) current[key] = (current[key] || 0) + value;
+    }
+    for (const key of HIGHEST_CONSEQUENCE_KEYS) {
+      const value = val[key];
+      const held = current[key];
+      if (value) current[key] = held ? Math.max(held, value) : value;
     }
     if (val.diffuseImmediateDamage !== undefined) {
       current.diffuseImmediateDamage =
         (current.diffuseImmediateDamage ?? 0) + val.diffuseImmediateDamage;
     }
-    if (val.absorb_hp) {
-      current.absorb_hp = current.absorb_hp
-        ? current.absorb_hp + val.absorb_hp
-        : val.absorb_hp;
-    }
-    if (val.absorb_sp) {
-      current.absorb_sp = current.absorb_sp
-        ? current.absorb_sp + val.absorb_sp
-        : val.absorb_sp;
-    }
-    if (val.absorb_cp) {
-      current.absorb_cp = current.absorb_cp
-        ? current.absorb_cp + val.absorb_cp
-        : val.absorb_cp;
-    }
     if (val.types) {
       current.types = current.types ? current.types.concat(val.types) : val.types;
-    }
-    if (val.drain_hp) {
-      current.drain_hp = current.drain_hp
-        ? current.drain_hp + val.drain_hp
-        : val.drain_hp;
-    }
-    if (val.drain_cp) {
-      current.drain_cp = current.drain_cp
-        ? current.drain_cp + val.drain_cp
-        : val.drain_cp;
-    }
-    if (val.drain_sp) {
-      current.drain_sp = current.drain_sp
-        ? current.drain_sp + val.drain_sp
-        : val.drain_sp;
-    }
-    if (val.poison) {
-      current.poison = current.poison ? current.poison + val.poison : val.poison;
-    }
-    if (val.wound) {
-      current.wound = current.wound ? current.wound + val.wound : val.wound;
     }
     if (val.afterburn) {
       current.afterburn = (current.afterburn ?? 0) + val.afterburn;
     }
   } else {
     if (val.vampRatio) {
-      val.vampHeal =
-        (val.vampHeal ?? 0) + val.vampRatio * (val.preShieldDamage ?? val.damage ?? 0);
+      val.vampHeal = (val.vampHeal ?? 0) + calcVampHeal(val, val.vampRatio);
     }
     acc.push(val);
   }
   return acc;
 };
+
+const SUMMED_CONSEQUENCE_KEYS = [
+  "damage",
+  "residual",
+  "reflect",
+  "recoil",
+  "lifesteal_hp",
+  "preShieldDamage",
+  "absorb_hp",
+  "absorb_sp",
+  "absorb_cp",
+  "drain_hp",
+  "drain_cp",
+  "drain_sp",
+  "poison",
+  "wound",
+] as const satisfies readonly (keyof Consequence)[];
+
+const HIGHEST_CONSEQUENCE_KEYS = ["heal_hp", "heal_sp", "heal_cp"] as const;
+
+/**
+ * Vamp heals off the FULL pre-shield hit (matches lifesteal + the 60% cap, which both use
+ * preShieldDamage). Fallback to damage when preShieldDamage is unset.
+ */
+const calcVampHeal = (hit: Consequence, ratio: number) =>
+  ratio * (hit.preShieldDamage ?? hit.damage ?? 0);
 
 /** User fields required for initiative calculation */
 type InitiativeUser = {
@@ -1335,31 +1205,15 @@ export const rollInitiative = (
   if ((user.pvpStreak ?? 0) > 0) {
     let pvpBonus = 0;
     for (let i = 1; i <= (user.pvpStreak ?? 0); i++) {
-      switch (i) {
-        case 1:
-          pvpBonus += 0.02;
-          break;
-        case 2:
-          pvpBonus += 0.015;
-          break;
-        case 3:
-          pvpBonus += 0.01;
-          break;
-        case 4:
-          pvpBonus += 0.005;
-          break;
-        case 5:
-          pvpBonus += 0.0025;
-          break;
-        default:
-          pvpBonus += 0.0025;
-          break;
-      }
+      pvpBonus += PVP_STREAK_INITIATIVE_BONUS[i - 1] ?? 0.0025;
     }
     roll = roll * (1 + pvpBonus);
   }
   return roll;
 };
+
+/** Initiative bonus of each consecutive streak step; later steps add 0.25%. */
+const PVP_STREAK_INITIATIVE_BONUS = [0.02, 0.015, 0.01, 0.005];
 
 /**
  * Checks if a move is valid on the battlefield.
@@ -1654,7 +1508,7 @@ export const getBattleClaimIds = (info: {
  * then take the top `cap`. Repeated types each consume a slot. Types absent
  * from `rank` fall to a shared tail rank.
  *
- * Strength is the MAGNITUDE of `getPower(e).power` (percentage magnitudes clamped
+ * Strength is the MAGNITUDE of `getEffectPower(e)` (percentage magnitudes clamped
  * to 100): the damage-modifier pass negates `decrease*` powers in place, so a
  * signed comparison would rank a strong reduction below a weak boost and keep the
  * weaker instance ahead of a stronger one. Comparing static vs percentage
@@ -1669,7 +1523,7 @@ export const selectTransferEffects = (
   if (cap <= 0) return [];
   const magnitudeOf = new Map<string, number>();
   for (const effect of candidates) {
-    const magnitude = Math.abs(getPower(effect).power);
+    const magnitude = Math.abs(getEffectPower(effect));
     magnitudeOf.set(
       effect.id,
       effect.calculation === "percentage" && magnitude > 100 ? 100 : magnitude,
