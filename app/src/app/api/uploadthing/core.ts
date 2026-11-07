@@ -79,6 +79,60 @@ const adminMiddleware = async () => {
   return { userId: user.userId };
 };
 
+/** Avatar image for a federal tier, saved to the uploader's profile once moderated. */
+const avatarUploader = (
+  maxFileSize: "512KB" | "1MB" | "2MB",
+  tier: (typeof FederalStatuses)[number],
+) =>
+  f({ image: { maxFileSize } })
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware(tier)),
+      ...withExtensionIds(files),
+    }))
+    .onUploadComplete(async ({ metadata, file }) => {
+      const moderation = await moderateUploadedImage(file);
+      if (moderation.error) return moderation;
+      const userPatch = await uploadHistoricalAvatar(file, metadata.userId, true);
+      return { ...moderation, userPatch };
+    });
+
+/** Moderated group image, filed in the avatar history under a synthetic owner. */
+const contentImageUploader = (historyUserId: string) =>
+  f({ image: { maxFileSize: "512KB" } })
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware()),
+      ...withExtensionIds(files),
+    }))
+    .onUploadComplete(async ({ file }) => {
+      const moderation = await moderateUploadedImage(file);
+      if (moderation.error) return moderation;
+      await uploadHistoricalAvatar(file, historyUserId, true);
+      return moderation;
+    });
+
+/** Staff-only audio recorded as a sound effect of the given relation. */
+const audioUploader = (maxFileSize: "64KB" | "4MB") =>
+  f({ audio: { maxFileSize } })
+    .input(z.object({ relationId: z.string() }))
+    .middleware(async ({ input, files }) => {
+      const { userId } = await adminMiddleware();
+      return { userId, relationId: input.relationId, ...withExtensionIds(files) };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      await insertHistoricalSoundEffect(
+        drizzleDB,
+        metadata.userId,
+        servedUfsUrl(file),
+        {
+          relationId: metadata.relationId,
+          secondsTotal: 1,
+          prompt: "",
+          negativePrompt: "",
+        },
+      );
+      return { fileUrl: servedUfsUrl(file), userId: metadata.userId };
+    });
+
 export const ourFileRouter = {
   lpcSheetUploader: f({ image: { maxFileSize: "8MB" } })
     .middleware(async () => adminMiddleware())
@@ -119,114 +173,16 @@ export const ourFileRouter = {
       await insertUserUploadForTavernUploader(drizzleDB, metadata, file);
       return moderation;
     }),
-  anbuUploader: f({ image: { maxFileSize: "512KB" } })
-    .middleware(async ({ files }) => ({
-      ...(await avatarMiddleware()),
-      ...withExtensionIds(files),
-    }))
-    .onUploadComplete(async ({ file }) => {
-      const moderation = await moderateUploadedImage(file);
-      if (moderation.error) return moderation;
-      await uploadHistoricalAvatar(file, "anbu-image", true);
-      return moderation;
-    }),
-  clanUploader: f({ image: { maxFileSize: "512KB" } })
-    .middleware(async ({ files }) => ({
-      ...(await avatarMiddleware()),
-      ...withExtensionIds(files),
-    }))
-    .onUploadComplete(async ({ file }) => {
-      const moderation = await moderateUploadedImage(file);
-      if (moderation.error) return moderation;
-      await uploadHistoricalAvatar(file, "clan-image", true);
-      return moderation;
-    }),
-  tournamentUploader: f({ image: { maxFileSize: "512KB" } })
-    .middleware(async ({ files }) => ({
-      ...(await avatarMiddleware()),
-      ...withExtensionIds(files),
-    }))
-    .onUploadComplete(async ({ file }) => {
-      const moderation = await moderateUploadedImage(file);
-      if (moderation.error) return moderation;
-      await uploadHistoricalAvatar(file, "tournament-image", true);
-      return moderation;
-    }),
-  avatarNormalUploader: f({ image: { maxFileSize: "512KB" } })
-    .middleware(async ({ files }) => ({
-      ...(await avatarMiddleware("NORMAL")),
-      ...withExtensionIds(files),
-    }))
-    .onUploadComplete(async ({ metadata, file }) => {
-      const moderation = await moderateUploadedImage(file);
-      if (moderation.error) return moderation;
-      const userPatch = await uploadHistoricalAvatar(file, metadata.userId, true);
-      return { ...moderation, userPatch };
-    }),
-  avatarSilverUploader: f({ image: { maxFileSize: "1MB" } })
-    .middleware(async ({ files }) => ({
-      ...(await avatarMiddleware("SILVER")),
-      ...withExtensionIds(files),
-    }))
-    .onUploadComplete(async ({ metadata, file }) => {
-      const moderation = await moderateUploadedImage(file);
-      if (moderation.error) return moderation;
-      const userPatch = await uploadHistoricalAvatar(file, metadata.userId, true);
-      return { ...moderation, userPatch };
-    }),
-  avatarGoldUploader: f({ image: { maxFileSize: "2MB" } })
-    .middleware(async ({ files }) => ({
-      ...(await avatarMiddleware("GOLD")),
-      ...withExtensionIds(files),
-    }))
-    .onUploadComplete(async ({ metadata, file }) => {
-      const moderation = await moderateUploadedImage(file);
-      if (moderation.error) return moderation;
-      const userPatch = await uploadHistoricalAvatar(file, metadata.userId, true);
-      return { ...moderation, userPatch };
-    }),
+  anbuUploader: contentImageUploader("anbu-image"),
+  clanUploader: contentImageUploader("clan-image"),
+  tournamentUploader: contentImageUploader("tournament-image"),
+  avatarNormalUploader: avatarUploader("512KB", "NORMAL"),
+  avatarSilverUploader: avatarUploader("1MB", "SILVER"),
+  avatarGoldUploader: avatarUploader("2MB", "GOLD"),
   // SFX audio (small files)
-  audioSfxUploader: f({ audio: { maxFileSize: "64KB" } })
-    .input(z.object({ relationId: z.string() }))
-    .middleware(async ({ input, files }) => {
-      const { userId } = await adminMiddleware();
-      return { userId, relationId: input.relationId, ...withExtensionIds(files) };
-    })
-    .onUploadComplete(async ({ metadata, file }) => {
-      await insertHistoricalSoundEffect(
-        drizzleDB,
-        metadata.userId,
-        servedUfsUrl(file),
-        {
-          relationId: metadata.relationId,
-          secondsTotal: 1,
-          prompt: "",
-          negativePrompt: "",
-        },
-      );
-      return { fileUrl: servedUfsUrl(file), userId: metadata.userId };
-    }),
+  audioSfxUploader: audioUploader("64KB"),
   // MUSIC audio (larger files)
-  audioMusicUploader: f({ audio: { maxFileSize: "4MB" } })
-    .input(z.object({ relationId: z.string() }))
-    .middleware(async ({ input, files }) => {
-      const { userId } = await adminMiddleware();
-      return { userId, relationId: input.relationId, ...withExtensionIds(files) };
-    })
-    .onUploadComplete(async ({ metadata, file }) => {
-      await insertHistoricalSoundEffect(
-        drizzleDB,
-        metadata.userId,
-        servedUfsUrl(file),
-        {
-          relationId: metadata.relationId,
-          secondsTotal: 1,
-          prompt: "",
-          negativePrompt: "",
-        },
-      );
-      return { fileUrl: servedUfsUrl(file), userId: metadata.userId };
-    }),
+  audioMusicUploader: audioUploader("4MB"),
   // Tower Defense character animation zip uploader
   towerDefenseCharacterZip: f({
     "application/zip": { maxFileSize: "32MB" },
