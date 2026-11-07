@@ -166,8 +166,8 @@ export const gameAssetRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input?.cursor ? input.cursor : 0;
-      const limit = input?.limit ? input.limit : 100;
+      const currentCursor = input.cursor ?? 0;
+      const { limit } = input;
       const skip = currentCursor * limit;
       // Look ahead one row to avoid an empty final page or a separate count query.
       const results = await selectGameAssetForGetAll(
