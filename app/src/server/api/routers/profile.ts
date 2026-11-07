@@ -128,6 +128,7 @@ import {
   isRaidListedForVillage,
   raidRewardBlockMessage,
 } from "@/libs/raids";
+import { hasRequiredRank } from "@/libs/rank";
 import { createThumbnail } from "@/libs/replicate";
 import { callDiscordContent } from "@/libs/socials";
 import { getTerritoryWarBoost, getTerritoryWarBoostUntil } from "@/libs/territoryWar";
@@ -140,7 +141,6 @@ import { regenerationBuffs } from "@/libs/titles";
 import {
   applyMasteryTrainingGains,
   getReducedGainsDays,
-  hasRequiredRank,
   inferJutsuTrainingStartedAt,
   settleQueuedTraining,
 } from "@/libs/train";

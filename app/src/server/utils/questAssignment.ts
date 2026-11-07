@@ -30,7 +30,7 @@ import {
   getQuestEntryRequirements,
   isManagedQuestRun,
 } from "@/libs/questRun";
-import { availableQuestLetterRanks } from "@/libs/train";
+import { availableQuestLetterRanks } from "@/libs/rank";
 import {
   fetchQuestEntryInventory,
   type fetchUserQuestByQuestId,

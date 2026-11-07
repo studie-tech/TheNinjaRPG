@@ -48,7 +48,7 @@ import { getClanBoostCost, getClanBoostLevel } from "@/libs/clanBoost";
 import { isElderCandidateWithoutCutoff } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
 import { hasEnergyQueue } from "@/libs/queue";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { findHistoricalAvatarByImage } from "@/queries/avatar";
 import {

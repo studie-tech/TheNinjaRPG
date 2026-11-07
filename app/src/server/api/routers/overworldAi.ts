@@ -31,11 +31,11 @@ import {
 } from "@/libs/quest/missionHall";
 import { getReward } from "@/libs/quest/rewards";
 import { findManagedQuestAttempt } from "@/libs/questRun";
+import { availableQuestLetterRanks } from "@/libs/rank";
 import {
   REWARD_CHOICE_PENDING_MESSAGE,
   REWARD_CHOICE_READY_MESSAGE,
 } from "@/libs/rewardChoice";
-import { availableQuestLetterRanks } from "@/libs/train";
 import { clearActiveNpcQuest } from "@/queries/concurrency";
 import {
   deleteOverworldAiPlacementForDeletePlacement,

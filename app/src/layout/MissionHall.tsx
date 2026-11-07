@@ -41,10 +41,10 @@ import {
   questDailyQuota,
 } from "@/libs/quest/missionHall";
 import { isReducedMissionReward } from "@/libs/quest/rewards";
+import { availableQuestLetterRanks } from "@/libs/rank";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { availableQuestLetterRanks } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";

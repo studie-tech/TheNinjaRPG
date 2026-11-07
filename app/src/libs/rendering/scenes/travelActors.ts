@@ -20,6 +20,7 @@ import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { lpcFacing } from "@/libs/lpc/catalog";
 import { passesBracketFilter } from "@/libs/profile";
 import { getActiveObjectives } from "@/libs/quest";
+import { hasRequiredRank } from "@/libs/rank";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createRenderScope } from "@/libs/rendering/scope";
@@ -35,7 +36,6 @@ import {
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
-import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { canShowMapAttack } from "@/utils/alliance";
 import type { LpcDirection } from "@/validators/lpc";

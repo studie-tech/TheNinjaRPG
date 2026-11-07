@@ -130,6 +130,7 @@ import {
   objectiveContentIds,
 } from "@/libs/quest";
 import { postProcessRewards } from "@/libs/quest/rewards";
+import { hasRequiredLevel } from "@/libs/rank";
 import {
   calcRepairAllCost,
   calculateKitsToUse,
@@ -146,7 +147,6 @@ import {
 } from "@/libs/shop";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
-import { hasRequiredLevel } from "@/libs/train";
 import { getVillageLoyaltyShopCost } from "@/libs/villageLoyalty";
 import {
   CACHE_RESTRICTED_REWARD_MESSAGE,

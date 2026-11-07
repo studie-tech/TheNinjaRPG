@@ -82,6 +82,7 @@ import {
   isLocationObjective,
 } from "@/libs/quest";
 import { findConsecutiveQuestId } from "@/libs/questRun";
+import { hasRequiredRank } from "@/libs/rank";
 import {
   createTravelScene,
   type TravelPick,
@@ -115,7 +116,6 @@ import type {
 } from "@/libs/sector-map/world-types";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
-import { hasRequiredRank } from "@/libs/train";
 import { isTravelKeyBlocked } from "@/libs/travel";
 import { isTutorialActive, isTutorialCaptureStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";

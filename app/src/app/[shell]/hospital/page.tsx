@@ -26,8 +26,8 @@ import {
   snapToThresholds,
 } from "@/libs/hospital";
 import { showUserRank } from "@/libs/profile";
+import { hasRequiredRank } from "@/libs/rank";
 import { showMutationToast } from "@/libs/toast";
-import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getAcceptRequestUserUpdate, getLeaveSenseiUserUpdate } from "@/deltas/sensei";
 import { SENSEI_MAX_ACTIVE_STUDENTS, SENSEI_REQUIRED_RANK } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import { fetchUser } from "@/queries/profile";
 import {
   fetchStudents,

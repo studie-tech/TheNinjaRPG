@@ -32,8 +32,8 @@ import ContentBox from "@/layout/ContentBox";
 import { GroupOrders } from "@/layout/GroupOrders";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { hasRequiredRank } from "@/libs/rank";
 import { showMutationToast } from "@/libs/toast";
-import { hasRequiredRank } from "@/libs/train";
 import { prettyNumber } from "@/utils/string";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 

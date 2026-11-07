@@ -25,7 +25,7 @@ import type { Quest, UserData } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { calcMedninRank } from "@/libs/hospital";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
-import { availableQuestLetterRanks } from "@/libs/train";
+import { availableQuestLetterRanks } from "@/libs/rank";
 import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";

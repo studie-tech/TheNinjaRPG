@@ -13,8 +13,8 @@ import { LogbookEntry } from "@/layout/Logbook";
 import { QuestTeams } from "@/layout/QuestTeams";
 import { QuestEntryStock, TakeQuestButton } from "@/layout/TakeQuestButton";
 import { nameQuestEntryStock } from "@/libs/questRun";
+import { availableQuestLetterRanks } from "@/libs/rank";
 import { showMutationToast } from "@/libs/toast";
-import { availableQuestLetterRanks } from "@/libs/train";
 import { useRequireInVillage } from "@/utils/UserContext";
 
 export default function AdministrationBuilding() {

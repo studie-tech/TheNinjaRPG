@@ -50,9 +50,10 @@ import {
 } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
 import { fittingSlots, slotName } from "@/libs/itemsPage";
+import { hasRequiredLevel } from "@/libs/rank";
 import { getRepairKits } from "@/libs/repair";
 import { cn } from "@/libs/shadui";
-import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
+import { remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 
