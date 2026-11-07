@@ -40,6 +40,7 @@ import type {
   War,
   WarCamp,
 } from "@/drizzle/schema";
+import type { BattleItem, BattleJutsu, BattleVillage } from "@/libs/combat/catalog";
 import type { GenNames, publicState, StatNames } from "@/libs/combat/constants";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type {
@@ -474,13 +475,13 @@ export type ExtraState = {
   /** Accompanying pet identities frozen at initiation, including pets that later retreat. */
   petIdsByOwner?: Record<string, string>;
   // Static data - never changes during battle (looked up by ID)
-  jutsus: Record<string, Jutsu>; // jutsuId -> Jutsu (includes user jutsus + injectable jutsus)
+  jutsus: Record<string, BattleJutsu>; // jutsuId -> Jutsu (includes user jutsus + injectable jutsus)
   jutsuReskins: Record<string, JutsuReskin>; // reskinId -> Reskin data
-  items: Record<string, Item>; // itemId -> Item
+  items: Record<string, BattleItem>; // itemId -> Item
   bloodlines: Record<string, Bloodline>; // bloodlineId -> Bloodline
   enemySkills?: Record<string, ZodAllTags[]>; // skillId -> on-action effect templates
   sageModes: Record<string, SageMode>; // sageModeId -> SageMode
-  villages: Record<string, CombatQueryVillage>; // villageId -> Village
+  villages: Record<string, BattleVillage>; // villageId -> Village
   anbuSquads: Record<string, AnbuSquad>; // anbuId -> AnbuSquad
   keystoneItems: Record<string, Item>; // itemId -> Item
   wars: Record<string, BattleWar>; // warId -> War
@@ -558,6 +559,8 @@ export type ReturnedExtraState = Omit<
 export type ReturnedBattle = Omit<CompleteBattle, "usersState" | "extraState"> & {
   usersState: ReturnedUserState[];
   extraState: ReturnedExtraState;
+  /** Actions a response resolved, in order; only the action's own response carries them. */
+  playback?: import("@/libs/combat/playback").CombatPlaybackStep[];
 };
 
 /** Minimal battle context for per-round effect logic (e.g. castThisRound). */
@@ -639,7 +642,7 @@ export type CombatAction = {
   /** Authored effect types retained on selected actions before elemental damage resolves. */
   sharedCooldownTags?: ZodAllTags["type"][];
   lastUsedRound?: number;
-  data?: Jutsu | Item;
+  data?: BattleJutsu | BattleItem;
   level?: number;
   quantity?: number;
   hidden?: boolean;

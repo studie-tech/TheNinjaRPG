@@ -48,6 +48,7 @@ it.each([
   try {
     const scope = {
       props: { battleState: { battle, result: hasResult ? { outcome: "Won" } : null } },
+      result: hasResult ? { outcome: "Won" } : null,
       endedBattleInvalidationRef: { current: null },
       completionRevisionRef: { current: null },
       shouldInvalidateEndedBattleCaches,
@@ -93,6 +94,7 @@ it.each([true, false])("reconciles both combat inventories after profile complet
   battle.battleType = "ARENA";
   const scope = {
     props: { battleState: { battle, result: { outcome: "Won", profileUpdate: { baseline: { items: baseline }, items: after } } } },
+    result: { outcome: "Won" },
     endedBattleInvalidationRef: { current: null }, completionRevisionRef: { current: null },
     shouldInvalidateEndedBattleCaches, prepareUserUpdate: () => 1,
     updateUser: async () => { profileSettled = true; return profileApplied; },

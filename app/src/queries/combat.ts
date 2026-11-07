@@ -92,6 +92,7 @@ import {
   warKill,
 } from "@/drizzle/schema";
 import { matchBloodrightSnapshot } from "@/libs/bloodright";
+import { compactBattleCatalogs } from "@/libs/combat/catalog";
 import { petsAllowedInBattle } from "@/libs/combat/pets";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import { getVillage, sendsToHospital } from "@/libs/combat/util";
@@ -862,7 +863,7 @@ export const insertBattleForCreateBattle = (
     groundEffects: groundEffects,
     width: gridSize.width,
     height: gridSize.height,
-    extraState: {
+    extraState: compactBattleCatalogs({
       ...extraState,
       profileCacheSnapshots,
       pvpExperienceScaling,
@@ -895,7 +896,7 @@ export const insertBattleForCreateBattle = (
       ),
       sectorExclusiveRaids: sectorExclusiveRaids,
       topPlayersLP: rankedTopPlayersLP,
-    },
+    }),
     rewardScaling: rewardScaling,
     createdAt: startTime,
     updatedAt: startTime,
@@ -1664,19 +1665,29 @@ export const updateBattleForUpdateBattleState = (
       usersState: newBattle.usersState,
       usersEffects: newBattle.usersEffects,
       groundEffects: newBattle.groundEffects,
-      // Keep revealed action definitions available after a summon despawns.
-      // Update only this subtree within the same version-guarded write.
-      ...(newBattle.extraState.revealedActions
-        ? {
-            extraState: sql`JSON_SET(${battle.extraState}, '$.revealedActions', CAST(${JSON.stringify(newBattle.extraState.revealedActions)} AS JSON))`,
-          }
-        : {}),
-      ...(newBattle.extraState.dungeon ? { extraState: newBattle.extraState } : {}),
+      ...turnExtraStateUpdate(newBattle.extraState),
       activeUserId: newBattle.activeUserId,
       roundStartAt: newBattle.roundStartAt,
       round: newBattle.round,
     })
     .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion)));
+
+/**
+ * Rewrite only what a turn changes, within the same version-guarded write; catalogs make
+ * the rest of this column far larger. Revealed definitions outlive a despawned summon, and
+ * dungeon floors carry their run and pending waves between turns.
+ */
+const turnExtraStateUpdate = (extraState: import("@/libs/combat/types").ExtraState) => {
+  const changes = (["revealedActions", "dungeon", "encounter"] as const).flatMap(
+    (key) =>
+      extraState[key]
+        ? [sql`${`$.${key}`}, CAST(${JSON.stringify(extraState[key])} AS JSON)`]
+        : [],
+  );
+  return changes.length
+    ? { extraState: sql`JSON_SET(${battle.extraState}, ${sql.join(changes, sql`, `)})` }
+    : {};
+};
 
 /** Build the `logBattleLengths` insert for `finishBattle`, updating duplicate keys. */
 export const insertLogBattleLengthsForFinishBattle = (

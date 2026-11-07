@@ -28,6 +28,7 @@ import {
   TEMPORAL_AP_DELTA,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
+import type { BattleJutsu } from "@/libs/combat/catalog";
 import {
   BARRIER_DAMAGE_TAG_TYPES,
   COMBAT_SECONDS,
@@ -1739,7 +1740,10 @@ export const calcActiveUser = (
 };
 
 /** Masked users carry catalog availability instead of their private skill build. */
-const canUseSkillGatedJutsu = (jutsu: Jutsu, user: ReturnedUserState) =>
+const canUseSkillGatedJutsu = (
+  jutsu: Pick<BattleJutsu, "id" | "requiredSkillId">,
+  user: ReturnedUserState,
+) =>
   user.activeSkillIds === undefined
     ? !user.skillLockedJutsuIds?.includes(jutsu.id)
     : hasRequiredSkill(jutsu, user);

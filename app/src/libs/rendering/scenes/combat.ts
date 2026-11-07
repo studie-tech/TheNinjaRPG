@@ -10,6 +10,7 @@ import { ID_SFX_MOVE, WORLD_DAY_BRIGHTNESS } from "@/drizzle/constants";
 import type { GameAsset, UserData } from "@/drizzle/schema";
 import { actionPointsAfterAction, calcActiveUser } from "@/libs/combat/actions";
 import type { AggroDisplay } from "@/libs/combat/aggroDisplay";
+import { type CombatHit, combatHits } from "@/libs/combat/playback";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
 import { hexGridHeightRatio, type TerrainHex } from "@/libs/hexgrid";
@@ -36,6 +37,8 @@ import {
   COMBAT_GROUND_EFFECT_Z_INDEX,
   createCombatEffects,
 } from "@/libs/rendering/scenes/combatEffects";
+import { createCombatFeedback } from "@/libs/rendering/scenes/combatFeedback";
+import { createCombatPlayback } from "@/libs/rendering/scenes/combatPlayback";
 import { prepareCombatTerrain } from "@/libs/rendering/scenes/combatTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
@@ -48,6 +51,11 @@ import {
 } from "@/libs/rendering/worldWeather";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import { clamp } from "@/utils/math";
+
+const NO_HITS: CombatHit[] = [];
+
+/** Without a frame for this long the page is not rendering, so nothing is replaying. */
+const PRESENTATION_STALL_MS = 500;
 
 /**
  * Owns a battle canvas and awaits its initial terrain, actors and known effects.
@@ -63,6 +71,8 @@ export const createCombatScene = async (options: {
   onTap: (tile: TerrainHex, character?: CombatHover) => void;
   onHover: (hover: CombatHover | null) => void;
   onZoom: (zoom: number) => void;
+  /** The field reached another step of a replay, or caught up with the live battle. */
+  onPresent?: (presented: CombatPresented) => void;
   play: (url: string, volume: number) => void;
   initialZoom: number;
   interactive?: boolean;
@@ -143,6 +153,9 @@ export const createCombatScene = async (options: {
       { ground: groundLayer, world: depthLayer, ui: uiLayer },
     );
     const effects = createCombatEffects(game, data.grid, options.play);
+    const firstTile = data.grid.toArray()[0];
+    const feedback = createCombatFeedback(firstTile?.height ?? width / 20);
+    game.own(feedback.dispose);
     // Static ground artwork lies on the hex surface: above flat faces, below grid outlines,
     // and (via the lit ground layer) beneath fighters and upright scenery.
     effects.ground.zIndex = COMBAT_GROUND_EFFECT_Z_INDEX;
@@ -174,6 +187,7 @@ export const createCombatScene = async (options: {
       uiLayer,
       actors.container,
       effects.container,
+      feedback.container,
     );
     game.stage.addChild(world);
     let zoom = Math.max(1, Math.min(3, options.initialZoom));
@@ -185,6 +199,7 @@ export const createCombatScene = async (options: {
       initialized = false,
       rendered = false;
     let effectsReady: Promise<unknown> = Promise.resolve();
+    let wasMoving = false;
     let previous: CombatSceneSnapshot | null = null,
       highlightKey = "",
       hoverKey = "";
@@ -202,8 +217,8 @@ export const createCombatScene = async (options: {
       }
       world.scale.set(s, -s);
       world.position.set(
-        game.renderer.width / 2 - camera.x * s,
-        game.renderer.height / 2 + camera.y * s,
+        game.renderer.width / 2 - (camera.x + feedback.shake.x) * s,
+        game.renderer.height / 2 + (camera.y + feedback.shake.y) * s,
       );
     };
     const tileAt = (x: number, y: number) =>
@@ -254,6 +269,9 @@ export const createCombatScene = async (options: {
       transform();
       highlightKey = "";
     });
+    const playback = createCombatPlayback(initial.battle);
+    let lastFrameAt = 0;
+    let lastPresented: CombatPresented = { battle: initial.battle };
     const sync = (snapshot: CombatSceneSnapshot, isInitial: boolean) => {
       actors.sync({
         battle: snapshot.battle,
@@ -390,11 +408,37 @@ export const createCombatScene = async (options: {
         game.animation.uniforms.uTime = frame.reducedMotion ? 0 : clock / 1000;
         game.animation.update();
       }
+      lastFrameAt = performance.now();
+      playback.receive(snapshot.battle);
+      const presented = playback.tick({
+        now: clock,
+        instant:
+          frame.reducedMotion ||
+          !snapshot.active ||
+          capture ||
+          !!options.staticActors ||
+          !!options.advance,
+        moving: wasMoving,
+        cue: actors.cue,
+      });
+      const logVersion = playback.logVersion();
+      let hits: CombatHit[] = NO_HITS;
+      if (
+        presented !== lastPresented.battle ||
+        logVersion !== lastPresented.logVersion
+      ) {
+        // Previews and catch-up reads redraw a result without anything landing.
+        if (snapshot.active && !capture && !options.staticActors && !options.advance)
+          hits = combatHits(lastPresented.battle, presented);
+        lastPresented = { battle: presented, logVersion };
+        options.onPresent?.(lastPresented);
+      }
+      const view = { ...snapshot, battle: presented };
       if (
         dirty ||
         !previous ||
-        snapshot.battle !== previous.battle ||
-        snapshot.battle.version !== previous.battle.version ||
+        view.battle !== previous.battle ||
+        view.battle.version !== previous.battle.version ||
         snapshot.revision !== previous.revision ||
         snapshot.assets !== previous.assets ||
         snapshot.aggro !== previous.aggro ||
@@ -403,7 +447,21 @@ export const createCombatScene = async (options: {
         snapshot.sound !== previous.sound ||
         snapshot.volume !== previous.volume
       )
-        sync(snapshot, !rendered);
+        sync(view, !rendered);
+      for (const { userId, amount, severity } of hits) {
+        const head = actors.headPosition(userId);
+        if (!head) continue;
+        const direction = actors.hitDirection(userId, playback.actorId());
+        feedback.show({
+          userId,
+          amount,
+          severity,
+          x: head.x,
+          y: head.y,
+          dirX: direction.x,
+        });
+        if (amount < 0) actors.react(userId, direction, severity);
+      }
       labels.visible = snapshot.showGridNumbers;
       const pointer = controls.dragging() ? null : controls.pointer();
       const tile = pointer ? tileAt(pointer.x, pointer.y) : null;
@@ -411,7 +469,7 @@ export const createCombatScene = async (options: {
       const effect = pointer ? effects.hit(pointer.x, pointer.y) : null;
       const hoverUser =
         actor?.userId ??
-        snapshot.battle.usersState.find(
+        view.battle.usersState.find(
           (user) =>
             user.longitude === tile?.col &&
             user.latitude === tile.row &&
@@ -420,7 +478,9 @@ export const createCombatScene = async (options: {
         )?.userId;
       if (options.staticActors) actors.snap();
       const moving = actors.animate(frame, snapshot.userId, hoverUser, scale());
+      wasMoving = moving;
       effects.animate(clock, frame.reducedMotion, moving, effect?.id ?? null);
+      feedback.animate(clock, frame.reducedMotion, scale());
       const user = snapshot.battle.usersState.find(
         (user) => user.userId === snapshot.userId,
       );
@@ -495,7 +555,7 @@ export const createCombatScene = async (options: {
       const hoverTile = actor?.tile ?? tile;
       const hasGround =
         hoverTile &&
-        snapshot.battle.groundEffects.some(
+        view.battle.groundEffects.some(
           (effect) =>
             effect.longitude === hoverTile.col && effect.latitude === hoverTile.row,
         );
@@ -538,12 +598,17 @@ export const createCombatScene = async (options: {
         dirty = true;
         game.invalidate();
       },
+      /** Actions are still replaying; a stalled render loop must not hold up the battle. */
+      isPresenting: () =>
+        playback.isPlaying() && performance.now() - lastFrameAt < PRESENTATION_STALL_MS,
     };
   } catch (error) {
     game.dispose();
     throw error;
   }
 };
+/** The battle on the field and the newest log version it has reached while replaying. */
+export type CombatPresented = { battle: ReturnedBattle; logVersion?: number };
 export type CombatHover = {
   tileKey: string;
   userId?: string;

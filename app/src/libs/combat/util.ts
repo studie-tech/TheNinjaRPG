@@ -73,7 +73,12 @@ import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
 import { isSummonTemplate, spliceOrphanedSummons } from "@/libs/combat/summon";
 import { getTargetTiles } from "@/libs/combat/targeting";
-import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
+import type {
+  BattleEffect,
+  CombatQueryVillage,
+  GroundEffect,
+  UserEffect,
+} from "@/libs/combat/types";
 import { dungeonCombatResult } from "@/libs/dungeon";
 import { applyGameSettingMultiplier } from "@/libs/gameSettingBoost";
 import { getWarSide } from "@/libs/objectiveWar";
@@ -441,7 +446,10 @@ export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserSta
   );
   const completedQuests = getCompletedQuestsFromBattle(battle, user.controllerId);
   const questData = getQuestDataFromBattle(battle, user.controllerId);
-  const village = user.villageId ? getVillage(battle, user.villageId) : undefined;
+  // Quest rewards read structures only through boost lookups, which the catalog keeps.
+  const village = user.villageId
+    ? (getVillage(battle, user.villageId) as CombatQueryVillage | undefined)
+    : undefined;
   const bloodline = getBloodline(battle, user.bloodlineId);
 
   // Omit BattleUserState.items (BattleUserItem[]) to rebuild as the UserItem shape

@@ -1,6 +1,6 @@
 "use client";
 
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Loader2, Maximize2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
@@ -53,6 +53,7 @@ import { showMutationToast } from "@/libs/toast";
 import { isTutorialActive } from "@/libs/tutorial";
 import {
   combatActionIdAtom,
+  combatHeldResultAtom,
   useRequiredUserData,
   userBattleAtom,
 } from "@/utils/UserContext";
@@ -155,6 +156,9 @@ export default function CombatPage() {
   // Derived variables
   const userId = userData?.userId;
   const results = battleState?.result;
+  const heldResultVersion = useAtomValue(combatHeldResultAtom);
+  // Keeps the battle layout while the field replays the action that ended it.
+  const resultShown = !!results && heldResultVersion === undefined;
   const battle = battleState?.battle;
   const isBattleMissing = isSuccess && data.battle === null;
   const versionId = battle?.version;
@@ -599,7 +603,10 @@ export default function CombatPage() {
       }
       return (
         <div
-          className={cn("flex flex-row items-center gap-2", results && "opacity-50")}
+          className={cn(
+            "flex flex-row items-center gap-2",
+            resultShown && "opacity-50",
+          )}
           id="tutorial-combat-action-timer"
         >
           <ActionTimer
@@ -621,14 +628,14 @@ export default function CombatPage() {
                     size="icon"
                     className="h-10 w-10"
                     aria-label="Battle focus"
-                    inert={!!results}
+                    inert={resultShown}
                     title="Battle focus: open the battle dialog"
                     onClick={() => config.setBattleFocus(true)}
                   >
                     <Maximize2 className="h-5 w-5" />
                   </Button>
                 )}
-                <div className="flex" inert={!!results}>
+                <div className="flex" inert={resultShown}>
                   <UserCombatSettings
                     config={config}
                     userData={userData}
@@ -646,7 +653,7 @@ export default function CombatPage() {
       user,
       isInBattle,
       battleState,
-      results,
+      resultShown,
       actions,
       actionId,
       userId,
@@ -664,7 +671,7 @@ export default function CombatPage() {
       <div
         className="relative box-content overflow-hidden rounded-lg border bg-card text-card-foreground shadow-lg"
         style={
-          battle && !results
+          battle && !resultShown
             ? {
                 aspectRatio: `1 / ${hexGridHeightRatio(battle.width, battle.height)}`,
               }
@@ -672,7 +679,7 @@ export default function CombatPage() {
         }
       >
         {!isBattleLoading && combat}
-        {!isBattleLoading && !results && battle && isAutoCombatActive && (
+        {!isBattleLoading && !resultShown && battle && isAutoCombatActive && (
           <div className="absolute top-2 left-2 z-20">
             <AutoCombatBadge
               isPending={isTogglingAutoCombat}
@@ -690,7 +697,7 @@ export default function CombatPage() {
   }, [
     isBattleLoading,
     combat,
-    results,
+    resultShown,
     battle,
     isAutoCombatActive,
     isTogglingAutoCombat,
@@ -705,8 +712,8 @@ export default function CombatPage() {
       const layout = battleActionGrid({ focus, small: config.useSmallActions });
       return (
         <div
-          className={cn("flex flex-col gap-1", results && "opacity-50")}
-          inert={!!results}
+          className={cn("flex flex-col gap-1", resultShown && "opacity-50")}
+          inert={resultShown}
         >
           <CombatElementalSealNotice battle={battle} userId={controlledActorId} />
           <ActionSelector
