@@ -12,7 +12,7 @@ import * as AiProfileEdit from "@/layout/AiProfileEdit";
 import * as ContentBox from "@/layout/ContentBox";
 import * as EditContent from "@/layout/EditContent";
 import * as Modal from "@/layout/Modal";
-import * as petSpecies from "@/libs/petSpecies";
+import * as petSpecies from "@/hooks/petSpecies";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { ActionEndTurn } from "@/validators/ai";

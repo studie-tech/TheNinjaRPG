@@ -23,10 +23,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { PET_ABILITY_SLOTS_BY_RARITY, PET_RANKS } from "@/drizzle/constants";
 import type { PetSpecies } from "@/drizzle/schema";
+import { usePetSpeciesEditForm } from "@/hooks/petSpecies";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Modal from "@/layout/Modal";
-import { usePetSpeciesEditForm } from "@/libs/petSpecies";
 import { PET_RANK_APPEARANCES } from "@/libs/pets/catalogue";
 import { getTagSchema, IncreaseStatTag, tagTypes } from "@/validators/combat";
 import {
