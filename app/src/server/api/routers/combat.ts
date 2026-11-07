@@ -87,6 +87,8 @@ import { createAction, settlementWrites, updateBattle } from "@/libs/combat/data
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
 import { BATTLE_LOG_PAGE_SIZE } from "@/libs/combat/log";
+import { maskBattle } from "@/libs/combat/masking";
+import { refreshMasteries, resetMasteriesToBase } from "@/libs/combat/mastery";
 import {
   fitsBattleUsage,
   getBattleSpawnLocations,
@@ -102,11 +104,13 @@ import {
 } from "@/libs/combat/process";
 import { addQuestStartingEffects } from "@/libs/combat/questEffects";
 import { filterCombatQuests } from "@/libs/combat/quests";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import {
   mergeLoadoutParticipants,
   summonActionBlockedReason,
 } from "@/libs/combat/summon";
 import { realizePassiveEffect } from "@/libs/combat/tags";
+import { alignBattle, getTurnControl } from "@/libs/combat/turn";
 import type {
   ActionEffect,
   BattleUserItem,
@@ -124,21 +128,15 @@ import type {
   UserEffect,
 } from "@/libs/combat/types";
 import {
-  alignBattle,
-  calcBattleResult,
   createEmptyExtraState,
   getBattleClaimIds,
   getBattleGrid,
   getDefaultBattleSizes,
   getEffectiveMaxPool,
   getPoolKeys,
-  getTurnControl,
   inertUserItemColumns,
-  maskBattle,
   mergeExtraState,
   reconcileLobbyPools,
-  refreshMasteries,
-  resetMasteriesToBase,
   rollInitiative,
   syncPoolAdjustments,
 } from "@/libs/combat/util";

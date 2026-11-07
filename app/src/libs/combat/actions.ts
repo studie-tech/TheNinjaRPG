@@ -41,6 +41,7 @@ import { resolvePotencyTags } from "@/libs/combat/potency";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { isClone } from "@/libs/combat/summon";
 import { getPower, realizeTag, updateStatUsage } from "@/libs/combat/tags";
+import { calcApReduction, hasNoAvailableActions } from "@/libs/combat/turn";
 import type {
   BasicActions,
   BattleEffect,
@@ -55,7 +56,6 @@ import type {
   UserEffect,
 } from "@/libs/combat/types";
 import {
-  calcApReduction,
   calcPoolCost,
   findBarrier,
   getActionAffectedTiles,
@@ -66,7 +66,6 @@ import {
   getJutsu,
   getJutsuReskin,
   getUserElementalSeal,
-  hasNoAvailableActions,
   isEffectActive,
   isEffectEnabled,
   isUserDisarmed,

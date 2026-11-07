@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { MAP_WAR_TORN_BATTLEGROUND_SECTOR, WAR_ESPIONAGE_TARGET } from "@/drizzle/constants";
 import { aiProfile, battle, battleAction, battleHistory, mpvpBattleQueue, mpvpBattleUser, quest, questHistory, territoryWar, userData, village, war, warAlly, warMercenary } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { claimDailyQuestSlot } from "@/server/utils/questAssignment";

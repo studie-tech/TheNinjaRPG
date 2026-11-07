@@ -13,7 +13,7 @@ import { makeBattleUser, makeCompleteBattle } from "../../../libs/combat/helpers
 import { villageRouter } from "@/server/api/routers/village";
 import { kageRouter } from "@/server/api/routers/kage";
 import { syncKageDefense, syncLockedKageDefense, withinKageChallengeLimits, withKageDefense } from "@/server/utils/kage";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { beforeStatements, failStatements, inTransactions, beforeTransaction, failCommits } from "../../../setup/statements";
 import { getKageSlots } from "@/utils/kage";
 import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";

@@ -38,6 +38,7 @@ import {
   getCurseDamageMultiplier,
 } from "./curse";
 import { type DiffusePacket, deferDiffuseDamage, repayDiffuseDamage } from "./diffuse";
+import { refreshMasteries, resetMasteriesToBase } from "./mastery";
 import { areBattleAllies } from "./participants";
 import {
   absorb,
@@ -139,8 +140,6 @@ import {
   isEffectActive,
   isEffectEnabled,
   recordUsedTag,
-  refreshMasteries,
-  resetMasteriesToBase,
   resolveDamageCreditUser,
   sealCheck,
   sortEffects,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { getTurnControl } from "@/libs/combat/util";
+import { getTurnControl } from "@/libs/combat/turn";
 
 describe("getTurnControl truth table", () => {
   const suid = "player1";

@@ -4,15 +4,25 @@ import {
   PVP_MASTERY_LOSS_REWARD,
   PVP_MASTERY_WIN_REWARD,
 } from "@/drizzle/constants";
+import { decreaseMastery, increaseMastery } from "@/libs/combat/tags";
 import type {
   BattleUserState,
   CombatAction,
   CompleteBattle,
+  UserEffect,
 } from "@/libs/combat/types";
 import { MASTERY_REQUIREMENT_FIELDS, MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
 import { allocateMasteryGains } from "@/libs/masteryProgression";
 import { boostPvpGain } from "@/libs/pvpExperience";
 import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
+import {
+  canStackEffect,
+  getActiveSealEffects,
+  getEffectStackKey,
+  isEffectActive,
+  sealCheck,
+  sortEffects,
+} from "./util";
 
 /** Count the disciplines of a successfully performed action once, not once per effect. */
 export const recordMasteryUsage = (user: BattleUserState, action: CombatAction) => {
@@ -84,4 +94,63 @@ export const combatMasteryGains = (
       ]),
     ),
   );
+};
+
+/**
+ * Re-derive masteries from their bases and the mastery tags active now, with applyEffects'
+ * seal, stacking and prevent rules, for state that is read before the next applyEffects:
+ * a new battle, a completed action, or a new round whose expired or newly landed tags
+ * change what is usable.
+ */
+export const refreshMasteries = (
+  usersState: BattleUserState[],
+  usersEffects: UserEffect[],
+) => {
+  usersState.forEach(resetMasteriesToBase);
+  const sealEffects = getActiveSealEffects(usersEffects);
+  const applied = new Set<string>();
+  usersEffects
+    .filter(
+      (e) =>
+        (e.type === "increasemastery" || e.type === "decreasemastery") &&
+        e.targetType === "user" &&
+        isEffectActive(e),
+    )
+    .sort(sortEffects)
+    .forEach((effect) => {
+      const creator = usersState.find((u) => u.userId === effect.creatorId);
+      const target = usersState.find((u) => u.userId === effect.targetId);
+      if (!creator || !target || !canStackEffect(effect, applied)) return;
+      if (sealCheck(effect, sealEffects)) return;
+      applied.add(getEffectStackKey(effect));
+      if (effect.type === "increasemastery") {
+        increaseMastery(effect, usersEffects, target);
+      } else {
+        decreaseMastery(effect, usersEffects, target);
+      }
+    });
+};
+
+/** Remember unbuffed masteries so residual mastery tags can be reapplied without stacking. */
+export const storeMasteryBases = (user: BattleUserState) => {
+  if (!user.baseStatsForModifiers) {
+    user.baseStatsForModifiers = {};
+  }
+  for (const key of MasteryNames) {
+    if (user.baseStatsForModifiers[key] === undefined) {
+      user.baseStatsForModifiers[key] = user[key];
+    }
+  }
+};
+
+/** Restore masteries to the values stored before residual mastery tags were applied. */
+export const resetMasteriesToBase = (user: BattleUserState) => {
+  const base = user.baseStatsForModifiers;
+  if (!base) return;
+  for (const key of MasteryNames) {
+    const stored = base[key];
+    if (stored !== undefined) {
+      user[key] = stored;
+    }
+  }
 };

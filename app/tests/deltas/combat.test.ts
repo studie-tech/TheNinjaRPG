@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "bun:test";
 import { CombatStatNames, ELEMENTAL_MASTERY_CAP, MasteryNames } from "@/drizzle/constants";
 import { battle } from "@/drizzle/schema";
-import { getCombatAdmissionUserUpdate, captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatCacheIntegerDelta, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate } from "@/deltas/combat";
+import { getCombatAdmissionUserUpdate, captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatCacheIntegerDelta, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate, getCombatInventoryUpdate } from "@/deltas/combat";
 import { calcMaxEnergy } from "@/libs/profile";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -10,9 +10,8 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { ZodAllTags } from "@/validators/combat";
 import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
 import { observeProfile, soloPveResult } from "../libs/combat/helpers/profileCache";
-import { maskBattle } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
 import { QuestTracker } from "@/validators/objectives";
-import { getCombatInventoryUpdate } from "@/deltas/combat";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const fixture = () => {

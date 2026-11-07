@@ -6,7 +6,7 @@ import {
   aiProfile, anbuSquad, battle, battleAction, battleHistory, clan,
   mpvpBattleQueue, mpvpBattleUser, quest, raidParticipation, userData, village, villageAlliance,
 } from "@/drizzle/schema";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { raidsRouter } from "@/server/api/routers/raids";
 import { RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";

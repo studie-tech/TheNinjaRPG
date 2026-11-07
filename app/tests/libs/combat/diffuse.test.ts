@@ -7,7 +7,7 @@ import type {
   CompleteBattle,
   UserEffect,
 } from "@/libs/combat/types";
-import { alignBattle } from "@/libs/combat/util";
+import { alignBattle } from "@/libs/combat/turn";
 import { DiffuseTag, getTagSchema, tagTypes } from "@/validators/combat";
 import { makeBattleUser, makeCombatAction, makeDamageEffect, makeEffect } from "./helpers/battleScenario";
 

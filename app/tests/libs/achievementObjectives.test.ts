@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildCombatTrackerTasks } from "@/libs/combat/util";
+import { buildCombatTrackerTasks } from "@/libs/combat/settlement";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { getReward } from "@/libs/quest/rewards";

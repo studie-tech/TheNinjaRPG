@@ -11,7 +11,7 @@ import {
   WAR_TORN_SECTOR_BASE_MONEY,
 } from "@/drizzle/constants";
 import type { BattleUserState } from "@/libs/combat/types";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { makeCompleteBattle, makeUser } from "./helpers/battleScenario";
 
 const villages = {

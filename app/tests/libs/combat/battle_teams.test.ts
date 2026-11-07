@@ -4,7 +4,8 @@ import { BattleTypes, PVP_KILL_PRESTIGE_REWARD, PVP_KILL_TOKEN_REWARD } from "@/
 import { getTargetUser } from "@/libs/combat/actions";
 import { checkFriendlyFire } from "@/libs/combat/process";
 import type { CombatAction } from "@/libs/combat/types";
-import { calcBattleResult, getDistanceToClosestEnemy, getOpposingBattleWars, isValidMove } from "@/libs/combat/util";
+import { getDistanceToClosestEnemy, isValidMove } from "@/libs/combat/util";
+import { calcBattleResult, getOpposingBattleWars } from "@/libs/combat/settlement";
 import { TerrainHex } from "@/libs/hexgrid";
 import { makeBattleUser, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
 

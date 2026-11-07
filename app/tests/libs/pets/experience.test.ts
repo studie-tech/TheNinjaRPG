@@ -6,7 +6,7 @@ import {
   userQueue, userVote,
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import type { PusherClient } from "@/libs/pusher";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";

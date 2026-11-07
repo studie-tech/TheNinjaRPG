@@ -2,7 +2,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { actionLog, jutsu, jutsuLoadout, userData, userJutsu, userQueue } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import type { PusherClient } from "@/libs/pusher";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { profileRouter } from "@/server/api/routers/profile";

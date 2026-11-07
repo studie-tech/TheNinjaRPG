@@ -10,6 +10,7 @@ import {
 } from "@/drizzle/constants";
 import type { BattleAction, UserData, UserTitle } from "@/drizzle/schema";
 import { BATTLE_LOG_PAGE_SIZE } from "@/libs/combat/log";
+import { maskBattle } from "@/libs/combat/masking";
 import type {
   BattleState,
   BattleUserItem,
@@ -17,7 +18,6 @@ import type {
   CompleteBattle,
   ReturnedBattle,
 } from "@/libs/combat/types";
-import { maskBattle } from "@/libs/combat/util";
 import {
   effectiveMasteries,
   MASTERY_REQUIREMENT_FIELDS,

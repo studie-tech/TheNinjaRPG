@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
-import { alignBattle } from "@/libs/combat/util";
+import { alignBattle } from "@/libs/combat/turn";
 import { claimVillageMissionCombatEvents } from "@/libs/combat/villageMission";
 import type { CombatResult } from "@/libs/combat/types";
 import type { Quest } from "@/drizzle/schema";

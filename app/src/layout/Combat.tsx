@@ -47,14 +47,10 @@ import {
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
+import { isPvpEnergyRewardBattle, sendsToHospital } from "@/libs/combat/settlement";
 import { validateActionTarget } from "@/libs/combat/targetValidation";
+import { getTurnControl, resolveControlledActorId } from "@/libs/combat/turn";
 import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/types";
-import {
-  getTurnControl,
-  isPvpEnergyRewardBattle,
-  resolveControlledActorId,
-  sendsToHospital,
-} from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { haptics } from "@/libs/native";

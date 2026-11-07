@@ -21,7 +21,7 @@ import {
 } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { auctionRouter } from "@/routers/auction";
 import { farmingRouter } from "@/routers/farming";

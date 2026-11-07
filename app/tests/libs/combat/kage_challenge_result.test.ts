@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { didKageChallengerWin, didUserTakeKageSeat } from "@/libs/combat/util";
+import { didKageChallengerWin, didUserTakeKageSeat } from "@/libs/combat/settlement";
 import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 
 describe("Kage challenge outcome", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Quest, UserQuest } from "@/drizzle/schema";
 import { COMBAT_QUEST_TASKS, filterCombatQuests } from "@/libs/combat/quests";
-import { hydrateUserForQuests } from "@/libs/combat/util";
+import { hydrateUserForQuests } from "@/libs/combat/settlement";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { getPublicQuestUser } from "@/libs/quest/projection";
 import { getIsolatedPyramid } from "@/libs/questRun";

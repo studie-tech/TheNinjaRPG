@@ -3,7 +3,8 @@ import { accumulateCurseConsequence, accumulateCurseDamage } from "@/libs/combat
 import { advanceEncounterWave } from "@/libs/combat/encounters";
 import { applyEffects } from "@/libs/combat/process";
 import { curse, settleCurse } from "@/libs/combat/tags";
-import { alignBattle, applyPoolAdjustmentsToBase } from "@/libs/combat/util";
+import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";
+import { alignBattle } from "@/libs/combat/turn";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { CurseTag } from "@/validators/combat";
 import {

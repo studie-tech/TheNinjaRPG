@@ -1,7 +1,7 @@
 import type { VillageMissionTask } from "@/drizzle/constants";
 import { isHumanOpponent } from "@/libs/combat/participants";
+import { wasDefeated } from "@/libs/combat/settlement";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
-import { wasDefeated } from "@/libs/combat/util";
 
 /** Reserve shared PvP credit in battle state before its version-guarded settlement. */
 export const claimVillageMissionCombatEvents = (

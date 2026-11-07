@@ -16,7 +16,8 @@ import type {
   GroundEffect,
   UserEffect,
 } from "@/libs/combat/types";
-import { alignBattle, refreshMasteries } from "@/libs/combat/util";
+import { refreshMasteries } from "@/libs/combat/mastery";
+import { alignBattle } from "@/libs/combat/turn";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { ZodAllTags } from "@/validators/combat";
 import {
