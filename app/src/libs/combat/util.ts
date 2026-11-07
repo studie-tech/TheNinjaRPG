@@ -90,7 +90,6 @@ import { randomInt, round, secureRandomInt } from "@/utils/math";
 import { countBoostingShrines, getShrineBoost, getStrucBoost } from "@/utils/village";
 import { checkAssassin, checkCoLeader } from "@/validators/clan";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
-import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
 import type { PathCalculator, TerrainHex } from "../hexgrid";
 import { createHexGrid, nameArenaTile, oddQHexDistance } from "../hexgrid";
 import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
@@ -122,64 +121,6 @@ import type {
   ReturnedExtraState,
   ReturnedUserState,
 } from "./types";
-
-// =============================================================================
-// ITEM DISPLAY HELPERS
-// =============================================================================
-
-/**
- * Resolve a user item's active variant into a display-ready item: returns the base
- * item with image/name/description overridden by the active variant when one is
- * selected (and the variant defines that field), falling back to the base item.
- * Mirrors getReskinnedUserJutsu for the jutsu cosmetic system — one helper does the
- * variant lookup once instead of three parallel getters each re-running `.find()`.
- *
- * Inventory and shop UI only. In combat, battle descriptions are pre-resolved into
- * BattleUserItem.variantBattleDescription at initiateBattle time — do not call this
- * during action processing.
- */
-export const applyActiveVariant = <
-  TItem extends {
-    image: string;
-    name: string;
-    description: string;
-    furnitureData?: FurnitureData | null;
-    variants?: {
-      id: string;
-      image: string;
-      name?: string | null;
-      description?: string | null;
-      furnitureData?: FurnitureVariantData | null;
-    }[];
-  },
->(userItem: {
-  activeVariantId?: string | null;
-  item: TItem;
-}): TItem & { image: string; name: string; description: string } => {
-  const variant = userItem.activeVariantId
-    ? userItem.item.variants?.find((v) => v.id === userItem.activeVariantId)
-    : undefined;
-  return {
-    ...userItem.item,
-    image: variant?.image ?? userItem.item.image,
-    name: variant?.name ?? userItem.item.name,
-    description: variant?.description ?? userItem.item.description,
-    // A skin's missing directions fall back to its own canonical image, never the base skin.
-    ...(variant && userItem.item.furnitureData
-      ? {
-          furnitureData: {
-            ...userItem.item.furnitureData,
-            width: variant.furnitureData?.width ?? userItem.item.furnitureData.width,
-            groundAnchor:
-              variant.furnitureData?.groundAnchor ??
-              userItem.item.furnitureData.groundAnchor,
-            geometry: variant.furnitureData?.geometry,
-            views: variant.furnitureData?.views ?? {},
-          },
-        }
-      : {}),
-  };
-};
 
 // =============================================================================
 // STATIC DATA LOOKUP FUNCTIONS

@@ -12,9 +12,9 @@ import type {
   UserItemWithRelations,
   VillageStructure,
 } from "@/drizzle/schema";
-import { applyActiveVariant } from "@/libs/combat/util";
 import { canDropFarmSeed } from "@/libs/farming";
 import {
+  applyActiveVariant,
   byItemName,
   calcItemSellingPrice,
   getEquipBlockReason,

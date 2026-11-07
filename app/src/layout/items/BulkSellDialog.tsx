@@ -15,8 +15,7 @@ import {
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import ContentImage from "@/layout/ContentImage";
 import { rarityLabel, rarityTextClass } from "@/layout/items/ItemCard";
-import { applyActiveVariant } from "@/libs/combat/util";
-import { calcItemSellingPrice } from "@/libs/item";
+import { applyActiveVariant, calcItemSellingPrice } from "@/libs/item";
 import { bulkSellTotals, warnedItems } from "@/libs/itemsPage";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";

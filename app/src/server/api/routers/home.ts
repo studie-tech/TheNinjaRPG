@@ -9,7 +9,6 @@ import {
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 } from "@/drizzle/constants";
 import { userItem } from "@/drizzle/schema";
-import { applyActiveVariant } from "@/libs/combat/util";
 import {
   getHomeLayout,
   type HomeFurniture,
@@ -20,6 +19,7 @@ import {
 } from "@/libs/home";
 import { getHomeRooms, homeRoomStylesError } from "@/libs/homeProperty";
 import {
+  applyActiveVariant,
   countsTowardInventoryStorage,
   getHomeStorageBucket,
   getHomeStorageBucketCapacity,

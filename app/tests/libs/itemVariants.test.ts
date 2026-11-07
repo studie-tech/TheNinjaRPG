@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { applyActiveVariant } from "@/libs/combat/util";
+import { applyActiveVariant } from "@/libs/item";
 import { DEFAULT_FURNITURE_DATA, type FurnitureData } from "@/validators/itemFurniture";
 
 const baseItem = {

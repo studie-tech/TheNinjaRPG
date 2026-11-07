@@ -20,7 +20,7 @@ import { EquipmentFigure } from "@/layout/items/EquipmentFigure";
 import { ItemContextMenu } from "@/layout/items/ItemContextMenu";
 import { ItemInspector } from "@/layout/items/ItemInspector";
 import { SlotPicker } from "@/layout/items/SlotPicker";
-import { applyActiveVariant } from "@/libs/combat/util";
+import { applyActiveVariant } from "@/libs/item";
 import {
   bulkSellBlockReason,
   bulkSellTotals,
