@@ -36,10 +36,8 @@ import {
   selectVillageForUpdateRewards,
   updateClanForUpdateRewards,
   updateUserDataForUpdateRewards,
-  updateWarForUpdateRewards,
-  updateWarForUpdateRewards2,
-  updateWarForUpdateRewards3,
-  updateWarForUpdateRewards4,
+  updateWarDamageForUpdateRewards,
+  updateWarHealingForUpdateRewards,
 } from "@/queries/quests";
 import { deleteRequests } from "@/queries/sensei";
 import { incrementVillageTokens } from "@/queries/village";
@@ -381,43 +379,36 @@ export const updateRewards = async (info: {
       ),
     ...(() => {
       if (!activeWars || activeWars.length === 0) return [];
-      // Find ALL applicable wars (VILLAGE_WAR or WAR_RAID)
-      const applicableWars = activeWars.filter(
-        (w) =>
-          ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
-          !!getWarSide(w, user.villageId, user.userId),
-      );
-      if (applicableWars.length === 0) return [];
-
       const warUpdates: Promise<unknown>[] = [];
 
-      // Process each war the user is involved in
-      for (const activeWar of applicableWars) {
-        // Determine if user is on attacker or defender side for this war
-        const isOnAttackerSide =
-          getWarSide(activeWar, user.villageId, user.userId) ===
-          activeWar.attackerVillageId;
+      // Process each war the user is involved in (VILLAGE_WAR or WAR_RAID)
+      for (const activeWar of activeWars) {
+        const warSide = getWarSide(activeWar, user.villageId, user.userId);
+        if (!warSide || !["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) continue;
+        const onAttackerSide = warSide === activeWar.attackerVillageId;
 
-        // Apply war damage (damages opponent's war health)
+        // War damage hits the opponent's war health
         if (rewards.reward_war_damage > 0) {
-          if (isOnAttackerSide) {
-            // Attacker damages defender's war health
-            warUpdates.push(updateWarForUpdateRewards(client, rewards, activeWar));
-          } else {
-            // Defender damages attacker's war health
-            warUpdates.push(updateWarForUpdateRewards2(client, rewards, activeWar));
-          }
+          warUpdates.push(
+            updateWarDamageForUpdateRewards(
+              client,
+              activeWar.id,
+              onAttackerSide ? "defender" : "attacker",
+              rewards.reward_war_damage,
+            ),
+          );
         }
 
-        // Apply war healing (heals own side's war health)
+        // War healing restores the player's own side, under its own raid guard check
         if (rewards.reward_war_healing > 0) {
-          if (isOnAttackerSide) {
-            // Attacker heals attacker's war health
-            warUpdates.push(updateWarForUpdateRewards3(client, rewards, activeWar));
-          } else {
-            // Defender heals defender's war health
-            warUpdates.push(updateWarForUpdateRewards4(client, rewards, activeWar));
-          }
+          warUpdates.push(
+            updateWarHealingForUpdateRewards(
+              client,
+              activeWar.id,
+              onAttackerSide ? "attacker" : "defender",
+              rewards.reward_war_healing,
+            ),
+          );
         }
       }
 
