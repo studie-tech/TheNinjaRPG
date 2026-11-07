@@ -21,6 +21,7 @@ import {
   updateWebStoreOrderForDeliverStoreOrder,
 } from "@/queries/paypal";
 import type { DrizzleClient } from "@/server/db";
+import { queryInTransaction } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { reputationAllowanceUsed } from "@/server/utils/purchases/allowance";
 import { isDeletedStoreUserId } from "@/server/utils/purchases/storeIdentity";
@@ -211,24 +212,22 @@ export const authorizeStoreCapture = async (
     const buyerQuery = selectUserDataForReserve(db, buyerId);
     // Acquire the lock before consistent reads so queued captures see prior refreshes.
     const [buyer] = await (needsBuyerLock ? lockStoreBuyer(buyerQuery) : buyerQuery);
-    const order = snapshot;
-    if (!buyer || buyer.isBanned || order.buyerId !== buyerId)
+    if (!buyer || buyer.isBanned || snapshot.buyerId !== buyerId)
       return "This checkout is not available for your account";
-    if (order.grantedAt) return null;
-    const bundleError = order.bundleId
-      ? await checkBundlePurchaseLimit(db, buyerId, order.bundleId, order.id)
+    if (snapshot.grantedAt) return null;
+    const bundleError = snapshot.bundleId
+      ? await checkBundlePurchaseLimit(db, buyerId, snapshot.bundleId, snapshot.id)
       : null;
     if (bundleError) return bundleError;
-    if (isDeletedStoreUserId(order.recipientId))
+    if (isDeletedStoreUserId(snapshot.recipientId))
       return "The recipient account was deleted. No payment was captured.";
-    const recipientQuery = findUserDataForAuthorize(db, order);
-    const aliasesQuery = listCheckoutUserIdAliases(db, buyerId, order.recipientId);
-    const itemsQuery = order.contents.items.length
-      ? listItemForAuthorize(db, order)
+    const recipientQuery = findUserDataForAuthorize(db, snapshot);
+    const aliasesQuery = listCheckoutUserIdAliases(db, buyerId, snapshot.recipientId);
+    const itemsQuery = snapshot.contents.items.length
+      ? listItemForAuthorize(db, snapshot)
       : [];
-    // PlanetScale transactions share one session and reject overlapping statements.
     const [recipient, aliases, items] = needsBuyerLock
-      ? ([await recipientQuery, await aliasesQuery, await itemsQuery] as const)
+      ? await queryInTransaction([recipientQuery, aliasesQuery, itemsQuery])
       : await Promise.all([recipientQuery, aliasesQuery, itemsQuery]);
     if (
       !recipient ||
@@ -237,27 +236,27 @@ export const authorizeStoreCapture = async (
       aliases.some((alias) => isDeletedStoreUserId(alias.newUserId))
     )
       return "The recipient account is no longer available. No payment was captured.";
-    if (items.length !== order.contents.items.length)
+    if (items.length !== snapshot.contents.items.length)
       return "An item in this checkout is no longer available. No payment was captured.";
     // Stop unpaid quotes that became too cheap; completed captures bypass this preflight.
-    if (order.priceCents < getStoreBundleMinimumPriceCents(order.contents, items))
+    if (snapshot.priceCents < getStoreBundleMinimumPriceCents(snapshot.contents, items))
       return "This checkout's price needs updating. Start a new checkout. No payment was captured.";
     const error = await checkStoreAllowance(
       db,
       buyer,
-      order.contents.reputationPoints,
-      order.id,
+      snapshot.contents.reputationPoints,
+      snapshot.id,
     );
     if (error) return error;
     // Snapshot contents stay fixed; guard identities changed by account repair/deletion.
     const refreshed = await updateWebStoreOrderForAuthorize(
       db,
       captureAttemptId,
-      order,
+      snapshot,
       buyerId,
     );
     if (refreshed.rowsAffected !== 1) {
-      const current = await findWebStoreOrderById(db, order.id);
+      const current = await findWebStoreOrderById(db, snapshot.id);
       return current?.buyerId === buyerId && current.grantedAt
         ? null
         : "The checkout account changed. Retry checkout. No payment was captured.";
@@ -307,13 +306,9 @@ const checkStoreAllowance = async (
   points: number,
   excludeOrderId?: string,
 ) => {
-  const used = await reputationAllowanceUsed(
-    client,
-    buyer.userId,
-    "",
-    "",
-    excludeOrderId,
-  );
+  const used = await reputationAllowanceUsed(client, buyer.userId, {
+    excludeStoreOrderId: excludeOrderId,
+  });
   return used + points > dynamicMonthlyRepCap(buyer)
     ? "This exceeds your monthly reputation allowance, including other open checkouts. No payment was captured."
     : null;

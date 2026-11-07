@@ -383,7 +383,10 @@ export const deliverPaypalReputation = async (input: PaypalReputationPayment) =>
         rawData: input.raw,
       };
       const allowed =
-        (await reputationAllowanceUsed(tx, input.createdById, id)) + input.reps <=
+        (await reputationAllowanceUsed(tx, input.createdById, {
+          excludePaypalId: id,
+        })) +
+          input.reps <=
         dynamicMonthlyRepCap(buyer);
       const status = allowed ? "COMPLETED" : "REVIEW_REQUIRED";
       if (stored)
