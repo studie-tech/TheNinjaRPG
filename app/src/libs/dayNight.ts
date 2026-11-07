@@ -7,32 +7,29 @@ import {
   WORLD_NIGHT_SECONDS,
 } from "@/drizzle/constants";
 
-const getCycleMs = () => WORLD_CYCLE_SECONDS * 1000;
-const getDayMs = () => WORLD_DAY_SECONDS * 1000;
-const getNightMs = () => WORLD_NIGHT_SECONDS * 1000;
+const CYCLE_MS = WORLD_CYCLE_SECONDS * 1000;
+const DAY_MS = WORLD_DAY_SECONDS * 1000;
+const NIGHT_MS = WORLD_NIGHT_SECONDS * 1000;
 
 const lerp = (from: number, to: number, amount: number) =>
   from + (to - from) * Math.max(0, Math.min(1, amount));
 
 export const getWorldDayCycleIndex = (date: Date) =>
-  Math.floor(date.getTime() / getCycleMs());
+  Math.floor(date.getTime() / CYCLE_MS);
 
 export const getWorldCyclePosition = (date: Date) => {
   const ms = date.getTime();
-  const cycleMs = getCycleMs();
-  const dayMs = getDayMs();
-  const nightMs = getNightMs();
-  const cycleStart = Math.floor(ms / cycleMs) * cycleMs;
+  const cycleStart = Math.floor(ms / CYCLE_MS) * CYCLE_MS;
   const offset = ms - cycleStart;
-  const phase = offset < dayMs ? ("day" as const) : ("night" as const);
-  const phaseOffset = offset < dayMs ? offset : offset - dayMs;
+  const phase = offset < DAY_MS ? ("day" as const) : ("night" as const);
+  const phaseOffset = offset < DAY_MS ? offset : offset - DAY_MS;
   return {
     cycleStart,
-    cycleMs,
-    dayMs,
+    cycleMs: CYCLE_MS,
+    dayMs: DAY_MS,
     phase,
     phaseOffset,
-    phaseDuration: phase === "day" ? dayMs : nightMs,
+    phaseDuration: phase === "day" ? DAY_MS : NIGHT_MS,
   };
 };
 
@@ -43,25 +40,14 @@ export const getWorldCycleBrightness = (now = new Date()) => {
     phaseDuration / 4,
   );
 
-  if (phase === "day") {
-    if (phaseOffset > phaseDuration - transitionMs) {
-      return lerp(
-        WORLD_DAY_BRIGHTNESS,
-        WORLD_NIGHT_BRIGHTNESS,
-        (phaseOffset - (phaseDuration - transitionMs)) / transitionMs,
-      );
-    }
-    return WORLD_DAY_BRIGHTNESS;
-  }
-
-  if (phaseOffset > phaseDuration - transitionMs) {
-    return lerp(
-      WORLD_NIGHT_BRIGHTNESS,
-      WORLD_DAY_BRIGHTNESS,
-      (phaseOffset - (phaseDuration - transitionMs)) / transitionMs,
-    );
-  }
-  return WORLD_NIGHT_BRIGHTNESS;
+  const [from, to] =
+    phase === "day"
+      ? [WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS]
+      : [WORLD_NIGHT_BRIGHTNESS, WORLD_DAY_BRIGHTNESS];
+  const fadeStart = phaseDuration - transitionMs;
+  return phaseOffset > fadeStart
+    ? lerp(from, to, (phaseOffset - fadeStart) / transitionMs)
+    : from;
 };
 
 export const getWorldCycleState = (now = new Date()) => {
