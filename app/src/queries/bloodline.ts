@@ -614,11 +614,11 @@ export const updateUserDataForDoRoll = (
       ),
     );
 
-/** Build the `bloodlineRolls` insert for `doRoll`. */
+/** Build the natural `bloodlineRolls` insert; an empty roll leaves `bloodlineId` unset. */
 export const insertBloodlineRollsForDoRoll = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
-  randomBloodline: { id: string },
+  bloodlineId: string | undefined,
 ) =>
   client.insert(bloodlineRolls).values({
     id: nanoid(),
@@ -626,20 +626,7 @@ export const insertBloodlineRollsForDoRoll = (
     used: 0,
     pityRolls: 0,
     type: "NATURAL",
-    bloodlineId: randomBloodline.id,
-  });
-
-/** Build the `bloodlineRolls` insert for `doRoll`. */
-export const insertBloodlineRollsForDoRoll2 = (
-  client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-) =>
-  client.insert(bloodlineRolls).values({
-    id: nanoid(),
-    used: 0,
-    pityRolls: 0,
-    userId: ctx.userId,
-    type: "NATURAL",
+    bloodlineId,
   });
 
 /** Build the `bloodlineRolls` insert for `pityRoll`. */
