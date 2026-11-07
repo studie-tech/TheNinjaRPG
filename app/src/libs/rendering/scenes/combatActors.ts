@@ -569,9 +569,14 @@ export const createCombatActors = (
       container.children.sort((a, b) => b.y - a.y);
       needsSort = false;
     }
-    for (const record of records.values())
-      record.artRoot.zIndex = -(record.root.y + record.groundY + container.y);
-    layers?.world.sortRenderLayerChildren();
+    let depthChanged = false;
+    for (const record of records.values()) {
+      const depth = -(record.root.y + record.groundY + container.y);
+      if (record.artRoot.zIndex === depth) continue;
+      record.artRoot.zIndex = depth;
+      depthChanged = true;
+    }
+    if (depthChanged) layers?.world.sortRenderLayerChildren();
     return moving;
   };
   /** Authored length of a fighter's cue; 0 when its artwork has nothing to play. */

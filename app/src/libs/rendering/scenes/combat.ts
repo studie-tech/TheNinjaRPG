@@ -49,7 +49,7 @@ import {
   getWorldWeather,
   type WorldWeather,
 } from "@/libs/rendering/worldWeather";
-import { sampleWorldWind } from "@/libs/rendering/worldWind";
+import { sampleShadowWind, sampleWorldWind } from "@/libs/rendering/worldWind";
 import { clamp } from "@/utils/math";
 
 const NO_HITS: CombatHit[] = [];
@@ -89,6 +89,7 @@ export const createCombatScene = async (options: {
     ratio = hexGridHeightRatio(initial.battle.width, initial.battle.height);
   const game = await createGameRenderer({
     ...options,
+    surface: options.interactive === false ? "battlefield-preview" : "combat",
     touchAction: options.interactive === false ? "auto" : "none",
     width: options.viewport
       ? options.viewport.width * (options.viewport.magnify ?? 1)
@@ -254,7 +255,6 @@ export const createCombatScene = async (options: {
         hasManualCamera = true;
         camera = { x: camera.x - dx / scale(), y: camera.y + dy / scale() };
         transform();
-        highlightKey = "";
       },
       zoom: (factor) => {
         zoom = Math.max(1, Math.min(3, zoom * factor));
@@ -357,10 +357,6 @@ export const createCombatScene = async (options: {
           canUseTile: canUse,
           hoverTileName: hovered?.name ?? "",
         }) + JSON.stringify([snapshot.revision ?? 0, scale()]);
-      game.canvas.style.cursor = nextCombatHoverCursor(
-        desiredCursor,
-        document.body.style.cursor,
-      );
       if (key === highlightKey) return;
       highlightKey = key;
       for (const graphics of outlineLayers.values()) graphics.clear();
@@ -389,10 +385,6 @@ export const createCombatScene = async (options: {
       }
       terrain.setTints(plan.tints);
       desiredCursor = plan.valid ? "pointer" : "default";
-      game.canvas.style.cursor = nextCombatHoverCursor(
-        desiredCursor,
-        document.body.style.cursor,
-      );
     };
     const updateFrame = (sourceFrame: GameFrame, capture = false) => {
       const frame = game.visualEffects.spriteAnimations
@@ -525,14 +517,14 @@ export const createCombatScene = async (options: {
       );
       if (shadows)
         shadows.update(
-          worldSunlight(lightDate),
+          worldSunlight(lightDate, 60_000),
           {
             minX: camera.x - game.renderer.width / (2 * scale()),
             maxX: camera.x + game.renderer.width / (2 * scale()),
             minY: camera.y - game.renderer.height / (2 * scale()),
             maxY: camera.y + game.renderer.height / (2 * scale()),
           },
-          breeze,
+          sampleShadowWind(sourceFrame, scale(), game.visualEffects.wind),
         );
       else {
         const brightness =
@@ -544,15 +536,18 @@ export const createCombatScene = async (options: {
         actors.setLighting(brightness);
       }
       drawHighlights(snapshot, tile);
+      let cursor = nextCombatHoverCursor(desiredCursor, document.body.style.cursor);
       if (
         options.interactive !== false &&
         !options.focus &&
         zoom > 1 &&
         document.body.style.cursor !== "wait"
       ) {
-        if (controls.dragging()) game.canvas.style.cursor = "grabbing";
-        else if (desiredCursor === "default") game.canvas.style.cursor = "grab";
+        if (controls.dragging()) cursor = "grabbing";
+        else if (desiredCursor === "default") cursor = "grab";
       }
+      // Each write invalidates style and fires attribute observers; publish changes only.
+      if (game.canvas.style.cursor !== cursor) game.canvas.style.cursor = cursor;
       const hoverTile = actor?.tile ?? tile;
       const hasGround =
         hoverTile &&

@@ -37,6 +37,7 @@ const SectorPreview = (props: SectorPreviewProps) => {
     ],
   );
   const { scene, error, isReady } = useGameScene(
+    "sector-preview",
     mount,
     (element, signal, onError) =>
       createSectorPreview({

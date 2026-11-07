@@ -1,7 +1,32 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import { WebGLRenderer } from "pixi.js";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
+import { createGameRenderer } from "@/libs/rendering/runtime";
 import { farmPlotAt, farmPlotPosition } from "@/libs/rendering/scenes/farmLayout";
+
+describe("renderer initialization failure", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("rejects with the initialization error when teardown of a partial renderer also throws", async () => {
+    const cause = new Error("This browser does not support WebGL");
+    vi.spyOn(WebGLRenderer.prototype, "init").mockImplementation(async function (this: WebGLRenderer) {
+      Object.assign(this, { view: { canvas: document.createElement("canvas") } });
+      throw cause;
+    });
+    vi.spyOn(WebGLRenderer.prototype, "destroy").mockImplementation(() => {
+      throw new TypeError("Cannot read properties of undefined (reading 'destroy')");
+    });
+    const start = createGameRenderer({
+      surface: "travel",
+      mount: document.createElement("div"),
+      signal: new AbortController().signal,
+      height: () => 100,
+      onError: () => {},
+    });
+    await expect(start).rejects.toBe(cause);
+  });
+});
 
 describe("shared renderer frame loop", () => {
   it("uses one request for multiple canvases and cancels when the last leaves", () => {

@@ -17,6 +17,7 @@ const TowerDefenseInner = (props: TowerDefenseProps) => {
     latest = useRef(props);
   latest.current = props;
   const { scene, error } = useGameScene(
+    "tower-defense",
     mount,
     (element, signal, onError) =>
       createTowerDefenseScene({

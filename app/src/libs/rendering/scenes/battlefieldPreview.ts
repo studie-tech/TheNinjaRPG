@@ -27,6 +27,7 @@ import {
   type CombatSceneSnapshot,
   createCombatScene,
 } from "@/libs/rendering/scenes/combat";
+import { reportRendererFailure } from "@/libs/rendering/telemetry";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { isBunnyCdnUrl, textureImageUrl, transformImageUrl } from "@/utils/image";
 import { VisualTag } from "@/validators/combat";
@@ -185,6 +186,10 @@ export const createBattlefieldPreview = async (
       signal: controller.signal,
       onError: (error) => {
         console.error("Battlefield preview unavailable", error);
+        reportRendererFailure(error, {
+          surface: "battlefield-preview",
+          phase: "frame",
+        });
       },
       interactive: false,
       viewport: { width, magnify: options.magnify ?? 1 },
@@ -329,6 +334,7 @@ export const createBattlefieldPreview = async (
     options.signal?.removeEventListener("abort", abort);
     if (options.signal?.aborted) return null;
     console.error("Unable to initialize the battlefield preview", error);
+    reportRendererFailure(error, { surface: "battlefield-preview", phase: "init" });
     return null;
   }
 };

@@ -1,8 +1,10 @@
 import { Container, GlProgram, UniformGroup, WebGLRenderer } from "pixi.js";
+import { setGameSceneVisible } from "@/libs/gameSceneVisibility";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
+import { observeRenderer, type RendererSurface } from "@/libs/rendering/telemetry";
 import { readVisualEffects, subscribeVisualEffects } from "@/libs/visualEffects";
 
 // Keep sub-texel UV offsets through sprite interpolation; Pixi falls back when highp is unavailable.
@@ -20,6 +22,8 @@ const frames = createFrameLoop(
  */
 export const createGameRenderer = async (options: {
   lpcCatalog?: LpcCatalog;
+  /** Labels this renderer in failure reports and frame metrics. */
+  surface: RendererSurface;
   mount: HTMLElement;
   signal: AbortSignal;
   /** Renderer/CSS pixel dimensions at resolution 1; observed mount width is used by default. */
@@ -55,14 +59,17 @@ export const createGameRenderer = async (options: {
       preserveDrawingBuffer: false,
     });
   } catch (error) {
-    // Initialization may fail before Pixi's systems have been constructed.
-    if (renderer.view?.canvas) renderer.destroy({ removeView: true });
+    // Teardown throws on a partly built renderer; the initialization error stays the cause.
+    try {
+      if (renderer.view?.canvas) renderer.destroy({ removeView: true });
+    } catch {}
     throw error;
   }
   if (signal.aborted) {
     renderer.destroy({ removeView: true });
     throw new DOMException("Scene initialization cancelled", "AbortError");
   }
+  const telemetry = observeRenderer(options.surface, renderer);
   const stage = new Container();
   // This group is shared by every animated terrain batch; publish it once per frame.
   const animation = new UniformGroup(
@@ -94,6 +101,8 @@ export const createGameRenderer = async (options: {
   const tick = (now: number) => {
     if (disposed) return;
     dirty = false;
+    const startedAt = performance.now();
+    const interval = previousTime === null ? 0 : now - previousTime;
     try {
       const reducedMotion = motion.matches;
       animation.uniforms.uTime =
@@ -106,6 +115,10 @@ export const createGameRenderer = async (options: {
       });
       previousTime = now;
       renderer.render({ container: stage });
+      // On-demand scenes idle between frames, so their intervals are not frame pacing.
+      if (continuous && interval > 0) {
+        telemetry.frame(interval, performance.now() - startedAt);
+      }
     } catch (error) {
       dispose();
       options.onError(error);
@@ -123,8 +136,11 @@ export const createGameRenderer = async (options: {
       previousTime = null;
     }
   };
+  // Previews are incidental to their page, so its decoration keeps running around them.
+  const isScene = !options.surface.endsWith("-preview");
   const observer = new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? true;
+    if (isScene) setGameSceneVisible(canvas, visible);
     updateSubscription();
   });
   observer.observe(canvas);
@@ -168,6 +184,7 @@ export const createGameRenderer = async (options: {
     (event) => {
       event.preventDefault();
       contextLost = true;
+      telemetry.contextLost();
       updateSubscription();
     },
     { signal: listeners.signal },
@@ -176,6 +193,7 @@ export const createGameRenderer = async (options: {
     "webglcontextrestored",
     () => {
       contextLost = false;
+      telemetry.contextRestored();
       invalidate();
     },
     { signal: listeners.signal },
@@ -184,6 +202,8 @@ export const createGameRenderer = async (options: {
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    setGameSceneVisible(canvas, false);
+    telemetry.dispose();
     updateSubscription();
     signal.removeEventListener("abort", dispose);
     listeners.abort();

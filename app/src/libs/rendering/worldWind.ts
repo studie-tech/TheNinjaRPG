@@ -40,6 +40,20 @@ export const sampleWorldWind = (
   return { large, small, key: `${large}:${small}` };
 };
 
+/** Peak sway per frame is a small fraction of a shadow texel, so lighting passes step at 15 Hz. */
+const SHADOW_WIND_STEP_MS = 66;
+
+/** Breeze for receiver and depth passes; sprites keep sampling the full-rate wind. */
+export const sampleShadowWind = (frame: GameFrame, scale: number, enabled = true) =>
+  sampleWorldWind(
+    {
+      ...frame,
+      now: Math.floor(frame.now / SHADOW_WIND_STEP_MS) * SHADOW_WIND_STEP_MS,
+    },
+    scale,
+    enabled,
+  );
+
 /** Zero is still; codes one through eight select shared large/small vegetation phases. */
 export const worldWindShader = `
 uniform vec4 uWind;

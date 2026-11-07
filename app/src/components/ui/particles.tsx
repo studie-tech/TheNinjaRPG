@@ -7,6 +7,10 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { expandedWorldAtom } from "@/libs/expandedWorld";
 import { getGameLayout } from "@/libs/gameLayouts";
+import {
+  isGameSceneVisible,
+  subscribeGameSceneVisibility,
+} from "@/libs/gameSceneVisibility";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import {
   CONFETTI_OVERLAY_ID,
@@ -182,6 +186,11 @@ const ParticleProvider = () => {
     };
 
     const tick = (timestamp: number) => {
+      // Resize, focus and viewport handlers restart the engine, so pausing once would not hold.
+      if (isGameSceneVisible() && particlesContainer.animationStatus) {
+        particlesContainer.pause();
+      }
+
       if (
         document.hidden ||
         particlesContainer.destroyed ||
@@ -267,6 +276,13 @@ const ParticleProvider = () => {
   }, [particlesContainer, shouldRender]);
 
   useEffect(() => {
+    if (!shouldRender || !particlesContainer) return;
+    return subscribeGameSceneVisibility(() => {
+      if (!isGameSceneVisible()) particlesContainer.play();
+    });
+  }, [particlesContainer, shouldRender]);
+
+  useEffect(() => {
     if (!shouldRender || !pauseWhileScrolling) return;
 
     const handleScroll = () => {
@@ -278,7 +294,7 @@ const ParticleProvider = () => {
       }
 
       scrollResumeTimerRef.current = window.setTimeout(() => {
-        particleContainerRef.current?.play();
+        if (!isGameSceneVisible()) particleContainerRef.current?.play();
         scrollResumeTimerRef.current = null;
       }, 180);
     };
@@ -291,7 +307,7 @@ const ParticleProvider = () => {
         window.clearTimeout(scrollResumeTimerRef.current);
         scrollResumeTimerRef.current = null;
       }
-      particleContainerRef.current?.play();
+      if (!isGameSceneVisible()) particleContainerRef.current?.play();
     };
   }, [pauseWhileScrolling, shouldRender]);
 

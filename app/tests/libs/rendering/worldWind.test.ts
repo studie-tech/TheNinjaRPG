@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { MAX_SMALL_WORLD_WIND, MAX_WORLD_WIND, sampleWorldWind, STILL_WORLD_WIND, worldWindGroup } from "@/libs/rendering/worldWind";
+import { MAX_SMALL_WORLD_WIND, MAX_WORLD_WIND, STILL_WORLD_WIND, sampleShadowWind, sampleWorldWind, worldWindGroup } from "@/libs/rendering/worldWind";
 
 describe("shared world wind", () => {
   it("can stop and resume gusts independently of the animation clock", () => {
@@ -44,5 +44,29 @@ describe("shared world wind", () => {
   it("restores the shared stationary pose for reduced motion", () => {
     expect(sampleWorldWind({ now: 8713, delta: 0.016, reducedMotion: true }, 1.6)).toBe(STILL_WORLD_WIND);
     expect([...STILL_WORLD_WIND.large, ...STILL_WORLD_WIND.small]).toEqual(Array(8).fill(0));
+  });
+});
+
+describe("sampleShadowWind", () => {
+  const frame = { now: 12_345, delta: 1 / 60, reducedMotion: false };
+
+  it("holds one sample across a lighting step", () => {
+    const start = Math.floor(frame.now / 66) * 66;
+    expect(sampleShadowWind({ ...frame, now: start }, 1)).toEqual(
+      sampleShadowWind({ ...frame, now: start + 65 }, 1),
+    );
+  });
+
+  it("samples the shared wind at the step start", () => {
+    const start = Math.floor(frame.now / 66) * 66;
+    expect(sampleShadowWind(frame, 1)).toEqual(
+      sampleWorldWind({ ...frame, now: start }, 1),
+    );
+  });
+
+  it("stays still when wind is disabled", () => {
+    expect(sampleShadowWind(frame, 1, false)).toEqual(
+      sampleWorldWind(frame, 1, false),
+    );
   });
 });
