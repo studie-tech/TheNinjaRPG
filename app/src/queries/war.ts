@@ -85,17 +85,19 @@ import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { defaultWarRules, type WarMissionAttempt } from "@/validators/war";
 
 /**
- * Build the `war` update for `GET`, setting `attackerWarHealth` and
- * `defenderWarHealth`, using predicates on `id` and `endedAt`.
+ * Build the guarded daily health drain of a running war. A war that keeps going records
+ * its reduction time; one about to settle leaves it alone.
  */
-export const updateWarForGET = (
+export const updateWarForDailyDecay = (
   client: Pick<DrizzleClient, "update">,
   totalHealthDrain: number,
   activeWar: { id: string },
+  lastTokenReductionAt?: Date,
 ) =>
   client
     .update(war)
     .set({
+      ...(lastTokenReductionAt ? { lastTokenReductionAt } : {}),
       attackerWarHealth: sql`GREATEST(attackerWarHealth - ${totalHealthDrain}, 0)`,
       defenderWarHealth: sql`GREATEST(defenderWarHealth - ${totalHealthDrain}, 0)`,
     })
@@ -111,22 +113,6 @@ export const updateWarVillageTokens = (
     .update(village)
     .set({ tokens: sql`GREATEST(${village.tokens} - ${decay}, 0)` })
     .where(eq(village.id, villageId));
-
-/** Build the `war` update for `GET`, using predicates on `id` and `endedAt`. */
-export const updateWarForGET2 = (
-  client: Pick<DrizzleClient, "update">,
-  now: Date,
-  totalHealthDrain: number,
-  activeWar: { id: string },
-) =>
-  client
-    .update(war)
-    .set({
-      lastTokenReductionAt: now,
-      attackerWarHealth: sql`GREATEST(attackerWarHealth - ${totalHealthDrain}, 0)`,
-      defenderWarHealth: sql`GREATEST(defenderWarHealth - ${totalHealthDrain}, 0)`,
-    })
-    .where(and(eq(war.id, activeWar.id), isNull(war.endedAt)));
 
 /** Build a war declaration approval guarded by its pending status. */
 export const approvePendingWarDeclaration = (

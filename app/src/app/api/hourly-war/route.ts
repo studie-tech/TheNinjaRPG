@@ -23,8 +23,7 @@ import {
   approvePendingWarDeclaration,
   expireWarPoints,
   listActiveWarsWithRules,
-  updateWarForGET,
-  updateWarForGET2,
+  updateWarForDailyDecay,
   updateWarVillageTokens,
 } from "@/queries/war";
 import {
@@ -170,21 +169,6 @@ async function applyDailyWarDecay(now: Date) {
     activeWar.attackerVillage.tokens = Math.max(0, activeWar.attackerVillage.tokens);
     activeWar.defenderVillage.tokens = Math.max(0, activeWar.defenderVillage.tokens);
 
-    // Apply the decay as decrements so token changes since the fetch are kept
-    const decayVillageTokens = () =>
-      Promise.all([
-        updateWarVillageTokens(
-          drizzleDB,
-          attackerTokensBefore - activeWar.attackerVillage.tokens,
-          activeWar.attackerVillage.id,
-        ),
-        updateWarVillageTokens(
-          drizzleDB,
-          defenderTokensBefore - activeWar.defenderVillage.tokens,
-          activeWar.defenderVillage.id,
-        ),
-      ]);
-
     // Calculate war health drain (applied to both sides each reduction interval)
     const totalHealthDrain = WAR_DAILY_HEALTH_DRAIN * reductionsToApply;
 
@@ -192,41 +176,46 @@ async function applyDailyWarDecay(now: Date) {
     // We need to check current war health minus the drain we're about to apply
     const attackerHealthAfterDrain = activeWar.attackerWarHealth - totalHealthDrain;
     const defenderHealthAfterDrain = activeWar.defenderWarHealth - totalHealthDrain;
-
-    if (
+    const isEnding =
       activeWar.attackerVillage.tokens <= 0 ||
       activeWar.defenderVillage.tokens <= 0 ||
       attackerHealthAfterDrain <= 0 ||
-      defenderHealthAfterDrain <= 0
-    ) {
-      // Apply the health drain before ending war so handleWarEnd sees accurate values
-      const result = await updateWarForGET(drizzleDB, totalHealthDrain, activeWar);
+      defenderHealthAfterDrain <= 0;
 
-      // Only proceed if the war update actually modified a row (guarded update)
-      if (result.rowsAffected > 0) {
-        await decayVillageTokens();
+    // Apply the health drain before ending war so handleWarEnd sees accurate values
+    const result = await updateWarForDailyDecay(
+      drizzleDB,
+      totalHealthDrain,
+      activeWar,
+      isEnding ? undefined : now,
+    );
 
-        // Build updated war object with drained health values to avoid an extra DB roundtrip
-        const warWithDrain: FetchActiveWarsReturnType = {
-          ...activeWar,
-          attackerWarHealth: Math.max(
-            activeWar.attackerWarHealth - totalHealthDrain,
-            0,
-          ),
-          defenderWarHealth: Math.max(
-            activeWar.defenderWarHealth - totalHealthDrain,
-            0,
-          ),
-        };
-        await handleWarEnd(warWithDrain);
-      }
-      continue;
+    // Only proceed if the war update actually modified a row (guarded update)
+    if (result.rowsAffected === 0) continue;
+
+    // Apply the decay as decrements so token changes since the fetch are kept
+    await Promise.all([
+      updateWarVillageTokens(
+        drizzleDB,
+        attackerTokensBefore - activeWar.attackerVillage.tokens,
+        activeWar.attackerVillage.id,
+      ),
+      updateWarVillageTokens(
+        drizzleDB,
+        defenderTokensBefore - activeWar.defenderVillage.tokens,
+        activeWar.defenderVillage.id,
+      ),
+    ]);
+
+    if (isEnding) {
+      // Build updated war object with drained health values to avoid an extra DB roundtrip
+      const warWithDrain: FetchActiveWarsReturnType = {
+        ...activeWar,
+        attackerWarHealth: Math.max(attackerHealthAfterDrain, 0),
+        defenderWarHealth: Math.max(defenderHealthAfterDrain, 0),
+      };
+      await handleWarEnd(warWithDrain, drizzleDB);
     }
-
-    // Update token counts, war health drain, and last reduction time
-    const result = await updateWarForGET2(drizzleDB, now, totalHealthDrain, activeWar);
-
-    if (result.rowsAffected > 0) await decayVillageTokens();
   }
 }
 
@@ -264,7 +253,7 @@ async function processExpiredElderVotes() {
   const villagesById = new Map(allVillages.map((v) => [v.id, v]));
 
   // Build a promise per vote and run all in parallel
-  const promises: Promise<void>[] = [];
+  const promises: Promise<unknown>[] = [];
   for (const vote of expiredVotes) {
     if (vote.type === "WAR_DECLARATION") {
       const villageElderIds = eldersByVillage.get(vote.villageId) ?? [];
@@ -283,7 +272,8 @@ async function processExpiredElderVotes() {
         ),
       );
     } else if (vote.type === "KAGE_REMOVAL") {
-      promises.push(handleExpiredKageRemoval(vote));
+      // Same electorate, tenure guards and atomic outcome as live votes.
+      promises.push(settleKageRemoval(drizzleDB, vote.id, true));
     }
   }
   await Promise.all(promises);
@@ -341,11 +331,4 @@ async function handleExpiredWarDeclaration(
     defenderVillage,
     activeWars,
   });
-}
-
-/**
- * Resolve expired removals with the same electorate, tenure guards and atomic outcome as live votes.
- */
-async function handleExpiredKageRemoval(vote: ExpiredElderVote) {
-  await settleKageRemoval(drizzleDB, vote.id, true);
 }
