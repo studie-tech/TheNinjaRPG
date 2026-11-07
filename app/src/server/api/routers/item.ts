@@ -181,8 +181,6 @@ import {
   fetchItemLoadouts,
   fetchItemWithCraftingRequirements,
   fetchPurchaseCounters,
-  fetchSageModeRolls,
-  fetchSageModes,
   fetchUserEquipmentSnapshot,
   fetchUserItem,
   fetchUserItemWithVariants,
@@ -299,6 +297,7 @@ import {
   fetchQuestTrackerState,
   fetchUserQuestByQuestId,
 } from "@/queries/quests";
+import { fetchSageModeRolls, fetchSageModes } from "@/queries/sageMode";
 import {
   fetchMasterySources,
   fetchUserSkills,
