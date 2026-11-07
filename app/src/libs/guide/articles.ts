@@ -46,6 +46,7 @@ const rollPct = `S ${ROLL_CHANCE_PERCENTAGE.S * 100}%, A ${ROLL_CHANCE_PERCENTAG
 export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   {
     slug: "getting-started",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-getting-started-v3.webp",
     title: "Getting Started in TheNinja-RPG",
     subtitle: "Your first hour in Seichi",
     excerpt:
@@ -111,6 +112,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "combat",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-combat-v3.webp",
     title: "Combat in TheNinja-RPG",
     subtitle: "Rounds, action points and initiative",
     excerpt:
@@ -167,6 +169,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "combat-tags",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-combat-tags-v3.webp",
     title: "Game Tags in TheNinja-RPG",
     subtitle: "What jutsu and items actually do",
     excerpt:
@@ -209,6 +212,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "prevent-tags",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-prevent-tags-v3.webp",
     title: "Prevent Tags",
     subtitle: "Stopping buffs, heals, movement and more",
     excerpt: "Prevent tags block a family of combat effects for a number of rounds.",
@@ -238,6 +242,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "cleansable-tags",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-cleansable-tags-v3.webp",
     title: "Cleansable Tags",
     subtitle: "What cleanse can remove",
     excerpt:
@@ -266,6 +271,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "clearable-tags",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-clearable-tags-v3.webp",
     title: "Clearable Tags",
     subtitle: "What clear can remove",
     excerpt:
@@ -294,6 +300,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "combat-tag-priority",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-combat-tag-priority-v3.webp",
     title: "Combat Tag Priority",
     subtitle: "Why order of effects matters",
     excerpt:
@@ -322,6 +329,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "loadout-building",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-loadout-building-v3.webp",
     title: "Combat Fundamentals: Loadout Building",
     subtitle: "What to equip before you queue",
     excerpt:
@@ -356,6 +364,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "ai-rules",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-ai-rules-v3.webp",
     title: "AI Rule Set",
     subtitle: "Let your profile fight for you",
     excerpt:
@@ -384,6 +393,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "raids",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-raids-v3.webp",
     title: "Raid Guidelines",
     subtitle: "Multiplayer PvE in Seichi",
     excerpt: "Open and exclusive raids, tailed-beast hunts and how to show up ready.",
@@ -411,6 +421,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "bracket-system",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-bracket-system-v3.webp",
     title: "Bracket System",
     subtitle: "XP brackets and PvP protection",
     excerpt:
@@ -437,6 +448,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "farming",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-farming-v3.webp",
     title: "Farming in TheNinja-RPG",
     subtitle: "Plots, seeds, water and extractors",
     excerpt:
@@ -482,6 +494,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "villages",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-villages-v3.webp",
     title: "Villages of Seichi",
     subtitle: "The five core villages and later settlements",
     excerpt:
@@ -514,6 +527,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "world",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-world-v3.webp",
     title: "Travel and the World of Seichi",
     subtitle: "Sectors, the globe and Wake Island",
     excerpt:
@@ -540,6 +554,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "wake-island",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-wake-island-v3.webp",
     title: "Wake Island",
     subtitle: "Where bloodlines are rolled",
     excerpt:
@@ -566,6 +581,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "bloodlines",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-bloodlines-v3.webp",
     title: "Bloodlines in TheNinja-RPG",
     subtitle: "D-rank starters to S-rank event lines",
     excerpt:
@@ -603,6 +619,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "ranks",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-ranks-v3.webp",
     title: "Ranks and Progression",
     subtitle: "Student to Elite Jonin",
     excerpt:
@@ -637,6 +654,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "economy",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-economy-v3.webp",
     title: "Ryo, Bank and Reputation",
     subtitle: "The two currencies you will actually use",
     excerpt:
@@ -665,6 +683,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "auction-house",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-auction-house-v3.webp",
     title: "Auction House Guidelines",
     subtitle: "Community price norms",
     excerpt:
@@ -693,6 +712,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
   },
   {
     slug: "item-variants",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-item-variants-v3.webp",
     title: "Item Variants",
     subtitle: "Cosmetic reskins of existing items",
     excerpt:
