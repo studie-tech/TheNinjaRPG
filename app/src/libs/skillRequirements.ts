@@ -15,3 +15,8 @@ export const hasRequiredSkill = (
   !!user.userSkills?.some(
     (owned) => owned.skillId === content.requiredSkillId && owned.activated === true,
   );
+
+export const isSkillVisible = (
+  skill: { hidden: boolean; folder: { hidden: boolean } | null },
+  includeHidden: boolean,
+) => includeHidden || (!skill.hidden && !skill.folder?.hidden);

@@ -36,6 +36,7 @@ import {
 import { aggregateExperiments } from "@/libs/experimentAnalytics";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { collapseRewards } from "@/libs/rewards";
+import { isSkillVisible } from "@/libs/skillRequirements";
 import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { fetchBloodline } from "@/queries/bloodline";
 import {
@@ -133,7 +134,7 @@ import { getPublicUsersSchema } from "@/validators/user";
 import { bloodlineDatabaseFilter } from "./bloodline";
 import { itemDatabaseFilter } from "./item";
 import { jutsuDatabaseFilter } from "./jutsu";
-import { isSkillVisible, skillTreeDatabaseFilter } from "./skillTree";
+import { skillTreeDatabaseFilter } from "./skillTree";
 
 export const dataRouter = createTRPCRouter({
   /** Return full-history variant counts for tests with an event in the last week. */
