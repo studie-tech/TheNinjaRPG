@@ -2172,43 +2172,15 @@ export const createStatSchema = (
     willpower: roomFor("willpower"),
   };
 
+  const statField = (max: number) =>
+    z.coerce.number().min(min).max(max).transform(roundStat).prefault(start);
   const schema = z.object({
-    offence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.offence)
-      .transform(roundStat)
-      .prefault(start),
-    defence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.defence)
-      .transform(roundStat)
-      .prefault(start),
-    strength: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.strength)
-      .transform(roundStat)
-      .prefault(start),
-    speed: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.speed)
-      .transform(roundStat)
-      .prefault(start),
-    intelligence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.intelligence)
-      .transform(roundStat)
-      .prefault(start),
-    willpower: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.willpower)
-      .transform(roundStat)
-      .prefault(start),
+    offence: statField(maxValues.offence),
+    defence: statField(maxValues.defence),
+    strength: statField(maxValues.strength),
+    speed: statField(maxValues.speed),
+    intelligence: statField(maxValues.intelligence),
+    willpower: statField(maxValues.willpower),
   });
 
   return { schema, maxValues };
