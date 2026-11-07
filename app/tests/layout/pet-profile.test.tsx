@@ -1,4 +1,4 @@
-import { getAssignExperienceUserUpdate } from "@/deltas/pets";
+import { getAssignExperienceUserUpdate, getSavedPetSettingsUpdate } from "@/deltas/pets";
 import type { UserUpdateOptions } from "@/deltas/profile";
 import { afterEach, beforeEach, expect, it, setDefaultTimeout, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
@@ -1201,4 +1201,25 @@ it.each([true, false])("reconciles confirmed XP and the collection without a pet
   expect(getPet).toHaveBeenCalledTimes(1);
   expect(getUser).not.toHaveBeenCalled();
   expect(queryClient.getQueryData<RouterOutputs["pets"]["getCollection"]>(collectionKey)?.pets[0]).toMatchObject({ offence: 11, experience: 1, revision: 1, storedExperience: isActive ? 0 : 99 });
+});
+
+
+it("reconciles saved settings and the owner timestamp without reloading pet, collection or profile", async () => {
+  const collectionKey = getQueryKey(testApi.pets.getCollection, undefined, "query");
+  queryClient.setQueryData(collectionKey, { pets: data.pets, activePetId: data.activePetId });
+  const cachedOwner = observeProfileCache();
+  update.mockImplementation((input: RouterInputs["pets"]["updatePet"]) => ({ success: true, message: "Updated",
+    ...getSavedPetSettingsUpdate(owner as never, data.pet as never, input, new Date(owner.updatedAt.getTime() + 1000), false) }));
+  const view = mount();
+  await view.findByRole("tab", { name: "Settings" });
+  selectTab(view, "Settings");
+  fireEvent.change(view.getByRole("textbox", { name: "Companion name" }), { target: { value: "Kumo" } });
+  fireEvent.click(view.getByRole("button", { name: /^Save$/ }));
+  await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect((view.getByRole("textbox", { name: "Companion name" }) as HTMLInputElement).value).toBe("Kumo"));
+  expect(cachedOwner()?.updatedAt).toEqual(new Date(owner.updatedAt.getTime() + 1000));
+  expect(getPet).toHaveBeenCalledTimes(1);
+  expect(getUser).not.toHaveBeenCalled();
+  expect(queryClient.getQueryState(collectionKey)?.isInvalidated).toBe(false);
+  expect(queryClient.getQueryData<RouterOutputs["pets"]["getCollection"]>(collectionKey)?.pets[0]).toMatchObject({ name: "Kumo", revision: 1 });
 });

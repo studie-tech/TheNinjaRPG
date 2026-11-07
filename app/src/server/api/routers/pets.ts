@@ -8,6 +8,7 @@ import {
   getAssignExperienceUserUpdate,
   getFeedPetUserUpdate,
   getReleasePetUserUpdate,
+  getSavedPetSettingsUpdate,
   getUnchangedPetUserUpdate,
   getUnlockSlotUserUpdate,
 } from "@/deltas/pets";
@@ -28,7 +29,9 @@ import {
   PET_REPLACEMENT_COST,
   PET_SANCTUARY_NAME,
   PET_SEICHI_SILVER_COST,
+  PetGenders,
   type PetPaymentCurrency,
+  PetSpawnPositions,
 } from "@/drizzle/constants";
 import { type UserData, type UserPet, userData, userPet } from "@/drizzle/schema";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
@@ -100,6 +103,7 @@ import {
   getPetFeedAvailableAt,
   getUtcDayKey,
 } from "@/utils/time";
+import { AiRule } from "@/validators/ai";
 import {
   acquirePetSchema,
   assignPetExperienceSchema,
@@ -112,6 +116,26 @@ import {
   updatePetSchema,
 } from "@/validators/pets";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+/** Settings responses expose a fixed public allowlist, never a database pet row. */
+const petSettingsResponseSchema = userDeltaResponseSchema.extend({
+  petSettingsUpdate: z
+    .object({
+      id: z.string(),
+      ownerId: z.string(),
+      previousOwnerUpdatedAt: z.date(),
+      previousRevision: z.number(),
+      revision: z.number(),
+      updatedAt: z.date(),
+      name: z.string(),
+      gender: z.enum(PetGenders).nullable(),
+      battleEnabled: z.boolean(),
+      spawnPosition: z.enum(PetSpawnPositions),
+      aiRules: z.array(AiRule),
+      includeDefaultRules: z.boolean(),
+    })
+    .optional(),
+});
 
 /** Own, configure and progress companions through guarded account and pet snapshots. */
 export const petsRouter = createTRPCRouter({
@@ -696,7 +720,7 @@ export const petsRouter = createTRPCRouter({
   /** Save presentation and battle settings without charging reputation. */
   updatePet: protectedProcedure
     .input(updatePetSchema)
-    .output(userDeltaResponseSchema)
+    .output(petSettingsResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const {
         user: initialUser,
@@ -722,7 +746,13 @@ export const petsRouter = createTRPCRouter({
             {
               success: true,
               message: "Companion settings updated.",
-              ...getUnchangedPetUserUpdate(),
+              ...getSavedPetSettingsUpdate(
+                user,
+                pet,
+                patch,
+                changed,
+                !!readiness.notice,
+              ),
             },
             readiness,
             ctx.drizzle,
@@ -733,7 +763,7 @@ export const petsRouter = createTRPCRouter({
   /** Save validated companion AI rules against its current revision. */
   updateAiConfig: protectedProcedure
     .input(updatePetAiSchema)
-    .output(userDeltaResponseSchema)
+    .output(petSettingsResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const {
         user: initialUser,
@@ -748,22 +778,23 @@ export const petsRouter = createTRPCRouter({
       if (restriction || !pet) return errorResponse(restriction ?? "Pet not found");
       if (pet.rank > getMaxPetRank(user.rank))
         return errorResponse("Your rank does not support this companion rank.");
-      const changed = await updateOwnedPet(
-        ctx.drizzle,
-        user,
-        pet,
-        {
-          aiRules: input.rules,
-          includeDefaultRules: input.includeDefaultRules,
-        },
-        readiness,
-      );
+      const patch = {
+        aiRules: input.rules,
+        includeDefaultRules: input.includeDefaultRules,
+      };
+      const changed = await updateOwnedPet(ctx.drizzle, user, pet, patch, readiness);
       return changed
         ? actionReadinessResponse(
             {
               success: true,
               message: "Companion AI settings updated.",
-              ...getUnchangedPetUserUpdate(),
+              ...getSavedPetSettingsUpdate(
+                user,
+                pet,
+                patch,
+                changed,
+                !!readiness.notice,
+              ),
             },
             readiness,
             ctx.drizzle,
@@ -1237,5 +1268,5 @@ const updateOwnedPet = async (
       readiness,
     ),
   );
-  return result.rowsAffected > 0;
+  return result.rowsAffected > 0 ? now : undefined;
 };

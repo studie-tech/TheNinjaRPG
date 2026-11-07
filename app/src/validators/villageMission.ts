@@ -86,9 +86,6 @@ export const villageMissionContentError = (
   return null;
 };
 
-export const villageMaintenancePaymentSchema = z.object({
-  villageId: z.string().min(1),
-});
 export const structureUpgradeSchema = z.object({
   structureId: z.string().min(1),
   villageId: z.string().min(1),

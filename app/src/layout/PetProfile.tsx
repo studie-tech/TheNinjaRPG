@@ -6,7 +6,7 @@ import { PawPrint, Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { api, type RouterInputs } from "@/app/_trpc/client";
+import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -149,7 +149,8 @@ export function PetProfile() {
         ? 3000
         : false,
   });
-  const { preparePetUpdate, updatePet } = usePetCacheUpdate(petInput);
+  const { preparePetUpdate, updatePet, prepareSettingsUpdate, updateSettings } =
+    usePetCacheUpdate(petInput, { prepareUserUpdate, updateUser });
   const pet = data?.pet;
   const isGenerating = !!pet && generatingPetIds.includes(pet.id);
   const aiProfile = useMemo(
@@ -211,9 +212,27 @@ export function PetProfile() {
     setMessage,
     updateUser,
   });
+  const finishSettings = async (
+    result: RouterOutputs["pets"]["updatePet"],
+    _variables: unknown,
+    context: ReturnType<typeof prepareSettingsUpdate>,
+  ) => {
+    setMessage(result.success ? null : result.message);
+    showMutationToast(result);
+    if (result.success && result.petSettingsUpdate) {
+      // A confirmed settings-only owner timestamp must not reload the pet bank.
+      previousOwnerProgress.current = [
+        result.userPatch?.updatedAt?.getTime() ?? ownerUpdatedAt,
+        ownerExperience,
+        ownerEarnedExperience,
+        ownerPetExperience,
+      ];
+    }
+    await updateSettings(result, context);
+  };
   const update = api.pets.updatePet.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: finishMutation,
+    onMutate: prepareSettingsUpdate,
+    onSuccess: finishSettings,
     onError: failMutation,
   });
   const generate = api.pets.generateAppearance.useMutation({
@@ -287,8 +306,8 @@ export function PetProfile() {
     onError: failMutation,
   });
   const updateAi = api.pets.updateAiConfig.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: finishMutation,
+    onMutate: prepareSettingsUpdate,
+    onSuccess: finishSettings,
     onError: failMutation,
   });
   const release = api.pets.releasePet.useMutation({

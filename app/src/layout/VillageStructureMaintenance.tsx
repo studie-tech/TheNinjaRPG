@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { VILLAGE_STRUCTURE_MONTHLY_COST } from "@/drizzle/constants";
+import { useVillageMaintenanceCacheUpdate } from "@/hooks/useVillageMaintenanceCacheUpdate";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
@@ -12,23 +13,24 @@ import { countMaintainedStructures } from "@/utils/village";
 
 /** Show village upkeep and pay outstanding maintenance with confirmed server feedback. */
 export const VillageStructureMaintenance = ({ villageId }: { villageId: string }) => {
-  const utils = api.useUtils();
+  const { prepareMaintenanceUpdate, updateMaintenance } =
+    useVillageMaintenanceCacheUpdate(villageId);
   const [message, setMessage] = useState("");
   const { data, isPending, isError, refetch } = api.village.get.useQuery(
     { id: villageId },
     { enabled: !!villageId },
   );
   const pay = api.kage.payStructureMaintenance.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareMaintenanceUpdate,
+    onSuccess: async (result, input, snapshot) => {
       setMessage(result.message);
       showMutationToast(result);
-      if (result.success)
-        await Promise.all([
-          utils.village.get.invalidate(),
-          utils.profile.getUser.invalidate(),
-        ]);
+      await updateMaintenance(result, input.expectedDue!, snapshot);
     },
-    onError: (error) => setMessage(error.message),
+    onError: async (error, input, snapshot) => {
+      setMessage(error.message);
+      if (snapshot) await updateMaintenance(undefined, input.expectedDue!, snapshot);
+    },
   });
   const village = data?.villageData;
   const count = countMaintainedStructures(village?.structures ?? []);
@@ -77,7 +79,12 @@ export const VillageStructureMaintenance = ({ villageId }: { villageId: string }
                     disabled={
                       pay.isPending || village.tokens < village.structureMaintenanceDue
                     }
-                    onClick={() => pay.mutate({ villageId })}
+                    onClick={() =>
+                      pay.mutate({
+                        villageId,
+                        expectedDue: village.structureMaintenanceDue,
+                      })
+                    }
                   >
                     {pay.isPending ? "Paying..." : "Pay maintenance"}
                   </Button>

@@ -1,6 +1,9 @@
 import { and, eq, exists, gte, lte } from "drizzle-orm";
 import { z } from "zod";
-import { getNominateKageUserUpdate } from "@/deltas/kage";
+import {
+  getNominateKageUserUpdate,
+  getStructureMaintenanceUserUpdate,
+} from "@/deltas/kage";
 import {
   ELDER_KAGE_REMOVAL_VOTE_DAYS,
   ELDER_MIN_VOTING_COUNT,
@@ -73,10 +76,7 @@ import {
   kageVoteSchema,
 } from "@/validators/kage";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import {
-  structureUpgradeSchema,
-  villageMaintenancePaymentSchema,
-} from "@/validators/villageMission";
+import { structureUpgradeSchema } from "@/validators/villageMission";
 
 export const kageRouter = createTRPCRouter({
   ...kageDefenseProcedures,
@@ -316,21 +316,34 @@ export const kageRouter = createTRPCRouter({
       return { success: true, message: "Structure upgraded" };
     }),
   payStructureMaintenance: protectedProcedure
-    .input(villageMaintenancePaymentSchema)
-    .output(baseServerResponse)
+    .input(
+      z.object({
+        villageId: z.string().min(1),
+        expectedDue: z
+          .number()
+          .int()
+          .positive()
+          .max(Number.MAX_SAFE_INTEGER)
+          .optional(),
+      }),
+    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.expectedDue === undefined)
+        return errorResponse("Reload the page before paying structure maintenance.");
       const result = await updateVillageForPayStructureMaintenance(
         ctx.drizzle,
-        input,
+        { villageId: input.villageId, expectedDue: input.expectedDue },
         ctx,
       );
       return result.rowsAffected > 0
         ? {
             success: true,
             message: "Structure maintenance paid",
+            ...getStructureMaintenanceUserUpdate(input.villageId, input.expectedDue),
           }
         : errorResponse(
-            "Only the village Kage can pay an outstanding bill, and the village must have enough tokens",
+            "The bill, village funds or Kage changed. Refresh the maintenance details and try again.",
           );
     }),
   /** Publish a reasoned removal motion after tenure protection and the failed-vote cooldown. */
