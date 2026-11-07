@@ -247,7 +247,7 @@ export const travelRouter = createTRPCRouter({
       // Break stealth before the money writes or the battle, so initiateBattle sees the
       // settled stealth state and no second stealth roll happens
       if (user.stealthActive) {
-        await breakStealth(ctx.drizzle, ctx.userId, user.stealth, false);
+        await breakStealth(ctx.drizzle, ctx.userId, user.stealth);
       }
 
       if (success) {
