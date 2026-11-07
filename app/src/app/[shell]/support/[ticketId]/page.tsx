@@ -32,8 +32,8 @@ import Conversation from "@/layout/Conversation";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
-import { getStatusIcon } from "@/libs/menus";
 import { getCategoryColor, getPriorityColor, getStatusColor } from "@/libs/support";
+import { getStatusIcon } from "@/libs/supportIcons";
 import { showMutationToast } from "@/libs/toast";
 import {
   canEditCannedResponses,
