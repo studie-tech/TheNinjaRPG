@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { IMG_URL_ASSISTANT } from "@/drizzle/constants";
-import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
+import { getExperimentAssignments } from "@/libs/experimentAnalytics";
 import { drawLemuVariant, getLemuImage, LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
 
 afterEach(() => vi.restoreAllMocks());
@@ -9,13 +9,13 @@ describe("Lemu experiment", () => {
   it("records the new experiment and uses the promoted baseline", () => {
     expect(getLemuImage("control")).toBe(IMG_URL_ASSISTANT);
     expect(IMG_URL_ASSISTANT).toBe("https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIG7HmDxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp");
-    expect(getLayoutExperimentAssignments({ abLemuReplacementVariant: "control" })).toEqual([{experiment:"ab_lemu_replacement_3",variant:"control"}]);
+    expect(getExperimentAssignments({ abLemuReplacementVariant: "control" })).toEqual([{experiment:"ab_lemu_replacement_3",variant:"control"}]);
     expect(LEMU_EXPERIMENT).toBe("ab_lemu_replacement_3");
   });
 
   it.each(["treatment", "treatment_7", "unknown", "", null, undefined])("rejects unknown assignment %s", (value) => {
     expect(normalizeLemuVariant(value)).toBeUndefined();
-    expect(getLayoutExperimentAssignments({abLemuReplacementVariant:value})).toEqual([]);
+    expect(getExperimentAssignments({abLemuReplacementVariant:value})).toEqual([]);
     expect(getLemuImage(value ?? undefined)).toBe(IMG_URL_ASSISTANT);
   });
 
@@ -29,7 +29,7 @@ describe("Lemu experiment", () => {
   ])("uses the selected portrait for %s and records the same arm", (variant, url) => {
     expect(getLemuImage(variant)).toBe<typeof url>(url);
     expect(normalizeLemuVariant(variant)).toBe<typeof variant>(variant);
-    expect(getLayoutExperimentAssignments({abLemuReplacementVariant:variant})).toEqual([{experiment:LEMU_EXPERIMENT,variant}]);
+    expect(getExperimentAssignments({abLemuReplacementVariant:variant})).toEqual([{experiment:LEMU_EXPERIMENT,variant}]);
   });
 
   it.each([

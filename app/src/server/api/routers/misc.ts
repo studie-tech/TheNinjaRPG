@@ -13,12 +13,12 @@ import {
   randomCaptchaValue,
   showTrainingCapcha,
 } from "@/libs/captcha";
+import { getExperimentAssignments } from "@/libs/experimentAnalytics";
 import {
   fetchDmgConfig,
   updateDmgConfig,
   updateGameSetting,
 } from "@/libs/gamesettings";
-import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import {
   deleteEmailReminderForDeleteEmailReminder,
   fetchEmailReminder,
@@ -105,7 +105,7 @@ export const miscRouter = createTRPCRouter({
       const ip = ctx.userIp ?? "unknown";
       if (ip === "unknown") return { success: false, message: "No IP detected" };
 
-      const experiments = getLayoutExperimentAssignments({
+      const experiments = getExperimentAssignments({
         abLemuReplacementVariant: ctx.abLemuReplacementVariant,
         wallpaperVariant:
           input.wallpaperVariant === ctx.wallpaperVariant

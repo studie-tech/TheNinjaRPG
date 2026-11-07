@@ -73,12 +73,12 @@ import {
 import { getWorldCyclePosition } from "@/libs/dayNight";
 import { activeDungeonNotification } from "@/libs/dungeon";
 import { elementalGainRoom } from "@/libs/elementalMastery";
+import { getExperimentAssignments } from "@/libs/experimentAnalytics";
 import {
   getGameSettingBoost,
   getGlobalGameSettingNotifications,
 } from "@/libs/gameSettingBoost";
 import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
-import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import {
   effectiveMasteries,
   type MasterySources,
@@ -566,7 +566,7 @@ export const profileRouter = createTRPCRouter({
       const ipHash =
         ctx.userIp && ctx.userIp !== "unknown" ? hashIp(ctx.userIp) : undefined;
       if (input.step === TUTORIAL_STEPS_COUNT && ipHash) {
-        const experiments = getLayoutExperimentAssignments({
+        const experiments = getExperimentAssignments({
           abLemuReplacementVariant: ctx.abLemuReplacementVariant,
           wallpaperVariant: ctx.wallpaperVariant,
         });
