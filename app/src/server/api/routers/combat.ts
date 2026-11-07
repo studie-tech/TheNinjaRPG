@@ -1178,10 +1178,10 @@ export const combatRouter = createTRPCRouter({
       if (userBattle.extraState.tournamentAiOnly || userBattle.extraState.kageMatch?.ai)
         return errorResponse("AI match loadouts are frozen for this battle");
       if (user.iAmHere) return errorResponse("You are already marked as ready");
-      if (userBattle.battleType !== "COMBAT" && userBattle.battleType !== "SPARRING") {
-        return errorResponse("You can only update loadouts in the combat lobby");
-      }
-      if (new Date() > userBattle.roundStartAt) {
+      if (
+        (userBattle.battleType !== "COMBAT" && userBattle.battleType !== "SPARRING") ||
+        new Date() > userBattle.roundStartAt
+      ) {
         return errorResponse("You can only update loadouts in the combat lobby");
       }
       if (!jId && !iId) {
@@ -1254,17 +1254,18 @@ export const combatRouter = createTRPCRouter({
         user.aiProfileId && user.aiProfileId !== "Default"
           ? userBattle.extraState.aiProfiles?.[user.aiProfileId]
           : userBattle.extraState.aiProfiles?.Default;
-      // The combatant as battle initiation sees it after the item switch.
-      const gateUser = {
+      // Relations battle state keeps apart, rebuilt from extraState and fresh skills.
+      const combatant = {
         ...user,
         bloodline: bloodline ?? null,
         village: village ?? null,
         userSkills: activatedSkills,
-        items: useritems,
         aiProfile: aiProfile ?? null,
         questData: questData ?? [],
         titles,
       };
+      // The combatant as battle initiation sees it after the item switch.
+      const gateUser = { ...combatant, items: useritems };
       // Skip jutsu combat would strip, plus hidden jutsu as the Jutsu page does, so
       // they neither fill equip slots nor persist as equipped.
       const validateLobbyJutsu = (jutsu: Jutsu) => {
@@ -1387,51 +1388,8 @@ export const combatRouter = createTRPCRouter({
       // holds them to the result full rows give.
       const now = new Date();
       const hydratedJutsus =
-        newJutsus ??
-        user.jutsus
-          .filter((ref) => !invalidatedJutsuIds.includes(ref.jutsuId))
-          .map((ref) => {
-            const jutsu = userBattle.extraState.jutsus?.[ref.jutsuId] as
-              | Jutsu
-              | undefined;
-            if (!jutsu) return null;
-            // Add missing UserJutsu fields needed for CombatQueryUserJutsu
-            return {
-              ...ref,
-              reskinId: ref.reskinId ?? null, // Ensure non-undefined
-              jutsu,
-              activeReskin: ref.reskinId
-                ? (userBattle.extraState.jutsuReskins?.[ref.reskinId] ?? null)
-                : null,
-              userId: user.controllerId,
-              createdAt: now,
-              updatedAt: now,
-              trainingStartedAt: null,
-              finishTraining: null,
-            };
-          })
-          .filter((j): j is NonNullable<typeof j> => j !== null);
-
-      const hydratedItems =
-        newItems ??
-        user.items
-          .map((ref) => {
-            const item = userBattle.extraState.items?.[ref.itemId] as Item | undefined;
-            if (!item) return null;
-            // Add missing UserItem fields needed for CombatQueryUserItem
-            return {
-              ...ref,
-              ...inertUserItemColumns(user.controllerId, now),
-              item,
-              imbuements: [],
-              imbuementEffects: ref.imbuementEffects ?? [],
-              activeVariantId: ref.activeVariantId ?? null,
-              variantBattleDescription: ref.variantBattleDescription ?? null,
-              variantImage: ref.variantImage ?? null,
-              variantName: ref.variantName ?? null,
-            };
-          })
-          .filter((i): i is NonNullable<typeof i> => i !== null);
+        newJutsus ?? hydrateBattleJutsus(userBattle, user, invalidatedJutsuIds, now);
+      const hydratedItems = newItems ?? hydrateBattleItems(userBattle, user, now);
 
       // Build raw user for processing - hydrate from existing battle staticData and merge new data
       // We need to add back the village, bloodline, and aiProfile from extraState since CombatQueryUser requires them
@@ -1441,18 +1399,12 @@ export const combatRouter = createTRPCRouter({
       // Build rawUserForProcessing from BattleUserState + extraState data
       // The jutsus/items are reconstructed from refs + static data with all required fields
       const rawUserForProcessing = {
-        ...user,
-        bloodline: bloodline ?? null,
+        ...combatant,
         sageMode: equippedSageMode ?? null,
         jutsuLoadout: jId ?? user.jutsuLoadout,
         itemLoadout: iId ?? user.itemLoadout,
         jutsus: hydratedJutsus,
         items: hydratedItems,
-        userSkills: activatedSkills,
-        village: village ?? null,
-        aiProfile: aiProfile ?? null,
-        questData: questData ?? [],
-        titles,
       };
 
       // Process only the single user
@@ -1562,8 +1514,8 @@ export const combatRouter = createTRPCRouter({
         const user = userBattle?.usersState.find((u) => u.userId === ctx.userId);
 
         // Guard
-        if (!userBattle) return { success: false, message: "You are not in a battle" };
-        if (!user) return { success: false, message: "You are not in this battle" };
+        if (!userBattle) return errorResponse("You are not in a battle");
+        if (!user) return errorResponse("You are not in this battle");
         if (new Date() > userBattle.roundStartAt) return { success: true, message: "" };
 
         // Check if user is already marked as here
@@ -1605,7 +1557,7 @@ export const combatRouter = createTRPCRouter({
           const currentBattle = await fetchBattle(ctx.drizzle, input.battleId);
           if (!currentBattle || currentBattle.version === userBattle.version - 1) {
             // If the version hasn't changed or battle no longer exists, don't retry
-            return { success: false, message: "Battle state could not be updated" };
+            return errorResponse("Battle state could not be updated");
           }
           // Retry against the conflict snapshot, rechecking all lobby guards.
           userBattle = currentBattle;
@@ -1897,6 +1849,56 @@ const notifyBattleLogs = (
         : { ...state, logEntries: null },
   );
 };
+
+/** Rebuild a combatant's jutsu rows from its battle refs and the battle's static data. */
+const hydrateBattleJutsus = (
+  battle: CompleteBattle,
+  user: BattleUserState,
+  excludedJutsuIds: string[],
+  now: Date,
+) =>
+  user.jutsus
+    .filter((ref) => !excludedJutsuIds.includes(ref.jutsuId))
+    .map((ref) => {
+      const jutsu = battle.extraState.jutsus?.[ref.jutsuId];
+      if (!jutsu) return null;
+      // Add missing UserJutsu fields needed for CombatQueryUserJutsu
+      return {
+        ...ref,
+        reskinId: ref.reskinId ?? null, // Ensure non-undefined
+        jutsu,
+        activeReskin: ref.reskinId
+          ? (battle.extraState.jutsuReskins?.[ref.reskinId] ?? null)
+          : null,
+        userId: user.controllerId,
+        createdAt: now,
+        updatedAt: now,
+        trainingStartedAt: null,
+        finishTraining: null,
+      };
+    })
+    .filter((j): j is NonNullable<typeof j> => j !== null);
+
+/** Rebuild a combatant's item rows from its battle refs and the battle's static data. */
+const hydrateBattleItems = (battle: CompleteBattle, user: BattleUserState, now: Date) =>
+  user.items
+    .map((ref) => {
+      const item = battle.extraState.items?.[ref.itemId];
+      if (!item) return null;
+      // Add missing UserItem fields needed for CombatQueryUserItem
+      return {
+        ...ref,
+        ...inertUserItemColumns(user.controllerId, now),
+        item,
+        imbuements: [],
+        imbuementEffects: ref.imbuementEffects ?? [],
+        activeVariantId: ref.activeVariantId ?? null,
+        variantBattleDescription: ref.variantBattleDescription ?? null,
+        variantImage: ref.variantImage ?? null,
+        variantName: ref.variantName ?? null,
+      };
+    })
+    .filter((i): i is NonNullable<typeof i> => i !== null);
 
 /**
  * Preload combat relations and create a battle from independently cloned participants.
