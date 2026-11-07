@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { CREATOR_TRIAL_FORMS, CREATOR_USERNAME } from "@/drizzle/constants";
+import { findSidebarOpponent } from "@/libs/combat/actions";
 import { creatorTrialWaves, isCreator } from "@/libs/combat/creatorTrial";
 import { advanceEncounterWave } from "@/libs/combat/encounters";
 import { calcBattleResult, maskBattle } from "@/libs/combat/util";
@@ -109,5 +110,36 @@ describe("creator trial", () => {
     ).toBe(2);
     expect(JSON.stringify(masked)).not.toContain("chunin");
     expect(masked.extraState.encounter).toEqual({ wave: 2 });
+  });
+
+  it("shows the risen form beside the field, whatever the initiative order", () => {
+    const battle = trial();
+    const fallen = battle.usersState[1]!;
+    fallen.curHealth = 0;
+    fallen.initiative = 100;
+    advanceEncounterWave(battle);
+
+    expect(battle.usersState[0]?.userId).toBe("student");
+    expect(findSidebarOpponent(battle.usersState, "hero")?.userId).toBe("genin");
+  });
+
+  it("stays on the form that just fell, not an earlier one, until the next rises", () => {
+    const battle = trial();
+    const student = battle.usersState[1]!;
+    student.curHealth = 0;
+    student.leftBattle = true;
+    const fallen = form("genin");
+    fallen.curHealth = 0;
+    battle.usersState.push(fallen);
+
+    expect(findSidebarOpponent(battle.usersState, "hero")?.userId).toBe("genin");
+  });
+
+  it("keeps the last opponent beside the field once everyone has left", () => {
+    const battle = trial([]);
+    battle.usersState[1]!.curHealth = 0;
+    battle.usersState[1]!.leftBattle = true;
+
+    expect(findSidebarOpponent(battle.usersState, "hero")?.userId).toBe("student");
   });
 });

@@ -2064,11 +2064,11 @@ export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
 export const CREATOR_USERNAME = "Terriator";
 /** The trial's AI templates, weakest first; each rises where the previous form fell. */
 export const CREATOR_TRIAL_FORMS = [
-  { aiId: "creator-trial-student", title: "Academy Student", announce: "" },
-  { aiId: "creator-trial-genin", title: "the Genin Frame", announce: "GENIN FRAME" },
-  { aiId: "creator-trial-chunin", title: "the Chunin Battle Frame", announce: "CHUNIN BATTLE FRAME" },
-  { aiId: "creator-trial-jonin", title: "the Jonin Siege Engine", announce: "JONIN SIEGE ENGINE" },
-  { aiId: "creator-trial-elite", title: "the Elite Jonin God Machine", announce: "ELITE JONIN GOD MACHINE" },
+  { aiId: "creator-trial-student", title: "Safe-mode", announce: "" },
+  { aiId: "creator-trial-genin", title: "Turbo-mode", announce: "TURBO-MODE" },
+  { aiId: "creator-trial-chunin", title: "Blade-mode", announce: "BLADE-MODE" },
+  { aiId: "creator-trial-jonin", title: "Siege-mode", announce: "SIEGE-MODE" },
+  { aiId: "creator-trial-elite", title: "God-mode", announce: "GOD-MODE" },
 ] as const;
 /** Sheet each form plays on arrival, from the previous form to its own. */
 export const CREATOR_TRIAL_TRANSFORM_ACTION = "transform";

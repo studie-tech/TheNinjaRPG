@@ -24,5 +24,5 @@ export const creatorTrialTransformationLog = (
   const stage = form.transformation?.stage ?? 0;
   const username = battle.extraState.creatorTrial?.username ?? CREATOR_USERNAME;
   const title = creatorTrialForm(stage)?.title;
-  return `${username} refuses to fall and reassembles as ${title ?? form.username}!`;
+  return `${username} refuses to fall and reassembles in ${title ?? form.username}!`;
 };

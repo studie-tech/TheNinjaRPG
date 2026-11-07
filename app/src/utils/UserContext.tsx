@@ -61,6 +61,9 @@ export const combatPendingActionAtom = atom<CombatPendingAction | undefined>(und
  */
 export const combatHeldResultAtom = atom<number | undefined>(undefined);
 
+/** The battle on the field while it replays behind the live state; null once caught up. */
+export const combatPresentedBattleAtom = atom<ReturnedBattle | null>(null);
+
 /** The battle theme carries through a result screen, so another fight continues it. */
 export const combatThemeHeldAtom = atom(false);
 
