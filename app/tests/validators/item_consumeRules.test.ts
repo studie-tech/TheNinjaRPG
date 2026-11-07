@@ -1,9 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { ItemValidator, tagTypes, getTagSchema } from "@/validators/combat";
+import { getTagSchema, ItemValidator } from "@/validators/combat";
 import { validItemInput } from "../setup/items";
 
-const tag = (type: (typeof tagTypes)[number], patch: object = {}) =>
-  getTagSchema(type).parse({ type, ...patch });
+const tag = (type: Parameters<typeof getTagSchema>[0]) => getTagSchema(type).parse({ type });
 
 const consumable = {
   itemType: "CONSUMABLE",
