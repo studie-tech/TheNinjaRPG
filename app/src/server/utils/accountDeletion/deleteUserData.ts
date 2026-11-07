@@ -1,5 +1,4 @@
 import * as Sentry from "@sentry/nextjs";
-import { after } from "next/server";
 import { huntingProgress, huntingReceipt, huntingSession } from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
