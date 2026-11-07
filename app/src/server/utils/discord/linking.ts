@@ -38,7 +38,11 @@ import {
 } from "@/server/utils/discord/rest";
 import { evaluateDiscordLink } from "@/server/utils/discord/rules";
 import { encryptToken } from "@/server/utils/discord/secrets";
-import { releaseDiscordMember, syncDiscordMember } from "@/server/utils/discord/sync";
+import {
+  errorText,
+  releaseDiscordMember,
+  syncDiscordMember,
+} from "@/server/utils/discord/sync";
 import type { SanctionIdentity } from "@/server/utils/sanctionTombstone";
 
 export type DiscordLinkOutcome = {
@@ -316,7 +320,7 @@ export const removeDiscordLink = async (
     await setDiscordPrimary(client, remaining);
     const sync = await syncDiscordMember(client, remaining.userId, {
       force: true,
-    }).catch((error: unknown) => ({ synced: false, errors: [String(error)] }));
+    }).catch((error: unknown) => ({ synced: false, errors: [errorText(error)] }));
     cleanup.push(...sync.errors);
   } else if (removed && sibling) {
     cleanup.push(

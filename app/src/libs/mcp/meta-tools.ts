@@ -2,6 +2,7 @@ import type { CallToolResult, Tool } from "@modelcontextprotocol/server";
 import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import type { z } from "zod";
+import { clientErrorMessage } from "@/server/utils/mysqlErrors";
 import { truncateString } from "@/utils/string";
 import type { ModelContextProtocolTool } from "./types";
 
@@ -638,7 +639,7 @@ async function executeProcedure(
         content: [
           {
             type: "text" as const,
-            text: `Error calling ${endpointName}: ${error.message}`,
+            text: `Error calling ${endpointName}: ${clientErrorMessage(error)}`,
           },
         ],
       };
