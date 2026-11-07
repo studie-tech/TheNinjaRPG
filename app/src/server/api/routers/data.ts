@@ -26,7 +26,6 @@ import {
   jutsu,
   logBattleLengths,
   logQueueLengths,
-  logRankedPicks,
   paypalTransaction,
   quest,
   skillTree,
@@ -70,8 +69,6 @@ import {
   selectLogBattleLengthsForGetBattleLengthStatistics,
   selectLogQueueLengthsForGetQueueLengthStatistics,
   selectLogRankedPicksForGetRankedLoadoutStatistics,
-  selectLogRankedPicksForGetRankedLoadoutStatistics2,
-  selectLogRankedPicksForGetRankedLoadoutStatistics3,
   selectPaypalTransactionForGetRecruitmentMainMetrics,
   selectPaypalTransactionForGetRevenueByReferralSource,
   selectQuestForGetQuestRewardStatistics,
@@ -117,7 +114,7 @@ import {
 } from "@/server/api/trpc";
 import { fetchPublicUsers } from "@/server/utils/profile";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
-import { getDeviceType } from "@/utils/hardware";
+import { type DeviceType, getDeviceType } from "@/utils/hardware";
 import {
   canAccessHiddenSkillTree,
   canChangeContent,
@@ -254,109 +251,27 @@ export const dataRouter = createTRPCRouter({
         ),
       ]);
 
-      // Create mutable versions for filtering
-      let allVisitorsRow = allVisitorsRowRaw;
-      let signupsRow = signupsRowRaw;
-      let characterCreationsRow = signupsRowRaw;
-      let nonStudentSignupsRow = nonStudentSignupsRowRaw;
-      let nonStudentGeninSignupsRow = nonStudentGeninSignupsRowRaw;
-      let pvpSignupsRow = pvpSignupsRowRaw;
-      let tutorialFinishedSignupsRow = tutorialFinishedSignupsRowRaw;
-
       // Filter the different rows by device type if specified
-      if (input.deviceType && input.deviceType.length > 0) {
-        allVisitorsRow = allVisitorsRow.filter((visitor) => {
-          const deviceType = getDeviceType(visitor.userAgent ?? undefined);
-          return input.deviceType?.includes(deviceType);
-        });
-        signupsRow = signupsRow.filter((signup) => {
-          const deviceType = getDeviceType(signup.userAgent ?? undefined);
-          return input.deviceType?.includes(deviceType);
-        });
-        characterCreationsRow = signupsRowRaw
-          .filter((signup) => signup.userId)
-          .filter((characterCreation) => {
-            const deviceType = getDeviceType(characterCreation.userAgent ?? undefined);
-            return input.deviceType?.includes(deviceType);
-          });
-        nonStudentSignupsRow = nonStudentSignupsRow.filter((nonStudentSignup) => {
-          const deviceType = getDeviceType(nonStudentSignup.userAgent ?? undefined);
-          return input.deviceType?.includes(deviceType);
-        });
-        nonStudentGeninSignupsRow = nonStudentGeninSignupsRow.filter(
-          (nonStudentSignup) => {
-            const deviceType = getDeviceType(nonStudentSignup.userAgent ?? undefined);
-            return input.deviceType?.includes(deviceType);
-          },
-        );
-        pvpSignupsRow = pvpSignupsRow.filter((pvpSignup) => {
-          const deviceType = getDeviceType(pvpSignup.userAgent ?? undefined);
-          return input.deviceType?.includes(deviceType);
-        });
-        tutorialFinishedSignupsRow = tutorialFinishedSignupsRow.filter(
-          (tutorialFinishedSignup) => {
-            const deviceType = getDeviceType(
-              tutorialFinishedSignup.userAgent ?? undefined,
-            );
-            return input.deviceType?.includes(deviceType);
-          },
-        );
-      }
-
-      // Calculate visitors by device
-      const visitorsByDevice = {
-        mobile: 0,
-        desktop: 0,
-        unknown: 0,
-      };
-      allVisitorsRow.forEach((row) => {
-        const deviceType = getDeviceType(row.userAgent ?? undefined);
-        visitorsByDevice[deviceType]++;
-      });
-
-      // Filter signupsRow by deviceType if specified
-      let filteredSignupsRow = signupsRow;
-      if (input.deviceType && input.deviceType.length > 0) {
-        filteredSignupsRow = signupsRow.filter((signup) => {
-          const deviceType = getDeviceType(signup.userAgent ?? undefined);
-          return input.deviceType?.includes(deviceType);
-        });
-      }
-
-      // Calculate signups by device
-      const signupsByDevice = {
-        mobile: 0,
-        desktop: 0,
-        unknown: 0,
-      };
-      filteredSignupsRow.forEach((row) => {
-        const deviceType = getDeviceType(row.userAgent ?? undefined);
-        signupsByDevice[deviceType]++;
-      });
+      const inDevices = (row: { userAgent: string | null }) =>
+        matchesDevice(row, input.deviceType);
+      const allVisitorsRow = allVisitorsRowRaw.filter(inDevices);
+      const signupsRow = signupsRowRaw.filter(inDevices);
+      // The referral join requires an account, so every signup has created a character.
+      const characterCreationsRow = signupsRow;
+      const nonStudentSignupsRow = nonStudentSignupsRowRaw.filter(inDevices);
+      const nonStudentGeninSignupsRow = nonStudentGeninSignupsRowRaw.filter(inDevices);
+      const pvpSignupsRow = pvpSignupsRowRaw.filter(inDevices);
+      const tutorialFinishedSignupsRow =
+        tutorialFinishedSignupsRowRaw.filter(inDevices);
 
       // Calculate device-split metrics
-      const characterCreationsByDevice = {
-        mobile: 0,
-        desktop: 0,
-        unknown: 0,
-      };
-      characterCreationsRow.forEach((row) => {
-        const deviceType = getDeviceType(row.userAgent ?? undefined);
-        characterCreationsByDevice[deviceType]++;
-      });
-
-      const tutorialFinishedByDevice = {
-        mobile: 0,
-        desktop: 0,
-        unknown: 0,
-      };
-      tutorialFinishedSignupsRow.forEach((row) => {
-        const deviceType = getDeviceType(row.userAgent ?? undefined);
-        tutorialFinishedByDevice[deviceType]++;
-      });
+      const visitorsByDevice = countByDevice(allVisitorsRow);
+      const signupsByDevice = countByDevice(signupsRow);
+      const characterCreationsByDevice = countByDevice(characterCreationsRow);
+      const tutorialFinishedByDevice = countByDevice(tutorialFinishedSignupsRow);
 
       const clicks = allVisitorsRow.length;
-      const signups = filteredSignupsRow.length;
+      const signups = signupsRow.length;
       const characterCreations = characterCreationsRow.length;
       const signupRate = clicks > 0 ? signups / clicks : 0;
       const characterCreationRate = clicks > 0 ? characterCreations / clicks : 0;
@@ -376,8 +291,8 @@ export const dataRouter = createTRPCRouter({
       // Extract tutorial steps for each signup with device type and username
       // By default, exclude users who have disabled the tutorial (tutorialOn = false)
       const tutorialFilteredSignups = input.includeTutorialDisabled
-        ? filteredSignupsRow
-        : filteredSignupsRow.filter((r) => r.tutorialOn !== false);
+        ? signupsRow
+        : signupsRow.filter((r) => r.tutorialOn !== false);
       const tutorialSteps = tutorialFilteredSignups.map((r) => ({
         steps: r.tutorialStep ?? 0,
         deviceType: getDeviceType(r.userAgent ?? undefined),
@@ -391,10 +306,10 @@ export const dataRouter = createTRPCRouter({
       // Create a map of userId -> Set of completed tier quest IDs
       const completedTierQuestsMap = new Map<string, Set<string>>();
       completedTierQuestsRaw.forEach((cq) => {
-        if (!completedTierQuestsMap.has(cq.odUserId)) {
-          completedTierQuestsMap.set(cq.odUserId, new Set());
+        if (!completedTierQuestsMap.has(cq.userId)) {
+          completedTierQuestsMap.set(cq.userId, new Set());
         }
-        completedTierQuestsMap.get(cq.odUserId)?.add(cq.questId);
+        completedTierQuestsMap.get(cq.userId)?.add(cq.questId);
       });
 
       // Get set of users who finished the tutorial
@@ -403,7 +318,7 @@ export const dataRouter = createTRPCRouter({
       );
 
       // For each eligible user, count how many tier quests they've completed
-      const tierQuestCompletions = filteredSignupsRow
+      const tierQuestCompletions = signupsRow
         .filter((r) => r.userId && tierEligibleUserIds.has(r.userId))
         .map((r) => {
           const userId = r.userId ?? "";
@@ -1375,46 +1290,24 @@ export const dataRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      // Perform the filter by minimum count
-      const havingClause = gte(sql`SUM(${logRankedPicks.count})`, input.minCount);
-
-      // Build where conditions for type filtering
-      const typeConditions =
-        input.types && input.types.length > 0
-          ? inArray(logRankedPicks.type, input.types as ["jutsu", "item", "consumable"])
-          : undefined;
-
-      // Build name filtering conditions
-      const nameConditions = !!(input.name && input.name.length > 0);
-
-      // Fetch ranked loadout data with content names
-      const [jutsuPicks, itemPicks, consumablePicks] = await Promise.all([
-        selectLogRankedPicksForGetRankedLoadoutStatistics(
-          ctx.drizzle,
-          typeConditions,
-          nameConditions,
-          input,
-          havingClause,
+      // Fetch ranked loadout data with content names; each type has its own limit
+      const picks = await Promise.all(
+        (["jutsu", "item", "consumable"] as const).map((type) =>
+          !input.types?.length || input.types.includes(type)
+            ? selectLogRankedPicksForGetRankedLoadoutStatistics(
+                ctx.drizzle,
+                type,
+                input,
+              )
+            : [],
         ),
-        selectLogRankedPicksForGetRankedLoadoutStatistics2(
-          ctx.drizzle,
-          typeConditions,
-          nameConditions,
-          input,
-          havingClause,
-        ),
-        selectLogRankedPicksForGetRankedLoadoutStatistics3(
-          ctx.drizzle,
-          typeConditions,
-          nameConditions,
-          input,
-          havingClause,
-        ),
-      ]);
+      );
 
       // Combine all results and sort by count
-      const allPicks = [...jutsuPicks, ...itemPicks, ...consumablePicks];
-      return allPicks.sort((a, b) => b.count - a.count).slice(0, input.limit);
+      return picks
+        .flat()
+        .sort((a, b) => b.count - a.count)
+        .slice(0, input.limit);
     }),
   getRankedRankDistributionStatistics: publicProcedure
     .input(
@@ -1581,4 +1474,15 @@ const parseRecruitmentSources = (sources: string[] | undefined) => {
     wantsRecruited: selected?.includes("Recruited") ?? false,
     wantReal: !selected || !!realSources?.length,
   };
+};
+
+/** Whether a row's user agent is on the requested devices; no devices means any device. */
+const matchesDevice = (row: { userAgent: string | null }, devices?: DeviceType[]) =>
+  !devices?.length || devices.includes(getDeviceType(row.userAgent ?? undefined));
+
+/** Tally rows by the device their user agent resolves to. */
+const countByDevice = (rows: { userAgent: string | null }[]) => {
+  const counts: Record<DeviceType, number> = { mobile: 0, desktop: 0, unknown: 0 };
+  for (const row of rows) counts[getDeviceType(row.userAgent ?? undefined)]++;
+  return counts;
 };

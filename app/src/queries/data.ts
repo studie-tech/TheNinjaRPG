@@ -334,7 +334,7 @@ export const selectQuestHistoryForGetRecruitmentMainMetrics2 = (
 ) =>
   client
     .select({
-      odUserId: userData.userId,
+      userId: userData.userId,
       questId: questHistory.questId,
     })
     .from(questHistory)
@@ -973,101 +973,36 @@ export const insertActionLogForClearAllQueueLengths = (
     relatedImage: null,
   });
 
-/** Build the `logRankedPicks` selection for `getRankedLoadoutStatistics`, using predicates on `type` and `name`. */
+/** Build the `logRankedPicks` selection of one type for `getRankedLoadoutStatistics`. */
 export const selectLogRankedPicksForGetRankedLoadoutStatistics = (
   client: Pick<DrizzleClient, "select">,
-  typeConditions: undefined | SQL<unknown>,
-  nameConditions: false | true,
-  input: { name?: undefined | string; limit: number },
-  havingClause: SQL<unknown>,
-) =>
-  client
+  type: "jutsu" | "item" | "consumable",
+  input: { name?: undefined | string; limit: number; minCount: number },
+) => {
+  const content = type === "jutsu" ? jutsu : item;
+  return client
     .select({
       type: logRankedPicks.type,
       contentId: logRankedPicks.contentId,
       battleType: logRankedPicks.battleType,
       count: sql`SUM(${logRankedPicks.count})`.mapWith(Number),
-      name: jutsu.name,
+      name: content.name,
     })
     .from(logRankedPicks)
-    .innerJoin(jutsu, eq(logRankedPicks.contentId, jutsu.id))
+    .innerJoin(content, eq(logRankedPicks.contentId, content.id))
     .where(
       and(
-        eq(logRankedPicks.type, "jutsu"),
-        typeConditions,
-        nameConditions
-          ? sql`LOWER(${jutsu.name}) LIKE LOWER(${`%${input.name}%`})`
+        eq(logRankedPicks.type, type),
+        input.name
+          ? sql`LOWER(${content.name}) LIKE LOWER(${`%${input.name}%`})`
           : undefined,
       ),
     )
     .groupBy(logRankedPicks.contentId, logRankedPicks.battleType)
-    .having(havingClause)
+    .having(gte(sql`SUM(${logRankedPicks.count})`, input.minCount))
     .orderBy(sql`SUM(${logRankedPicks.count}) DESC`)
     .limit(input.limit);
-
-/** Build the `logRankedPicks` selection for `getRankedLoadoutStatistics`, using predicates on `type` and `name`. */
-export const selectLogRankedPicksForGetRankedLoadoutStatistics2 = (
-  client: Pick<DrizzleClient, "select">,
-  typeConditions: undefined | SQL<unknown>,
-  nameConditions: false | true,
-  input: { name?: undefined | string; limit: number },
-  havingClause: SQL<unknown>,
-) =>
-  client
-    .select({
-      type: logRankedPicks.type,
-      contentId: logRankedPicks.contentId,
-      battleType: logRankedPicks.battleType,
-      count: sql`SUM(${logRankedPicks.count})`.mapWith(Number),
-      name: item.name,
-    })
-    .from(logRankedPicks)
-    .innerJoin(item, eq(logRankedPicks.contentId, item.id))
-    .where(
-      and(
-        eq(logRankedPicks.type, "item"),
-        typeConditions,
-        nameConditions
-          ? sql`LOWER(${item.name}) LIKE LOWER(${`%${input.name}%`})`
-          : undefined,
-      ),
-    )
-    .groupBy(logRankedPicks.contentId, logRankedPicks.battleType)
-    .having(havingClause)
-    .orderBy(sql`SUM(${logRankedPicks.count}) DESC`)
-    .limit(input.limit);
-
-/** Build the `logRankedPicks` selection for `getRankedLoadoutStatistics`, using predicates on `type` and `name`. */
-export const selectLogRankedPicksForGetRankedLoadoutStatistics3 = (
-  client: Pick<DrizzleClient, "select">,
-  typeConditions: undefined | SQL<unknown>,
-  nameConditions: false | true,
-  input: { name?: undefined | string; limit: number },
-  havingClause: SQL<unknown>,
-) =>
-  client
-    .select({
-      type: logRankedPicks.type,
-      contentId: logRankedPicks.contentId,
-      battleType: logRankedPicks.battleType,
-      count: sql`SUM(${logRankedPicks.count})`.mapWith(Number),
-      name: item.name,
-    })
-    .from(logRankedPicks)
-    .innerJoin(item, eq(logRankedPicks.contentId, item.id))
-    .where(
-      and(
-        eq(logRankedPicks.type, "consumable"),
-        typeConditions,
-        nameConditions
-          ? sql`LOWER(${item.name}) LIKE LOWER(${`%${input.name}%`})`
-          : undefined,
-      ),
-    )
-    .groupBy(logRankedPicks.contentId, logRankedPicks.battleType)
-    .having(havingClause)
-    .orderBy(sql`SUM(${logRankedPicks.count}) DESC`)
-    .limit(input.limit);
+};
 
 /** Build the `userData` selection for `getRankedRankDistributionStatistics`, using predicates on `isAi`. */
 export const selectUserDataForGetRankedRankDistributionStatistics = (
