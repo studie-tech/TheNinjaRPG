@@ -4,7 +4,7 @@ import { insertAction } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { applyEffects } from "@/libs/combat/process";
 import { getBattleGrid } from "@/libs/combat/util";
-import { ConsumeTag, DamageTag, JutsuValidatorRawSchema, SageModeValidator } from "@/validators/combat";
+import { ClearTag, ConsumeTag, DamageTag, JutsuValidatorRawSchema, SageModeValidator } from "@/validators/combat";
 import type { BattleUserState, CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";
 import {
   makeBattleUser,
@@ -15,7 +15,7 @@ import {
   makeJutsu,
   makeShield,
 } from "./helpers/battleScenario";
-import { makeSageMode } from "./helpers/sageMode";
+import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
 
 const ROUND = 3;
 
@@ -357,6 +357,22 @@ describe("active Consume damage conversion", () => {
       makeCombatAction(),
     ).newBattle;
     expect(shieldHp(stale)).toBe(0);
+  });
+
+  it("keeps a zero-duration conversion when a Sage activation grants Clear", () => {
+    const sageMode = makeSageMode({ effects: [ClearTag.parse({ power: 100, rounds: 3 })] });
+    const battle = makeBattle(
+      [makeAttacker({ sageModeId: sageMode.id }), makeDefender()],
+      [
+        staticHit(),
+        makeConsume(50, 3, 0),
+        makeActivateSageEffect("attacker", { createdRound: ROUND }),
+      ],
+    );
+    battle.extraState.sageModes = { [sageMode.id]: sageMode };
+    const { newBattle, actionEffects } = applyEffects(battle, "attacker", makeCombatAction());
+    expect(actionEffects.map((e) => e.txt)).toContain("attacker was cleared of all positive status effects. ");
+    expect(shieldHp(newBattle)).toBeGreaterThan(0);
   });
 
   it("converts residual damage during the victim's turn", () => {
