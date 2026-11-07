@@ -23,6 +23,20 @@ const NEW_TASKS = [
   "damage_dealt",
 ] as const;
 
+describe("getObjectiveSchema resolution", () => {
+  it("returns the union member that declares each task", () => {
+    for (const task of allObjectiveTasks) {
+      const schema = getObjectiveSchema(task);
+      expect(AllObjectives.options).toContain(schema as never);
+      expect(schema.shape.task.safeParse(task).success, task).toBe(true);
+    }
+  });
+
+  it("rejects an unknown task", () => {
+    expect(() => getObjectiveSchema("not_a_task")).toThrow();
+  });
+});
+
 describe("specific-X / tag / damage objective schemas", () => {
   it("registers every new task in allObjectiveTasks", () => {
     for (const task of NEW_TASKS) {
