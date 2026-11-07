@@ -64,8 +64,8 @@ TEST_MYSQL_URL='mysql://root:placeholder@127.0.0.1:3307/tnr_test' \
 make test
 ```
 
-The database must already exist and be disposable: setup reconciles the schema
-and truncates every table. Each suite resets the tables it touches in
+The database must already exist and be disposable: setup reconciles the schema,
+truncates every table and drops every trigger. Each suite resets the tables it touches in
 `beforeEach`. Use a separate database for each concurrent test run. CI configures
 this database so SQL assertions run there.
 

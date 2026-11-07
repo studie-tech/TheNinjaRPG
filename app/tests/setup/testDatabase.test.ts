@@ -1,7 +1,14 @@
 import { expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Pool, RowDataPacket } from "mysql2/promise";
-import { describeWithDatabase, getTestDatabase, recordQueries, runRawSql } from "./testDatabase";
+import {
+  describeWithDatabase,
+  dropEveryTrigger,
+  getTestDatabase,
+  recordQueries,
+  runRawSql,
+  triggerNames,
+} from "./testDatabase";
 import { deferred } from "./deferred";
 
 describeWithDatabase("SQL query recorder", () => {
@@ -107,5 +114,22 @@ describeWithDatabase("SQL query recorder", () => {
     });
     expect(trace.statements).toEqual(["begin", "SELECT missing_column", "rollback", "SELECT 1"]);
     expect(trace.roundTrips).toBe(4);
+  });
+});
+
+describeWithDatabase("leftover triggers", () => {
+  it("drops every trigger a killed run left behind", async () => {
+    await runRawSql("CREATE TRIGGER left_on_update BEFORE UPDATE ON UserData FOR EACH ROW SET NEW.money = 0");
+    await runRawSql("CREATE TRIGGER left_on_delete BEFORE DELETE ON Battle FOR EACH ROW SET @left_behind = 1");
+    expect(await triggerNames()).toEqual(["left_on_delete", "left_on_update"]);
+
+    await dropEveryTrigger();
+
+    expect(await triggerNames()).toEqual([]);
+  });
+
+  it("leaves a database without triggers alone", async () => {
+    await dropEveryTrigger();
+    expect(await triggerNames()).toEqual([]);
   });
 });
