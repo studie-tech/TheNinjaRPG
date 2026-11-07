@@ -26,8 +26,7 @@ import {
   updateModerationScanForModerateContent3,
   updateUserReportCommentForUpdateReportedStatus,
 } from "@/queries/moderator";
-import { insertAutomatedModeration } from "@/queries/reports";
-import { insertUserReport } from "@/routers/reports";
+import { insertAutomatedModeration, insertUserReport } from "@/queries/reports";
 import type { DrizzleClient } from "@/server/db";
 import { evaluateImageModeration } from "@/utils/imageModeration";
 import { htmlToModerationInput } from "@/utils/sanitize";
