@@ -19,6 +19,7 @@ import { Pusher } from "@/libs/pusher";
 import { clanRouter } from "@/server/api/routers/clan";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { deleteUserRankedQueueRow, pvpRankRouter } from "@/server/api/routers/pvprank";
+import * as ranked from "@/server/utils/ranked";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
@@ -250,6 +251,44 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
     expect(await queueRows()).toHaveLength(0);
     expect(await member.getRankedQueueCount()).toBe(0);
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("ranked-queue", "updated", {});
+  });
+
+  it("logs every pick of both loadouts, counting selections they share", async () => {
+    const db = await getTestDatabase();
+    const clean = ranked.cleanRankedProhibitedSelections;
+    vi.spyOn(ranked, "cleanRankedProhibitedSelections").mockImplementation(async (...args) => {
+      const cleaned = await clean(...args);
+      const { userId } = args[1];
+      return {
+        ...cleaned,
+        loadout: {
+          ...cleaned.loadout,
+          loadout: {
+            ...cleaned.loadout.loadout,
+            jutsuIds: [`jutsu-${userId}`, "shared"],
+            weaponIds: [`weapon-${userId}`],
+            consumableIds: ["shared"],
+          },
+        },
+      };
+    });
+    const member = callerForDatabase(pvpRankRouter, "member", db);
+    expect((await member.queueForRankedPvp()).success).toBe(true);
+    expect((await callerForDatabase(pvpRankRouter, "leader", db).queueForRankedPvp()).success).toBe(true);
+    expect(await member.checkRankedPvpMatches()).toMatchObject({ success: true });
+    const picks = await db.query.logRankedPicks.findMany();
+    expect(
+      picks
+        .map(({ type, contentId, battleType, count }) => `${type} ${contentId} ${battleType} ${count}`)
+        .sort(),
+    ).toEqual([
+      "consumable shared RANKED_PVP 2",
+      "item weapon-leader RANKED_PVP 1",
+      "item weapon-member RANKED_PVP 1",
+      "jutsu jutsu-leader RANKED_PVP 1",
+      "jutsu jutsu-member RANKED_PVP 1",
+      "jutsu shared RANKED_PVP 2",
+    ]);
   });
 
   it("requires claimed ranked ownership at the final combat claim and rollback", async () => {
