@@ -39,6 +39,12 @@ export const emptyPreBattleGearModifiers = (): PreBattleGearModifiers => ({
   drGivenFromKeystone: 0,
 });
 
+/** True when percentage mods are folded into preBattleGearModifiers (not pipeline lists). */
+const isPreBattleConsolidatedPercentageFromType = (
+  fromType: string | undefined,
+): boolean =>
+  isPreBattleGearFromType(fromType) || isPreBattleKeystoneFromType(fromType);
+
 /** Universal armor/accessory/keystone percentage mods fold into battle-start totals. */
 export const isConsolidatedStage1PercentageModifier = (effect: UserEffect): boolean => {
   if (
@@ -50,8 +56,7 @@ export const isConsolidatedStage1PercentageModifier = (effect: UserEffect): bool
   if (!("fromType" in effect)) {
     return false;
   }
-  const { fromType } = effect;
-  if (!isPreBattleGearFromType(fromType) && !isPreBattleKeystoneFromType(fromType)) {
+  if (!isPreBattleConsolidatedPercentageFromType(effect.fromType)) {
     return false;
   }
   return (
@@ -60,31 +65,10 @@ export const isConsolidatedStage1PercentageModifier = (effect: UserEffect): bool
   );
 };
 
-/** True when percentage mods are folded into preBattleGearModifiers (not pipeline lists). */
-const isPreBattleConsolidatedPercentageFromType = (
-  fromType: string | undefined,
-): boolean =>
-  isPreBattleGearFromType(fromType) || isPreBattleKeystoneFromType(fromType);
-
 /** Stage-1 percentage modifiers from skill/village/ranked stay in usersEffects for the pipeline. */
-const isStage1NonGearPercentageModifier = (effect: UserEffect): boolean => {
-  if (
-    !damageBoostTypes.includes(effect.type) &&
-    !damageReductionTypes.includes(effect.type)
-  ) {
-    return false;
-  }
-  if (getEffectStage(effect) !== 1 || effect.calculation !== "percentage") {
-    return false;
-  }
-  if (
-    "fromType" in effect &&
-    isPreBattleConsolidatedPercentageFromType(effect.fromType)
-  ) {
-    return false;
-  }
-  return true;
-};
+const isStage1NonGearPercentageModifier = (effect: UserEffect): boolean =>
+  getEffectStage(effect) === 1 &&
+  !("fromType" in effect && isPreBattleConsolidatedPercentageFromType(effect.fromType));
 
 const applyPercentageDrMultiplier = (damage: number, drFraction: number): number =>
   damage * Math.max(0, 1 - drFraction);
@@ -321,7 +305,7 @@ export const buildDamagePacketModifierLists = (
         bloodlineIncreases.push(effect);
       } else if (isPercentage && isStage1NonGearPercentageModifier(effect)) {
         stage1PreBattleIncreases.push(effect);
-      } else if (isPercentage && getEffectStage(effect) === 2 && !isBloodline) {
+      } else if (isPercentage && getEffectStage(effect) === 2) {
         inBattleIncreases.push(effect);
       }
       continue;
@@ -334,7 +318,7 @@ export const buildDamagePacketModifierLists = (
         bloodlineDrEffects.push(effect);
       } else if (isPercentage && isStage1NonGearPercentageModifier(effect)) {
         stage1PreBattleDrEffects.push(effect);
-      } else if (isPercentage && getEffectStage(effect) !== 1 && !isBloodline) {
+      } else if (isPercentage && getEffectStage(effect) !== 1) {
         inCombatDrEffects.push(effect);
       }
     }
@@ -540,12 +524,24 @@ export const computeDamagePacket = (
     }, 0);
   let damage = ctx.rawDamage;
 
-  for (const effect of modifierLists.stage1PreBattleIncreases) {
-    const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
-    const { power } = getPower(effect);
-    damage *= 1 + (power / 100) * ratio;
-  }
+  const applyPercentageIncreases = (effects: UserEffect[]) => {
+    for (const effect of effects) {
+      const ratio = getEfficiencyRatio(damageEffect, effect);
+      if (ratio === 0) continue;
+      const { power } = getPower(effect);
+      damage *= 1 + (power / 100) * ratio;
+    }
+  };
+  const applyPercentageReductions = (effects: UserEffect[]) => {
+    for (const effect of effects) {
+      const ratio = getEfficiencyRatio(damageEffect, effect);
+      if (ratio === 0) continue;
+      const { power } = getPower(effect);
+      damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
+    }
+  };
+
+  applyPercentageIncreases(modifierLists.stage1PreBattleIncreases);
 
   const incPoints =
     OUT_OF_COMBAT_BASE_DAMAGE_INCREASE +
@@ -554,13 +550,7 @@ export const computeDamagePacket = (
     elementalPoints(modifierLists.elementalGearIncreases);
   damage *= 1 + incPoints / 100;
 
-  for (const effect of modifierLists.inBattleIncreases) {
-    const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
-    const { power } = getPower(effect);
-    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
-    damage *= 1 + (power / 100) * ratio;
-  }
+  applyPercentageIncreases(modifierLists.inBattleIncreases);
 
   const baseDamageAfterBoosts = damage;
 
@@ -574,20 +564,8 @@ export const computeDamagePacket = (
         elementalPoints(modifierLists.elementalGearReductions, true));
   damage = applyPercentageDrMultiplier(damage, drPoints / 100);
 
-  for (const effect of modifierLists.stage1PreBattleDrEffects) {
-    const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
-    const power = getSignedDrModifierPower(effect);
-    damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
-  }
-
-  for (const effect of modifierLists.inCombatDrEffects) {
-    const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
-    const power = getSignedDrModifierPower(effect);
-    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
-    damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
-  }
+  applyPercentageReductions(modifierLists.stage1PreBattleDrEffects);
+  applyPercentageReductions(modifierLists.inCombatDrEffects);
 
   const baseDamageAfterSystemDr = applyPercentageDrMultiplier(
     baseDamageAfterBoosts,
@@ -602,12 +580,7 @@ export const computeDamagePacket = (
     const ratio = getEfficiencyRatio(damageEffect, effect);
     if (ratio === 0) continue;
     const { power } = getPower(effect);
-    if (
-      isBloodlineDamageMod(effect) &&
-      !allowBloodlineDamageModifier(damageEffect, effect, power)
-    ) {
-      continue;
-    }
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
     totalStaticIncrease += power * ratio;
   }
   damage += totalStaticIncrease;
