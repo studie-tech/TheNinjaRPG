@@ -869,18 +869,8 @@ export const profileRouter = createTRPCRouter({
           !party.tracker.failed &&
           !isQuestComplete(party.quest, party.tracker),
       );
+      const { hasActiveTeamQuest, completedTeamQuests } = summarizeTeamQuests(user);
       // Keep team navigation available while a team-enabled quest is active and unfinished.
-      const hasActiveTeamQuest = user?.userQuests.some((entry) => {
-        const tracker = user.questData?.find((tracker) => tracker.id === entry.questId);
-        return (
-          entry.quest.teamEnabled &&
-          !entry.endAt &&
-          !entry.completed &&
-          !!tracker &&
-          !tracker.failed &&
-          !isQuestComplete(entry.quest, tracker)
-        );
-      });
       if (hasActiveTeamQuest)
         notifications.push({
           href: "/questteams",
@@ -902,29 +892,13 @@ export const profileRouter = createTRPCRouter({
         });
 
       // Keep collection discoverable after disbanding, even before a reward choice exists.
-      // Synthetic helpers keep closed receipts and must not advertise another payout.
-      const completedTeamQuests =
-        user?.userQuests.filter((entry) => {
-          const tracker = user.questData?.find(
-            (tracker) => tracker.id === entry.questId,
-          );
-          return (
-            entry.quest.teamEnabled &&
-            !isQuestPartyHelperAttempt(entry, user.questPartyId) &&
-            !entry.endAt &&
-            !entry.completed &&
-            tracker &&
-            !tracker.failed &&
-            isQuestComplete(entry.quest, tracker)
-          );
-        }) ?? [];
-      if (completedTeamQuests.length)
+      if (completedTeamQuests > 0)
         notifications.push({
           href: "/profile?tab=dashboard#progress-heading",
           name: "Quest rewards waiting: open your Logbook",
           color: "green",
           alwaysShow: true,
-          notificationCount: completedTeamQuests.length,
+          notificationCount: completedTeamQuests,
         });
 
       // Add any notifications from fetching user to toasts
@@ -970,13 +944,7 @@ export const profileRouter = createTRPCRouter({
         });
       }
       // Add a voting link
-      let hasVoted = true;
-      ACTIVE_VOTING_SITES.forEach((site) => {
-        if (user?.votes?.[site] !== true) {
-          hasVoted = false;
-        }
-      });
-      if (!hasVoted) {
+      if (!ACTIVE_VOTING_SITES.every((site) => user?.votes?.[site] === true)) {
         notifications.push({
           href: "/profile/recruit",
           name: `Vote for Us`,
@@ -1128,8 +1096,8 @@ export const profileRouter = createTRPCRouter({
           });
         }
         // Add deletion timer to notifications
-        if (user?.deletionAt) {
-          notifications?.push({
+        if (user.deletionAt) {
+          notifications.push({
             href: "/profile?tab=edit&settings=deletion&setting=character",
             name: "Deletion requested",
             color: "red",
@@ -1137,7 +1105,7 @@ export const profileRouter = createTRPCRouter({
         }
         // Is in combat
         if (user.status === "BATTLE") {
-          notifications?.push({
+          notifications.push({
             href: "/combat",
             name: "In combat",
             color: "red",
@@ -1145,7 +1113,7 @@ export const profileRouter = createTRPCRouter({
         }
         // Is in hospital
         if (user.status === "HOSPITALIZED") {
-          notifications?.push({
+          notifications.push({
             href: "/hospital",
             name: "In hospital",
             color: "red",
@@ -1153,7 +1121,7 @@ export const profileRouter = createTRPCRouter({
         }
         // Stuff in inbox
         if (user.inboxNews > 0) {
-          notifications?.push({
+          notifications.push({
             href: "/inbox",
             name: `${user.inboxNews} messages`,
             color: "hidden",
@@ -1162,7 +1130,7 @@ export const profileRouter = createTRPCRouter({
         }
         // Stuff in news
         if (user.unreadNews > 0) {
-          notifications?.push({
+          notifications.push({
             href: "/news",
             name: `${user.unreadNews} news`,
             color: "hidden",
@@ -3383,6 +3351,27 @@ const fetchUpdatedUserOnce = async (
       craftingItemsChanged: settlement.craftingItemsChanged,
     };
   }
+};
+
+/**
+ * Summarize the team-enabled quests a profile is still running: whether any is unfinished, and
+ * how many await collection. Synthetic helpers keep closed receipts and advertise no payout.
+ */
+const summarizeTeamQuests = (
+  user:
+    | Pick<NonNullable<UserWithRelations>, "userQuests" | "questData" | "questPartyId">
+    | undefined,
+) => {
+  const summary = { hasActiveTeamQuest: false, completedTeamQuests: 0 };
+  for (const entry of user?.userQuests ?? []) {
+    const tracker = user?.questData?.find((tracker) => tracker.id === entry.questId);
+    if (!entry.quest.teamEnabled || entry.endAt || entry.completed) continue;
+    if (!tracker || tracker.failed) continue;
+    if (!isQuestComplete(entry.quest, tracker)) summary.hasActiveTeamQuest = true;
+    else if (!isQuestPartyHelperAttempt(entry, user?.questPartyId ?? null))
+      summary.completedTeamQuests += 1;
+  }
+  return summary;
 };
 
 /** Writes passive regen fields only while the hydrated user snapshot still matches. */

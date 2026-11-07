@@ -10,31 +10,23 @@ export const getUserFactionNotifications = (
   now = new Date(),
 ): NavBarDropdownLink[] => {
   const notifications: NavBarDropdownLink[] = [];
-  // Shrine notifications (use Set to avoid duplicate sectors)
-  const userWithRelations = user;
   const warSideOf = (war: Parameters<typeof getWarSide>[0]) =>
     getWarSide(war, user?.villageId ?? null);
-  const shrineDefenseSectors = [
-    ...new Set(
-      userWithRelations?.shrineBattles
-        ?.filter((b) => b.defenderEntityId === user?.villageId)
-        .map((b) => b.sector)
-        .filter(Boolean) ?? [],
-    ),
-  ];
-  const shrineOffenseSectors = [
-    ...new Set(
-      userWithRelations?.shrineBattles
-        ?.filter((b) => b.attackerEntityId === user?.villageId)
-        .map((b) => b.sector)
-        .filter(Boolean) ?? [],
-    ),
-  ];
+
+  // Shrine notifications
+  const shrineDefenseSectors = activeSectors(
+    user?.shrineBattles,
+    (b) => b.defenderEntityId === user?.villageId,
+  );
+  const shrineOffenseSectors = activeSectors(
+    user?.shrineBattles,
+    (b) => b.attackerEntityId === user?.villageId,
+  );
 
   if (shrineDefenseSectors.length > 0) {
     notifications.push({
       href: "/travel",
-      name: `${shrineDefenseSectors.length > 1 ? "Shrines" : "Shrine"} under attack (${shrineDefenseSectors.length > 1 ? "Sectors" : "Sector"} ${shrineDefenseSectors.join(", ")})`,
+      name: `${pluralize("Shrine", shrineDefenseSectors)} under attack (${sectorList(shrineDefenseSectors)})`,
       color: "red",
       alwaysShow: true,
     });
@@ -42,35 +34,26 @@ export const getUserFactionNotifications = (
   if (shrineOffenseSectors.length > 0) {
     notifications.push({
       href: "/travel",
-      name: `We are attacking ${shrineOffenseSectors.length > 1 ? "Shrines" : "Shrine"} (${shrineOffenseSectors.length > 1 ? "Sectors" : "Sector"} ${shrineOffenseSectors.join(", ")})`,
+      name: `We are attacking ${pluralize("Shrine", shrineOffenseSectors)} (${sectorList(shrineOffenseSectors)})`,
       color: "blue",
       alwaysShow: true,
     });
   }
 
-  // Gather sectors under war attack for this user's village (use Set to avoid duplicate sectors)
-  const warDefenseSectors = [
-    ...new Set(
-      userWithRelations?.activeWars
-        ?.filter((w) => warSideOf(w) === w.defenderVillageId && w.sector)
-        .map((w) => w.sector)
-        .filter(Boolean) ?? [],
-    ),
-  ];
-
-  const warOffenseSectors = [
-    ...new Set(
-      userWithRelations?.activeWars
-        ?.filter((w) => warSideOf(w) === w.attackerVillageId && w.sector)
-        .map((w) => w.sector)
-        .filter(Boolean) ?? [],
-    ),
-  ];
+  // Gather sectors under war attack for this user's village
+  const warDefenseSectors = activeSectors(
+    user?.activeWars,
+    (w) => warSideOf(w) === w.defenderVillageId,
+  );
+  const warOffenseSectors = activeSectors(
+    user?.activeWars,
+    (w) => warSideOf(w) === w.attackerVillageId,
+  );
 
   if (warDefenseSectors.length > 0) {
     notifications.push({
       href: "/travel",
-      name: `${warDefenseSectors.length > 1 ? "Sectors" : "Sector"} under attack (${warDefenseSectors.length > 1 ? "Sectors" : "Sector"} ${warDefenseSectors.join(", ")})`,
+      name: `${pluralize("Sector", warDefenseSectors)} under attack (${sectorList(warDefenseSectors)})`,
       color: "red",
       alwaysShow: true,
     });
@@ -78,7 +61,7 @@ export const getUserFactionNotifications = (
   if (warOffenseSectors.length > 0) {
     notifications.push({
       href: "/travel",
-      name: `We are attacking ${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} (${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} ${warOffenseSectors.join(", ")})`,
+      name: `We are attacking ${pluralize("Sector", warOffenseSectors)} (${sectorList(warOffenseSectors)})`,
       color: "blue",
       alwaysShow: true,
     });
@@ -86,7 +69,7 @@ export const getUserFactionNotifications = (
 
   // Village war / raid notifications (VILLAGE_WAR and WAR_RAID have sector=0)
   const villageWars =
-    userWithRelations?.activeWars?.filter(
+    user?.activeWars?.filter(
       (w) => (w.type === "VILLAGE_WAR" || w.type === "WAR_RAID") && !!warSideOf(w),
     ) ?? [];
   for (const w of villageWars) {
@@ -134,10 +117,9 @@ export const getUserFactionNotifications = (
   }
 
   // Raid notifications
-  const openRaids =
-    userWithRelations?.activeRaids?.filter((r) => r.raidType === "open") ?? [];
+  const openRaids = user?.activeRaids?.filter((r) => r.raidType === "open") ?? [];
   const exclusiveRaids =
-    userWithRelations?.activeRaids?.filter((r) => r.raidType === "exclusive") ?? [];
+    user?.activeRaids?.filter((r) => r.raidType === "exclusive") ?? [];
 
   // Group by sector to avoid duplicate sector mentions
   const openRaidSectors = [...new Set(openRaids.map((r) => r.sector))];
@@ -146,7 +128,7 @@ export const getUserFactionNotifications = (
   if (openRaidSectors.length > 0) {
     notifications.push({
       href: "/travel",
-      name: `Open ${openRaidSectors.length > 1 ? "Raids" : "Raid"} available (${openRaidSectors.length > 1 ? "Sectors" : "Sector"} ${openRaidSectors.join(", ")})`,
+      name: `Open ${pluralize("Raid", openRaidSectors)} available (${sectorList(openRaidSectors)})`,
       color: "red",
       alwaysShow: true,
     });
@@ -155,7 +137,7 @@ export const getUserFactionNotifications = (
   if (exclusiveRaidSectors.length > 0) {
     notifications.push({
       href: "/travel",
-      name: `Village ${exclusiveRaidSectors.length > 1 ? "Raids" : "Raid"} active (${exclusiveRaidSectors.length > 1 ? "Sectors" : "Sector"} ${exclusiveRaidSectors.join(", ")})`,
+      name: `Village ${pluralize("Raid", exclusiveRaidSectors)} active (${sectorList(exclusiveRaidSectors)})`,
       color: "red",
       alwaysShow: true,
     });
@@ -163,3 +145,24 @@ export const getUserFactionNotifications = (
 
   return notifications;
 };
+
+/** Distinct sectors of the matching rows. Sector 0 means the row has no map sector. */
+const activeSectors = <Row extends { sector: number | null }>(
+  rows: Row[] | undefined,
+  isIncluded: (row: Row) => boolean,
+) => [
+  ...new Set(
+    rows
+      ?.filter(isIncluded)
+      .map((row) => row.sector)
+      .filter(Boolean) ?? [],
+  ),
+];
+
+/** Name the noun in the plural when several sectors are listed. */
+const pluralize = (noun: string, sectors: unknown[]) =>
+  sectors.length > 1 ? `${noun}s` : noun;
+
+/** Label a sector listing, e.g. "Sector 4" or "Sectors 4, 5". */
+const sectorList = (sectors: unknown[]) =>
+  `${pluralize("Sector", sectors)} ${sectors.join(", ")}`;
