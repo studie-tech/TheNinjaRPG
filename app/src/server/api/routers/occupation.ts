@@ -385,7 +385,7 @@ export const occupationRouter = createTRPCRouter({
       // Update trackers: crafting experience, total items crafted, and any
       // craft-this-specific-item objectives. Emitted here (behind the transaction's
       // craft CAS below) — NOT from the quest-reward EXP path
-      // (quest.ts:367-377), which must stay experience-only to avoid double-counting.
+      // (getExperienceTrackerTasks), which must stay experience-only to avoid double-counting.
       // Waiting crafts have not earned their production progress yet.
       const { trackers, consequences, questIdsUpdated } = isQueued
         ? { trackers: user.questData ?? [], consequences: [], questIdsUpdated: [] }

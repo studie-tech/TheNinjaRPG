@@ -109,7 +109,7 @@ export const milestoneRewardFields = {
  * Used as output schema for API responses that return processed rewards.
  *
  * This is the SINGLE SOURCE OF TRUTH for post-processed reward types.
- * The postProcessRewards function in quest.ts uses this type as its return type
+ * The postProcessRewards function in libs/quest/rewards.ts uses this type as its return type
  * to ensure type safety if the function implementation changes.
  */
 export const PostProcessedRewardSchema = z.object({
