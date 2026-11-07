@@ -130,4 +130,16 @@ describe("Pixi AI atlases",()=>{
   renderOversized(100,{id:"two",actionKey:"jutsu:huge"});expect(sprite.texture).toBe(original);
   oversized.dispose();sprite.destroy();
  });
+ it("plays a requested clip once it has loaded, then returns to idle",async()=>{
+  vi.spyOn(Assets,"load").mockImplementation(async()=>atlas());vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
+  const original=new Texture({source:new TextureSource({width:128,height:128})});const sprite=new Sprite(original);
+  const transform={...idle,id:"transform",url:"https://example.com/transform.webp"};
+  const player=createCharacterAnimation(sprite,100,{idle,transform});
+  const render=(now:number)=>player.render({now,moving:false,enabled:true,facing:"left",sourceFacing:"left",reducedMotion:false});
+  player.play("missing");player.play("transform");
+  render(0);expect(player.isPlaying("transform")).toBe(false);
+  await flush();render(0);expect(player.isPlaying("transform")).toBe(true);
+  render(1100);expect(player.isPlaying("transform")).toBe(false);
+  player.dispose();sprite.destroy();
+ });
 });

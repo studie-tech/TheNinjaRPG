@@ -40,6 +40,10 @@ import {
 import { createCombatFeedback } from "@/libs/rendering/scenes/combatFeedback";
 import { createCombatPlayback } from "@/libs/rendering/scenes/combatPlayback";
 import { prepareCombatTerrain } from "@/libs/rendering/scenes/combatTerrain";
+import {
+  createCombatTransformation,
+  findTransformation,
+} from "@/libs/rendering/scenes/combatTransformation";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
 import { createWorldShadows } from "@/libs/rendering/worldShadows";
@@ -140,7 +144,14 @@ export const createCombatScene = async (options: {
     );
     terrain.container.sortableChildren = true;
     // Tile markings share the ground plane, beneath physical fighters and scenery.
-    lightingLayer.addChild(terrainLayer, groundLayer, labels, depthLayer);
+    const fighterBackdrop = new Container();
+    lightingLayer.addChild(
+      terrainLayer,
+      groundLayer,
+      labels,
+      fighterBackdrop,
+      depthLayer,
+    );
     const actors = createCombatActors(
       game,
       data.grid,
@@ -157,6 +168,17 @@ export const createCombatScene = async (options: {
     const firstTile = data.grid.toArray()[0];
     const feedback = createCombatFeedback(firstTile?.height ?? width / 20);
     game.own(feedback.dispose);
+    const transformation = createCombatTransformation(
+      firstTile ?? { width: width / 20, height: width / 20 },
+      actors,
+      (id, gain) => {
+        const snapshot = options.getSnapshot();
+        const sound = snapshot.assets.find((asset) => asset.id === id);
+        if (snapshot.active && snapshot.sound && sound?.url)
+          options.play(sound.url, snapshot.volume * gain);
+      },
+    );
+    game.own(transformation.dispose);
     // Static ground artwork lies on the hex surface: above flat faces, below grid outlines,
     // and (via the lit ground layer) beneath fighters and upright scenery.
     effects.ground.zIndex = COMBAT_GROUND_EFFECT_Z_INDEX;
@@ -189,7 +211,9 @@ export const createCombatScene = async (options: {
       actors.container,
       effects.container,
       feedback.container,
+      transformation.container,
     );
+    fighterBackdrop.addChild(transformation.behind);
     game.stage.addChild(world);
     let zoom = Math.max(1, Math.min(3, options.initialZoom));
     let camera = options.focus ?? { x: width / 2, y: (width * ratio) / 2 };
@@ -218,8 +242,10 @@ export const createCombatScene = async (options: {
       }
       world.scale.set(s, -s);
       world.position.set(
-        game.renderer.width / 2 - (camera.x + feedback.shake.x) * s,
-        game.renderer.height / 2 + (camera.y + feedback.shake.y) * s,
+        game.renderer.width / 2 -
+          (camera.x + feedback.shake.x + transformation.shake.x) * s,
+        game.renderer.height / 2 +
+          (camera.y + feedback.shake.y + transformation.shake.y) * s,
       );
     };
     const tileAt = (x: number, y: number) =>
@@ -402,19 +428,27 @@ export const createCombatScene = async (options: {
       }
       lastFrameAt = performance.now();
       playback.receive(snapshot.battle);
-      const presented = playback.tick({
-        now: clock,
-        instant:
-          frame.reducedMotion ||
-          !snapshot.active ||
-          capture ||
-          !!options.staticActors ||
-          !!options.advance,
-        moving: wasMoving,
-        cue: actors.cue,
-      });
+      const instant =
+        frame.reducedMotion ||
+        !snapshot.active ||
+        capture ||
+        !!options.staticActors ||
+        !!options.advance;
+      // A transformation holds the field: replays queue behind it, input stays live.
+      const presented =
+        transformation.isPlaying() && !instant
+          ? playback.presented()
+          : playback.tick({
+              now: clock,
+              instant,
+              moving: wasMoving,
+              cue: actors.cue,
+            });
       const logVersion = playback.logVersion();
       let hits: CombatHit[] = NO_HITS;
+      const arrival = instant
+        ? undefined
+        : findTransformation(lastPresented.battle, presented);
       if (
         presented !== lastPresented.battle ||
         logVersion !== lastPresented.logVersion
@@ -440,6 +474,7 @@ export const createCombatScene = async (options: {
         snapshot.volume !== previous.volume
       )
         sync(view, !rendered);
+      if (arrival) transformation.start(arrival);
       for (const { userId, amount, severity } of hits) {
         const head = actors.headPosition(userId);
         if (!head) continue;
@@ -473,6 +508,12 @@ export const createCombatScene = async (options: {
       wasMoving = moving;
       effects.animate(clock, frame.reducedMotion, moving, effect?.id ?? null);
       feedback.animate(clock, frame.reducedMotion, scale());
+      transformation.animate(clock, scale(), {
+        x: camera.x,
+        y: camera.y,
+        halfWidth: game.renderer.width / (2 * scale()),
+        halfHeight: game.renderer.height / (2 * scale()),
+      });
       const user = snapshot.battle.usersState.find(
         (user) => user.userId === snapshot.userId,
       );
@@ -596,7 +637,8 @@ export const createCombatScene = async (options: {
       },
       /** Actions are still replaying; a stalled render loop must not hold up the battle. */
       isPresenting: () =>
-        playback.isPlaying() && performance.now() - lastFrameAt < PRESENTATION_STALL_MS,
+        (playback.isPlaying() || transformation.isPlaying()) &&
+        performance.now() - lastFrameAt < PRESENTATION_STALL_MS,
     };
   } catch (error) {
     game.dispose();
