@@ -9,10 +9,9 @@ import PixelPublicLayout from "@/components/layout/PixelPublicLayout";
 import ParticleProvider from "@/components/ui/particles";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { applyGameLayout } from "@/hooks/useGameLayout";
-import { getGameLayout } from "@/libs/gameLayouts";
+import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import {
   applyFontScaleCookie,
-  type EffectiveLayout,
   LAYOUT_PREFERENCE_COOKIE,
   persistLayoutPreferenceCookie,
   storedValueToLayout,
@@ -29,7 +28,7 @@ import { useUserInfo } from "@/utils/UserContext";
 let hasRefreshedForRepairedCookie = false;
 
 /** Whether the layout cookie the next request sends now carries this layout. */
-const cookieCarriesLayout = (layout: EffectiveLayout) =>
+const cookieCarriesLayout = (layout: GameLayoutId) =>
   document.cookie
     .split("; ")
     .some((entry) => entry === `${LAYOUT_PREFERENCE_COOKIE}=${layout}`);
@@ -37,7 +36,7 @@ const cookieCarriesLayout = (layout: EffectiveLayout) =>
 interface LayoutSwitcherProps {
   children: React.ReactNode;
   initialIsSignedIn: boolean;
-  initialLayout: EffectiveLayout;
+  initialLayout: GameLayoutId;
   wallpaper?: WallpaperVariant;
 }
 
