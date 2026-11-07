@@ -368,19 +368,23 @@ export const selectUnresolvedClanLobbyEntry = (
     .where(and(eq(mpvpBattleUser.userId, userId), isNull(mpvpBattleQueue.winnerId)));
 
 /**
- * Build the `table` update for `reservePityCredit`, setting `pityRolls` and
+ * Build the `bloodlineRolls` update for `reservePityCredit`, setting `pityRolls` and
  * `updatedAt`, using the configured predicates.
  */
-export const updateTableForReservePityCredit = (
+export const updateBloodlineRollsForReservePityCredit = (
   client: Pick<DrizzleClient, "update">,
-  table: typeof import("@/drizzle/schema").bloodlineRolls,
   rollId: string,
   expectedPityRolls: number,
 ) =>
   client
-    .update(table)
-    .set({ pityRolls: sql`${table.pityRolls} + 1`, updatedAt: new Date() })
-    .where(and(eq(table.id, rollId), eq(table.pityRolls, expectedPityRolls)));
+    .update(bloodlineRolls)
+    .set({ pityRolls: sql`${bloodlineRolls.pityRolls} + 1`, updatedAt: new Date() })
+    .where(
+      and(
+        eq(bloodlineRolls.id, rollId),
+        eq(bloodlineRolls.pityRolls, expectedPityRolls),
+      ),
+    );
 
 /**
  * Return a credit reserved by `reservePityCredit` when the grant that followed it did not apply.
@@ -394,15 +398,13 @@ export const updateTableForReservePityCredit = (
  */
 export const refundPityCredit = async ({
   client,
-  table,
   rollId,
 }: {
   client: DrizzleClient;
-  table: typeof bloodlineRolls;
   rollId: string;
 }) => {
   await client
-    .update(table)
-    .set({ pityRolls: sql`${table.pityRolls} - 1`, updatedAt: new Date() })
-    .where(and(eq(table.id, rollId), gt(table.pityRolls, 0)));
+    .update(bloodlineRolls)
+    .set({ pityRolls: sql`${bloodlineRolls.pityRolls} - 1`, updatedAt: new Date() })
+    .where(and(eq(bloodlineRolls.id, rollId), gt(bloodlineRolls.pityRolls, 0)));
 };

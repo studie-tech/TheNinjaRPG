@@ -850,7 +850,6 @@ export const bloodlineRouter = createTRPCRouter({
       // loser stops before touching userData.bloodlineId at all.
       const reserved = await reservePityCredit({
         client: ctx.drizzle,
-        table: bloodlineRolls,
         rollId: prevRoll.id,
         expectedPityRolls: prevRoll.pityRolls,
       });
@@ -881,7 +880,6 @@ export const bloodlineRouter = createTRPCRouter({
           try {
             await refundPityCredit({
               client: ctx.drizzle,
-              table: bloodlineRolls,
               rollId: prevRoll.id,
             });
           } catch (refundError) {
