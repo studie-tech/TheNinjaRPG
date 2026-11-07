@@ -58,12 +58,24 @@ export const listDungeonForGetAvailable = (client: Pick<DrizzleClient, "query">)
   client.query.dungeon.findMany();
 
 /** Resolve player-facing dungeon item names without loading effects or inventory data. */
-export const listDungeonItemNames = (client: Pick<DrizzleClient, "query">) =>
-  client.query.item.findMany({ columns: { id: true, name: true } });
+export const listDungeonItemNames = (
+  client: Pick<DrizzleClient, "query">,
+  ids: string[],
+) =>
+  client.query.item.findMany({
+    columns: { id: true, name: true },
+    where: inArray(item.id, ids),
+  });
 
 /** Resolve player-facing dungeon jutsu names without loading combat definitions. */
-export const listDungeonJutsuNames = (client: Pick<DrizzleClient, "query">) =>
-  client.query.jutsu.findMany({ columns: { id: true, name: true } });
+export const listDungeonJutsuNames = (
+  client: Pick<DrizzleClient, "query">,
+  ids: string[],
+) =>
+  client.query.jutsu.findMany({
+    columns: { id: true, name: true },
+    where: inArray(jutsu.id, ids),
+  });
 
 /** Page successful squad clears with measured entry and finish times, retaining stable ties. */
 export const listDungeonRankings = (

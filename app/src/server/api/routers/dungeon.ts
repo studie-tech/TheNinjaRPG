@@ -149,20 +149,31 @@ export const dungeonRouter = createTRPCRouter({
     }),
   /** Discover published dungeons across Seichi without exposing encounters or staff drafts. */
   getCatalogue: protectedProcedure.query(async ({ ctx }) => {
-    const [definitions, items, jutsus] = await Promise.all([
-      listDungeonForGetAvailable(ctx.drizzle),
-      listDungeonItemNames(ctx.drizzle),
-      listDungeonJutsuNames(ctx.drizzle),
+    const definitions = await listDungeonForGetAvailable(ctx.drizzle);
+    const now = Date.now();
+    const visible = definitions.filter(
+      ({ content }) =>
+        !content.hidden &&
+        (!content.expiresAt || new Date(content.expiresAt).getTime() > now),
+    );
+    const drops = visible.flatMap(({ content }) => content.rewards.drops);
+    const itemIds = [
+      ...new Set(
+        drops
+          .filter((drop) => drop.type === "item" || drop.type === "cache")
+          .map((drop) => drop.id),
+      ),
+    ];
+    const jutsuIds = [
+      ...new Set(drops.filter((drop) => drop.type === "jutsu").map((drop) => drop.id)),
+    ];
+    const [items, jutsus] = await Promise.all([
+      itemIds.length ? listDungeonItemNames(ctx.drizzle, itemIds) : [],
+      jutsuIds.length ? listDungeonJutsuNames(ctx.drizzle, jutsuIds) : [],
     ]);
     const itemNames = new Map(items.map((entry) => [entry.id, entry.name]));
     const jutsuNames = new Map(jutsus.map((entry) => [entry.id, entry.name]));
-    const now = Date.now();
-    return definitions
-      .filter(
-        ({ content }) =>
-          !content.hidden &&
-          (!content.expiresAt || new Date(content.expiresAt).getTime() > now),
-      )
+    return visible
       .map(({ id, content }) => ({
         id,
         name: content.name,
