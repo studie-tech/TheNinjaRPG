@@ -195,6 +195,39 @@ describeWithDatabase("sprite studio", () => {
     expect((await row(id))?.url).toBeNull();
   });
 
+  it("removes the first sheet when the second upload fails", async () => {
+    const id = await queued();
+    vi.spyOn(gameAsset, "getSpriteAsset").mockResolvedValue(finished);
+    vi.spyOn(spriteSheets, "uploadToStorage")
+      .mockResolvedValueOnce("https://uploadthing.b-cdn.net/f/large")
+      .mockRejectedValueOnce(new Error("Upload failed"));
+    await (await caller()).sync();
+    expect(spriteSheets.removeFromStorage).toHaveBeenCalledWith(["https://uploadthing.b-cdn.net/f/large"]);
+    expect(await row(id)).toMatchObject({ status: "FAILED", error: "Upload failed" });
+  });
+
+  it("cancels a paid job whose request cannot be saved", async () => {
+    await queued();
+    const cancel = vi.spyOn(gameAsset, "cancelSpriteAsset").mockResolvedValue(remote({ status: "failed" }));
+    await expect((await caller()).generate(request)).rejects.toThrow();
+    expect(cancel).toHaveBeenCalledWith("asset-1");
+  });
+
+  it("polls the oldest requests first when more are running than one sync covers", async () => {
+    const create = vi.spyOn(gameAsset, "createSpriteAsset");
+    const db = await getTestDatabase();
+    for (let index = 0; index < 13; index++) {
+      create.mockResolvedValue(remote({ id: `asset-${index}` }));
+      const id = await queued();
+      await db.update(spriteGeneration).set({ createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)) }).where(eq(spriteGeneration.id, id));
+    }
+    const poll = vi.spyOn(gameAsset, "getSpriteAsset").mockResolvedValue(remote());
+    await (await caller()).sync();
+    expect(poll).toHaveBeenCalledTimes(12);
+    expect(poll).toHaveBeenCalledWith("asset-0");
+    expect(poll).not.toHaveBeenCalledWith("asset-12");
+  });
+
   it("takes a new shot from the stored image without uploading again", async () => {
     const id = await ready();
     vi.spyOn(gameAsset, "createSpriteAsset").mockResolvedValue(remote({ id: "asset-2" }));

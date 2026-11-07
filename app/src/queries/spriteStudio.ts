@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, ne, or } from "drizzle-orm";
 import type { SpriteGenerationStatus } from "@/drizzle/constants";
 import { spriteGeneration } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
@@ -17,7 +17,10 @@ export const listSpriteGenerations = (client: DrizzleClient) =>
   });
 export const findSpriteGeneration = (client: DrizzleClient, id: string) =>
   client.query.spriteGeneration.findFirst({ where: eq(spriteGeneration.id, id) });
-/** Work to reconcile: anything remote, plus preparation abandoned by a stopped function. */
+/**
+ * Work to reconcile: anything remote, plus preparation abandoned by a stopped function.
+ * Oldest first, so a burst of new requests cannot hold back finished ones.
+ */
 export const listGenerationsToSync = (client: DrizzleClient, staleBefore: Date) =>
   client.query.spriteGeneration.findMany({
     where: or(
@@ -27,7 +30,7 @@ export const listGenerationsToSync = (client: DrizzleClient, staleBefore: Date) 
         lt(spriteGeneration.updatedAt, staleBefore),
       ),
     ),
-    orderBy: desc(spriteGeneration.createdAt),
+    orderBy: asc(spriteGeneration.createdAt),
     limit: SYNC_LIMIT,
   });
 export const insertSpriteGeneration = (

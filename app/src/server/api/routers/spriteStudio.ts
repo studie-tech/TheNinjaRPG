@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import sharp from "sharp";
 import { z } from "zod";
 import { SpriteGenerationMotions } from "@/drizzle/constants";
-import type { SpriteGeneration } from "@/drizzle/schema";
+import type { SpriteGeneration, spriteGeneration } from "@/drizzle/schema";
 import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate";
 import { animationActions } from "@/libs/spriteAnimationActions";
 import { finishSpriteSheet } from "@/libs/spriteSheetFinish";
@@ -145,7 +145,7 @@ export const spriteStudioRouter = createTRPCRouter({
           { ...input, imageId: remoteImageId, facing },
           id,
         );
-        await insertSpriteGeneration(ctx.drizzle, {
+        await recordGeneration(ctx.drizzle, {
           ...input,
           id,
           facing,
@@ -183,7 +183,7 @@ export const spriteStudioRouter = createTRPCRouter({
           },
           id,
         );
-        await insertSpriteGeneration(ctx.drizzle, {
+        await recordGeneration(ctx.drizzle, {
           id,
           name: row.name,
           prompt: row.prompt,
@@ -373,6 +373,19 @@ const uploadArt = async (url: string, title: string) => {
   return uploadCharacterImage(png, title.slice(0, 120));
 };
 
+/** Save a paid job's request; one that cannot be saved is untrackable, so cancel it. */
+const recordGeneration = async (
+  client: DrizzleClient,
+  values: typeof spriteGeneration.$inferInsert,
+) => {
+  try {
+    await insertSpriteGeneration(client, values);
+  } catch (error) {
+    await cancelSpriteAsset(values.remoteAssetId).catch(() => undefined);
+    throw error;
+  }
+};
+
 /**
  * Cancel a running job. One that finished in the meantime refuses and stays charged;
  * one that may still be running keeps its row, so its result is not lost.
@@ -438,11 +451,10 @@ const prepareSheet = async (
       downloadSpriteFile(row.sourceUrl),
     ]);
     const { large, small } = await finishSpriteSheet(sheet, art, grid);
-    const [url, smallUrl] = await Promise.all([
-      uploadToStorage(large, `sprite-sheet-${nanoid()}-256.webp`),
-      uploadToStorage(small, `sprite-sheet-${nanoid()}-128.webp`),
-    ]);
-    stored.push(url, smallUrl);
+    const url = await uploadToStorage(large, `sprite-sheet-${nanoid()}-256.webp`);
+    stored.push(url);
+    const smallUrl = await uploadToStorage(small, `sprite-sheet-${nanoid()}-128.webp`);
+    stored.push(smallUrl);
     const finished = await transitionSpriteGeneration(client, claimed, {
       status: "READY",
       stage: null,
