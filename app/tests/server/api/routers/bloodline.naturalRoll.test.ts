@@ -2,7 +2,7 @@ import * as crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { ROLL_CHANCE } from "@/drizzle/constants";
-import { actionLog, bloodline, bloodlineRolls, gameSetting, userData } from "@/drizzle/schema";
+import { actionLog, bloodline, bloodlineRolls, gameSetting, quest, questHistory, userData } from "@/drizzle/schema";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { insertUsers } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
@@ -20,7 +20,7 @@ const rolls = async () => (await getTestDatabase()).select().from(bloodlineRolls
 
 describeWithDatabase("natural bloodline roll", () => {
   beforeEach(async () => {
-    await resetTables(actionLog, bloodlineRolls, bloodline, gameSetting, userData);
+    await resetTables(actionLog, bloodlineRolls, bloodline, questHistory, quest, gameSetting, userData);
     await insertUsers([{ userId, username: "NaturalRoller", rank: "GENIN", status: "AWAKE", regeneration: 0 }]);
     await (await getTestDatabase()).insert(bloodline).values(
       (["S", "A", "B", "C"] as const).map((rank) => ({ id: `line-${rank}`, name: `Line ${rank}`, rank, image: "", description: "A bloodline", effects: [] })),
