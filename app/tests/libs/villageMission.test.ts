@@ -1,7 +1,7 @@
 import { expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import { alignBattle } from "@/libs/combat/turn";
-import { claimVillageMissionCombatEvents } from "@/libs/combat/villageMission";
+import { claimVillageMissionPvpKills } from "@/libs/combat/villageMission";
 import type { CombatResult } from "@/libs/combat/types";
 import type { Quest } from "@/drizzle/schema";
 import { isVillageMissionAvailable, villageMissionCompletionEvents } from "@/libs/villageMission";
@@ -23,9 +23,9 @@ it("counts defeated human opponents while excluding escapees, allies, summons an
     makeBattleUser("summon", { direction: "right", curHealth: 0, isSummon: true }),
   ] });
   const result = { didWin: 1 } as CombatResult;
-  expect(claimVillageMissionCombatEvents(battle, "winner", result)).toEqual({ pvp_kills: 1 });
-  expect(claimVillageMissionCombatEvents({ ...battle, battleType: "SPARRING" }, "winner", result)).toEqual({});
-  expect(claimVillageMissionCombatEvents(battle, "winner", { ...result, didWin: 0 })).toEqual({});
+  expect(claimVillageMissionPvpKills(battle, "winner", result)).toBe(1);
+  expect(claimVillageMissionPvpKills({ ...battle, battleType: "SPARRING" }, "winner", result)).toBe(0);
+  expect(claimVillageMissionPvpKills(battle, "winner", { ...result, didWin: 0 })).toBe(0);
 });
 
 it.each([
@@ -63,8 +63,8 @@ it.each([false, true])("counts group PvP defeats once per village regardless of 
   const battle = makeCompleteBattle({ usersState: reversed ? usersState.reverse() : usersState });
   const result = { didWin: 1 } as CombatResult;
   const winnerIds = reversed ? ["winner-b", "winner-a"] : ["winner-a", "winner-b"];
-  expect(claimVillageMissionCombatEvents(battle, winnerIds[0]!, result)).toEqual({ pvp_kills: 2 });
-  expect(claimVillageMissionCombatEvents(battle, winnerIds[1]!, result)).toEqual({});
+  expect(claimVillageMissionPvpKills(battle, winnerIds[0]!, result)).toBe(2);
+  expect(claimVillageMissionPvpKills(battle, winnerIds[1]!, result)).toBe(0);
 });
 
 it.each([
@@ -78,8 +78,8 @@ it.each([
     makeBattleUser("winner", { villageId: "v1", direction: "left" }),
     makeBattleUser("opponent", { villageId: "v2", direction: "right", curHealth: 0 }),
   ] });
-  expect(claimVillageMissionCombatEvents(battle, "ally-a", { didWin: overrides.curHealth === 0 || overrides.fledBattle ? 0 : 1 } as CombatResult)).toEqual({});
-  expect(claimVillageMissionCombatEvents(battle, "winner", { didWin: 1 } as CombatResult)).toEqual({ pvp_kills: 1 });
+  expect(claimVillageMissionPvpKills(battle, "ally-a", { didWin: overrides.curHealth === 0 || overrides.fledBattle ? 0 : 1 } as CombatResult)).toBe(0);
+  expect(claimVillageMissionPvpKills(battle, "winner", { didWin: 1 } as CombatResult)).toBe(1);
 });
 
 it("keeps shared PvP credit reserved after lethal deferred damage to the settled winner", () => {
@@ -92,11 +92,11 @@ it("keeps shared PvP credit reserved after lethal deferred damage to the settled
       makeBattleUser("opponent", { villageId: "v2", direction: "right", curHealth: 0, leftBattle: true }),
     ], usersEffects: [],
   });
-  expect(claimVillageMissionCombatEvents(battle, "winner-a", { didWin: 1 } as CombatResult)).toEqual({ pvp_kills: 1 });
+  expect(claimVillageMissionPvpKills(battle, "winner-a", { didWin: 1 } as CombatResult)).toBe(1);
   const actId = battle.activeUserId;
   if (!actId) throw new Error("Missing active battle user");
   expect(alignBattle(battle, [], "winner-b").progressRound).toBe(true);
   const after = applyEffects(battle, actId).newBattle;
   expect(after.usersState.find((entry) => entry.userId === "winner-a")?.curHealth).toBe(0);
-  expect(claimVillageMissionCombatEvents(after, "winner-b", { didWin: 1 } as CombatResult)).toEqual({});
+  expect(claimVillageMissionPvpKills(after, "winner-b", { didWin: 1 } as CombatResult)).toBe(0);
 });
