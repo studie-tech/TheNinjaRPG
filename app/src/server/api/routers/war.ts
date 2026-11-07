@@ -8,6 +8,8 @@ import {
   getStartWarMissionUserUpdate,
 } from "@/deltas/war";
 import {
+  ALLIANCE_VILLAGE_TYPES,
+  type AllianceVillageType,
   ELDER_MIN_VOTING_COUNT,
   ELDER_WAR_VOTE_HOURS,
   FACTION_RAID_COST,
@@ -349,12 +351,9 @@ export const warRouter = createTRPCRouter({
         listAcceptedWarMercenaries(ctx.drizzle, input),
         fetchMercenaryWarId(ctx.drizzle, ctx.userId),
       ]);
-      if (
-        !activeWar?.rules ||
-        !getWarSide(activeWar, user.villageId, user.userId, mercenaryWarId)
-      )
-        return null;
-      const side = getWarSide(activeWar, user.villageId, user.userId, mercenaryWarId)!;
+      if (!activeWar?.rules) return null;
+      const side = getWarSide(activeWar, user.villageId, user.userId, mercenaryWarId);
+      if (!side) return null;
       const maskedIds = getMaskedMercenaryIds(mercenaryHistory, ctx.userId);
       const isMasked = (id: string) => maskedIds.has(id);
       const displayName = (id: string, name: string | null | undefined) =>
@@ -1178,7 +1177,7 @@ export const warRouter = createTRPCRouter({
         return errorResponse("Only factions can initiate raids");
       if (isRaid) {
         const block = getRaidDeclarationBlock(
-          attackerVillage!,
+          attackerVillage,
           attackerStructures,
           structures,
           input.targetVillageId,
@@ -1190,10 +1189,14 @@ export const warRouter = createTRPCRouter({
       if (relationshipStatus !== "ENEMY") {
         return errorResponse("You can only declare war on enemy villages");
       }
-      if (!["VILLAGE", "STRONGHOLD", "HIDEOUT"].includes(attackerVillage.type)) {
+      if (
+        !ALLIANCE_VILLAGE_TYPES.includes(attackerVillage.type as AllianceVillageType)
+      ) {
         return errorResponse("You cannot declare war on this type of village");
       }
-      if (!["VILLAGE", "STRONGHOLD", "HIDEOUT"].includes(defenderVillage.type)) {
+      if (
+        !ALLIANCE_VILLAGE_TYPES.includes(defenderVillage.type as AllianceVillageType)
+      ) {
         return errorResponse("You cannot declare war on this type of village");
       }
       if (!isRaid && defenderVillage.tokens < WAR_MINIMUM_TOKENS_FOR_BEING_ATTACKABLE) {
@@ -1296,7 +1299,7 @@ export const warRouter = createTRPCRouter({
       }
 
       // Factions have no elder council, so their leader's declaration is the approval
-      if (isFactionVillage(attackerVillage)) {
+      if (isRaid) {
         const started = await startDeclaredWar(ctx.drizzle, {
           attackerVillageId: attackerVillage.id,
           attackerVillageName: attackerVillage.name,
