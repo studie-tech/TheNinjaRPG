@@ -1713,7 +1713,6 @@ function realizeSageTags(props: {
       level,
       fromType,
       round: battle.round,
-      battle,
     });
     realized.longitude = user.longitude;
     realized.latitude = user.latitude;
