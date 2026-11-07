@@ -16,17 +16,23 @@ export const STRIPE_CHECKOUT_RETRY_SECONDS = STRIPE_CHECKOUT_LIFETIME_SECONDS - 
 export const reputationAllowanceUsed = async (
   client: DrizzleClient,
   buyerId: string,
-  excludedPaypalId = "",
-  excludedStripeId = "",
-  excludedStoreId = "",
+  {
+    excludePaypalId = "",
+    excludeStripeCheckoutId = "",
+    excludeStoreOrderId = "",
+  }: {
+    excludePaypalId?: string;
+    excludeStripeCheckoutId?: string;
+    excludeStoreOrderId?: string;
+  } = {},
 ) => {
   const [row] = await selectUserDataForReputationAllowanceUsed(
     client,
     buyerId,
-    excludedPaypalId,
-    excludedStripeId,
+    excludePaypalId,
+    excludeStripeCheckoutId,
     STRIPE_CHECKOUT_RESERVATION_SECONDS,
-    excludedStoreId,
+    excludeStoreOrderId,
   );
   return row?.total ?? 0;
 };

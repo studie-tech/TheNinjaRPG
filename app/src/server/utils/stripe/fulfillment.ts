@@ -81,7 +81,9 @@ export const grantStripeReceipt = async (
         if (current?.grantedAt) return;
         if (current?.reviewRequired) return "review_required" as const;
         if (
-          (await reputationAllowanceUsed(client, buyerId, "", stored.checkoutId)) +
+          (await reputationAllowanceUsed(client, buyerId, {
+            excludeStripeCheckoutId: stored.checkoutId,
+          })) +
             stored.reputationPoints >
           dynamicMonthlyRepCap(buyer)
         ) {
