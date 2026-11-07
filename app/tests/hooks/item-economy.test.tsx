@@ -29,42 +29,14 @@ import type { FurnitureGeometry } from "@/validators/itemFurniture";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { validItemInput } from "../setup/items";
 
-const validItem = ItemValidator.parse({
+const validItem = ItemValidator.parse(validItemInput({
   name: "Shop item",
-  image: "item.webp",
   description: "Shop item",
   battleDescription: "",
   stackSize: 10,
-  chakraCost: 0,
-  healthCost: 0,
-  staminaCost: 0,
-  healthCostReducePerLvl: 0,
-  chakraCostReducePerLvl: 0,
-  staminaCostReducePerLvl: 0,
-  actionCostPerc: 100,
-  maxImbueNumber: 1,
-  maxDurability: 100,
-  hidden: false,
-  cooldown: 0,
-  cost: 1,
-  repsCost: 0,
-  seichiSilverCost: 0,
-  range: 0,
-  maxEquips: 0,
-  method: "SINGLE",
-  target: "SELF",
-  itemType: "MATERIAL",
-  weaponType: "NONE",
-  rarity: "COMMON",
-  slot: "NONE",
-  expireFromStoreAt: null,
-  effects: [],
-  farmYieldItemId: null,
-  farmExtractSeedItemId: null,
-  crystalTargetTypes: null,
-  bloodlineId: null,
-});
+}));
 const data = {
   ...validItem,
   id: "shop-item",
