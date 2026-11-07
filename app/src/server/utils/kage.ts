@@ -73,8 +73,7 @@ export const withKageDefense = async <T>(
   callback: (tx: DrizzleClient, hall: KageDefenseHall) => Promise<T>,
 ) =>
   retryOnDeadlock(() =>
-    client.transaction(async (transaction) => {
-      const tx = transaction as unknown as DrizzleClient;
+    client.transaction(async (tx) => {
       await incrementKageScheduleVersion(tx, villageId);
       const hall = await loadKageDefense(tx, villageId);
       if (hall?.village.type !== "VILLAGE") return null;

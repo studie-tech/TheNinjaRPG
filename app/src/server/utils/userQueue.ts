@@ -105,8 +105,6 @@ import type {
  * users without rows pay no extra query, and timed jobs only cost writes when one is due.
  */
 
-type QueueClient = DrizzleClient | DrizzleTransaction;
-
 type JobOutcome = { finishesAt: Date } | "dropped" | "conflict";
 
 /** A waiting jutsu level with its JUTSU columns narrowed. */
@@ -728,7 +726,7 @@ const settleWaitingJobs = async <
 };
 
 const rescheduleWaiting = async (
-  client: QueueClient,
+  client: DrizzleClient,
   entries: { id: string; startsAt: Date; finishesAt: Date; durationSeconds: number }[],
   startsAt: Date,
 ) => {
@@ -890,7 +888,7 @@ const startQueuedCraft = async (
 };
 
 /** Deleting the row is the claim: only one settlement or cancellation can win it. */
-const claimQueueRow = async (client: QueueClient, id: string) => {
+const claimQueueRow = async (client: DrizzleClient, id: string) => {
   const result = await deleteUserQueueForClaimQueueRow(client, id);
   return result.rowsAffected === 1;
 };
@@ -923,7 +921,7 @@ const QUEST_WRITE_ATTEMPTS = 3;
  * changed the owner first; after a few lost races the amounts are written without it.
  */
 const updateQueueOwner = async (
-  client: QueueClient,
+  client: DrizzleClient,
   owner: Awaited<ReturnType<typeof fetchQuestUser>>,
   changes: {
     refund?: number;
@@ -968,7 +966,7 @@ const updateQueueOwner = async (
   await updateUserDataForUpdateQueueOwner2(client, amounts, nextSnapshot, owner);
 };
 
-const refundRyo = async (client: QueueClient, userId: string, amount: number) => {
+const refundRyo = async (client: DrizzleClient, userId: string, amount: number) => {
   if (amount <= 0) return;
   await incrementUserMoney(client, amount, userId);
 };
@@ -981,7 +979,7 @@ const refundRyo = async (client: QueueClient, userId: string, amount: number) =>
  * need new stacks; the rest go in one insert.
  */
 const returnMaterials = async (
-  client: QueueClient,
+  client: DrizzleClient,
   userId: string,
   materials: CraftingQueueMaterial[],
   inTransaction = false,
@@ -1012,7 +1010,7 @@ export const returnCraftMaterials = returnMaterials;
  * Include bonus history back to the queued job's logical start in the same read.
  */
 const fetchQuestUser = async (
-  client: QueueClient,
+  client: DrizzleClient,
   userId: string,
   jutsuId?: string,
   startsAt?: Date,

@@ -89,7 +89,7 @@ export const commitCacheConsumption = async ({
           committed: false,
         };
       }
-      const response = await consume(tx as unknown as DrizzleClient);
+      const response = await consume(tx);
       if (!response.success) {
         await deleteActionLogForCommitCacheConsumption(tx, receiptId);
         return { response, committed: false };

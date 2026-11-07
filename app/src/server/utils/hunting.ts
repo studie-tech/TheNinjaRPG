@@ -82,7 +82,7 @@ export const settleHuntingBattle = async (
           await insertUserItemForSettleHuntingBattle(tx, receipt, meta);
       }
       await insertHuntingReceiptForSettleHuntingBattle(tx, current, meta, receipt);
-      await settlePlayer(tx as unknown as DrizzleClient, playerBattle, playerResult);
+      await settlePlayer(tx, playerBattle, playerResult);
       return playerResult;
     }),
   );

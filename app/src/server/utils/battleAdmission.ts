@@ -29,8 +29,7 @@ export const commitBattleAdmission = async <T>({
   };
   try {
     const result = await retryOnDeadlock(() =>
-      client.transaction(async (transaction) => {
-        const tx = transaction as unknown as DrizzleClient;
+      client.transaction(async (tx) => {
         await admit?.(tx, reject);
         const created = await createBattle(tx);
         if (!didClaim(created)) reject(claimFailedMessage);
