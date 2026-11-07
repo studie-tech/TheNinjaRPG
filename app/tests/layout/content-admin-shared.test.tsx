@@ -53,16 +53,21 @@ afterEach(() => {
 describe("EditorQueryFeedback", () => {
   it("reports a missing record without a retry", () => {
     const view = render(<EditorQueryFeedback {...feedback} isError={false} onRetry={vi.fn()} />);
-    expect(view.getByRole("alert").textContent).toBe("This item could not be found.");
+    expect(view.getByRole("heading", { name: "Item not found" })).toBeTruthy();
+    expect(view.getByRole("alert").textContent).toContain("may have been removed");
+    expect(
+      view.getByRole("link", { name: "Back to list" }).getAttribute("href"),
+    ).toBe(feedback.backHref);
     expect(view.queryByRole("button")).toBeNull();
   });
 
   it("offers a retry after a failed load", () => {
     const onRetry = vi.fn();
     const view = render(<EditorQueryFeedback {...feedback} isError onRetry={onRetry} />);
-    expect(view.getByRole("alert").textContent).toBe(
-      "This item could not be loaded. Please try again.",
-    );
+    expect(view.getByRole("heading", { name: "Unable to load item" })).toBeTruthy();
+    expect(
+      view.getByRole("link", { name: "Back to list" }).getAttribute("href"),
+    ).toBe(feedback.backHref);
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -72,6 +77,17 @@ describe("EditorQueryFeedback", () => {
       <EditorQueryFeedback {...feedback} hasCachedData isError onRetry={vi.fn()} />,
     );
     expect(view.getByRole("alert").textContent).toContain("previously loaded data");
+    expect(view.getByRole("heading", { name: "Unable to refresh item" })).toBeTruthy();
+    expect(view.queryByRole("link", { name: "Back to list" })).toBeNull();
+  });
+
+  it("disables retry and announces the pending state while refetching", () => {
+    const view = render(
+      <EditorQueryFeedback {...feedback} isFetching isError onRetry={vi.fn()} />,
+    );
+    const retry = view.getByRole("button", { name: "Retrying..." });
+    expect((retry as HTMLButtonElement).disabled).toBe(true);
+    expect(retry.getAttribute("aria-busy")).toBe("true");
   });
 });
 
