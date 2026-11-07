@@ -141,13 +141,8 @@ export const calcBattleResult = (
       let eloDiff = Math.max(calcEloChange(uExp, oExp || 1000, maxGain), 0.02);
 
       // If killing ally, then no experience (unless in war-torn sector)
-      // Note: isInWarTornSector is declared later in the prestige calculation section
-      const isInWarTornSectorForExp = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
-      if (
-        battleType === "COMBAT" &&
-        villageIds.length === 1 &&
-        !isInWarTornSectorForExp
-      ) {
+      const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
+      if (battleType === "COMBAT" && villageIds.length === 1 && !isInWarTornSector) {
         eloDiff = 0;
       }
 
@@ -236,7 +231,7 @@ export const calcBattleResult = (
       const isCombatOrWarBattle =
         battleType === "COMBAT" || battleType === "SHRINE_WAR";
       let moneyDelta = didWin
-        ? (isCombatOrWarBattle && isInWarTornSectorForExp
+        ? (isCombatOrWarBattle && isInWarTornSector
             ? WAR_TORN_SECTOR_BASE_MONEY
             : randomInt(30, 40) + user.level) * moneyBoost
         : 0;
@@ -288,7 +283,6 @@ export const calcBattleResult = (
       // Check for prestige, tokens, etc.
       const vilId = friends[0]?.villageId ?? user.villageId;
       const isInitiatingTeam = friends.some((member) => member.isAggressor);
-      const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
       if (didWin && battleType === "COMBAT" && isInitiatingTeam) {
         targetUsers.forEach((target) => {
           const targetRelations = getRelationsArray(battle, target);
@@ -349,12 +343,19 @@ export const calcBattleResult = (
       > = {};
       const villageWarShrineDisplay: Record<string, number> = {};
       const warIdToDisplayName: Record<string, string> = {};
+      const ensureVillageWarShrine = (war: BattleWar) => {
+        if (war.id in villageWarShrineInfo) return;
+        villageWarShrineInfo[war.id] = { attacker: 0, defender: 0 };
+        // Create display name for this war using village names
+        const attackerName = war.attackerVillage?.name ?? "Attacker";
+        const defenderName = war.defenderVillage?.name ?? "Defender";
+        warIdToDisplayName[war.id] = `${attackerName} vs ${defenderName}`;
+      };
       let warHealthChange = 0;
       let shrineChangeHp = 0;
-      // Skip war updates if kill happened in war-torn sector
-      const isInWarTornSectorForWar = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
       const userWars = getBattleTeamWars(battle, user);
-      if (!user.fledBattle && !isInWarTornSectorForWar) {
+      // Skip war updates if kill happened in war-torn sector
+      if (!user.fledBattle && !isInWarTornSector) {
         targets.forEach((target) => {
           const wars = getOpposingBattleWars(battle, user, target);
           wars.forEach(({ war, sideVillageId }) => {
@@ -440,13 +441,7 @@ export const calcBattleResult = (
             // Track per-war to avoid accumulation bug when a user is in multiple wars
             // Track attacker and defender shrine changes separately
             if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
-              if (!(war.id in villageWarShrineInfo)) {
-                villageWarShrineInfo[war.id] = { attacker: 0, defender: 0 };
-                // Create display name for this war using village names
-                const attackerName = war.attackerVillage?.name ?? "Attacker";
-                const defenderName = war.defenderVillage?.name ?? "Defender";
-                warIdToDisplayName[war.id] = `${attackerName} vs ${defenderName}`;
-              }
+              ensureVillageWarShrine(war);
               const isUserOnDefenderSide = !isUserOnAttackerSide;
 
               // Determine which shrine is being targeted based on user's sector
@@ -525,13 +520,7 @@ export const calcBattleResult = (
               // Skip if not a defend scenario (attack scenarios are handled by target loop)
               if (!isDefendScenario) return;
 
-              // Initialize war entry if not exists
-              if (!(war.id in villageWarShrineInfo)) {
-                villageWarShrineInfo[war.id] = { attacker: 0, defender: 0 };
-                const attackerName = war.attackerVillage?.name ?? "Attacker";
-                const defenderName = war.defenderVillage?.name ?? "Defender";
-                warIdToDisplayName[war.id] = `${attackerName} vs ${defenderName}`;
-              }
+              ensureVillageWarShrine(war);
 
               // Apply shrine HP recovery for defend
               const warInfo = villageWarShrineInfo[war.id];
@@ -551,26 +540,15 @@ export const calcBattleResult = (
       // Scale everything based on reward scaling
       shrineChangeHp *= battle.rewardScaling;
       warHealthChange *= battle.rewardScaling;
-      Object.keys(shrineInfo).forEach((sector) => {
-        const sectorNum = Number(sector);
-        const val = shrineInfo[sectorNum];
-        if (val !== undefined) {
-          shrineInfo[sectorNum] = val * battle.rewardScaling;
-        }
-      });
-      Object.keys(warHealthInfo).forEach((name) => {
-        const val = warHealthInfo[name];
-        if (val !== undefined) {
-          warHealthInfo[name] = val * battle.rewardScaling;
-        }
-      });
+      mapRecordValues(shrineInfo, (value) => value * battle.rewardScaling);
+      mapRecordValues(warHealthInfo, (value) => value * battle.rewardScaling);
       // Note: villageWarShrineInfo is intentionally NOT scaled by rewardScaling.
       // Shrine HP changes are a strategic war mechanic and should not be reduced
       // by anti-farming scaling, ensuring consistent war progress per kill.
 
       // Adjust shrine & townhall datamage based on level different
-      const maxTargetLevel = Math.max(...targetUsers.map((t) => t.level), 0);
-      if (Math.abs(user.level - maxTargetLevel) > STREAK_LEVEL_DIFF) {
+      const maxHumanTargetLevel = Math.max(...targetUsers.map((t) => t.level), 0);
+      if (Math.abs(user.level - maxHumanTargetLevel) > STREAK_LEVEL_DIFF) {
         // Check if any kage was killed in this battle
         const targetKageLost =
           targets.some((target) => {
@@ -579,64 +557,41 @@ export const calcBattleResult = (
           }) && didWin;
         const userKageLost = village?.kageId === user.userId && !didWin;
         const kageLost = targetKageLost || userKageLost;
-        const strongestWon = user.level > maxTargetLevel && didWin;
-        const weakestLost = user.level < maxTargetLevel && !didWin;
+        const strongestWon = user.level > maxHumanTargetLevel && didWin;
+        const weakestLost = user.level < maxHumanTargetLevel && !didWin;
         // If kage was killed, we preserve all war damage, otherwise reduce all changes to 1/abs(change) if we're the stronger player
         if (!kageLost && (strongestWon || weakestLost)) {
-          if (shrineChangeHp !== 0) {
-            shrineChangeHp /= Math.abs(shrineChangeHp);
+          shrineChangeHp = Math.sign(shrineChangeHp);
+          warHealthChange = Math.sign(warHealthChange);
+          mapRecordValues(shrineInfo, Math.sign);
+          mapRecordValues(warHealthInfo, Math.sign);
+          for (const info of Object.values(villageWarShrineInfo)) {
+            info.attacker = Math.sign(info.attacker);
+            info.defender = Math.sign(info.defender);
           }
-          if (warHealthChange !== 0) {
-            warHealthChange /= Math.abs(warHealthChange);
-          }
-          Object.keys(shrineInfo).forEach((sector) => {
-            const sectorNum = Number(sector);
-            const val = shrineInfo[sectorNum];
-            if (val !== undefined) {
-              const abs = Math.abs(val);
-              if (abs !== 0) shrineInfo[sectorNum] = val / abs;
-            }
-          });
-          Object.keys(warHealthInfo).forEach((name) => {
-            const val = warHealthInfo[name];
-            if (val !== undefined) {
-              const abs = Math.abs(val);
-              if (abs !== 0) warHealthInfo[name] = val / abs;
-            }
-          });
-          Object.keys(villageWarShrineInfo).forEach((warId) => {
-            const info = villageWarShrineInfo[warId];
-            if (info) {
-              const absAttacker = Math.abs(info.attacker);
-              const absDefender = Math.abs(info.defender);
-              if (absAttacker !== 0) info.attacker /= absAttacker;
-              if (absDefender !== 0) info.defender /= absDefender;
-            }
-          });
         }
       }
 
       // Convert villageWarShrineInfo to display-friendly format using war names
       // Combine attacker and defender changes for display purposes
-      Object.keys(villageWarShrineInfo).forEach((warId) => {
+      for (const [warId, info] of Object.entries(villageWarShrineInfo)) {
         const displayName = warIdToDisplayName[warId] ?? warId;
-        const info = villageWarShrineInfo[warId];
-        if (info) {
-          villageWarShrineDisplay[displayName] = info.attacker + info.defender;
-        }
-      });
+        villageWarShrineDisplay[displayName] = info.attacker + info.defender;
+      }
+
+      // Opponent level gaps for rewards count AI opponents too.
+      const maxTargetLevel = Math.max(...targets.map((t) => t.level), 0);
 
       // Determine if pvpStreak should be adjusted
       const calculatePvpStreak = (
         battleType: string,
         user: { level: number; pvpStreak: number; isAggressor: boolean },
-        targets: { level: number }[],
+        maxTargetLevel: number,
         didWin: boolean,
       ): number => {
         if (battleType !== "COMBAT") {
           return user.pvpStreak;
         }
-        const maxTargetLevel = Math.max(...targets.map((t) => t.level), 0);
         const levelDifference = user.level - maxTargetLevel;
         if (user.isAggressor && levelDifference > STREAK_LEVEL_DIFF) {
           return user.pvpStreak;
@@ -658,24 +613,20 @@ export const calcBattleResult = (
       }[] = [];
       if (battleType === "COMBAT" && didWin) {
         const userBountySignups = getUserBountySignups(battle, user.controllerId);
-        userBountySignups.forEach((signup) => {
-          targets
-            .filter((t) => {
-              const targetBounties = getUserBounties(battle, t.controllerId);
-              return targetBounties.find((b) => b.id === signup.bountyId);
-            })
-            .forEach((t) => {
-              const targetBounties = getUserBounties(battle, t.controllerId);
-              const bounty = targetBounties.find((b) => b.id === signup.bountyId);
-              if (bounty) {
-                bountiesClaimed.push({
-                  bountyId: bounty.id,
-                  hunterId: user.userId,
-                  amountRyo: bounty.amountRyo,
-                });
-              }
-            });
-        });
+        for (const signup of userBountySignups) {
+          for (const target of targets) {
+            const bounty = getUserBounties(battle, target.controllerId).find(
+              (b) => b.id === signup.bountyId,
+            );
+            if (bounty) {
+              bountiesClaimed.push({
+                bountyId: bounty.id,
+                hunterId: user.userId,
+                amountRyo: bounty.amountRyo,
+              });
+            }
+          }
+        }
       }
 
       // Roll item drops from defeated opponents and include in result for frontend display
@@ -711,7 +662,7 @@ export const calcBattleResult = (
         lpDiff: lpDiff,
         experience: 0.01,
         earnedExperience: 0,
-        pvpStreak: calculatePvpStreak(battleType, user, targets, didWin),
+        pvpStreak: calculatePvpStreak(battleType, user, maxTargetLevel, didWin),
         curHealth: user.curHealth,
         curStamina: user.curStamina,
         curChakra: user.curChakra,
@@ -810,7 +761,7 @@ export const calcBattleResult = (
 
       // Apply 1.6x multiplier to all PvP rewards in war-torn sector
       // Allow both COMBAT and war battle types (SHRINE_WAR, etc.) in war-torn sector
-      if (isCombatOrWarBattle && isInWarTornSectorForExp && didWin) {
+      if (isCombatOrWarBattle && isInWarTornSector && didWin) {
         result.experience *= 1.6;
         result.money *= 1.6;
         result.earnedExperience *= 1.6;
@@ -818,7 +769,6 @@ export const calcBattleResult = (
         // Silver drop chance for kills in war-torn sector (using same diminishing returns as rewards)
         // Check level difference is within 10 levels
         if (targets.length > 0) {
-          const maxTargetLevel = Math.max(...targets.map((t) => t.level), 0);
           const levelDifference = Math.abs(user.level - maxTargetLevel);
           if (levelDifference <= STREAK_LEVEL_DIFF) {
             const silverDropChance = 5 * battle.rewardScaling;
@@ -830,16 +780,9 @@ export const calcBattleResult = (
       }
 
       // Apply money penalty for losers in war-torn sector (lose the same amount winner would gain)
-      if (
-        isCombatOrWarBattle &&
-        isInWarTornSectorForExp &&
-        !didWin &&
-        outcome !== "Fled"
-      ) {
+      if (isCombatOrWarBattle && isInWarTornSector && !didWin && outcome !== "Fled") {
         // Calculate what the user would have gotten if they won (same calculation as winner)
-        // Clan and faction Ryo bonuses use the same stored percentage.
-        const loserMoneyBoost = userClan?.ryoBoost ? 1 + userClan.ryoBoost / 100 : 1;
-        let loserMoneyGain = WAR_TORN_SECTOR_BASE_MONEY * loserMoneyBoost;
+        let loserMoneyGain = WAR_TORN_SECTOR_BASE_MONEY * moneyBoost;
         loserMoneyGain *= 1.5; // COMBAT multiplier
         loserMoneyGain *= battle.rewardScaling;
         // Apply 1.6x multiplier (same as winner gets)
@@ -877,11 +820,7 @@ export const calcBattleResult = (
           "TOURNAMENT",
         ].includes(battleType) &&
         targetUsers.length > 0 &&
-        !(
-          battleType === "COMBAT" &&
-          villageIds.length === 1 &&
-          !isInWarTornSectorForExp
-        );
+        !(battleType === "COMBAT" && villageIds.length === 1 && !isInWarTornSector);
       result.pvpExperience = earnsPvpExperience
         ? pvpExperienceReward(
             outcome,
@@ -922,6 +861,14 @@ export const calcBattleResult = (
     }
   }
   return null;
+};
+
+/** Replace every value of a record in place. */
+const mapRecordValues = <K extends string | number>(
+  record: Record<K, number>,
+  transform: (value: number) => number,
+) => {
+  for (const key of Object.keys(record) as K[]) record[key] = transform(record[key]);
 };
 
 /** War health a kill recovers and removes, by the rank of the fighter it counts for. */
