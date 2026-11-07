@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
   getDiscordConfig,
   isDiscordLinkingEnabled,
   parseTokenKey,
   parseVillageRoleIds,
 } from "@/server/utils/discord/config";
+import { restoreEnvAfterEach } from "../../../setup/env";
 
 const KEYS = [
   "DISCORD_LINKING_ENABLED",
@@ -17,7 +18,7 @@ const KEYS = [
   "DISCORD_TOKEN_ENCRYPTION_KEY",
   "NEXT_PUBLIC_BASE_URL",
 ] as const;
-const original = Object.fromEntries(KEYS.map((key) => [key, process.env[key]]));
+restoreEnvAfterEach(...KEYS);
 
 const configure = (overrides: Partial<Record<(typeof KEYS)[number], string>> = {}) => {
   Object.assign(process.env, {
@@ -31,13 +32,6 @@ const configure = (overrides: Partial<Record<(typeof KEYS)[number], string>> = {
     ...overrides,
   });
 };
-
-afterEach(() => {
-  for (const key of KEYS) {
-    if (original[key] === undefined) delete process.env[key];
-    else process.env[key] = original[key];
-  }
-});
 
 describe("getDiscordConfig", () => {
   it("is off unless the flag is exactly true", () => {

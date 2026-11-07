@@ -34,8 +34,9 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { restoreEnvAfterEach } from "../../../setup/env";
 
-const originalEnv = { ...process.env };
+restoreEnvAfterEach("CRON_SECRET");
 
 const mocks = { process: vi.fn(), lock: vi.fn(), reset: vi.fn(), execute: vi.fn() };
 
@@ -171,7 +172,7 @@ describeWithDatabase("war ally reservations during request expiry", () => {
   });
 });
 
-afterEach(() => { process.env = { ...originalEnv }; vi.restoreAllMocks(); resetServerModuleStubs(); });
+afterEach(() => { vi.restoreAllMocks(); resetServerModuleStubs(); });
 describe("account deletion in the existing cleaner", () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -34,6 +34,7 @@ import {
   trpcPathsFromUrl,
   withBotIdGuard,
 } from "@/server/utils/botid";
+import { restoreEnvAfterEach } from "../../setup/env";
 
 const human = { isHuman: true, isBot: false, isVerifiedBot: false, bypassed: false };
 const bot = { isHuman: false, isBot: true, isVerifiedBot: false, bypassed: false };
@@ -48,7 +49,7 @@ const guardedMutation = (verdict: object) => {
 };
 
 const originalSetting = env.BOTID_ENFORCE;
-const originalVercelEnv = process.env.VERCEL_ENV;
+restoreEnvAfterEach("VERCEL_ENV");
 let warn: { mock: { calls: unknown[][] }; mockRestore: () => void };
 let info: { mock: { calls: unknown[][] }; mockRestore: () => void };
 
@@ -81,8 +82,6 @@ afterEach(() => {
   info.mockRestore();
   checkBotId.mockReset();
   env.BOTID_ENFORCE = originalSetting;
-  if (originalVercelEnv === undefined) delete process.env.VERCEL_ENV;
-  else process.env.VERCEL_ENV = originalVercelEnv;
 });
 
 describe("BotID check level", () => {

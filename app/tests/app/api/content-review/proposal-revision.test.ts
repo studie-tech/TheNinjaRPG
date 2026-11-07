@@ -1,10 +1,11 @@
 import { afterEach, expect, it, vi } from "bun:test";
 import { GET, PATCH } from "@/app/api/content-review/proposals/[id]/route";
 import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
+import { restoreEnvAfterEach } from "../../../setup/env";
 
-const originalCronSecret = process.env.CRON_SECRET;
+restoreEnvAfterEach("CRON_SECRET");
 const context = { params: Promise.resolve({ id: "proposal-id" }) };
-afterEach(() => { if (originalCronSecret === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = originalCronSecret; resetServerModuleStubs(); });
+afterEach(() => { resetServerModuleStubs(); });
 it("authenticates before reading a proposal or parsing a revision", async () => {
   process.env.CRON_SECRET = "test-secret";
   const read = vi.fn();

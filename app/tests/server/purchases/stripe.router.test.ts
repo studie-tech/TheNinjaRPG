@@ -3,16 +3,15 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
 import { paypalTransaction, stripeCheckout, stripePayment, userData } from "@/drizzle/schema";
-import { env } from "@/env/server.mjs";
 import { paypalRouter } from "@/server/api/routers/paypal";
 import { stripeRouter } from "@/server/api/routers/stripe";
 import * as stripeClient from "@/server/utils/stripe/client";
 import { insertUsers } from "../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { useStripeTestEnv } from "../../setup/stripe";
 
 const BUYER = "stripe-buyer";
 const RECIPIENT = "stripe-target";
-const original = { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_NORMAL: env.STRIPE_PRICE_NORMAL, STRIPE_PRICE_SILVER: env.STRIPE_PRICE_SILVER, STRIPE_PRICE_GOLD: env.STRIPE_PRICE_GOLD };
 const input = (points = 20) => ({ requestId: nanoid(), expectedUserId: BUYER, userId: RECIPIENT, purchase: { type: "reputation" as const, reputationPoints: points } });
 let lostCreateResponse = false;
 const sessions = new Map<string, Stripe.Checkout.Session>();
@@ -29,14 +28,14 @@ const expire = vi.fn(async (id: string) => { const session = sessions.get(id); i
 const api = { checkout: { sessions: { create, retrieve, expire } }, prices: { retrieve: vi.fn() }, subscriptions: { retrieve: vi.fn(), update: vi.fn() } } as unknown as Stripe;
 
 describeWithDatabase("Stripe router guards and durable checkout terms", () => {
+  useStripeTestEnv();
   beforeEach(async () => {
-    Object.assign(env, { STRIPE_SECRET_KEY: "sk_test_placeholder", STRIPE_WEBHOOK_SECRET: "whsec_placeholder", STRIPE_PRICE_NORMAL: "price_normal", STRIPE_PRICE_SILVER: "price_silver", STRIPE_PRICE_GOLD: "price_gold" });
     await resetTables(stripeCheckout, stripePayment, paypalTransaction, userData);
     await insertUsers([{ userId: BUYER, username: BUYER, reputationPoints: 0 }, { userId: RECIPIENT, username: RECIPIENT, reputationPoints: 0 }]);
     sessions.clear(); lostCreateResponse = false; create.mockClear(); retrieve.mockClear(); expire.mockClear();
     vi.spyOn(stripeClient, "getStripe").mockReturnValue(api);
   });
-  afterEach(() => { vi.restoreAllMocks(); Object.assign(env, original); });
+  afterEach(() => { vi.restoreAllMocks(); });
   it("keeps healthy subscriptions and unavailable rows manageable after an isolated lookup failure", async () => {
     const db = await getTestDatabase();
     await db.insert(stripeCheckout).values(["healthy", "unavailable"].map(id => ({ id, createdById: BUYER, affectedUserId: RECIPIENT, amountCents: 1500, federalStatus: "GOLD" as const, subscriptionId: `sub_${id}` })));

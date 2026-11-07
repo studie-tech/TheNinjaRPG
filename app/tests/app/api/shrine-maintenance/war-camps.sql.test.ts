@@ -25,6 +25,7 @@ import {
   recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
+import { restoreEnvAfterEach } from "../../../setup/env";
 
 const minuteTimer = "shrine-maintenance";
 const dailyTimer = "shrine-maintenance-daily";
@@ -38,7 +39,7 @@ const request = () =>
 describeWithDatabase("shrine minute scheduler war camps", () => {
   let now: Date;
   let previousMinute: Date;
-  let previousCronSecret: string | undefined;
+  restoreEnvAfterEach("CRON_SECRET");
 
   beforeEach(async () => {
     // Keep simulated camp deadlines behind MySQL's real clock for its SQL guards.
@@ -47,7 +48,6 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
     now.setUTCMinutes(17, 0, 0);
     setSystemTime(now);
     previousMinute = new Date(now.getTime() - 60000);
-    previousCronSecret = process.env.CRON_SECRET;
     process.env.CRON_SECRET = cronSecret;
     await resetTables(
       gameSetting,
@@ -98,8 +98,6 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
     vi.restoreAllMocks();
     resetServerModuleStubs();
     setSystemTime();
-    if (previousCronSecret === undefined) delete process.env.CRON_SECRET;
-    else process.env.CRON_SECRET = previousCronSecret;
   });
 
   it("opens camps between hourly ticks, respects the minute timer and resolves damage once", async () => {

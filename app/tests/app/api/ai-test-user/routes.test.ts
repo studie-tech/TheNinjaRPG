@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { POST as callEndpoint } from "@/app/api/ai-test-user/call-endpoint/route";
 import { POST as provisionUsers } from "@/app/api/ai-test-user/route";
+import { restoreEnvAfterEach } from "../../../setup/env";
 
-const originalEnv = {
-  VERCEL_ENV: process.env.VERCEL_ENV,
-  NODE_ENV: process.env.NODE_ENV,
-  AI_TEST_USER_BROKER_TOKEN: process.env.AI_TEST_USER_BROKER_TOKEN,
-};
+restoreEnvAfterEach("VERCEL_ENV", "NODE_ENV", "AI_TEST_USER_BROKER_TOKEN");
 const brokerToken = "test-broker-token";
 
 beforeEach(() => {
@@ -19,10 +16,6 @@ beforeEach(() => {
 
 afterEach(() => {
   mock.restore();
-  for (const [key, value] of Object.entries(originalEnv)) {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
 });
 
 describe.each([
