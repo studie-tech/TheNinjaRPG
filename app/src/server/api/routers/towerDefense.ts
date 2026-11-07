@@ -28,7 +28,7 @@ import {
   calculateUpgradeCost,
   directionToSpriteDirection,
 } from "@/libs/towerDefense/game";
-import { servedUfsUrl } from "@/libs/uploadthing";
+import { servedUfsUrl, UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { findUserRoleById } from "@/queries/profile";
 import {
   deleteTowerDefenseCharacterForDeleteCharacter,
@@ -76,11 +76,12 @@ import {
   type SessionParams,
   signSessionParams,
 } from "@/server/utils/towerDefenseCrypto";
-import { getRandomElement } from "@/utils/array";
+import { chunkArray, getRandomElement } from "@/utils/array";
 import { canChangeContent } from "@/utils/permissions";
 import { validateUrlForSsrf } from "@/utils/ssrf";
 import { idSchema } from "@/validators/misc";
 import type {
+  CharacterAnimationState,
   SignedEnemyDefinition,
   SignedUpgradeDefinition,
 } from "@/validators/towerDefense";
@@ -635,7 +636,7 @@ export const towerDefenseRouter = createTRPCRouter({
       try {
         // SSRF protection
         const isValid = await validateUrlForSsrf(input.zipUrl, [
-          "https://ui0arpl8sm.ufs.sh/f/",
+          `${UPLOADTHING_HOST}/f/`,
         ]);
         if (!isValid) {
           return errorResponse("Invalid or disallowed zipUrl");
@@ -708,9 +709,7 @@ export const towerDefenseRouter = createTRPCRouter({
         }
 
         // Upload in batches of 20
-        const batchSize = 20;
-        for (let i = 0; i < filesToUpload.length; i += batchSize) {
-          const batch = filesToUpload.slice(i, i + batchSize);
+        for (const batch of chunkArray(filesToUpload, 20)) {
           const uploadResults = await utapi.uploadFiles(batch.map((f) => f.file));
 
           for (let j = 0; j < batch.length; j++) {
@@ -729,10 +728,7 @@ export const towerDefenseRouter = createTRPCRouter({
             const url = uploadedUrls.get(path);
             if (url) {
               // Map short directions to long format
-              const longDir = directionToSpriteDirection(direction);
-              if (longDir) {
-                rotations[longDir] = url;
-              }
+              rotations[directionToSpriteDirection(direction)] = url;
             }
           }
         }
@@ -741,7 +737,7 @@ export const towerDefenseRouter = createTRPCRouter({
         const availableAnimations: string[] = [];
         const animations: Array<{
           name: string;
-          state: "idle" | "moving" | "throw" | "punch";
+          state: CharacterAnimationState;
           frames: Record<string, string[]>;
           frameDurationMs: number;
           loop: boolean;
@@ -755,12 +751,9 @@ export const towerDefenseRouter = createTRPCRouter({
 
             const framesRecord: Record<string, string[]> = {};
             for (const [direction, framePaths] of Object.entries(directionFrames)) {
-              const longDir = directionToSpriteDirection(direction);
-              if (longDir && Array.isArray(framePaths)) {
-                framesRecord[longDir] = framePaths
-                  .map((p) => uploadedUrls.get(p))
-                  .filter((url): url is string => !!url);
-              }
+              framesRecord[directionToSpriteDirection(direction)] = framePaths
+                .map((p) => uploadedUrls.get(p))
+                .filter((url): url is string => !!url);
             }
 
             // Default to idle state - user will configure in UI
@@ -852,24 +845,6 @@ export const towerDefenseRouter = createTRPCRouter({
 
 type TowerDefenseUpgradeDb = InferSelectModel<typeof towerDefenseUpgrade>;
 
-/** Convert DB enemy characters to game format */
-function convertDbEnemiesToGameFormat(characters: TowerDefenseCharacterDb[]) {
-  return characters.map((def) => ({
-    id: def.id,
-    enemyType: def.id,
-    baseHealth: def.baseHealth,
-    baseSpeed: def.baseSpeed,
-    baseDamage: def.baseDamage,
-    attackCooldown: def.attackCooldown,
-    healthScaling: def.healthScaling,
-    speedScaling: def.speedScaling,
-    damageScaling: def.damageScaling,
-    firstAppearWave: def.firstAppearWave,
-    baseCount: def.baseCount,
-    countScaling: def.countScaling,
-  }));
-}
-
 /** Convert upgrade definitions to signed format for SpacetimeDB */
 function toSignedUpgradeDefinitions(
   upgrades: TowerDefenseUpgradeDb[],
@@ -884,13 +859,13 @@ function toSignedUpgradeDefinitions(
   }));
 }
 
-/** Convert enemy definitions to signed format for SpacetimeDB */
+/** Convert DB enemy characters to signed format for SpacetimeDB */
 function toSignedEnemyDefinitions(
-  enemies: ReturnType<typeof convertDbEnemiesToGameFormat>,
+  characters: TowerDefenseCharacterDb[],
 ): SignedEnemyDefinition[] {
-  return enemies.map((def) => ({
+  return characters.map((def) => ({
     id: def.id,
-    enemyType: def.enemyType,
+    enemyType: def.id,
     baseHealth: def.baseHealth,
     baseSpeed: def.baseSpeed,
     baseDamage: def.baseDamage,
@@ -994,8 +969,7 @@ function initiateSession(input: {
 
   // Convert to signed formats for SpacetimeDB
   const signedUpgradeDefinitions = toSignedUpgradeDefinitions(upgradeDefinitions);
-  const enemyDefinitions = convertDbEnemiesToGameFormat(enemyDefinitionsDb);
-  const signedEnemyDefinitions = toSignedEnemyDefinitions(enemyDefinitions);
+  const signedEnemyDefinitions = toSignedEnemyDefinitions(enemyDefinitionsDb);
 
   // Build and sign session parameters
   const sessionParams = buildSessionParams({
