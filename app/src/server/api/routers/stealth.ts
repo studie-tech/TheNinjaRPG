@@ -1,6 +1,22 @@
+import {
+  STEALTH_SENSORY_CAP,
+  STEALTH_TRAIN_GAIN_PER_MINUTE,
+} from "@/drizzle/constants";
 import { withMercenaryParticipation } from "@/libs/objectiveWar";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { getPvpBoost } from "@/libs/pvpExperience";
+import {
+  calcCovertTrainingGain,
+  calcSensoryCooldown,
+  calcStealthDuration,
+  getRemainingSensoryCooldown,
+  getRemainingStealthCooldown,
+  isSensoryReady,
+  isStealthCooldownExpired,
+  isStealthExpired,
+  rollSensoryDetection,
+  rollStealthKeep,
+} from "@/libs/stealth";
 import { getTerritoryWarPeriodBoost } from "@/libs/territoryWar";
 import { getMapDisguise } from "@/libs/war";
 import {
@@ -22,31 +38,12 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { canShowMapAttack, mapAttackRelation } from "@/utils/alliance";
-
-const pusher = getServerPusher();
-
-import type { CovertTrainingType } from "@/drizzle/constants";
-import {
-  STEALTH_SENSORY_CAP,
-  STEALTH_TRAIN_GAIN_PER_MINUTE,
-} from "@/drizzle/constants";
-import {
-  calcCovertTrainingGain,
-  calcSensoryCooldown,
-  calcStealthDuration,
-  getRemainingSensoryCooldown,
-  getRemainingStealthCooldown,
-  isSensoryReady,
-  isStealthCooldownExpired,
-  isStealthExpired,
-  rollSensoryDetection,
-  rollStealthKeep,
-} from "@/libs/stealth";
 import {
   activateStealthDataSchema,
   startTrainDataSchema,
@@ -55,6 +52,8 @@ import {
   useSensoryDataSchema,
   useSensoryInputSchema,
 } from "@/validators/stealth";
+
+const pusher = getServerPusher();
 
 export const stealthRouter = createTRPCRouter({
   // Activate stealth mode
@@ -306,19 +305,16 @@ export const stealthRouter = createTRPCRouter({
       }
 
       // Derived
+      const startedAt = new Date();
+      const finishAt = new Date(startedAt.getTime() + input.minutes * 60_000);
       const expectedGain = calcCovertTrainingGain(
         input.minutes,
         currentStat,
         STEALTH_SENSORY_CAP,
         STEALTH_TRAIN_GAIN_PER_MINUTE,
         getPvpBoost(user, settings).totalPercent,
-        getTerritoryWarPeriodBoost(
-          user,
-          new Date(),
-          new Date(Date.now() + input.minutes * 60000),
-        ),
+        getTerritoryWarPeriodBoost(user, startedAt, finishAt),
       );
-      const finishAt = new Date(Date.now() + input.minutes * 60 * 1000);
 
       // Mutation
       const result = await updateUserDataForTrainCovert(
@@ -337,7 +333,7 @@ export const stealthRouter = createTRPCRouter({
           success: true,
           message: `Started ${input.minutes} minute ${input.type} training`,
           data: {
-            covertTrainingType: input.type as CovertTrainingType,
+            covertTrainingType: input.type,
             covertTrainingFinishAt: finishAt,
             covertTrainingGain: expectedGain,
           },
@@ -453,27 +449,17 @@ const broadcastStealth = (
   });
 
 /**
- * Break stealth for a user when stealth-breaking actions occur.
- * Used by other routers (e.g., combat, robbery) to reveal stealthed users.
+ * Roll to keep stealth after a stealth-breaking action, such as a robbery.
  *
- * @param drizzle - Database client instance
+ * @param client - Database client instance
  * @param userId - The user ID whose stealth should potentially be broken
  * @param stealthStat - The user's current stealth stat (used for roll calculation)
- * @param forceBreak - If true, always breaks stealth (e.g., when being attacked)
- * @returns Promise<boolean> - True if stealth was broken, false if maintained
  */
 export const breakStealth = async (
-  drizzle: Parameters<typeof fetchUpdatedUser>[0]["client"],
+  client: DrizzleClient,
   userId: string,
   stealthStat: number,
-  forceBreak: boolean = false,
-): Promise<boolean> => {
-  // If not forcing, roll to see if stealth is maintained
-  if (!forceBreak && rollStealthKeep(stealthStat)) {
-    return false;
-  }
-
-  // Break stealth
-  await clearStealthForUsers(drizzle, [userId]);
-  return true;
+): Promise<void> => {
+  if (rollStealthKeep(stealthStat)) return;
+  await clearStealthForUsers(client, [userId]);
 };
