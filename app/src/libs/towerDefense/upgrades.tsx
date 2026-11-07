@@ -223,16 +223,3 @@ export const getEffectDisplay = (
   // Flat value upgrades - show decimal only if needed
   return totalEffect % 1 === 0 ? `+${totalEffect}` : `+${totalEffect.toFixed(1)}`;
 };
-
-/**
- * Get effect per level display string
- */
-export const getEffectPerLevelDisplay = (upgrade: TowerDefenseUpgrade): string => {
-  if (isPercentageUpgrade(upgrade.upgradeType)) {
-    return `+${(upgrade.effectValue * 100).toFixed(0)}%`;
-  }
-  // Flat value upgrades
-  return upgrade.effectValue % 1 === 0
-    ? `+${upgrade.effectValue}`
-    : `+${upgrade.effectValue.toFixed(1)}`;
-};
