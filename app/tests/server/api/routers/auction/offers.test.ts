@@ -12,6 +12,7 @@ import { beforeStatements, failStatements } from "../../../../setup/statements";
 import type { DrizzleClient } from "@/server/db";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 describeWithDatabase("Auction House fixed-term requests and trades", () => {
   const queuePush = vi.fn();
@@ -448,7 +449,7 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
     await prepareQueuedCraft(10);
     const db = await getTestDatabase();
     await db.insert(craftingRequirement).values({ id: "gem-requirement", craftItemId: "output", requirementItemId: "gem", quantity: 3 });
-    const { promise: reserved, resolve: finishReservation } = Promise.withResolvers<void>();
+    const { promise: reserved, resolve: finishReservation } = deferred<void>();
     const craftDb = beforeStatements(db, userItem, [async () => {
       try { await postCraftMaterialTrade(); } finally { finishReservation(); }
     }, () => reserved, async () => {

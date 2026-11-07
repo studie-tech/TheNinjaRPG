@@ -12,6 +12,7 @@ import { makeEffect } from "../../../../libs/combat/helpers/battleScenario";
 import { insertUsers } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 describeWithDatabase("lethal combat history", () => {
   let trigger: ReturnType<typeof vi.spyOn<Pusher, "trigger">>;
@@ -42,8 +43,8 @@ describeWithDatabase("lethal combat history", () => {
   it.each(["performAction", "getBattle"] as const)("%s notifies observers after a lethal insert that raced settlement", async (route) => {
     const snapshot = await startLethalBattle("COMBAT");
     const db = await getTestDatabase();
-    const { promise: insertGate, resolve: releaseInsert } = Promise.withResolvers<void>();
-    const { promise: insertReady, resolve: insertReached } = Promise.withResolvers<void>();
+    const { promise: insertGate, resolve: releaseInsert } = deferred<void>();
+    const { promise: insertReady, resolve: insertReached } = deferred<void>();
     if (route === "getBattle") {
       snapshot.usersState.forEach((user) => { user.round = user.userId === "killer" ? 1 : 0; });
       const old = new Date(Date.now() - 600_000);

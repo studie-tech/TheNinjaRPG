@@ -19,6 +19,7 @@ import { HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
 import * as Kitchen from "@/layout/Kitchen";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { deferred } from "../../setup/deferred";
 
 const furniture: HomeFurniture[] = [
   { id: "owned-bed", itemId: "home-bed", name: "Bed", image: "/images/home/furniture/bed.webp", width: 34, groundAnchor: 91.1, action: "sleep", isFloor: false, quantity: 1, views: {} },
@@ -130,11 +131,11 @@ afterEach(async () => {
 
 for (const hasCachedInventory of [false, true]) {
   it(`refreshes home storage after ${hasCachedInventory ? "cached" : "initial"} parallel inventory reads miss newly granted furniture`, async () => {
-    const { promise: homeReady, resolve: finishHome } = Promise.withResolvers<void>();
-    const { promise: inventoryReady, resolve: finishInventory } = Promise.withResolvers<void>();
+    const { promise: homeReady, resolve: finishHome } = deferred<void>();
+    const { promise: inventoryReady, resolve: finishInventory } = deferred<void>();
     let homeQueries = 0;
     let itemQueries = 0;
-    const { promise: pregrantRead, resolve: finishPregrantRead } = Promise.withResolvers<void>();
+    const { promise: pregrantRead, resolve: finishPregrantRead } = deferred<void>();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
     const itemKey = getQueryKey(testApi.item.getUserItems, undefined, "query");
     if (hasCachedInventory) {
@@ -463,7 +464,7 @@ it("refreshes furniture storage after a downgrade stores a carried piece from a 
 it("refreshes furniture storage after placing a carried piece and waits for its inventory", async () => {
   let home = { ...essentialHome, furniture: [...basics, rug] };
   let items = [...ownedItems, { ...ownedItems[0]!, id: rug.id, itemId: rug.itemId, storedAtHome: false, item: { ...ownedItems[0]!.item, id: rug.itemId, name: rug.name, image: rug.image } }];
-  const { promise: inventoryReady, resolve: finishInventory } = Promise.withResolvers<void>();
+  const { promise: inventoryReady, resolve: finishInventory } = deferred<void>();
   let itemQueries = 0;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   const itemKey = getQueryKey(testApi.item.getUserItems, undefined, "query");
@@ -515,7 +516,7 @@ it("refreshes furniture storage after placing a carried piece and waits for its 
 
 for (const success of [true, false]) {
   it(`keeps the editor disabled through refreshing a ${success ? "successful" : "rejected"} save`, async () => {
-    const { promise: refreshed, resolve: finishRefresh } = Promise.withResolvers<void>();
+    const { promise: refreshed, resolve: finishRefresh } = deferred<void>();
     let homeQueries = 0;
     const home: NonNullable<RouterOutputs["home"]["getUserHome"]> = {
       homeType: "NONE",
@@ -632,7 +633,7 @@ for (const success of [true, false]) {
 
 // Real dialog focus and query refresh need an integration-test budget.
 it("opens home management from the header and waits for refreshed inventory before decorating", async () => {
-  const { promise: refreshed, resolve: finishRefresh } = Promise.withResolvers<void>();
+  const { promise: refreshed, resolve: finishRefresh } = deferred<void>();
   let homeQueries = 0;
   const home: NonNullable<RouterOutputs["home"]["getUserHome"]> = {
     homeType: "NONE", biome: "ground", regen: HomeTypeDetails.NONE.regen, storage: HomeTypeDetails.NONE.storage,

@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "bun:test";
 import { fetchConversation } from "@/server/api/routers/comments";
 import type { DrizzleClient } from "@/server/db";
+import { deferred } from "../../../setup/deferred";
 
 describe("conversation read scheduling", () => {
   it("starts the reader policy before a public title lookup resolves", async () => {
-    const { promise: conversation, resolve: resolveConversation } = Promise.withResolvers<unknown>();
-    const { promise: policies, resolve: resolvePolicies } = Promise.withResolvers<unknown[]>();
+    const { promise: conversation, resolve: resolveConversation } = deferred<unknown>();
+    const { promise: policies, resolve: resolvePolicies } = deferred<unknown[]>();
     const findConversation = vi.fn(() => conversation);
     const findPolicies = vi.fn(() => policies);
     const client = {

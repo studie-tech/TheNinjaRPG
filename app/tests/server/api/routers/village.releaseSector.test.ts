@@ -27,6 +27,7 @@ import {
   resetTables,
   lockWaitObserved,
 } from "../../../setup/testDatabase";
+import { deferred } from "../../../setup/deferred";
 
 const sectorId = 205;
 const leader = "defender-kage";
@@ -189,8 +190,8 @@ describeWithDatabase("guarded sector release", () => {
   it("preserves an objective committed while release waits for the declaring village", async () => {
     const database = await seed();
     await enableObjectives(database);
-    const locked = Promise.withResolvers<void>();
-    const resume = Promise.withResolvers<void>();
+    const locked = deferred<void>();
+    const resume = deferred<void>();
     const declarationClient = new Proxy(database, {
       get(target, property, receiver) {
         if (property !== "transaction") return Reflect.get(target, property, receiver);
@@ -236,8 +237,8 @@ describeWithDatabase("guarded sector release", () => {
     const database = await seed();
     await enableObjectives(database);
     const connection = await mysql.createConnection(process.env.TEST_MYSQL_URL!);
-    const deleted = Promise.withResolvers<void>();
-    const resume = Promise.withResolvers<void>();
+    const deleted = deferred<void>();
+    const resume = deferred<void>();
     const client = releaseClient(database, async (query) => {
       // Keep this real procedure statement uncommitted only to observe the declaration's wait.
       await connection.beginTransaction();

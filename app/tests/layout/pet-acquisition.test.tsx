@@ -16,6 +16,7 @@ import { getDailyPetOptions } from "@/libs/pets/catalogue";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { initialPetSpecies } from "../libs/pets/helpers/species";
+import { deferred } from "../setup/deferred";
 
 const testApi = createTRPCReact<AppRouter>();
 const dayKey = "2026-10-16";
@@ -56,7 +57,7 @@ afterEach(() => {
 it("keeps a successful adoption intact while its claimed species leaves the daily offers and artwork is pending", async () => {
   let claimed: (RouterInputs["pets"]["acquirePet"] & { id: string; rank: number; avatar: string | null; artRank: number; generationStatus: string }) | null = null;
   let remainingGenerations = 3;
-  const { promise: generation, resolve: finishGeneration } = Promise.withResolvers<void>();
+  const { promise: generation, resolve: finishGeneration } = deferred<void>();
   const acquire = vi.fn((input: RouterInputs["pets"]["acquirePet"]) => {
     claimed = { ...input, id: "new-companion", rank: 1, avatar: null, artRank: 0, generationStatus: "PENDING" };
     return { success: true, message: "Companion adopted", petId: claimed.id };

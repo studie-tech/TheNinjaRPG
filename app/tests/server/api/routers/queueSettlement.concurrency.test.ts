@@ -31,6 +31,7 @@ import {
   resetTables,
 } from "../../../setup/testDatabase";
 import { barrier } from "../../../setup/statements";
+import { deferred } from "../../../setup/deferred";
 
 const userId = "queue-settlement";
 const minute = 60_000;
@@ -53,8 +54,8 @@ const costs = [10, 11].map((level) =>
 );
 // Alter dispatch timing only: all reads, writes and transactions execute on real MySQL.
 const delayQueueRead = (database: DrizzleClient) => {
-  const activeRead = Promise.withResolvers<void>();
-  const release = Promise.withResolvers<void>();
+  const activeRead = deferred<void>();
+  const release = deferred<void>();
   const wrapBuilder = <T extends object>(builder: T): T =>
     new Proxy(builder, {
       get(target, property) {

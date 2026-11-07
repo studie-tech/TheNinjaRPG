@@ -30,6 +30,7 @@ import {
   resetTables,
   runRawSql,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   beforeEach(async () => {
@@ -267,7 +268,7 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   it("allows one of two simultaneous joins to own status and keeps only its row", async () => {
     const db = await getTestDatabase();
     let published = 0;
-    const { promise: ready, resolve: release } = Promise.withResolvers<void>();
+    const { promise: ready, resolve: release } = deferred<void>();
     const barrier = async () => {
       published += 1;
       if (published === 2) release();

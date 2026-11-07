@@ -39,11 +39,12 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
 
 /** Pause a real endpoint after its equipment or inventory preload has completed. */
 const pauseRead = (db: DrizzleClient, equipment: boolean) => {
-  const reached = Promise.withResolvers<void>();
-  const resume = Promise.withResolvers<void>();
+  const reached = deferred<void>();
+  const resume = deferred<void>();
   const userQuery = new Proxy(db.query.userData, {
     get(target, key, receiver) {
       if (equipment && key === "findMany")
@@ -87,8 +88,8 @@ const pauseRead = (db: DrizzleClient, equipment: boolean) => {
 
 /** Pause the real merge after its negative claims, before its publish statement executes. */
 const pauseMergePublish = (db: DrizzleClient) => {
-  const reached = Promise.withResolvers<void>();
-  const resume = Promise.withResolvers<void>();
+  const reached = deferred<void>();
+  const resume = deferred<void>();
   let paused = false;
   const client = new Proxy(db, {
     get(target, key, receiver) {
@@ -577,8 +578,8 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "high-kit", userId: "hunter", itemId: "high", equipped: "ITEM_2", quantity, level: 2, experience: 17, durability: 13 },
     ]);
     const { db, hunter, id } = await prepare();
-    const paused = Promise.withResolvers<void>();
-    const resume = Promise.withResolvers<void>();
+    const paused = deferred<void>();
+    const resume = deferred<void>();
     const client = beforeStatements(db, userItem, [async () => {}, async () => { paused.resolve(); await resume.promise; }]);
     const repair = callerForDatabase(itemRouter, "hunter", client).useRepairAll();
     await paused.promise;

@@ -9,6 +9,7 @@ import { maskBattle } from "@/libs/combat/util";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { userBattleAtom } from "@/utils/UserContext";
 import { makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
+import { deferred } from "../setup/deferred";
 
 afterEach(cleanup);
 const source = readFileSync(join(import.meta.dirname, "../../src/layout/Combat.tsx"), "utf8");
@@ -104,7 +105,7 @@ it.each([false, true])("displays committed rewards before history recovery and r
   const result = { outcome: "Won", notifications: [] };
   let state: { battle: typeof battle; result: typeof result | null; isPending: boolean } = { battle, result: null, isPending: true };
   let options!: { onSuccess: (data: object, input: object, context: object) => Promise<void>; onError: () => void };
-  const { promise: held, resolve: finish } = Promise.withResolvers<void>();
+  const { promise: held, resolve: finish } = deferred<void>();
   const events: string[] = [];
   new Function("scope", `with (scope) { ${transpiler.transformSync(handlers)} }`)({
     api: { combat: { performAction: { useMutation: (value: typeof options) => { options = value; return {}; } } } },

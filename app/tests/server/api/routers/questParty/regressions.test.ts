@@ -19,6 +19,7 @@ import { AllObjectives, QuestTracker, QuestValidator } from "@/validators/object
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuestHistory, insertQuests, insertUsers, insertUserItems } from "../../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 describeWithDatabase("quest team eligibility and terminal failure", () => {
   beforeEach(async () => {
@@ -306,7 +307,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     const { leader, helper, party } = await claimReleaseFixture();
     expect((await helper.join({ partyId: party.id })).success).toBe(true);
     let concurrentSnapshot: LoadedQuestParty | undefined;
-    const { promise: detached, resolve: helperDetached } = Promise.withResolvers<void>();
+    const { promise: detached, resolve: helperDetached } = deferred<void>();
     const failing = new Proxy(client, {
       get(target, key, receiver) {
         if (key === "update") return (table: unknown) => {

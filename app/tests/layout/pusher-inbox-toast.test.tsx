@@ -17,6 +17,7 @@ import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
+import { deferred } from "../setup/deferred";
 
 const testApi = createTRPCReact<AppRouter>();
 const queryClients: QueryClient[] = [];
@@ -216,7 +217,7 @@ it.each([
   );
   const view = renderHook(() => usePusherHandler("player"), { wrapper });
   try {
-    const { promise: responseReady, resolve: settle } = Promise.withResolvers<void>();
+    const { promise: responseReady, resolve: settle } = deferred<void>();
     const mutation = queryClient.getMutationCache().build(queryClient, {
       mutationFn: async (_variables: { originSocketId: string }) => {
         await responseReady;

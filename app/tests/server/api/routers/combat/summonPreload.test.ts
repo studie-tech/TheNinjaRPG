@@ -12,6 +12,7 @@ import { makeTag, makeUser } from "../../../../libs/combat/helpers/battleScenari
 import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
 import { insertUsers } from "../../../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const participant = (userId: string, summons: string[] = []): CombatQueryUser => ({
   ...Object.fromEntries(Object.entries(getTableColumns(userData)).map(([key, column]) => [
@@ -86,8 +87,8 @@ describe("summon template preparation scope", () => {
 
   it("shares pending reads without re-executing a Drizzle-style thenable", async () => {
     let executions = 0;
-    const { promise: ready, resolve: release } = Promise.withResolvers<void>();
-    const { promise: queried, resolve: started } = Promise.withResolvers<void>();
+    const { promise: ready, resolve: release } = deferred<void>();
+    const { promise: queried, resolve: started } = deferred<void>();
     const client = { query: { userData: { findMany: () => ({
       then: (resolve: (rows: CombatQueryUser[]) => unknown) => {
         executions++;

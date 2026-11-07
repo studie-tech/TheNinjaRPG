@@ -7,6 +7,7 @@ import type { AppRouter } from "@/api/root";
 import { createTrpcSession, trpcSessionLink } from "@/libs/trpcSession";
 import type { UserWithRelations } from "@/routers/profile";
 import type { RegisterDeviceInput } from "@/validators/push";
+import { deferred } from "../setup/deferred";
 
 interface NativeLifecycleMocks {
   actionListeners: Array<(payload: unknown) => void>;
@@ -187,8 +188,8 @@ describe("native push ownership", () => {
     };
     const credential = "w".repeat(32);
     let device: { token: string; widgetToken: string } | undefined;
-    const { promise: dispatched, resolve: started } = Promise.withResolvers<void>();
-    const { promise: responseReady, resolve: finishRegistration } = Promise.withResolvers<void>();
+    const { promise: dispatched, resolve: started } = deferred<void>();
+    const { promise: responseReady, resolve: finishRegistration } = deferred<void>();
     const requests: { path: string; authorization: string | null }[] = [];
     let exposedWidgetToken: string | null | undefined;
     const createClient = () => {

@@ -18,6 +18,7 @@ import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const participants = ["credit-actor", "credit-ally", "credit-enemy"];
 const winners = participants.slice(0, 2);
@@ -194,8 +195,8 @@ describeWithDatabase("combat team faction rewards", () => {
     const db = await getTestDatabase();
     const saved = await startDecidedRaid();
     // Pause one finalizer at deletion so the other deterministically wins the claim.
-    const { promise: gate, resolve: unblock } = Promise.withResolvers<void>();
-    const { promise: ready, resolve: reached } = Promise.withResolvers<void>();
+    const { promise: gate, resolve: unblock } = deferred<void>();
+    const { promise: ready, resolve: reached } = deferred<void>();
     const staleClient = new Proxy(db, {
       get(target, key, receiver) {
         if (key !== "delete") return Reflect.get(target, key, receiver);

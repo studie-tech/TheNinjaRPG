@@ -10,6 +10,7 @@ import type { WorldBounds } from "@/libs/rendering/visibility";
 import { travelActorRecipes, createTravelActors, type TravelActorMovement, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
+import { deferred } from "../../setup/deferred";
 
 const cleanups: (() => void)[] = [];
 const originalCreate = characters.createLpcCharacter;
@@ -41,7 +42,7 @@ const fixture = (sceneryBounds?: WeakMap<Container, WorldBounds>) => {
   return { game, actors, grid, stage, depth, overlay, ground, snapshot, dispose };
 };
 const holdCharacters = () => {
-  const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+  const { promise: gate, resolve: release } = deferred<void>();
   cleanups.push(release);
   const create = vi.spyOn(characters, "createLpcCharacter").mockImplementation(async (...args) => { await gate; return originalCreate(...args); });
   return { release, create };
@@ -444,7 +445,7 @@ describe("travel actor artwork loading", () => {
   });
 
   it.each(["remove", "replace", "dispose"] as const)("ignores late artwork after actor %s", async (action) => {
-    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const { promise: gate, resolve: release } = deferred<void>();
     cleanups.push(release);
     const loaded: Container[] = [];
     vi.spyOn(characters, "createLpcCharacter").mockImplementation(async (...args) => {

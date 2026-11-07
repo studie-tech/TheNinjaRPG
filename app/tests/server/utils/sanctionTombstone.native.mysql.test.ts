@@ -33,6 +33,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
 
 const DAY = 86_400_000;
 const NATIVE_USER = "native-deleting";
@@ -193,8 +194,8 @@ const deleteReplacement = async () => {
 const pauseNextDecision = async (beforeWrite = false) => {
   const database = await getTestDatabase();
   const execute = database.execute.bind(database);
-  const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
-  const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+  const { promise: entered, resolve: enter } = deferred<void>();
+  const { promise: gate, resolve: release } = deferred<void>();
   let paused = false;
   const client = new Proxy(database, {
     get(target, property, receiver) {
@@ -636,8 +637,8 @@ describeWithDatabase("original sanctions during native deletion", () => {
         updatedAt: new Date(Date.now() - 360_000),
       })
       .where(eq(userData.userId, NATIVE_USER));
-    const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
-    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const { promise: entered, resolve: enter } = deferred<void>();
+    const { promise: gate, resolve: release } = deferred<void>();
     const paused = beforeStatements(database, historicalIp, [async () => {
       enter();
       await gate;
@@ -1324,8 +1325,8 @@ describeWithDatabase("original sanctions during native deletion", () => {
   );
 
   it("requires a captured source while a deleted Clerk identity's response is pending", async () => {
-    const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
-    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const { promise: entered, resolve: enter } = deferred<void>();
+    const { promise: gate, resolve: release } = deferred<void>();
     const { register: registerIdentity } = stubSingleIdentity(async () => {
       enter();
       await gate;

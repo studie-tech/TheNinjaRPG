@@ -44,6 +44,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
 
 const DAY = 86_400_000;
 const EMAIL = "registration-appeal@example.com";
@@ -117,9 +118,9 @@ const deleteAccount = async (userId: string) => {
 const startRegistration = async () => {
   claimIdentity("Concurrent");
   gatedId = "Concurrent";
-  const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
+  const { promise: entered, resolve: enter } = deferred<void>();
   enterLookup = enter;
-  const { promise: paused, resolve: release } = Promise.withResolvers<void>();
+  const { promise: paused, resolve: release } = deferred<void>();
   lookupGate = paused;
   const pending = register("Concurrent");
   await entered;
@@ -153,8 +154,8 @@ const expectUnpublished = async (
 
 /** Pause after durable cases, before the character is published. */
 const prepareAndPause = () => {
-  const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
-  const { promise: paused, resolve: release } = Promise.withResolvers<void>();
+  const { promise: entered, resolve: enter } = deferred<void>();
+  const { promise: paused, resolve: release } = deferred<void>();
   const reapply = sanctions.reapplySanctions;
   let first = true;
   vi.spyOn(sanctions, "reapplySanctions").mockImplementation(async (...args) => {
@@ -375,8 +376,8 @@ describeWithDatabase("registration claims current sanction sources", () => {
         .set({ deletionAt: new Date(Date.now() - DAY) })
         .where(eq(userData.userId, "Concurrent"));
 
-      const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
-      const { promise: paused, resolve: release } = Promise.withResolvers<void>();
+      const { promise: entered, resolve: enter } = deferred<void>();
+      const { promise: paused, resolve: release } = deferred<void>();
       let reads = 0;
       const delayed = new Proxy(database, {
         get(target, property, receiver) {
@@ -485,8 +486,8 @@ describeWithDatabase("registration claims current sanction sources", () => {
       });
       const userId = mode === "web" ? "LateOriginal" : "Concurrent";
       if (mode === "native") claimIdentity(userId, "unrelated@example.com");
-      const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
-      const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+      const { promise: entered, resolve: enter } = deferred<void>();
+      const { promise: gate, resolve: release } = deferred<void>();
       const delayed = new Proxy(database, {
         get(target, property, receiver) {
           if (property === "query")
@@ -1008,8 +1009,8 @@ describeWithDatabase("registration claims current sanction sources", () => {
       const preparation = records === "prepared" ? prepareAndPause() : null;
       const registration = preparation ? register("Concurrent") : null;
       if (preparation) await preparation.entered;
-      const { promise: readReports, resolve: enter } = Promise.withResolvers<void>();
-      const { promise: paused, resolve: release } = Promise.withResolvers<void>();
+      const { promise: readReports, resolve: enter } = deferred<void>();
+      const { promise: paused, resolve: release } = deferred<void>();
       const getBanDatabase = new Proxy(database, {
         get(target, property, receiver) {
           if (property === "query")
@@ -1151,8 +1152,8 @@ describeWithDatabase("registration claims current sanction sources", () => {
     const database = await getTestDatabase();
     await addSilenceSource();
     claimIdentity("Concurrent");
-    const { promise: reachedInsert, resolve: enter } = Promise.withResolvers<void>();
-    const { promise: paused, resolve: release } = Promise.withResolvers<void>();
+    const { promise: reachedInsert, resolve: enter } = deferred<void>();
+    const { promise: paused, resolve: release } = deferred<void>();
     const failingDatabase = new Proxy(database, {
       get(target, property, receiver) {
         if (property === "execute")

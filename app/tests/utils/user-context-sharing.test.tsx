@@ -18,6 +18,7 @@ import * as mutationToast from "@/libs/toast";
 import { UserContextProvider, useUserDataRef, selectUserWithoutPosition, useUserData, useUserInfo, useUserDataSelector } from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { shareUserCache } from "@/utils/userCacheSharing";
+import { deferred } from "../setup/deferred";
 
 const BASE = Date.UTC(2026, 9, 26, 12);
 const key: ReturnType<typeof trpc.getQueryKey> = [
@@ -144,7 +145,7 @@ describe("profile context structural sharing", () => {
   it("keeps the reward calendar idle during movement while publishing streak and claim state", async () => {
     const streakKey: typeof key = [["activityStreak", "getUserStreaks"], { type: "query" }];
     const initialStreak = { streaks: [], activeRecurringConfig: { id: "daily", name: "Daily rewards", totalDays: 1, rewards: [] } };
-    const { promise: claimResponse, resolve: finishClaim } = Promise.withResolvers<{ success: false; message: string }>();
+    const { promise: claimResponse, resolve: finishClaim } = deferred<{ success: false; message: string }>();
     const activityStreak = {
       getUserStreaks: { useQuery: () => useQuery({ queryKey: streakKey, queryFn: async () => initialStreak, initialData: initialStreak }) },
       getAvailablePasses: { useQuery: () => useQuery({ queryKey: ["test-streak-passes"], queryFn: async () => [], initialData: [] }) },

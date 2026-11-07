@@ -16,6 +16,7 @@ import { QuestValidator, RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { actualGameSettings } from "../../../setup/preload";
 import { restoreEnvAfterEach } from "../../../setup/env";
+import { deferred } from "../../../setup/deferred";
 
 const env = process.env as Record<string, string | undefined>;
 restoreEnvAfterEach("NODE_ENV", "DISCORD_EVENT_UPDATES", "DISCORD_RAIDS_ROLE_ID", "DISCORD_WARS_ROLE_ID", "DISCORD_TERRITORY_WARS_ROLE_ID");
@@ -87,8 +88,8 @@ describeWithDatabase("Discord event delivery receipts", () => {
   it("keeps an end behind a pending start across overlapping minute ticks", async () => {
     const db = await seed();
     setSystemTime(new Date("2026-10-29T12:00:55Z"));
-    const { promise: blocked, resolve: release } = Promise.withResolvers<void>();
-    const { promise: started, resolve: entered } = Promise.withResolvers<void>();
+    const { promise: blocked, resolve: release } = deferred<void>();
+    const { promise: started, resolve: entered } = deferred<void>();
     const accepted: string[] = [];
     posts.mockImplementation(async (_url, options) => {
       const message = JSON.parse(String(options?.body)).content as string;

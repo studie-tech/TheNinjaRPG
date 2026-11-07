@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { after } from "next/server";
 import { withAfterTasks } from "../../setup/after";
+import { deferred } from "../../setup/deferred";
 
 describe("direct router caller deferred work", () => {
   it("finishes callbacks and nested callbacks before returning to SQL assertions", async () => {
@@ -19,7 +20,7 @@ describe("direct router caller deferred work", () => {
 
   it("keeps callbacks scoped to each concurrent invocation", async () => {
     const events: string[] = [];
-    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const { promise: gate, resolve: release } = deferred<void>();
     const caller = withAfterTasks({ query: async (id: string, wait: Promise<void>) => {
       after(() => { events.push(id); });
       await wait;

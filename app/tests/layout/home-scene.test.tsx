@@ -8,6 +8,7 @@ import { boundHomeCamera, getHomeOverviewCamera, getHomePlacementRoom, getHomeRo
 import { HOME_ART_PLANS, HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
 import { bunnyImageUrl, transformImageUrl } from "@/utils/image";
 import { type HomePlacement, homeFurnitureSaveInputSchema } from "@/validators/home";
+import { deferred } from "../setup/deferred";
 
 // The image stub exposes art failures without relying on a browser image loader.
 vi.mock("@/layout/Image", () => ({
@@ -673,7 +674,7 @@ describe("Home scene", () => {
   });
 
   it("ends a captured drag when saving and preserves its submitted position after rejection", async () => {
-    const { promise: pendingSave, resolve: resolveSave } = Promise.withResolvers<boolean>();
+    const { promise: pendingSave, resolve: resolveSave } = deferred<boolean>();
     const onSave = vi.fn<NonNullable<ComponentProps<typeof HomeScene>["onSave"]>>(() => pendingSave);
     const PendingSaveScene = () => {
       const [isSaving, setIsSaving] = useState(false);

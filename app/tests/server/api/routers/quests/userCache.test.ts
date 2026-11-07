@@ -16,6 +16,7 @@ import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
 import { queueEnergy } from "../../../../setup/queues";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const playerId = "quest-cache-player";
 const missionId = "quest-cache-mission";
@@ -372,8 +373,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const clients = questIds.map(() => new QueryClient());
     for (const client of clients) client.setQueryData(key, profile);
     const revisions = clients.map((client) => prepareUserUpdate(client, key));
-    const entered = questIds.map(() => Promise.withResolvers<void>());
-    const releases = questIds.map(() => Promise.withResolvers<void>());
+    const entered = questIds.map(() => deferred<void>());
+    const releases = questIds.map(() => deferred<void>());
     let selections = 0;
     const select = db.select.bind(db);
     const selectWithPause = ((fields: Parameters<typeof select>[0]) => {

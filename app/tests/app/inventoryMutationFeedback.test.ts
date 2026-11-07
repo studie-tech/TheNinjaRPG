@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MutationObserver, type MutationObserverOptions, QueryClient, QueryObserver } from "@tanstack/react-query";
 import { expect, it, vi } from "bun:test";
+import { deferred } from "../setup/deferred";
 
 // Exercise the actual callbacks alongside cache recovery and user feedback.
 for (const procedure of ["item.mergeStacks", "item.mergeAllStacks", "item.sellUserItem", "item.sellUserItems", "item.toggleEquip", "jutsu.toggleEquip"]) {
@@ -25,11 +26,11 @@ for (const procedure of ["item.mergeStacks", "item.mergeAllStacks", "item.sellUs
       queries: { retry: false, staleTime: Infinity },
       mutations: { onError: defaultError },
     } });
-    const { promise: recovery, resolve: finishRecovery } = Promise.withResolvers<string>();
+    const { promise: recovery, resolve: finishRecovery } = deferred<string>();
     const caches = (isItem ? ["inventory", "variants"] : ["jutsus", "loadouts", "profile"]).map((name) => {
       const queryKey = [name];
       client.setQueryData(queryKey, "stale");
-      const { promise: started, resolve: startRecovery } = Promise.withResolvers<void>();
+      const { promise: started, resolve: startRecovery } = deferred<void>();
       const queryFn = vi.fn(() => { startRecovery(); return recovery; });
       const stop = new QueryObserver(client, { queryKey, queryFn }).subscribe(() => {});
       return { queryKey, queryFn, stop, started, invalidate: () => client.invalidateQueries({ queryKey }) };

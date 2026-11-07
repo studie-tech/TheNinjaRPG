@@ -34,6 +34,7 @@ import { petJutsuFixture, petSkillFixture } from "../libs/pets/helpers/abilities
 import { IncreaseStatTag } from "@/validators/combat";
 import type { PetTask } from "@/validators/petTasks";
 import { actualShowMutationToast } from "../setup/preload";
+import { deferred } from "../setup/deferred";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
@@ -435,7 +436,7 @@ it.each(["FAILED", "READY"] as const)("waits for the final active image attempt 
 it("waits for a local final-attempt response before offering support for failed art", async () => {
   const pet = { ...data.pet!, rank: 2, artRank: 1, generationStatus: "FAILED" as const };
   data = { ...data, pet, pets: [pet], remainingGenerations: 1, canFeed: false };
-  const { promise: generation, resolve: finishGeneration } = Promise.withResolvers<void>();
+  const { promise: generation, resolve: finishGeneration } = deferred<void>();
   generate.mockImplementation(async () => {
     await generation;
     return { success: false, message: "Image creation failed." };
@@ -537,8 +538,8 @@ it.each(["rejection", "network error", "success"])("allows routine activity and 
   const other = { ...data.pet!, id: "second", name: "Sora" };
   data = { ...data, pets: [data.pet!, other], maxRank: 10, nextRank: PET_RANKS[7]!, canRankUp: true };
   getPet.mockImplementation((input: { petId: string }) => ({ ...data, pet: data.pets.find((entry) => entry.id === input.petId) }));
-  const { promise: generation, resolve: finishGeneration } = Promise.withResolvers<void>();
-  const { promise: assignment, resolve: finishAssignment } = Promise.withResolvers<void>();
+  const { promise: generation, resolve: finishGeneration } = deferred<void>();
+  const { promise: assignment, resolve: finishAssignment } = deferred<void>();
   assign.mockImplementation(async () => { await assignment; return { success: true, message: "Experience assigned" }; });
   generate.mockImplementation(async ({ petId }: { petId: string }) => {
     if (petId !== "companion") return { success: true, message: "Appearance ready" };
@@ -622,8 +623,8 @@ it.each(["rejection", "network error", "success"])("allows routine activity and 
 it.each([0, 3])("keeps evolution and artwork recoverable with %s attempts left in the previous rank", async (remainingGenerations) => {
   owner.rank = "ELITE JONIN";
   data = { ...data, maxRank: 10, nextRank: PET_RANKS[7]!, canRankUp: true, remainingGenerations };
-  const { promise: evolution, resolve: finishEvolution } = Promise.withResolvers<void>();
-  const { promise: generation, resolve: finishGeneration } = Promise.withResolvers<void>();
+  const { promise: evolution, resolve: finishEvolution } = deferred<void>();
+  const { promise: generation, resolve: finishGeneration } = deferred<void>();
   evolve.mockImplementation(async () => {
     await evolution;
     const pet = { ...data.pet!, rank: 8, generationStatus: "PENDING" as const };

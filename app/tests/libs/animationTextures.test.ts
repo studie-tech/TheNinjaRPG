@@ -4,6 +4,7 @@ import { spriteGroundContact, textureGroundContact } from "@/libs/rendering/asse
 import { acquireAnimationTexture, animationTextureUrl, clearUnusedAnimationTextures } from "@/libs/rendering/animationTextures";
 import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
+import { deferred } from "../setup/deferred";
 const idle: CharacterAnimation={id:"idle",name:"Idle",url:"https://uploadthing.b-cdn.net/f/idle.webp",smallUrl:null,columns:2,rows:2,frameCount:4,fps:4,facing:"left"};
 const atlas=()=>new Texture({source:new TextureSource({width:256,height:256})});
 const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
@@ -46,7 +47,7 @@ describe("Pixi AI atlases",()=>{
   b.release();clearUnusedAnimationTextures();await flush();expect(unload).toHaveBeenCalledTimes(1);
  });
  it("reserves pending and active images within the 32 MiB budget",async()=>{
-  const { promise: pending, resolve } = Promise.withResolvers<Texture>();
+  const { promise: pending, resolve } = deferred<Texture>();
   vi.spyOn(Assets,"load").mockImplementation(()=>pending);
   vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
   const big={...idle,columns:8,rows:8,frameCount:64,fps:8};

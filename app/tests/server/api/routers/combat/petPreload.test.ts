@@ -11,6 +11,7 @@ import { petJutsuFixture } from "../../../../libs/pets/helpers/abilities";
 import { insertPetSpecies, insertUsers } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const ownerId = "defender";
 
@@ -154,7 +155,7 @@ const adoptionInput = async (database: DrizzleClient) => {
 /** Complete real companion reads before a successful account mutation and the participant read. */
 const beforeParticipantRead = (database: DrizzleClient, change: () => Promise<void>): DrizzleClient => {
   let completed = 0;
-  const { promise: preloaded, resolve: release } = Promise.withResolvers<void>();
+  const { promise: preloaded, resolve: release } = deferred<void>();
   const afterRead = async <T>(read: PromiseLike<T>) => {
     const result = await read;
     if (++completed === 2) release();

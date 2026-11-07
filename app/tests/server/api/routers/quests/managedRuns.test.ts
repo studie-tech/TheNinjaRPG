@@ -46,6 +46,7 @@ import {
   resetTables,
   runRawSql,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const router = createTRPCRouter({ quests: questsRouter });
 
@@ -344,9 +345,9 @@ describeWithDatabase("managed quest battle and abandonment", () => {
 
   it("waits for delayed history and participant writes before compensating a failed insert", async () => {
     const { client, attempt } = await snapshot();
-    const { promise: released, resolve: release } = Promise.withResolvers<void>();
+    const { promise: released, resolve: release } = deferred<void>();
     let entered = 0;
-    const { promise: ready, resolve: markReady } = Promise.withResolvers<void>();
+    const { promise: ready, resolve: markReady } = deferred<void>();
     const delay = async () => {
       entered += 1;
       if (entered === 2) markReady();
@@ -546,8 +547,8 @@ describeWithDatabase("managed quest battle and abandonment", () => {
 
   it("settles delayed sibling inserts before compensating a rejected paid-floor claim", async () => {
     const { client, attempt } = await snapshot();
-    const { promise: started, resolve: markInsertStarted } = Promise.withResolvers<void>();
-    const { promise: released, resolve: releaseInsert } = Promise.withResolvers<void>();
+    const { promise: started, resolve: markInsertStarted } = deferred<void>();
+    const { promise: released, resolve: releaseInsert } = deferred<void>();
     const delayed = beforeStatements(withoutTransactions(client), battle, [
       async () => {
         markInsertStarted();

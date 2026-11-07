@@ -10,6 +10,7 @@ import {
 } from "@/hooks/navigation";
 import { NavigationProvider } from "@/layout/NavigationProvider";
 import { actualLink as Link } from "../setup/preload";
+import { deferred } from "../setup/deferred";
 
 // Model the public Link event contract without importing Next's bundled RSC runtime.
 const TestNextLink = ({
@@ -35,7 +36,7 @@ afterEach(() => {
 
 describe("navigation feedback", () => {
   it("keeps a programmatic transition pending after its source unmounts until it commits", async () => {
-    const { promise: gate, resolve: finish } = Promise.withResolvers<void>();
+    const { promise: gate, resolve: finish } = deferred<void>();
     const Destination = () => { use(gate); return <p>Destination</p>; };
     const Controls = ({ close }: { close: () => void }) => {
       const router = useNavigationRouter();

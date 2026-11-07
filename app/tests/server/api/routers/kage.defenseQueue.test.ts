@@ -19,6 +19,7 @@ import { beforeStatements, failStatements } from "../../../setup/statements";
 import { getKageSlots } from "@/utils/kage";
 import { insertUsers } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
+import { deferred } from "../../../setup/deferred";
 
 const now = new Date("2026-10-12T12:00:00Z");
 const windows = [{ day: 2, hour: 14 }, { day: 4, hour: 14 }];
@@ -169,9 +170,9 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const defender = await callerFor(kageRouter, "defender");
     if (action === "dismiss") expect((await defender.requestInstantDefense({ id: m.id })).success).toBe(true);
     const invitation = (await db.query.village.findFirst())!.kageSchedule!.instantChallenge;
-    const { promise: loaded, resolve: markLoaded } = Promise.withResolvers<void>();
-    const { promise: resume, resolve: resumeSync } = Promise.withResolvers<void>();
-    const { promise: submitted, resolve: markSubmitted } = Promise.withResolvers<void>();
+    const { promise: loaded, resolve: markLoaded } = deferred<void>();
+    const { promise: resume, resolve: resumeSync } = deferred<void>();
+    const { promise: submitted, resolve: markSubmitted } = deferred<void>();
     const syncing = withKageDefense(db, villageId, async (tx, hall) => {
       markLoaded(); await resume;
       return syncLockedKageDefense(tx, hall);
@@ -386,9 +387,9 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const challenger = await callerFor(kageRouter, "first");
     expect((await challenger.joinDefenseQueue({ villageId })).success).toBe(true);
     const m = (await db.query.kageDefendedChallenges.findFirst())!;
-    const { promise: loaded, resolve: markLoaded } = Promise.withResolvers<void>();
-    const { promise: resume, resolve: resumeSync } = Promise.withResolvers<void>();
-    const { promise: submitted, resolve: markSubmitted } = Promise.withResolvers<void>();
+    const { promise: loaded, resolve: markLoaded } = deferred<void>();
+    const { promise: resume, resolve: resumeSync } = deferred<void>();
+    const { promise: submitted, resolve: markSubmitted } = deferred<void>();
     const syncing = withKageDefense(db, villageId, async (tx, hall) => {
       markLoaded(); await resume;
       return syncLockedKageDefense(tx, hall);

@@ -18,6 +18,7 @@ import { createTrpcSession, SESSION_CHANGED_MESSAGE, trpcSessionLink } from "@/l
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { actualShowMutationToast } from "../setup/preload";
+import { deferred } from "../setup/deferred";
 
 const key = [["profile", "getUser"], { type: "query" }];
 type Result = RouterOutputs["misc"]["submitNotification"];
@@ -143,7 +144,7 @@ it.each(["accepted", "switch", "sign-out", "lost"] as const)("delivers only an a
   const clerk: Pick<Clerk, "session"> = { session: session("actor") };
   const scope = createTrpcSession(clerk);
   let finish!: () => void;
-  const { promise: dispatched, resolve: started } = Promise.withResolvers<void>();
+  const { promise: dispatched, resolve: started } = deferred<void>();
   const transport = createTRPCClient<AppRouter>({ links: [trpcSessionLink(scope), httpBatchLink({
     url: "http://localhost/api/trpc", transformer: superjson, headers: scope.headers,
     fetch: async () => {

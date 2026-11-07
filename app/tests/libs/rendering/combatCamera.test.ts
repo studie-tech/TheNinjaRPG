@@ -10,6 +10,7 @@ import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatScene, type CombatSceneSnapshot } from "@/libs/rendering/scenes/combat";
 import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { deferred } from "../../setup/deferred";
 
 const cleanups: (() => void)[] = [];
 const originalTerrain=combatTerrain.prepareCombatTerrain;
@@ -62,7 +63,7 @@ describe("combat camera gestures", () => {
     const original=combatEffects.createCombatEffects, phases:boolean[]=[];
     vi.spyOn(combatEffects,"createCombatEffects").mockImplementation((...args)=>{const effects=original(...args),sync=effects.sync;effects.sync=(next,initial=false)=>{phases.push(initial);return sync(next,initial)};return effects});
     vi.spyOn(combatTerrain,"prepareCombatTerrain").mockImplementation((...args)=>({...originalTerrain(...args),scenery:[{id:"held-border",kind:"decoration",image:"held-border.png",size:20,x:30,y:30,groundY:20}]}));
-    const { promise: held, resolve: release } = Promise.withResolvers<Texture>();
+    const { promise: held, resolve: release } = deferred<Texture>();
     vi.spyOn(Assets,"load").mockImplementation(async input=>JSON.stringify(input).includes("held-border")?held:Texture.WHITE);
     const fixture=await setup(2,false,{},false);
     const effect={id:"before-first-frame",type:"visual",longitude:6,latitude:5,power:100,appearSfx:"arrival"} as GroundEffect;
@@ -73,7 +74,7 @@ describe("combat camera gestures", () => {
 
   it.each([false,true])("keeps fighters usable while border scenery loads and ignores cancelled artwork (%s)", async cancel=>{
     vi.spyOn(combatTerrain,"prepareCombatTerrain").mockImplementation((...args)=>({...originalTerrain(...args),scenery:[{id:"pending-border",kind:"decoration",image:"pending-combat-border.png",size:20,x:30,y:30,groundY:20}]}));
-    const { promise: pending, resolve: release } = Promise.withResolvers<Texture>();
+    const { promise: pending, resolve: release } = deferred<Texture>();
     vi.spyOn(Assets,"load").mockImplementation(async input=>JSON.stringify(input).includes("pending-combat-border")?pending:Texture.WHITE);
     const fixture=await setup(2,false);
     expect(fixture.game.isDisposed()).toBe(false);expect(fixture.world.getChildByLabel("combat-health",true)).not.toBeNull();

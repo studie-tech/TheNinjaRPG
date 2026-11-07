@@ -28,6 +28,7 @@ import { beforeStatements } from "../../../../setup/statements";
 import {
   describeWithDatabase, getTestDatabase, recordQueries, resetTables,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const userId = "arena-ready";
 const aiId = "arena-ai";
@@ -274,10 +275,10 @@ describeWithDatabase("arena readiness reads", () => {
 
   it("starts the AI lookup while the readiness participant read is still pending", async () => {
     const client = await getTestDatabase();
-    const { promise: pending, resolve: release } = Promise.withResolvers<void>();
+    const { promise: pending, resolve: release } = deferred<void>();
     let aiReadStarted = false;
     let readinessReadStarted = false;
-    const { promise: readiness, resolve: signalReadiness } = Promise.withResolvers<void>();
+    const { promise: readiness, resolve: signalReadiness } = deferred<void>();
     const original = client.query.userData.findFirst.bind(client.query.userData);
     vi.spyOn(client.query.userData, "findFirst").mockImplementation(((options: Parameters<typeof original>[0]) => {
       if (options?.with) {
@@ -430,8 +431,8 @@ describeWithDatabase("arena readiness reads", () => {
     it.each([{ inArena: false }, { isAi: false }, { isSummon: true }])(
       `rejects a selected ${battleType} target changed during readiness: %j`, async (patch) => {
         const client = await getTestDatabase();
-        const { promise: pending, resolve: release } = Promise.withResolvers<void>();
-        const { promise: selection, resolve: selected } = Promise.withResolvers<void>();
+        const { promise: pending, resolve: release } = deferred<void>();
+        const { promise: selection, resolve: selected } = deferred<void>();
         const original = client.query.userData.findFirst.bind(client.query.userData);
         vi.spyOn(client.query.userData, "findFirst").mockImplementation(((options: Parameters<typeof original>[0]) => {
           if (options?.with)

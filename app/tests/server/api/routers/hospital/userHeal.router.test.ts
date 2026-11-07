@@ -31,6 +31,7 @@ import {
   resetTables,
   lockWaitObserved,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const USER_ID = "hospital-self-heal-user";
 const TARGET_ID = "hospital-heal-target";
@@ -265,8 +266,8 @@ describeWithDatabase("hospital self-healing", () => {
     // Bootstrap profile rows before both requests read the same user concurrently.
     await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
 
-    const { promise: secondRegenReached, resolve: releaseFirstRegen } = Promise.withResolvers<void>();
-    const { promise: firstHealFinished, resolve: releaseSecondRegen } = Promise.withResolvers<void>();
+    const { promise: secondRegenReached, resolve: releaseFirstRegen } = deferred<void>();
+    const { promise: firstHealFinished, resolve: releaseSecondRegen } = deferred<void>();
     let regenWrites = 0;
     const delayedDatabase = new Proxy(database, {
       get(target, property) {
@@ -419,9 +420,9 @@ describeWithDatabase("hospital healing another user", () => {
     const database = await getTestDatabase();
     await database.update(userData).set({ status: "AWAKE", isOutlaw: true })
       .where(eq(userData.userId, TARGET_ID));
-    const { promise: release, resolve: releaseAssignment } = Promise.withResolvers<void>();
-    const { promise: locked, resolve: markLocked } = Promise.withResolvers<void>();
-    const { promise: healingSent, resolve: markHealingSent } = Promise.withResolvers<void>();
+    const { promise: release, resolve: releaseAssignment } = deferred<void>();
+    const { promise: locked, resolve: markLocked } = deferred<void>();
+    const { promise: healingSent, resolve: markHealingSent } = deferred<void>();
     const assignmentClient = new Proxy(database, {
       get(target, property, receiver) {
         if (property === "transaction") {

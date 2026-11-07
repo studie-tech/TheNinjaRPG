@@ -17,6 +17,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const USER = "ranked-player";
 
@@ -123,8 +124,8 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
   for (const endpoint of ["checkRankedPvpMatches", "getRankedPvpQueue"] as const) {
     it(`${endpoint} preserves a join claimed after its stale status read`, async () => {
       const db = await getTestDatabase();
-      const { promise: ready, resolve: claimReady } = Promise.withResolvers<void>();
-      const { promise: wait, resolve: releaseClaim } = Promise.withResolvers<void>();
+      const { promise: ready, resolve: claimReady } = deferred<void>();
+      const { promise: wait, resolve: releaseClaim } = deferred<void>();
       const joiningClient = beforeStatements(db, rankedPvpQueue, [
         async () => {
           // The join has preloaded an empty queue. Publish an old claimed orphan

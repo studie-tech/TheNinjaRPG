@@ -15,6 +15,7 @@ import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
 import type UserRequestSystem from "@/layout/UserRequestSystem";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
+import { deferred } from "../setup/deferred";
 
 type HomeRequest = ComponentProps<typeof UserRequestSystem>["requests"][number];
 type Result = { success: boolean; message: string };
@@ -89,7 +90,7 @@ it("refreshes a mounted home invitation list before showing its incoming invitat
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/home");
   const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   showToast.mockClear();
-  const { promise: refreshReady, resolve: finishRefresh } = Promise.withResolvers<void>();
+  const { promise: refreshReady, resolve: finishRefresh } = deferred<void>();
   const query = vi.fn(async () => {
     if (query.mock.calls.length === 1) return [];
     await refreshReady;
@@ -195,7 +196,7 @@ it("shows sent and received history with accepted visit and revoke actions", asy
 });
 
 it("keeps visibility controls pending through revision recovery and retries with the refreshed revision", async () => {
-  const { promise: refreshReady, resolve: finishRefresh } = Promise.withResolvers<void>();
+  const { promise: refreshReady, resolve: finishRefresh } = deferred<void>();
   const sharing = vi.fn((_input: unknown): Result => sharing.mock.calls.length === 1
     ? { success: false, message: "Your home changed. Refresh and try again" }
     : { success: true, message: "Your home is public" });
@@ -222,7 +223,7 @@ it("keeps visibility controls pending through revision recovery and retries with
 });
 
 it("shows invitation loading and recovers a failed query from its nearby retry control", async () => {
-  const { promise: queryReady, resolve: finishQuery } = Promise.withResolvers<void>();
+  const { promise: queryReady, resolve: finishQuery } = deferred<void>();
   let queries = 0;
   const view = setup(async (path) => {
     if (path !== "home.getHomeRequests") throw new Error(`Unexpected procedure ${path}`);

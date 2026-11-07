@@ -21,6 +21,7 @@ import {
   resetTables,
   recordQueries,
 } from "../../../setup/testDatabase";
+import { deferred } from "../../../setup/deferred";
 
 /**
  * The farming router carries the economy: level gates, purchase caps, compare-and-swap
@@ -763,7 +764,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       } : {}),
     })) as never);
 
-    const { promise: catalogUpdated, resolve: releaseReads } = Promise.withResolvers<void>();
+    const { promise: catalogUpdated, resolve: releaseReads } = deferred<void>();
     let catalogRead = false;
     let completionReads = 0;
     const skewed = new Proxy(database, {

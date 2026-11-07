@@ -2,11 +2,12 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "bun:test";
 import { usePendingIds } from "@/hooks/usePendingIds";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
+import { deferred } from "../setup/deferred";
 
 describe("useSingleFlight", () => {
   it("refuses a second submission in the same tick, before pending renders", async () => {
     const { result } = renderHook(() => useSingleFlight<{ id: string }>());
-    const flight = Promise.withResolvers<string>();
+    const flight = deferred<string>();
     const first = vi.fn(() => flight.promise);
     const second = vi.fn(async () => "duplicate");
 
@@ -74,7 +75,7 @@ describe("useSingleFlight", () => {
     const { result } = renderHook(() => useSingleFlight<{ id: string }>());
     const abandoned = { id: "old" };
     const next = { id: "new" };
-    const flight = Promise.withResolvers<void>();
+    const flight = deferred<void>();
     let stillOwned: boolean | undefined;
 
     let run!: Promise<void>;

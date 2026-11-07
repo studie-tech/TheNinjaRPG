@@ -6,6 +6,7 @@ import * as fields from "@/libs/rendering/villageLightField";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { shadowDirectionIndex } from "@/libs/rendering/bakedShadowAtlas";
 import { createBakedVillageLighting, strongestShadowLights, type VillageLight } from "@/libs/rendering/bakedVillageLighting";
+import { deferred } from "../../setup/deferred";
 
 describe("baked village shadow selection", () => {
   it.each(Array.from({ length: 8 }, (_, direction) => direction))("samples compass direction %i without requesting another texture", direction => {
@@ -204,7 +205,7 @@ it("retains a matching pool through cold artwork, replaces it at runtime, and cl
 
 it("ignores stale and disposed pool preloads", async () => {
   const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
-  const { promise: pending, resolve } = Promise.withResolvers<{ texture: Texture; bounds: { minX: number; maxX: number; minY: number; maxY: number } }>();
+  const { promise: pending, resolve } = deferred<{ texture: Texture; bounds: { minX: number; maxX: number; minY: number; maxY: number } }>();
   const stale = { resource: pending, release: vi.fn() };
   const unknown = { resource: Promise.resolve(null), release: vi.fn() };
   const acquire = vi.spyOn(fields, "acquirePrebakedVillageLightField").mockReturnValueOnce(stale).mockReturnValueOnce(unknown).mockReturnValueOnce(stale);

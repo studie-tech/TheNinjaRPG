@@ -10,6 +10,7 @@ import { trainRouter } from "@/server/api/routers/train";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { callerForDatabase } from "../../../setup/testDatabase";
+import { deferred as createDeferred } from "../../../setup/deferred";
 
 const startedAt = new Date(Date.now() - 60_000);
 const deferred: Array<() => unknown> = [];
@@ -97,8 +98,8 @@ const trainingCases = [
 describe.each(trainingCases)("$name history", ({ name, invoke }) => {
   it("responds after claiming gains without starting the history write", async () => {
     const db = database();
-    const { promise: claimed, resolve: reachedClaim } = Promise.withResolvers<void>();
-    const { promise: committed, resolve: commit } = Promise.withResolvers<{ rowsAffected: number }>();
+    const { promise: claimed, resolve: reachedClaim } = createDeferred<void>();
+    const { promise: committed, resolve: commit } = createDeferred<{ rowsAffected: number }>();
     db.where.mockImplementationOnce(() => { reachedClaim(); return committed; });
     const response = invoke(db);
     await claimed;

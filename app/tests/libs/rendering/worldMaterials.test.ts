@@ -17,6 +17,7 @@ import { STONE_VILLAGE_WALL_KIT } from "@/libs/sector-map/village-wall-assets";
 import { acquireCharacterFrameMaterial, acquireWorldMaterial, canopyShadowFrame, createCharacterMaterialFrame, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { createSunShadows } from "@/libs/rendering/worldSunShadows";
+import { deferred } from "../../setup/deferred";
 
 const material = (width: number, height: number): WorldMaterial => {
   const pixels = new Uint8Array(width * height * 4);
@@ -354,7 +355,7 @@ describe("world material loading", () => {
   });
 
   it("shares pending metadata and retains a usable resource when both leases release before it resolves", async () => {
-    const { promise: pending, resolve: complete } = Promise.withResolvers<Response>();
+    const { promise: pending, resolve: complete } = deferred<Response>();
     const fixture = loadingFixture(() => pending), image = "/world-art/oasis-village.webp";
     const first = acquireWorldMaterial(image, "column"), second = acquireWorldMaterial(image, "character");
     first.release(); second.release();

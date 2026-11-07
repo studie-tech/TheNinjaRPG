@@ -5,6 +5,7 @@ import type { UserData } from "@/drizzle/schema";
 import { travelRouter } from "@/server/api/routers/travel";
 import { buildSectorWindowLayout } from "@/server/utils/sectorMap";
 import { MoveToObjective, ObjectiveTracker, QuestTracker } from "@/validators/objectives";
+import { deferred } from "../../../../setup/deferred";
 
 const SECTOR = 500;
 const STALE_SECTOR = 10;
@@ -38,9 +39,9 @@ const makeCaller = (options: {
     userId: "viewer", status: options.status ?? "AWAKE", sector: SECTOR,
     villageId: null, rank: "JONIN", questData: options.questData ?? [], role: "USER",
   };
-  const userGate = Promise.withResolvers<typeof user>();
+  const userGate = deferred<typeof user>();
   const findUser = vi.fn(() => options.waitForUser ? userGate.promise : Promise.resolve(user));
-  const allSectorReadsStarted = Promise.withResolvers<void>();
+  const allSectorReadsStarted = deferred<void>();
   let readCount = 0;
   const read = <T,>(result: (options: { where: SQL }) => T) => vi.fn((query: { where: SQL }) => {
     if (++readCount === 6) allSectorReadsStarted.resolve();

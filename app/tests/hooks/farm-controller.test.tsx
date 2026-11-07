@@ -12,6 +12,7 @@ import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { QuestTracker } from "@/validators/objectives";
 import type { FarmMutationResponse, FarmPlotState, FarmStateResponse } from "@/validators/farming";
+import { deferred as createDeferred } from "../setup/deferred";
 
 const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
@@ -49,7 +50,7 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
     updateUser: (result, options) => updateUserCache(client, profileKey, result, options),
   } as ReturnType<typeof userContext.useRequiredUserData>);
   let requested = false;
-  const { promise: waiting, resolve: release } = Promise.withResolvers<void>();
+  const { promise: waiting, resolve: release } = createDeferred<void>();
   const requests: string[] = [];
   const trpc = testApi.createClient({ links: [() => ({ op }) => observable((sink) => {
     requests.push(op.path);

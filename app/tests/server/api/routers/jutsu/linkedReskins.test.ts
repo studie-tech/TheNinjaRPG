@@ -8,6 +8,7 @@ import type { DrizzleClient } from "@/server/db";
 import { DamageTag, JutsuValidator } from "@/validators/combat";
 import { insertItems, insertUsers } from "../../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const staff = () => callerFor(jutsuRouter, "staff");
 const read = async (id: string) => {
@@ -26,8 +27,8 @@ const createChild = async () => {
 
 // Pause after upfront guards; the transaction still executes against real MySQL.
 const pauseBeforeTransaction = (database: DrizzleClient) => {
-  const { promise: reached, resolve: signalReached } = Promise.withResolvers<void>();
-  const { promise: resumed, resolve: release } = Promise.withResolvers<void>();
+  const { promise: reached, resolve: signalReached } = deferred<void>();
+  const { promise: resumed, resolve: release } = deferred<void>();
   const client = new Proxy(database, {
     get(target, property, receiver) {
       if (property !== "transaction") return Reflect.get(target, property, receiver);

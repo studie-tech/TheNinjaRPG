@@ -21,6 +21,7 @@ import { dungeonBattleState, dungeonContent } from "../../../setup/dungeon";
 import { insertQuests, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
+import { deferred } from "../../../setup/deferred";
 
 type Profile = RouterOutputs["profile"]["getUser"];
 type DungeonState = RouterOutputs["coop"]["dungeon"]["getState"];
@@ -430,8 +431,8 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     const initial = await profile.getUser();
     expect(initial.userData).toMatchObject({ money: 0, dungeonsCompleted: 1 });
     const cache = cachedProfile(initial, () => profile.getUser());
-    const { promise: memberGate, resolve: releaseMember } = Promise.withResolvers<void>();
-    const { promise: openingMoney, resolve: actorRead } = Promise.withResolvers<number | undefined>();
+    const { promise: memberGate, resolve: releaseMember } = deferred<void>();
+    const { promise: openingMoney, resolve: actorRead } = deferred<number | undefined>();
     const delayed = new Proxy(db, {
       get(target, property, receiver) {
         if (property !== "query") return Reflect.get(target, property, receiver);

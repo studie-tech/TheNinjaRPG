@@ -10,6 +10,7 @@ import { useCombatUpdates } from "@/hooks/combat";
 import { useCombatTabs } from "@/hooks/combatTabs";
 import type { BattleState } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
+import { deferred } from "../setup/deferred";
 
 const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
@@ -35,7 +36,7 @@ beforeEach(() => {
   Object.defineProperty(navigator, "locks", { configurable: true, value: {
     request: async (name: string, options: { signal: AbortSignal }, callback: () => Promise<void>) => {
       const previous = tails.get(name) ?? Promise.resolve();
-      const { promise: held, resolve: release } = Promise.withResolvers<void>();
+      const { promise: held, resolve: release } = deferred<void>();
       tails.set(name, previous.then(() => held));
       await previous;
       if (!options.signal.aborted) await callback();

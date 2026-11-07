@@ -13,6 +13,7 @@ import CombatHistory from "@/layout/CombatHistory";
 import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
+import { deferred } from "../setup/deferred";
 
 // Keep the real history component, subscription hook and tRPC query lifecycle;
 // control only websocket delivery, user context and the server's log responses.
@@ -101,7 +102,7 @@ it("refreshes a cached saved log when it is reopened after the final insert", as
 });
 
 it("discards a saved log's pre-insert request when reopened before it finishes", async () => {
-  const { promise: oldResponse, resolve: finishOldRead } = Promise.withResolvers<BattleAction[]>();
+  const { promise: oldResponse, resolve: finishOldRead } = deferred<BattleAction[]>();
   readEntries.mockImplementationOnce(() => oldResponse);
   const state = { ...finalState, result: null };
   const view = mount(false, state);
@@ -115,7 +116,7 @@ it("discards a saved log's pre-insert request when reopened before it finishes",
 });
 
 it("discards an in-flight pre-insert history response when the final event arrives", async () => {
-  const { promise: oldResponse, resolve: finishOldRead } = Promise.withResolvers<BattleAction[]>();
+  const { promise: oldResponse, resolve: finishOldRead } = deferred<BattleAction[]>();
   readEntries.mockImplementationOnce(() => oldResponse);
   const view = mount();
   await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
@@ -328,7 +329,7 @@ it("does not overwrite a newer page committed while cancellation is pending", as
   queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, { ...input, refreshKey: 3 }, "query"), [row(2), row(1)]);
   mount();
   await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
-  const { promise: pendingCancellation, resolve: finishCancellation } = Promise.withResolvers<void>();
+  const { promise: pendingCancellation, resolve: finishCancellation } = deferred<void>();
   const cancel = vi.spyOn(queryClient, "cancelQueries").mockImplementationOnce(() => pendingCancellation);
   const pendingUpdate = applyLogs("battle", 4, [row(3)]);
   expect(cancel).toHaveBeenCalledTimes(1);

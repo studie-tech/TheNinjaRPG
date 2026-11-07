@@ -3,11 +3,12 @@ import * as pusher from "@/libs/pusher";
 import { createConvo } from "@/server/api/routers/comments";
 import type { DrizzleClient } from "@/server/db";
 import * as social from "@/server/utils/push/social";
+import { deferred } from "../../../setup/deferred";
 
 afterEach(() => vi.restoreAllMocks());
 
 it.each([false, true])("publishes the inbox event only after successful storage (failure: %s)", async (fail) => {
-  const { promise: stored, resolve: finish } = Promise.withResolvers<void>();
+  const { promise: stored, resolve: finish } = deferred<void>();
   let completed = 0;
   const write = async () => { await stored; if (fail) throw new Error("Storage failed"); completed++; return { rowsAffected: 1 }; };
   const client = {

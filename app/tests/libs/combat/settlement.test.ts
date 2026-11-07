@@ -49,6 +49,7 @@ import {
   makeCompleteBattle,
   makeEffect,
 } from "./helpers/battleScenario";
+import { deferred } from "../../setup/deferred";
 
 const trigger = vi.fn(async () => {});
 const pusher = { trigger } as unknown as PusherClient;
@@ -765,8 +766,8 @@ describeWithDatabase("CAS combat settlement", () => {
       const snapshot = scenario(true);
       const database = await getTestDatabase();
       await database.insert(battle).values(snapshot);
-      const { promise: cleanupGate, resolve: releaseCleanup } = Promise.withResolvers<void>();
-      const { promise: rewardReady, resolve: rewardWritten } = Promise.withResolvers<void>();
+      const { promise: cleanupGate, resolve: releaseCleanup } = deferred<void>();
+      const { promise: rewardReady, resolve: rewardWritten } = deferred<void>();
       const client = new Proxy(database, {
         get(target, key, receiver) {
           if (key === "insert")

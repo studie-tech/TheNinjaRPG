@@ -13,6 +13,7 @@ import { QUERY_RATE_LIMIT_MESSAGE, rateLimitFine, rateLimitFineMessage } from "@
 import type { DrizzleClient } from "@/server/db";
 import { resetServerModuleStubs } from "../../setup/serverModules";
 import { callerForDatabase } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
 
 const source = (path: string) => readFileSync(join(import.meta.dirname, "../../../src", path), "utf8");
 /** Scope architecture assertions to one protected procedure's source. */
@@ -100,8 +101,8 @@ describe("self-guarded Pyramid mutations", () => {
   });
 
   it.each([false, true])("repairs stale inventory only after authorization (allowed: %s)", async (allowed) => {
-    const authorization = Promise.withResolvers<boolean>();
-    const inventoryStarted = Promise.withResolvers<void>();
+    const authorization = deferred<boolean>();
+    const inventoryStarted = deferred<void>();
     const staleItem = { quantity: -1, updatedAt: new Date(0), item: { hidden: false } };
     const read = vi.fn(async (): Promise<(typeof staleItem)[]> => {
       inventoryStarted.resolve();
@@ -150,9 +151,9 @@ describe("combat deferred rate limit", () => {
   };
 
   it("starts the first battle read while Redis is pending and awaits both", async () => {
-    const limiter = Promise.withResolvers<number[]>();
-    const limiterStarted = Promise.withResolvers<void>();
-    const battleStarted = Promise.withResolvers<void>();
+    const limiter = deferred<number[]>();
+    const limiterStarted = deferred<void>();
+    const battleStarted = deferred<void>();
     mockLimiter(() => { limiterStarted.resolve(); return limiter.promise; });
     const read = vi.fn(async () => { battleStarted.resolve(); return undefined; });
     let finished = false;

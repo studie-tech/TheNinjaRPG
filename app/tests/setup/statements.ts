@@ -1,4 +1,5 @@
 import type { DrizzleClient } from "@/server/db";
+import { deferred } from "./deferred";
 
 type Hook = () => Promise<void>;
 
@@ -86,7 +87,7 @@ export const failStatements = (
 
 /** A wait that returns only once `count` callers have arrived, so a race's competitors overlap. */
 export const barrier = (count: number) => {
-  const { promise, resolve } = Promise.withResolvers<void>();
+  const { promise, resolve } = deferred<void>();
   let arrivals = 0;
   return async () => {
     if (++arrivals >= count) resolve();

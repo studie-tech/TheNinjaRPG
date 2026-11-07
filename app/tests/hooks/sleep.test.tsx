@@ -11,6 +11,7 @@ import { useSleepToggle } from "@/hooks/sleep";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { deferred } from "../setup/deferred";
 
 const testApi = createTRPCReact<AppRouter>();
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -23,7 +24,7 @@ it("reconciles a delayed sleep response instead of replacing a newer hospitaliza
   const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity, queryFn: async () => profile("HOSPITALIZED") });
   const unsubscribe = observer.subscribe(() => {});
   let finish!: () => void;
-  const { promise: dispatched, resolve: started } = Promise.withResolvers<void>();
+  const { promise: dispatched, resolve: started } = deferred<void>();
   // Fresh hooks preserve mutation lifecycles after other suites replace the shared API.
   Object.assign(vi.spyOn(clientModule, "api" as never), { home: testApi.home });
   const trpc = testApi.createClient({ links: [httpBatchLink({

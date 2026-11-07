@@ -15,6 +15,7 @@ import { huntingContract, huntingHabitatContent, huntingMap } from "../../setup/
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements, holdReads } from "../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
 
 describeWithDatabase("staff changes during hunting admission", () => {
   beforeEach(async () => {
@@ -421,8 +422,8 @@ describeWithDatabase("staff changes during hunting admission", () => {
   for (const operation of ["forceAwake", "updateUserId"] as const) {
     it(`rejects a stale hunt when ${operation} finishes before its admission, then settles a fresh hunt`, async () => {
       const { db, id } = await prepare();
-      const { promise: reached, resolve: paused } = Promise.withResolvers<void>();
-      const { promise: wait, resolve: resume } = Promise.withResolvers<void>();
+      const { promise: reached, resolve: paused } = deferred<void>();
+      const { promise: wait, resolve: resume } = deferred<void>();
       const client = new Proxy(db, { get(target, key, receiver) {
         if (key === "transaction") return async (...args: Parameters<typeof target.transaction>) => { paused(); await wait; return target.transaction(...args); };
         return Reflect.get(target, key, receiver);

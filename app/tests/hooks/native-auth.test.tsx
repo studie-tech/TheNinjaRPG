@@ -7,6 +7,7 @@ import * as handoff from "@/hooks/useNativeAuthHandoff";
 import * as native from "@/libs/native";
 import { appEvents, oauthBrowser } from "@/libs/native";
 import { nativeAuthChallenge } from "@/server/utils/nativeAuth";
+import { deferred } from "../setup/deferred";
 
 const flowId = "a".repeat(43);
 const code = "c".repeat(43);
@@ -151,7 +152,7 @@ describe("browser authentication App Link continuations", () => {
   const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
   const grace = () => new Promise<void>((resolve) => setTimeout(resolve, 2050));
   const exercise = async (run: () => Promise<void>) => {
-    const { promise: initialOpen, resolve: opened } = Promise.withResolvers<void>();
+    const { promise: initialOpen, resolve: opened } = deferred<void>();
     mocks.open.mockImplementation(async () => { opened(); });
     const { result } = renderHook(() => useNativeAuth());
     let outcome: NativeAuthResult | undefined;
@@ -196,7 +197,7 @@ describe("browser authentication App Link continuations", () => {
   it("invalidates an in-flight dismissal check when a continuation arrives", async () => {
     expect(await exercise(async () => {
       let finishCheck: (state: { isActive: boolean }) => void = () => {};
-      const { promise: started, resolve: checkStarted } = Promise.withResolvers<void>();
+      const { promise: started, resolve: checkStarted } = deferred<void>();
       mocks.getState.mockImplementationOnce(() => new Promise((resolve) => { finishCheck = resolve; checkStarted(); }));
       onFinished(); await started;
       onUrl(continuation()); await flush();

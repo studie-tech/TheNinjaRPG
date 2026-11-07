@@ -5,6 +5,7 @@ import { ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
 import * as tutorial from "@/hooks/tutorial";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import type { UserWithRelations } from "@/routers/profile";
+import { deferred } from "../setup/deferred";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
@@ -72,7 +73,7 @@ const form = (onAccept: Accept, userData = trainee) => (
 
 describe("advanced experience assignment drafts", () => {
   it("waits for an accepted allocation before advancing the tutorial", async () => {
-    const { promise: assignment, resolve: resolveAssignment } = Promise.withResolvers<boolean>();
+    const { promise: assignment, resolve: resolveAssignment } = deferred<boolean>();
     const accept = vi.fn(() => assignment);
     const next = vi.fn(async () => {});
     vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({

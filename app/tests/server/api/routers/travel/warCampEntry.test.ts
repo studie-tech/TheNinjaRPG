@@ -10,6 +10,7 @@ import { getSectorNeighborIds, invalidatePublishedMapCache } from "@/server/util
 import { defaultWarRules } from "@/validators/war";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const SECTOR = 1538;
 const neighbors = getSectorNeighborIds(SECTOR);
@@ -36,8 +37,8 @@ const fixture = ({ width = SECTOR_WIDTH, height = SECTOR_HEIGHT,
   const reads: string[] = [];
   const campSectors: number[] = [];
   let writes = 0;
-  const { promise: userStarted, resolve: signalUserRead } = Promise.withResolvers<void>();
-  const { promise: userReady, resolve: releaseUser } = Promise.withResolvers<void>();
+  const { promise: userStarted, resolve: signalUserRead } = deferred<void>();
+  const { promise: userReady, resolve: releaseUser } = deferred<void>();
   const user = {
     userId: "visitor", username: "Visitor", sector: SECTOR, villageId: "neutral",
     status: "AWAKE", updatedAt: new Date(), energyQueueHead: 0, energyQueueTail: queued ? 1 : 0,

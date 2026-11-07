@@ -31,6 +31,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 describeWithDatabase("clan queue claim ownership", () => {
   beforeEach(async () => {
@@ -255,8 +256,8 @@ describeWithDatabase("clan queue claim ownership", () => {
               .set({ status: "QUEUED" })
               .where(eq(userData.userId, "leader"));
           }
-          const { promise: ready, resolve: signalReady } = Promise.withResolvers<void>();
-          const { promise: wait, resolve: releaseInsert } = Promise.withResolvers<void>();
+          const { promise: ready, resolve: signalReady } = deferred<void>();
+          const { promise: wait, resolve: releaseInsert } = deferred<void>();
           let joining: ReturnType<typeof join> | undefined;
           let replacement: Promise<void> | undefined;
           const replace = () =>
@@ -483,7 +484,7 @@ describeWithDatabase("clan queue claim ownership", () => {
 
   it("settles a delayed challenge-lobby insert before compensating a lost membership", async () => {
     const db = await getTestDatabase();
-    const { promise: memberFailed, resolve: signalMemberFailed } = Promise.withResolvers<void>();
+    const { promise: memberFailed, resolve: signalMemberFailed } = deferred<void>();
     // Hold the lobby insertion until the membership insertion has already rejected.
     let client = beforeStatements(db, mpvpBattleQueue, [
       async () => {

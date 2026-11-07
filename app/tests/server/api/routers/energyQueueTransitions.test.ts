@@ -50,6 +50,7 @@ import {
 } from "../../../setup/testDatabase";
 
 import { makeEffect } from "../../../libs/combat/helpers/battleScenario";
+import { deferred } from "../../../setup/deferred";
 
 const HOME = 30;
 const AWAY = getSectorNeighborIds(HOME).east;
@@ -690,8 +691,8 @@ describeWithDatabase("Energy queue state transitions", () => {
   it("preserves a concurrent discipline speed change when combat advances only the element queue", async () => {
     const now = new Date();
     setSystemTime(now);
-    const { promise: ready, resolve: speedWriteReady } = Promise.withResolvers<void>();
-    const { promise: release, resolve: releaseSpeedWrite } = Promise.withResolvers<void>();
+    const { promise: ready, resolve: speedWriteReady } = deferred<void>();
+    const { promise: release, resolve: releaseSpeedWrite } = deferred<void>();
     const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
     try {
       await prepare([]);

@@ -10,6 +10,7 @@ import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { deferred } from "../setup/deferred";
 
 type Input = RouterInputs["profile"]["updatePreferences"];
 type Result = RouterOutputs["profile"]["updatePreferences"];
@@ -60,7 +61,7 @@ const settle = async (view: ReturnType<typeof show>) => {
 
 it("retains the confirmed preference after an already-running stale profile read without another read", async () => {
   const view = show();
-  const read = Promise.withResolvers<UserCache>();
+  const read = deferred<UserCache>();
   const readFn = vi.fn(() => read.promise);
   const cancel = vi.spyOn(cache, "cancelQueries");
   const invalidate = vi.spyOn(cache, "invalidateQueries");
@@ -83,7 +84,7 @@ it("retains the confirmed preference after an already-running stale profile read
 });
 
 it("preserves an unrelated settled projection made while the preference write runs", async () => {
-  const write = Promise.withResolvers<Result>();
+  const write = deferred<Result>();
   save = () => write.promise;
   const view = show();
   await toggle(view);
@@ -120,7 +121,7 @@ it.each(["rejected", "network"] as const)("shows %s failures beside the unchange
 });
 
 it("does not apply an old actor's save after an account switch", async () => {
-  const write = Promise.withResolvers<Result>();
+  const write = deferred<Result>();
   save = () => write.promise;
   const view = show();
   await toggle(view);
@@ -135,7 +136,7 @@ it("does not apply an old actor's save after an account switch", async () => {
 
 it("does not overwrite a newer preference projection, even after a stale read restores its baseline", async () => {
   const view = show();
-  const read = Promise.withResolvers<UserCache>();
+  const read = deferred<UserCache>();
   const fetching = cache.fetchQuery({ queryKey: key, staleTime: 0, queryFn: () => read.promise });
   await toggle(view);
   await act(async () => { cache.setQueryData(key, profile({ autoWakeUp: true })); cache.setQueryData(key, profile({ autoWakeUp: false })); });
@@ -158,7 +159,7 @@ it("lets a newer save supersede an earlier captured preference", async () => {
 
 it("leaves a failed existing read intact and displays reconciliation feedback", async () => {
   const view = show();
-  const read = Promise.withResolvers<UserCache>();
+  const read = deferred<UserCache>();
   const fetching = cache.fetchQuery({ queryKey: key, staleTime: 0, queryFn: () => read.promise }).catch(() => {});
   await toggle(view);
   await act(async () => { read.reject(new Error("Profile unavailable")); await fetching; });
@@ -169,10 +170,10 @@ it("leaves a failed existing read intact and displays reconciliation feedback", 
 });
 
 it("retains the preference when an existing read settles before the write response", async () => {
-  const write = Promise.withResolvers<Result>();
+  const write = deferred<Result>();
   save = () => write.promise;
   const view = show();
-  const read = Promise.withResolvers<UserCache>();
+  const read = deferred<UserCache>();
   const fetching = cache.fetchQuery({ queryKey: key, staleTime: 0, queryFn: () => read.promise });
   await toggle(view);
   await act(async () => { read.resolve(profile({ money: 55 })); await fetching; });
@@ -183,11 +184,11 @@ it("retains the preference when an existing read settles before the write respon
 });
 
 it("waits for a profile read that starts while the preference write is pending", async () => {
-  const write = Promise.withResolvers<Result>();
+  const write = deferred<Result>();
   save = () => write.promise;
   const view = show();
   await toggle(view);
-  const read = Promise.withResolvers<UserCache>();
+  const read = deferred<UserCache>();
   const fetching = cache.fetchQuery({ queryKey: key, staleTime: 0, queryFn: () => read.promise });
   await act(async () => { write.resolve(saved); });
   expect(announce).not.toHaveBeenCalled();

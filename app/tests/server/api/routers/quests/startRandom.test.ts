@@ -4,6 +4,7 @@ import { isAvailableUserQuests } from "@/libs/quest";
 import { questsRouter } from "@/routers/quests";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const input = {
   type: "crime" as const,
@@ -73,8 +74,8 @@ describe("random assignment reads", () => {
   afterEach(resetServerModuleStubs);
 
   it("loads the village and candidates while user regeneration is pending", async () => {
-    const refresh = Promise.withResolvers<{ user: typeof user }>();
-    const started = Promise.withResolvers<void>();
+    const refresh = deferred<{ user: typeof user }>();
+    const started = deferred<void>();
     stubProfile("fetchUpdatedUser", (() => {
       started.resolve();
       return refresh.promise;
