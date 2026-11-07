@@ -236,6 +236,45 @@ export const aiSpriteAnimationRelations = relations(aiSpriteAnimation, ({ one })
   animation: one(spriteAnimation, { fields: [aiSpriteAnimation.animationId], references: [spriteAnimation.id] }),
 }));
 
+/** Staff requests to gameasset.dev; a reviewed result becomes one `SpriteAnimation`. */
+export const spriteGeneration = mysqlTable("SpriteGeneration", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  name: varchar("name", { length: 191 }).notNull(),
+  prompt: varchar("prompt", { length: 2000 }).notNull(),
+  motion: mysqlEnum("motion", consts.SpriteGenerationMotions).notNull(),
+  frames: smallint("frames").notNull(),
+  facing: mysqlEnum("facing", consts.AvatarFacings).notNull(),
+  sourceUrl: varchar("sourceUrl", { length: 2048 }).notNull(),
+  remoteImageId: varchar("remoteImageId", { length: 191 }).notNull(),
+  remoteAssetId: varchar("remoteAssetId", { length: 191 }).notNull(),
+  /** Set together when the sprite is meant for one AI action. */
+  aiUserId: varchar("aiUserId", { length: 191 }),
+  actionKey: varchar("actionKey", { length: 191 }),
+  status: mysqlEnum("status", consts.SpriteGenerationStatuses).default("QUEUED").notNull(),
+  stage: varchar("stage", { length: 191 }),
+  error: varchar("error", { length: 500 }),
+  /** Finished sheets on our own CDN, stored at the same sizes as `SpriteAnimation`. */
+  url: varchar("url", { length: 2048 }),
+  smallUrl: varchar("smallUrl", { length: 2048 }),
+  columns: smallint("columns"),
+  rows: smallint("rows"),
+  frameCount: smallint("frameCount"),
+  fps: float("fps"),
+  animationId: varchar("animationId", { length: 191 }),
+  createdByUserId: varchar("createdByUserId", { length: 191 }).notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+}, (table) => ({
+  remoteAsset: uniqueIndex("SpriteGeneration_remoteAssetId_key").on(table.remoteAssetId),
+  status: index("SpriteGeneration_status_idx").on(table.status),
+  createdAt: index("SpriteGeneration_createdAt_idx").on(table.createdAt),
+}));
+/** Stored sprite request, including its review state and remote identifiers. */
+export type SpriteGeneration = InferSelectModel<typeof spriteGeneration>;
+export const spriteGenerationRelations = relations(spriteGeneration, ({ one }) => ({
+  createdBy: one(userData, { fields: [spriteGeneration.createdByUserId], references: [userData.userId] }),
+}));
+
 export const gameAssetTag = mysqlTable(
   "GameAssetTag",
   {

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { SPRITE_ANIMATION_LIMITS } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
 import { showMutationToast } from "@/libs/toast";
 import { groupBy } from "@/utils/grouping";
@@ -178,6 +179,13 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
                   Reset
                 </Button>
               )}
+              <Button asChild type="button" variant="outline">
+                <Link
+                  href={`/manual/sprite_studio?ai=${encodeURIComponent(userId)}&action=${encodeURIComponent(actionKey)}`}
+                >
+                  Create with Sprite Studio
+                </Link>
+              </Button>
               {preview && (
                 <Button
                   type="button"
@@ -367,8 +375,10 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
  */
 export const SpriteAnimationPreview = ({
   animation,
+  className = "rounded-md border bg-muted",
 }: {
   animation: CharacterAnimation;
+  className?: string;
 }) => {
   const [frame, setFrame] = useState(0);
   const [error, setError] = useState(false);
@@ -381,7 +391,7 @@ export const SpriteAnimationPreview = ({
   }, [animation.frameCount, animation.fps]);
   return (
     <div
-      className="relative aspect-square overflow-hidden rounded-md border bg-muted"
+      className={`relative aspect-square overflow-hidden ${className}`}
       role="img"
       aria-label={animation.name}
     >

@@ -1,9 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
-import { NonActionItemTypes } from "@/drizzle/constants";
-import { getDefaultBasicActions } from "@/libs/combat/actions";
 import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate";
-import { spriteActionKey } from "@/libs/spriteAnimations";
+import { animationActions } from "@/libs/spriteAnimationActions";
 import { fetchUser } from "@/queries/profile";
 import {
   fetchAnimationAi,
@@ -132,30 +130,3 @@ export const spriteAnimationRouter = createTRPCRouter({
       };
     }),
 });
-
-/** Use catalogue IDs so reusable sheets follow equipped actions rather than inventory rows. */
-const animationActions = (
-  ai: NonNullable<Awaited<ReturnType<typeof fetchAnimationAi>>>,
-) => [
-  { key: "idle", name: "Idle", group: "Default" },
-  ...Object.values(getDefaultBasicActions(ai)).map((action) => ({
-    key: spriteActionKey(action),
-    name: action.name,
-    group: "Basic",
-  })),
-  { key: "basic:wait", name: "Wait / end turn", group: "Basic" },
-  ...ai.jutsus
-    .filter((entry) => entry.jutsu)
-    .map((entry) => ({
-      key: `jutsu:${entry.jutsuId}`,
-      name: entry.jutsu.name,
-      group: "Jutsu",
-    })),
-  ...ai.items
-    .filter((entry) => entry.item && !NonActionItemTypes.includes(entry.item.itemType))
-    .map((entry) => ({
-      key: `item:${entry.itemId}`,
-      name: entry.item.name,
-      group: "Item",
-    })),
-];

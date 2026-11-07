@@ -61,11 +61,17 @@ export const prepareSpriteSheetUrls = async (
 };
 
 /** Raw file-key URLs bypass the CDN optimizer, keeping packed atlases byte-identical. */
-const uploadToStorage = async (sheet: Buffer, name: string) => {
+export const uploadToStorage = async (sheet: Buffer, name: string) => {
   const file = new UTFile([new Uint8Array(sheet)], name, { type: "image/webp" });
   const { data, error } = await new UTApi().uploadFiles(file);
   if (error || !data) throw new Error(error?.message ?? "Sprite sheet upload failed");
   return `https://uploadthing.b-cdn.net/f/${data.key}`;
+};
+
+/** Remove sheets nothing references; a file left behind only costs storage. */
+export const removeFromStorage = async (urls: string[]) => {
+  const keys = urls.flatMap((url) => new URL(url).pathname.split("/").slice(-1));
+  await new UTApi().deleteFiles(keys).catch(() => undefined);
 };
 
 type SpriteSheetUrls =

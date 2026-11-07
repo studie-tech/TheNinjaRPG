@@ -154,3 +154,9 @@ it("cancels revisions without writing or retaining the previous draft", () => {
   expect(create).not.toHaveBeenCalled();
   expect(assign).not.toHaveBeenCalled();
 });
+
+it("links the chosen action to the sprite studio", () => {
+  const view = render(<AiSpriteAnimations userId="ai" />);
+  const link = view.getByRole("link", { name: "Create with Sprite Studio" });
+  expect(link.getAttribute("href")).toBe("/manual/sprite_studio?ai=ai&action=idle");
+});

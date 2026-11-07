@@ -1009,6 +1009,13 @@
       "when": 1794039583665,
       "tag": "0144_seed_ai_action_animations",
       "breakpoints": false
+    },
+    {
+      "idx": 145,
+      "version": "5",
+      "when": 1794057566131,
+      "tag": "0145_sprite_generation",
+      "breakpoints": false
     }
   ]
 }

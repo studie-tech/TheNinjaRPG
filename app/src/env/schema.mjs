@@ -67,6 +67,8 @@ export const serverSchema = z.object({
   TWITTER_ACCESS_TOKEN: z.string().optional(),
   TWITTER_ACCESS_SECRET: z.string().optional(),
   REPLICATE_API_TOKEN: z.string().optional(),
+  // Spends gameasset.dev credits for the staff sprite studio; never reaches the client
+  GAMEASSET_API_KEY: z.string().optional(),
   // Epidemic Sound Partner API key for sound suggestions in the content review desk
   EPIDEMIC_API_KEY: z.string().optional(),
   SENDGRID_API_KEY: z.string().optional(),
@@ -165,6 +167,7 @@ export const serverEnv = {
   TWITTER_ACCESS_TOKEN: process.env.TWITTER_ACCESS_TOKEN,
   TWITTER_ACCESS_SECRET: process.env.TWITTER_ACCESS_SECRET,
   REPLICATE_API_TOKEN: process.env.REPLICATE_API_TOKEN,
+  GAMEASSET_API_KEY: process.env.GAMEASSET_API_KEY,
   EPIDEMIC_API_KEY: process.env.EPIDEMIC_API_KEY,
   SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
   CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,

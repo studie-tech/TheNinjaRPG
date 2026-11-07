@@ -110,6 +110,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/manual/rewards",
   "/manual/sageMode",
   "/manual/sageMode/edit/[sagemodeid]",
+  "/manual/sprite_studio",
   "/manual/skillTree",
   "/manual/skillTree/balance",
   "/manual/skillTree/edit/[skillid]",
