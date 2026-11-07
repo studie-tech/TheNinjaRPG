@@ -152,6 +152,8 @@ export type DungeonRunState = CoopRoster & {
   entryStartedAt?: number;
   /** Committed with the first battle and entry items; absent until a successful admission. */
   entryPaidAt?: number;
+  /** Final-floor settlement time; recorded atomically with successful completion. */
+  completedAt?: number;
   /** Publication commits with the battle; recovery may claim only an unpublished floor. */
   battlePublished?: boolean;
   /** Owned companions reserved by the solo player's queued status throughout the run. */

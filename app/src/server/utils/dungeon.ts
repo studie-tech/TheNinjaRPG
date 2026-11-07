@@ -81,6 +81,7 @@ export const settleDungeonBattle = async (
       : next.floor === meta.totalFloors
         ? "COMPLETED"
         : "BETWEEN";
+  if (status === "COMPLETED") next.completedAt = settledAt.getTime();
   // These changes span battle, run, character and membership rows. A single guarded update
   // cannot delete the battle too; retain a short transaction so failed revival is retryable.
   return retryOnDeadlock(() =>

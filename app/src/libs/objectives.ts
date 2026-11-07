@@ -150,7 +150,9 @@ export const isQuestComplete = (
 
 /**
  * Objective ids along the branch the tracker selected, from the starting objective (the one
- * without a predecessor). `cyclic` reports a selection that loops back on itself.
+ * without a predecessor), stopping at the first unfinished objective. A saved next link
+ * selects a branch but does not satisfy the objective that owns it. `cyclic` reports a
+ * selection that loops back on itself.
  */
 const selectedObjectivePath = (
   objectives: AllObjectivesType[],
@@ -161,7 +163,8 @@ const selectedObjectivePath = (
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId);
     const id = currentId;
-    currentId = tracker.goals.find((goal) => goal.id === id)?.selectedNextObjectiveId;
+    const goal = tracker.goals.find((goal) => goal.id === id);
+    currentId = goal?.done ? goal.selectedNextObjectiveId : undefined;
   }
   return { ids: [...visited], cyclic: !!currentId };
 };
