@@ -1,6 +1,7 @@
 import { Pusher } from "@/libs/pusher";
 import { reassignPendingAnbuRequestsOnPromotion } from "@/queries/anbu";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
 import * as nativePush from "@/server/utils/push/defer";
@@ -29,21 +30,10 @@ const insertRequestMock = vi.fn();
 const notifyMock = vi.fn();
 
 /** Stable string form of a drizzle SQL predicate for assertion (cols + params). */
-function describeSql(node: unknown): string {
-  if (!node || typeof node !== "object") return String(node);
-  const obj = node as Record<string, unknown>;
-  if ("name" in obj && "columnType" in obj) return `col(${String(obj.name)})`;
-  if ("value" in obj && Array.isArray(obj.value) && !("queryChunks" in obj)) {
-    return (obj.value as unknown[]).map(String).join("");
-  }
-  if ("value" in obj && !("queryChunks" in obj) && !Array.isArray(obj.value)) {
-    return `param(${JSON.stringify(obj.value)})`;
-  }
-  if ("queryChunks" in obj && Array.isArray(obj.queryChunks)) {
-    return (obj.queryChunks as unknown[]).map(describeSql).join("");
-  }
-  return Object.prototype.toString.call(node);
-}
+const describeSql = (node: unknown) => {
+  const { sql, params } = new MySqlDialect().sqlToQuery(node as SQL);
+  return `${sql} ${JSON.stringify(params)}`;
+};
 
 describe("ANBU request squad identity", () => {
   afterEach(resetServerModuleStubs);
@@ -660,13 +650,13 @@ describe("ANBU membership invariants", () => {
       promoteAnbuLeader(client as never, "squad-1", "successor", "leader"),
     ).resolves.toBe(true);
     expect(select).toHaveBeenCalledTimes(1);
-    expect(describeSql(selectedPredicates[0])).toContain("col(userId)");
-    expect(describeSql(selectedPredicates[0])).toContain("col(anbuId)");
+    expect(describeSql(selectedPredicates[0])).toContain("`userId`");
+    expect(describeSql(selectedPredicates[0])).toContain("`anbuId`");
     expect(updates).toHaveLength(1);
     expect(updates[0]?.table).toBe(anbuSquad);
     expect(updates[0]?.values).toEqual({ leaderId: "successor" });
-    expect(describeSql(updates[0]?.predicate)).toContain("col(leaderId)");
-    expect(describeSql(updates[0]?.predicate)).toContain('param("leader")');
+    expect(describeSql(updates[0]?.predicate)).toContain("`leaderId`");
+    expect(describeSql(updates[0]?.predicate)).toContain('"leader"');
   });
 });
 
