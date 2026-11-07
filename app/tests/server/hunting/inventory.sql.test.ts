@@ -30,7 +30,7 @@ import { itemRouter } from "@/routers/item";
 import type { DrizzleClient } from "@/server/db";
 import { getTagSchema, IncreaseReskinSlots, ItemValidator, RepairTag, UnlockItemVariantTag } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
-import { huntingHabitatContent, huntingMap } from "../../setup/hunting";
+import { acceptReadySession, insertHuntingWorld } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements, pollUntil } from "../../setup/statements";
 import {
@@ -157,18 +157,9 @@ describeWithDatabase("Hunting inventory admission", () => {
     ]);
     const db = await getTestDatabase();
     await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
-    await db.insert(huntingHabitat).values({ id: "forest", content: huntingHabitatContent(), updatedAt: new Date() });
-    await db.insert(sectorMap).values({ id: "map", sector: 1, name: "Forest", width: 1, height: 1, status: "PUBLISHED", normalizedJson: huntingMap() });
+    await insertHuntingWorld();
   });
   afterEach(() => vi.restoreAllMocks());
-
-  const prepare = async () => {
-    const db = await getTestDatabase();
-    const hunter = callerForDatabase(huntingRouter, "hunter", db);
-    expect((await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).success).toBe(true);
-    await db.update(huntingSession).set({ readyAt: new Date(0) });
-    return { db, hunter, id: (await db.query.huntingSession.findFirst())!.id };
-  };
 
   const settle = async (db: DrizzleClient) => {
     const current = (await db.query.battle.findFirst()) as CompleteBattle;
@@ -205,7 +196,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: equippedId, itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1" },
       { id: keeper ? "z-backpack" : "a-backpack", itemId: "potion", userId: "hunter", quantity: 4 },
     ]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     const preload = pauseRead(db, true);
     const pendingStart = callerForDatabase(huntingRouter, "hunter", preload.client).start({ id });
     await preload.reached;
@@ -238,7 +229,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "b", itemId: "potion", userId: "hunter", quantity: 4 },
       { id: "worn", itemId: "potion", userId: "hunter", quantity: 2, equipped: "ITEM_1" },
     ]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     const merge = phase === "claim" ? pauseRead(db, false) : pauseMergePublish(db);
     const pendingMerge = callerForDatabase(itemRouter, "hunter", merge.client).mergeStacks({ itemId: "potion" });
     await merge.reached;
@@ -258,7 +249,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "a", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1" },
       { id: "b", itemId: "potion", userId: "hunter", quantity: 4, equipped: "ITEM_1" },
     ]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     const merge = pauseMergePublish(db);
     const pendingMerge = callerForDatabase(itemRouter, "hunter", merge.client).mergeStacks({ itemId: "potion" });
     await merge.reached;
@@ -283,7 +274,7 @@ describeWithDatabase("Hunting inventory admission", () => {
 
   it("rejects durability changed after equipment preload without overwriting the repair", async () => {
     await insertUserItems([{ id: "worn", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1", durability: 20 }]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     const preload = pauseRead(db, true);
     const pendingStart = callerForDatabase(huntingRouter, "hunter", preload.client).start({ id });
     await preload.reached;
@@ -321,7 +312,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "worn", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1" },
       { id: "spare", itemId: "spare", userId: "hunter", quantity: 2 },
     ]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await db.insert(itemLoadout).values({ id: "current", userId: "hunter", itemData: [{ userItemId: "worn", itemId: "potion", slot: "ITEM_1" }] });
     await db.update(userData).set({ itemLoadout: "current", staffAccount: true }).where(eq(userData.userId, "hunter"));
     // Admit only after the equipment swap commits, immediately before saving its template.
@@ -339,7 +330,7 @@ describeWithDatabase("Hunting inventory admission", () => {
 
   it.each([false, true])("clears the saved loadout after unequipping (hunt before template: %s)", async (admitBetween) => {
     await insertUserItems([{ id: "worn", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1" }]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await db.insert(itemLoadout).values({ id: "current", userId: "hunter", itemData: [{ userItemId: "worn", itemId: "potion", slot: "ITEM_1" }] });
     await db.update(userData).set({ itemLoadout: "current", staffAccount: true }).where(eq(userData.userId, "hunter"));
     const client = beforeStatements(db, itemLoadout, [async () => {
@@ -364,7 +355,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "worn", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1" },
       { id: "spare", itemId: "spare", userId: "hunter", quantity: 2 },
     ]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     let started = false;
     const start = async () => {
       expect((await hunter.start({ id })).success).toBe(true);
@@ -403,7 +394,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "worn", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1" },
       { id: "spare", itemId: "spare", userId: "hunter", quantity: 2 },
     ]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await db.insert(itemLoadout).values([
       { id: "current", userId: "hunter", itemData: [{ userItemId: "worn", itemId: "potion", slot: "ITEM_1" }] },
       { id: "empty", userId: "hunter", itemData: [] },
@@ -445,7 +436,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "crop", name: "Crop", itemType: "MATERIAL" },
     ]);
     await insertUserItems([{ id: "seed-stack", userId: "hunter", itemId: "seed", quantity }]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     expect(ItemValidator.safeParse(await db.query.item.findFirst({ where: eq(item.id, "seed") })).success).toBe(true);
     await db.insert(farmPlot).values({ id: "plot", userId: "hunter", slotIndex: 0 });
     expect((await callerForDatabase(itemRouter, "hunter", db).toggleEquip({ userItemId: "seed-stack", slot: "ITEM_1" })).success).toBe(true);
@@ -464,7 +455,7 @@ describeWithDatabase("Hunting inventory admission", () => {
   });
 
   it("rejects ordinary item consumption after hunting wins admission", async () => {
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     const before = await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") });
     await db.update(item).set({ effects: [IncreaseReskinSlots.parse({ power: 1 })] }).where(eq(item.id, "potion"));
     await insertUserItems([{ id: "worn", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1" }]);
@@ -478,7 +469,7 @@ describeWithDatabase("Hunting inventory admission", () => {
   });
 
   it.each([1, 3])("rejects stale variant consumption after admission (quantity: %s)", async (quantity) => {
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await db.update(item).set({ effects: [UnlockItemVariantTag.parse({})] }).where(eq(item.id, "potion"));
     await insertUserItems([
       { id: "worn", itemId: "potion", userId: "hunter", quantity, equipped: "ITEM_1" },
@@ -500,7 +491,7 @@ describeWithDatabase("Hunting inventory admission", () => {
     ["single", "target"], ["single", "kit"],
     ["all", "target"], ["all", "kit"],
   ] as const)("rejects stale %s repair after admission before the %s write", async (method, phase) => {
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await insertItems([{ id: "kit", name: "Repair kit", itemType: "CONSUMABLE", slot: "ITEM", destroyOnUse: true, maxDurability: 100, effects: [getTagSchema("repair").parse({ power: 100 })] }]);
     await db.update(item).set({ maxDurability: 100 }).where(eq(item.id, "potion"));
     await insertUserItems([
@@ -523,7 +514,7 @@ describeWithDatabase("Hunting inventory admission", () => {
 
   it("rejects an auction reservation after the item enters a hunting battle", async () => {
     await insertUsers([{ userId: "buyer", username: "Buyer", status: "AWAKE", level: 50, bank: 10000 }]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     await db.update(item).set({ canBeTraded: true, auctionMinPrice: 1, auctionMaxPrice: 1000 }).where(eq(item.id, "potion"));
     await insertUserItems([{ id: "lot", userId: "hunter", itemId: "potion", quantity: 3 }]);
     const auction = callerForDatabase(auctionRouter, "hunter", db);
@@ -547,7 +538,7 @@ describeWithDatabase("Hunting inventory admission", () => {
   });
 
   it("rejects hunting equipment reserved by an auction after preload", async () => {
-    const { db, id } = await prepare();
+    const { db, id } = await acceptReadySession();
     await db.update(item).set({ canBeTraded: true, auctionMinPrice: 1, auctionMaxPrice: 1000 }).where(eq(item.id, "potion"));
     await insertUserItems([{ id: "lot", userId: "hunter", itemId: "potion", quantity: 3, equipped: "ITEM_1" }]);
     const preload = pauseRead(db, true);
@@ -577,7 +568,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "low-kit", userId: "hunter", itemId: "low", equipped: "ITEM_1", quantity: 1 },
       { id: "high-kit", userId: "hunter", itemId: "high", equipped: "ITEM_2", quantity, level: 2, experience: 17, durability: 13 },
     ]);
-    const { db, hunter, id } = await prepare();
+    const { db, hunter, id } = await acceptReadySession();
     const paused = deferred<void>();
     const resume = deferred<void>();
     const client = beforeStatements(db, userItem, [async () => {}, async () => { paused.resolve(); await resume.promise; }]);
