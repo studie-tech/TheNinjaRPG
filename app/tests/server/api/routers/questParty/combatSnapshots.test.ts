@@ -23,14 +23,13 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { questPartyRouter } from "@/server/api/routers/questParty";
 import { questsRouter } from "@/server/api/routers/quests";
 import { AllObjectives } from "@/validators/objectives";
-import { ObjectiveReward } from "@/validators/rewards";
 import {
   insertItems,
   insertUsers,
-  insertQuests,
   insertUserItems,
   insertDefaultAiProfile,
 } from "../../../../setup/factories";
+import { formQuestTeam, insertQuestTeamWorld, insertTeamQuest } from "../../../../setup/questParty";
 import {
   callerFor,
   callerForDatabase,
@@ -58,52 +57,13 @@ describeWithDatabase("quest team snapshots during unrelated battle", () => {
     );
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     stubRateLimitTransport();
-    const client = await getTestDatabase();
-    await client
-      .insert(village)
-      .values({ id: "home", name: "Home", kageId: "leader", sector: 50 });
-    await client
-      .insert(villageStructure)
-      .values({
-        id: "admin",
-        villageId: "home",
-        name: "Administrative Building",
-        route: "/adminbuilding",
-        image: "",
-      });
-    await insertUsers(
-      ["leader", "helper"].map((userId) => ({
-        userId,
-        username: userId,
-        status: "AWAKE",
-        rank: "JONIN",
-        level: 50,
-        experience: 20_000_000,
-        villageId: "home",
-        sector: 50,
-        longitude: 10,
-        latitude: 10,
-        regenAt: new Date(),
-        updatedAt: new Date(),
-      })),
-    );
+    await insertQuestTeamWorld();
     await insertUsers([
       { userId: "enemy", username: "enemy", isAi: true, inArena: true, level: 50, rank: "JONIN" },
     ]);
     await insertDefaultAiProfile({ userId: "enemy" });
     await insertItems([{ id: "scroll" }]);
-    await insertQuests([
-      {
-        id: "team-quest",
-        questType: "event",
-        hidden: false,
-        teamEnabled: true,
-        consecutiveObjectives: true,
-        maxAttempts: 3,
-        maxCompletes: 3,
-        retryDelay: "none",
-        content: {
-          objectives: [
+    await insertTeamQuest([
             AllObjectives.parse({
               id: "collect",
               task: "collect_item",
@@ -117,13 +77,7 @@ describeWithDatabase("quest team snapshots during unrelated battle", () => {
               nextObjectiveId: "wait",
             }),
             AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-          ],
-          reward: ObjectiveReward.parse({}),
-          sceneBackground: "",
-          sceneCharacters: [],
-        },
-      },
-    ]);
+          ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -527,15 +481,7 @@ const teamFixture = async (task: "collect_item" | "deliver_item") => {
       { id: "helper-copy-2", userId: "helper", itemId: "scroll" },
     ]);
   }
-  const leader = await callerFor(questPartyRouter, "leader");
-  expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(
-    true,
-  );
-  const party = (await client.query.questParty.findFirst())!;
-  expect(
-    (await (await callerFor(questPartyRouter, "helper")).join({ partyId: party.id }))
-      .success,
-  ).toBe(true);
+  const { leader, party } = await formQuestTeam();
   const advance = async () => {
     await client
       .update(userData)

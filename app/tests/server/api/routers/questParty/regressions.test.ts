@@ -25,6 +25,7 @@ import {
   insertUserItems,
   insertDefaultAiProfile,
 } from "../../../../setup/factories";
+import { insertQuestTeamWorld, insertTeamQuest, questTeamMember, teamQuest } from "../../../../setup/questParty";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { deferred } from "../../../../setup/deferred";
 
@@ -33,10 +34,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     await resetTables(questParty, quest, questHistory, userData, user2conversation, village, villageStructure, aiProfile, battle, battleHistory, overworldAiPlacement, item, userItem);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     stubRateLimitTransport();
-    const client = await getTestDatabase();
-    await client.insert(village).values({ id: "home", name: "Home", kageId: "leader", sector: 50 });
-    await client.insert(villageStructure).values({ id: "admin", villageId: "home", name: "Administrative Building", route: "/adminbuilding", image: "" });
-    await insertUsers(["leader", "helper"].map((userId) => ({ userId, username: userId, status: "AWAKE", rank: "JONIN", level: 50, experience: 20_000_000, villageId: "home", sector: 50, longitude: 10, latitude: 10, money: 100, regenAt: new Date(), updatedAt: new Date() })));
+    await insertQuestTeamWorld({ money: 100 });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -389,10 +387,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
 
   it.each([false, true])("retries personal detachment after roster removal fails to save the member (completed helper=%p)", async (completed) => {
     const client = await getTestDatabase();
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+    await insertTeamQuest([
       AllObjectives.parse({ id: "paid", task: "stats_trained", value: 10, reward_money: 25 }),
       AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-    ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    ], { maxAttempts: 3, maxCompletes: 3 });
     if (completed) await insertQuestHistory([{ id: "helper-receipt", userId: "helper", questId: "team-quest", questType: "event", completed: 1, previousCompletes: 1, endAt: new Date() }]);
     const leader = await callerFor(questPartyRouter, "leader");
     const helper = await callerFor(questPartyRouter, "helper");
@@ -496,10 +494,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
         it(`preserves personal inventory effects when joining ${advanced ? "a completed" : "an unfinished"} team goal (${task}, ${departure ?? "attached"})`, async () => {
           const client = await getTestDatabase();
           await insertItems([{ id: "scroll" }]);
-          await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+          await insertTeamQuest([
             AllObjectives.parse({ id: "inventory", task, ...(task === "collect_item" ? { collectItemIds: ["scroll"] } : { deliverItemIds: ["scroll"] }), item_name: "Scroll", sector: 50, longitude: 11, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "wait" }),
             AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-          ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+          ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
           const leader = await callerFor(questPartyRouter, "leader");
           expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
           if (advanced) {
@@ -541,7 +539,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           }
           expect((await client.query.questParty.findFirst())?.tracker.goals.find((goal) => goal.id === "inventory")?.done).toBe(true);
           for (const userId of ["fresh", "replacement"]) {
-            await insertUsers([{ userId, username: userId, status: "AWAKE", rank: "JONIN", level: 50, experience: 20_000_000, villageId: "home", sector: 50, longitude: 10, latitude: 10, regenAt: new Date(), updatedAt: new Date() }]);
+            await insertUsers([questTeamMember(userId)]);
             if (task === "deliver_item") await insertUserItems([{ id: `${userId}-copy`, userId, itemId: "scroll" }]);
             const newcomer = await callerFor(questPartyRouter, userId);
             expect((await newcomer.join({ partyId: party.id })).success).toBe(true);
@@ -560,10 +558,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   it("retires finished crafted delivery copies while preserving unfinished crafts", async () => {
     const client = await getTestDatabase();
     await insertItems([{ id: "scroll", canBeCrafted: true }]);
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+    await insertTeamQuest([
       AllObjectives.parse({ id: "delivery", task: "deliver_item", deliverItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 11, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "wait" }),
       AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-    ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
     expect((await (await callerFor(questPartyRouter, "leader")).create({ questId: "team-quest", isPublic: true })).success).toBe(true);
     const party = (await client.query.questParty.findFirst())!;
     expect((await (await callerFor(questPartyRouter, "helper")).join({ partyId: party.id })).success).toBe(true);
@@ -602,7 +600,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           AllObjectives.parse({ id: "deliver1", task: "deliver_item", deliverItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 12, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "choice" }),
         ];
         expect(verifyQuestContentForSave(objectives, true).check).toBe(true);
-        await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+        await insertTeamQuest(objectives, { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
         expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
         const leader = await callerFor(questPartyRouter, "leader");
         const helper = await callerFor(questPartyRouter, "helper");
@@ -642,7 +640,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
         expect((await client.query.questParty.findFirst())?.tracker.goals.find((goal) => goal.id === "deliver2")?.done).toBe(true);
         expect(await client.query.userItem.findMany({ where: eq(userItem.userId, "helper") })).toHaveLength(0);
         // A replacement after both deliveries inherits receipts without receiving retired copies.
-        await insertUsers([{ userId: "late", username: "late", status: "AWAKE", rank: "JONIN", level: 50, experience: 20_000_000, villageId: "home", sector: 50, longitude: 10, latitude: 10, regenAt: new Date(), updatedAt: new Date() }]);
+        await insertUsers([questTeamMember("late")]);
         expect((await (await callerFor(questPartyRouter, "late")).join({ partyId: party.id })).success).toBe(true);
         for (let read = 0; read < 2; read++) {
           await fetchUpdatedUser({ client, userId: "late" });
@@ -666,7 +664,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
         ];
         expect(verifyQuestContentForSave(objectives, consecutiveObjectives).check).toBe(true);
-        await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+        await insertTeamQuest(objectives, { consecutiveObjectives, maxAttempts: 3, maxCompletes: 3 });
         expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
         const leader = await callerFor(questPartyRouter, "leader");
         expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
@@ -713,7 +711,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
         ];
         expect(verifyQuestContentForSave(objectives, consecutiveObjectives).check).toBe(true);
-        await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+        await insertTeamQuest(objectives, { consecutiveObjectives, maxAttempts: 3, maxCompletes: 3 });
         expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
         const leader = await callerFor(questPartyRouter, "leader");
         expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
@@ -762,7 +760,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           await insertUserItems([{ id: "leader-delivery", userId: "leader", itemId: "scroll" }]);
         }
         expect(verifyQuestContentForSave(objectives, consecutiveObjectives).check).toBe(true);
-        await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+        await insertTeamQuest(objectives, { consecutiveObjectives, maxAttempts: 3, maxCompletes: 3 });
         expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
         const leader = await callerFor(questPartyRouter, "leader");
         const helper = await callerFor(questPartyRouter, "helper");
@@ -805,7 +803,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
       AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
     ];
     expect(verifyQuestContentForSave(objectives, false).check).toBe(true);
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    await insertTeamQuest(objectives, { consecutiveObjectives: false, maxAttempts: 3, maxCompletes: 3 });
     expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
     const leader = await callerFor(questPartyRouter, "leader");
     expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
@@ -862,10 +860,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     it(`preserves collection deliveries when entering a team (${mode})`, async () => {
       const client = await getTestDatabase();
       await insertItems([{ id: "scroll" }]);
-      await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+      await insertTeamQuest([
         AllObjectives.parse({ id: "collect", task: "collect_item", collectItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 11, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "wait" }),
         AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-      ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+      ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
       const leader = await callerFor(questPartyRouter, "leader");
       if (mode !== "form") {
         expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
@@ -915,7 +913,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   it("explains rank rejection to completed helpers and releases membership for a later retry", async () => {
     const client = await getTestDatabase();
     await client.update(userData).set({ rank: "GENIN" }).where(eq(userData.userId, "helper"));
-    await insertQuests([{ id: "team-quest", questType: "event", questRank: "C", teamEnabled: true, hidden: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [AllObjectives.parse({ id: "goal", task: "stats_trained", value: 100 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    await insertTeamQuest([AllObjectives.parse({ id: "goal", task: "stats_trained", value: 100 })], { questRank: "C", maxAttempts: 3, maxCompletes: 3 });
     const endAt = new Date("2026-10-01T00:00:00Z");
     await insertQuestHistory([{ id: "receipt", userId: "helper", questId: "team-quest", questType: "event", completed: 1, previousCompletes: 1, previousAttempts: 1, endAt }]);
     const receipt = await client.query.questHistory.findFirst({ where: eq(questHistory.id, "receipt") });
@@ -1014,10 +1012,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
       if (mode !== "generic") {
         await client.insert(overworldAiPlacement).values({ id: "selected-npc", aiTemplateUserId: "enemy-selected", interactionType: "HOSTILE", sectorList: [], sector: 50, longitude: 10, latitude: 10, positionVersion: 0 });
       }
-      await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: false, maxAttempts: 2, retryDelay: "none", content: { objectives: [
+      await insertTeamQuest([
         AllObjectives.parse({ id: "first", task: "defeat_opponents", opponentAIs: [{ ids: ["enemy-first"], number: 1 }], sector: 50, longitude: mode === "bound-same-tile" ? 10 : 5, latitude: 10 }),
         AllObjectives.parse({ id: "selected", task: "defeat_opponents", overworldPlacementId: mode === "generic" ? undefined : "selected-npc", opponentAIs: [{ ids: ["enemy-selected"], number: 1 }], sector: 50, longitude: 10, latitude: 10 }),
-      ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+      ], { consecutiveObjectives: false, maxAttempts: 2 });
       const leader = await callerFor(questPartyRouter, "leader");
       expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
       const party = await client.query.questParty.findFirst();
@@ -1036,10 +1034,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     const client = await getTestDatabase();
     await insertUsers([{ userId: "guide", username: "guide", isAi: true }]);
     await client.insert(overworldAiPlacement).values({ id: "guide-npc", aiTemplateUserId: "guide", interactionType: "FRIENDLY", sectorList: [], sector: 50, longitude: 10, latitude: 10, positionVersion: 0 });
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, retryDelay: "none", content: { objectives: [
+    await insertTeamQuest([
       AllObjectives.parse({ id: "choice", task: "dialog", overworldPlacementId: "guide-npc", nextObjectiveId: [{ text: "Continue", nextObjectiveId: "goal" }] }),
       AllObjectives.parse({ id: "goal", task: "stats_trained", value: 10 }),
-    ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    ]);
     expect((await (await callerFor(questPartyRouter, "leader")).create({ questId: "team-quest", isPublic: true })).success).toBe(true);
     const party = (await client.query.questParty.findFirst())!;
     expect((await (await callerFor(questPartyRouter, "helper")).join({ partyId: party.id })).success).toBe(true);
@@ -1162,12 +1160,12 @@ const collectionChainFixture = async () => {
   const client = await getTestDatabase();
   await insertItems([{ id: "scroll" }]);
   await insertQuests([
-    { id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+    teamQuest([
       AllObjectives.parse({ id: "collect", task: "collect_item", collectItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 11, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "next" }),
       AllObjectives.parse({ id: "next", task: "new_quest", newQuestIds: ["next-quest"], nextObjectiveId: "deliver" }),
       AllObjectives.parse({ id: "deliver", task: "deliver_item", deliverItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 12, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "wait" }),
       AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-    ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } },
+    ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 }),
     { id: "next-quest", questType: "event", hidden: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
       AllObjectives.parse({ id: "finish", task: "win_quest" }),
     ], reward: ObjectiveReward.parse({ reward_money: 25 }), sceneBackground: "", sceneCharacters: [] } },
@@ -1216,9 +1214,9 @@ const continueCollectionChainSolo = async (collected?: UserItem[]) => {
 
 const claimReleaseFixture = async () => {
   const client = await getTestDatabase();
-  await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+  await insertTeamQuest([
     AllObjectives.parse({ id: "goal", task: "stats_trained", value: 100 }),
-  ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+  ], { maxAttempts: 3, maxCompletes: 3 });
   const leader = await callerFor(questPartyRouter, "leader");
   const helper = await callerFor(questPartyRouter, "helper");
   expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);

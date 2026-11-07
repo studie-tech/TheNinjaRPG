@@ -8,9 +8,9 @@ import type { DrizzleClient } from "@/server/db";
 import { AllObjectives, QuestTracker, ObjectiveTracker } from "@/validators/objectives";
 import { coopRouter } from "@/server/api/routers/coop";
 import { Pusher } from "@/libs/pusher";
-import { ObjectiveReward } from "@/validators/rewards";
 import { dungeonContent } from "../../../setup/dungeon";
-import { insertQuests, insertUsers } from "../../../setup/factories";
+import { insertUsers } from "../../../setup/factories";
+import { insertQuestTeamWorld, insertTeamQuest } from "../../../setup/questParty";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 describeWithDatabase("co-op activity adapters", () => {
@@ -18,12 +18,10 @@ describeWithDatabase("co-op activity adapters", () => {
     await resetTables(conversation, dungeon, dungeonMember, dungeonRun, quest, questHistory, questParty, user2conversation, userData, village, villageStructure);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     stubRateLimitTransport();
-    await insertUsers([{ userId: "leader", username: "leader", status: "AWAKE", rank: "JONIN", level: 50, experience: 20_000_000, villageId: "home", sector: 1, longitude: 10, latitude: 10, regenAt: new Date(), updatedAt: new Date() }]);
+    await insertQuestTeamWorld({ sector: 1, members: ["leader"] });
     const db = await getTestDatabase();
-    await db.insert(village).values({ id: "home", name: "Home", kageId: "leader", sector: 1 });
-    await db.insert(villageStructure).values({ id: "admin", villageId: "home", name: "Administrative Building", route: "/adminbuilding", image: "" });
     await db.insert(dungeon).values({ id: "definition", content: dungeonContent(), updatedAt: new Date() });
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [AllObjectives.parse({ id: "train", task: "stats_trained", value: 100 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    await insertTeamQuest([AllObjectives.parse({ id: "train", task: "stats_trained", value: 100 })], { maxAttempts: 3, maxCompletes: 3 });
   });
   afterEach(() => vi.restoreAllMocks());
   it("rejects personal entry items before creating a team or joining an edited quest", async () => {
