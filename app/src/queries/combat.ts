@@ -2109,29 +2109,20 @@ export const updateWarForUpdateWars = (
     })
     .where(and(eq(war.id, w.id), isNull(war.endedAt), warRaidCombatGuard()));
 
-/** Build the `war` update for `updateWars`, setting `attackerWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateWars2 = (
+/** Build the `war` update for `updateWars`, setting one side's war health, using predicates on `id` and `endedAt`. */
+export const updateWarHealthForUpdateWars = (
   client: Pick<DrizzleClient, "update">,
+  columns: {
+    warHealth: "attackerWarHealth" | "defenderWarHealth";
+    warHealthMax: "attackerWarHealthMax" | "defenderWarHealthMax";
+  },
   result: { warHealthChange: number },
   w: { id: string },
 ) =>
   client
     .update(war)
     .set({
-      attackerWarHealth: sql`GREATEST(LEAST(attackerWarHealth + ${result.warHealthChange}, attackerWarHealthMax), 0)`,
-    })
-    .where(and(eq(war.id, w.id), isNull(war.endedAt), warRaidCombatGuard()));
-
-/** Build the `war` update for `updateWars`, setting `defenderWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateWars3 = (
-  client: Pick<DrizzleClient, "update">,
-  result: { warHealthChange: number },
-  w: { id: string },
-) =>
-  client
-    .update(war)
-    .set({
-      defenderWarHealth: sql`GREATEST(LEAST(defenderWarHealth + ${result.warHealthChange}, defenderWarHealthMax), 0)`,
+      [columns.warHealth]: sql`GREATEST(LEAST(${war[columns.warHealth]} + ${result.warHealthChange}, ${war[columns.warHealthMax]}), 0)`,
     })
     .where(and(eq(war.id, w.id), isNull(war.endedAt), warRaidCombatGuard()));
 

@@ -105,8 +105,7 @@ import {
   updateWarForRecoverWarShrine2,
   updateWarForRecoverWarShrine3,
   updateWarForUpdateWars,
-  updateWarForUpdateWars2,
-  updateWarForUpdateWars3,
+  updateWarHealthForUpdateWars,
 } from "@/queries/combat";
 import { reduceActiveFarmPlotTimers } from "@/queries/farming";
 import { deleteUserItemsWithPositiveQuantity } from "@/queries/item";
@@ -750,10 +749,8 @@ export const updateWars = async (
       // Skip if we've already scheduled an update for this war (prevents double-counting when multiple targets share a war)
       // Use the per-war shrine HP changes (separate for attacker and defender shrines)
       const shrineChanges = result.villageWarShrineInfo[w.id];
-      const hasAttackerChange = shrineChanges?.attacker !== 0;
-      const hasDefenderChange = shrineChanges?.defender !== 0;
       if (
-        (hasAttackerChange || hasDefenderChange) &&
+        hasShrineChange(shrineChanges) &&
         ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
         !processedShrineWarIds.has(w.id)
       ) {
@@ -769,10 +766,7 @@ export const updateWars = async (
               if (change === 0) return;
 
               const { hp: hpCol } = shrineColumnsBySide[shrineType];
-              const villageName =
-                shrineType === "attacker"
-                  ? (w.attackerVillage?.name ?? "Attacker")
-                  : (w.defenderVillage?.name ?? "Defender");
+              const villageName = shrineVillageName(w, shrineType);
 
               if (change < 0) {
                 const ownerVillageId =
@@ -807,12 +801,10 @@ export const updateWars = async (
             };
 
             // Process both shrines
-            if (shrineChanges) {
-              await Promise.all([
-                processShrine("attacker", shrineChanges.attacker),
-                processShrine("defender", shrineChanges.defender),
-              ]);
-            }
+            await Promise.all([
+              processShrine("attacker", shrineChanges.attacker),
+              processShrine("defender", shrineChanges.defender),
+            ]);
           })(),
         );
       }
@@ -825,11 +817,11 @@ export const updateWars = async (
         !processedWarHealthIds.has(w.id)
       ) {
         processedWarHealthIds.add(w.id);
-        if (killerSideVillageId === w.attackerVillageId) {
-          otherPromises.push(updateWarForUpdateWars2(client, result, w));
-        } else {
-          otherPromises.push(updateWarForUpdateWars3(client, result, w));
-        }
+        const side =
+          killerSideVillageId === w.attackerVillageId ? "attacker" : "defender";
+        otherPromises.push(
+          updateWarHealthForUpdateWars(client, shrineColumnsBySide[side], result, w),
+        );
       }
     });
   });
@@ -844,10 +836,7 @@ export const updateWars = async (
       if (processedShrineWarIds.has(warId)) continue;
 
       const shrineChanges = result.villageWarShrineInfo[warId];
-      const hasAttackerChange = shrineChanges?.attacker !== 0;
-      const hasDefenderChange = shrineChanges?.defender !== 0;
-
-      if (!hasAttackerChange && !hasDefenderChange) continue;
+      if (!hasShrineChange(shrineChanges)) continue;
 
       // Find the war from user's wars
       const w = userWars.find((war) => war.id === warId);
@@ -855,26 +844,24 @@ export const updateWars = async (
 
       processedShrineWarIds.add(warId);
 
-      if (shrineChanges) {
-        shrineUpdatePromises.push(
-          Promise.all([
-            recoverWarShrine(
-              client,
-              w,
-              "attacker",
-              shrineChanges.attacker,
-              result.notifications,
-            ),
-            recoverWarShrine(
-              client,
-              w,
-              "defender",
-              shrineChanges.defender,
-              result.notifications,
-            ),
-          ]),
-        );
-      }
+      shrineUpdatePromises.push(
+        Promise.all([
+          recoverWarShrine(
+            client,
+            w,
+            "attacker",
+            shrineChanges.attacker,
+            result.notifications,
+          ),
+          recoverWarShrine(
+            client,
+            w,
+            "defender",
+            shrineChanges.defender,
+            result.notifications,
+          ),
+        ]),
+      );
     }
   }
 
@@ -923,6 +910,18 @@ const shrineColumnsBySide = {
   },
 } as const;
 
+/** Whether a battle recorded any shrine change on this war. */
+const hasShrineChange = (
+  changes: CombatResult["villageWarShrineInfo"][string] | undefined,
+): changes is CombatResult["villageWarShrineInfo"][string] =>
+  !!changes && (changes.attacker !== 0 || changes.defender !== 0);
+
+/** Display name of the village holding one side of a war. */
+const shrineVillageName = (w: BattleWar, side: keyof typeof shrineColumnsBySide) =>
+  side === "attacker"
+    ? (w.attackerVillage?.name ?? "Attacker")
+    : (w.defenderVillage?.name ?? "Defender");
+
 /** Recover shrine HP and award recapture healing only to the battle that claims it. */
 const recoverWarShrine = async (
   client: DrizzleClient,
@@ -954,10 +953,7 @@ const recoverWarShrine = async (
 
   if (recaptureResult.rowsAffected > 0) {
     await updateWarForRecoverWarShrine2(client, columns, activeWar);
-    const villageName =
-      side === "attacker"
-        ? (w.attackerVillage?.name ?? "Attacker")
-        : (w.defenderVillage?.name ?? "Defender");
+    const villageName = shrineVillageName(w, side);
     notifications.push(
       `${villageName}'s shrine recaptured! ${villageName} gained ${WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL} war HP!`,
     );
