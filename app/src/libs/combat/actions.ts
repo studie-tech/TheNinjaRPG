@@ -983,134 +983,93 @@ export const insertAction = (info: {
 
   // Check if the user can perform the action
   const userHex = user.hex;
-  if (userHex && targetTile) {
-    // Check pools cost
-    const { hpCost, cpCost, spCost } = calcPoolCost(action, usersEffects, user);
-    if (user.curHealth < hpCost) throw new Error("Not enough health");
-    if (user.curChakra < cpCost) throw new Error("Not enough chakra");
-    if (user.curStamina < spCost) throw new Error("Not enough stamina");
-    // How much time passed since last action
-    const { apAvailableAfter, apAfter } = actionPointsAfterAction(user, battle, action);
-    if (apAvailableAfter < 0) return false;
-    // Get the possible action squares
-    const highlights = getPossibleActionTiles(action, userHex, grid);
-    // Given this action, get the affected tiles
-    const { green: affectedTiles, effectTiles } = getActionAffectedTiles({
-      a: userHex,
-      b: targetTile,
-      action,
-      grid: grid,
-      restrictGrid: highlights,
-      users: alive,
-      ground: groundEffects,
-      userId: actorId,
-    });
-    if (affectedTiles.size === 0) return false;
-    // Bookkeeping
-    let targetUsernames: string[] = [];
-    let targetGenders: string[] = [];
-    const enemyRecipients = new Map<string, BattleUserState>();
-    const appliedEffects = new Set<string>();
-    const barrierAttacks = new Set<string>();
-    // Path finder on grid
-    const aStar = new PathCalculator(grid);
-    // Skip per-tile A* pathfinding when no barriers exist on the field
-    const hasBarriers = groundEffects.some((g) => g.type === "barrier");
-    const EMPTY_BARRIER_RESULT = { barriers: [] as BattleEffect[], totalAbsorb: 0 };
-    // Ground projections are discarded after processing, so snapshot the caster's
-    // current tile before this cast inserts any new effects.
-    const groundPotency: UserEffect[] = groundEffects
-      .filter(
-        (effect) =>
-          (effect.type === "increasepotency" || effect.type === "decreasepotency") &&
-          effect.longitude === user.longitude &&
-          effect.latitude === user.latitude &&
-          !effect.isNew &&
-          isEffectActive(effect) &&
-          checkFriendlyFire(effect, user, usersState) &&
-          !usersEffects.some((userEffect) => userEffect.id === effect.id),
-      )
-      .map((effect) => ({ ...effect, targetId: actorId, fromGround: true }));
-    // Raw actions can bypass selection; resolve their elements before element-specific potency.
-    const castTags = resolvePotencyTags(
-      {
-        ...action,
-        effects: action.effects.map((tag) => resolveElementalDamage(tag, user)),
-      },
-      [...usersEffects, ...groundPotency],
-      actorId,
-    );
-    // Each tag uses its own resolved tiles, or the shared parent pattern.
-    affectedTiles.forEach((tile) => {
-      // Calculate how many barriers are between origin & target
-      const { barriers, totalAbsorb } = hasBarriers
-        ? getBarriersBetween(actorId, aStar, groundEffects, userHex, tile)
-        : EMPTY_BARRIER_RESULT;
+  if (!userHex || !targetTile) return false;
+  // Check pools cost
+  const { hpCost, cpCost, spCost } = calcPoolCost(action, usersEffects, user);
+  if (user.curHealth < hpCost) throw new Error("Not enough health");
+  if (user.curChakra < cpCost) throw new Error("Not enough chakra");
+  if (user.curStamina < spCost) throw new Error("Not enough stamina");
+  // How much time passed since last action
+  const { apAvailableAfter, apAfter } = actionPointsAfterAction(user, battle, action);
+  if (apAvailableAfter < 0) return false;
+  // Get the possible action squares
+  const highlights = getPossibleActionTiles(action, userHex, grid);
+  // Given this action, get the affected tiles
+  const { green: affectedTiles, effectTiles } = getActionAffectedTiles({
+    a: userHex,
+    b: targetTile,
+    action,
+    grid: grid,
+    restrictGrid: highlights,
+    users: alive,
+    ground: groundEffects,
+    userId: actorId,
+  });
+  if (affectedTiles.size === 0) return false;
+  // Bookkeeping
+  let targetUsernames: string[] = [];
+  let targetGenders: string[] = [];
+  const enemyRecipients = new Map<string, BattleUserState>();
+  const appliedEffects = new Set<string>();
+  const barrierAttacks = new Set<string>();
+  const applyToCasterOnce = (effect: UserEffect) => {
+    effect.targetId = user.userId;
+    const idx = getEffectStackKey(effect);
+    if (!appliedEffects.has(idx) && checkFriendlyFire(effect, user, alive)) {
+      usersEffects.push(effect);
+      appliedEffects.add(idx);
+    }
+  };
+  // Path finder on grid
+  const aStar = new PathCalculator(grid);
+  // Skip per-tile A* pathfinding when no barriers exist on the field
+  const hasBarriers = groundEffects.some((g) => g.type === "barrier");
+  const EMPTY_BARRIER_RESULT = { barriers: [] as BattleEffect[], totalAbsorb: 0 };
+  // Ground projections are discarded after processing, so snapshot the caster's
+  // current tile before this cast inserts any new effects.
+  const groundPotency: UserEffect[] = groundEffects
+    .filter(
+      (effect) =>
+        (effect.type === "increasepotency" || effect.type === "decreasepotency") &&
+        effect.longitude === user.longitude &&
+        effect.latitude === user.latitude &&
+        !effect.isNew &&
+        isEffectActive(effect) &&
+        checkFriendlyFire(effect, user, usersState) &&
+        !usersEffects.some((userEffect) => userEffect.id === effect.id),
+    )
+    .map((effect) => ({ ...effect, targetId: actorId, fromGround: true }));
+  // Raw actions can bypass selection; resolve their elements before element-specific potency.
+  const castTags = resolvePotencyTags(
+    {
+      ...action,
+      effects: action.effects.map((tag) => resolveElementalDamage(tag, user)),
+    },
+    [...usersEffects, ...groundPotency],
+    actorId,
+  );
+  // Each tag uses its own resolved tiles, or the shared parent pattern.
+  affectedTiles.forEach((tile) => {
+    // Calculate how many barriers are between origin & target
+    const { barriers, totalAbsorb } = hasBarriers
+      ? getBarriersBetween(actorId, aStar, groundEffects, userHex, tile)
+      : EMPTY_BARRIER_RESULT;
 
-      castTags.forEach((tag, tagIndex) => {
-        // SELF tags apply once per accepted cast, even when the parent pattern is empty.
-        if (tag.target !== "SELF" && !effectTiles[tagIndex]?.has(tile)) return;
-        // ADD EFFECTS
-        if (
-          action.target === "GROUND" ||
-          action.target === "EMPTY_GROUND" ||
-          tag.target === "COORDINATES"
-        ) {
-          // ADD GROUND EFFECTS
-          const target = getTargetUser(alive, "CHARACTER", tile, user.userId);
-          // If it is a move effect, use the target tile instead of AOE tile
-          const effectTile = tag.type === "move" ? targetTile : tile;
-          // Target conditions
-          if (tag.target === "SELF") {
-            const effect = realizeTag({
-              tag: tag as UserEffect,
-              user: user,
-              actionId: action.id,
-              level: action.level,
-              round: battle.round,
-              barrierAbsorb: totalAbsorb,
-            });
-            effect.fromType = action.type;
-            effect.targetId = user.userId;
-            if (checkFriendlyFire(effect, user, alive)) {
-              const idx = getEffectStackKey(effect);
-              if (!appliedEffects.has(idx)) {
-                usersEffects.push(effect);
-                appliedEffects.add(idx);
-              }
-            }
-          } else if (
-            !tag.target ||
-            tag.target === "INHERIT" ||
-            tag.target === "COORDINATES"
-          ) {
-            const effect = realizeTag({
-              tag: tag as GroundEffect,
-              user: user,
-              actionId: action.id,
-              level: action.level,
-              round: battle.round,
-              barrierAbsorb: totalAbsorb,
-            });
-            effect.fromType = action.type;
-            effect.longitude = effectTile.col;
-            effect.latitude = effectTile.row;
-            groundEffects.push({ ...effect });
-            if (
-              target &&
-              effect.type !== "move" &&
-              checkFriendlyFire(effect, target, alive)
-            ) {
-              targetUsernames.push(target.username);
-              targetGenders.push(target.gender);
-              if (target.direction !== user.direction) {
-                enemyRecipients.set(target.userId, target);
-              }
-            }
-          }
-        } else {
-          // ADD USER EFFECTS
-          const target = getTargetUser(alive, action.target, tile, user.userId);
+    castTags.forEach((tag, tagIndex) => {
+      // SELF tags apply once per accepted cast, even when the parent pattern is empty.
+      if (tag.target !== "SELF" && !effectTiles[tagIndex]?.has(tile)) return;
+      // ADD EFFECTS
+      if (
+        action.target === "GROUND" ||
+        action.target === "EMPTY_GROUND" ||
+        tag.target === "COORDINATES"
+      ) {
+        // ADD GROUND EFFECTS
+        const target = getTargetUser(alive, "CHARACTER", tile, user.userId);
+        // If it is a move effect, use the target tile instead of AOE tile
+        const effectTile = tag.type === "move" ? targetTile : tile;
+        // Target conditions
+        if (tag.target === "SELF") {
           const effect = realizeTag({
             tag: tag as UserEffect,
             user: user,
@@ -1119,197 +1078,222 @@ export const insertAction = (info: {
             round: battle.round,
             barrierAbsorb: totalAbsorb,
           });
-          if (effect) {
-            effect.longitude = tile.col;
-            effect.latitude = tile.row;
-            effect.fromType = action.type;
-            if (target && (!tag.target || tag.target === "INHERIT")) {
-              // Apply UserEffect to target
-              if (checkFriendlyFire(effect, target, alive)) {
-                targetUsernames.push(target.username);
-                targetGenders.push(target.gender);
-                // Check for stealth
-                const isStealthed = isUserStealthed(target.userId, usersEffects);
-                // Allow self-targeting abilities like basic heal even when stealthed
-                if (isStealthed && target.userId !== user.userId) {
-                  action.battleDescription +=
-                    ". The target is stealthed and cannot be targeted";
-                } else {
-                  effect.targetId = target.userId;
-                  usersEffects.push(effect);
-                  if (target.direction !== user.direction) {
-                    enemyRecipients.set(target.userId, target);
-                  }
-                }
-              }
-            } else if (tag.target === "SELF") {
-              effect.targetId = user.userId;
-              const idx = getEffectStackKey(effect);
-              if (!appliedEffects.has(idx) && checkFriendlyFire(effect, user, alive)) {
-                usersEffects.push(effect);
-                appliedEffects.add(idx);
-              }
-            }
-            // Extra: apply damage to barriers
-            if (BARRIER_DAMAGE_TAG_TYPES.has(tag.type)) {
-              const addBarrierHit = (
-                barrier: BattleEffect,
-                absorbFraction?: number,
-              ) => {
-                const idx = `${barrier.id}-${tagIndex}`;
-                if (barrierAttacks.has(idx)) return;
-                barrierAttacks.add(idx);
-                targetUsernames.push("barrier");
-                targetGenders.push("it");
-                const barrierEffect = structuredClone(effect);
-                barrierEffect.targetType = "barrier";
-                barrierEffect.targetId = barrier.id;
-                barrierEffect.id = nanoid();
-                if (absorbFraction !== undefined) {
-                  barrierEffect.barrierAbsorb = absorbFraction;
-                }
-                usersEffects.push(barrierEffect);
-              };
-              if (action.method === "SINGLE") {
-                // SINGLE: damage barriers on the A* path (projectile-in-path).
-                // getBarriersBetween already reduced absorbPercentage to a 0-1 fraction.
-                barriers.forEach((barrier) => {
-                  addBarrierHit(
-                    barrier,
-                    "absorbPercentage" in barrier
-                      ? barrier.absorbPercentage
-                      : undefined,
-                  );
-                });
-              } else {
-                // AOE: only damage barriers directly ON this affected tile
-                const barrierOnTile = findBarrier(groundEffects, tile.col, tile.row);
-                if (barrierOnTile && barrierOnTile.creatorId !== actorId) {
-                  addBarrierHit(
-                    barrierOnTile,
-                    "absorbPercentage" in barrierOnTile
-                      ? barrierOnTile.absorbPercentage / 100
-                      : undefined,
-                  );
-                }
-              }
-            }
-          }
-        }
-      });
-    });
-    // Trigger each passive source once per enemy reached by the accepted action.
-    // Empty tiles, self actions, stealth rejections and barrier hits supply no recipient.
-    for (const target of enemyRecipients.values()) {
-      for (const skillId of user.enemySkillIds ?? []) {
-        for (const tag of battle.extraState.enemySkills?.[skillId] ?? []) {
-          // Passives have no empty-ground movement destination; clones cannot clone again.
-          if (tag.type === "move" || (tag.type === "clone" && isClone(user))) continue;
-          const effect = realizeTag({
-            tag: structuredClone(tag) as UserEffect,
-            user,
-            actionId: skillId,
-            level: user.level,
-            round: battle.round,
-          });
-          effect.fromType = "skill";
-          effect.targetId = target.userId;
-          effect.longitude = target.longitude;
-          effect.latitude = target.latitude;
-          if (checkFriendlyFire(effect, target, alive)) {
-            if (GROUND_EFFECT_TAG_TYPES.has(tag.type)) {
-              groundEffects.push(effect);
-            } else {
-              usersEffects.push(effect);
-            }
-          }
-        }
-      }
-    }
-    // Get uniques only
-    targetUsernames = [...new Set(targetUsernames)];
-    targetGenders = [...new Set(targetGenders)];
-    // Update local battle history in terms of usage of action, effects, etc.
-    action.effects.forEach((effect) => {
-      updateStatUsage(user, effect as UserEffect);
-    });
-    recordMasteryUsage(user, action);
-    // Check if action affected anything
-    if (affectedTiles.size > 0) {
-      user.usedActions.push({
-        id: action.id,
-        type: action.type,
-        ...(action.type === "jutsu" && action.data
-          ? { masteryTypes: jutsuMasteryTypes(action.data) }
-          : {}),
-      });
-      // Combat logs outlive summons and clones; retain definitions of revealed
-      // actions even when their caster is removed from usersState.
-      if (action.type === "jutsu" || action.type === "item") {
-        battle.extraState.revealedActions ??= { jutsuIds: [], itemIds: [] };
-        const revealed = battle.extraState.revealedActions;
-        const ids = action.type === "jutsu" ? revealed.jutsuIds : revealed.itemIds;
-        if (!ids.includes(action.id)) ids.push(action.id);
-      }
-      // If this was an item, check if we should destroy on use
-      if (action.type === "item") {
-        const useritem = user.items.find((i) => i.itemId === action.id);
-        const itemData = useritem ? getItem(battle, useritem.itemId) : undefined;
-        if (
-          useritem &&
-          itemData?.destroyOnUse &&
-          battle.battleType !== "SPARRING" &&
-          !RankedBattleTypes.includes(battle.battleType)
+          effect.fromType = action.type;
+          applyToCasterOnce(effect);
+        } else if (
+          !tag.target ||
+          tag.target === "INHERIT" ||
+          tag.target === "COORDINATES"
         ) {
-          useritem.quantity -= 1;
+          const effect = realizeTag({
+            tag: tag as GroundEffect,
+            user: user,
+            actionId: action.id,
+            level: action.level,
+            round: battle.round,
+            barrierAbsorb: totalAbsorb,
+          });
+          effect.fromType = action.type;
+          effect.longitude = effectTile.col;
+          effect.latitude = effectTile.row;
+          groundEffects.push({ ...effect });
+          if (
+            target &&
+            effect.type !== "move" &&
+            checkFriendlyFire(effect, target, alive)
+          ) {
+            targetUsernames.push(target.username);
+            targetGenders.push(target.gender);
+            if (target.direction !== user.direction) {
+              enemyRecipients.set(target.userId, target);
+            }
+          }
+        }
+      } else {
+        // ADD USER EFFECTS
+        const target = getTargetUser(alive, action.target, tile, user.userId);
+        const effect = realizeTag({
+          tag: tag as UserEffect,
+          user: user,
+          actionId: action.id,
+          level: action.level,
+          round: battle.round,
+          barrierAbsorb: totalAbsorb,
+        });
+        effect.longitude = tile.col;
+        effect.latitude = tile.row;
+        effect.fromType = action.type;
+        if (target && (!tag.target || tag.target === "INHERIT")) {
+          // Apply UserEffect to target
+          if (checkFriendlyFire(effect, target, alive)) {
+            targetUsernames.push(target.username);
+            targetGenders.push(target.gender);
+            // Check for stealth
+            const isStealthed = isUserStealthed(target.userId, usersEffects);
+            // Allow self-targeting abilities like basic heal even when stealthed
+            if (isStealthed && target.userId !== user.userId) {
+              action.battleDescription +=
+                ". The target is stealthed and cannot be targeted";
+            } else {
+              effect.targetId = target.userId;
+              usersEffects.push(effect);
+              if (target.direction !== user.direction) {
+                enemyRecipients.set(target.userId, target);
+              }
+            }
+          }
+        } else if (tag.target === "SELF") {
+          applyToCasterOnce(effect);
+        }
+        // Extra: apply damage to barriers
+        if (BARRIER_DAMAGE_TAG_TYPES.has(tag.type)) {
+          const addBarrierHit = (barrier: BattleEffect, absorbFraction?: number) => {
+            const idx = `${barrier.id}-${tagIndex}`;
+            if (barrierAttacks.has(idx)) return;
+            barrierAttacks.add(idx);
+            targetUsernames.push("barrier");
+            targetGenders.push("it");
+            const barrierEffect = structuredClone(effect);
+            barrierEffect.targetType = "barrier";
+            barrierEffect.targetId = barrier.id;
+            barrierEffect.id = nanoid();
+            if (absorbFraction !== undefined) {
+              barrierEffect.barrierAbsorb = absorbFraction;
+            }
+            usersEffects.push(barrierEffect);
+          };
+          if (action.method === "SINGLE") {
+            // SINGLE: damage barriers on the A* path (projectile-in-path).
+            // getBarriersBetween already reduced absorbPercentage to a 0-1 fraction.
+            barriers.forEach((barrier) => {
+              addBarrierHit(
+                barrier,
+                "absorbPercentage" in barrier ? barrier.absorbPercentage : undefined,
+              );
+            });
+          } else {
+            // AOE: only damage barriers directly ON this affected tile
+            const barrierOnTile = findBarrier(groundEffects, tile.col, tile.row);
+            if (barrierOnTile && barrierOnTile.creatorId !== actorId) {
+              addBarrierHit(
+                barrierOnTile,
+                "absorbPercentage" in barrierOnTile
+                  ? barrierOnTile.absorbPercentage / 100
+                  : undefined,
+              );
+            }
+          }
         }
       }
-      // Update pools & action timer based on action
-      user.curChakra -= cpCost;
-      user.curChakra = Math.max(0, user.curChakra);
-      user.curStamina -= spCost;
-      user.curStamina = Math.max(0, user.curStamina);
-      user.curHealth -= hpCost;
-      user.curHealth = Math.max(0, user.curHealth);
-      user.updatedAt = new Date();
-      user.actionPoints = apAfter;
-      if (action.battleDescription === "") {
-        action.battleDescription = `%user uses ${action.name}`;
+    });
+  });
+  // Trigger each passive source once per enemy reached by the accepted action.
+  // Empty tiles, self actions, stealth rejections and barrier hits supply no recipient.
+  for (const target of enemyRecipients.values()) {
+    for (const skillId of user.enemySkillIds ?? []) {
+      for (const tag of battle.extraState.enemySkills?.[skillId] ?? []) {
+        // Passives have no empty-ground movement destination; clones cannot clone again.
+        if (tag.type === "move" || (tag.type === "clone" && isClone(user))) continue;
+        const effect = realizeTag({
+          tag: structuredClone(tag) as UserEffect,
+          user,
+          actionId: skillId,
+          level: user.level,
+          round: battle.round,
+        });
+        effect.fromType = "skill";
+        effect.targetId = target.userId;
+        effect.longitude = target.longitude;
+        effect.latitude = target.latitude;
+        if (checkFriendlyFire(effect, target, alive)) {
+          if (GROUND_EFFECT_TAG_TYPES.has(tag.type)) {
+            groundEffects.push(effect);
+          } else {
+            usersEffects.push(effect);
+          }
+        }
       }
-      action.battleDescription = `${action.name}: ${action.battleDescription} ${targetTile?.name ? `on <b>${targetTile.name}</b>` : ""}`;
-      action.battleDescription = replacePronouns(
-        action.battleDescription,
-        "%user",
-        user.gender,
-      );
-      action.battleDescription = action.battleDescription.replaceAll(
-        "%user",
-        user.username,
-      );
-      // Update generic descriptions
-      action.battleDescription = action.battleDescription.replaceAll(
-        "%location",
-        `[${targetTile.row}, ${targetTile.col}]`,
-      );
-      // Update target descriptions
-      if (targetGenders.length > 0) {
-        action.battleDescription = replacePronouns(
-          action.battleDescription,
-          "%target",
-          targetGenders.length === 1 ? targetGenders[0] : undefined,
-        );
-      }
-      if (targetUsernames.length > 0) {
-        action.battleDescription = action.battleDescription.replaceAll(
-          "%target",
-          targetUsernames.join(", "),
-        );
-      }
-      // Successful action
-      return true;
     }
   }
-  return false;
+  // Get uniques only
+  targetUsernames = [...new Set(targetUsernames)];
+  targetGenders = [...new Set(targetGenders)];
+  // Update local battle history in terms of usage of action, effects, etc.
+  action.effects.forEach((effect) => {
+    updateStatUsage(user, effect as UserEffect);
+  });
+  recordMasteryUsage(user, action);
+  user.usedActions.push({
+    id: action.id,
+    type: action.type,
+    ...(action.type === "jutsu" && action.data
+      ? { masteryTypes: jutsuMasteryTypes(action.data) }
+      : {}),
+  });
+  // Combat logs outlive summons and clones; retain definitions of revealed
+  // actions even when their caster is removed from usersState.
+  if (action.type === "jutsu" || action.type === "item") {
+    battle.extraState.revealedActions ??= { jutsuIds: [], itemIds: [] };
+    const revealed = battle.extraState.revealedActions;
+    const ids = action.type === "jutsu" ? revealed.jutsuIds : revealed.itemIds;
+    if (!ids.includes(action.id)) ids.push(action.id);
+  }
+  // If this was an item, check if we should destroy on use
+  if (action.type === "item") {
+    const useritem = user.items.find((i) => i.itemId === action.id);
+    const itemData = useritem ? getItem(battle, useritem.itemId) : undefined;
+    if (
+      useritem &&
+      itemData?.destroyOnUse &&
+      battle.battleType !== "SPARRING" &&
+      !RankedBattleTypes.includes(battle.battleType)
+    ) {
+      useritem.quantity -= 1;
+    }
+  }
+  // Update pools & action timer based on action
+  user.curChakra -= cpCost;
+  user.curChakra = Math.max(0, user.curChakra);
+  user.curStamina -= spCost;
+  user.curStamina = Math.max(0, user.curStamina);
+  user.curHealth -= hpCost;
+  user.curHealth = Math.max(0, user.curHealth);
+  user.updatedAt = new Date();
+  user.actionPoints = apAfter;
+  if (action.battleDescription === "") {
+    action.battleDescription = `%user uses ${action.name}`;
+  }
+  action.battleDescription = `${action.name}: ${action.battleDescription} ${targetTile?.name ? `on <b>${targetTile.name}</b>` : ""}`;
+  action.battleDescription = replacePronouns(
+    action.battleDescription,
+    "%user",
+    user.gender,
+  );
+  action.battleDescription = action.battleDescription.replaceAll(
+    "%user",
+    user.username,
+  );
+  // Update generic descriptions
+  action.battleDescription = action.battleDescription.replaceAll(
+    "%location",
+    `[${targetTile.row}, ${targetTile.col}]`,
+  );
+  // Update target descriptions
+  if (targetGenders.length > 0) {
+    action.battleDescription = replacePronouns(
+      action.battleDescription,
+      "%target",
+      targetGenders.length === 1 ? targetGenders[0] : undefined,
+    );
+  }
+  if (targetUsernames.length > 0) {
+    action.battleDescription = action.battleDescription.replaceAll(
+      "%target",
+      targetUsernames.join(", "),
+    );
+  }
+  // Successful action
+  return true;
 };
 
 const PRONOUNS = {
@@ -1607,7 +1591,6 @@ const getTemporalApDelta = (
   action: CombatAction,
   type: "timecompression" | "timedilation",
 ) => {
-  if (action.id === "wait") return 0;
   // Time dilation and time compression should not affect basic actions or items
   if (action.type === "basic" || action.type === "item") return 0;
   const effects = getActiveTargetEffects(battle.usersEffects, userId, type);
