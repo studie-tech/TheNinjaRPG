@@ -117,14 +117,8 @@ const tombstonesOf = async (userId: string) =>
 /** Hold web deletion after capture, before any report cleanup can start. */
 const pauseWebDeletion = async () => {
   const capture = sanctions.recordSanctionTombstone;
-  let enter!: () => void;
-  let release!: () => void;
-  const entered = new Promise<void>((resolve) => {
-    enter = resolve;
-  });
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
+  const { promise: gate, resolve: release } = Promise.withResolvers<void>();
   vi.spyOn(sanctions, "recordSanctionTombstone").mockImplementation(async (...args) => {
     await capture(...args);
     enter();
@@ -236,14 +230,8 @@ describeWithDatabase("sanction tombstones", () => {
         [SANCTIONED]: identity("original@example.com"),
         user_returned: identity("returned@example.com"),
       });
-      let enterIp!: () => void;
-      const ipEntered = new Promise<void>((resolve) => {
-        enterIp = resolve;
-      });
-      let releaseIp!: () => void;
-      const ipGate = new Promise<void>((resolve) => {
-        releaseIp = resolve;
-      });
+      const { promise: ipEntered, resolve: enterIp } = Promise.withResolvers<void>();
+      const { promise: ipGate, resolve: releaseIp } = Promise.withResolvers<void>();
       const profileClient = beforeStatements(database, historicalIp, [async () => {
         enterIp();
         await ipGate;
@@ -256,14 +244,8 @@ describeWithDatabase("sanction tombstones", () => {
         } as never)
         .getUser();
       await ipEntered;
-      let enterDeletion!: () => void;
-      const deletionEntered = new Promise<void>((resolve) => {
-        enterDeletion = resolve;
-      });
-      let releaseDeletion!: () => void;
-      const deletionGate = new Promise<void>((resolve) => {
-        releaseDeletion = resolve;
-      });
+      const { promise: deletionEntered, resolve: enterDeletion } = Promise.withResolvers<void>();
+      const { promise: deletionGate, resolve: releaseDeletion } = Promise.withResolvers<void>();
       // Read/delete gates must pause after execution; beforeStatements only provides
       // a before-write hook, so those boundaries need the custom proxy below.
       const deletionClient = boundary === "before sources"
@@ -394,14 +376,8 @@ describeWithDatabase("sanction tombstones", () => {
         await sanctions.recordSanctionTombstone(database, SANCTIONED);
         expect(await tombstonesOf(SANCTIONED)).toEqual(before);
       }
-      let enter!: () => void;
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => {
-        release = resolve;
-      });
+      const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
+      const { promise: gate, resolve: release } = Promise.withResolvers<void>();
       const paused = beforeStatements(database, sanctionTombstone, [
         async () => {}, // Let report closure run before pausing source deletion.
         async () => {
@@ -693,14 +669,8 @@ describeWithDatabase("sanction tombstones", () => {
         { provider: "oauth_google", providerUserId: "capture-subject" },
       ]);
       const getUser = stubClerk({ [SANCTIONED]: clerkIdentity });
-      let enter!: () => void;
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => {
-        release = resolve;
-      });
+      const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
+      const { promise: gate, resolve: release } = Promise.withResolvers<void>();
       getUser.mockImplementationOnce(async () => {
         enter();
         await gate;
@@ -1101,14 +1071,8 @@ describeWithDatabase("sanction tombstones", () => {
     stubClerk({ [SANCTIONED]: identity("atomic@example.com") });
     const database = await getTestDatabase();
     await deleteUser(database, SANCTIONED);
-    let enter!: () => void;
-    const entered = new Promise<void>((resolve) => {
-      enter = resolve;
-    });
-    let release!: () => void;
-    const paused = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
+    const { promise: paused, resolve: release } = Promise.withResolvers<void>();
     const reapply = sanctions.reapplySanctions;
     vi.spyOn(sanctions, "reapplySanctions").mockImplementation(async (...args) => {
       const guard = await reapply(...args);

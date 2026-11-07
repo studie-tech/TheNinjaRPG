@@ -18,18 +18,10 @@ const userId = "queue-publication";
 const genjutsu = { stat: "genjutsuMastery" as const, speed: "15min" as const };
 const taijutsu = { stat: "taijutsuMastery" as const, speed: "15min" as const };
 const bukijutsu = { stat: "bukijutsuMastery" as const, speed: "15min" as const };
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
-
 // Delay only dispatch; the transaction, predicates and rows execute on real SQL.
 const delayReplacementInsert = (database: DrizzleClient, fail = false) => {
-  const entered = deferred();
-  const release = deferred();
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
   const client = new Proxy(database, {
     get(target, property) {
       if (property !== "transaction") return Reflect.get(target, property);
@@ -69,8 +61,8 @@ const delayReplacementInsert = (database: DrizzleClient, fail = false) => {
 };
 
 const delayFirstUserWrite = (database: DrizzleClient) => {
-  const entered = deferred();
-  const release = deferred();
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
   let delayed = false;
   const wrap = <T extends object>(builder: T): T =>
     new Proxy(builder, {

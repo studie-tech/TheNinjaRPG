@@ -46,8 +46,7 @@ describe("Pixi AI atlases",()=>{
   b.release();clearUnusedAnimationTextures();await flush();expect(unload).toHaveBeenCalledTimes(1);
  });
  it("reserves pending and active images within the 32 MiB budget",async()=>{
-  let resolve!: (texture: Texture) => void;
-  const pending=new Promise<Texture>(done=>{resolve=done;});
+  const { promise: pending, resolve } = Promise.withResolvers<Texture>();
   vi.spyOn(Assets,"load").mockImplementation(()=>pending);
   vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
   const big={...idle,columns:8,rows:8,frameCount:64,fps:8};

@@ -33,8 +33,7 @@ describeWithDatabase("Stronghold monthly maintenance", () => {
 
   it.each([cost - 1, cost, cost * 2])("charges or downgrades once when duplicate claims start with %s points", async (points) => {
     const db = await seedMaintenance(points);
-    let release!: () => void;
-    const ready = new Promise<void>((resolve) => { release = resolve; });
+    const { promise: ready, resolve: release } = Promise.withResolvers<void>();
     let writes = 0;
     stubDatabase({
       select: db.select.bind(db),

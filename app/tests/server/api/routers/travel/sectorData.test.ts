@@ -11,12 +11,6 @@ const STALE_SECTOR = 10;
 const dialect = new MySqlDialect();
 const queryParams = (options: { where: SQL }) =>
   dialect.sqlToQuery(options.where).params;
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
-};
-
 const placement = (sector: number, isAi: boolean | null = true) => ({
   id: `npc-${sector}`,
   aiTemplateUserId: "npc",
@@ -44,9 +38,9 @@ const makeCaller = (options: {
     userId: "viewer", status: options.status ?? "AWAKE", sector: SECTOR,
     villageId: null, rank: "JONIN", questData: options.questData ?? [], role: "USER",
   };
-  const userGate = deferred<typeof user>();
+  const userGate = Promise.withResolvers<typeof user>();
   const findUser = vi.fn(() => options.waitForUser ? userGate.promise : Promise.resolve(user));
-  const allSectorReadsStarted = deferred<void>();
+  const allSectorReadsStarted = Promise.withResolvers<void>();
   let readCount = 0;
   const read = <T,>(result: (options: { where: SQL }) => T) => vi.fn((query: { where: SQL }) => {
     if (++readCount === 6) allSectorReadsStarted.resolve();

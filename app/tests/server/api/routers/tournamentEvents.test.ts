@@ -685,8 +685,8 @@ describeWithDatabase("event tournament persistence", () => {
       cache.setQueryData(key, initial);
       const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
       const unsubscribe = observer.subscribe(() => {});
-      const reserved = deferred();
-      const release = deferred();
+      const reserved = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
       const opponent = callerForDatabase(tournamentRouter, game.userIds[0]!, phase === "STARTING"
         ? beforeTransactionalWrite(database, battle, async () => { reserved.resolve(); await release.promise; })
         : database);
@@ -873,10 +873,10 @@ describeWithDatabase("event tournament persistence", () => {
 
   it("leaves recovery in control when a delayed launch collides with its missing-token tombstone", async () => {
     const { database, game, accept } = await readyEvent();
-    const inserting = deferred();
-    const releaseLaunch = deferred();
-    const savingRecovery = deferred();
-    const releaseRecovery = deferred();
+    const inserting = Promise.withResolvers<void>();
+    const releaseLaunch = Promise.withResolvers<void>();
+    const savingRecovery = Promise.withResolvers<void>();
+    const releaseRecovery = Promise.withResolvers<void>();
     const launching = accept(
       game.userIds[1]!,
       beforeStatements(database, tournamentMatch, [
@@ -932,12 +932,12 @@ describeWithDatabase("event tournament persistence", () => {
 
   it("keeps a valid battle when launch wins after recovery reads a missing token and battle", async () => {
     const { database, game, accept } = await readyEvent();
-    const inserting = deferred();
-    const releaseLaunch = deferred();
-    const committedBattle = deferred();
-    const releaseFighting = deferred();
-    const insertingRecovery = deferred();
-    const releaseRecovery = deferred();
+    const inserting = Promise.withResolvers<void>();
+    const releaseLaunch = Promise.withResolvers<void>();
+    const committedBattle = Promise.withResolvers<void>();
+    const releaseFighting = Promise.withResolvers<void>();
+    const insertingRecovery = Promise.withResolvers<void>();
+    const releaseRecovery = Promise.withResolvers<void>();
     const launching = accept(
       game.userIds[1]!,
       beforeStatements(
@@ -1069,8 +1069,8 @@ describeWithDatabase("event tournament persistence", () => {
 
   it("recovers a stalled launch without exposing claims or allowing its late battle", async () => {
     const { database, game, accept } = await readyEvent();
-    const reached = deferred();
-    const release = deferred();
+    const reached = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
     const stalled = beforeTransactionalWrite(database, battle, async () => {
       reached.resolve();
       await release.promise;
@@ -1142,9 +1142,9 @@ describeWithDatabase("event tournament persistence", () => {
           })
           .where(eq(battle.id, game.battleId));
         const before = await database.query.userData.findMany();
-        const firstReached = deferred();
-        const secondReached = deferred();
-        const release = deferred();
+        const firstReached = Promise.withResolvers<void>();
+        const secondReached = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
         // Delay the first player's ordinary result write. The last player's claim
         // must make deletion and the outcome visible together even in this gap.
         const first = callerForDatabase(
@@ -1231,10 +1231,10 @@ describeWithDatabase("event tournament persistence", () => {
   for (const inFlight of [false, true]) {
     it(`arbitrates launch against recovery's stale missing-battle read (inFlight=${inFlight})`, async () => {
       const { database, game, accept } = await readyEvent();
-      const reached = deferred();
-      const release = deferred();
-      const revoking = deferred();
-      const releaseRecovery = deferred();
+      const reached = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const revoking = Promise.withResolvers<void>();
+      const releaseRecovery = Promise.withResolvers<void>();
       const stalled = beforeTransactionalWrite(database, battleHistory, async () => {
         reached.resolve();
         await release.promise;
@@ -1824,14 +1824,6 @@ describeWithDatabase("event tournament persistence", () => {
     expect((await database.query.userData.findFirst())?.money).toBe(20);
   });
 });
-
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
 
 /** Interleave a real SQL write inside or outside a transaction. */
 const beforeTransactionalWrite = (

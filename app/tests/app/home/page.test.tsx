@@ -130,14 +130,11 @@ afterEach(async () => {
 
 for (const hasCachedInventory of [false, true]) {
   it(`refreshes home storage after ${hasCachedInventory ? "cached" : "initial"} parallel inventory reads miss newly granted furniture`, async () => {
-    let finishHome = () => {};
-    const homeReady = new Promise<void>((resolve) => { finishHome = resolve; });
-    let finishInventory = () => {};
-    const inventoryReady = new Promise<void>((resolve) => { finishInventory = resolve; });
+    const { promise: homeReady, resolve: finishHome } = Promise.withResolvers<void>();
+    const { promise: inventoryReady, resolve: finishInventory } = Promise.withResolvers<void>();
     let homeQueries = 0;
     let itemQueries = 0;
-    let finishPregrantRead = () => {};
-    const pregrantRead = new Promise<void>((resolve) => { finishPregrantRead = resolve; });
+    const { promise: pregrantRead, resolve: finishPregrantRead } = Promise.withResolvers<void>();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
     const itemKey = getQueryKey(testApi.item.getUserItems, undefined, "query");
     if (hasCachedInventory) {
@@ -466,8 +463,7 @@ it("refreshes furniture storage after a downgrade stores a carried piece from a 
 it("refreshes furniture storage after placing a carried piece and waits for its inventory", async () => {
   let home = { ...essentialHome, furniture: [...basics, rug] };
   let items = [...ownedItems, { ...ownedItems[0]!, id: rug.id, itemId: rug.itemId, storedAtHome: false, item: { ...ownedItems[0]!.item, id: rug.itemId, name: rug.name, image: rug.image } }];
-  let finishInventory = () => {};
-  const inventoryReady = new Promise<void>((resolve) => { finishInventory = resolve; });
+  const { promise: inventoryReady, resolve: finishInventory } = Promise.withResolvers<void>();
   let itemQueries = 0;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   const itemKey = getQueryKey(testApi.item.getUserItems, undefined, "query");
@@ -519,10 +515,7 @@ it("refreshes furniture storage after placing a carried piece and waits for its 
 
 for (const success of [true, false]) {
   it(`keeps the editor disabled through refreshing a ${success ? "successful" : "rejected"} save`, async () => {
-    let finishRefresh = () => {};
-    const refreshed = new Promise<void>((resolve) => {
-      finishRefresh = resolve;
-    });
+    const { promise: refreshed, resolve: finishRefresh } = Promise.withResolvers<void>();
     let homeQueries = 0;
     const home: NonNullable<RouterOutputs["home"]["getUserHome"]> = {
       homeType: "NONE",
@@ -639,8 +632,7 @@ for (const success of [true, false]) {
 
 // Real dialog focus and query refresh need an integration-test budget.
 it("opens home management from the header and waits for refreshed inventory before decorating", async () => {
-  let finishRefresh = () => {};
-  const refreshed = new Promise<void>((resolve) => { finishRefresh = resolve; });
+  const { promise: refreshed, resolve: finishRefresh } = Promise.withResolvers<void>();
   let homeQueries = 0;
   const home: NonNullable<RouterOutputs["home"]["getUserHome"]> = {
     homeType: "NONE", biome: "ground", regen: HomeTypeDetails.NONE.regen, storage: HomeTypeDetails.NONE.storage,

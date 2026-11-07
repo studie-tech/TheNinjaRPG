@@ -78,8 +78,7 @@ describe("auction result native alerts", () => {
   };
   it("waits for the settlement commit before notifying participants", async () => {
     const { client, transaction } = settlementClient();
-    let committed!: () => void;
-    const commit = new Promise<void>((resolve) => { committed = resolve; });
+    const { promise: commit, resolve: committed } = Promise.withResolvers<void>();
     const run = transaction.getMockImplementation()!;
     transaction.mockImplementation(async (work) => {
       const result = await run(work);
@@ -105,8 +104,7 @@ describe("auction result native alerts", () => {
   });
   it("waits for a no-bid statement before notifying its seller", async () => {
     const { client, execute, transaction } = settlementClient([]);
-    let finish!: () => void;
-    const statement = new Promise<void>((resolve) => { finish = resolve; });
+    const { promise: statement, resolve: finish } = Promise.withResolvers<void>();
     execute.mockImplementation(async () => {
       expect(deferred).toHaveLength(0);
       await statement;

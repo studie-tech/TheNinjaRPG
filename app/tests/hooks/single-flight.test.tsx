@@ -3,20 +3,10 @@ import { describe, expect, it, vi } from "bun:test";
 import { usePendingIds } from "@/hooks/usePendingIds";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  let reject!: (error: Error) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-};
-
 describe("useSingleFlight", () => {
   it("refuses a second submission in the same tick, before pending renders", async () => {
     const { result } = renderHook(() => useSingleFlight<{ id: string }>());
-    const flight = deferred<string>();
+    const flight = Promise.withResolvers<string>();
     const first = vi.fn(() => flight.promise);
     const second = vi.fn(async () => "duplicate");
 
@@ -84,7 +74,7 @@ describe("useSingleFlight", () => {
     const { result } = renderHook(() => useSingleFlight<{ id: string }>());
     const abandoned = { id: "old" };
     const next = { id: "new" };
-    const flight = deferred<void>();
+    const flight = Promise.withResolvers<void>();
     let stillOwned: boolean | undefined;
 
     let run!: Promise<void>;

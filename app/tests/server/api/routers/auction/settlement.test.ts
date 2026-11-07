@@ -140,8 +140,7 @@ describeWithDatabase("auction settlement", () => {
       const db = await getTestDatabase();
       await db.delete(auctionBid).where(eq(auctionBid.id, "losing-bid"));
       let arrivals = 0;
-      let release!: () => void;
-      const ready = new Promise<void>((resolve) => { release = resolve; });
+      const { promise: ready, resolve: release } = Promise.withResolvers<void>();
       const synchronized = new Proxy(db, {
         get(target, key, receiver) {
           if (key !== "execute") return Reflect.get(target, key, receiver);
@@ -202,8 +201,7 @@ describeWithDatabase("auction settlement", () => {
       await seedAuction(currency, true, false);
       const db = await getTestDatabase();
       let arrivals = 0;
-      let release!: () => void;
-      const ready = new Promise<void>((resolve) => { release = resolve; });
+      const { promise: ready, resolve: release } = Promise.withResolvers<void>();
       const synchronized = new Proxy(db, {
         get(target, key, receiver) {
           if (key !== "transaction") return Reflect.get(target, key, receiver);

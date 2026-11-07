@@ -25,13 +25,11 @@ for (const procedure of ["item.mergeStacks", "item.mergeAllStacks", "item.sellUs
       queries: { retry: false, staleTime: Infinity },
       mutations: { onError: defaultError },
     } });
-    let finishRecovery!: (value: string) => void;
-    const recovery = new Promise<string>((resolve) => { finishRecovery = resolve; });
+    const { promise: recovery, resolve: finishRecovery } = Promise.withResolvers<string>();
     const caches = (isItem ? ["inventory", "variants"] : ["jutsus", "loadouts", "profile"]).map((name) => {
       const queryKey = [name];
       client.setQueryData(queryKey, "stale");
-      let startRecovery!: () => void;
-      const started = new Promise<void>((resolve) => { startRecovery = resolve; });
+      const { promise: started, resolve: startRecovery } = Promise.withResolvers<void>();
       const queryFn = vi.fn(() => { startRecovery(); return recovery; });
       const stop = new QueryObserver(client, { queryKey, queryFn }).subscribe(() => {});
       return { queryKey, queryFn, stop, started, invalidate: () => client.invalidateQueries({ queryKey }) };

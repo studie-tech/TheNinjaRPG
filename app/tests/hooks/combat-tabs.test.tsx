@@ -35,8 +35,7 @@ beforeEach(() => {
   Object.defineProperty(navigator, "locks", { configurable: true, value: {
     request: async (name: string, options: { signal: AbortSignal }, callback: () => Promise<void>) => {
       const previous = tails.get(name) ?? Promise.resolve();
-      let release!: () => void;
-      const held = new Promise<void>((resolve) => { release = resolve; });
+      const { promise: held, resolve: release } = Promise.withResolvers<void>();
       tails.set(name, previous.then(() => held));
       await previous;
       if (!options.signal.aborted) await callback();

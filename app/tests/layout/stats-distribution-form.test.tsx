@@ -72,10 +72,7 @@ const form = (onAccept: Accept, userData = trainee) => (
 
 describe("advanced experience assignment drafts", () => {
   it("waits for an accepted allocation before advancing the tutorial", async () => {
-    let resolveAssignment: (accepted: boolean) => void = () => {};
-    const assignment = new Promise<boolean>((resolve) => {
-      resolveAssignment = resolve;
-    });
+    const { promise: assignment, resolve: resolveAssignment } = Promise.withResolvers<boolean>();
     const accept = vi.fn(() => assignment);
     const next = vi.fn(async () => {});
     vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({

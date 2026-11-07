@@ -70,10 +70,8 @@ afterEach(() => vi.restoreAllMocks());
 describe("posting moderation scheduling", () => {
   it.each(cases)("returns from $name after storage without waiting for moderation", async ({ run, table, relationType }) => {
     let saved = false;
-    let release!: () => void;
-    let started!: () => void;
-    const writing = new Promise<void>((resolve) => { started = resolve; });
-    const stored = new Promise<void>((resolve) => { release = resolve; });
+    const { promise: writing, resolve: started } = Promise.withResolvers<void>();
+    const { promise: stored, resolve: release } = Promise.withResolvers<void>();
     const db = makeClient(async (target) => {
       if (target === table) { started(); await stored; saved = true; }
       return { rowsAffected: 1 };

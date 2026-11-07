@@ -123,14 +123,8 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
   for (const endpoint of ["checkRankedPvpMatches", "getRankedPvpQueue"] as const) {
     it(`${endpoint} preserves a join claimed after its stale status read`, async () => {
       const db = await getTestDatabase();
-      let claimReady = () => {};
-      let releaseClaim = () => {};
-      const ready = new Promise<void>((resolve) => {
-        claimReady = resolve;
-      });
-      const wait = new Promise<void>((resolve) => {
-        releaseClaim = resolve;
-      });
+      const { promise: ready, resolve: claimReady } = Promise.withResolvers<void>();
+      const { promise: wait, resolve: releaseClaim } = Promise.withResolvers<void>();
       const joiningClient = beforeStatements(db, rankedPvpQueue, [
         async () => {
           // The join has preloaded an empty queue. Publish an old claimed orphan

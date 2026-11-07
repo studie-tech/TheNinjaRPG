@@ -427,8 +427,7 @@ describeWithDatabase("auction bid atomicity", () => {
 /** Both resolvers must finish the same listing snapshot before either can mutate it. */
 const synchronizeAuctionReads = (db: DrizzleClient) => {
   let arrivals = 0;
-  let release: () => void = () => {};
-  const ready = new Promise<void>((resolve) => { release = resolve; });
+  const { promise: ready, resolve: release } = Promise.withResolvers<void>();
   return new Proxy(db, {
     get(target, key, receiver) {
       if (key !== "query") return Reflect.get(target, key, receiver);

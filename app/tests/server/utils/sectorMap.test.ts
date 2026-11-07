@@ -186,10 +186,7 @@ describe("published sector map cache", () => {
         findMany.mockImplementationOnce(async () => [{ sector: 3, version: 2 }]);
       }
       let release: (rows: MapRow[]) => void = () => {};
-      let markStarted = () => {};
-      const started = new Promise<void>((resolve) => {
-        markStarted = resolve;
-      });
+      const { promise: started, resolve: markStarted } = Promise.withResolvers<void>();
       findMany.mockImplementationOnce(() => {
         markStarted();
         return new Promise<MapRow[]>((resolve) => {

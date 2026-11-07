@@ -117,13 +117,10 @@ const deleteAccount = async (userId: string) => {
 const startRegistration = async () => {
   claimIdentity("Concurrent");
   gatedId = "Concurrent";
-  const entered = new Promise<void>((resolve) => {
-    enterLookup = resolve;
-  });
-  let release!: () => void;
-  lookupGate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
+  enterLookup = enter;
+  const { promise: paused, resolve: release } = Promise.withResolvers<void>();
+  lookupGate = paused;
   const pending = register("Concurrent");
   await entered;
   expect(
@@ -156,14 +153,8 @@ const expectUnpublished = async (
 
 /** Pause after durable cases, before the character is published. */
 const prepareAndPause = () => {
-  let enter!: () => void;
-  const entered = new Promise<void>((resolve) => {
-    enter = resolve;
-  });
-  let release!: () => void;
-  const paused = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
+  const { promise: paused, resolve: release } = Promise.withResolvers<void>();
   const reapply = sanctions.reapplySanctions;
   let first = true;
   vi.spyOn(sanctions, "reapplySanctions").mockImplementation(async (...args) => {
@@ -384,14 +375,8 @@ describeWithDatabase("registration claims current sanction sources", () => {
         .set({ deletionAt: new Date(Date.now() - DAY) })
         .where(eq(userData.userId, "Concurrent"));
 
-      let enter!: () => void;
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const paused = new Promise<void>((resolve) => {
-        release = resolve;
-      });
+      const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
+      const { promise: paused, resolve: release } = Promise.withResolvers<void>();
       let reads = 0;
       const delayed = new Proxy(database, {
         get(target, property, receiver) {
@@ -500,14 +485,8 @@ describeWithDatabase("registration claims current sanction sources", () => {
       });
       const userId = mode === "web" ? "LateOriginal" : "Concurrent";
       if (mode === "native") claimIdentity(userId, "unrelated@example.com");
-      let enter!: () => void;
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => {
-        release = resolve;
-      });
+      const { promise: entered, resolve: enter } = Promise.withResolvers<void>();
+      const { promise: gate, resolve: release } = Promise.withResolvers<void>();
       const delayed = new Proxy(database, {
         get(target, property, receiver) {
           if (property === "query")
@@ -1029,14 +1008,8 @@ describeWithDatabase("registration claims current sanction sources", () => {
       const preparation = records === "prepared" ? prepareAndPause() : null;
       const registration = preparation ? register("Concurrent") : null;
       if (preparation) await preparation.entered;
-      let enter!: () => void;
-      const readReports = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const paused = new Promise<void>((resolve) => {
-        release = resolve;
-      });
+      const { promise: readReports, resolve: enter } = Promise.withResolvers<void>();
+      const { promise: paused, resolve: release } = Promise.withResolvers<void>();
       const getBanDatabase = new Proxy(database, {
         get(target, property, receiver) {
           if (property === "query")
@@ -1178,14 +1151,8 @@ describeWithDatabase("registration claims current sanction sources", () => {
     const database = await getTestDatabase();
     await addSilenceSource();
     claimIdentity("Concurrent");
-    let enter!: () => void;
-    const reachedInsert = new Promise<void>((resolve) => {
-      enter = resolve;
-    });
-    let release!: () => void;
-    const paused = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: reachedInsert, resolve: enter } = Promise.withResolvers<void>();
+    const { promise: paused, resolve: release } = Promise.withResolvers<void>();
     const failingDatabase = new Proxy(database, {
       get(target, property, receiver) {
         if (property === "execute")

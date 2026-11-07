@@ -23,8 +23,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("deferred moderation", () => {
   it("retains pending provider work until the after callback finishes", async () => {
-    let finish!: () => void;
-    const provider = new Promise<void>((resolve) => { finish = resolve; });
+    const { promise: provider, resolve: finish } = Promise.withResolvers<void>();
     const moderate = vi.spyOn(moderator, "moderateContent").mockReturnValue(provider);
     const before = Date.now();
     expect(deferModeration(client, info)).toBeUndefined();

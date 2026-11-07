@@ -143,8 +143,7 @@ it.each(["accepted", "switch", "sign-out", "lost"] as const)("delivers only an a
   const clerk: Pick<Clerk, "session"> = { session: session("actor") };
   const scope = createTrpcSession(clerk);
   let finish!: () => void;
-  let started!: () => void;
-  const dispatched = new Promise<void>((resolve) => { started = resolve; });
+  const { promise: dispatched, resolve: started } = Promise.withResolvers<void>();
   const transport = createTRPCClient<AppRouter>({ links: [trpcSessionLink(scope), httpBatchLink({
     url: "http://localhost/api/trpc", transformer: superjson, headers: scope.headers,
     fetch: async () => {

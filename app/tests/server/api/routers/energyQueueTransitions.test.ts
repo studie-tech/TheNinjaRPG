@@ -690,10 +690,8 @@ describeWithDatabase("Energy queue state transitions", () => {
   it("preserves a concurrent discipline speed change when combat advances only the element queue", async () => {
     const now = new Date();
     setSystemTime(now);
-    let speedWriteReady!: () => void;
-    const ready = new Promise<void>((resolve) => { speedWriteReady = resolve; });
-    let releaseSpeedWrite!: () => void;
-    const release = new Promise<void>((resolve) => { releaseSpeedWrite = resolve; });
+    const { promise: ready, resolve: speedWriteReady } = Promise.withResolvers<void>();
+    const { promise: release, resolve: releaseSpeedWrite } = Promise.withResolvers<void>();
     const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
     try {
       await prepare([]);

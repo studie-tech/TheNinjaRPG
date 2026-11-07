@@ -89,8 +89,7 @@ it("refreshes a mounted home invitation list before showing its incoming invitat
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/home");
   const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   showToast.mockClear();
-  let finishRefresh = () => {};
-  const refreshReady = new Promise<void>((resolve) => { finishRefresh = resolve; });
+  const { promise: refreshReady, resolve: finishRefresh } = Promise.withResolvers<void>();
   const query = vi.fn(async () => {
     if (query.mock.calls.length === 1) return [];
     await refreshReady;
@@ -196,8 +195,7 @@ it("shows sent and received history with accepted visit and revoke actions", asy
 });
 
 it("keeps visibility controls pending through revision recovery and retries with the refreshed revision", async () => {
-  let finishRefresh = () => {};
-  const refreshReady = new Promise<void>((resolve) => { finishRefresh = resolve; });
+  const { promise: refreshReady, resolve: finishRefresh } = Promise.withResolvers<void>();
   const sharing = vi.fn((_input: unknown): Result => sharing.mock.calls.length === 1
     ? { success: false, message: "Your home changed. Refresh and try again" }
     : { success: true, message: "Your home is public" });
@@ -224,8 +222,7 @@ it("keeps visibility controls pending through revision recovery and retries with
 });
 
 it("shows invitation loading and recovers a failed query from its nearby retry control", async () => {
-  let finishQuery = () => {};
-  const queryReady = new Promise<void>((resolve) => { finishQuery = resolve; });
+  const { promise: queryReady, resolve: finishQuery } = Promise.withResolvers<void>();
   let queries = 0;
   const view = setup(async (path) => {
     if (path !== "home.getHomeRequests") throw new Error(`Unexpected procedure ${path}`);

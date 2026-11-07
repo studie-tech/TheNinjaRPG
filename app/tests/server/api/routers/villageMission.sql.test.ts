@@ -543,8 +543,7 @@ const shrineResult = (change: number) => ({ didWin: 1, shrineChangeHp: change, v
 
 /** Both requests must load the same level before either guarded upgrade can commit. */
 const synchronizeUpgradeClaims = (db: Awaited<ReturnType<typeof getTestDatabase>>) => {
-  let release!: () => void;
-  const ready = new Promise<void>((resolve) => { release = resolve; });
+  const { promise: ready, resolve: release } = Promise.withResolvers<void>();
   let writes = 0;
   return new Proxy(db, {
     get(target, property, receiver) {

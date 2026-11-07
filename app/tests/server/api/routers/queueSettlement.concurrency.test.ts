@@ -50,18 +50,10 @@ const jutsuRow = (id: string) => ({
 const costs = [10, 11].map((level) =>
   calcJutsuTrainCost(jutsuRow("b") as never, level),
 );
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
-
 // Alter dispatch timing only: all reads, writes and transactions execute on real MySQL.
 const delayQueueRead = (database: DrizzleClient) => {
-  const activeRead = deferred();
-  const release = deferred();
+  const activeRead = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
   const wrapBuilder = <T extends object>(builder: T): T =>
     new Proxy(builder, {
       get(target, property) {
@@ -113,7 +105,7 @@ const delayQueueRead = (database: DrizzleClient) => {
 };
 
 const gateEnqueueWrites = (database: DrizzleClient) => {
-  const ready = deferred();
+  const ready = Promise.withResolvers<void>();
   let arrivals = 0;
   const wrap = <T extends object>(builder: T): T =>
     new Proxy(builder, {

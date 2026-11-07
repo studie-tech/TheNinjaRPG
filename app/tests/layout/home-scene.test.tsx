@@ -673,8 +673,7 @@ describe("Home scene", () => {
   });
 
   it("ends a captured drag when saving and preserves its submitted position after rejection", async () => {
-    let resolveSave!: (success: boolean) => void;
-    const pendingSave = new Promise<boolean>((resolve) => { resolveSave = resolve; });
+    const { promise: pendingSave, resolve: resolveSave } = Promise.withResolvers<boolean>();
     const onSave = vi.fn<NonNullable<ComponentProps<typeof HomeScene>["onSave"]>>(() => pendingSave);
     const PendingSaveScene = () => {
       const [isSaving, setIsSaving] = useState(false);

@@ -56,8 +56,7 @@ afterEach(() => {
 it("keeps a successful adoption intact while its claimed species leaves the daily offers and artwork is pending", async () => {
   let claimed: (RouterInputs["pets"]["acquirePet"] & { id: string; rank: number; avatar: string | null; artRank: number; generationStatus: string }) | null = null;
   let remainingGenerations = 3;
-  let finishGeneration: () => void = () => undefined;
-  const generation = new Promise<void>((resolve) => { finishGeneration = resolve; });
+  const { promise: generation, resolve: finishGeneration } = Promise.withResolvers<void>();
   const acquire = vi.fn((input: RouterInputs["pets"]["acquirePet"]) => {
     claimed = { ...input, id: "new-companion", rank: 1, avatar: null, artRank: 0, generationStatus: "PENDING" };
     return { success: true, message: "Companion adopted", petId: claimed.id };

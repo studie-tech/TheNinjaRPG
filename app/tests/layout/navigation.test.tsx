@@ -35,8 +35,7 @@ afterEach(() => {
 
 describe("navigation feedback", () => {
   it("keeps a programmatic transition pending after its source unmounts until it commits", async () => {
-    let finish!: () => void;
-    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    const { promise: gate, resolve: finish } = Promise.withResolvers<void>();
     const Destination = () => { use(gate); return <p>Destination</p>; };
     const Controls = ({ close }: { close: () => void }) => {
       const router = useNavigationRouter();

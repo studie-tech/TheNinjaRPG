@@ -24,12 +24,6 @@ const procedureSource = (router: string, name: string) => {
   const end = body.search(/\n  \w+: protectedProcedure/);
   return end === -1 ? body : body.slice(0, end);
 };
-/** Control completion gates to assert concurrent ordering without sleeps. */
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
-};
 let identity = 0;
 const caller = <Context, Caller>(router: { createCaller: (context: Context) => Caller }, db: object) =>
   callerForDatabase(router, `preflight-${++identity}`, db as DrizzleClient);
@@ -106,8 +100,8 @@ describe("self-guarded Pyramid mutations", () => {
   });
 
   it.each([false, true])("repairs stale inventory only after authorization (allowed: %s)", async (allowed) => {
-    const authorization = deferred<boolean>();
-    const inventoryStarted = deferred<void>();
+    const authorization = Promise.withResolvers<boolean>();
+    const inventoryStarted = Promise.withResolvers<void>();
     const staleItem = { quantity: -1, updatedAt: new Date(0), item: { hidden: false } };
     const read = vi.fn(async (): Promise<(typeof staleItem)[]> => {
       inventoryStarted.resolve();
@@ -156,9 +150,9 @@ describe("combat deferred rate limit", () => {
   };
 
   it("starts the first battle read while Redis is pending and awaits both", async () => {
-    const limiter = deferred<number[]>();
-    const limiterStarted = deferred<void>();
-    const battleStarted = deferred<void>();
+    const limiter = Promise.withResolvers<number[]>();
+    const limiterStarted = Promise.withResolvers<void>();
+    const battleStarted = Promise.withResolvers<void>();
     mockLimiter(() => { limiterStarted.resolve(); return limiter.promise; });
     const read = vi.fn(async () => { battleStarted.resolve(); return undefined; });
     let finished = false;

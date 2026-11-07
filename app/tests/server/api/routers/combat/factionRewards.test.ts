@@ -194,10 +194,8 @@ describeWithDatabase("combat team faction rewards", () => {
     const db = await getTestDatabase();
     const saved = await startDecidedRaid();
     // Pause one finalizer at deletion so the other deterministically wins the claim.
-    let unblock!: () => void;
-    let reached!: () => void;
-    const gate = new Promise<void>((resolve) => { unblock = resolve; });
-    const ready = new Promise<void>((resolve) => { reached = resolve; });
+    const { promise: gate, resolve: unblock } = Promise.withResolvers<void>();
+    const { promise: ready, resolve: reached } = Promise.withResolvers<void>();
     const staleClient = new Proxy(db, {
       get(target, key, receiver) {
         if (key !== "delete") return Reflect.get(target, key, receiver);

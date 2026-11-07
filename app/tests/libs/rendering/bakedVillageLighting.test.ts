@@ -204,8 +204,7 @@ it("retains a matching pool through cold artwork, replaces it at runtime, and cl
 
 it("ignores stale and disposed pool preloads", async () => {
   const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
-  let resolve!: (field: { texture: Texture; bounds: { minX: number; maxX: number; minY: number; maxY: number } }) => void;
-  const pending = new Promise<Parameters<typeof resolve>[0]>(done => { resolve = done; });
+  const { promise: pending, resolve } = Promise.withResolvers<{ texture: Texture; bounds: { minX: number; maxX: number; minY: number; maxY: number } }>();
   const stale = { resource: pending, release: vi.fn() };
   const unknown = { resource: Promise.resolve(null), release: vi.fn() };
   const acquire = vi.spyOn(fields, "acquirePrebakedVillageLightField").mockReturnValueOnce(stale).mockReturnValueOnce(unknown).mockReturnValueOnce(stale);

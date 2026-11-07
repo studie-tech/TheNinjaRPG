@@ -7,8 +7,7 @@ import * as social from "@/server/utils/push/social";
 afterEach(() => vi.restoreAllMocks());
 
 it.each([false, true])("publishes the inbox event only after successful storage (failure: %s)", async (fail) => {
-  let finish!: () => void;
-  const stored = new Promise<void>((resolve) => { finish = resolve; });
+  const { promise: stored, resolve: finish } = Promise.withResolvers<void>();
   let completed = 0;
   const write = async () => { await stored; if (fail) throw new Error("Storage failed"); completed++; return { rowsAffected: 1 }; };
   const client = {

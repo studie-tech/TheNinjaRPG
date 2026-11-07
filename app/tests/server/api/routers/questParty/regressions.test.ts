@@ -306,8 +306,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     const { leader, helper, party } = await claimReleaseFixture();
     expect((await helper.join({ partyId: party.id })).success).toBe(true);
     let concurrentSnapshot: LoadedQuestParty | undefined;
-    let helperDetached!: () => void;
-    const detached = new Promise<void>((resolve) => { helperDetached = resolve; });
+    const { promise: detached, resolve: helperDetached } = Promise.withResolvers<void>();
     const failing = new Proxy(client, {
       get(target, key, receiver) {
         if (key === "update") return (table: unknown) => {

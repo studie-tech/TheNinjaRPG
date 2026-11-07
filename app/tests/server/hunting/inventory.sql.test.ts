@@ -40,25 +40,17 @@ import {
   resetTables,
 } from "../../setup/testDatabase";
 
-const gate = () => {
-  let release!: () => void;
-  const promise = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  return { promise, release };
-};
-
 /** Pause a real endpoint after its equipment or inventory preload has completed. */
 const pauseRead = (db: DrizzleClient, equipment: boolean) => {
-  const reached = gate();
-  const resume = gate();
+  const reached = Promise.withResolvers<void>();
+  const resume = Promise.withResolvers<void>();
   const userQuery = new Proxy(db.query.userData, {
     get(target, key, receiver) {
       if (equipment && key === "findMany")
         return async (...args: Parameters<typeof target.findMany>) => {
           const rows = await target.findMany(...args);
           if ((args[0] as { with?: { items?: unknown } })?.with?.items) {
-            reached.release();
+            reached.resolve();
             await resume.promise;
           }
           return rows;
@@ -71,7 +63,7 @@ const pauseRead = (db: DrizzleClient, equipment: boolean) => {
       if (!equipment && key === "findMany")
         return async (...args: Parameters<typeof target.findMany>) => {
           const rows = await target.findMany(...args);
-          reached.release();
+          reached.resolve();
           await resume.promise;
           return rows;
         };
@@ -90,13 +82,13 @@ const pauseRead = (db: DrizzleClient, equipment: boolean) => {
       return key === "query" ? query : Reflect.get(target, key, receiver);
     },
   });
-  return { client, reached: reached.promise, resume: resume.release };
+  return { client, reached: reached.promise, resume: resume.resolve };
 };
 
 /** Pause the real merge after its negative claims, before its publish statement executes. */
 const pauseMergePublish = (db: DrizzleClient) => {
-  const reached = gate();
-  const resume = gate();
+  const reached = Promise.withResolvers<void>();
+  const resume = Promise.withResolvers<void>();
   let paused = false;
   const client = new Proxy(db, {
     get(target, key, receiver) {
@@ -121,7 +113,7 @@ const pauseMergePublish = (db: DrizzleClient) => {
                             get(statement, writeKey, writeReceiver) {
                               if (writeKey === "then")
                                 return (...callbacks: Parameters<typeof statement.then>) => {
-                                  reached.release();
+                                  reached.resolve();
                                   return resume.promise.then(() => statement.then(...callbacks));
                                 };
                               return Reflect.get(statement, writeKey, writeReceiver);
@@ -139,7 +131,7 @@ const pauseMergePublish = (db: DrizzleClient) => {
       return Reflect.get(target, key, receiver);
     },
   });
-  return { client, reached: reached.promise, resume: resume.release };
+  return { client, reached: reached.promise, resume: resume.resolve };
 };
 
 describeWithDatabase("Hunting inventory admission", () => {
@@ -585,9 +577,9 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "high-kit", userId: "hunter", itemId: "high", equipped: "ITEM_2", quantity, level: 2, experience: 17, durability: 13 },
     ]);
     const { db, hunter, id } = await prepare();
-    const paused = gate();
-    const resume = gate();
-    const client = beforeStatements(db, userItem, [async () => {}, async () => { paused.release(); await resume.promise; }]);
+    const paused = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const client = beforeStatements(db, userItem, [async () => {}, async () => { paused.resolve(); await resume.promise; }]);
     const repair = callerForDatabase(itemRouter, "hunter", client).useRepairAll();
     await paused.promise;
     try {
@@ -602,7 +594,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       const current = (await db.query.battle.findFirst()) as CompleteBattle;
       expect(current.usersState.find((u) => u.userId === "hunter")!.items.find((i) => i.id === "high-kit")?.quantity ?? 0).toBe(quantity - 1);
     } finally {
-      resume.release();
+      resume.resolve();
     }
     expect(await repair).toMatchObject({ success: false, message: expect.stringContaining("Could not consume repair kits") });
     const refunded = (await db.query.userItem.findMany({ where: eq(userItem.itemId, "high") })).find((row) => row.id !== "high-kit");

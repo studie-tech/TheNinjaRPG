@@ -763,8 +763,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       } : {}),
     })) as never);
 
-    let releaseReads = () => {};
-    const catalogUpdated = new Promise<void>((resolve) => { releaseReads = resolve; });
+    const { promise: catalogUpdated, resolve: releaseReads } = Promise.withResolvers<void>();
     let catalogRead = false;
     let completionReads = 0;
     const skewed = new Proxy(database, {

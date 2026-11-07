@@ -392,12 +392,11 @@ describe("layered LPC actors", () => {
   });
   it("walks toward sector updates, keeps canonical equipment and snaps reduced motion", async () => {
     const { game } = gameFixture();
-    let resolveLoaded: (() => void) | undefined;
-    const loaded = new Promise<void>((resolve) => { resolveLoaded = resolve; });
+    const { promise: loaded, resolve: resolveLoaded } = Promise.withResolvers<void>();
     const renders: ReturnType<typeof vi.fn>[] = [];
     const create = vi.spyOn(characters, "createLpcCharacter").mockImplementation(async (...args) => {
       const actor = await originalCreate(...args);
-      const render = vi.fn(actor.render); renders.push(render); resolveLoaded?.();
+      const render = vi.fn(actor.render); renders.push(render); resolveLoaded();
       return { ...actor, render };
     });
     const appearance = resolveSpriteAppearance({ spriteBodyStyle: "female" });

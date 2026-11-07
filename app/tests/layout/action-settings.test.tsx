@@ -27,12 +27,6 @@ const profile = (patch: Record<string, unknown> = {}): UserCache => ({
   userData: { userId: "actor", status: "ASLEEP", autoWakeUp: false, money: 10, rank: "NONE", ...patch } as NonNullable<UserCache["userData"]>,
   notifications: [],
 });
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: Error) => void;
-  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
-  return { promise, resolve, reject };
-};
 let cache: QueryClient;
 let actor = "actor";
 let controller: Controller;
@@ -66,7 +60,7 @@ const settle = async (view: ReturnType<typeof show>) => {
 
 it("retains the confirmed preference after an already-running stale profile read without another read", async () => {
   const view = show();
-  const read = deferred<UserCache>();
+  const read = Promise.withResolvers<UserCache>();
   const readFn = vi.fn(() => read.promise);
   const cancel = vi.spyOn(cache, "cancelQueries");
   const invalidate = vi.spyOn(cache, "invalidateQueries");
@@ -89,7 +83,7 @@ it("retains the confirmed preference after an already-running stale profile read
 });
 
 it("preserves an unrelated settled projection made while the preference write runs", async () => {
-  const write = deferred<Result>();
+  const write = Promise.withResolvers<Result>();
   save = () => write.promise;
   const view = show();
   await toggle(view);
@@ -126,7 +120,7 @@ it.each(["rejected", "network"] as const)("shows %s failures beside the unchange
 });
 
 it("does not apply an old actor's save after an account switch", async () => {
-  const write = deferred<Result>();
+  const write = Promise.withResolvers<Result>();
   save = () => write.promise;
   const view = show();
   await toggle(view);
@@ -141,7 +135,7 @@ it("does not apply an old actor's save after an account switch", async () => {
 
 it("does not overwrite a newer preference projection, even after a stale read restores its baseline", async () => {
   const view = show();
-  const read = deferred<UserCache>();
+  const read = Promise.withResolvers<UserCache>();
   const fetching = cache.fetchQuery({ queryKey: key, staleTime: 0, queryFn: () => read.promise });
   await toggle(view);
   await act(async () => { cache.setQueryData(key, profile({ autoWakeUp: true })); cache.setQueryData(key, profile({ autoWakeUp: false })); });
@@ -164,7 +158,7 @@ it("lets a newer save supersede an earlier captured preference", async () => {
 
 it("leaves a failed existing read intact and displays reconciliation feedback", async () => {
   const view = show();
-  const read = deferred<UserCache>();
+  const read = Promise.withResolvers<UserCache>();
   const fetching = cache.fetchQuery({ queryKey: key, staleTime: 0, queryFn: () => read.promise }).catch(() => {});
   await toggle(view);
   await act(async () => { read.reject(new Error("Profile unavailable")); await fetching; });
@@ -175,10 +169,10 @@ it("leaves a failed existing read intact and displays reconciliation feedback", 
 });
 
 it("retains the preference when an existing read settles before the write response", async () => {
-  const write = deferred<Result>();
+  const write = Promise.withResolvers<Result>();
   save = () => write.promise;
   const view = show();
-  const read = deferred<UserCache>();
+  const read = Promise.withResolvers<UserCache>();
   const fetching = cache.fetchQuery({ queryKey: key, staleTime: 0, queryFn: () => read.promise });
   await toggle(view);
   await act(async () => { read.resolve(profile({ money: 55 })); await fetching; });
@@ -189,11 +183,11 @@ it("retains the preference when an existing read settles before the write respon
 });
 
 it("waits for a profile read that starts while the preference write is pending", async () => {
-  const write = deferred<Result>();
+  const write = Promise.withResolvers<Result>();
   save = () => write.promise;
   const view = show();
   await toggle(view);
-  const read = deferred<UserCache>();
+  const read = Promise.withResolvers<UserCache>();
   const fetching = cache.fetchQuery({ queryKey: key, staleTime: 0, queryFn: () => read.promise });
   await act(async () => { write.resolve(saved); });
   expect(announce).not.toHaveBeenCalled();

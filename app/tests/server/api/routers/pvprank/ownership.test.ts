@@ -267,13 +267,10 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   it("allows one of two simultaneous joins to own status and keeps only its row", async () => {
     const db = await getTestDatabase();
     let published = 0;
-    let release: (() => void) | undefined;
-    const ready = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: ready, resolve: release } = Promise.withResolvers<void>();
     const barrier = async () => {
       published += 1;
-      if (published === 2) release?.();
+      if (published === 2) release();
       await ready;
     };
     const client = beforeStatements(db, rankedPvpQueue, [barrier, barrier]);

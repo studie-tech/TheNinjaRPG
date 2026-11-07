@@ -97,10 +97,8 @@ const trainingCases = [
 describe.each(trainingCases)("$name history", ({ name, invoke }) => {
   it("responds after claiming gains without starting the history write", async () => {
     const db = database();
-    let commit!: (result: { rowsAffected: number }) => void;
-    let reachedClaim!: () => void;
-    const claimed = new Promise<void>((resolve) => { reachedClaim = resolve; });
-    const committed = new Promise<{ rowsAffected: number }>((resolve) => { commit = resolve; });
+    const { promise: claimed, resolve: reachedClaim } = Promise.withResolvers<void>();
+    const { promise: committed, resolve: commit } = Promise.withResolvers<{ rowsAffected: number }>();
     db.where.mockImplementationOnce(() => { reachedClaim(); return committed; });
     const response = invoke(db);
     await claimed;

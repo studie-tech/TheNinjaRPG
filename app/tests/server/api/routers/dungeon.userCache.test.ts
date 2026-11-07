@@ -430,10 +430,8 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     const initial = await profile.getUser();
     expect(initial.userData).toMatchObject({ money: 0, dungeonsCompleted: 1 });
     const cache = cachedProfile(initial, () => profile.getUser());
-    let releaseMember = () => {};
-    const memberGate = new Promise<void>((resolve) => { releaseMember = resolve; });
-    let actorRead = (_money: number | undefined) => {};
-    const openingMoney = new Promise<number | undefined>((resolve) => { actorRead = resolve; });
+    const { promise: memberGate, resolve: releaseMember } = Promise.withResolvers<void>();
+    const { promise: openingMoney, resolve: actorRead } = Promise.withResolvers<number | undefined>();
     const delayed = new Proxy(db, {
       get(target, property, receiver) {
         if (property !== "query") return Reflect.get(target, property, receiver);

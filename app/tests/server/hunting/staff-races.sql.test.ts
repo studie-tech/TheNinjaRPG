@@ -37,8 +37,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
   it("assigns distinct contract IDs to concurrent saves with the same draft ID", async () => {
     const db = await getTestDatabase();
     let reads = 0;
-    let release!: () => void;
-    const bothRead = new Promise<void>((resolve) => { release = resolve; });
+    const { promise: bothRead, resolve: release } = Promise.withResolvers<void>();
     const habitatQuery = new Proxy(db.query.huntingHabitat, { get(target, key, receiver) {
       if (key === "findMany") return async (...args: Parameters<typeof target.findMany>) => {
         const rows = await target.findMany(...args);
@@ -438,10 +437,8 @@ describeWithDatabase("staff changes during hunting admission", () => {
   for (const operation of ["forceAwake", "updateUserId"] as const) {
     it(`rejects a stale hunt when ${operation} finishes before its admission, then settles a fresh hunt`, async () => {
       const { db, id } = await prepare();
-      let paused!: () => void;
-      let resume!: () => void;
-      const reached = new Promise<void>((resolve) => { paused = resolve; });
-      const wait = new Promise<void>((resolve) => { resume = resolve; });
+      const { promise: reached, resolve: paused } = Promise.withResolvers<void>();
+      const { promise: wait, resolve: resume } = Promise.withResolvers<void>();
       const client = new Proxy(db, { get(target, key, receiver) {
         if (key === "transaction") return async (...args: Parameters<typeof target.transaction>) => { paused(); await wait; return target.transaction(...args); };
         return Reflect.get(target, key, receiver);

@@ -765,14 +765,8 @@ describeWithDatabase("CAS combat settlement", () => {
       const snapshot = scenario(true);
       const database = await getTestDatabase();
       await database.insert(battle).values(snapshot);
-      let releaseCleanup!: () => void;
-      const cleanupGate = new Promise<void>((resolve) => {
-        releaseCleanup = resolve;
-      });
-      let rewardWritten!: () => void;
-      const rewardReady = new Promise<void>((resolve) => {
-        rewardWritten = resolve;
-      });
+      const { promise: cleanupGate, resolve: releaseCleanup } = Promise.withResolvers<void>();
+      const { promise: rewardReady, resolve: rewardWritten } = Promise.withResolvers<void>();
       const client = new Proxy(database, {
         get(target, key, receiver) {
           if (key === "insert")

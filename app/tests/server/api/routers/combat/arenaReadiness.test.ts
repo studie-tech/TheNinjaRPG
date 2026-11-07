@@ -274,12 +274,10 @@ describeWithDatabase("arena readiness reads", () => {
 
   it("starts the AI lookup while the readiness participant read is still pending", async () => {
     const client = await getTestDatabase();
-    let release = () => {};
-    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const { promise: pending, resolve: release } = Promise.withResolvers<void>();
     let aiReadStarted = false;
     let readinessReadStarted = false;
-    let signalReadiness = () => {};
-    const readiness = new Promise<void>((resolve) => { signalReadiness = resolve; });
+    const { promise: readiness, resolve: signalReadiness } = Promise.withResolvers<void>();
     const original = client.query.userData.findFirst.bind(client.query.userData);
     vi.spyOn(client.query.userData, "findFirst").mockImplementation(((options: Parameters<typeof original>[0]) => {
       if (options?.with) {
@@ -432,10 +430,8 @@ describeWithDatabase("arena readiness reads", () => {
     it.each([{ inArena: false }, { isAi: false }, { isSummon: true }])(
       `rejects a selected ${battleType} target changed during readiness: %j`, async (patch) => {
         const client = await getTestDatabase();
-        let release = () => {};
-        const pending = new Promise<void>((resolve) => { release = resolve; });
-        let selected = () => {};
-        const selection = new Promise<void>((resolve) => { selected = resolve; });
+        const { promise: pending, resolve: release } = Promise.withResolvers<void>();
+        const { promise: selection, resolve: selected } = Promise.withResolvers<void>();
         const original = client.query.userData.findFirst.bind(client.query.userData);
         vi.spyOn(client.query.userData, "findFirst").mockImplementation(((options: Parameters<typeof original>[0]) => {
           if (options?.with)

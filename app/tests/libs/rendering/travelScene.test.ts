@@ -91,7 +91,7 @@ afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restor
 describe("still travel rendering", () => {
   it("makes terrain ready while a published light-field request is still pending", async () => {
     const original=bakedLighting.createBakedVillageLighting;
-    let release!:()=>void; const held=new Promise<void>(resolve=>{release=resolve});
+     const { promise: held, resolve: release } = Promise.withResolvers<void>();
     vi.spyOn(bakedLighting,"createBakedVillageLighting").mockImplementation((...args)=>({...original(...args),preloadField:()=>held}));
     let ready=false; const pending=sceneFixture().then(scene=>{ready=true;return scene});
     try { for(let i=0;i<5;i++)await settle(); expect(ready).toBe(true); }
@@ -184,8 +184,7 @@ describe("travel scene ground depth", () => {
     const state = snapshotFixture();
     state.window[0]!.structures[0]!.image = `pending-building-${cancel}.png`;
     const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
-    let release!: (texture: Texture) => void;
-    const pending = new Promise<Texture>((resolve) => { release = resolve; });
+    const { promise: pending, resolve: release } = Promise.withResolvers<Texture>();
     vi.spyOn(Assets, "load").mockImplementation(async (input) => JSON.stringify(input).includes(`pending-building-${cancel}`) ? pending : texture);
     const fixture = gameFixture(), onReady = vi.fn(), onTap = vi.fn();
     const scene = await createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => state, onError: (error) => { throw error; }, onReady, onTap, onHover: () => {}, onZoom: () => {}, initialZoom: 1 });
@@ -219,7 +218,7 @@ describe("travel scene ground depth", () => {
   it.each([false,true])("prioritizes occupied artwork across repeated window updates and cancellation (%s)", async cancel => {
     const state=snapshotFixture(),neighbor=windowEntry(725,1); state.window.push(neighbor);
     state.window[0]!.structures[0]!.image="priority-current.png"; neighbor.structures[0]!.image="priority-neighbor.png";
-    let release!: (texture:Texture)=>void;const pending=new Promise<Texture>(resolve=>{release=resolve});
+    const { promise: pending, resolve: release } = Promise.withResolvers<Texture>();
     const load=vi.spyOn(Assets,"load").mockImplementation(async input=>JSON.stringify(input).includes("priority-current")?pending:Texture.WHITE);
     const fixture=gameFixture(),ready=vi.fn();
     const scene=await createTravelScene({mount:document.createElement("div"),signal:fixture.game.signal,lightLayout:false,getSnapshot:()=>state,onReady:ready,onError:error=>{throw error},onTap(){},onHover(){},onZoom(){},initialZoom:1});
@@ -236,8 +235,7 @@ describe("travel scene ground depth", () => {
     state.window.push(neighbor);
     state.window[0]!.structures[0]!.image = `crossing-old-${cancel}.png`;
     neighbor.structures[0]!.image = `crossing-new-${cancel}.png`;
-    let release!: (texture: Texture) => void;
-    const pending = new Promise<Texture>(resolve => { release = resolve; });
+    const { promise: pending, resolve: release } = Promise.withResolvers<Texture>();
     const load = vi.spyOn(Assets, "load").mockImplementation(async input => JSON.stringify(input).includes(`crossing-old-${cancel}`) ? pending : Texture.WHITE);
     const { scene, advance } = await sceneFixture(state);
     await scene.updateWindow(); await settle();
@@ -525,8 +523,7 @@ describe("travel scene window updates", () => {
     const ready = windowEntry(725, 1), held = windowEntry(726, 2);
     ready.structures[0]!.image = "ready-still-neighbor.png";
     held.structures[0]!.image = "held-still-neighbor.png";
-    let release!: (texture: Texture) => void;
-    const pending = new Promise<Texture>(resolve => { release = resolve; });
+    const { promise: pending, resolve: release } = Promise.withResolvers<Texture>();
     vi.spyOn(Assets, "load").mockImplementation(async input => JSON.stringify(input).includes("held-still-neighbor") ? pending : Texture.WHITE);
     const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
     invalidate.mockClear(); state.window.push(ready, held);
@@ -565,8 +562,7 @@ describe("travel scene window updates", () => {
   it("ignores late scenery after a sector replacement", async () => {
     const state = snapshotFixture();
     state.window[0]!.structures[0]!.image = "replaced-pending-building.png";
-    let release!: (texture: Texture) => void;
-    const pending = new Promise<Texture>((resolve) => { release = resolve; });
+    const { promise: pending, resolve: release } = Promise.withResolvers<Texture>();
     vi.spyOn(Assets, "load").mockImplementation(async (input) => JSON.stringify(input).includes("replaced-pending-building") ? pending : Texture.WHITE);
     const { scene } = await sceneFixture(state);
     const previous = scene.sectors.get(724)!;

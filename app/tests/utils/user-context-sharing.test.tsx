@@ -144,8 +144,7 @@ describe("profile context structural sharing", () => {
   it("keeps the reward calendar idle during movement while publishing streak and claim state", async () => {
     const streakKey: typeof key = [["activityStreak", "getUserStreaks"], { type: "query" }];
     const initialStreak = { streaks: [], activeRecurringConfig: { id: "daily", name: "Daily rewards", totalDays: 1, rewards: [] } };
-    let finishClaim!: (result: { success: false; message: string }) => void;
-    const claimResponse = new Promise<{ success: false; message: string }>(resolve => { finishClaim = resolve; });
+    const { promise: claimResponse, resolve: finishClaim } = Promise.withResolvers<{ success: false; message: string }>();
     const activityStreak = {
       getUserStreaks: { useQuery: () => useQuery({ queryKey: streakKey, queryFn: async () => initialStreak, initialData: initialStreak }) },
       getAvailablePasses: { useQuery: () => useQuery({ queryKey: ["test-streak-passes"], queryFn: async () => [], initialData: [] }) },

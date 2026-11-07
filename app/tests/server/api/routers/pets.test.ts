@@ -1703,8 +1703,7 @@ const readPet = (database: DrizzleClient, id?: string) => database.query.userPet
 /** Hold owner snapshots so competing requests share the same version before their SQL writes race. */
 const holdOwnerSnapshots = (database: DrizzleClient, count: number): DrizzleClient => {
   let pending = 0;
-  let release = () => {};
-  const barrier = new Promise<void>((resolve) => { release = resolve; });
+  const { promise: barrier, resolve: release } = Promise.withResolvers<void>();
   const ownerQueries = new Proxy(database.query.userData, {
     get(target, property, receiver) {
       if (property !== "findFirst") return Reflect.get(target, property, receiver);

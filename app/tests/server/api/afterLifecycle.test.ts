@@ -19,8 +19,7 @@ describe("direct router caller deferred work", () => {
 
   it("keeps callbacks scoped to each concurrent invocation", async () => {
     const events: string[] = [];
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
     const caller = withAfterTasks({ query: async (id: string, wait: Promise<void>) => {
       after(() => { events.push(id); });
       await wait;

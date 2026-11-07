@@ -50,12 +50,6 @@ const candidate = {
   content: { objectives: [], reward: {}, sceneBackground: "", sceneCharacters: [] },
 } as unknown as Quest;
 
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
-};
-
 const makeClient = (rows: Quest[] = []) => {
   const findVillage = vi.fn().mockResolvedValue(null);
   const candidates = vi.fn().mockResolvedValue(rows);
@@ -79,8 +73,8 @@ describe("random assignment reads", () => {
   afterEach(resetServerModuleStubs);
 
   it("loads the village and candidates while user regeneration is pending", async () => {
-    const refresh = deferred<{ user: typeof user }>();
-    const started = deferred<void>();
+    const refresh = Promise.withResolvers<{ user: typeof user }>();
+    const started = Promise.withResolvers<void>();
     stubProfile("fetchUpdatedUser", (() => {
       started.resolve();
       return refresh.promise;

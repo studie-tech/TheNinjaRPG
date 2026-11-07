@@ -86,10 +86,8 @@ describe("summon template preparation scope", () => {
 
   it("shares pending reads without re-executing a Drizzle-style thenable", async () => {
     let executions = 0;
-    let release!: () => void;
-    let started!: () => void;
-    const ready = new Promise<void>((resolve) => { release = resolve; });
-    const queried = new Promise<void>((resolve) => { started = resolve; });
+    const { promise: ready, resolve: release } = Promise.withResolvers<void>();
+    const { promise: queried, resolve: started } = Promise.withResolvers<void>();
     const client = { query: { userData: { findMany: () => ({
       then: (resolve: (rows: CombatQueryUser[]) => unknown) => {
         executions++;

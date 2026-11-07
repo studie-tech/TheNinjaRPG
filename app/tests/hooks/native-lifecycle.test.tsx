@@ -187,14 +187,8 @@ describe("native push ownership", () => {
     };
     const credential = "w".repeat(32);
     let device: { token: string; widgetToken: string } | undefined;
-    let finishRegistration!: () => void;
-    let started!: () => void;
-    const dispatched = new Promise<void>((resolve) => {
-      started = resolve;
-    });
-    const responseReady = new Promise<void>((resolve) => {
-      finishRegistration = resolve;
-    });
+    const { promise: dispatched, resolve: started } = Promise.withResolvers<void>();
+    const { promise: responseReady, resolve: finishRegistration } = Promise.withResolvers<void>();
     const requests: { path: string; authorization: string | null }[] = [];
     let exposedWidgetToken: string | null | undefined;
     const createClient = () => {

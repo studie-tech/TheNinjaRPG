@@ -5,10 +5,7 @@ describe("createSerialQueue", () => {
   it("runs each operation after the previous one settles", async () => {
     const enqueue = createSerialQueue();
     const order: string[] = [];
-    let releaseFirst = () => {};
-    const gate = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
+    const { promise: gate, resolve: releaseFirst } = Promise.withResolvers<void>();
 
     const first = enqueue(async () => {
       await gate;

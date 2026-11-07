@@ -344,15 +344,9 @@ describeWithDatabase("managed quest battle and abandonment", () => {
 
   it("waits for delayed history and participant writes before compensating a failed insert", async () => {
     const { client, attempt } = await snapshot();
-    let release = () => {};
-    const released = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: released, resolve: release } = Promise.withResolvers<void>();
     let entered = 0;
-    let markReady = () => {};
-    const ready = new Promise<void>((resolve) => {
-      markReady = resolve;
-    });
+    const { promise: ready, resolve: markReady } = Promise.withResolvers<void>();
     const delay = async () => {
       entered += 1;
       if (entered === 2) markReady();
@@ -552,14 +546,8 @@ describeWithDatabase("managed quest battle and abandonment", () => {
 
   it("settles delayed sibling inserts before compensating a rejected paid-floor claim", async () => {
     const { client, attempt } = await snapshot();
-    let markInsertStarted = () => {};
-    let releaseInsert = () => {};
-    const started = new Promise<void>((resolve) => {
-      markInsertStarted = resolve;
-    });
-    const released = new Promise<void>((resolve) => {
-      releaseInsert = resolve;
-    });
+    const { promise: started, resolve: markInsertStarted } = Promise.withResolvers<void>();
+    const { promise: released, resolve: releaseInsert } = Promise.withResolvers<void>();
     const delayed = beforeStatements(withoutTransactions(client), battle, [
       async () => {
         markInsertStarted();

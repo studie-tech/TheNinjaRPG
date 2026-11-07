@@ -354,8 +354,7 @@ describe("world material loading", () => {
   });
 
   it("shares pending metadata and retains a usable resource when both leases release before it resolves", async () => {
-    let complete: (response: Response) => void = () => {};
-    const pending = new Promise<Response>((resolve) => { complete = resolve; });
+    const { promise: pending, resolve: complete } = Promise.withResolvers<Response>();
     const fixture = loadingFixture(() => pending), image = "/world-art/oasis-village.webp";
     const first = acquireWorldMaterial(image, "column"), second = acquireWorldMaterial(image, "character");
     first.release(); second.release();

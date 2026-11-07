@@ -372,13 +372,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const clients = questIds.map(() => new QueryClient());
     for (const client of clients) client.setQueryData(key, profile);
     const revisions = clients.map((client) => prepareUserUpdate(client, key));
-    const gate = () => {
-      let resolve = () => {};
-      const promise = new Promise<void>((settle) => { resolve = settle; });
-      return { promise, resolve };
-    };
-    const entered = questIds.map(gate);
-    const releases = questIds.map(gate);
+    const entered = questIds.map(() => Promise.withResolvers<void>());
+    const releases = questIds.map(() => Promise.withResolvers<void>());
     let selections = 0;
     const select = db.select.bind(db);
     const selectWithPause = ((fields: Parameters<typeof select>[0]) => {

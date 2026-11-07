@@ -169,10 +169,9 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const defender = await callerFor(kageRouter, "defender");
     if (action === "dismiss") expect((await defender.requestInstantDefense({ id: m.id })).success).toBe(true);
     const invitation = (await db.query.village.findFirst())!.kageSchedule!.instantChallenge;
-    let markLoaded = () => {}; let resumeSync = () => {}; let markSubmitted = () => {};
-    const loaded = new Promise<void>((resolve) => { markLoaded = resolve; });
-    const resume = new Promise<void>((resolve) => { resumeSync = resolve; });
-    const submitted = new Promise<void>((resolve) => { markSubmitted = resolve; });
+    const { promise: loaded, resolve: markLoaded } = Promise.withResolvers<void>();
+    const { promise: resume, resolve: resumeSync } = Promise.withResolvers<void>();
+    const { promise: submitted, resolve: markSubmitted } = Promise.withResolvers<void>();
     const syncing = withKageDefense(db, villageId, async (tx, hall) => {
       markLoaded(); await resume;
       return syncLockedKageDefense(tx, hall);
@@ -387,10 +386,9 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const challenger = await callerFor(kageRouter, "first");
     expect((await challenger.joinDefenseQueue({ villageId })).success).toBe(true);
     const m = (await db.query.kageDefendedChallenges.findFirst())!;
-    let markLoaded = () => {}; let resumeSync = () => {}; let markSubmitted = () => {};
-    const loaded = new Promise<void>((resolve) => { markLoaded = resolve; });
-    const resume = new Promise<void>((resolve) => { resumeSync = resolve; });
-    const submitted = new Promise<void>((resolve) => { markSubmitted = resolve; });
+    const { promise: loaded, resolve: markLoaded } = Promise.withResolvers<void>();
+    const { promise: resume, resolve: resumeSync } = Promise.withResolvers<void>();
+    const { promise: submitted, resolve: markSubmitted } = Promise.withResolvers<void>();
     const syncing = withKageDefense(db, villageId, async (tx, hall) => {
       markLoaded(); await resume;
       return syncLockedKageDefense(tx, hall);

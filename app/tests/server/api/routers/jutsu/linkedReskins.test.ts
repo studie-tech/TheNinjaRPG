@@ -26,10 +26,8 @@ const createChild = async () => {
 
 // Pause after upfront guards; the transaction still executes against real MySQL.
 const pauseBeforeTransaction = (database: DrizzleClient) => {
-  let signalReached!: () => void;
-  let release!: () => void;
-  const reached = new Promise<void>((resolve) => { signalReached = resolve; });
-  const resumed = new Promise<void>((resolve) => { release = resolve; });
+  const { promise: reached, resolve: signalReached } = Promise.withResolvers<void>();
+  const { promise: resumed, resolve: release } = Promise.withResolvers<void>();
   const client = new Proxy(database, {
     get(target, property, receiver) {
       if (property !== "transaction") return Reflect.get(target, property, receiver);

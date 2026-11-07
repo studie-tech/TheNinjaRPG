@@ -104,8 +104,7 @@ it.each([false, true])("displays committed rewards before history recovery and r
   const result = { outcome: "Won", notifications: [] };
   let state: { battle: typeof battle; result: typeof result | null; isPending: boolean } = { battle, result: null, isPending: true };
   let options!: { onSuccess: (data: object, input: object, context: object) => Promise<void>; onError: () => void };
-  let finish!: () => void;
-  const held = new Promise<void>((resolve) => { finish = resolve; });
+  const { promise: held, resolve: finish } = Promise.withResolvers<void>();
   const events: string[] = [];
   new Function("scope", `with (scope) { ${transpiler.transformSync(handlers)} }`)({
     api: { combat: { performAction: { useMutation: (value: typeof options) => { options = value; return {}; } } } },

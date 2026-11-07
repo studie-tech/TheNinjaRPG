@@ -23,8 +23,7 @@ it("reconciles a delayed sleep response instead of replacing a newer hospitaliza
   const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity, queryFn: async () => profile("HOSPITALIZED") });
   const unsubscribe = observer.subscribe(() => {});
   let finish!: () => void;
-  let started!: () => void;
-  const dispatched = new Promise<void>((resolve) => { started = resolve; });
+  const { promise: dispatched, resolve: started } = Promise.withResolvers<void>();
   // Fresh hooks preserve mutation lifecycles after other suites replace the shared API.
   Object.assign(vi.spyOn(clientModule, "api" as never), { home: testApi.home });
   const trpc = testApi.createClient({ links: [httpBatchLink({

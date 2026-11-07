@@ -151,8 +151,7 @@ describe("browser authentication App Link continuations", () => {
   const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
   const grace = () => new Promise<void>((resolve) => setTimeout(resolve, 2050));
   const exercise = async (run: () => Promise<void>) => {
-    let opened: () => void = () => {};
-    const initialOpen = new Promise<void>((resolve) => { opened = resolve; });
+    const { promise: initialOpen, resolve: opened } = Promise.withResolvers<void>();
     mocks.open.mockImplementation(async () => { opened(); });
     const { result } = renderHook(() => useNativeAuth());
     let outcome: NativeAuthResult | undefined;
@@ -197,8 +196,7 @@ describe("browser authentication App Link continuations", () => {
   it("invalidates an in-flight dismissal check when a continuation arrives", async () => {
     expect(await exercise(async () => {
       let finishCheck: (state: { isActive: boolean }) => void = () => {};
-      let checkStarted: () => void = () => {};
-      const started = new Promise<void>((resolve) => { checkStarted = resolve; });
+      const { promise: started, resolve: checkStarted } = Promise.withResolvers<void>();
       mocks.getState.mockImplementationOnce(() => new Promise((resolve) => { finishCheck = resolve; checkStarted(); }));
       onFinished(); await started;
       onUrl(continuation()); await flush();

@@ -36,10 +36,8 @@ const fixture = ({ width = SECTOR_WIDTH, height = SECTOR_HEIGHT,
   const reads: string[] = [];
   const campSectors: number[] = [];
   let writes = 0;
-  let releaseUser!: () => void;
-  let signalUserRead!: () => void;
-  const userStarted = new Promise<void>((resolve) => { signalUserRead = resolve; });
-  const userReady = new Promise<void>((resolve) => { releaseUser = resolve; });
+  const { promise: userStarted, resolve: signalUserRead } = Promise.withResolvers<void>();
+  const { promise: userReady, resolve: releaseUser } = Promise.withResolvers<void>();
   const user = {
     userId: "visitor", username: "Visitor", sector: SECTOR, villageId: "neutral",
     status: "AWAKE", updatedAt: new Date(), energyQueueHead: 0, energyQueueTail: queued ? 1 : 0,

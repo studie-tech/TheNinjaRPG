@@ -3,17 +3,11 @@ import { sql } from "drizzle-orm";
 import type { Pool, RowDataPacket } from "mysql2/promise";
 import { describeWithDatabase, getTestDatabase, recordQueries, runRawSql } from "./testDatabase";
 
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => { resolve = done; });
-  return { promise, resolve };
-};
-
 describeWithDatabase("SQL query recorder", () => {
   it("counts parallel requests once even when the local pool queues them", async () => {
     const database = await getTestDatabase();
-    const acquired = deferred();
-    const release = deferred();
+    const acquired = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
     let started = 0;
     // Occupy nine of the ten connections so independent requests share one connection.
     const transactions = Array.from({ length: 9 }, () => database.transaction(async () => {

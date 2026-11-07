@@ -448,8 +448,7 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
     await prepareQueuedCraft(10);
     const db = await getTestDatabase();
     await db.insert(craftingRequirement).values({ id: "gem-requirement", craftItemId: "output", requirementItemId: "gem", quantity: 3 });
-    let finishReservation!: () => void;
-    const reserved = new Promise<void>((resolve) => { finishReservation = resolve; });
+    const { promise: reserved, resolve: finishReservation } = Promise.withResolvers<void>();
     const craftDb = beforeStatements(db, userItem, [async () => {
       try { await postCraftMaterialTrade(); } finally { finishReservation(); }
     }, () => reserved, async () => {

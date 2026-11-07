@@ -23,8 +23,7 @@ it.each([false, true])("reconciles inventory and profile for an unconfirmed sale
     refused: [{ userItemId: "blade-row", name: "Blade", reason: "sale could not be confirmed" }],
   };
   const queryClient = new QueryClient();
-  let finishRecovery!: () => void;
-  const recovery = new Promise<void>((resolve) => { finishRecovery = resolve; });
+  const { promise: recovery, resolve: finishRecovery } = Promise.withResolvers<void>();
   const updateUser = vi.fn(() => recovery);
   const invalidateInventory = vi.fn(() => recovery);
   const updateInventory = vi.fn();

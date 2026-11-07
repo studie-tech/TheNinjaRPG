@@ -4,10 +4,8 @@ import type { DrizzleClient } from "@/server/db";
 
 describe("conversation read scheduling", () => {
   it("starts the reader policy before a public title lookup resolves", async () => {
-    let resolveConversation!: (value: unknown) => void;
-    let resolvePolicies!: (value: unknown[]) => void;
-    const conversation = new Promise<unknown>((resolve) => { resolveConversation = resolve; });
-    const policies = new Promise<unknown[]>((resolve) => { resolvePolicies = resolve; });
+    const { promise: conversation, resolve: resolveConversation } = Promise.withResolvers<unknown>();
+    const { promise: policies, resolve: resolvePolicies } = Promise.withResolvers<unknown[]>();
     const findConversation = vi.fn(() => conversation);
     const findPolicies = vi.fn(() => policies);
     const client = {

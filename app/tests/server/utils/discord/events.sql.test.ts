@@ -87,10 +87,8 @@ describeWithDatabase("Discord event delivery receipts", () => {
   it("keeps an end behind a pending start across overlapping minute ticks", async () => {
     const db = await seed();
     setSystemTime(new Date("2026-10-29T12:00:55Z"));
-    let release!: () => void;
-    let entered!: () => void;
-    const blocked = new Promise<void>(resolve => { release = resolve; });
-    const started = new Promise<void>(resolve => { entered = resolve; });
+    const { promise: blocked, resolve: release } = Promise.withResolvers<void>();
+    const { promise: started, resolve: entered } = Promise.withResolvers<void>();
     const accepted: string[] = [];
     posts.mockImplementation(async (_url, options) => {
       const message = JSON.parse(String(options?.body)).content as string;

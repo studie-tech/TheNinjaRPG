@@ -63,11 +63,9 @@ const search = (onImported: (assetId: string) => void | Promise<void> = vi.fn(as
 
 describe("sound library import recovery", () => {
   it("refreshes each asset cache once and stays pending through the import callback", async () => {
-    let finishRefresh!: () => void;
-    const refreshGate = new Promise<void>((resolve) => { finishRefresh = resolve; });
+    const { promise: refreshGate, resolve: finishRefresh } = Promise.withResolvers<void>();
     for (const invalidate of Object.values(invalidations)) invalidate.mockReturnValueOnce(refreshGate);
-    let finish!: () => void;
-    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    const { promise: gate, resolve: finish } = Promise.withResolvers<void>();
     const onImported = vi.fn(async () => gate);
     const { view } = search(onImported);
     act(() => { fireEvent.click(view.getByRole("button", { name: /^Use this/ })); fireEvent.click(view.getByRole("button", { name: /^Use this/ })); });

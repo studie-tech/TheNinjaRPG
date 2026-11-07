@@ -154,8 +154,7 @@ const adoptionInput = async (database: DrizzleClient) => {
 /** Complete real companion reads before a successful account mutation and the participant read. */
 const beforeParticipantRead = (database: DrizzleClient, change: () => Promise<void>): DrizzleClient => {
   let completed = 0;
-  let release = () => {};
-  const preloaded = new Promise<void>((resolve) => { release = resolve; });
+  const { promise: preloaded, resolve: release } = Promise.withResolvers<void>();
   const afterRead = async <T>(read: PromiseLike<T>) => {
     const result = await read;
     if (++completed === 2) release();

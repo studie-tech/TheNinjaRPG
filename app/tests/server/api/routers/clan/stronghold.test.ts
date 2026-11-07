@@ -167,8 +167,7 @@ describeWithDatabase("Stronghold membership and restoration", () => {
 /** Competing purchases must read the same boost level before their guarded writes race. */
 const holdClanSnapshots = (database: DrizzleClient, count: number): DrizzleClient => {
   let pending = 0;
-  let release = () => {};
-  const barrier = new Promise<void>((resolve) => { release = resolve; });
+  const { promise: barrier, resolve: release } = Promise.withResolvers<void>();
   const clanQueries = new Proxy(database.query.clan, {
     get(target, property, receiver) {
       if (property !== "findFirst") return Reflect.get(target, property, receiver);

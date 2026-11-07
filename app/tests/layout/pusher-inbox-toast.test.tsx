@@ -216,8 +216,7 @@ it.each([
   );
   const view = renderHook(() => usePusherHandler("player"), { wrapper });
   try {
-    let settle!: () => void;
-    const responseReady = new Promise<void>((resolve) => { settle = resolve; });
+    const { promise: responseReady, resolve: settle } = Promise.withResolvers<void>();
     const mutation = queryClient.getMutationCache().build(queryClient, {
       mutationFn: async (_variables: { originSocketId: string }) => {
         await responseReady;

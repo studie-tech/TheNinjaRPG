@@ -283,10 +283,7 @@ describeWithDatabase(
       );
       const db = await getTestDatabase();
       const before = await readUser();
-      let release = () => {};
-      const ready = new Promise<void>((resolve) => {
-        release = resolve;
-      });
+      const { promise: ready, resolve: release } = Promise.withResolvers<void>();
       let writes = 0;
       const client = new Proxy(db, {
         get(target, property, receiver) {

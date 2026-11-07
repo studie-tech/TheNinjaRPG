@@ -48,9 +48,8 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
     prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
     updateUser: (result, options) => updateUserCache(client, profileKey, result, options),
   } as ReturnType<typeof userContext.useRequiredUserData>);
-  let release = () => {};
   let requested = false;
-  const waiting = new Promise<void>((resolve) => { release = resolve; });
+  const { promise: waiting, resolve: release } = Promise.withResolvers<void>();
   const requests: string[] = [];
   const trpc = testApi.createClient({ links: [() => ({ op }) => observable((sink) => {
     requests.push(op.path);

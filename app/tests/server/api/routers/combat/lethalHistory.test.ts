@@ -42,10 +42,8 @@ describeWithDatabase("lethal combat history", () => {
   it.each(["performAction", "getBattle"] as const)("%s notifies observers after a lethal insert that raced settlement", async (route) => {
     const snapshot = await startLethalBattle("COMBAT");
     const db = await getTestDatabase();
-    let releaseInsert!: () => void;
-    const insertGate = new Promise<void>((resolve) => { releaseInsert = resolve; });
-    let insertReached!: () => void;
-    const insertReady = new Promise<void>((resolve) => { insertReached = resolve; });
+    const { promise: insertGate, resolve: releaseInsert } = Promise.withResolvers<void>();
+    const { promise: insertReady, resolve: insertReached } = Promise.withResolvers<void>();
     if (route === "getBattle") {
       snapshot.usersState.forEach((user) => { user.round = user.userId === "killer" ? 1 : 0; });
       const old = new Date(Date.now() - 600_000);

@@ -63,14 +63,6 @@ const releaseClient = (
     },
   });
 
-const gate = () => {
-  let open = () => {};
-  const wait = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { wait, open: () => open() };
-};
-
 /** Observe the contested parent row, rather than relying on a timing delay. */
 const expectVillageLockWait = async (
   observer: mysql.Connection,
@@ -213,8 +205,8 @@ describeWithDatabase("guarded sector release", () => {
   it("preserves an objective committed while release waits for the declaring village", async () => {
     const database = await seed();
     await enableObjectives(database);
-    const locked = gate();
-    const resume = gate();
+    const locked = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
     const observer = await mysql.createConnection(process.env.TEST_MYSQL_URL!);
     const declarationClient = new Proxy(database, {
       get(target, property, receiver) {
@@ -228,8 +220,8 @@ describeWithDatabase("guarded sector release", () => {
                 war: {
                   ...transaction.query.war,
                   findMany: async (options: Parameters<typeof transaction.query.war.findMany>[0]) => {
-                    locked.open();
-                    await resume.wait;
+                    locked.resolve();
+                    await resume.promise;
                     return transaction.query.war.findMany(options);
                   },
                 },
@@ -241,10 +233,10 @@ describeWithDatabase("guarded sector release", () => {
     const started = startDeclaredWar(declarationClient, declaration);
     let released: ReturnType<typeof release> | undefined;
     try {
-      await locked.wait;
+      await locked.promise;
       released = release(releaseClient(database));
       await expectVillageLockWait(observer, "S");
-      resume.open();
+      resume.resolve();
       expect(await started).toBe(true);
       expect(await released).toMatchObject({ success: false, message: rejection });
       const current = await database.query.war.findFirst();
@@ -252,7 +244,7 @@ describeWithDatabase("guarded sector release", () => {
       expect(await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) })).toBeDefined();
       expect(await database.query.actionLog.findMany()).toHaveLength(0);
     } finally {
-      resume.open();
+      resume.resolve();
       await Promise.allSettled([started, ...(released ? [released] : [])]);
       await observer.end();
     }
@@ -262,25 +254,25 @@ describeWithDatabase("guarded sector release", () => {
     const database = await seed();
     await enableObjectives(database);
     const connection = await mysql.createConnection(process.env.TEST_MYSQL_URL!);
-    const deleted = gate();
-    const resume = gate();
+    const deleted = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
     const client = releaseClient(database, async (query) => {
       // Keep this real procedure statement uncommitted only to observe the declaration's wait.
       await connection.beginTransaction();
       const compiled = dialect.sqlToQuery(query);
       const [result] = await connection.query<mysql.ResultSetHeader>(compiled.sql, compiled.params);
-      deleted.open();
-      await resume.wait;
+      deleted.resolve();
+      await resume.promise;
       await connection.commit();
       return { rowsAffected: result.affectedRows } as Awaited<ReturnType<DrizzleClient["execute"]>>;
     });
     const released = release(client);
     let started: ReturnType<typeof startDeclaredWar> | undefined;
     try {
-      await deleted.wait;
+      await deleted.promise;
       started = startDeclaredWar(database, declaration);
       await expectVillageLockWait(connection, "X");
-      resume.open();
+      resume.resolve();
       expect((await released).success).toBe(true);
       expect(await started).toBe(false);
       expect(await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) })).toBeUndefined();
@@ -288,7 +280,7 @@ describeWithDatabase("guarded sector release", () => {
       expect((await database.query.village.findFirst({ where: eq(village.id, "attacker") }))?.tokens).toBe(defaultWarRules.declarationCost * 2);
       expect(await database.query.actionLog.findMany()).toHaveLength(1);
     } finally {
-      resume.open();
+      resume.resolve();
       await Promise.allSettled([released, ...(started ? [started] : [])]);
       await connection.rollback();
       await connection.end();
