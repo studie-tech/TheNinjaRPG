@@ -92,11 +92,7 @@ const setRequestHandler = (
         case "listRouterEndpoints": {
           const routerName = procedureArguments?.routerName;
           if (typeof routerName !== "string" || !routerName) {
-            return {
-              content: [
-                { type: "text", text: "Missing required argument: routerName" },
-              ],
-            };
+            return missingArgument("routerName");
           }
           return handleListEndpoints(registry, routerName);
         }
@@ -104,11 +100,7 @@ const setRequestHandler = (
         case "getEndpointSchema": {
           const endpointName = procedureArguments?.endpointName;
           if (typeof endpointName !== "string" || !endpointName) {
-            return {
-              content: [
-                { type: "text", text: "Missing required argument: endpointName" },
-              ],
-            };
+            return missingArgument("endpointName");
           }
           return handleGetSchema(registry, endpointName);
         }
@@ -116,11 +108,7 @@ const setRequestHandler = (
         case "callEndpoint": {
           const endpointName = procedureArguments?.endpointName;
           if (typeof endpointName !== "string" || !endpointName) {
-            return {
-              content: [
-                { type: "text", text: "Missing required argument: endpointName" },
-              ],
-            };
+            return missingArgument("endpointName");
           }
           const filters = parseResponseFilters(procedureArguments);
           // Validate input type guard: ensure input is an object if provided
@@ -206,6 +194,10 @@ export const trpcToModelContextProtocolHandler = <
 
   return handler;
 };
+
+const missingArgument = (name: string) => ({
+  content: [{ type: "text" as const, text: `Missing required argument: ${name}` }],
+});
 
 export type {
   ModelContextProtocolHandlerConfig,
