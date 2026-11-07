@@ -34,7 +34,7 @@ export const seedVillages = async (client: DrizzleClient) => {
       hasPage: 1,
       allyAccess: 1,
       maxLevel: 1,
-    }).onDuplicateKeyUpdate({ set: { route: "/pets", image: PET_SANCTUARY_IMAGE } });
+    });
   }
   console.log("Done syncing villages!");
 };
