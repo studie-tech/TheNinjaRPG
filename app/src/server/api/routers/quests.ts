@@ -241,6 +241,7 @@ import { rewardPayloads } from "@/validators/rewardPackages";
 import {
   ClaimRewardChoiceSchema,
   hasPromotionRank,
+  type ObjectiveRewardType,
   PendingRewardChoiceSchema,
   PostProcessedRewardSchema,
   type RewardChoiceAmountField,
@@ -339,8 +340,8 @@ export const questsRouter = createTRPCRouter({
     })
     .input(
       z.object({
-        villageId: z.string().optional().nullish(),
-        level: z.number().optional().nullish(),
+        villageId: z.string().nullish(),
+        level: z.number().nullish(),
         rank: z.array(z.enum(LetterRanks)).optional(),
       }),
     )
@@ -710,7 +711,7 @@ export const questsRouter = createTRPCRouter({
       });
       const { user } = snapshot;
       if (!user) return errorResponse("User does not exist");
-      const current = user?.userQuests?.find((q) => q.questId === input.id && !q.endAt);
+      const current = user.userQuests.find((q) => q.questId === input.id && !q.endAt);
       if (user.petTask?.questId === input.id)
         return errorResponse(
           "Return your companion from the Tasks tab before abandoning this contract.",
@@ -1852,7 +1853,6 @@ export const questsRouter = createTRPCRouter({
         ]),
       ];
 
-      const fullTrackers = trackers;
       user.questData = filterQuestTrackersForDbPersist(trackers, user);
 
       // Handle consequences
@@ -1870,7 +1870,7 @@ export const questsRouter = createTRPCRouter({
         },
       );
 
-      user.questData = fullTrackers;
+      user.questData = trackers;
       const responseUser = getPublicQuestUser(user);
 
       // Return information
@@ -2396,7 +2396,7 @@ export const claimRewardChoiceTrackers = async (
 
 /** Describe complete bundle contents with resolved names and original item quantities/chances. */
 const describePackageRewards = (
-  reward: import("@/validators/rewards").ObjectiveRewardType,
+  reward: ObjectiveRewardType,
   content: ReadonlyMap<string, { name: string }>,
 ) => {
   const entries = buildRewardChoiceCards(reward)
