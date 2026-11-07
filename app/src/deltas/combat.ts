@@ -14,6 +14,7 @@ import { maskBattle } from "@/libs/combat/masking";
 import type {
   BattleState,
   BattleUserItem,
+  BattleUserState,
   CombatResult,
   CompleteBattle,
   ReturnedBattle,
@@ -25,10 +26,12 @@ import {
   type MasteryGear,
   type MasterySources,
 } from "@/libs/mastery";
+import { allocateMasteryGains } from "@/libs/masteryProgression";
 import { calcMaxEnergy } from "@/libs/profile";
 import { hasTrainingInProgress } from "@/libs/queue";
 import { getRegenerationPeriodGain, type RegenerationPeriod } from "@/libs/timedBuffs";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { postCombatStealthCooldownAt } from "@/utils/time";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 const baselineFields = [
@@ -357,6 +360,82 @@ export const combatCacheItems = (
       ? { ...original, quantity: changed.quantity, durability: changed.durability }
       : original;
   });
+
+/**
+ * Project a confirmed settlement onto the profile cache from already-loaded state.
+ * `questData` is the public projection of the updated trackers.
+ */
+export const buildCombatProfileUpdate = ({
+  battle,
+  result,
+  user,
+  baseline,
+  capacity,
+  regeneration,
+  settledAt,
+  questData,
+  removedQuestIds,
+  rewardPetId,
+  petExperience,
+  isIsolated,
+}: {
+  battle: CompleteBattle;
+  result: CombatResult;
+  user: BattleUserState;
+  baseline: CombatCacheSnapshot;
+  capacity: number;
+  regeneration: number;
+  settledAt: Date;
+  questData: CombatProfileUpdate["userPatch"]["questData"];
+  removedQuestIds: string[];
+  rewardPetId: string | undefined;
+  petExperience: number;
+  isIsolated: boolean;
+}): CombatProfileUpdate => {
+  const { masterySources: _privateSources, ...cacheBaseline } = baseline;
+  const settledItems = combatCacheItems(baseline, user.items);
+  const userDelta = {
+    ...combatCacheIntegerDelta(baseline, result),
+    ...(rewardPetId ? { petExperience } : {}),
+    offence: result.offence,
+    defence: result.defence,
+    strength: result.strength,
+    intelligence: result.intelligence,
+    willpower: result.willpower,
+    speed: result.speed,
+    dailyArenaFights: battle.battleType === "ARENA" ? 1 : 0,
+    dailySageActivations: user.sageModeUsedThisBattle ? 1 : 0,
+    ...allocateMasteryGains({ ...user, ...baseline }, result.masteryGains ?? {}),
+  };
+  return {
+    userId: user.userId,
+    battleId: battle.id,
+    baseline: cacheBaseline,
+    userDelta,
+    removedQuestIds,
+    userPatch: {
+      status: isIsolated ? "BATTLE" : "AWAKE",
+      curHealth: Math.round(result.curHealth),
+      curStamina: Math.round(result.curStamina),
+      curChakra: Math.round(result.curChakra),
+      curEnergy: combatCacheEnergy(
+        baseline,
+        capacity,
+        regeneration,
+        settledAt,
+        result.energyReward ?? 0,
+        battle.extraState.energyRegenerationPeriods?.[user.userId],
+      ),
+      regenAt: settledAt,
+      stealthCooldownAt: postCombatStealthCooldownAt(settledAt),
+      pvpStreak: result.pvpStreak,
+      questData,
+      pveFights: baseline.pveFights + 1,
+      ...combatCacheDerived(baseline, settledItems, userDelta),
+    },
+    items: settledItems,
+  };
+};
 
 /** Integer-column deltas use the rounded final balance, including fractional debits. */
 export const combatCacheIntegerDelta = (
