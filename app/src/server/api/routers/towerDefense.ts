@@ -64,7 +64,10 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { constantTimeEquals } from "@/server/utils/constantTime";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import {
+  clientErrorMessage,
+  isMysqlDuplicateKeyError,
+} from "@/server/utils/mysqlErrors";
 import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import {
   areTowerDefenseClaimsEnabled,
@@ -788,7 +791,7 @@ export const towerDefenseRouter = createTRPCRouter({
       } catch (error) {
         console.error("Error processing character zip:", error);
         return errorResponse(
-          `Failed to process zip: ${error instanceof Error ? error.message : "Unknown error"}`,
+          `Failed to process zip: ${error instanceof Error ? clientErrorMessage(error) : "Unknown error"}`,
         );
       }
     }),

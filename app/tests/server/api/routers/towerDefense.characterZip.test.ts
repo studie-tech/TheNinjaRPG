@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { eq } from "drizzle-orm";
+import { DrizzleQueryError, eq } from "drizzle-orm";
 import JSZip from "jszip";
 import * as uploadthing from "uploadthing/server";
 import { towerDefenseCharacter, userData } from "@/drizzle/schema";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { towerDefenseRouter } from "@/server/api/routers/towerDefense";
+import { DATABASE_FAILURE_MESSAGE } from "@/server/utils/mysqlErrors";
 import * as ssrf from "@/server/utils/ssrf";
 import { insertUsers } from "../../../setup/factories";
 import { rateLimitResponse } from "../../../setup/rateLimit";
@@ -135,5 +136,18 @@ describeWithDatabase("processCharacterZip", () => {
       message: "Failed to process zip: upload broke",
     });
     expect(logged).toHaveBeenCalled();
+  });
+
+  it("keeps a failed statement out of the rejected response", async () => {
+    validate();
+    serveZip(await characterZip(1));
+    stubUploads(async () => {
+      throw new DrizzleQueryError("update Character", ["secret"], new TypeError("fetch failed"));
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await process()).toEqual({
+      success: false,
+      message: `Failed to process zip: ${DATABASE_FAILURE_MESSAGE}`,
+    });
   });
 });

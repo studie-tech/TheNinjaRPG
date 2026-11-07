@@ -1,9 +1,11 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { describe, expect, it, vi } from "bun:test";
+import { DrizzleQueryError } from "drizzle-orm";
 import { z } from "zod";
 import { buildToolRegistry, handleCallEndpoint } from "@/libs/mcp/meta-tools";
 import { extractToolsFromProcedures } from "@/libs/mcp/tools";
 import type { McpMeta } from "@/libs/mcp/types";
+import { DATABASE_FAILURE_MESSAGE } from "@/server/utils/mysqlErrors";
 import { idSchema } from "@/validators/misc";
 
 const firstText = (result: Awaited<ReturnType<typeof handleCallEndpoint>>) => {
@@ -28,6 +30,9 @@ const router = t.router({
     described: t.procedure
       .meta({ mcp: { description: "A custom description" } })
       .query(() => ({ success: true })),
+    broken: t.procedure.query(() => {
+      throw new DrizzleQueryError("select secret", ["secret"], new TypeError("fetch failed"));
+    }),
   }),
   staff: t.router({ update: staffProcedure.input(idSchema).mutation(write) }),
 });
@@ -75,6 +80,12 @@ describe("universal MCP exposure", () => {
     expect(firstText(await call("profile.update", { id: 123 }))).toContain("Error calling");
     expect(firstText(await call("profile.update", {}))).toContain("Missing required fields");
     expect(write).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed statement out of the tool result", async () => {
+    expect(firstText(await call("profile.broken"))).toBe(
+      `Error calling profile.broken: ${DATABASE_FAILURE_MESSAGE}`,
+    );
   });
 
   it("blocks unauthenticated mutations before creating a caller", async () => {

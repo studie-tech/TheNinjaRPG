@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { DrizzleQueryError, eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import { conceptImage, userData, userQueue } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";
 import * as replicate from "@/libs/replicate";
 import { CONCEPT_PROMPT, conceptartRouter } from "@/server/api/routers/conceptart";
+import { DATABASE_FAILURE_MESSAGE } from "@/server/utils/mysqlErrors";
 import { insertUsers } from "../../../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 import { queueEnergy } from "../../../setup/queues";
@@ -103,6 +104,17 @@ describeWithDatabase("concept art confirmed debits", () => {
     expect(failure.success).toBe(false);
     expect(failure.userDelta).toBeUndefined();
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))?.reputationPoints).toBe(1000 - COST_CONCEPT_VIDEO);
+  });
+
+  it("reports a dispatch failure and keeps a failed statement out of the response", async () => {
+    const db = await getTestDatabase();
+    const caller = callerForDatabase(conceptartRouter, userId, db);
+    vi.spyOn(replicate, "startVideoGeneration").mockRejectedValueOnce(new Error("Dispatch failed"));
+    expect((await caller.createVideo(videoInput)).message).toBe("Dispatch failed");
+    vi.spyOn(replicate, "startVideoGeneration").mockRejectedValueOnce(
+      new DrizzleQueryError("insert into ConceptImage", ["secret"], new TypeError("fetch failed")),
+    );
+    expect((await caller.createVideo(videoInput)).message).toBe(DATABASE_FAILURE_MESSAGE);
   });
 
   it("retains full reconciliation when an energy training queue is pending", async () => {
