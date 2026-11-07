@@ -34,6 +34,7 @@ import {
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
@@ -359,7 +360,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                 <SelectItem value="ALL">All Rarities</SelectItem>
                 {ItemRarities.map((rarity) => (
                   <SelectItem key={rarity} value={rarity}>
-                    {rarity.charAt(0) + rarity.slice(1).toLowerCase()}
+                    {capitalizeFirstLetter(rarity)}
                   </SelectItem>
                 ))}
               </SelectContent>

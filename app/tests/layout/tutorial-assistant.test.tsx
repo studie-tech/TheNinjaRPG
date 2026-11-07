@@ -10,6 +10,7 @@ import * as sortableList from "@/components/ui/sortable-list";
 import type { TutorialStepConfig } from "@/hooks/tutorial";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import { BattleFocusView } from "@/layout/BattleFocusView";
+import * as logbook from "@/layout/Logbook";
 import * as objective from "@/layout/Objective";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -68,10 +69,6 @@ vi.mock("@/hooks/tutorial", () => {
   return { TUTORIAL_STEPS: [step], TUTORIAL_CHAPTERS: [{ id: "student", title: "A New Student" }], TUTORIAL_HOSPITALIZED_STEP: step, useTutorialStep: () => ({ currentStep: testMocks().step, stepNumber: testMocks().stepNumber, isAssistantVisible: testMocks().visible, setIsAssistantVisible: vi.fn(), updateTutorialStep: vi.fn(), handleNextStep: testMocks().next, handleNextStepAsync: vi.fn(async () => {}), completeTutorialAction: vi.fn(async () => {}) }) };
 });
 vi.mock("@/hooks/useAbVariant", () => ({ useAbVariant: () => ({ variant: "A" }) }));
-vi.mock("@/layout/Logbook", () => ({ LogbookEntry: () => null, useCheckRewards: () => {
-  testMocks().rewardHook();
-  return { checkRewards: vi.fn(), isCheckingRewards: false };
-} }));
 vi.mock("@/layout/Image", () => ({ default: () => null }));
 const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}</div>;
 const dialogMocks = { Dialog: ({ children, open }: { children: ReactNode; open: boolean }) => open ? <div role="dialog">{children}</div> : null, DialogContent: dialogContent, DialogDescription: dialogContent, DialogHeader: dialogContent, DialogTitle: dialogContent };
@@ -99,6 +96,11 @@ beforeEach(() => {
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   // Bun shares modules between suites; restore Objective after each test.
   componentSpies.push(vi.spyOn(objective, "Objective").mockImplementation(() => null));
+  componentSpies.push(vi.spyOn(logbook, "QuestObjectives").mockImplementation(() => null));
+  componentSpies.push(vi.spyOn(logbook, "useCheckRewards").mockImplementation(() => {
+    mocks.rewardHook();
+    return { checkRewards: vi.fn(), isCheckingRewards: false } as never;
+  }));
   componentSpies.push(vi.spyOn(sortableList, "SortableList").mockImplementation(() => null));
   for (const [name, implementation] of Object.entries(dialogMocks)) {
     dialogSpies.push(vi.spyOn(dialogComponents, name as keyof typeof dialogMocks).mockImplementation(implementation as never));

@@ -76,7 +76,7 @@ describeWithDatabase("confirmed quest cache responses", () => {
     expect(result.announcements).toContain("First announcement");
     expect(result.announcements).toContain("Second announcement");
     expect(result.announcements).toContain("Your recruits earned you 1 rank milestone reward");
-    expect(await readPlayer()).toMatchObject({ unreadNotifications: 0, unreadRecruitRewards: 0, updatedAt: result.userPatch!.updatedAt });
+    expect(await readPlayer()).toEqual(expect.objectContaining({ unreadNotifications: 0, unreadRecruitRewards: 0, updatedAt: result.userPatch!.updatedAt }));
     const client = new QueryClient(), key = [["profile", "getUser"], { type: "query" }];
     client.setQueryData(key, before);
     const reads = vi.fn(() => profileApi.getUser());
@@ -755,7 +755,7 @@ describeWithDatabase("confirmed quest cache responses", () => {
     expect(result.userPatch?.earnedExperience).toBe(saved?.earnedExperience);
     expect(result.userDelta?.earnedExperience).toBeUndefined();
     expect(result.userPatch).not.toHaveProperty("updatedAt");
-    expect(result.userPatch).toMatchObject({ missionsA: saved?.missionsA, curEnergy: saved?.curEnergy, questFinishAt: saved?.questFinishAt });
+    expect(result.userPatch).toEqual(expect.objectContaining({ missionsA: saved?.missionsA, curEnergy: saved?.curEnergy, questFinishAt: saved?.questFinishAt }));
     expect(result.userPatch?.completedQuests?.some((entry) => entry.questId === missionId && entry.completed === 1)).toBe(true);
     expect(result.userPatch?.userQuests?.some((entry) => entry.questId === missionId)).toBe(false);
     expect(result.userPatch?.questData?.some((entry) => entry.id === missionId)).toBe(false);

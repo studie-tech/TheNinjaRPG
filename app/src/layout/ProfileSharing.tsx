@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,8 +32,9 @@ import {
   ACTIVE_VOTING_SITES,
   RECRUIT_RANK_MILESTONES,
   type RecruitMilestoneRank,
-  type RecruitMilestoneStatus,
+  SITE_URL,
 } from "@/drizzle/constants";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -41,6 +42,7 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
+import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getVotingLink } from "@/libs/voting";
@@ -267,7 +269,7 @@ export function ProfileSharing() {
 const RecruitLinkTab: React.FC = () => {
   // State
   const { data: userData } = useRequiredUserData();
-  const recruitUrl = `https://www.theninja-rpg.com/?ref=${userData?.userId ?? ""}`;
+  const recruitUrl = `${SITE_URL}/?ref=${userData?.userId ?? ""}`;
   const [genin, chunin, jonin, eliteJonin] = RECRUIT_RANK_MILESTONES;
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -306,9 +308,7 @@ const RecruitLinkTab: React.FC = () => {
           <br />
           When a recruit reaches Genin you receive {genin.reputation} reputation point,
           Chunin {chunin.reputation}, Jonin {jonin.reputation}, Elite Jonin{" "}
-          {eliteJonin.reputation}. Recruits who sign up from an IP address already used
-          by another account still count as your recruits but are not eligible for rank
-          milestone rewards.
+          {eliteJonin.reputation}. {SHARED_IP_MILESTONE_RULE}
         </li>
       </ul>
       <button
@@ -508,7 +508,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
   promotionUrl,
 }) => {
   const utils = api.useUtils();
-  const submissionInFlight = useRef(false);
+  const submissionFlight = useSingleFlight();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reviewComplete, setReviewComplete] = useState(false);
   const reviewForm = useForm<LinkPromotionReviewInput>({
@@ -533,8 +533,8 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
   });
 
   const review = () => {
-    if (submissionInFlight.current) return;
-    submissionInFlight.current = true;
+    // The claim spans validation, so both of handleSubmit's callbacks release it.
+    if (!submissionFlight.claim()) return;
     void reviewForm.handleSubmit(
       async (values) => {
         try {
@@ -542,12 +542,10 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
         } catch {
           // The mutation callback presents the error and the form stays open for retry.
         } finally {
-          submissionInFlight.current = false;
+          submissionFlight.release();
         }
       },
-      () => {
-        submissionInFlight.current = false;
-      },
+      () => submissionFlight.release(),
     )();
   };
 
@@ -671,15 +669,8 @@ const RecruitRewardsTab: React.FC = () => {
   );
 };
 
-type RecruitEligibility = "ELIGIBLE" | "SHARED_IP" | "UNVERIFIED";
-type RecruitMilestone = {
-  rank: RecruitMilestoneRank;
-  reputation: number;
-  reached: boolean;
-  paid: boolean;
-  status: RecruitMilestoneStatus | null;
-  reputationAwarded: number;
-};
+type RecruitEligibility = RecruitSummary["eligibility"];
+type RecruitMilestone = RecruitSummary["milestones"][number];
 
 const RecruitEligibilityBadge: React.FC<{
   eligibility: RecruitEligibility | undefined;
@@ -730,7 +721,8 @@ const RecruitMilestoneChips: React.FC<{
             <li key={m.rank} className="flex items-start gap-2">
               <MilestoneChip milestone={m} />
               <span>
-                <strong>{formatRank(m.rank)}</strong>: {describeMilestone(m)}
+                <strong>{showUserRank({ rank: m.rank })}</strong>:{" "}
+                {describeMilestone(m)}
               </span>
             </li>
           ))}
@@ -778,14 +770,11 @@ const MilestoneRulesHeader: React.FC<{ label: string }> = ({ label }) => (
           When an eligible recruit first reaches a rank you receive:{" "}
           {RECRUIT_RANK_MILESTONES.map(
             (m) =>
-              `${formatRank(m.rank)} ${m.reputation} ${m.reputation === 1 ? "point" : "points"}`,
+              `${showUserRank({ rank: m.rank })} ${m.reputation} ${m.reputation === 1 ? "point" : "points"}`,
           ).join(", ")}
           . Each milestone is paid at most once per recruit.
         </p>
-        <p>
-          Recruits who sign up from an IP address already used by another account still
-          count as your recruits but are not eligible for rank milestone rewards.
-        </p>
+        <p>{SHARED_IP_MILESTONE_RULE}</p>
         <ul className="space-y-1">
           {MILESTONE_LEGEND.map(({ example, text }) => (
             <li key={text} className="flex items-center gap-2">
@@ -800,12 +789,6 @@ const MilestoneRulesHeader: React.FC<{ label: string }> = ({ label }) => (
 );
 
 // Helpers
-const formatRank = (rank: string) =>
-  rank
-    .split(" ")
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(" ");
-
 const milestoneState = (
   m: Pick<RecruitMilestone, "reached" | "paid" | "status">,
 ): "paid" | "unpaid" | "before" | "pending" => {
@@ -829,6 +812,9 @@ const describeMilestone = (m: RecruitMilestone) => {
       return `not reached yet (+${m.reputation})`;
   }
 };
+
+const SHARED_IP_MILESTONE_RULE =
+  "Recruits who sign up from an IP address already used by another account still count as your recruits but are not eligible for rank milestone rewards.";
 
 const MILESTONE_SHORT_LABEL: Record<RecruitMilestoneRank, string> = {
   GENIN: "G",
@@ -863,3 +849,5 @@ const ELIGIBILITY_EXPLANATION: Record<RecruitEligibility, string> = {
   UNVERIFIED:
     "Eligibility could not be verified for this recruit. Still counts as your recruit, but rank milestones are not paid.",
 };
+
+type RecruitSummary = RouterOutputs["profile"]["getRecruitMilestones"][number];

@@ -1,9 +1,7 @@
 "use client";
 
-import { Gamepad2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { Button } from "@/components/ui/button";
 import { IMG_BUILDING_ADMINBUILDING, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import Accordion from "@/layout/Accordion";
 import BanInfo from "@/layout/BanInfo";
@@ -12,6 +10,9 @@ import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
+import { QuestTeams } from "@/layout/QuestTeams";
+import { QuestEntryStock, TakeQuestButton } from "@/layout/TakeQuestButton";
+import { nameQuestEntryStock } from "@/libs/questRun";
 import { showMutationToast } from "@/libs/toast";
 import { availableQuestLetterRanks } from "@/libs/train";
 import { useRequireInVillage } from "@/utils/UserContext";
@@ -32,8 +33,13 @@ export default function AdministrationBuilding() {
       level: userData?.level,
       rank: userData?.rank ? availableQuestLetterRanks(userData.rank) : [],
     },
-    { enabled: !!userData },
+    // Owned counts gate the button, and inventory changes elsewhere leave this list cached.
+    { enabled: !!userData, refetchOnMount: "always" },
   );
+
+  const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {
+    enabled: hallData?.some((quest) => quest.entryRequirements.length > 0) ?? false,
+  });
 
   // Mutations
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
@@ -48,8 +54,8 @@ export default function AdministrationBuilding() {
   // Default active tab
   useEffect(() => {
     if (userData && !activeElement) {
-      const currentQuest = userData?.userQuests?.find((uq) =>
-        ["event"].includes(uq.quest.questType),
+      const currentQuest = userData?.userQuests?.find(
+        (uq) => uq.quest.questType === "event" && !uq.endAt,
       );
       if (currentQuest) {
         setActiveElement(currentQuest.quest.name);
@@ -100,6 +106,7 @@ export default function AdministrationBuilding() {
             );
             const currentTracker = userData?.questData?.find((q) => q.id === quest.id);
             const active = currentQuest && currentTracker;
+            const entryStock = nameQuestEntryStock(quest.entryRequirements, itemNames);
 
             return (
               <div key={`${quest.id}-${i}`}>
@@ -123,19 +130,27 @@ export default function AdministrationBuilding() {
                       item={quest}
                       showEdit="quest"
                       imageExtra={
-                        <Button
-                          className="mt-2"
-                          onClick={() =>
-                            startQuest({
-                              questId: quest.id,
-                              userSector: userData.sector,
-                              supportsAnnouncements: true,
-                            })
-                          }
-                        >
-                          <Gamepad2 className="mr-1 h-6 w-6" />
-                          Take Quest
-                        </Button>
+                        <div className="mt-2 space-y-2">
+                          <QuestTeams
+                            questId={quest.id}
+                            teamEnabled={quest.teamEnabled}
+                          />
+                          <QuestEntryStock stock={entryStock} />
+                          <TakeQuestButton
+                            quest={quest}
+                            entryCost={entryStock}
+                            disabled={entryStock.some(
+                              (required) => required.owned < required.quantity,
+                            )}
+                            onStart={() =>
+                              startQuest({
+                                questId: quest.id,
+                                userSector: userData.sector,
+                                supportsAnnouncements: true,
+                              })
+                            }
+                          />
+                        </div>
                       }
                       hideTitle
                     />

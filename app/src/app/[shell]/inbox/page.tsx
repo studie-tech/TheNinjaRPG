@@ -1,18 +1,17 @@
 "use client";
 
-import { BellRing, SquarePen, Trash2, UserRoundX, Users } from "lucide-react";
+import { BellRing, SquarePen, Trash2, Users } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, startTransition, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
-import UserBlacklistControl from "@/layout/UserBlacklistControl";
+import { UserBlacklistPopover } from "@/layout/UserBlacklistControl";
 import { isRaidChatConversationId } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -53,16 +52,7 @@ function InboxContent() {
           </span>
         }
       />
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button id="filter-bloodline">
-            <UserRoundX className="h-6 w-6 hover:text-orange-500" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[300px] overflow-hidden p-0">
-          <UserBlacklistControl />
-        </PopoverContent>
-      </Popover>
+      <UserBlacklistPopover />
     </div>
   );
 

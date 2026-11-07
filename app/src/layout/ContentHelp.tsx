@@ -14,8 +14,16 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  DEFAULT_ITEM_DESCRIPTION,
+  MIN_CONTENT_DESCRIPTION_LENGTH,
+  type QuestType,
+} from "@/drizzle/constants";
 import type { ZodCombinedQuest } from "@/hooks/quest";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { hasEffectGraphics, isNonBattleItem } from "@/libs/contentCompleteness";
 import { findPredecessor } from "@/libs/objectives";
+import { cn } from "@/libs/shadui";
 import type { AiRelations } from "@/server/api/routers/ai";
 import type { ItemRelations } from "@/server/api/routers/item";
 import type { JutsuRelations } from "@/server/api/routers/jutsu";
@@ -56,84 +64,26 @@ export interface AiHelperProps {
 }
 
 export const QuestHelper: React.FC<QuestHelperProps> = (props) => {
-  const [isOpen, setIsOpen] = useState(false);
   const { quest } = props;
 
-  // Set initial state based on screen size
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const isDesktop = window.innerWidth >= 768; // md breakpoint
-      setIsOpen(isDesktop);
-    };
-
-    checkScreenSize();
-    window.addEventListener("resize", checkScreenSize);
-    return () => window.removeEventListener("resize", checkScreenSize);
-  }, []);
-
   return (
-    <div className="inline-block">
-      <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
-        <SheetTrigger asChild>
-          <Button
-            className="flex items-center gap-2"
-            variant={isOpen ? "default" : "outline"}
-          >
-            <HelpCircle className="h-6 w-6" />
-          </Button>
-        </SheetTrigger>
-
-        <SheetContent
-          side="right"
-          className="w-80 sm:w-96"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <HelpCircle className="h-5 w-5" />
-              Quest Helper
-            </SheetTitle>
-          </SheetHeader>
-
-          <div className="mt-6 space-y-4">
-            <div className="rounded-lg border bg-gray-50 p-3">
-              <h3 className="mb-2 font-medium text-gray-900">Quest: {quest.name}</h3>
-              <p className="text-gray-600 text-sm capitalize">
-                Type: <span className="font-medium">{quest.questType}</span>
-              </p>
-            </div>
-
-            {renderHuntingTips(quest)}
-
-            {renderGatheringTips(quest)}
-
-            {renderBattlePyramidTips(quest)}
-
-            {renderStarterTips(quest)}
-
-            {renderRaidTips(quest)}
-
-            {quest.questType !== "hunting" &&
-              quest.questType !== "gathering" &&
-              quest.questType !== "battlepyramid" &&
-              quest.questType !== "starter" &&
-              quest.questType !== "raid" && (
-                <div className="rounded-lg border bg-gray-50 p-3 text-center">
-                  <p className="text-gray-600 text-sm">
-                    No specific tips available for this quest type yet.
-                  </p>
-                </div>
-              )}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </div>
+    <HelperSheet
+      title="Quest Helper"
+      heading={<>Quest: {quest.name}</>}
+      summary={<SummaryField label="Type" value={quest.questType} />}
+    >
+      {(quest.questType && QUEST_TIPS[quest.questType]?.(quest)) ?? (
+        <div className="rounded-lg border bg-gray-50 p-3 text-center">
+          <p className="text-gray-600 text-sm">
+            No specific tips available for this quest type yet.
+          </p>
+        </div>
+      )}
+    </HelperSheet>
   );
 };
 
 export const ItemHelper: React.FC<ItemHelperProps> = (props) => {
-  const [isOpen, setIsOpen] = useState(false);
   const { item } = props;
   const itemId = (item as { id?: string })?.id ?? "";
   const { data: itemRelations } = api.item.getItemRelations.useQuery(
@@ -141,79 +91,25 @@ export const ItemHelper: React.FC<ItemHelperProps> = (props) => {
     { enabled: !!itemId },
   );
 
-  // Set initial state based on screen size
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const isDesktop = window.innerWidth >= 768; // md breakpoint
-      setIsOpen(isDesktop);
-    };
-
-    checkScreenSize();
-    window.addEventListener("resize", checkScreenSize);
-    return () => window.removeEventListener("resize", checkScreenSize);
-  }, []);
-
   return (
-    <div className="inline-block">
-      <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
-        <SheetTrigger asChild>
-          <Button
-            className="flex items-center gap-2"
-            variant={isOpen ? "default" : "outline"}
-          >
-            <HelpCircle className="h-6 w-6" />
-          </Button>
-        </SheetTrigger>
-
-        <SheetContent
-          side="right"
-          className="w-80 sm:w-96"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <HelpCircle className="h-5 w-5" />
-              Item Helper
-            </SheetTitle>
-          </SheetHeader>
-
-          <div className="mt-6 space-y-4">
-            <div className="rounded-lg border bg-gray-50 p-3">
-              <h3 className="mb-2 font-medium text-gray-900">Item: {item.name}</h3>
-              <p className="text-gray-600 text-sm capitalize">
-                Type: <span className="font-medium">{item.itemType}</span>
-              </p>
-            </div>
-            {renderItemRelations(itemRelations)}
-            {renderItemTips(item)}
-            {renderItemDescriptionWarnings(item)}
-            {item.effects && renderEffectsTips(item.effects as ZodAllTags[])}
-            {item.effects &&
-              !isItemNoBattleUsage(item) &&
-              renderEffectsGraphicsWarning(item.effects as ZodAllTags[])}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </div>
+    <HelperSheet
+      title="Item Helper"
+      heading={<>Item: {item.name}</>}
+      summary={<SummaryField label="Type" value={item.itemType} />}
+    >
+      {renderItemRelations(itemRelations)}
+      {renderItemTips(item)}
+      {renderItemDescriptionWarnings(item)}
+      {item.effects && renderEffectsTips(item.effects as ZodAllTags[])}
+      {item.effects &&
+        !isNonBattleItem(item) &&
+        renderEffectsGraphicsWarning(item.effects as ZodAllTags[])}
+    </HelperSheet>
   );
 };
 
 export const JutsuHelper: React.FC<JutsuHelperProps> = ({ jutsu }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const { data: userData } = useRequiredUserData();
-
-  // Set initial state based on screen size
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const isDesktop = window.innerWidth >= 768; // md breakpoint
-      setIsOpen(isDesktop);
-    };
-
-    checkScreenSize();
-    window.addEventListener("resize", checkScreenSize);
-    return () => window.removeEventListener("resize", checkScreenSize);
-  }, []);
 
   // Load injector counts and references
   const jutsuId = (jutsu as { id?: string })?.id ?? "";
@@ -227,196 +123,66 @@ export const JutsuHelper: React.FC<JutsuHelperProps> = ({ jutsu }) => {
   if (!canChangeContent(userData.role)) return null;
 
   return (
-    <div className="inline-block">
-      <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
-        <SheetTrigger asChild>
-          <Button
-            className="flex items-center gap-2"
-            variant={isOpen ? "default" : "outline"}
-          >
-            <HelpCircle className="h-6 w-6" />
-          </Button>
-        </SheetTrigger>
-
-        <SheetContent
-          side="right"
-          className="w-80 sm:w-96"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <HelpCircle className="h-5 w-5" />
-              Jutsu Helper
-            </SheetTitle>
-          </SheetHeader>
-
-          <div className="mt-6 space-y-4">
-            <div className="rounded-lg border bg-gray-50 p-3">
-              <h3 className="mb-2 font-medium text-gray-900">Jutsu: {jutsu.name}</h3>
-              <p className="text-gray-600 text-sm capitalize">
-                Rank: <span className="font-medium">{jutsu.jutsuRank}</span>
-              </p>
-            </div>
-
-            {renderJutsuInformation()}
-            {renderJutsuDescriptionWarnings(jutsu)}
-            {renderJutsuRelations(injectorData)}
-            {jutsu.effects && renderEffectsTips(jutsu.effects as ZodAllTags[])}
-            {jutsu.effects &&
-              renderEffectsGraphicsWarning(jutsu.effects as ZodAllTags[])}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </div>
+    <HelperSheet
+      title="Jutsu Helper"
+      heading={<>Jutsu: {jutsu.name}</>}
+      summary={<SummaryField label="Rank" value={jutsu.jutsuRank} />}
+    >
+      {renderJutsuInformation()}
+      {renderJutsuDescriptionWarnings(jutsu)}
+      {renderJutsuRelations(injectorData)}
+      {jutsu.effects && renderEffectsTips(jutsu.effects as ZodAllTags[])}
+      {jutsu.effects && renderEffectsGraphicsWarning(jutsu.effects as ZodAllTags[])}
+    </HelperSheet>
   );
 };
 
 export const SkillTreeHelper: React.FC<SkillTreeHelperProps> = ({ skillTree }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const { data: userData } = useRequiredUserData();
-
-  // Set initial state based on screen size
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const isDesktop = window.innerWidth >= 768; // md breakpoint
-      setIsOpen(isDesktop);
-    };
-
-    checkScreenSize();
-    window.addEventListener("resize", checkScreenSize);
-    return () => window.removeEventListener("resize", checkScreenSize);
-  }, []);
 
   // Only show if user has permission
   if (!userData) return null;
   if (!canChangeContent(userData.role)) return null;
 
   return (
-    <div>
-      <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
-        <SheetTrigger asChild>
-          <Button
-            className="flex items-center gap-2"
-            variant={isOpen ? "default" : "outline"}
-          >
-            <HelpCircle className="h-6 w-6" />
-          </Button>
-        </SheetTrigger>
-
-        <SheetContent
-          side="right"
-          className="w-80 sm:w-96"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <HelpCircle className="h-5 w-5" />
-              SkillTree Helper
-            </SheetTitle>
-          </SheetHeader>
-
-          <div className="mt-6 space-y-4">
-            <div className="rounded-lg border bg-gray-50 p-3">
-              <h3 className="mb-2 font-medium text-gray-900">
-                SkillTree: {skillTree.name}
-              </h3>
-              <p className="text-gray-600 text-sm capitalize">
-                Tier: <span className="font-medium">{skillTree.tier ?? 1}</span>
-              </p>
-              <p className="text-gray-600 text-sm capitalize">
-                Target:{" "}
-                <span className="font-medium">{skillTree.target ?? "SELF"}</span>
-              </p>
-            </div>
-
-            {renderSkillTreeWarnings(skillTree)}
-            {skillTree.effects && renderEffectsTips(skillTree.effects as ZodAllTags[])}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </div>
+    <HelperSheet
+      title="SkillTree Helper"
+      heading={<>SkillTree: {skillTree.name}</>}
+      summary={
+        <>
+          <SummaryField label="Tier" value={skillTree.tier ?? 1} />
+          <SummaryField label="Target" value={skillTree.target ?? "SELF"} />
+        </>
+      }
+      isBlock
+    >
+      {renderSkillTreeWarnings(skillTree)}
+      {skillTree.effects && renderEffectsTips(skillTree.effects as ZodAllTags[])}
+    </HelperSheet>
   );
 };
 
 export const BloodlineHelper: React.FC<BloodlineHelperProps> = ({ bloodline }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const { data: userData } = useRequiredUserData();
-
-  // Set initial state based on screen size
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const isDesktop = window.innerWidth >= 768; // md breakpoint
-      setIsOpen(isDesktop);
-    };
-
-    checkScreenSize();
-    window.addEventListener("resize", checkScreenSize);
-    return () => window.removeEventListener("resize", checkScreenSize);
-  }, []);
 
   // Only show if user has permission
   if (!userData) return null;
   if (!canChangeContent(userData.role)) return null;
 
   return (
-    <div className="inline-block">
-      <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
-        <SheetTrigger asChild>
-          <Button
-            className="flex items-center gap-2"
-            variant={isOpen ? "default" : "outline"}
-          >
-            <HelpCircle className="h-6 w-6" />
-          </Button>
-        </SheetTrigger>
-
-        <SheetContent
-          side="right"
-          className="w-80 sm:w-96"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <HelpCircle className="h-5 w-5" />
-              Bloodline Helper
-            </SheetTitle>
-          </SheetHeader>
-
-          <div className="mt-6 space-y-4">
-            <div className="rounded-lg border bg-gray-50 p-3">
-              <h3 className="mb-2 font-medium text-gray-900">
-                Bloodline: {bloodline.name}
-              </h3>
-              <p className="text-gray-600 text-sm capitalize">
-                Rank: <span className="font-medium">{bloodline.rank}</span>
-              </p>
-            </div>
-
-            {bloodline.effects && renderEffectsTips(bloodline.effects as ZodAllTags[])}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </div>
+    <HelperSheet
+      title="Bloodline Helper"
+      heading={<>Bloodline: {bloodline.name}</>}
+      summary={<SummaryField label="Rank" value={bloodline.rank} />}
+    >
+      {bloodline.effects && renderEffectsTips(bloodline.effects as ZodAllTags[])}
+    </HelperSheet>
   );
 };
 
 export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const { data: userData } = useRequiredUserData();
   const aiId = ai.userId ?? "";
-
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const isDesktop = window.innerWidth >= 768;
-      setIsOpen(isDesktop);
-    };
-    checkScreenSize();
-    window.addEventListener("resize", checkScreenSize);
-    return () => window.removeEventListener("resize", checkScreenSize);
-  }, []);
 
   const { data } = api.ai.getAiRelations.useQuery({ aiId }, { enabled: !!aiId });
 
@@ -424,7 +190,22 @@ export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
   if (!canChangeContent(userData.role)) return null;
 
   return (
-    <div className="inline-block">
+    <HelperSheet title="AI Helper" heading={<>AI: {ai.username ?? ai.userId}</>}>
+      {renderAiRelations(data)}
+    </HelperSheet>
+  );
+};
+
+/** Non-modal help sheet that stays open on desktop and starts closed on mobile. */
+const HelperSheet: React.FC<HelperSheetProps> = (props) => {
+  const { title, heading, summary, isBlock, children } = props;
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => setIsOpen(isDesktop), [isDesktop]);
+
+  return (
+    <div className={isBlock ? undefined : "inline-block"}>
       <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
         <SheetTrigger asChild>
           <Button
@@ -434,6 +215,7 @@ export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
             <HelpCircle className="h-6 w-6" />
           </Button>
         </SheetTrigger>
+
         <SheetContent
           side="right"
           className="w-80 sm:w-96"
@@ -442,20 +224,66 @@ export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
         >
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <HelpCircle className="h-5 w-5" /> AI Helper
+              <HelpCircle className="h-5 w-5" />
+              {title}
             </SheetTitle>
           </SheetHeader>
+
           <div className="mt-6 space-y-4">
             <div className="rounded-lg border bg-gray-50 p-3">
-              <h3 className="mb-2 font-medium text-gray-900">
-                AI: {ai.username ?? ai.userId}
-              </h3>
+              <h3 className="mb-2 font-medium text-gray-900">{heading}</h3>
+              {summary}
             </div>
-
-            {renderAiRelations(data)}
+            {children}
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  );
+};
+
+/** Present one labeled value in a content helper's compact summary. */
+const SummaryField: React.FC<{ label: string; value: React.ReactNode }> = (props) => (
+  <p className="text-gray-600 text-sm capitalize">
+    {props.label}: <span className="font-medium">{props.value}</span>
+  </p>
+);
+
+/** Content row opening its editor in a new tab. */
+const RelationRow: React.FC<{ name: string; href: string; className?: string }> = (
+  props,
+) => (
+  <div className={cn("flex items-center justify-between", props.className)}>
+    <span>{props.name}</span>
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-6 w-6 p-0"
+      onClick={() => window.open(props.href, "_blank")}
+    >
+      <ExternalLink className="h-3 w-3" />
+    </Button>
+  </div>
+);
+
+/** List related content with a count and direct links to its editors. */
+const RelationSection: React.FC<RelationSectionProps> = (props) => {
+  const { name, data, route, rowClassName } = props;
+  return (
+    <div>
+      <h5 className="mb-1 font-medium text-gray-700 text-sm">
+        {name} ({data.length})
+      </h5>
+      <div className="space-y-1">
+        {data.map((ref) => (
+          <RelationRow
+            key={ref.id}
+            name={ref.name}
+            href={`${route}/${ref.id}`}
+            className={rowClassName}
+          />
+        ))}
+      </div>
     </div>
   );
 };
@@ -504,24 +332,11 @@ const renderEffectsTips = (effects: ZodAllTags[]) => {
 };
 
 /**
- * Returns true if any effect has a visual configured
- */
-const hasAnyEffectGraphics = (effects: ZodAllTags[]) => {
-  return effects.some(
-    (e) =>
-      e.appearAnimation ||
-      e.disappearAnimation ||
-      e.staticAnimation ||
-      e.staticAssetPath,
-  );
-};
-
-/**
  * Single utility: render a graphics warning for a list of effects
  */
 const renderEffectsGraphicsWarning = (effects: ZodAllTags[]) => {
   if (effects.length === 0) return null;
-  if (hasAnyEffectGraphics(effects)) return null;
+  if (hasEffectGraphics(effects)) return null;
 
   return (
     <div className="rounded-lg border border-red-200 bg-red-50 p-3">
@@ -540,46 +355,26 @@ const renderEffectsGraphicsWarning = (effects: ZodAllTags[]) => {
   );
 };
 
-/** Item helper: skip graphics warning for items not used in battle */
-const isItemNoBattleUsage = (item: DeepPartial<ZodItemType>) => {
-  return (
-    !!item.preventBattleUsage ||
-    ["MATERIAL", "COOKING", "CRYSTAL", "FURNITURE"].includes(
-      (item.itemType as string) || "",
-    )
-  );
-};
-
 /** Jutsu description warnings */
 const renderJutsuDescriptionWarnings = (jutsu: DeepPartial<ZodJutsuType>) => {
   const warnings = [] as { title: string; msg: string }[];
   const desc = jutsu.description || "";
   const battleDesc = jutsu.battleDescription || "";
 
-  if (desc.length < 50) {
+  if (desc.length < MIN_CONTENT_DESCRIPTION_LENGTH) {
     warnings.push({
       title: "Short Description",
-      msg: "Description is very short. Aim for at least 50 characters for clarity.",
+      msg: `Description is very short. Aim for at least ${MIN_CONTENT_DESCRIPTION_LENGTH} characters for clarity.`,
     });
   }
-  if (battleDesc.length < 50) {
+  if (battleDesc.length < MIN_CONTENT_DESCRIPTION_LENGTH) {
     warnings.push({
       title: "Short Battle Description",
-      msg: "Battle description is very short. Aim for at least 50 characters to explain in-battle behavior.",
+      msg: `Battle description is very short. Aim for at least ${MIN_CONTENT_DESCRIPTION_LENGTH} characters to explain in-battle behavior.`,
     });
   }
 
-  if (warnings.length === 0) return null;
-  return (
-    <div className="space-y-3">
-      {warnings.map((w) => (
-        <div key={w.title} className="rounded-lg border border-red-200 bg-red-50 p-3">
-          <h4 className="mb-2 font-medium text-red-900">{w.title}</h4>
-          <p className="text-red-800 text-sm">{w.msg}</p>
-        </div>
-      ))}
-    </div>
-  );
+  return renderWarnings(warnings);
 };
 
 /** Item description warnings */
@@ -587,24 +382,14 @@ const renderItemDescriptionWarnings = (item: DeepPartial<ZodItemType>) => {
   const warnings = [] as { title: string; msg: string }[];
   const desc = item.description || "";
 
-  if (desc === "New item description") {
+  if (desc === DEFAULT_ITEM_DESCRIPTION) {
     warnings.push({
       title: "Placeholder Description",
       msg: "Item description is still the default placeholder. Please write a proper description.",
     });
   }
 
-  if (warnings.length === 0) return null;
-  return (
-    <div className="space-y-3">
-      {warnings.map((w) => (
-        <div key={w.title} className="rounded-lg border border-red-200 bg-red-50 p-3">
-          <h4 className="mb-2 font-medium text-red-900">{w.title}</h4>
-          <p className="text-red-800 text-sm">{w.msg}</p>
-        </div>
-      ))}
-    </div>
-  );
+  return renderWarnings(warnings);
 };
 
 /**
@@ -647,14 +432,27 @@ const renderSkillTreeWarnings = (skillTree: DeepPartial<ZodSkillTreeType>) => {
   );
 };
 
+/** Red warning cards, or nothing when there are none. */
+const renderWarnings = (warnings: { title: string; msg: string }[]) => {
+  if (warnings.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      {warnings.map((w) => (
+        <div key={w.title} className="rounded-lg border border-red-200 bg-red-50 p-3">
+          <h4 className="mb-2 font-medium text-red-900">{w.title}</h4>
+          <p className="text-red-800 text-sm">{w.msg}</p>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 /**
  * Renders the tips for hunting quests
  * @param quest - The quest to render the tips for
  * @returns The tips for hunting quests
  */
 const renderHuntingTips = (quest: DeepPartial<ZodCombinedQuest>) => {
-  if (quest.questType !== "hunting") return null;
-
   return (
     <div className="space-y-4">
       <Alert>
@@ -721,8 +519,6 @@ const renderHuntingTips = (quest: DeepPartial<ZodCombinedQuest>) => {
  * @returns The tips for gathering quests
  */
 const renderGatheringTips = (quest: DeepPartial<ZodCombinedQuest>) => {
-  if (quest.questType !== "gathering") return null;
-
   return (
     <div className="space-y-4">
       <Alert>
@@ -790,8 +586,6 @@ const renderGatheringTips = (quest: DeepPartial<ZodCombinedQuest>) => {
  * @returns The tips for battle pyramid quests
  */
 const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
-  if (quest.questType !== "battlepyramid") return null;
-
   // Find the first objective (the one with no predecessors)
   const objectives = (quest.content?.objectives || []) as AllObjectivesType[];
   const firstObjective = objectives.find((obj) => !findPredecessor(objectives, obj.id));
@@ -960,8 +754,6 @@ const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
  * @returns The tips for starter quests
  */
 const renderStarterTips = (quest: DeepPartial<ZodCombinedQuest>) => {
-  if (quest.questType !== "starter") return null;
-
   const hasPrerequisite = !!quest.prerequisiteQuestId;
 
   return (
@@ -1029,8 +821,6 @@ const renderStarterTips = (quest: DeepPartial<ZodCombinedQuest>) => {
  * @returns The tips for raid quests
  */
 const renderRaidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
-  if (quest.questType !== "raid") return null;
-
   const objectives = (quest.content?.objectives || []) as AllObjectivesType[];
   const objective = objectives[0];
   const objectiveTask = objective?.task;
@@ -1367,36 +1157,6 @@ const renderJutsuRelations = (relations?: JutsuRelations) => {
     0,
   );
 
-  /**
-   * Renders a section for a specific relation type
-   */
-  const renderRelationSection = (config: (typeof relationConfigs)[0]) => {
-    if (config.data.length === 0) return null;
-
-    return (
-      <div key={config.name}>
-        <h5 className="mb-1 font-medium text-gray-700 text-sm">
-          {config.name} ({config.data.length})
-        </h5>
-        <div className="space-y-1">
-          {config.data.map((ref) => (
-            <div key={ref.id} className="flex items-center justify-between text-sm">
-              <span>{ref.name}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0"
-                onClick={() => window.open(`${config.route}/${ref.id}`, "_blank")}
-              >
-                <ExternalLink className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   // Return null if no relations exist
   if (totalRelations === 0) return null;
 
@@ -1420,7 +1180,16 @@ const renderJutsuRelations = (relations?: JutsuRelations) => {
               <PopoverContent className="w-80">
                 <div className="space-y-3">
                   <h4 className="font-medium">Related Content</h4>
-                  {relationConfigs.map(renderRelationSection)}
+                  {relationConfigs.map(
+                    (config) =>
+                      config.data.length > 0 && (
+                        <RelationSection
+                          key={config.name}
+                          {...config}
+                          rowClassName="text-sm"
+                        />
+                      ),
+                  )}
                 </div>
               </PopoverContent>
             </Popover>
@@ -1458,17 +1227,11 @@ const renderAiRelations = (relations?: AiRelations) => {
           </div>
           <div className="mt-1 space-y-0.5 text-gray-700 text-xs">
             {questsUsingAi.map((q) => (
-              <div key={q.id} className="flex items-center justify-between">
-                <span>{q.name}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={() => window.open(`/manual/quest/edit/${q.id}`, "_blank")}
-                >
-                  <ExternalLink className="h-3 w-3" />
-                </Button>
-              </div>
+              <RelationRow
+                key={q.id}
+                name={q.name}
+                href={`/manual/quest/edit/${q.id}`}
+              />
             ))}
           </div>
         </div>
@@ -1494,29 +1257,17 @@ const renderItemRelations = (relations?: ItemRelations) => {
       <div className="space-y-3 text-sm">
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
           <div className="mt-1 space-y-1 text-gray-700 text-xs">
-            {sections.map((s) =>
-              s.data && s.data.length > 0 ? (
-                <div key={s.name}>
-                  <h5 className="mb-1 font-medium text-gray-700 text-sm">
-                    {s.name} ({s.data.length})
-                  </h5>
-                  <div className="space-y-1">
-                    {s.data.map((ref) => (
-                      <div key={ref.id} className="flex items-center justify-between">
-                        <span>{ref.name}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => window.open(`${s.route}/${ref.id}`, "_blank")}
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null,
+            {sections.map(
+              (section) =>
+                section.data &&
+                section.data.length > 0 && (
+                  <RelationSection
+                    key={section.name}
+                    name={section.name}
+                    data={section.data}
+                    route={section.route}
+                  />
+                ),
             )}
           </div>
         </div>
@@ -1524,3 +1275,29 @@ const renderItemRelations = (relations?: ItemRelations) => {
     </div>
   );
 };
+
+const QUEST_TIPS: Partial<
+  Record<QuestType, (quest: DeepPartial<ZodCombinedQuest>) => React.ReactNode>
+> = {
+  hunting: renderHuntingTips,
+  gathering: renderGatheringTips,
+  battlepyramid: renderBattlePyramidTips,
+  starter: renderStarterTips,
+  raid: renderRaidTips,
+};
+
+interface HelperSheetProps {
+  title: string;
+  heading: React.ReactNode;
+  summary?: React.ReactNode;
+  /** Take the full row instead of sitting inline in the toolbar. */
+  isBlock?: boolean;
+  children: React.ReactNode;
+}
+
+interface RelationSectionProps {
+  name: string;
+  data: { id: string; name: string }[];
+  route: string;
+  rowClassName?: string;
+}

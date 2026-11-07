@@ -1,16 +1,15 @@
 "use client";
 
 import { FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useContentListActions } from "@/hooks/useContentListActions";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import ListLoader from "@/layout/ListLoader";
 import SageModeFiltering, { getFilter, useFiltering } from "@/layout/SageModeFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
-import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -19,8 +18,6 @@ export default function ManualSageModes() {
   const { data: userData } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const state = useFiltering();
-  const router = useRouter();
-
   const {
     data: sageModes,
     isFetching,
@@ -38,21 +35,17 @@ export default function ManualSageModes() {
   const allSageModes = sageModes?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
+  const { onCreated, onDeleted } = useContentListActions(
+    refetch,
+    "/manual/sageMode/edit",
+  );
+
   const { mutate: create, isPending: load1 } = api.sageMode.create.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await refetch();
-      if (data.success) {
-        router.push(`/manual/sageMode/edit/${data.message}`);
-      }
-    },
+    onSuccess: onCreated,
   });
 
   const { mutate: remove, isPending: load2 } = api.sageMode.delete.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await refetch();
-    },
+    onSuccess: onDeleted,
   });
 
   const totalLoading = isFetching || load1 || load2;

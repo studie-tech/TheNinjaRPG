@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getCookingLevel, getCookingRank, getCookingSeconds } from "@/libs/cooking";
+import { getCookingExperience, getCookingLevel, getCookingRank, getCookingSeconds } from "@/libs/cooking";
 import { getInventoryBucket, getHomeStorageBucket, nonCombatConsume, isEquippableUserItem, getEquipBlockReason, canEquipAdditional } from "@/libs/item";
 import type { Item, UserData } from "@/drizzle/schema";
 
@@ -14,6 +14,10 @@ describe("Cooking progression", () => {
   });
   it("times each output meal, with shrine bonuses increasing the duration", () => {
     expect(getCookingSeconds({ cookingTimeSeconds: 60, cookingOutputQuantity: 3 }, 2, 0.1)).toBe(396);
+  });
+  it("floors the XP of a whole job, with the Territory War boost as a fraction", () => {
+    expect(getCookingExperience(7, 3)).toBe(21);
+    expect(getCookingExperience(7, 3, 0.25)).toBe(26);
   });
   it("stores Meals in cooking and makes them edible outside battle", () => {
     const item = { itemType: "MEAL", isEventItem: true } as Item;

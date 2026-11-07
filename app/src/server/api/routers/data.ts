@@ -29,7 +29,6 @@ import {
   logRankedPicks,
   paypalTransaction,
   quest,
-  referralSource,
   skillTree,
   userData,
   visitorLog,
@@ -37,6 +36,7 @@ import {
 import { aggregateExperiments } from "@/libs/experimentAnalytics";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { collapseRewards } from "@/libs/rewards";
+import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { fetchBloodline } from "@/queries/bloodline";
 import {
   deleteDataBattleActionForDeleteAllDataBattleAction,
@@ -44,11 +44,12 @@ import {
   deleteLogBattleLengthsForClearAllBattleLengths,
   deleteLogQueueLengthsForClearAllQueueLengths,
   findUserDataForGetStatistics,
-  hasNoReferralSource,
   insertActionLogForClearAllBattleLengths,
   insertActionLogForClearAllQueueLengths,
   insertActionLogForDeleteAllDataBattleAction,
   insertActionLogForDeleteSingleDataBattleAction,
+  isDynamicSignup,
+  isReferralChannelSignup,
   listBloodlineForGetBloodlineEffectsBalanceStatistics,
   listItemForGetItemEffectsBalanceStatistics,
   listJutsuForGetJutsuEffectsBalanceStatistics,
@@ -524,15 +525,15 @@ export const dataRouter = createTRPCRouter({
       // Base where clauses shared by all branches
       const baseUserWhere = recruitmentUserConditions(input);
 
-      // Referrals-specific where; every referral source when none is named
-      const realWhere: QueryCondition[] = [...baseUserWhere];
-      if (realSources?.length) {
-        realWhere.push(inArray(referralSource.source, realSources));
-      }
+      // Referrals-specific where
+      const realWhere: QueryCondition[] = [
+        ...baseUserWhere,
+        isReferralChannelSignup(realSources),
+      ];
       // Dynamic and Recruited specifics
       const dynamicWhere: QueryCondition[] = [
         ...baseUserWhere,
-        hasNoReferralSource(ctx.drizzle),
+        isDynamicSignup(ctx.drizzle),
       ];
       const recruitedWhere: QueryCondition[] = [
         ...baseUserWhere,
@@ -715,10 +716,10 @@ export const dataRouter = createTRPCRouter({
       const dayExpr = sql<string>`CAST(${userData.createdAt} AS DATE)`;
 
       // Referred series
-      const realWhere = recruitmentUserConditions(input);
-      if (realSources?.length) {
-        realWhere.push(inArray(referralSource.source, realSources));
-      }
+      const realWhere = [
+        ...recruitmentUserConditions(input),
+        isReferralChannelSignup(realSources),
+      ];
 
       const realPromise = wantReal
         ? selectUserDataForGetRecruitmentDailyCountsBySource(
@@ -897,31 +898,11 @@ export const dataRouter = createTRPCRouter({
         const userCount = userCountMap.get(bloodline.id) || 0;
         const battleData = battleStatsMap.get(bloodline.id) || [];
 
-        // Calculate battle statistics
-        const wins = battleData
-          .filter((entry) => entry.battleWon === 1)
-          .reduce((acc, curr) => acc + curr.count, 0);
-
-        const flees = battleData
-          .filter((entry) => entry.battleWon === 2)
-          .reduce((acc, curr) => acc + curr.count, 0);
-
-        const losses = battleData
-          .filter((entry) => entry.battleWon === 0)
-          .reduce((acc, curr) => acc + curr.count, 0);
-
-        const totalUsage = wins + flees + losses;
-        const winRate = totalUsage > 0 ? (wins / totalUsage) * 100 : 0;
-
         return {
           name: bloodline.name,
           bloodlineId: bloodline.id,
           userCount,
-          totalUsage,
-          wins,
-          flees,
-          losses,
-          winRate: `${winRate.toFixed(1)}%`,
+          ...summarizeBattleOutcomes(battleData),
         };
       });
     }),

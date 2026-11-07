@@ -39,16 +39,9 @@ import type {
 } from "@/drizzle/constants";
 import {
   DIFFUSE_MAX_PERCENTAGE,
-  DISCORD_INVITE_URL,
   ELITE_JONIN_BRACKET,
   ERRANDS_PER_DAY,
-  IMG_ICON_DISCORD,
-  IMG_ICON_FACEBOOK,
-  IMG_ICON_INSTAGRAM,
-  IMG_ICON_REDDIT,
-  IMG_ICON_TIKTOK,
-  IMG_ICON_TWITTER,
-  IMG_ICON_YOUTUBE,
+  MASTERY_QUEUE_KIND_LABELS,
   MAX_EXPERIENCE_LEVEL,
   MAX_PLAYER_LEVEL,
   MAX_PVP_BRACKET,
@@ -57,6 +50,7 @@ import {
   MISSIONS_PER_DAY,
   PARRY_MAX_PERCENTAGE,
   PVP_MISSIONS_PER_DAY,
+  SOCIAL_LINKS,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
@@ -66,8 +60,9 @@ import ElementImage from "@/layout/ElementImage";
 import Image from "@/layout/Image";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
+import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import StatusBar from "@/layout/StatusBar";
-import { getEffectPower } from "@/libs/combat/power";
+import { getEffectMagnitude } from "@/libs/combat/power";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
 import {
   getPreventTypeName,
@@ -77,8 +72,8 @@ import {
 } from "@/libs/combat/util";
 import { useGameMenu } from "@/libs/menus";
 import {
-  calcLevelRequirements,
   getExpBracket,
+  levelExperienceProgress,
   levelUpBlockMessage,
   unassignedExperienceTowardLevel,
 } from "@/libs/profile";
@@ -87,54 +82,13 @@ import { cn } from "@/libs/shadui";
 import { calcCovertTrainingFinishAt } from "@/libs/stealth";
 import { regenerationBuffs } from "@/libs/titles";
 import { masteryTrainingEndsAt } from "@/libs/train";
-import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
+import { formatClockTime, getGameTime } from "@/utils/time";
 import {
   selectUserWithoutPosition,
   userBattleAtom,
   useUserDataSelector,
 } from "@/utils/UserContext";
 import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
-
-/**
- * Social media links
- */
-export const socials = [
-  {
-    url: DISCORD_INVITE_URL,
-    image: IMG_ICON_DISCORD,
-    alt: "Discord",
-  },
-  {
-    url: "https://www.facebook.com/profile.php?id=61554961626034",
-    image: IMG_ICON_FACEBOOK,
-    alt: "Facebook",
-  },
-  {
-    url: "https://www.youtube.com/@fullstackscientist",
-    image: IMG_ICON_YOUTUBE,
-    alt: "Youtube",
-  },
-  {
-    url: "https://twitter.com/RealTheNinjaRPG",
-    image: IMG_ICON_TWITTER,
-    alt: "Twitter",
-  },
-  {
-    url: "https://www.instagram.com/theninjarpg/",
-    image: IMG_ICON_INSTAGRAM,
-    alt: "Instagram",
-  },
-  {
-    url: "https://www.tiktok.com/@theninjarpg",
-    image: IMG_ICON_TIKTOK,
-    alt: "Tiktok",
-  },
-  {
-    url: "https://www.reddit.com/r/theninjarpg/",
-    image: IMG_ICON_REDDIT,
-    alt: "Reddit",
-  },
-];
 
 const MenuBoxProfile: React.FC = () => {
   // State
@@ -168,19 +122,17 @@ const MenuBoxProfile: React.FC = () => {
   // Get location of user
   const { location } = useGameMenu();
 
-  const immunityData = useExpiryAnchor(userData?.immunityUntil, now);
-  const immunitySecsLeft = immunityData.secsLeft;
-
-  // Bracket-immunity and war-participant countdown anchors (see useExpiryAnchor below): each gives a
-  // memoized (createdAt, totalSeconds) pair plus a fresh secsLeft for the > 0 visibility guard.
-  const bracketImmunityAnchor = useExpiryAnchor(
+  const immunitySecsLeft = useSecondsUntil(userData?.immunityUntil, now, timeDiff);
+  const bracketImmunitySecsLeft = useSecondsUntil(
     userData?.bracketImmunityLiftedUntil,
     now,
+    timeDiff,
   );
-  const bracketImmunitySecsLeft = bracketImmunityAnchor.secsLeft;
-
-  const warParticipantAnchor = useExpiryAnchor(userData?.warParticipantUntil, now);
-  const warParticipantSecsLeft = warParticipantAnchor.secsLeft;
+  const warParticipantSecsLeft = useSecondsUntil(
+    userData?.warParticipantUntil,
+    now,
+    timeDiff,
+  );
 
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
@@ -236,12 +188,7 @@ const MenuBoxProfile: React.FC = () => {
     }
   };
 
-  const expRequired = userData && calcLevelRequirements(userData.level - 1);
-  const expForNextLevel = userData && calcLevelRequirements(userData.level);
-  const expTowardsNextLevel =
-    userData && Math.max(0, userData.experience - (expRequired ?? 0));
-  const expNeededForNextLevel =
-    userData && Math.max(1, (expForNextLevel ?? 0) - (expRequired ?? 0));
+  const levelExperience = userData && levelExperienceProgress(userData);
   const canLevelUp = !!userData && !levelUpBlockMessage(userData);
   const unassignedExperience = userData ? unassignedExperienceTowardLevel(userData) : 0;
 
@@ -261,46 +208,13 @@ const MenuBoxProfile: React.FC = () => {
           </Link>
 
           <div className="pt-5">
-            <StatusBar
-              key={`hp-${pools.curHealth}-${pools.maxHealth}`}
-              title="HP"
-              tooltip="Health"
-              color="bg-red-500"
-              showText={true}
+            <PoolStatusBars
+              pools={pools}
+              remountOnChange
               lastRegenAt={userData?.regenAt}
               regen={hasBattlePools ? 0 : passiveRegeneration}
               timedBuffs={hasBattlePools ? undefined : poolRegenerationBuffs}
               status={hasBattlePools ? "AWAKE" : userData?.status}
-              current={pools.curHealth}
-              total={pools.maxHealth}
-              timeDiff={timeDiff}
-            />
-            <StatusBar
-              key={`cp-${pools.curChakra}-${pools.maxChakra}`}
-              title="CP"
-              tooltip="Chakra"
-              color="bg-blue-500"
-              showText={true}
-              lastRegenAt={userData?.regenAt}
-              regen={hasBattlePools ? 0 : passiveRegeneration}
-              timedBuffs={hasBattlePools ? undefined : poolRegenerationBuffs}
-              status={hasBattlePools ? "AWAKE" : userData?.status}
-              current={pools.curChakra}
-              total={pools.maxChakra}
-              timeDiff={timeDiff}
-            />
-            <StatusBar
-              key={`sp-${pools.curStamina}-${pools.maxStamina}`}
-              title="SP"
-              tooltip="Stamina"
-              color="bg-green-500"
-              showText={true}
-              lastRegenAt={userData?.regenAt}
-              regen={hasBattlePools ? 0 : passiveRegeneration}
-              timedBuffs={hasBattlePools ? undefined : poolRegenerationBuffs}
-              status={hasBattlePools ? "AWAKE" : userData?.status}
-              current={pools.curStamina}
-              total={pools.maxStamina}
               timeDiff={timeDiff}
             />
             <StatusBar
@@ -349,11 +263,8 @@ const MenuBoxProfile: React.FC = () => {
                   lastRegenAt={userData?.regenAt}
                   regen={0}
                   status={userData?.status}
-                  current={Math.min(
-                    expTowardsNextLevel ?? 0,
-                    expNeededForNextLevel ?? 1,
-                  )}
-                  total={expNeededForNextLevel}
+                  current={levelExperience?.earned ?? 0}
+                  total={levelExperience?.required}
                   timeDiff={timeDiff}
                 />
                 {unassignedExperience > 0 && (
@@ -486,10 +397,10 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center">
                     <ShieldCheck className="mr-2 h-6 w-6" />
-                    <Cooldown
-                      createdAt={immunityData.createdAt}
-                      totalSeconds={immunityData.totalSeconds}
-                      initialSecondsLeft={immunityData.totalSeconds}
+                    <Countdown
+                      targetDate={userData.immunityUntil}
+                      timeDiff={timeDiff}
+                      format={formatBracketedClock}
                       onFinish={refreshTime}
                     />
                   </div>
@@ -504,12 +415,11 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center text-orange-500">
                     <ShieldAlert className="mr-2 h-6 w-6" />
-                    <Cooldown
-                      createdAt={bracketImmunityAnchor.createdAt}
-                      totalSeconds={bracketImmunityAnchor.totalSeconds}
-                      initialSecondsLeft={bracketImmunityAnchor.totalSeconds}
+                    <Countdown
+                      targetDate={userData.bracketImmunityLiftedUntil}
+                      timeDiff={timeDiff}
+                      format={formatBracketedClock}
                       onFinish={refreshTime}
-                      hideWhenDone
                     />
                   </div>
                 </TooltipTrigger>
@@ -523,12 +433,11 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center text-red-500">
                     <Swords className="mr-2 h-6 w-6" />
-                    <Cooldown
-                      createdAt={warParticipantAnchor.createdAt}
-                      totalSeconds={warParticipantAnchor.totalSeconds}
-                      initialSecondsLeft={warParticipantAnchor.totalSeconds}
+                    <Countdown
+                      targetDate={userData.warParticipantUntil}
+                      timeDiff={timeDiff}
+                      format={formatBracketedClock}
                       onFinish={refreshTime}
-                      hideWhenDone
                     />
                   </div>
                 </TooltipTrigger>
@@ -552,7 +461,7 @@ const MenuBoxProfile: React.FC = () => {
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {kind === "ELEMENT" ? "Elemental" : "Mastery"} training
+                      {MASTERY_QUEUE_KIND_LABELS[kind]} training
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -745,7 +654,7 @@ const MenuBoxProfile: React.FC = () => {
       </div>
       <hr className="my-2" />
       <div className="flex justify-center px-2 pt-2 align-center">
-        {socials.map((social) => {
+        {SOCIAL_LINKS.map((social) => {
           return (
             <a
               target="_blank"
@@ -786,111 +695,25 @@ const GameClock: React.FC = () => {
 };
 
 /**
- * Anchors an expiry countdown for a `Cooldown`. Returns a memoized (createdAt, totalSeconds) pair
- * sampled from a single Date.now() reading — Cooldown derives its deadline as
- * createdAt + totalSeconds*1000, so the two must come from the same instant — plus a fresh
- * `secsLeft` derived from the parent clock state. Cooldown advances that clock on expiry, so
- * visibility guards remain reactive when React Compiler memoizes this hook.
+ * Seconds left until the server time `until` on the parent clock, which the row's Countdown
+ * advances on expiry. A new snapshot may already have expired since that clock last moved,
+ * so a change of `until` also reads the current time.
  */
-const useExpiryAnchor = (until: Date | null | undefined, now: number) => {
-  const untilMs = until?.getTime() ?? 0;
-  const anchor = useMemo(() => {
-    const sampledAt = Date.now();
-    return {
-      createdAt: sampledAt,
-      totalSeconds: Math.max(0, (untilMs - sampledAt) / 1000),
-    };
-  }, [untilMs]);
-  // A new snapshot may already have expired since the parent clock last advanced.
-  const secsLeft = Math.min(anchor.totalSeconds, Math.max(0, (untilMs - now) / 1000));
-  return { ...anchor, secsLeft };
-};
-
-/**
- * Returns a formatted time string based on the number of seconds left.
- * If the number of seconds is greater than 0, the time string will be in the format "HH:MM:SS" or "MM:SS" if the number of hours is 0.
- * If the number of seconds is 0 or less, the time string will be "Done".
- *
- * @param secondsLeft The number of seconds left.
- * @returns The formatted time string.
- */
-const getTimeStr = (secondsLeft: number) => {
-  const [, hours, minutes, seconds] = getDaysHoursMinutesSeconds(secondsLeft);
-  if (secondsLeft > 0) {
-    const hoursStr = hours.toString().padStart(2, "0");
-    const minutesStr = minutes.toString().padStart(2, "0");
-    const secondsStr = seconds.toString().padStart(2, "0");
-    if (hours > 0) {
-      return `${hoursStr}:${minutesStr}:${secondsStr}`;
-    } else {
-      return `${minutesStr}:${secondsStr}`;
-    }
-  } else {
-    return `Done`;
-  }
-};
-
-interface CooldownProps {
-  initialSecondsLeft: number;
-  totalSeconds: number;
-  createdAt: number;
-  onFinish: () => void;
-  hideWhenDone?: boolean;
-}
-
-/**
- * A component that displays a countdown timer.
- *
- * @param props - The component props.
- * @returns The rendered `Cooldown` component.
- */
-const Cooldown: React.FC<CooldownProps> = (props) => {
-  const { createdAt, totalSeconds, initialSecondsLeft, onFinish, hideWhenDone } = props;
-  const [counter, setCounter] = useState<string>(() =>
-    getTimeStr(initialSecondsLeft * 1000),
+const useSecondsUntil = (
+  until: Date | null | undefined,
+  now: number,
+  timeDiff: number,
+) => {
+  const untilMs = until ? until.getTime() + timeDiff : 0;
+  const secsAtSnapshot = useMemo(
+    () => Math.max(0, (untilMs - Date.now()) / 1000),
+    [untilMs],
   );
-  // Track if we've already notified parent that countdown finished
-  const hasNotifiedRef = React.useRef(false);
-
-  useEffect(() => {
-    // Only reset notification flag when countdown actually restarts (has time remaining)
-    const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
-    if (secondsLeft > 0) {
-      hasNotifiedRef.current = false;
-    }
-  }, [createdAt, totalSeconds]);
-
-  useEffect(() => {
-    if (totalSeconds) {
-      const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
-      if (secondsLeft > 0) {
-        const interval = setInterval(() => {
-          const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
-          if (secondsLeft > 0) {
-            setCounter(getTimeStr(secondsLeft));
-          } else {
-            clearInterval(interval);
-            if (initialSecondsLeft > 0 && !hasNotifiedRef.current) {
-              hasNotifiedRef.current = true;
-              onFinish();
-            }
-            setCounter(hideWhenDone ? "" : "Done");
-          }
-        }, 1000);
-        return () => clearInterval(interval);
-      } else {
-        // Only notify parent once to prevent infinite loop
-        if (initialSecondsLeft > 0 && !hasNotifiedRef.current) {
-          hasNotifiedRef.current = true;
-          onFinish();
-        }
-        setCounter(hideWhenDone ? "" : "Done");
-      }
-    }
-  }, [totalSeconds, createdAt, initialSecondsLeft, onFinish, hideWhenDone]);
-
-  return counter ? <>[{counter}]</> : null;
+  return Math.min(secsAtSnapshot, Math.max(0, (untilMs - now) / 1000));
 };
+
+/** Wrap a remaining duration in the sidebar's bracketed clock notation. */
+const formatBracketedClock = (msLeft: number) => `[${formatClockTime(msLeft)}]`;
 
 type EffectCategory =
   | GeneralType
@@ -1012,14 +835,12 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
       if (val.type === "wound" && val.timeTracker?.originalDamage !== undefined) {
         // Convert wound percentage to actual damage amount
-        const woundPower = Math.abs(val.power + val.level * val.powerPerLevel);
+        const woundPower = getEffectMagnitude(val);
         const od = val.timeTracker.originalDamage || 0;
         value = -Math.floor(od * (woundPower / 100));
-      } else if (val.type === "parry" || val.type === "curse") {
-        value = Math.abs(getEffectPower(val));
       } else {
         // Standard processing for all other effects
-        value = Math.abs(val.power + val.level * val.powerPerLevel) * sign;
+        value = getEffectMagnitude(val) * sign;
         if (val.type === "diffuse") value = Math.min(DIFFUSE_MAX_PERCENTAGE, value);
       }
       cats.forEach((cat) => {
@@ -1155,13 +976,13 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
     // Apply all decrease effects multiplicatively
     decreaseHealEffects.forEach((e) => {
-      const power = Math.abs(e.power + e.level * e.powerPerLevel);
+      const power = getEffectMagnitude(e);
       netFactor *= 1 - power / 100; // decrease = 1 - percentage
     });
 
     // Apply all increase effects multiplicatively
     increaseHealEffects.forEach((e) => {
-      const power = Math.abs(e.power + e.level * e.powerPerLevel);
+      const power = getEffectMagnitude(e);
       netFactor *= 1 + power / 100; // increase = 1 + percentage
     });
 
@@ -1502,7 +1323,7 @@ export const VisualizeGroundEffects: React.FC<VisualizeGroundEffectsProps> = ({
     <EffectRow
       key={`${effect.id}-${index}`}
       type={effect.type}
-      power={Math.abs(effect.power + effect.level * effect.powerPerLevel)}
+      power={getEffectMagnitude(effect)}
       calculation={effect.calculation}
       roundsLeft={effect.rounds ?? 0}
       isPositive={isPositive}

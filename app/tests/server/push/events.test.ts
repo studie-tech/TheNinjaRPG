@@ -90,7 +90,7 @@ describe("auction result native alerts", () => {
     const finishing = completeAuctionInternal(client, auction.id);
     expect(deferred).toHaveLength(0);
     committed();
-    expect(await finishing).toMatchObject({ success: true, winningBid: auction.bids[0] });
+    expect(await finishing).toEqual(expect.objectContaining({ success: true, winningBid: expect.objectContaining(auction.bids[0]!) }));
     expect(deferred).toHaveLength(1);
     await deferred[0]?.();
     expect(send).toHaveBeenCalledWith(client, ["seller", "winner", "refunded"], expect.objectContaining({

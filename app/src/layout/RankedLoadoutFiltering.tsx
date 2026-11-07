@@ -4,6 +4,7 @@ import {
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  minCountField,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 
@@ -32,13 +33,7 @@ const makeSchema = () =>
         defaultValue: "",
         normalizeForFilter: (v: string) => v.trim(),
       },
-      {
-        id: "minCount",
-        label: "Minimum Count",
-        type: "number",
-        defaultValue: undefined,
-        normalizeForFilter: (v) => (v !== undefined && v >= 1 ? v : undefined),
-      },
+      minCountField,
     ] as const,
   });
 

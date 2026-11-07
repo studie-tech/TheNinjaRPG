@@ -22,6 +22,8 @@ import {
   type EquippedAssignment,
   type EquippedConstraintState,
   finishedImbuementItems,
+  finishedImbuements,
+  userItemDisplay,
   getItemStackMergeBucketKey,
   getHomeStorageBucket,
   getHomeStorageBucketFullMessage,
@@ -1105,6 +1107,48 @@ describe("getItemStackMergeBucketKey", () => {
         getItemStackMergeBucketKey(item, other),
       );
     }
+  });
+});
+
+describe("userItemDisplay", () => {
+  const ui = {
+    item: { name: "Blade" },
+    durability: 7,
+    level: 3,
+    experience: 40,
+    imbuements: [
+      { craftingFinishedAt: null, item: { name: "Fire Seal" } },
+      { craftingFinishedAt: new Date(NOW.getTime() + 1000), item: { name: "Water Seal" } },
+    ],
+  };
+
+  it("carries the owned stats and finished imbuements onto the item", () => {
+    expect(userItemDisplay(ui, ui.item, NOW)).toEqual({
+      name: "Blade",
+      imbuements: [{ name: "Fire Seal" }],
+      curDurability: 7,
+      level: 3,
+      experience: 40,
+    });
+  });
+
+  it("shows a variant in place of the base item", () => {
+    expect(userItemDisplay(ui, { name: "Gilded Blade" }, NOW).name).toBe("Gilded Blade");
+  });
+});
+
+describe("finishedImbuements", () => {
+  it("keeps the rows finished at or before now", () => {
+    const row = (id: string, craftingFinishedAt: Date | null) => ({ id, craftingFinishedAt });
+    const ui = {
+      imbuements: [
+        row("done", new Date(NOW.getTime() - 1)),
+        row("boundary", NOW),
+        row("legacy", null),
+        row("active", new Date(NOW.getTime() + 1)),
+      ],
+    };
+    expect(finishedImbuements(ui, NOW).map((i) => i.id)).toEqual(["done", "boundary", "legacy"]);
   });
 });
 

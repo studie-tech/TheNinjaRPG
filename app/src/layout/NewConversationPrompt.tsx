@@ -3,8 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { BellOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,19 +22,20 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { FederalStatus, UserRank } from "@/drizzle/constants";
-import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
+import { CONVERSATION_MAX_USERS, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
+import { AiSenderSelect } from "@/layout/AiSenderSelect";
 import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi, getMessagingRestriction } from "@/utils/permissions";
+import { useUserPicker } from "@/utils/search";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type CreateConversationSchema,
   createConversationSchema,
 } from "@/validators/comments";
-import { getSearchValidator } from "@/validators/register";
 
 /**
  * Component for creating a new conversation
@@ -59,7 +59,6 @@ export interface NewConversationPromptProps {
 export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (props) => {
   const { data: userData } = useRequiredUserData();
   const { refreshConversationList } = useConversationCacheUpdate();
-  const maxUsers = 5;
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(
     props.defaultOpen ?? false,
   );
@@ -82,36 +81,16 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     },
   });
 
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: {
-      username: "",
-      users: props.preSelectedUser ? [props.preSelectedUser] : [],
-    },
-  });
+  const { methods: userSearchMethods, users } = useUserPicker(
+    CONVERSATION_MAX_USERS,
+    props.preSelectedUser ? [props.preSelectedUser] : [],
+  );
 
   // User search for sender selection (AI posting)
-  const maxSenderUsers = 1;
-  const senderSearchSchema = getSearchValidator({ max: maxSenderUsers });
-  const senderSearchMethods = useForm<z.infer<typeof senderSearchSchema>>({
-    resolver: zodResolver(senderSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const watchedSenderUsers = useWatch({
-    control: senderSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
-  const senderUser = watchedSenderUsers?.[0];
+  const { methods: senderSearchMethods, user: senderUser } = useUserPicker();
   const canPostAsAI = userData && canPostAsAi(userData.role);
   const composeRestriction = userData ? getMessagingRestriction(userData) : null;
 
-  const users = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
   useEffect(() => {
     create.setValue(
       "users",
@@ -163,11 +142,6 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     });
   };
 
-  const openCreateDialog = () => {
-    if (createSubmissionRef.current) return;
-    setIsCreateDialogOpen(true);
-  };
-
   return (
     <div className="flex flex-row items-center">
       {userData && composeRestriction && (
@@ -214,7 +188,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
               if (createSubmissionRef.current) return;
               event.preventDefault();
               event.stopPropagation();
-              openCreateDialog();
+              setIsCreateDialogOpen(true);
             }}
           >
             {props.newButton}
@@ -235,14 +209,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
                 {canPostAsAI && (
                   <div className="mb-3">
                     <FormLabel>Sender</FormLabel>
-                    <UserSearchSelect
-                      useFormMethods={senderSearchMethods}
-                      label="Post as (leave empty to post as yourself)"
-                      showYourself={true}
-                      showAi={true}
-                      inline={true}
-                      maxUsers={maxSenderUsers}
-                    />
+                    <AiSenderSelect methods={senderSearchMethods} />
                   </div>
                 )}
                 <div>
@@ -252,7 +219,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
                     label="Users to send to"
                     showAi={false}
                     showYourself={false}
-                    maxUsers={maxUsers}
+                    maxUsers={CONVERSATION_MAX_USERS}
                   />
                 </div>
                 <FormField

@@ -15,16 +15,20 @@ import {
   canAssignExperience,
   canAttackBracket,
   capUserStats,
+  experienceToNextLevel,
   getAssignedCombatStatTotal,
   getExpBracket,
   getScoutingUsers,
+  levelExperienceProgress,
   manuallyAssignUserStats,
   passesBracketFilter,
   scaleUserStats,
   unassignedExperienceTowardLevel,
+  formatPvpWinRate,
+  getPvpWinRate,
 } from "@/libs/profile";
 
-test("Confirm that level<->experience calculations are consistent", () => {
+test("calcLevel lags stored level: the experience that leaves level L still derives L", () => {
   for (const level of [
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
   ]) {
@@ -547,6 +551,30 @@ test("canAssignExperience stays true while any assignable mastery is below its c
   ).toBe(true);
 });
 
+describe("levelExperienceProgress", () => {
+  const start = calcLevelRequirements(4);
+  const span = calcLevelRequirements(5) - start;
+
+  it("measures from the start of the level", () => {
+    expect(levelExperienceProgress({ level: 5, experience: start + span / 2 })).toEqual({ earned: span / 2, required: span, percent: 50 });
+  });
+
+  it("starts level 1 at zero experience", () => {
+    expect(levelExperienceProgress({ level: 1, experience: 0 })).toEqual({ earned: 0, required: calcLevelRequirements(1), percent: 0 });
+  });
+
+  it("stays inside the level when stored level and experience disagree", () => {
+    expect(levelExperienceProgress({ level: 5, experience: start - 1 }).percent).toBe(0);
+    expect(levelExperienceProgress({ level: 5, experience: start + span * 2 })).toEqual({ earned: span, required: span, percent: 100 });
+  });
+
+  it("leaves the same experience to go as the level-up rule", () => {
+    const user = { level: 5, experience: start + 10 };
+    const { earned, required } = levelExperienceProgress(user);
+    expect(required - earned).toBe(experienceToNextLevel(user));
+  });
+});
+
 describe("unassignedExperienceTowardLevel", () => {
   const user = {
     rank: "GENIN" as const,
@@ -598,5 +626,19 @@ describe("unassignedExperienceTowardLevel", () => {
       unassignedExperienceTowardLevel({ ...user, village: { name: "Horizon" } }),
     ).toBe(0);
     expect(unassignedExperienceTowardLevel({ ...user, rank: "ELITE JONIN" })).toBe(0);
+  });
+});
+
+describe("PvP win rate", () => {
+  it("is a percentage of fights, or 0 before the first fight", () => {
+    expect(getPvpWinRate(3, 1)).toBe(75);
+    expect(getPvpWinRate(0, 0)).toBe(0);
+  });
+
+  it("shows one decimal, or a bare 0 before the first fight", () => {
+    expect(formatPvpWinRate(1, 2)).toBe("33.3");
+    expect(formatPvpWinRate(3, 1)).toBe("75.0");
+    expect(formatPvpWinRate(0, 0)).toBe("0");
+    expect(formatPvpWinRate(0, 5)).toBe("0.0");
   });
 });

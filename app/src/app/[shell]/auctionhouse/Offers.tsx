@@ -47,7 +47,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import { isEquippableUserItem, isImbuing } from "@/libs/item";
+import { isEquippableUserItem, isImbuing, userItemDisplay } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -468,13 +468,7 @@ function OfferCard({
   const selected = available.find((row) => row.id === suppliedId);
   const isOwner = offer.ownerId === user?.userId;
   const offered = offer.offeredUserItem;
-  const offeredItem = offered && {
-    ...offered.item,
-    level: offered.level,
-    experience: offered.experience,
-    curDurability: offered.durability,
-    imbuements: offered.imbuements.map((entry) => entry.item),
-  };
+  const offeredItem = offered && userItemDisplay(offered);
   return (
     <Card>
       <CardHeader className="space-y-2">
@@ -603,16 +597,7 @@ function OfferCard({
                       }))}
                     />
                     {selected && (
-                      <ItemWithEffects
-                        item={{
-                          ...selected.item,
-                          level: selected.level,
-                          experience: selected.experience,
-                          curDurability: selected.durability,
-                          imbuements: selected.imbuements.map((entry) => entry.item),
-                        }}
-                        hideDetails
-                      />
+                      <ItemWithEffects item={userItemDisplay(selected)} hideDetails />
                     )}
                     {error && (
                       <p role="alert" className="text-destructive text-sm">

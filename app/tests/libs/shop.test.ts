@@ -6,6 +6,7 @@ import {
   MIN_ITEM_SHOP_DISCOUNT_FACTOR,
 } from "@/drizzle/constants";
 import {
+  canAffordShopPrice,
   getMaxItemShopPurchaseQuantity,
   getShopDiscounts,
   getShopStackPrice,
@@ -74,6 +75,19 @@ describe("shopItemDiscountFactor", () => {
 
   it("stops at the price floor", () => {
     expect(shopItemDiscountFactor([{ value: 100 }])).toBe(MIN_ITEM_SHOP_DISCOUNT_FACTOR);
+  });
+});
+
+describe("canAffordShopPrice", () => {
+  const price = { ryoCost: 10, repsCost: 2, seichiSilverCost: 1 };
+  const balance = { money: 10, reputationPoints: 2, seichiSilver: 1 };
+
+  it("accepts a balance that exactly covers every currency", () => {
+    expect(canAffordShopPrice(balance, price)).toBe(true);
+  });
+
+  it.each(["money", "reputationPoints", "seichiSilver"] as const)("needs enough %s", (key) => {
+    expect(canAffordShopPrice({ ...balance, [key]: balance[key] - 1 }, price)).toBe(false);
   });
 });
 

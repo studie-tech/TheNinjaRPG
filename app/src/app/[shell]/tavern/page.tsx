@@ -1,9 +1,6 @@
 "use client";
 
-import { UserRoundX } from "lucide-react";
 import { useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -18,7 +15,7 @@ import BanInfo from "@/layout/BanInfo";
 import { ChatMuteButton } from "@/layout/ChatMuteButton";
 import Conversation, { ConversationSkeleton } from "@/layout/Conversation";
 import NavTabs from "@/layout/NavTabs";
-import UserBlacklistControl from "@/layout/UserBlacklistControl";
+import { UserBlacklistPopover } from "@/layout/UserBlacklistControl";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Full tavern conversation with channel selection and account notification controls. */
@@ -115,16 +112,7 @@ export default function Tavern() {
               variant="default"
             />
           )}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button id="filter-bloodline" size="icon" className="w-[32px]">
-                <UserRoundX className="h-4 w-4 hover:text-orange-500" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] overflow-hidden p-0">
-              <UserBlacklistControl />
-            </PopoverContent>
-          </Popover>
+          <UserBlacklistPopover />
         </div>
       }
     />

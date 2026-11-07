@@ -15,6 +15,7 @@ import {
   getFertilizerExperience,
   getFarmingLevel,
   getFarmingLevelProgress,
+  getLivePlotTiming,
   getMaxExtractors,
   getMaxPurchasablePlots,
   getNextFarmEvents,
@@ -24,6 +25,7 @@ import {
   getTotalFarmPlots,
   isFarmMarketSeed,
   isPlotReady,
+  isValidFarmQuantity,
   mapPlotToState,
   qualifiesForFarmActivityReward,
   summarizeFarmPlots,
@@ -211,6 +213,47 @@ describe("farming", () => {
     expect(canWaterPlot(wateredAt, sameCycle)).toBe(false);
     expect(canWaterPlot(null, sameCycle)).toBe(true);
     expect(canWaterPlot(wateredAt, nextCycle)).toBe(true);
+  });
+
+  it("derives plot timing from the clock", () => {
+    const cycleMs = WORLD_CYCLE_SECONDS * 1000;
+    const plantedAt = new Date(cycleMs * 10);
+    const finishAt = new Date(plantedAt.getTime() + cycleMs * 2);
+    const plot = { seedItemId: "seed", plantedAt, finishAt, lastWateredAt: plantedAt };
+
+    expect(getLivePlotTiming(plot, new Date(plantedAt.getTime() + 1000))).toEqual(expect.objectContaining({
+      isReady: false,
+      canWater: false,
+      nextWateringAt: new Date(cycleMs * 11),
+      growthStage: 1,
+    }));
+    expect(getLivePlotTiming(plot, new Date(cycleMs * 11))).toMatchObject({
+      isReady: false,
+      canWater: true,
+      nextWateringAt: null,
+      growthProgress: 50,
+    });
+    expect(getLivePlotTiming(plot, finishAt)).toMatchObject({
+      isReady: true,
+      canWater: false,
+      growthProgress: 100,
+    });
+    expect(
+      getLivePlotTiming({ ...plot, seedItemId: null, lastWateredAt: null }, finishAt),
+    ).toEqual({
+      isReady: false,
+      canWater: false,
+      nextWateringAt: null,
+      growthProgress: 0,
+      growthStage: 0,
+    });
+  });
+
+  it("rejects a cleared or fractional farm quantity", () => {
+    expect(isValidFarmQuantity(1)).toBe(true);
+    expect(isValidFarmQuantity(0)).toBe(false);
+    expect(isValidFarmQuantity(1.5)).toBe(false);
+    expect(isValidFarmQuantity(Number.NaN)).toBe(false);
   });
 
   it("uses crop harvest xp only", () => {

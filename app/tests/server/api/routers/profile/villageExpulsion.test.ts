@@ -69,7 +69,7 @@ describe("village expulsion recovery", () => {
     const { db, reads } = profileClient([profileSnapshot(false), fresh]);
     const result = await fetchUpdatedUser({ client: db, userId: "user-1" });
     expect(reads()).toBe(2);
-    expect(result.user).toMatchObject({ isOutlaw: true, villageId: "syndicate", joinedVillageAt: fresh.joinedVillageAt, village: { type: "OUTLAW" } });
+    expect(result.user).toEqual(expect.objectContaining({ isOutlaw: true, villageId: "syndicate", joinedVillageAt: fresh.joinedVillageAt, village: expect.objectContaining({ type: "OUTLAW" }) }));
   });
 
   it("retries failed ANBU cleanup even after the account is already an outlaw", async () => {

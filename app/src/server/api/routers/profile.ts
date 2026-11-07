@@ -37,11 +37,11 @@ import {
   SHRINE_BOOST_TYPES,
   SKILL_POINT_MAX_LEVEL,
   SKILL_POINT_MIN_LEVEL,
+  SKILL_TREE_REQUIRED_RANK,
   shrineLobbyFreshAfter,
   TERRITORY_WAR_BOOST_PERCENT,
   TUTORIAL_STEPS_COUNT,
   UserRanks,
-  UserRolesWithSkillTreeAccess,
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import {
@@ -138,6 +138,7 @@ import { regenerationBuffs } from "@/libs/titles";
 import {
   applyMasteryTrainingGains,
   getReducedGainsDays,
+  hasRequiredRank,
   inferJutsuTrainingStartedAt,
   settleQueuedTraining,
 } from "@/libs/train";
@@ -699,7 +700,7 @@ export const profileRouter = createTRPCRouter({
       ]);
       // Chunin+ ranks get 1 skill point per level from SKILL_POINT_MIN_LEVEL–MAX.
       // The LEAST(..., MAX_SKILL_POINTS) in the SQL update caps the running total.
-      const isChunin = UserRolesWithSkillTreeAccess.includes(user.rank);
+      const isChunin = hasRequiredRank(user.rank, SKILL_TREE_REQUIRED_RANK);
       const skillPointsGain =
         isChunin &&
         newLevel >= SKILL_POINT_MIN_LEVEL &&

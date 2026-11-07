@@ -2,6 +2,7 @@ import type {
   ContentProposalCategory,
   ContentProposalEntityType,
   ContentProposalRejectReason,
+  ContentProposalSource,
   ContentProposalStatus,
 } from "@/drizzle/constants";
 
@@ -15,6 +16,12 @@ export const ENTITY_LABELS: Record<ContentProposalEntityType, string> = {
   TITLE: "Title",
   GAME_ASSET: "Asset",
   AI: "AI",
+};
+
+/** Display name of each suggestion source, on the review desk and its statistics. */
+export const SOURCE_LABELS: Record<ContentProposalSource, string> = {
+  AGENT: "Content audit",
+  STAFF: "Staff",
 };
 
 /** Display name of each suggestion category, on the review desk and the suggest dialog. */

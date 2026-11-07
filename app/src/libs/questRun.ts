@@ -49,22 +49,37 @@ export const hasQuestContentChanged = (
   !!entry.questVersion &&
   new Date(entry.questVersion).getTime() !== new Date(entry.quest.updatedAt).getTime();
 
-/** Rejection for an attempt that cannot continue, or null while it remains playable. */
-export const questAttemptBlockMessage = (
+/** An attempt stalls once its content was edited, or was hidden from this role. */
+export const isQuestAttemptPaused = (
   attempt: Parameters<typeof hasQuestContentChanged>[0] & {
     quest: Pick<UserQuest["quest"], "hidden">;
   },
   role: UserRole,
+) =>
+  hasQuestContentChanged(attempt) ||
+  (!!attempt.quest.hidden && !canPlayHiddenQuests(role));
+
+/** Rejection for an attempt that cannot continue, or null while it remains playable. */
+export const questAttemptBlockMessage = (
+  attempt: Parameters<typeof isQuestAttemptPaused>[0],
+  role: UserRole,
 ) => {
-  if (
-    !hasQuestContentChanged(attempt) &&
-    (!attempt.quest.hidden || canPlayHiddenQuests(role))
-  )
-    return null;
+  if (!isQuestAttemptPaused(attempt, role)) return null;
   return attempt.questType === "battlepyramid"
     ? "This Pyramid is paused or changed. Return to the Battle Arena to resume or abandon it."
     : "This quest is currently unavailable.";
 };
+
+/** The last of the updated quests that plays out one objective at a time, if any. */
+export const findConsecutiveQuestId = (
+  userQuests: readonly UserQuest[] | undefined,
+  questIds: readonly string[],
+) =>
+  questIds
+    .filter(
+      (id) => userQuests?.find((q) => q.questId === id)?.quest?.consecutiveObjectives,
+    )
+    .at(-1);
 
 /** Runs with a lifecycle of their own: start guards, recovery and battle version checks. */
 export const isManagedQuestRun = (quest: {
@@ -102,6 +117,30 @@ export const getQuestEntryRequirements = (
   }
   return [...quantities].map(([itemId, quantity]) => ({ itemId, quantity }));
 };
+
+/** Entry items with the carried count of each; a missing item shows its id until named. */
+export const getQuestEntryStock = (
+  content: Pick<QuestContentType, "entryItems">,
+  carried: readonly { itemId: string; quantity: number; item: { name: string } }[],
+) =>
+  getQuestEntryRequirements(content).map((required) => {
+    const rows = carried.filter((row) => row.itemId === required.itemId);
+    return {
+      ...required,
+      name: rows[0]?.item.name ?? required.itemId,
+      owned: rows.reduce((sum, row) => sum + row.quantity, 0),
+    };
+  });
+
+/** Name entry items from the catalogue, which also knows items the player does not carry. */
+export const nameQuestEntryStock = <T extends { itemId: string; name: string }>(
+  stock: readonly T[],
+  itemNames: readonly { id: string; name: string }[] | undefined,
+) =>
+  stock.map((required) => ({
+    ...required,
+    name: itemNames?.find((item) => item.id === required.itemId)?.name ?? required.name,
+  }));
 
 /** "2× Pyramid Ticket, 1× Key" — the entry cost as players read it. */
 export const formatQuestEntryCost = (

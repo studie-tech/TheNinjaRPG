@@ -722,6 +722,7 @@ export const createTravelScene = async (options: {
         snapshot.showUsers !== lastActorSnapshot.showUsers ||
         snapshot.minBracket !== lastActorSnapshot.minBracket ||
         snapshot.friendlyAttack !== lastActorSnapshot.friendlyAttack ||
+        snapshot.wars !== lastActorSnapshot.wars ||
         snapshot.structureObjectiveIds !== lastActorSnapshot.structureObjectiveIds
       ) {
         actorsDirty = false;
@@ -969,6 +970,7 @@ const travelFrameInputs = (snapshot: TravelSnapshot) =>
     snapshot.showUsers,
     snapshot.minBracket,
     snapshot.friendlyAttack,
+    snapshot.wars,
     snapshot.structureObjectiveIds,
     snapshot.nav,
     snapshot.enabled,

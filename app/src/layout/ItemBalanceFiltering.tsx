@@ -1,9 +1,10 @@
-import { api } from "@/app/_trpc/client";
-import { BattleTypes, ItemTypes } from "@/drizzle/constants";
+import { ItemTypes } from "@/drizzle/constants";
 import {
+  battleTypesField,
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  minCountField,
   toOptions,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
@@ -12,23 +13,12 @@ interface ItemBalanceFilteringProps {
   state: ItemBalanceFilteringState;
 }
 
-const makeSchema = (bloodlines: { id: string; name: string }[]) =>
+/** Define the item balance filters and their initial battle sample. */
+const makeSchema = () =>
   defineFilteringSchema({
     fields: [
-      {
-        id: "battleTypes",
-        label: "Battle Types",
-        type: "multi-select",
-        defaultValue: ["RANKED_PVP", "COMBAT", "RANKED_SPARRING", "SPARRING"],
-        options: toOptions(BattleTypes),
-      },
-      {
-        id: "minCount",
-        label: "Minimum Count",
-        type: "number",
-        defaultValue: undefined,
-        normalizeForFilter: (v) => (v !== undefined && v >= 1 ? v : undefined),
-      },
+      battleTypesField(["RANKED_PVP", "COMBAT", "RANKED_SPARRING", "SPARRING"]),
+      minCountField,
       {
         id: "itemTypes",
         label: "Item Types",
@@ -41,18 +31,15 @@ const makeSchema = (bloodlines: { id: string; name: string }[]) =>
         label: "Bloodlines",
         type: "multi-select",
         defaultValue: [],
-        options: bloodlines.map((b) => ({ value: b.id, label: b.name })),
+        dataSource: "bloodlines",
       },
     ] as const,
   });
 
 const ItemBalanceFiltering: React.FC<ItemBalanceFilteringProps> = (props) => {
-  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
-  const bl = bloodlines ?? [];
-  const schema = makeSchema(bl);
   return (
     <ContentFiltering
-      schema={schema}
+      schema={makeSchema()}
       state={props.state.cf}
       triggerButtonId="filter-item-balance"
     />
@@ -62,12 +49,10 @@ const ItemBalanceFiltering: React.FC<ItemBalanceFilteringProps> = (props) => {
 export default ItemBalanceFiltering;
 
 export const getFilter = (state: ItemBalanceFilteringState) =>
-  buildFilter(state.cf, makeSchema([]));
+  buildFilter(state.cf, makeSchema());
 
 export const useFiltering = () => {
-  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
-  const bl = bloodlines ?? [];
-  const cf = useContentFiltering(makeSchema(bl));
+  const cf = useContentFiltering(makeSchema());
   return {
     ...cf.values,
     cf,

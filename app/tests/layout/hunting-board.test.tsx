@@ -11,6 +11,7 @@ import * as Modal from "@/layout/Modal";
 import { actionStatusMessage, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import * as toast from "@/libs/toast";
 import { optimisticGlobalTravelStart } from "@/libs/travel";
+import { pushToCombat } from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { huntingContract, huntingHabitatContent } from "../setup/hunting";
@@ -100,6 +101,28 @@ it("keeps ordinary hunting rejections inline and retains a merged recovery notic
   expect((view.getAllByRole("button", { name: "Accept contract" })[0] as HTMLButtonElement).disabled).toBe(false);
   expect(updateUser).toHaveBeenCalledWith(expect.objectContaining({ actionNotice: AUTO_WAKE_MESSAGE }), { revision: 7, refetch: false });
   expect(toast.showMutationToast).toHaveBeenCalledTimes(1);
+});
+
+it("enters a started hunt once when the battle event already navigated", async () => {
+  let options!: { onSuccess: (result: object, input: undefined, revision: number) => Promise<void> };
+  const invalidate = async () => undefined;
+  Object.assign(client.api, {
+    useUtils: () => ({
+      hunting: { getBoard: { invalidate }, getSession: { invalidate } },
+      combat: { getBattle: { invalidate } },
+    }),
+  });
+  Object.assign(client.api.hunting.start, {
+    useMutation: (mutationOptions: typeof options) => {
+      options = mutationOptions;
+      return {};
+    },
+  });
+  render(<HuntingBoard />);
+  const router = navigation.useRouter();
+  pushToCombat(router, "hunt-battle");
+  await options.onSuccess({ success: true, message: "Started", battleId: "hunt-battle" }, undefined, 1);
+  expect(router.push).toHaveBeenCalledTimes(1);
 });
 
 it("hides nonmatching habitats and combines rank, creature and material filters", () => {

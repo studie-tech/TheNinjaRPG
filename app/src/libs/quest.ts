@@ -92,7 +92,7 @@ import {
   getRewardPickCount,
   isRewardChoiceQuest,
 } from "@/libs/rewardChoice";
-import { collapseRewards } from "@/libs/rewards";
+import { collapseRewards, mergeMaterialDrops } from "@/libs/rewards";
 import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
@@ -108,6 +108,7 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import {
   formatSecondsToTimeDisplay,
   getCollectDeadline,
+  hasEndDatePassed,
   periodStart,
   reduceActivitySeconds,
   secondsPassed,
@@ -533,6 +534,7 @@ export const getReward = (
         if (objective.reward_sage_modes) {
           rawRewards.reward_sage_modes.push(...objective.reward_sage_modes);
         }
+        mergeMaterialDrops(rawRewards, objective);
         if (objective.reward_rank !== "NONE") {
           rawRewards.reward_rank = objective.reward_rank;
         }
@@ -2193,6 +2195,35 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
   ] as const;
 };
 
+/**
+ * Quests offered by a Mission Hall tile. PvP and medical tiles list every rank the player can
+ * take; the others match their type and rank, so random tiles count what startRandom draws from.
+ * The A-rank picker also keeps the village-locked quests of the other classifier, which no other
+ * tile can start.
+ */
+export const getMissionHallTileQuests = <
+  T extends Pick<Quest, "questType" | "questRank" | "requiredVillage">,
+>(
+  setting: Pick<ReturnType<typeof getMissionHallSettings>[number], "type" | "rank">,
+  quests: T[],
+  userRanks: LetterRank[],
+) => {
+  const { type, rank } = setting;
+  if (type === "pvp" || type === "medical") {
+    return quests.filter(
+      (q) => q.questType === type && userRanks.includes(q.questRank),
+    );
+  }
+  return quests.filter(
+    (q) =>
+      q.questRank === rank &&
+      (q.questType === type ||
+        (rank === "A" &&
+          ["mission", "crime"].includes(q.questType) &&
+          !!q.requiredVillage)),
+  );
+};
+
 export const mockAchievementHistoryEntries = (
   achievements: Quest[],
   user: Pick<NonNullable<UserWithRelations>, "userId" | "role" | "userQuests">,
@@ -2483,8 +2514,7 @@ export const isAvailableUserQuests = (
   const hideCheck = !questAndUserQuestInfo.hidden || canPlayHiddenQuests(user.role);
   const startsCheck =
     !questAndUserQuestInfo.startsAt || new Date(questAndUserQuestInfo.startsAt) <= now;
-  const expiresCheck =
-    !questAndUserQuestInfo.endsAt || new Date(questAndUserQuestInfo.endsAt) > now;
+  const expiresCheck = !hasEndDatePassed(questAndUserQuestInfo.endsAt, now);
   const villageCheck =
     !questAndUserQuestInfo.requiredVillage ||
     questAndUserQuestInfo.requiredVillage === user.villageId ||

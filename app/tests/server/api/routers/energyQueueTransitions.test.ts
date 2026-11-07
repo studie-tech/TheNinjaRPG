@@ -315,10 +315,10 @@ describeWithDatabase("Energy queue state transitions", () => {
     expect([arrived.offence, arrived.defence]).toEqual([10, 10]);
     expect(await readEnergyQueue(USER)).toEqual(entries);
     await complete();
-    expect(await read()).toMatchObject({
+    expect(await read()).toEqual(expect.objectContaining({
       curHealth: recovery, curChakra: recovery, curStamina: recovery, curEnergy: recovery,
       regenAt: arrived.regenAt, offence: 10, defence: 10,
-    });
+    }));
     expect(await readEnergyQueue(USER)).toEqual(entries);
   });
 
@@ -413,7 +413,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     });
     await completeExpiredGlobalTravel(racingDb);
     expect(raced).toBe(true);
-    expect(await read()).toMatchObject({ status: "TRAVEL", regenAt, updatedAt: changedAt, curEnergy: 1, offence: 10, defence: 10 });
+    expect(await read()).toEqual(expect.objectContaining({ status: "TRAVEL", regenAt, updatedAt: changedAt, curEnergy: 1, offence: 10, defence: 10 }));
     expect(await readEnergyQueue(USER)).toEqual(entries);
   });
 
@@ -497,14 +497,14 @@ describeWithDatabase("Energy queue state transitions", () => {
         avatarLight: "https://example.com/avatar.png",
       });
     expect(result.success).toBe(false);
-    expect(await read()).toMatchObject({
+    expect(await read()).toEqual(expect.objectContaining({
       longitude: 25,
       regenAt: before.regenAt,
       updatedAt: changedAt,
       curEnergy: 1,
       offence: before.offence,
       defence: before.defence,
-    });
+    }));
     expect(await readEnergyQueue(USER)).toEqual(entries);
   });
   it("finishes travel repeatedly without a queue or another snapshot write", async () => {
@@ -555,13 +555,13 @@ describeWithDatabase("Energy queue state transitions", () => {
       success: false,
       message: "Your travel state changed. Please try again",
     });
-    expect(await read()).toMatchObject({
+    expect(await read()).toEqual(expect.objectContaining({
       status: "TRAVEL",
       regenAt,
       curEnergy: before.curEnergy,
       curHealth: 42,
       updatedAt: changedAt,
-    });
+    }));
     expect(await readEnergyQueue(USER)).toEqual(entries);
   });
   it("preloads real Energy capacity and boosted recovery before forced combat loadouts", async () => {

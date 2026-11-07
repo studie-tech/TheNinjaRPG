@@ -44,6 +44,7 @@ import {
 import { getServerPusher } from "@/libs/pusher";
 import { createBattleClaimId } from "@/libs/raids";
 import { fetchActiveUserMpvpBattles } from "@/queries/clan";
+import { listUserDataForStartShrineBattle } from "@/queries/combat";
 import {
   fetchUser,
   findUserById,
@@ -73,7 +74,6 @@ import {
   listMpvpBattleQueueForGetShrineBattles,
   listSectorForGetCapturedSectors,
   listUserDataForGetShrineAis,
-  listUserDataForInitiateShrineBattle,
   selectMpvpBattleQueueForLeaveShrineBattle,
   selectMpvpBattleUserForGetUserQueuedShrineBattle,
   selectMpvpBattleUserForLeaveShrineBattle,
@@ -312,7 +312,7 @@ export const shrineRouter = createTRPCRouter({
           `Need ${SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens to unlock AI defender`,
         );
       }
-      if (!ai) return errorResponse("AI not found");
+      if (!ai?.isAi || !ai.inShrines) return errorResponse("AI not found");
 
       const currentUnlocks = user.village.shrineSettings.unlockedAiIds || [];
       if (currentUnlocks.includes(input.aiId)) {
@@ -323,12 +323,15 @@ export const shrineRouter = createTRPCRouter({
 
       const updateRes = await updateVillageForUnlockAiDefender(
         ctx.drizzle,
+        currentUnlocks,
         updatedUnlocks,
-        { villageId: user.villageId },
+        { villageId: user.villageId, userId: user.userId },
       );
 
       if (updateRes.rowsAffected === 0) {
-        return errorResponse("Not enough village tokens to unlock AI defender");
+        return errorResponse(
+          "Could not unlock AI defender: the village changed, please try again",
+        );
       }
 
       return {
@@ -349,12 +352,13 @@ export const shrineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [{ user, requiresUserRefresh }, ai] = await Promise.all([
+      const [{ user, requiresUserRefresh }, ai, shrineAis] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         findUserById(ctx.drizzle, input.aiId),
+        listUserDataForStartShrineBattle(ctx.drizzle),
       ]);
 
       if (!user) return errorResponse("User not found");
@@ -363,7 +367,6 @@ export const shrineRouter = createTRPCRouter({
       if (user.village.kageId !== user.userId) {
         return errorResponse("Only the Kage can manage AI defenders");
       }
-      if (!ai) return errorResponse("AI not found");
 
       const currentUnlocks = user.village.shrineSettings.unlockedAiIds || [];
       const currentAssigns = user.village.shrineSettings.activeAiIds || [];
@@ -372,25 +375,40 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("AI defender not unlocked");
       }
 
+      // Retired ids hold no slot and leave the list on any toggle.
+      const shrineAiIds = shrineAis.map((shrineAi) => shrineAi.userId);
+      const liveAssigns = currentAssigns.filter((id) => shrineAiIds.includes(id));
+
       let newAssigns: string[];
       let message: string;
 
       if (currentAssigns.includes(input.aiId)) {
-        newAssigns = currentAssigns.filter((id) => id !== input.aiId);
-        message = `AI defender ${ai.username} removed from active defenders`;
+        newAssigns = liveAssigns.filter((id) => id !== input.aiId);
+        message = `${ai ? `AI defender ${ai.username}` : "Retired AI defender"} removed from active defenders`;
       } else {
-        if (currentAssigns.length >= SHRINE_MAX_AI_ASSIGNMENTS) {
+        // Stays out of the removal branch so a Kage can clear a retired defender.
+        if (!ai?.isAi || !ai.inShrines) return errorResponse("AI not found");
+        if (liveAssigns.length >= SHRINE_MAX_AI_ASSIGNMENTS) {
           return errorResponse(
             `Can only assign up to ${SHRINE_MAX_AI_ASSIGNMENTS} AI defenders`,
           );
         }
-        newAssigns = [...currentAssigns, input.aiId];
+        newAssigns = [...liveAssigns, input.aiId];
         message = `AI defender ${ai.username} added to active defenders`;
       }
 
-      await updateVillageForToggleVillageAiDefender(ctx.drizzle, newAssigns, {
-        villageId: user.villageId,
-      });
+      const updateRes = await updateVillageForToggleVillageAiDefender(
+        ctx.drizzle,
+        currentAssigns,
+        newAssigns,
+        { villageId: user.villageId, userId: user.userId },
+      );
+
+      if (updateRes.rowsAffected === 0) {
+        return errorResponse(
+          "Could not update AI defenders: the village changed, please try again",
+        );
+      }
 
       return {
         success: true,
@@ -697,7 +715,7 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse(
           "You must be in a village or serving as a mercenary for this shrine",
         );
-      if (MAP_RESERVED_SECTORS.includes(input.sectorNumber)) {
+      if (MAP_RESERVED_SECTORS.includes(input.sectorNumber) && !userWar?.rules) {
         return errorResponse("This sector is reserved and cannot be attacked");
       }
       // Home sectors can only be attacked during Village Wars or Raids
@@ -1137,23 +1155,20 @@ export const shrineRouter = createTRPCRouter({
       // If no player defenders, use AI defenders from the defender village
       if (defenderIds.length === 0) {
         // Use defenderEntityId directly - it's the village ID for shrine battles
-        const defenderVillage = await findVillageById(
-          ctx.drizzle,
-          shrineBattle.defenderEntityId,
+        const [defenderVillage, shrineAis] = await Promise.all([
+          findVillageById(ctx.drizzle, shrineBattle.defenderEntityId),
+          listUserDataForStartShrineBattle(ctx.drizzle),
+        ]);
+        const shrineAiIds = shrineAis.map((ai) => ai.userId);
+        // Only shrine AIs defend, whatever the village has stored.
+        const assignedAiIds = (
+          defenderVillage?.shrineSettings?.activeAiIds ?? []
+        ).filter((id) => shrineAiIds.includes(id));
+        // Without a usable village assignment, fall back to the global shrine AIs.
+        defenderIds = (assignedAiIds.length > 0 ? assignedAiIds : shrineAiIds).slice(
+          0,
+          SHRINE_BATTLE_MAX_USERS_PER_SIDE,
         );
-        if (defenderVillage?.shrineSettings?.activeAiIds) {
-          defenderIds = defenderVillage.shrineSettings.activeAiIds.slice(
-            0,
-            SHRINE_BATTLE_MAX_USERS_PER_SIDE,
-          );
-        }
-        // If still no village-configured AI, fall back to global shrine AIs
-        if (defenderIds.length === 0) {
-          const globalAiDefenders = await listUserDataForInitiateShrineBattle(
-            ctx.drizzle,
-          );
-          defenderIds = globalAiDefenders.map((ai) => ai.userId);
-        }
         // Final fallback: use the same hardcoded AI as solo shrine battles
         if (defenderIds.length === 0) {
           defenderIds = [VILLAGE_PROTECTOR_AI_ID];

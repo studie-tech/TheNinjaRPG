@@ -123,7 +123,7 @@ export const rarityTextClass: Record<ItemRarity, string> = {
 export const slotLabel = (userItem: UserItemWithRelations) => {
   const value =
     userItem.item.slot === "NONE" ? userItem.item.itemType : userItem.item.slot;
-  return value.charAt(0) + value.slice(1).toLowerCase();
+  return capitalizeFirstLetter(value);
 };
 
 /** Stack size for stacks, remaining wear for gear that wears. */

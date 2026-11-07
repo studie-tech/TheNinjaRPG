@@ -205,3 +205,108 @@ export const getAssignedPetCollection = (
     pets: current.pets.map((pet) => (pet.id === id ? { ...pet, ...patch } : pet)),
   };
 };
+
+/** Public settings fields that cannot expose artwork generation leases or owner secrets. */
+type PetSettings = Pick<
+  UserPet,
+  | "name"
+  | "gender"
+  | "battleEnabled"
+  | "spawnPosition"
+  | "aiRules"
+  | "includeDefaultRules"
+>;
+
+/** Publish only the committed settings and snapshot metadata; recovery needs a complete pet refresh. */
+export const getSavedPetSettingsUpdate = (
+  user: UserData,
+  pet: UserPet,
+  patch: Partial<PetSettings>,
+  now: Date,
+  recovered: boolean,
+) => ({
+  userPatch: recovered ? {} : { updatedAt: getNextUserSnapshotAt(user.updatedAt, now) },
+  petSettingsUpdate: recovered
+    ? undefined
+    : {
+        id: pet.id,
+        ownerId: user.userId,
+        previousOwnerUpdatedAt: user.updatedAt,
+        previousRevision: pet.revision,
+        revision: pet.revision + 1,
+        updatedAt: now,
+        name: patch.name ?? pet.name,
+        gender: patch.gender ?? pet.gender,
+        battleEnabled: patch.battleEnabled ?? pet.battleEnabled,
+        spawnPosition: patch.spawnPosition ?? pet.spawnPosition,
+        aiRules: patch.aiRules ?? pet.aiRules,
+        includeDefaultRules: patch.includeDefaultRules ?? pet.includeDefaultRules,
+      },
+});
+
+type PetSettingsUpdate = NonNullable<
+  ReturnType<typeof getSavedPetSettingsUpdate>["petSettingsUpdate"]
+>;
+
+/** Advance only the matching owner's saved timestamp, preserving concurrent account changes. */
+export const getSavedPetSettingsOwnerPatch = (
+  user: Pick<UserData, "userId" | "updatedAt">,
+  update: PetSettingsUpdate,
+) =>
+  user.userId === update.ownerId &&
+  user.updatedAt.getTime() === update.previousOwnerUpdatedAt.getTime()
+    ? { updatedAt: getNextUserSnapshotAt(user.updatedAt, update.updatedAt) }
+    : undefined;
+
+/** Reconcile selected settings only when both pet projections still hold the committed baseline. */
+export const getSavedPetSettings = (
+  current: RouterOutputs["pets"]["getPet"],
+  update: PetSettingsUpdate | undefined,
+): RouterOutputs["pets"]["getPet"] | undefined => {
+  if (
+    !update ||
+    current.pet?.id !== update.id ||
+    current.pet.revision !== update.previousRevision ||
+    !current.pets.some(
+      (pet) => pet.id === update.id && pet.revision === update.previousRevision,
+    )
+  )
+    return;
+  const {
+    ownerId: _owner,
+    previousOwnerUpdatedAt: _ownerAt,
+    previousRevision: _previous,
+    id,
+    ...patch
+  } = update;
+  return {
+    ...current,
+    pet: { ...current.pet, ...patch },
+    pets: current.pets.map((pet) => (pet.id === id ? { ...pet, ...patch } : pet)),
+  };
+};
+
+/** Reconcile a loaded companion collection without changing eligibility, species or generation state. */
+export const getSavedPetSettingsCollection = (
+  current: RouterOutputs["pets"]["getCollection"],
+  update: PetSettingsUpdate | undefined,
+): RouterOutputs["pets"]["getCollection"] | undefined => {
+  if (
+    !update ||
+    !current.pets.some(
+      (pet) => pet.id === update.id && pet.revision === update.previousRevision,
+    )
+  )
+    return;
+  const {
+    ownerId: _owner,
+    previousOwnerUpdatedAt: _ownerAt,
+    previousRevision: _previous,
+    id,
+    ...patch
+  } = update;
+  return {
+    ...current,
+    pets: current.pets.map((pet) => (pet.id === id ? { ...pet, ...patch } : pet)),
+  };
+};

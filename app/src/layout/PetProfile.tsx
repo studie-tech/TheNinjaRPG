@@ -6,7 +6,7 @@ import { PawPrint, Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { api, type RouterInputs } from "@/app/_trpc/client";
+import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,9 +44,12 @@ import {
   PET_SEICHI_SILVER_COST,
   type PetGender,
   PetGenders,
+  PetPaymentCurrencies,
+  type PetPaymentCurrency,
   PetSpawnPositions,
 } from "@/drizzle/constants";
 import { usePetCacheUpdate } from "@/hooks/usePetCacheUpdate";
+import { usePetMutationFeedback } from "@/hooks/usePetMutationFeedback";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import Confirm from "@/layout/Confirm";
@@ -59,6 +62,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
 import { PetTasks } from "@/layout/PetTasks";
+import { QueryError } from "@/layout/QueryError";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import { actionStatusMessage, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import {
@@ -71,6 +75,7 @@ import { isPetGenderEditable, PET_GENDER_EDIT_UNTIL_LABEL } from "@/libs/pets/ge
 import {
   canUsePet,
   getPetLevel,
+  getPetPaymentOption,
   getPetRank,
   getPetStatCaps,
   isPetAppearanceReady,
@@ -84,7 +89,6 @@ import {
   PET_AI_EFFECT_TYPES,
   updatePetSchema,
 } from "@/validators/pets";
-import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
  * Manage the owner's collection and selected companion within the profile tab.
@@ -107,8 +111,7 @@ export function PetProfile() {
   const [selectedMealId, setSelectedMealId] = useState("");
   const [isSlotDialogOpen, setIsSlotDialogOpen] = useState(false);
   const slotButtonRef = useRef<HTMLButtonElement>(null);
-  const [slotCurrency, setSlotCurrency] =
-    useState<RouterInputs["pets"]["acquirePet"]["currency"]>("REPUTATION");
+  const [slotCurrency, setSlotCurrency] = useState<PetPaymentCurrency>("REPUTATION");
   const [abilityDraft, setAbilityDraft] = useState<
     RouterInputs["pets"]["updateAbilities"] | null
   >(null);
@@ -146,7 +149,8 @@ export function PetProfile() {
         ? 3000
         : false,
   });
-  const { preparePetUpdate, updatePet } = usePetCacheUpdate(petInput);
+  const { preparePetUpdate, updatePet, prepareSettingsUpdate, updateSettings } =
+    usePetCacheUpdate(petInput, { prepareUserUpdate, updateUser });
   const pet = data?.pet;
   const isGenerating = !!pet && generatingPetIds.includes(pet.id);
   const aiProfile = useMemo(
@@ -204,30 +208,31 @@ export function PetProfile() {
     setGenderDraft(pet?.gender ?? null);
   }, [pet?.id, pet?.gender]);
 
-  /** Reconcile pet and player views after a committed or uncertain mutation. */
-  const invalidatePetData = async () => {
-    await Promise.all([
-      utils.pets.getPet.invalidate(),
-      utils.pets.getCollection.invalidate(),
-    ]);
-  };
-  const finishMutation = async (
-    result: UserDeltaResponse,
+  const { invalidatePetData, finishMutation, failMutation } = usePetMutationFeedback({
+    setMessage,
+    updateUser,
+  });
+  const finishSettings = async (
+    result: RouterOutputs["pets"]["updatePet"],
     _variables: unknown,
-    revision: number | undefined,
+    context: ReturnType<typeof prepareSettingsUpdate>,
   ) => {
     setMessage(result.success ? null : result.message);
     showMutationToast(result);
-    await Promise.all([invalidatePetData(), updateUser(result, { revision })]);
-  };
-  const failMutation = async (cause: { message: string }) => {
-    setMessage(cause.message);
-    // A network failure may arrive after the server commits the update.
-    await Promise.all([invalidatePetData(), utils.profile.getUser.invalidate()]);
+    if (result.success && result.petSettingsUpdate) {
+      // A confirmed settings-only owner timestamp must not reload the pet bank.
+      previousOwnerProgress.current = [
+        result.userPatch?.updatedAt?.getTime() ?? ownerUpdatedAt,
+        ownerExperience,
+        ownerEarnedExperience,
+        ownerPetExperience,
+      ];
+    }
+    await updateSettings(result, context);
   };
   const update = api.pets.updatePet.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: finishMutation,
+    onMutate: prepareSettingsUpdate,
+    onSuccess: finishSettings,
     onError: failMutation,
   });
   const generate = api.pets.generateAppearance.useMutation({
@@ -301,8 +306,8 @@ export function PetProfile() {
     onError: failMutation,
   });
   const updateAi = api.pets.updateAiConfig.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: finishMutation,
+    onMutate: prepareSettingsUpdate,
+    onSuccess: finishSettings,
     onError: failMutation,
   });
   const release = api.pets.releasePet.useMutation({
@@ -416,12 +421,13 @@ export function PetProfile() {
   if (error || !data)
     return (
       <ContentBox title="Pet" subtitle="Your companion">
-        <p role="alert" className="mb-3 text-red-600">
-          {error?.message ?? "Your pet could not be loaded."}
-        </p>
-        <Button variant="outline" onClick={() => void refetch()}>
-          Try again
-        </Button>
+        <QueryError
+          layout="stacked"
+          message={error?.message ?? "Your pet could not be loaded."}
+          messageClassName="mb-3 text-red-600"
+          retryVariant="outline"
+          onRetry={() => void refetch()}
+        />
       </ContentBox>
     );
   // Send players through the existing destination picker instead of a location-gated page.
@@ -464,14 +470,14 @@ export function PetProfile() {
     hasHomeKitchen &&
     homeVillage.sector === sectorVillage?.sector &&
     (userData.isOutlaw || canAccessStructure(userData, "/home", sectorVillage));
-  const slotCost =
-    slotCurrency === "SEICHI_SILVER" ? data.slotSilverCost : data.slotCost;
-  const slotBalance =
-    slotCurrency === "SEICHI_SILVER"
-      ? userData.seichiSilver
-      : userData.reputationPoints;
-  const slotCurrencyLabel =
-    slotCurrency === "SEICHI_SILVER" ? "Seichi Silver" : "reputation";
+  const {
+    cost: slotCost,
+    balance: slotBalance,
+    label: slotCurrencyLabel,
+  } = getPetPaymentOption(slotCurrency, userData, {
+    reputation: data.slotCost,
+    silver: data.slotSilverCost,
+  });
   const slotBlockMessage =
     !canAttemptAwakeAction(userData) || userData.battleId
       ? "You must be awake and out of combat to unlock a slot."
@@ -577,8 +583,8 @@ export function PetProfile() {
             disabled={isBusy}
             className="gap-2 py-2"
             onValueChange={(value) => {
-              if (value === "REPUTATION" || value === "SEICHI_SILVER")
-                setSlotCurrency(value);
+              const next = PetPaymentCurrencies.find((c) => c === value);
+              if (next) setSlotCurrency(next);
             }}
           >
             {[

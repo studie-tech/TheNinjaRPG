@@ -23,6 +23,7 @@ import {
   listBountyForBoard,
   listBountySignupForGetTrackedBounties,
   listBountySignupForSignup,
+  refundBountyContribution,
   updateBountyForAddMoney,
   updateBountyForCollect,
   updateBountyForRetract,
@@ -274,11 +275,10 @@ export const bountyRouter = createTRPCRouter({
       );
       const raise = await updateBountyForAddMoney(ctx.drizzle, input);
       if (raise.rowsAffected === 0) {
-        // Whoever deletes the contribution row owns its refund
-        const removal = await deleteBountyContribution(ctx.drizzle, contributionId);
-        if (removal.rowsAffected === 1) {
-          await incrementUserMoney(ctx.drizzle, input.amountRyo, ctx.userId);
-        }
+        await refundContribution(ctx.drizzle, {
+          id: contributionId,
+          amountRyo: input.amountRyo,
+        });
         return errorResponse("Bounty not open");
       }
 
@@ -379,8 +379,8 @@ export const bountyRouter = createTRPCRouter({
 
 /**
  * Refund every contribution of a bounty that has already left the OPEN state. Contributions
- * are read after that transition so late ones are included, and each is refunded only by the
- * caller whose delete removed it, so concurrent refunders never pay the same row twice.
+ * are read after that transition so late ones are included. Safe to repeat, so the hourly
+ * cron resumes a pass that stopped partway.
  */
 export const refundBountyContributions = async (
   client: DrizzleClient,
@@ -388,14 +388,21 @@ export const refundBountyContributions = async (
 ) => {
   const contributions = await listBountyContributions(client, bountyId);
   await Promise.all(
-    contributions.map(async (contribution) => {
-      const removal = await deleteBountyContribution(client, contribution.id);
-      if (removal.rowsAffected !== 1) return;
-      await incrementUserMoney(
-        client,
-        contribution.amountRyo,
-        contribution.contributorUserId,
-      );
-    }),
+    contributions.map((contribution) => refundContribution(client, contribution)),
   );
+};
+
+/**
+ * Refund one contribution, then remove it. Only the refunder that zeroes the row pays and
+ * deletes it; a row found at 0 was paid by a pass that stopped before its delete.
+ */
+const refundContribution = async (
+  client: DrizzleClient,
+  contribution: { id: string; amountRyo: number },
+) => {
+  if (contribution.amountRyo > 0) {
+    const refund = await refundBountyContribution(client, contribution);
+    if (refund.rowsAffected === 0) return;
+  }
+  await deleteBountyContribution(client, contribution.id);
 };

@@ -76,15 +76,12 @@ export const filterRollableBloodlines = (info: {
 /**
  * Calculates the number of pity rolls based on the provided BloodlineRolls object.
  *
- * @param roll - An optional BloodlineRolls object containing the number of used rolls and pity rolls.
+ * @param roll - The BloodlineRolls object with the number of used rolls and pity rolls.
  * @returns The number of pity rolls calculated from the unused rolls.
  */
-export const getPityRolls = (roll: BloodlineRolls) => {
-  const nNormalRolls = roll?.used ?? 0;
-  const nPityRolls = roll?.pityRolls ?? 0;
-  const unusedRolls = nNormalRolls - PITY_BLOODLINE_ROLLS * nPityRolls;
-  const availablePityRolls = Math.floor(unusedRolls / PITY_BLOODLINE_ROLLS);
-  return availablePityRolls;
+export const getPityRolls = (roll: Pick<BloodlineRolls, "used" | "pityRolls">) => {
+  const unusedRolls = roll.used - PITY_BLOODLINE_ROLLS * roll.pityRolls;
+  return Math.floor(unusedRolls / PITY_BLOODLINE_ROLLS);
 };
 
 /**

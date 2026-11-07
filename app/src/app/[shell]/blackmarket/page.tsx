@@ -4,7 +4,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Dices, ReceiptJapaneseYen, ShoppingCart, Waypoints, X } from "lucide-react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,11 +42,12 @@ import NavTabs from "@/layout/NavTabs";
 import Shop from "@/layout/Shop";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { filterRollableBloodlines } from "@/libs/bloodline";
+import { filterRollableBloodlines, getPityRolls } from "@/libs/bloodline";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { round } from "@/utils/math";
+import { useUserPicker } from "@/utils/search";
 import { secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -56,7 +56,6 @@ import {
   type BlackMarketOfferSchemaInput,
   blackMarketOfferSchema,
 } from "@/validators/blackmarket";
-import { getSearchValidator } from "@/validators/register";
 
 export default function BlackMarket() {
   // Tab selection
@@ -207,8 +206,7 @@ const PityBloodlineRoll: React.FC<{
 
   // Process data for table
   const itemRolls = prevRolls?.map((entry) => {
-    const unusedRolls = entry.used - PITY_BLOODLINE_ROLLS * entry.pityRolls;
-    const pityRolls = Math.floor(unusedRolls / PITY_BLOODLINE_ROLLS);
+    const pityRolls = getPityRolls(entry);
     const bloodlinePool = filterRollableBloodlines({
       bloodlines: bloodlines.data,
       user: userData,
@@ -354,40 +352,13 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 
   // Creator search
   const maxUsers = 1;
-  const creatorSearchSchema = getSearchValidator({ max: maxUsers });
-  const creatorSearchMethods = useForm<z.infer<typeof creatorSearchSchema>>({
-    resolver: zodResolver(creatorSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const creatorUser = useWatch({
-    control: creatorSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: creatorSearchMethods, user: creatorUser } = useUserPicker(maxUsers);
 
   // Buyer search
-  const buyerSearchSchema = getSearchValidator({ max: maxUsers });
-  const buyerSearchMethods = useForm<z.infer<typeof buyerSearchSchema>>({
-    resolver: zodResolver(buyerSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const buyerUser = useWatch({
-    control: buyerSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: buyerSearchMethods, user: buyerUser } = useUserPicker(maxUsers);
 
   // Allowed buyer schema
-  const allowedSearchSchema = getSearchValidator({ max: maxUsers });
-  const allowedSearchMethods = useForm<z.infer<typeof allowedSearchSchema>>({
-    resolver: zodResolver(allowedSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const allowedUser = useWatch({
-    control: allowedSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: allowedSearchMethods, user: allowedUser } = useUserPicker(maxUsers);
 
   // Query
   const { data, fetchNextPage, hasNextPage } =

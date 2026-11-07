@@ -5,10 +5,10 @@ import {
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  hiddenVisibilityField,
+  useContentEditContext,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
 
 /** Manual-list filter schema: name, roll-pool level, village, and staff visibility. */
 const makeSageModeFilteringSchema = () =>
@@ -37,19 +37,7 @@ const makeSageModeFilteringSchema = () =>
         dataSource: "villages",
         filterOptions: (opts) => opts.sort((a, b) => a.label.localeCompare(b.label)),
       },
-      {
-        id: "hidden",
-        label: "Visibility",
-        type: "tri-state",
-        defaultValue: undefined,
-        visibleIf: (ctx) =>
-          Boolean((ctx as { canEdit?: boolean } | undefined)?.canEdit),
-        triStateLabels: {
-          labelActive: "Hidden",
-          labelInactive: "Visible",
-          labelAll: "All Visibility",
-        },
-      },
+      hiddenVisibilityField(),
     ] as const,
   });
 
@@ -59,9 +47,8 @@ interface SageModeFilteringProps {
 
 /** Filter popover for the sage mode manual list. Visibility is staff-only. */
 const SageModeFiltering: React.FC<SageModeFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
   const schema = makeSageModeFilteringSchema();
-  const context = { canEdit: Boolean(userData && canChangeContent(userData.role)) };
+  const context = useContentEditContext();
 
   return (
     <ContentFiltering

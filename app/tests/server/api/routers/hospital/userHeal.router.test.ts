@@ -641,7 +641,7 @@ describeWithDatabase("hospital healing another user", () => {
     expect(healer).toMatchObject({ curChakra: 8000, medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY });
     expect(healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals)
       .toMatchObject([{ id: "heal", value: 0 }]);
-    expect(target).toMatchObject({ curHealth: 100, curEnergy: 0, regenAt, status: "HOSPITALIZED" });
+    expect(target).toEqual(expect.objectContaining({ curHealth: 100, curEnergy: 0, regenAt, status: "HOSPITALIZED" }));
     expect(student?.medicalExperience).toBe(0);
     expect(trigger).not.toHaveBeenCalled();
 

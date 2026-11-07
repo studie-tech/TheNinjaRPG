@@ -4,17 +4,7 @@ import {
   defineFilteringSchema,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-
-// Helper: get date string (YYYY-MM-DD) for N months ago
-const dateStringMonthsAgo = (months: number) => {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setMonth(d.getMonth() - months);
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
+import { getLocalDateStringMonthsAgo } from "@/utils/time";
 
 // Inline schema for visitor analytics filters
 const visitorFilteringSchema = defineFilteringSchema({
@@ -44,7 +34,7 @@ const visitorFilteringSchema = defineFilteringSchema({
       id: "startDate",
       label: "First Visit (From)",
       type: "date",
-      defaultValue: dateStringMonthsAgo(1),
+      defaultValue: getLocalDateStringMonthsAgo(1),
       visibleIf: (ctx) =>
         (ctx as { includeDates?: boolean } | undefined)?.includeDates !== false,
     },

@@ -1,4 +1,5 @@
 import type { ElementDefinition } from "cytoscape";
+import { TERMINAL_DIALOG_PREFIX } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
 import { collapseRewards } from "@/libs/rewards";
@@ -15,6 +16,16 @@ import {
   rewardPayloads,
 } from "@/validators/rewardPackages";
 import { ObjectiveReward } from "@/validators/rewards";
+
+/**
+ * Content id a dialog choice reports. A terminal branch has no follow-up objective, so it
+ * sends an objective-scoped sentinel for the server to complete the dialog instead of
+ * re-opening it.
+ */
+export const dialogChoiceContentId = (
+  nextObjectiveId: string | undefined,
+  objectiveId: string,
+) => nextObjectiveId ?? `${TERMINAL_DIALOG_PREFIX}${objectiveId}`;
 
 export const getObjectiveImage = (objective: AllObjectivesType) => {
   return objectiveImageMap[objective.task] ?? { image: "", title: "???" };

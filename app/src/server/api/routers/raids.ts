@@ -1255,7 +1255,7 @@ export const raidsRouter = createTRPCRouter({
         reason: "RAID",
       });
 
-      const { items, jutsus, bloodlines, badges, titles } = granted;
+      const { items, jutsus, bloodlines, sageModes, badges, titles } = granted;
       // Grant combat effects as raid buff if present
       if (threshold.effects && threshold.effects.length > 0) {
         const expiresAt = new Date(
@@ -1279,6 +1279,7 @@ export const raidsRouter = createTRPCRouter({
         ),
         reward_jutsus: jutsus.map((j) => j.name),
         reward_bloodlines: bloodlines.map((b) => b.name),
+        reward_sage_modes: sageModes.map((s) => s.name),
         reward_badges: badges.map((b) => b.name),
         reward_titles: titles.map((t) => t.name),
       };

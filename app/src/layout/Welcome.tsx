@@ -306,8 +306,6 @@ const PixelWelcome: React.FC = () => {
   usePixelHeroVideoPlayback(heroVideoRef, scrollContainerRef);
 
   const pixelClip = "tnr-pixel-clip";
-  const inkPrimaryButton = "tnr-ink-btn tnr-ink-btn-primary tnr-ink-register";
-  const inkSecondaryButton = "tnr-ink-btn tnr-ink-btn-secondary";
   const panelClass = cn(
     pixelClip,
     "border border-sky-200/20 bg-slate-950/72 shadow-2xl shadow-black/30 backdrop-blur-md",
@@ -386,23 +384,7 @@ const PixelWelcome: React.FC = () => {
               </div>
             ))}
           </div>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link href="/signup">
-              <Button size="lg" className={cn(inkPrimaryButton, "tnr-ink-cta")}>
-                <UserPlus className="mr-2 h-5 w-5" />
-                Register
-              </Button>
-            </Link>
-            <Link href="/login">
-              <Button
-                variant="outline"
-                size="lg"
-                className={cn(inkSecondaryButton, "tnr-ink-cta")}
-              >
-                Log In
-              </Button>
-            </Link>
-          </div>
+          <AuthCtaButtons />
         </div>
       </section>
 
@@ -642,23 +624,7 @@ const PixelWelcome: React.FC = () => {
           <p className="mt-4 max-w-2xl text-slate-300">
             Step into the world, choose your path, and begin your journey today.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link href="/signup">
-              <Button size="lg" className={cn(inkPrimaryButton, "tnr-ink-cta")}>
-                <UserPlus className="mr-2 h-5 w-5" />
-                Register
-              </Button>
-            </Link>
-            <Link href="/login">
-              <Button
-                variant="outline"
-                size="lg"
-                className={cn(inkSecondaryButton, "tnr-ink-cta")}
-              >
-                Log In
-              </Button>
-            </Link>
-          </div>
+          <AuthCtaButtons />
         </div>
       </section>
 
@@ -981,3 +947,27 @@ const HeroPoster: React.FC = () => {
     </picture>
   );
 };
+
+/** Register and log in calls to action of the landing sections. */
+const AuthCtaButtons: React.FC = () => (
+  <div className="mt-8 flex flex-wrap justify-center gap-3">
+    <Link href="/signup">
+      <Button size="lg" className={cn(inkPrimaryButton, "tnr-ink-cta")}>
+        <UserPlus className="mr-2 h-5 w-5" />
+        Register
+      </Button>
+    </Link>
+    <Link href="/login">
+      <Button
+        variant="outline"
+        size="lg"
+        className={cn(inkSecondaryButton, "tnr-ink-cta")}
+      >
+        Log In
+      </Button>
+    </Link>
+  </div>
+);
+
+const inkPrimaryButton = "tnr-ink-btn tnr-ink-btn-primary tnr-ink-register";
+const inkSecondaryButton = "tnr-ink-btn tnr-ink-btn-secondary";

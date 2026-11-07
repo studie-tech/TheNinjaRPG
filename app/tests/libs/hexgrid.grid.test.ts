@@ -5,6 +5,7 @@ import {
   hexGridHeightRatio,
   nameArenaTile,
   oddQHexDistance,
+  oddQLineStep,
   stackedHexWidths,
   tileKeysNear,
 } from "@/libs/hexgrid";
@@ -50,6 +51,22 @@ describe("oddQHexDistance", () => {
         expect(oddQHexDistance(a.col, a.row, b.col, b.row)).toBe(
           grid.distance(a, b),
         );
+      }
+    }
+  });
+});
+
+describe("oddQLineStep", () => {
+  it("moves exactly the requested hexes toward and away from a tile", () => {
+    const hexes = createHexGrid(20, 7, 7).toArray();
+    for (const from of hexes) {
+      for (const to of hexes) {
+        const gap = oddQHexDistance(from.col, from.row, to.col, to.row);
+        if (gap === 0) continue;
+        const toward = oddQLineStep(from, to, gap - 1);
+        expect(oddQHexDistance(toward.col, toward.row, to.col, to.row)).toBe(1);
+        const away = oddQLineStep(from, to, -3);
+        expect(oddQHexDistance(away.col, away.row, to.col, to.row)).toBe(gap + 3);
       }
     }
   });

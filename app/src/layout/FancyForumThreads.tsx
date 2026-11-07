@@ -1,14 +1,11 @@
 "use client";
 
 import { MessagesSquare, SquarePen } from "lucide-react";
-
-// Number of forum threads to display per page in fancy forum component
-const FANCY_FORUM_THREADS_PER_PAGE = 10;
-
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import NotFoundPage from "@/components/layout/NotFoundPage";
 import { Button } from "@/components/ui/button";
+import { FANCY_FORUM_THREADS_PER_PAGE } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";

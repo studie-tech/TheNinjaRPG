@@ -1,8 +1,10 @@
-import { BattleTypes, MAX_PLAYER_LEVEL, UserRanks } from "@/drizzle/constants";
+import { MAX_PLAYER_LEVEL, UserRanks } from "@/drizzle/constants";
 import {
+  battleTypesField,
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  minCountField,
   toOptions,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
@@ -14,20 +16,8 @@ interface AiBalanceFilteringProps {
 const makeSchema = () =>
   defineFilteringSchema({
     fields: [
-      {
-        id: "battleTypes",
-        label: "Battle Types",
-        type: "multi-select",
-        defaultValue: [],
-        options: toOptions(BattleTypes),
-      },
-      {
-        id: "minCount",
-        label: "Minimum Count",
-        type: "number",
-        defaultValue: undefined,
-        normalizeForFilter: (v) => (v !== undefined && v >= 1 ? v : undefined),
-      },
+      battleTypesField([]),
+      minCountField,
       {
         id: "userRanks",
         label: "User Ranks",

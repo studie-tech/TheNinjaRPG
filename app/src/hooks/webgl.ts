@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 
 /**
- * Hook to detect WebGL2 support in the browser
+ * Hook to detect the WebGL the game renderer runs on. It prefers WebGL 1 and accepts WebGL 2.
  * @returns Object with webglError and isChecking states
  */
-export const useWebGL2Detection = () => {
+export const useWebGLDetection = () => {
   const [webglError, setWebglError] = useState<boolean>(false);
   const [isChecking, setIsChecking] = useState<boolean>(true);
 
   useEffect(() => {
-    // Detect WebGL2 support on mount
+    // Detect WebGL support on mount
     const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl2");
+    const gl = canvas.getContext("webgl") ?? canvas.getContext("webgl2");
 
     if (!gl) {
       setWebglError(true);

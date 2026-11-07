@@ -19,7 +19,6 @@ import {
 import { nanoid } from "nanoid";
 import {
   SHRINE_AI_UNLOCK_COST,
-  SHRINE_BATTLE_MAX_USERS_PER_SIDE,
   SHRINE_BOOST_COST,
   SHRINE_BOOST_REQUIRED_LEVEL,
   type SHRINE_BOOST_TYPE,
@@ -40,6 +39,7 @@ import {
   boostInactivePredicate,
   setActiveBoostExpression,
   setShrineSettingsKeyExpression,
+  shrineSettingsKeyUnchangedPredicate,
   upsertActiveBoostsExpression,
 } from "@/server/utils/shrine";
 
@@ -335,12 +335,14 @@ export const updateVillageForActivateBoost = (
 
 /**
  * Build the `village` update for `unlockAiDefender`, setting `tokens` and
- * `shrineSettings`, using predicates on `id` and `tokens`.
+ * `shrineSettings`, using predicates on `id`, `kageId`, `tokens` and the unlock list the
+ * write was built from.
  */
 export const updateVillageForUnlockAiDefender = (
   client: Pick<DrizzleClient, "update">,
+  currentUnlocks: string[],
   updatedUnlocks: string[],
-  user: { villageId: string },
+  user: { villageId: string; userId: string },
 ) =>
   client
     .update(village)
@@ -349,21 +351,36 @@ export const updateVillageForUnlockAiDefender = (
       shrineSettings: setShrineSettingsKeyExpression("unlockedAiIds", updatedUnlocks),
     })
     .where(
-      and(eq(village.id, user.villageId), gte(village.tokens, SHRINE_AI_UNLOCK_COST)),
+      and(
+        eq(village.id, user.villageId),
+        eq(village.kageId, user.userId),
+        gte(village.tokens, SHRINE_AI_UNLOCK_COST),
+        shrineSettingsKeyUnchangedPredicate("unlockedAiIds", currentUnlocks),
+      ),
     );
 
-/** Build the `village` update for `toggleVillageAiDefender`, setting `shrineSettings`, using predicates on `id`. */
+/**
+ * Build the `village` update for `toggleVillageAiDefender`, setting `shrineSettings`,
+ * using predicates on `id`, `kageId` and the stored assignment list.
+ */
 export const updateVillageForToggleVillageAiDefender = (
   client: Pick<DrizzleClient, "update">,
+  currentAssigns: string[],
   newAssigns: string[],
-  user: { villageId: string },
+  user: { villageId: string; userId: string },
 ) =>
   client
     .update(village)
     .set({
       shrineSettings: setShrineSettingsKeyExpression("activeAiIds", newAssigns),
     })
-    .where(eq(village.id, user.villageId));
+    .where(
+      and(
+        eq(village.id, user.villageId),
+        eq(village.kageId, user.userId),
+        shrineSettingsKeyUnchangedPredicate("activeAiIds", currentAssigns),
+      ),
+    );
 
 /** Build the `sector` lookup for `payWeeklyMaintenance`, using predicates on `id`. */
 export const findSectorForPayWeeklyMaintenance = (
@@ -683,19 +700,6 @@ export const selectMpvpBattleUserForLeaveShrineBattle = (
     .select({ remaining: count() })
     .from(mpvpBattleUser)
     .where(eq(mpvpBattleUser.clanBattleId, input.shrineBattleId));
-
-/**
- * Build the `userData` listing for `initiateShrineBattle`, selecting only `userId`,
- * using predicates on `isAi` and `inShrines`.
- */
-export const listUserDataForInitiateShrineBattle = (
-  client: Pick<DrizzleClient, "query">,
-) =>
-  client.query.userData.findMany({
-    where: and(eq(userData.isAi, true), eq(userData.inShrines, true)),
-    columns: { userId: true },
-    limit: SHRINE_BATTLE_MAX_USERS_PER_SIDE,
-  });
 
 /**
  * Build the `sector` selection for `hasLevel3Shrine`, using predicates on `villageId`,

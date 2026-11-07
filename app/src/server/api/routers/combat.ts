@@ -912,15 +912,7 @@ export const combatRouter = createTRPCRouter({
             const { battleOver, finishBattle } = claim;
             const [logEntries, { updatedQuestIds }] = await Promise.all([
               createAction(db, newBattle, history),
-              ...settlementWrites(
-                db,
-                pusher,
-                newBattle,
-                result,
-                suid,
-                battleOver,
-                true,
-              ),
+              ...settlementWrites(db, pusher, newBattle, result, suid, battleOver),
               finishBattle(),
             ]);
             const newMaskedBattle = maskBattle(newBattle, suid);
@@ -4146,7 +4138,8 @@ export const processUsersForBattle = async (
       }
     }
 
-    // Update user level to the effective level if he had leveled up (to combat level-holding, as some things are scaled based on level)
+    // Fight at the XP-derived effective level, not the stored level, since some things scale
+    // with level. This raises level holders and, by design, lags a user who just leveled up.
     // Ranked battles keep their normalized level.
     if (!isRankedBattle) {
       user.level = getEffectiveLevel(user);

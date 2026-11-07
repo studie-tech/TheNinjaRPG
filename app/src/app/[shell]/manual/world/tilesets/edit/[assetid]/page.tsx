@@ -1,18 +1,18 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
-import { use, useEffect, useRef } from "react";
+import { use, useRef } from "react";
 import { type UseFormReturn, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { MapAsset } from "@/drizzle/schema";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
 import Loader from "@/layout/Loader";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import {
   mapAssetValidator,
   type ZodMapAssetType,
@@ -23,23 +23,27 @@ import {
 export default function MapAssetEdit(props: { params: Promise<{ assetid: string }> }) {
   const params = use(props.params);
   const assetId = params.assetid;
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(canChangeContent);
 
-  const { data, isPending, refetch } = api.mapAsset.get.useQuery(
+  const { data, isPending, isError, isFetching, refetch } = api.mapAsset.get.useQuery(
     { id: assetId },
     { enabled: !!assetId && !!userData },
   );
 
-  // Redirect to profile if not content or admin
-  useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
-      router.push("/profile");
-    }
-  }, [userData, router]);
-
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="map asset"
+        subtitle="Map Asset Management"
+        backHref="/manual/world/tilesets"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return <SingleEditMapAsset asset={data} refetch={refetch} />;

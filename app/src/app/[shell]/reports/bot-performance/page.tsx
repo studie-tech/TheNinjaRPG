@@ -1,8 +1,7 @@
 "use client";
 
-import type { Chart } from "chart.js/auto";
 import { Download, RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,10 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useLazyChart } from "@/hooks/useLazyChart";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
+import { downloadCsv } from "@/utils/dom";
 import { isStaffRole } from "@/utils/permissions";
+import { formatPercent } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { ModBotPerformanceInput } from "@/validators/reports";
 
@@ -135,13 +137,13 @@ export default function BotPerformance() {
                   <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <Metric
                       label="Reviewed alert action yield"
-                      value={percent(summary.actionYield)}
+                      value={formatPercent(summary.actionYield)}
                       detail={`${summary.botAction} with staff action / ${summary.botReviewed} reviewed`}
                     />
                     <Metric
                       label="Bot alerts"
                       value={summary.botTotal}
-                      detail={`${summary.botReviewed} reviewed · ${percent(summary.reviewCoverage)} review coverage`}
+                      detail={`${summary.botReviewed} reviewed · ${formatPercent(summary.reviewCoverage)} review coverage`}
                     />
                     <Metric
                       label="Cleared bot alerts"
@@ -187,7 +189,7 @@ export default function BotPerformance() {
                         <Table
                           data={data.trend.map((row) => ({
                             ...row,
-                            actionYield: `${percent(row.actionYield)} (n=${row.botReviewed})`,
+                            actionYield: `${formatPercent(row.actionYield)} (n=${row.botReviewed})`,
                           }))}
                           columns={[...TREND_COLUMNS]}
                         />
@@ -207,7 +209,7 @@ export default function BotPerformance() {
                         data={data.surfaces.map((row) => ({
                           ...row,
                           surface: SURFACES[row.surface],
-                          actionYield: `${percent(row.actionYield)} (${row.botAction}/${row.botReviewed})`,
+                          actionYield: `${formatPercent(row.actionYield)} (${row.botAction}/${row.botReviewed})`,
                         }))}
                         columns={[...SURFACE_COLUMNS]}
                       />
@@ -260,7 +262,7 @@ export default function BotPerformance() {
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                       <Metric
                         label="Agreement"
-                        value={percent(summary.agreement)}
+                        value={formatPercent(summary.agreement)}
                         detail={`Based on ${summary.evaluated} reviewed reports`}
                       />
                       <Metric
@@ -284,7 +286,7 @@ export default function BotPerformance() {
                         <Table
                           data={data.versions.map((row) => ({
                             ...row,
-                            agreement: percent(row.agreement),
+                            agreement: formatPercent(row.agreement),
                           }))}
                           columns={[...VERSION_COLUMNS]}
                         />
@@ -303,12 +305,10 @@ export default function BotPerformance() {
 
 const OutcomeChart = ({ trend }: { trend: Stats["trend"] }) => {
   const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    let chart: Chart<"bar" | "line", (number | null)[], string> | undefined;
-    let cancelled = false;
-    void import("chart.js/auto").then(({ default: ChartJS }) => {
-      if (cancelled || !ref.current) return;
-      chart = new ChartJS(ref.current, {
+  const failed = useLazyChart(
+    ref,
+    (ChartJS, canvas) =>
+      new ChartJS(canvas, {
         type: "bar",
         data: {
           labels: trend.map((row) => row.date),
@@ -373,14 +373,14 @@ const OutcomeChart = ({ trend }: { trend: Stats["trend"] }) => {
             },
           },
         },
-      });
-    });
-    return () => {
-      cancelled = true;
-      chart?.destroy();
-    };
-  }, [trend]);
-  return (
+      }),
+    [trend],
+  );
+  return failed ? (
+    <p role="status" className="py-8 text-sm">
+      The chart could not load. Use the period table below to investigate results.
+    </p>
+  ) : (
     <div className="relative h-72">
       <canvas
         ref={ref}
@@ -432,8 +432,6 @@ const FilterSelect = ({
     </Select>
   </div>
 );
-const percent = (value: number | null) =>
-  value == null ? "—" : `${value.toFixed(1)}%`;
 const dateLabel = (at: string) =>
   new Date(at).toLocaleDateString(undefined, {
     day: "numeric",
@@ -459,16 +457,10 @@ const downloadStats = (data: Stats) => {
     "ERROR",
     "CHECKING",
   ] as const;
-  const csv = [
-    fields.join(","),
-    ...data.trend.map((row) => fields.map((key) => row[key] ?? "").join(",")),
-  ].join("\r\n");
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `mod-bot-${data.start.slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(
+    [[...fields], ...data.trend.map((row) => fields.map((key) => row[key] ?? ""))],
+    `mod-bot-${data.start.slice(0, 10)}.csv`,
+  );
 };
 const SURFACES: Record<string, string> = {
   all: "All surfaces",

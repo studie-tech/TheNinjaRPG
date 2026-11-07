@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { CACHE_MAX_GRANTED_ITEMS } from "@/drizzle/constants";
-import { cacheItemChance, resolveWeightedCache } from "@/libs/weightedCache";
+import {
+  CACHE_RESTRICTED_REWARD_MESSAGE,
+  cacheItemChance,
+  getWeightedCacheIssues,
+  resolveWeightedCache,
+} from "@/libs/weightedCache";
 import { NonCombatConsumeRewardTag } from "@/validators/combat";
 import { type WeightedCache, weightedCacheSchema } from "@/validators/weightedCache";
 
@@ -77,5 +82,53 @@ describe("weighted cache validation and legacy compatibility", () => {
     invalid.tiers[1]!.entries[0]!.items = [{ itemId: "pill", quantity: 100 }, { itemId: "gem", quantity: 100 }];
     expect(weightedCacheSchema.safeParse(invalid).success).toBe(false);
     expect(CACHE_MAX_GRANTED_ITEMS).toBe(2000);
+  });
+});
+
+describe("getWeightedCacheIssues", () => {
+  const items = (draft: WeightedCache) =>
+    new Map<string, { isRestrictedCacheReward?: boolean }>(
+      draft.tiers.flatMap((tier) =>
+        tier.entries.flatMap((entry) =>
+          entry.items.map((item) => [item.itemId, {}] as const),
+        ),
+      ),
+    );
+
+  it("accepts a cache whose rewards are all in the catalog", () => {
+    const draft = cache();
+    expect(
+      getWeightedCacheIssues(draft, items(draft), { isActive: true, catalogReady: true }),
+    ).toEqual({ issues: [], isSchemaValid: true });
+  });
+
+  it("ignores the catalog until it is ready", () => {
+    const result = getWeightedCacheIssues(cache(), new Map(), { isActive: true, catalogReady: false });
+    expect(result.issues).toEqual([]);
+  });
+
+  it("flags missing and restricted rewards once the catalog is ready", () => {
+    const draft = cache();
+    const catalog = items(draft);
+    const [restricted] = catalog.keys();
+    catalog.set(restricted ?? "", { isRestrictedCacheReward: true });
+    const { issues } = getWeightedCacheIssues(
+      draft,
+      catalog,
+      { isActive: true, catalogReady: true },
+    );
+    expect(issues.some((issue) => issue.message === CACHE_RESTRICTED_REWARD_MESSAGE)).toBe(true);
+    const missing = getWeightedCacheIssues(draft, new Map(), { isActive: true, catalogReady: true });
+    expect(missing.issues.every((issue) => issue.message.startsWith("Remove or replace"))).toBe(true);
+    expect(missing.issues.length).toBeGreaterThan(0);
+  });
+
+  it("holds an inactive cache to the draft schema", () => {
+    const draft = cache();
+    draft.displayName = "";
+    const inactive = getWeightedCacheIssues(draft, items(draft), { isActive: false, catalogReady: true });
+    const active = getWeightedCacheIssues(draft, items(draft), { isActive: true, catalogReady: true });
+    expect(active.isSchemaValid).toBe(false);
+    expect(inactive.issues.length).toBeLessThanOrEqual(active.issues.length);
   });
 });

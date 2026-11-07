@@ -1,26 +1,20 @@
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { downloadBlob } from "@/utils/dom";
 
 interface ExportGraphProps {
-  canvas: HTMLCanvasElement | undefined | null;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   filename: string;
 }
 
 const ExportGraph: React.FC<ExportGraphProps> = (props) => {
-  const { canvas, filename } = props;
+  const { canvasRef, filename } = props;
   return (
     <Button
-      id="save"
       className="w-full"
       onClick={() => {
-        canvas?.toBlob((blob) => {
-          if (blob) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${filename}.png`;
-            a.click();
-          }
+        canvasRef.current?.toBlob((blob) => {
+          if (blob) downloadBlob(blob, `${filename}.png`);
         });
       }}
     >

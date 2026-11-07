@@ -1060,7 +1060,7 @@ describe("standard mutation response updates", () => {
       success: true, message: "Returned", userPatch: { petTask: null },
       userDelta: { userQuests: { remove: [{ id: "attempt", startedAt: 1 }] } },
     }), { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value()?.userData).toMatchObject({ petTask: null, userQuests: [successor, virtual] });
+    expect(test.value()?.userData).toEqual(expect.objectContaining({ petTask: null, userQuests: [expect.objectContaining(successor), expect.objectContaining(virtual)] }));
     expect(test.reads()).toBe(0);
     test.close();
   });

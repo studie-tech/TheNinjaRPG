@@ -1,6 +1,8 @@
+import { withMercenaryParticipation } from "@/libs/objectiveWar";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { getPvpBoost } from "@/libs/pvpExperience";
 import { getTerritoryWarPeriodBoost } from "@/libs/territoryWar";
+import { getMapDisguise } from "@/libs/war";
 import {
   clearStealthForUsers,
   listUserDataForUseSensory,
@@ -12,6 +14,7 @@ import {
   updateUserDataForTrainCovert,
   updateUserDataForUseSensory,
 } from "@/queries/stealth";
+import { listWarForGetSectorData } from "@/queries/travel";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
@@ -23,7 +26,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
-import { getAlliedVillageIds } from "@/utils/alliance";
+import { canShowMapAttack, mapAttackRelation } from "@/utils/alliance";
 
 const pusher = getServerPusher();
 
@@ -160,14 +163,16 @@ export const stealthRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query (parallel)
-      let [{ user, settings }, stealthedUsers, alliances] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        listUserDataForUseSensory(ctx.drizzle, input, ctx),
-        selectVillageAllianceForUseSensory(ctx.drizzle),
-      ]);
+      let [{ user, settings }, stealthedUsers, alliances, fetchedWars] =
+        await Promise.all([
+          fetchUpdatedUser({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+          }),
+          listUserDataForUseSensory(ctx.drizzle, input, ctx),
+          selectVillageAllianceForUseSensory(ctx.drizzle),
+          listWarForGetSectorData(ctx.drizzle),
+        ]);
 
       // Guard
       if (!user) return errorResponse("User not found");
@@ -183,14 +188,23 @@ export const stealthRouter = createTRPCRouter({
         );
       }
 
-      // Derived - get all allied village IDs (same village + formal allies)
-      const alliedSet = new Set(getAlliedVillageIds(alliances, user.villageId));
+      // Derived - the map's view of each player, so a war side outranks village and alliance
+      const wars = withMercenaryParticipation(fetchedWars);
+      const viewer = {
+        userId: user.userId,
+        villageId: user.villageId,
+        village: {
+          id: user.villageId,
+          relationshipA: alliances,
+          relationshipB: [],
+        },
+      };
 
       // Filter out allied users, then roll for detection
       const detectedUsers: (typeof stealthedUsers)[number][] = [];
       for (const stealthedUser of stealthedUsers) {
         // Skip allied users - sensory doesn't reveal allies
-        if (stealthedUser.villageId && alliedSet.has(stealthedUser.villageId)) continue;
+        if (mapAttackRelation(viewer, stealthedUser, wars) === "ALLY") continue;
         if (rollSensoryDetection(user.sensory)) {
           detectedUsers.push(stealthedUser);
         }
@@ -198,16 +212,19 @@ export const stealthRouter = createTRPCRouter({
       const detectedUserIds = detectedUsers.map((u) => u.userId);
       const lastSensoryAt = new Date();
 
-      // Claim availability and reveal targets together before broadcasting them.
+      // Claim availability before revealing anyone. These stay separate because a self-joined
+      // UPDATE of UserData changes only the first of several joined targets.
       const result = await updateUserDataForUseSensory(
         ctx.drizzle,
         lastSensoryAt,
         ctx,
         readiness,
-        detectedUserIds,
       );
       if (!result.rowsAffected)
         return errorResponse("Your status changed. Please try again.");
+      if (detectedUserIds.length > 0) {
+        await clearStealthForUsers(ctx.drizzle, detectedUserIds);
+      }
 
       // Broadcast map updates and notifications for detected users
       if (detectedUsers.length > 0) {
@@ -233,14 +250,19 @@ export const stealthRouter = createTRPCRouter({
               ? `Revealed ${detectedUsers.length} stealthed player(s)!`
               : `No stealthed players detected. Next scan available in ${Math.floor(cooldown)} seconds`,
           data: {
-            detectedUsers: detectedUsers.map((u) => ({
-              userId: u.userId,
-              username: u.username,
-              longitude: u.longitude,
-              latitude: u.latitude,
-              villageId: u.villageId,
-              level: u.level,
-            })),
+            detectedUsers: detectedUsers.map((u) => {
+              const disguise = getMapDisguise(user, u, wars);
+              return {
+                userId: u.userId,
+                username: disguise ?? u.username,
+                longitude: u.longitude,
+                latitude: u.latitude,
+                villageId: disguise ? null : u.villageId,
+                level: disguise ? null : u.level,
+                isMasked: !!disguise,
+                canAttack: canShowMapAttack(viewer, u, false, wars),
+              };
+            }),
             lastSensoryAt,
           },
         },

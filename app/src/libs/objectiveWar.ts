@@ -1,3 +1,4 @@
+import type { UserRank } from "@/drizzle/constants";
 import {
   MAP_RESERVED_SECTORS,
   WAR_ESPIONAGE_TARGET,
@@ -146,8 +147,6 @@ export const findShrineAttackWar = <T extends ShrineWar>(
   wars.find((w) => {
     if (w.status !== "ACTIVE") return false;
     const side = getWarSide(w, villageId, userId);
-    const isUserOnAttackerSide = side === w.attackerVillageId;
-    const isUserOnDefenderSide = side === w.defenderVillageId;
 
     if (w.rules) {
       return (
@@ -161,28 +160,46 @@ export const findShrineAttackWar = <T extends ShrineWar>(
     }
 
     if (w.type === "SECTOR_WAR") {
-      return w.sector === sector && isUserOnAttackerSide;
+      return w.sector === sector && side === w.attackerVillageId;
     }
 
-    if (w.type === "VILLAGE_WAR" || w.type === "WAR_RAID") {
-      const atDefenderVillage = w.defenderVillage?.sector === sector;
-      const atAttackerVillage = w.attackerVillage?.sector === sector;
-      const canAttack =
-        (atDefenderVillage && isUserOnAttackerSide) ||
-        (atAttackerVillage && isUserOnDefenderSide);
-      const canDefend =
-        allowDefend &&
-        ((atAttackerVillage &&
-          isUserOnAttackerSide &&
-          w.attackerShrineHp < w.attackerShrineMaxHp) ||
-          (atDefenderVillage &&
-            isUserOnDefenderSide &&
-            w.defenderShrineHp < w.defenderShrineMaxHp));
-      return canAttack || canDefend;
-    }
-
-    return false;
+    const action = getVillageWarShrineAction(w, side, sector);
+    return action === "attack" || (allowDefend && action === "defend");
   });
+
+/**
+ * What a war side may do at a sector's shrine in a village war or raid: attack the enemy
+ * village's shrine, or defend its own while damaged. Rules, status and shrine HP floors
+ * belong to the caller; other war types get null.
+ */
+export const getVillageWarShrineAction = (
+  war: VillageWarShrine,
+  sideVillageId: string | null | undefined,
+  sector: number,
+): "attack" | "defend" | null => {
+  if (war.type !== "VILLAGE_WAR" && war.type !== "WAR_RAID") return null;
+  const isUserOnAttackerSide = sideVillageId === war.attackerVillageId;
+  const isUserOnDefenderSide = sideVillageId === war.defenderVillageId;
+  const atDefenderVillage = war.defenderVillage?.sector === sector;
+  const atAttackerVillage = war.attackerVillage?.sector === sector;
+  if (
+    (atDefenderVillage && isUserOnAttackerSide) ||
+    (atAttackerVillage && isUserOnDefenderSide)
+  ) {
+    return "attack";
+  }
+  if (
+    (atAttackerVillage &&
+      isUserOnAttackerSide &&
+      war.attackerShrineHp < war.attackerShrineMaxHp) ||
+    (atDefenderVillage &&
+      isUserOnDefenderSide &&
+      war.defenderShrineHp < war.defenderShrineMaxHp)
+  ) {
+    return "defend";
+  }
+  return null;
+};
 
 /**
  * Choose distinct, usable shrines. Ordinary ownership blocks reserve fallback even
@@ -219,6 +236,12 @@ export const selectWarObjectives = (
     destroyed: false,
   }));
 };
+
+/** Elders and the Kage of a viewer's own village read objectives without espionage. */
+export const isWarObjectiveLeader = (
+  user: { userId: string; rank: UserRank },
+  ownVillage: { kageId: string } | null | undefined,
+) => user.rank === "ELDER" || ownVillage?.kageId === user.userId;
 
 /**
  * Return only the viewer's mercenary contract and cross-war assignment. Objective
@@ -267,18 +290,21 @@ export const getWarRelationship = (
   }
 };
 
+type VillageWarShrine = Pick<
+  War,
+  | "type"
+  | "attackerVillageId"
+  | "defenderVillageId"
+  | "attackerShrineHp"
+  | "attackerShrineMaxHp"
+  | "defenderShrineHp"
+  | "defenderShrineMaxHp"
+> & {
+  attackerVillage?: { sector?: number } | null;
+  defenderVillage?: { sector?: number } | null;
+};
+
 type ShrineWar = Parameters<typeof isObjectiveWarActive>[0] &
   Parameters<typeof getWarSide>[0] &
-  Pick<
-    War,
-    | "objectiveState"
-    | "type"
-    | "sector"
-    | "attackerShrineHp"
-    | "attackerShrineMaxHp"
-    | "defenderShrineHp"
-    | "defenderShrineMaxHp"
-  > & {
-    attackerVillage?: { sector: number } | null;
-    defenderVillage?: { sector: number } | null;
-  };
+  VillageWarShrine &
+  Pick<War, "objectiveState" | "sector">;

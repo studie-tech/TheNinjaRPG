@@ -3,7 +3,6 @@
 import type { Core, ElementDefinition, EventObject, EventObjectNode } from "cytoscape";
 import { Copy, FileMinus, FilePlus } from "lucide-react";
 import { nanoid } from "nanoid";
-import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
 import type { UseFormReturn } from "react-hook-form";
@@ -11,11 +10,13 @@ import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   isPetTaskQuestType,
+  VILLAGE_MISSION_ONLY_TASKS,
   VILLAGE_MISSION_RANK_POINTS,
   VILLAGE_MISSION_TASKS,
 } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { useQuestEditForm } from "@/hooks/quest";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { QuestHelper } from "@/layout/ContentHelp";
 import { EditContent, ObjectiveFormWrapper } from "@/layout/EditContent";
@@ -27,7 +28,6 @@ import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
 import { verifyQuestObjectiveFlow } from "@/libs/quest";
 import { getQuestFlowPositions, restoreQuestFlowPositions } from "@/libs/questFlow";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import type {
   AllObjectivesType,
   QuestNodePositions,
@@ -46,8 +46,7 @@ export default function ManualQuestEdit(props: {
   const params = use(props.params);
   // Setup
   const questId = params.questid;
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(isStaffRole);
 
   // Queries
   const { data, isPending, refetch } = api.quests.get.useQuery(
@@ -55,15 +54,8 @@ export default function ManualQuestEdit(props: {
     { enabled: !!questId },
   );
 
-  // Redirect to profile if not staff
-  useEffect(() => {
-    if (userData && !isStaffRole(userData.role)) {
-      void router.push("/profile");
-    }
-  }, [userData]);
-
   // Prevent unauthorized access
-  if (isPending || !userData || !isStaffRole(userData.role)) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
   }
   if (!data) {
@@ -211,7 +203,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
               : [...allObjectiveTasks]
                   .filter(
                     (task) =>
-                      task !== "siege_operation" && task !== "combined_mission_effort",
+                      !(VILLAGE_MISSION_ONLY_TASKS as readonly string[]).includes(task),
                   )
                   .sort()
           }

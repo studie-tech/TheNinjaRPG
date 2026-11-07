@@ -147,6 +147,74 @@ export const isInjectedWalletRejection = (reason: unknown): boolean => {
   return record.code === 4001 && /wallet/i.test(message);
 };
 
+/** Messages the PayPal SDK raises when its buttons or popup close mid-flight. */
+export const PAYPAL_CLEANUP_PATTERNS = [
+  "zoid destroyed",
+  "popup close",
+  "Window closed",
+  "Component closed",
+  "Target window is closed",
+];
+
+/**
+ * Users navigating away while PayPal buttons initialize, or closing the popup before the
+ * transaction completes. Checkout stays silent on these, so a pattern added here hides
+ * that failure from the player.
+ */
+export const isPayPalCleanupError = (err: unknown): boolean => {
+  const message = err?.toString() ?? "";
+  return PAYPAL_CLEANUP_PATTERNS.some((pattern) => message.includes(pattern));
+};
+
+/**
+ * A stack line whose script came from a domain or its subdomains, as V8
+ * ("at fn (url:1:2)", "at url:1:2") or Firefox and Safari ("fn@url:1:2") print it.
+ */
+const stackLineFromDomain = (domain: string, path = "[/?#]") =>
+  new RegExp(
+    `(?:^\\s*at (?:[^():\\n]*\\()?|^[^@:\\n]*@)https?://(?:[a-z0-9-]+\\.)*${domain}(?::\\d+)?${path}`,
+    "im",
+  );
+
+/** The hosts the CSP lets serve PayPal scripts. */
+const PAYPAL_STACK_LINE = stackLineFromDomain("paypal(?:objects)?\\.com");
+/** Match consent scripts only on Cookiebot's domain or its subdomains. */
+const COOKIEBOT_STACK_LINE = stackLineFromDomain("cookiebot\\.com");
+/** Only gtag.js: GTM's own script can wrap our calls and sit on the stack of our errors. */
+const GOOGLE_TAG_STACK_LINE = stackLineFromDomain(
+  "googletagmanager\\.com",
+  "/gtag/js[?#:]",
+);
+
+/**
+ * True when a raw `Error.stack` ran through PayPal's own hosts. Takes the raw stack because
+ * the Next.js SDK replaces each Sentry frame's origin with `app://` before `beforeSend`.
+ */
+export const isPayPalSdkStack = (stack: string | undefined): boolean =>
+  !!stack && PAYPAL_STACK_LINE.test(stack);
+
+/** True when a raw `Error.stack` ran through Cookiebot's hosts, as for PayPal above. */
+export const isCookiebotStack = (stack: string | undefined): boolean =>
+  !!stack && COOKIEBOT_STACK_LINE.test(stack);
+
+/** True when a raw `Error.stack` ran through Google's gtag script, as for PayPal above. */
+export const isGoogleTagStack = (stack: string | undefined): boolean =>
+  !!stack && GOOGLE_TAG_STACK_LINE.test(stack);
+
+/** A script a browser or in-app webview injects; it has no host of its own to validate. */
+const INJECTED_CONTENT_PATH = /(^|\/)inject_content\.js([?#]|$)/;
+
+/** True for a frame path whose file is exactly that injected script. */
+export const isInjectedContentPath = (path: string | undefined): boolean =>
+  !!path && INJECTED_CONTENT_PATH.test(path);
+
+/** A script in-app browsers inject around media; it has no host of its own to validate. */
+const MEDIA_FILTER_PATH = /(^|\/)mediafilter(\.js)?([?#]|$)/;
+
+/** True for a frame path whose file is exactly that injected script. */
+export const isMediaFilterPath = (path: string | undefined): boolean =>
+  !!path && MEDIA_FILTER_PATH.test(path);
+
 export const isNetworkError = createErrorPatternMatcher([
   "Load failed",
   "fetch failed",

@@ -1,7 +1,4 @@
-import {
-  VILLAGE_MAINTAINED_STRUCTURE_ROUTES,
-  VILLAGE_STRUCTURE_MONTHLY_COST,
-} from "@/drizzle/constants";
+import { VILLAGE_STRUCTURE_MONTHLY_COST } from "@/drizzle/constants";
 import {
   listVillageForAccrueVillageStructureMaintenance,
   updateVillageForAccrueVillageStructureMaintenance,
@@ -9,6 +6,7 @@ import {
 } from "@/queries/village";
 import type { DrizzleClient } from "@/server/db";
 import { getUtcMonthDistance, getUtcMonthKey } from "@/utils/time";
+import { countMaintainedStructures } from "@/utils/village";
 
 export const accrueVillageStructureMaintenance = async (
   client: DrizzleClient,
@@ -20,13 +18,7 @@ export const accrueVillageStructureMaintenance = async (
     villages.map(async (entry) => {
       const previous = entry.structureMaintenanceMonth;
       if (previous && previous >= month) return;
-      const structureCount = entry.structures.filter(
-        (structure) =>
-          structure.level > 0 &&
-          (VILLAGE_MAINTAINED_STRUCTURE_ROUTES as readonly string[]).includes(
-            structure.route,
-          ),
-      ).length;
+      const structureCount = countMaintainedStructures(entry.structures);
       // A newly created village starts its first full billing period now, without retroactive fees.
       const fee = previous
         ? structureCount *

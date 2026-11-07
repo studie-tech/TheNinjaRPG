@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DISCORD_INVITE_URL,
+  GITHUB_ISSUES_URL,
   IMG_ICON_DISCORD,
   IMG_ICON_FACEBOOK,
   IMG_ICON_GITHUB,
@@ -106,6 +107,18 @@ const AccountLoadError: React.FC = () => {
 
 export type AccountMenuState = "loading" | "create-character" | "error" | null;
 
+const PARTICIPATE_LINKS = [
+  { href: GITHUB_ISSUES_URL, label: "GitHub", Icon: SiGithub },
+  { href: DISCORD_INVITE_URL, label: "Discord", Icon: SiDiscord },
+];
+
+const SOCIAL_PROVIDERS = [
+  { src: IMG_ICON_DISCORD, alt: "DiscordProvider" },
+  { src: IMG_ICON_FACEBOOK, alt: "FacebookProvider" },
+  { src: IMG_ICON_GOOGLE, alt: "GoogleProvider" },
+  { src: IMG_ICON_GITHUB, alt: "GithubProvider" },
+];
+
 const GithubStar: React.FC = () => (
   <div className="flex justify-center pt-6 pl-2 align-center">
     <iframe
@@ -134,10 +147,12 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
   accountState,
   userData,
 }) => {
-  const showPublicContent =
-    !userData &&
-    (accountState === "create-character" ||
-      (variant === "default" && !isSignedInLayout));
+  const showPublicContent = shouldShowPublicContent({
+    variant,
+    isSignedInLayout,
+    accountState,
+    userData,
+  });
   return (
     <div>
       {userData && (
@@ -157,34 +172,23 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
         <>
           <SideBannerTitle>Participate</SideBannerTitle>
           <div className="flex flex-row gap-4 pt-3">
-            <Link
-              href="https://github.com/studie-tech/TheNinjaRPG/issues"
-              aria-label="GitHub"
-              className="flex flex-col items-center font-bold hover:opacity-50"
-            >
-              <SiGithub
-                size={60}
-                className={cn(
-                  "p-2",
-                  getGameLayout(variant).frame !== "panel" &&
-                    "text-black md:text-white dark:text-white",
-                )}
-              />
-            </Link>
-            <Link
-              href={DISCORD_INVITE_URL}
-              aria-label="Discord"
-              className="flex flex-col items-center font-bold hover:opacity-50"
-            >
-              <SiDiscord
-                size={60}
-                className={cn(
-                  "p-2",
-                  getGameLayout(variant).frame !== "panel" &&
-                    "text-black md:text-white dark:text-white",
-                )}
-              />
-            </Link>
+            {PARTICIPATE_LINKS.map(({ href, label, Icon }) => (
+              <Link
+                key={label}
+                href={href}
+                aria-label={label}
+                className="flex flex-col items-center font-bold hover:opacity-50"
+              >
+                <Icon
+                  size={60}
+                  className={cn(
+                    "p-2",
+                    getGameLayout(variant).frame !== "panel" &&
+                      "text-black md:text-white dark:text-white",
+                  )}
+                />
+              </Link>
+            ))}
           </div>
         </>
       )}
@@ -220,10 +224,12 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
   notifications,
   location,
 }) => {
-  const showPublicContent =
-    !userData &&
-    (accountState === "create-character" ||
-      (variant === "default" && !isSignedInLayout));
+  const showPublicContent = shouldShowPublicContent({
+    variant,
+    isSignedInLayout,
+    accountState,
+    userData,
+  });
   const variantClasses = layoutVariantClasses[variant];
   return (
     <>
@@ -265,34 +271,16 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
                 Socials Login
               </p>
               <div className="grid grid-cols-4">
-                <Image
-                  className="my-4 w-full grayscale"
-                  src={IMG_ICON_DISCORD}
-                  alt="DiscordProvider"
-                  width={50}
-                  height={50}
-                ></Image>
-                <Image
-                  className="my-4 w-full grayscale"
-                  src={IMG_ICON_FACEBOOK}
-                  alt="FacebookProvider"
-                  width={50}
-                  height={50}
-                ></Image>
-                <Image
-                  className="my-4 w-full grayscale"
-                  src={IMG_ICON_GOOGLE}
-                  alt="GoogleProvider"
-                  width={50}
-                  height={50}
-                ></Image>
-                <Image
-                  className="my-4 w-full grayscale"
-                  src={IMG_ICON_GITHUB}
-                  alt="GithubProvider"
-                  width={50}
-                  height={50}
-                ></Image>
+                {SOCIAL_PROVIDERS.map(({ src, alt }) => (
+                  <Image
+                    key={alt}
+                    className="my-4 w-full grayscale"
+                    src={src}
+                    alt={alt}
+                    width={50}
+                    height={50}
+                  ></Image>
+                ))}
               </div>
               <Link href="/login" className="relative">
                 <Button
@@ -405,7 +393,7 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
                 className={variantClasses.mainMenuButton}
               >
                 <div className="grow">{system.name}</div>
-                <div>{system.icon && system.icon}</div>
+                <div>{system.icon}</div>
               </Button>
             </Link>
           );
@@ -431,19 +419,19 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
   userData,
   location,
 }) => {
-  const inBattle = userData?.status === "BATTLE";
+  const inBattle = userData.status === "BATTLE";
   const pathname = usePublicPathname();
   const variantClasses = layoutVariantClasses[variant];
 
   const renderDefaultSidebar = () => (
     <>
-      {userData && <CollapsibleNotifications notifications={notifications} />}
-      <SideBannerTitle break={userData && notifications && notifications.length > 0}>
+      <CollapsibleNotifications notifications={notifications} />
+      <SideBannerTitle break={notifications && notifications.length > 0}>
         Main Menu
       </SideBannerTitle>
       <div className="theme-menu-grid mt-1 grid grid-cols-2 gap-3">
         {systems.map((system) => {
-          const disabled = system.requireAwake && userData?.status !== "AWAKE";
+          const disabled = system.requireAwake && userData.status !== "AWAKE";
           return (
             <Link key={system.href} href={system.href} id={system.id}>
               <Button
@@ -457,7 +445,7 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
                 count={system.notificationCount}
               >
                 <div className="grow">{system.name}</div>
-                <div>{system.icon && system.icon}</div>
+                <div>{system.icon}</div>
               </Button>
             </Link>
           );
@@ -570,3 +558,16 @@ export const StrongestUsersBanner: React.FC = () => {
     </div>
   );
 };
+
+/** Visitors without a character get the public sidebars on the frames that have them. */
+const shouldShowPublicContent = ({
+  variant,
+  isSignedInLayout,
+  accountState,
+  userData,
+}: Pick<
+  LayoutLeftSidebarProps,
+  "variant" | "isSignedInLayout" | "accountState" | "userData"
+>) =>
+  !userData &&
+  (accountState === "create-character" || (variant === "default" && !isSignedInLayout));

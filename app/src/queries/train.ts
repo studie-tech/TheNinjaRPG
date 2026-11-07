@@ -19,6 +19,7 @@ import {
   userJutsu,
   userQueue,
 } from "@/drizzle/schema";
+import { getCookingExperience } from "@/libs/cooking";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -194,8 +195,10 @@ export const insertUserCookingJobForStartQueuedCraft = (
   client.insert(userCookingJob).values({
     id: nanoid(),
     userId: entry.userId,
-    experience: Math.floor(
-      entry.item.cookingExperience * entry.quantity * (1 + territoryBoost),
+    experience: getCookingExperience(
+      entry.item.cookingExperience,
+      entry.quantity,
+      territoryBoost,
     ),
     finishesAt,
   });

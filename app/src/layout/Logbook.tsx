@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import {
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   IMG_SCENE_BACKGROUND,
-  TERMINAL_DIALOG_PREFIX,
 } from "@/drizzle/constants";
 import type { UserQuest } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import { useQuestRewardCacheUpdate } from "@/hooks/useQuestRewardCacheUpdate";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Accordion from "@/layout/Accordion";
 import { BattleHistoryTable } from "@/layout/BattleHistoryTable";
 import ContentBox from "@/layout/ContentBox";
@@ -27,6 +27,7 @@ import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
+  dialogChoiceContentId,
   getActiveObjective,
   isQuestComplete,
   isQuestObjectiveAvailable,
@@ -38,17 +39,19 @@ import {
   hasQuestContentChanged,
   isBetweenPyramidBattles,
   isManagedQuestRun,
+  isQuestAttemptPaused,
 } from "@/libs/questRun";
+import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { getRewardPickCount, isRewardChoiceQuest } from "@/libs/rewardChoice";
 import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
-import { isRetryableTrpcError } from "@/utils/error";
 import { parseHtml } from "@/utils/parse";
-import { canPlayHiddenQuests } from "@/utils/permissions";
+import { canAbandonQuestType } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
+import { hasAnyRewardValue } from "@/validators/rewards";
 import Post from "./Post";
 
 const tabs = ["Active", "History", "Battles", "Achievements"] as const;
@@ -200,25 +203,12 @@ export const LogbookAchievements: React.FC = () => {
           </Button>
         </div>
       )}
-      {quests
-        .filter((uq) => uq.completed === 0)
-        .map((uq) => {
-          const tracker = userData?.questData?.find((q) => q.id === uq.questId);
-
-          return (
-            tracker && (
-              <Accordion
-                key={uq.questId}
-                title={uq.quest.name}
-                selectedTitle={activeElement}
-                titlePrefix={`${capitalizeFirstLetter(uq.quest.questType)}: `}
-                onClick={setActiveElement}
-              >
-                <LogbookEntry userQuest={uq} tracker={tracker} hideTitle />
-              </Accordion>
-            )
-          );
-        })}
+      <QuestAccordionList
+        quests={quests.filter((uq) => uq.completed === 0)}
+        trackers={userData?.questData}
+        activeElement={activeElement}
+        onSelect={setActiveElement}
+      />
     </div>
   );
 };
@@ -247,28 +237,42 @@ export const LogbookActive: React.FC = () => {
 
   return (
     <div className="">
-      {quests?.map((uq) => {
-        const tracker = userData?.questData?.find((q) => q.id === uq.questId);
-        return (
-          tracker && (
-            <Accordion
-              key={uq.questId}
-              title={uq.quest.name}
-              selectedTitle={activeElement}
-              titlePrefix={`${capitalizeFirstLetter(uq.quest.questType)}: `}
-              onClick={setActiveElement}
-            >
-              <LogbookEntry userQuest={uq} tracker={tracker} hideTitle />
-            </Accordion>
-          )
-        );
-      })}
+      <QuestAccordionList
+        quests={quests}
+        trackers={userData?.questData}
+        activeElement={activeElement}
+        onSelect={setActiveElement}
+      />
       {quests?.length === 0 && (
         <div className="p-3 text-muted-foreground">No active quests</div>
       )}
     </div>
   );
 };
+
+/** One collapsible logbook entry per quest with a tracker. */
+const QuestAccordionList: React.FC<{
+  quests: UserQuest[] | undefined;
+  trackers: QuestTrackerType[] | null | undefined;
+  activeElement: string;
+  onSelect: React.Dispatch<React.SetStateAction<string>>;
+}> = ({ quests, trackers, activeElement, onSelect }) =>
+  quests?.map((uq) => {
+    const tracker = trackers?.find((q) => q.id === uq.questId);
+    return (
+      tracker && (
+        <Accordion
+          key={uq.questId}
+          title={uq.quest.name}
+          selectedTitle={activeElement}
+          titlePrefix={`${capitalizeFirstLetter(uq.quest.questType)}: `}
+          onClick={onSelect}
+        >
+          <LogbookEntry userQuest={uq} tracker={tracker} hideTitle />
+        </Accordion>
+      )
+    );
+  });
 
 /**
  * Renders a logbook of battles.
@@ -436,8 +440,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const allDone = isQuestComplete(quest, tracker);
   const isPaused =
     quest.questType === "battlepyramid" &&
-    ((quest.hidden && !canPlayHiddenQuests(userData?.role ?? "USER")) ||
-      hasQuestContentChanged(userQuest));
+    isQuestAttemptPaused(userQuest, userData?.role ?? "USER");
   const canProgress =
     !isPaused &&
     (canAttemptAwakeAction(userData) ||
@@ -447,11 +450,8 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const questStartedAt = userQuest.startedAt;
   const abandonIdentity = `${userQuest.id}:${quest.id}:${questStartedAt?.toISOString() ?? "missing-start"}`;
   const activeAbandonIdentityRef = useRef(abandonIdentity);
-  const abandonRequestRef = useRef<{ identity: string } | null>(null);
+  const abandonFlight = useSingleFlight<{ identity: string; revision?: number }>();
   const [abandonDialogIdentity, setAbandonDialogIdentity] = useState<string | null>(
-    null,
-  );
-  const [abandonPendingIdentity, setAbandonPendingIdentity] = useState<string | null>(
     null,
   );
   const [abandonedIdentity, setAbandonedIdentity] = useState<string | null>(null);
@@ -459,13 +459,10 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   useEffect(() => {
     activeAbandonIdentityRef.current = abandonIdentity;
     setAbandonDialogIdentity(null);
-    setAbandonPendingIdentity(null);
     setAbandonedIdentity(null);
     // A response for the previous attempt remains harmless because both the client response
     // handler and server CAS are bound to that attempt. Let the new attempt have its own action.
-    if (abandonRequestRef.current?.identity !== abandonIdentity) {
-      abandonRequestRef.current = null;
-    }
+    if (abandonFlight.current()?.identity !== abandonIdentity) abandonFlight.release();
   }, [abandonIdentity]);
 
   // A/B test for starter quest assistant image
@@ -577,67 +574,50 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const { mutateAsync: abandon } = api.quests.abandon.useMutation({
     meta: { handlesTransportError: true },
   });
-  const isAbandoning = abandonPendingIdentity === abandonIdentity;
+  const isAbandoning = abandonFlight.pending?.identity === abandonIdentity;
   const isAbandoned =
     abandonedIdentity === abandonIdentity ||
     abandonedQuestAttemptTombstones.has(abandonIdentity);
   const isAbandonDialogOpen = abandonDialogIdentity === abandonIdentity;
 
   const abandonCurrentQuest = async () => {
-    // React state is asynchronous, so the ref is the same-tick duplicate-submit lock.
-    if (abandonRequestRef.current || !questStartedAt) return;
+    if (abandonFlight.current() || !questStartedAt) return;
 
     const request = { identity: abandonIdentity, revision: prepareUserUpdate() };
-    abandonRequestRef.current = request;
-    setAbandonPendingIdentity(abandonIdentity);
-
-    try {
-      const data = await abandon({
-        id: quest.id,
-      });
-
+    await abandonFlight.run(request, async () => {
       // A parent may reuse this component for another attempt while the request is in flight.
       // The server committed only the captured attempt; never hide or toast for its successor.
-      if (
-        abandonRequestRef.current !== request ||
-        activeAbandonIdentityRef.current !== request.identity
-      ) {
-        return;
-      }
+      const isCurrentAttempt = () =>
+        abandonFlight.owns(request) &&
+        activeAbandonIdentityRef.current === request.identity;
 
-      showMutationToast(data);
-      if (!data.success) return;
-
-      // Suppress and close before cache work. A failed/stale refresh must not immediately expose
-      // a second destructive action for an attempt the server has already closed.
-      abandonedQuestAttemptTombstones.add(request.identity);
-      setAbandonedIdentity(request.identity);
-      setAbandonDialogIdentity(null);
-      await Promise.allSettled([
-        utils.quests.allianceBuilding.invalidate(),
-        updateUser(data, { revision: request.revision }),
-      ]);
-    } catch (error) {
-      // This caller owns transport recovery feedback; other tRPC failures use the global handler.
-      if (
-        abandonRequestRef.current === request &&
-        activeAbandonIdentityRef.current === request.identity &&
-        error instanceof Error &&
-        isRetryableTrpcError(error)
-      ) {
-        showMutationToast({
-          success: false,
-          message: "Could not abandon this quest. Check your connection and try again.",
+      try {
+        const data = await abandon({
+          id: quest.id,
         });
-      }
-    } finally {
-      if (abandonRequestRef.current === request) {
-        abandonRequestRef.current = null;
-        if (activeAbandonIdentityRef.current === request.identity) {
-          setAbandonPendingIdentity(null);
+        if (!isCurrentAttempt()) return;
+
+        showMutationToast(data);
+        if (!data.success) return;
+
+        // Suppress and close before cache work. A failed/stale refresh must not immediately expose
+        // a second destructive action for an attempt the server has already closed.
+        abandonedQuestAttemptTombstones.add(request.identity);
+        setAbandonedIdentity(request.identity);
+        setAbandonDialogIdentity(null);
+        await Promise.allSettled([
+          utils.quests.allianceBuilding.invalidate(),
+          updateUser(data, { revision: request.revision }),
+        ]);
+      } catch (error) {
+        if (isCurrentAttempt()) {
+          showRetryableErrorToast(
+            error,
+            "Could not abandon this quest. Check your connection and try again.",
+          );
         }
       }
-    }
+    });
   };
 
   return (
@@ -649,24 +629,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             {!isAbandoned &&
               !props.compact &&
               !!questStartedAt &&
-              quest.questType !== "starter" &&
-              [
-                "mission",
-                "crime",
-                "event",
-                "errand",
-                "story",
-                "medical",
-                "hunting",
-                "gathering",
-                "battlepyramid",
-                "pvp",
-                "starter",
-                "anbu",
-                "overworld",
-                "mastery",
-                "special",
-              ].includes(quest.questType) && (
+              canAbandonQuestType(userData?.role ?? "USER", quest.questType) && (
                 <Button
                   type="button"
                   size="icon"
@@ -802,12 +765,10 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                       onClick={() =>
                         checkRewards({
                           questId: quest.id,
-                          // A terminal branch has no follow-up objective; send an objective-scoped
-                          // sentinel so the server completes this dialog objective instead of
-                          // re-opening the same dialog.
-                          nextObjectiveId:
-                            entry.nextObjectiveId ??
-                            `${TERMINAL_DIALOG_PREFIX}${activeObjective.id}`,
+                          nextObjectiveId: dialogChoiceContentId(
+                            entry.nextObjectiveId,
+                            activeObjective.id,
+                          ),
                         })
                       }
                     >
@@ -828,29 +789,12 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
               showScene ? "px-3 pb-3" : "",
             )}
           >
-            {quest.content.objectives.map((objective, i) => {
-              // Clean up the shown objectives a bit to hide dialog
-              const status = tracker?.goals.find((g) => g.id === objective.id);
-              const hideIfNoRewards =
-                objective.task === "dialog" ||
-                (activeObjective && objective.id !== activeObjective?.id) ||
-                (allDone && !status?.done);
-              return (
-                <Objective
-                  objective={objective}
-                  tracker={tracker}
-                  checkRewards={() => checkRewards({ questId: quest.id })}
-                  key={objective.id}
-                  titlePrefix={
-                    quest.consecutiveObjectives ? "Objective: " : `${i + 1}. `
-                  }
-                  grayedOut={
-                    !canProgress || !isQuestObjectiveAvailable(quest, tracker, i)
-                  }
-                  hideIfNoRewards={hideIfNoRewards}
-                />
-              );
-            })}
+            <QuestObjectives
+              quest={quest}
+              tracker={tracker}
+              checkRewards={() => checkRewards({ questId: quest.id })}
+              locked={!canProgress}
+            />
           </div>
         )}
 
@@ -868,6 +812,63 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         )}
       </div>
     </Post>
+  );
+};
+
+/** A quest's objective cards, hiding those not yet relevant. Callers own the grid around them. */
+export const QuestObjectives: React.FC<{
+  quest: UserQuest["quest"];
+  tracker: QuestTrackerType;
+  checkRewards: () => void;
+  /** Gray out every objective, for a player who cannot progress right now. */
+  locked?: boolean;
+}> = ({ quest, tracker, checkRewards, locked }) => {
+  const allDone = isQuestComplete(quest, tracker);
+  const activeObjective = getActiveObjective(quest, tracker);
+  return quest.content.objectives.map((objective, i) => {
+    const status = tracker.goals.find((g) => g.id === objective.id);
+    return (
+      <Objective
+        objective={objective}
+        tracker={tracker}
+        checkRewards={checkRewards}
+        key={objective.id}
+        titlePrefix={quest.consecutiveObjectives ? "Objective: " : `${i + 1}. `}
+        grayedOut={locked || !isQuestObjectiveAvailable(quest, tracker, i)}
+        hideIfNoRewards={
+          objective.task === "dialog" ||
+          (activeObjective && objective.id !== activeObjective.id) ||
+          (allDone && !status?.done)
+        }
+      />
+    );
+  });
+};
+
+/** The "Quest Update" dialog for a quest whose objective just changed on the map or in battle. */
+export const QuestUpdateModal: React.FC<{
+  questId: string;
+  onClose: () => void;
+}> = ({ questId, onClose }) => {
+  const { data: userData } = useRequiredUserData();
+  const userQuest = userData?.userQuests?.find((q) => q.questId === questId);
+  const tracker = userData?.questData?.find((q) => q.id === questId);
+  if (!userQuest || !tracker) return null;
+  return (
+    <Modal
+      isOpen
+      setIsOpen={(open) => {
+        if (!open) onClose();
+      }}
+      title="Quest Update"
+    >
+      <LogbookEntry
+        userQuest={userQuest}
+        tracker={tracker}
+        showScene={true}
+        hideTitle={false}
+      />
+    </Modal>
   );
 };
 
@@ -916,22 +917,7 @@ export const useCheckRewards = () => {
           const showToast =
             notifications.length > 0 ||
             (resolved && quest.successDescription) ||
-            rewards.reward_money > 0 ||
-            rewards.reward_seichi_silver > 0 ||
-            rewards.reward_clanpoints > 0 ||
-            rewards.reward_anbupoints > 0 ||
-            rewards.reward_exp > 0 ||
-            (rewards.reward_pet_experience ?? 0) > 0 ||
-            rewards.reward_tokens > 0 ||
-            rewards.reward_prestige > 0 ||
-            rewards.reward_reputation > 0 ||
-            rewards.reward_skillpoints > 0 ||
-            rewards.reward_jutsus.length > 0 ||
-            rewards.reward_badges.length > 0 ||
-            (rewards.reward_titles?.length ?? 0) > 0 ||
-            rewards.reward_bloodlines.length > 0 ||
-            rewards.reward_sage_modes.length > 0 ||
-            rewards.reward_items.length > 0;
+            hasAnyRewardValue(rewards);
           // Show toast
           const message = resolved
             ? `Finished: ${quest.name}`

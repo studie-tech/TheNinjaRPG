@@ -15,7 +15,7 @@ import {
 import dynamic from "next/dynamic";
 import type React from "react";
 import { useMemo, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +26,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { NumberInput } from "@/components/ui/number-input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -47,7 +46,6 @@ import {
   FACTION_RAID_STRUCTURE_ROUTES,
   FACTION_RAID_TARGET_COOLDOWN_HOURS,
   MAP_RESERVED_SECTORS,
-  MAP_SECTOR_ID_MAX,
   VILLAGE_SYNDICATE_ID,
   WAR_ALLY_OFFER_MIN,
   WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
@@ -61,12 +59,19 @@ import {
   WAR_SHRINE_IMAGE,
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
-import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schema";
+import type {
+  UserRequest,
+  Village,
+  VillageAlliance,
+  VillageStructure,
+} from "@/drizzle/schema";
 import { useMap } from "@/hooks/map";
 import { useActiveWars } from "@/hooks/useActiveWars";
+import { useAdminEndWar, useAllyOfferActions } from "@/hooks/useWarActions";
 import Building from "@/layout/Building";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { FindSectorPopover } from "@/layout/FindSectorPopover";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
@@ -87,11 +92,6 @@ import { canAdministrateWars } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
-import {
-  type SectorForm,
-  type SectorFormInput,
-  sectorFormSchema,
-} from "@/validators/travel";
 import {
   type AllianceOfferSchema,
   type AllianceOfferSchemaInput,
@@ -114,8 +114,6 @@ export const WarRoom: React.FC<{
   navTabs?: React.ReactNode;
   initialBreak?: boolean;
 }> = ({ user, navTabs, initialBreak }) => {
-  // tRPC utility
-  const utils = api.useUtils();
   const { timeDiff } = useUserInfo();
 
   // State
@@ -141,40 +139,7 @@ export const WarRoom: React.FC<{
   });
 
   // Mutations
-  const { mutate: acceptAllyOffer, isPending: isHiring } =
-    api.war.acceptAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            utils.war.getActiveWars.invalidate(),
-            utils.war.getRaidOptions.invalidate(),
-            utils.war.getEndedWars.invalidate(),
-            utils.war.getAllyOffers.invalidate(),
-          ]);
-        }
-      },
-    });
-
-  const { mutate: rejectAllyOffer, isPending: isRejectingOffer } =
-    api.war.rejectAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.war.getAllyOffers.invalidate();
-        }
-      },
-    });
-
-  const { mutate: cancelAllyOffer, isPending: isCancelling } =
-    api.war.cancelAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.war.getAllyOffers.invalidate();
-        }
-      },
-    });
+  const allyOffers = useAllyOfferActions();
 
   // Derived
   const isLeader = user.userId === user.village?.kageId;
@@ -186,6 +151,16 @@ export const WarRoom: React.FC<{
     warType === "Active"
       ? activeWars
       : endedWars?.filter((war) => war.type !== "SECTOR_WAR");
+  // Each village war card lists its own offers with their war; the board keeps the rest.
+  const warIdsListingOffers = user.isOutlaw
+    ? []
+    : (activeWars ?? [])
+        .filter((war) => war.type !== "SECTOR_WAR" && war.status === "ACTIVE")
+        .map((war) => war.id);
+  const boardOffers = requests?.filter(
+    (request) => !warIdsListingOffers.some((id) => isOfferForWarCard(request, id)),
+  );
+  const areAllOffersOnCards = !!requests?.length && boardOffers?.length === 0;
 
   return (
     <>
@@ -259,24 +234,24 @@ export const WarRoom: React.FC<{
           )}
         </div>
       </ContentBox>
-      {isLeader && warType === "Active" && (
+      {isLeader && warType === "Active" && !areAllOffersOnCards && (
         <ContentBox
           title="War Contract Offers"
           subtitle="Pending war participation requests"
           initialBreak={true}
           padding={false}
         >
-          {requests && requests.length > 0 && (
+          {boardOffers && boardOffers.length > 0 && (
             <UserRequestSystem
-              isLoading={isHiring || isRejectingOffer || isCancelling}
-              requests={requests}
+              isLoading={allyOffers.isPending}
+              requests={boardOffers}
               userId={user.userId}
-              onAccept={({ id }) => acceptAllyOffer({ offerId: id })}
-              onReject={({ id }) => rejectAllyOffer({ id })}
-              onCancel={({ id }) => cancelAllyOffer({ offerId: id })}
+              onAccept={allyOffers.onAccept}
+              onReject={allyOffers.onReject}
+              onCancel={allyOffers.onCancel}
             />
           )}
-          {requests && requests.length === 0 && (
+          {boardOffers && boardOffers.length === 0 && (
             <p className="p-4">No pending war participation requests</p>
           )}
         </ContentBox>
@@ -303,16 +278,6 @@ export const WarMap: React.FC<{
     FACTION_RAID_STRUCTURE_ROUTES[0],
   );
   const [focusSector, setFocusSector] = useState<number | null>(null);
-
-  // Find sector form
-  const findSectorForm = useForm<SectorFormInput, unknown, SectorForm>({
-    mode: "all",
-    resolver: zodResolver(sectorFormSchema),
-  });
-  const findSectorValue = useWatch({
-    control: findSectorForm.control,
-    name: "sector",
-  }) as number | undefined;
 
   // Query data
   const { data: userData } = useRequiredUserData();
@@ -575,8 +540,11 @@ export const WarMap: React.FC<{
 
       {/* Find Sector Control */}
       <div className="absolute top-2 right-2 z-10">
-        <Popover>
-          <PopoverTrigger asChild>
+        <FindSectorPopover
+          focusSector={focusSector}
+          onFocusSector={setFocusSector}
+          triggerAsChild
+          trigger={
             <Button
               variant="outline"
               size="icon"
@@ -585,62 +553,8 @@ export const WarMap: React.FC<{
             >
               <Locate className="h-5 w-5" />
             </Button>
-          </PopoverTrigger>
-          <PopoverContent>
-            <p className="py-2 font-semibold">Find Sector</p>
-            <p className="pb-2 text-muted-foreground text-sm">
-              Enter a sector ID to locate it on the map.
-            </p>
-            <Form {...findSectorForm}>
-              <form
-                onSubmit={findSectorForm.handleSubmit((data) => {
-                  setFocusSector(data.sector);
-                })}
-                className="flex flex-col gap-2"
-              >
-                <FormField
-                  control={findSectorForm.control}
-                  name="sector"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <NumberInput
-                          className="w-full"
-                          placeholder={`Sector ID (0-${MAP_SECTOR_ID_MAX})`}
-                          {...field}
-                          value={field.value as number | undefined}
-                          onValueChange={field.onChange}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="flex-1"
-                    disabled={!Number.isFinite(findSectorValue)}
-                  >
-                    Find Sector{" "}
-                    {Number.isFinite(findSectorValue) ? findSectorValue : "..."}
-                  </Button>
-                  {focusSector !== null && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setFocusSector(null)}
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </form>
-            </Form>
-          </PopoverContent>
-        </Popover>
+          }
+        />
       </div>
       {villages && globe && (
         <GlobalMap
@@ -705,9 +619,8 @@ export const SectorWar: React.FC<{
   // tRPC utility
   const utils = api.useUtils();
 
-  const [showAdminEndDialog, setShowAdminEndDialog] = useState(false);
-
   // Mutations
+  const adminEnd = useAdminEndWar(war.id);
   const { mutate: buildShrine, isPending: isBuilding } =
     api.war.buildShrine.useMutation({
       onSuccess: async (data) => {
@@ -720,20 +633,6 @@ export const SectorWar: React.FC<{
             utils.travel.getAllSectors.invalidate(),
           ]);
         }
-      },
-    });
-
-  const { mutate: adminEndWar, isPending: isEndingWar } =
-    api.war.adminEndWar.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (!data.success) return;
-        setShowAdminEndDialog(false);
-        await Promise.all([
-          utils.war.getActiveWars.invalidate(),
-          utils.war.getRaidOptions.invalidate(),
-          utils.war.getEndedWars.invalidate(),
-        ]);
       },
     });
 
@@ -761,10 +660,10 @@ export const SectorWar: React.FC<{
                 variant="destructive"
                 size="icon"
                 aria-label={`End sector war ${war.id}`}
-                disabled={isBuilding || isEndingWar}
-                onClick={() => setShowAdminEndDialog(true)}
+                disabled={isBuilding || adminEnd.isPending}
+                onClick={() => adminEnd.setShowDialog(true)}
               >
-                {isEndingWar ? (
+                {adminEnd.isPending ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <Trash2 className="h-5 w-5" />
@@ -824,12 +723,12 @@ export const SectorWar: React.FC<{
             {canBuildShrine && (
               <Confirm
                 title="Build Shrine"
-                disabled={isEndingWar}
+                disabled={adminEnd.isPending}
                 button={
                   <Button
                     className="w-full"
                     loading={isBuilding}
-                    disabled={isEndingWar}
+                    disabled={adminEnd.isPending}
                   >
                     <LandPlot className="mr-2 h-5 w-5" />
                     Build Shrine ({WAR_PURCHASE_SHRINE_TOKEN_COST.toLocaleString()}{" "}
@@ -854,14 +753,14 @@ export const SectorWar: React.FC<{
       <Modal
         id="sector-admin-end-war"
         title="End Sector War"
-        isOpen={showAdminEndDialog}
-        setIsOpen={setShowAdminEndDialog}
+        isOpen={adminEnd.showDialog}
+        setIsOpen={adminEnd.setShowDialog}
         proceed_label="End sector war"
         proceed_loading_label="Ending"
         confirmClassName="bg-amber-600 text-white hover:bg-amber-700"
-        isLoading={isEndingWar}
+        isLoading={adminEnd.isPending}
         keepOpenOnAccept={true}
-        onAccept={() => adminEndWar({ warId: war.id })}
+        onAccept={adminEnd.endWar}
       >
         <div className="space-y-3">
           <p>
@@ -1373,7 +1272,6 @@ export const VillageWar: React.FC<{
           : surrenderAlly?.supportVillageId === war.defenderVillageId
             ? "ALLY_DEFENDER"
             : undefined;
-  const [showAdminEndDialog, setShowAdminEndDialog] = useState(false);
 
   // Form for token offer
   const offerSchema = createAllianceOfferSchema(userVillage?.tokens ?? 0);
@@ -1400,44 +1298,11 @@ export const VillageWar: React.FC<{
   });
 
   // Derived for this war
-  const warRequests = requests?.filter(
-    (r) => r.relatedId === war.id && r.status !== "ACCEPTED",
-  );
+  const warRequests = requests?.filter((r) => isOfferForWarCard(r, war.id));
 
   // Mutations
-  const { mutate: acceptAllyOffer, isPending: isHiring } =
-    api.war.acceptAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            utils.war.getActiveWars.invalidate(),
-            utils.war.getRaidOptions.invalidate(),
-            utils.war.getAllyOffers.invalidate(),
-          ]);
-        }
-      },
-    });
-
-  const { mutate: rejectAllyOffer, isPending: isRejectingOffer } =
-    api.war.rejectAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.war.getAllyOffers.invalidate();
-        }
-      },
-    });
-
-  const { mutate: cancelAllyOffer, isPending: isCancelling } =
-    api.war.cancelAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.war.getAllyOffers.invalidate();
-        }
-      },
-    });
+  const allyOffers = useAllyOfferActions();
+  const adminEnd = useAdminEndWar(war.id);
 
   const { mutate: createAllyOffer, isPending: isCreatingOffer } =
     api.war.createAllyOffer.useMutation({
@@ -1465,23 +1330,9 @@ export const VillageWar: React.FC<{
       },
     });
 
-  const { mutate: adminEndWar, isPending: isAdminEnding } =
-    api.war.adminEndWar.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (!data.success) return;
-        setShowAdminEndDialog(false);
-        await Promise.all([
-          utils.war.getActiveWars.invalidate(),
-          utils.war.getRaidOptions.invalidate(),
-          utils.war.getEndedWars.invalidate(),
-          utils.war.getAllyOffers.invalidate(),
-        ]);
-      },
-    });
-
+  const isAdminEnding = adminEnd.isPending;
   const competingVillageWarMutation =
-    isHiring || isRejectingOffer || isCancelling || isCreatingOffer || isAdminEnding;
+    allyOffers.isPending || isCreatingOffer || isAdminEnding;
 
   const supportedVillageName =
     surrenderAlly?.supportVillageId === war.attackerVillageId
@@ -1577,7 +1428,7 @@ export const VillageWar: React.FC<{
               className="bg-amber-700 hover:bg-amber-800"
               aria-label={`Administratively end ${war.type === "WAR_RAID" ? "war raid" : "village war"} ${war.id}`}
               disabled={isSurrendering || competingVillageWarMutation}
-              onClick={() => setShowAdminEndDialog(true)}
+              onClick={() => adminEnd.setShowDialog(true)}
             >
               {isAdminEnding ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -1645,14 +1496,14 @@ export const VillageWar: React.FC<{
       <Modal
         id="village-admin-end-war"
         title={war.type === "WAR_RAID" ? "End War Raid" : "End Village War"}
-        isOpen={showAdminEndDialog && war.status === "ACTIVE"}
-        setIsOpen={setShowAdminEndDialog}
+        isOpen={adminEnd.showDialog && war.status === "ACTIVE"}
+        setIsOpen={adminEnd.setShowDialog}
         proceed_label={war.type === "WAR_RAID" ? "End war raid" : "End village war"}
         proceed_loading_label="Ending"
         confirmClassName="bg-amber-700 text-white hover:bg-amber-800 focus-visible:ring-amber-500"
         isLoading={isAdminEnding}
         keepOpenOnAccept={true}
-        onAccept={() => adminEndWar({ warId: war.id })}
+        onAccept={adminEnd.endWar}
         className="max-w-xl border-amber-900/60"
       >
         <div className="space-y-4">
@@ -2000,19 +1851,12 @@ export const VillageWar: React.FC<{
             padding={false}
           >
             <UserRequestSystem
-              isLoading={
-                isHiring ||
-                isRejectingOffer ||
-                isCancelling ||
-                isCreatingOffer ||
-                isSurrendering ||
-                isAdminEnding
-              }
+              isLoading={competingVillageWarMutation || isSurrendering}
               requests={warRequests}
               userId={user.userId}
-              onAccept={({ id }) => acceptAllyOffer({ offerId: id })}
-              onReject={({ id }) => rejectAllyOffer({ id })}
-              onCancel={({ id }) => cancelAllyOffer({ offerId: id })}
+              onAccept={allyOffers.onAccept}
+              onReject={allyOffers.onReject}
+              onCancel={allyOffers.onCancel}
             />
           </ContentBox>
         )}
@@ -2020,3 +1864,9 @@ export const VillageWar: React.FC<{
     </div>
   );
 };
+
+/** Whether a village war card lists this ally offer. */
+const isOfferForWarCard = (
+  offer: Pick<UserRequest, "relatedId" | "status">,
+  warId: string,
+) => offer.relatedId === warId && offer.status !== "ACCEPTED";

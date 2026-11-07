@@ -37,7 +37,7 @@ import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
-import { isMapUserAlly } from "@/utils/alliance";
+import { canShowMapAttack } from "@/utils/alliance";
 import type { LpcDirection } from "@/validators/lpc";
 
 /** Actor identity and art stay stable across position and presence updates. */
@@ -79,6 +79,7 @@ export const createTravelActors = (
   let viewer: UserWithRelations;
   let users: SectorUser[] = [];
   let friendlyAttack = false;
+  let wars: TravelActorsSnapshot["wars"];
   let brightness = WORLD_DAY_BRIGHTNESS;
   let hovered: string | null = null;
   let paths: PathCalculator | null = null;
@@ -220,6 +221,7 @@ export const createTravelActors = (
     viewer = snapshot.viewer;
     users = snapshot.users;
     friendlyAttack = snapshot.friendlyAttack;
+    wars = snapshot.wars;
     const recipes = travelActorRecipes(snapshot, partsFor);
     const wanted = new Set(recipes.map((recipe) => recipe.key));
     for (const key of appearanceParts.keys())
@@ -398,7 +400,7 @@ export const createTravelActors = (
         ).length === 1;
       const actions =
         isHovered && target && viewer
-          ? travelActionAvailability(viewer, target, friendlyAttack)
+          ? travelActionAvailability(viewer, target, friendlyAttack, wars)
           : { attack: false, heal: false, info: false };
       for (const entry of record.art?.entries ?? []) {
         if (!target || target.isNpc) continue;
@@ -819,14 +821,11 @@ export const travelActionAvailability = (
   viewer: NonNullable<UserWithRelations>,
   target: SectorUser,
   friendlyAttack: boolean,
+  wars: TravelActorsSnapshot["wars"],
 ) => {
-  const isAlly = isMapUserAlly(viewer, target);
   const other = target.userId !== viewer.userId && !target.isNpc;
   return {
-    attack:
-      !!other &&
-      !RANKS_RESTRICTED_FROM_PVP.includes(target.rank) &&
-      (friendlyAttack || !isAlly),
+    attack: !!other && canShowMapAttack(viewer, target, friendlyAttack, wars),
     heal:
       !!other &&
       target.curHealth < target.maxHealth &&
@@ -974,6 +973,7 @@ export type TravelActorsSnapshot = {
   minBracket: number;
   showUsers: boolean;
   friendlyAttack: boolean;
+  wars?: Parameters<typeof canShowMapAttack>[3];
   structureObjectiveIds: ReadonlySet<string | undefined>;
   /** Limits individual artwork only; occupancy badges and encounters use the complete user list. */
   characterKeys?: ReadonlySet<string>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { MAP_RESERVED_SECTORS, WAR_OBJECTIVES_PER_SIDE } from "@/drizzle/constants";
-import { findObjectiveWarForSector, findShrineAttackWar, getWarSide, maskWarObjectives, selectWarObjectives, withMercenaryParticipation } from "@/libs/objectiveWar";
+import { findObjectiveWarForSector, findShrineAttackWar, getVillageWarShrineAction, getWarSide, maskWarObjectives, selectWarObjectives, withMercenaryParticipation } from "@/libs/objectiveWar";
 import { defaultWarRules, warRulesSchema } from "@/validators/war";
 import type { War } from "@/drizzle/schema";
 
@@ -101,6 +101,18 @@ describe("shrine war lookup", () => {
   it("admits a damaged shrine's own side only when defending is allowed", () => {
     expect(findShrineAttackWar([baseWar], "d", "user", 200, { allowDefend: true })).toBe(baseWar);
     expect(findShrineAttackWar([baseWar], "a", "user", 100, { allowDefend: true })).toBeUndefined();
+  });
+  it("picks the village war shrine action from side, sector and shrine damage", () => {
+    const fullHp = { ...baseWar, attackerShrineHp: 100, defenderShrineHp: 100 };
+    expect(getVillageWarShrineAction(baseWar, "a", 200)).toBe("attack");
+    expect(getVillageWarShrineAction(baseWar, "d", 100)).toBe("attack");
+    expect(getVillageWarShrineAction(baseWar, "d", 200)).toBe("defend");
+    expect(getVillageWarShrineAction(fullHp, "d", 200)).toBeNull();
+    expect(getVillageWarShrineAction(fullHp, "a", 100)).toBeNull();
+    expect(getVillageWarShrineAction({ ...baseWar, defenderShrineHp: 0 }, "a", 200)).toBe("attack");
+    expect(getVillageWarShrineAction(baseWar, null, 200)).toBeNull();
+    expect(getVillageWarShrineAction(baseWar, "a", 300)).toBeNull();
+    expect(getVillageWarShrineAction({ ...baseWar, type: "SECTOR_WAR" }, "a", 200)).toBeNull();
   });
   it("limits sector wars to attackers on the war's sector", () => {
     const sectorWar = { ...baseWar, type: "SECTOR_WAR" } as typeof baseWar;

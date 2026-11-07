@@ -26,12 +26,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ITEM_LEVEL_CAP } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { useUserEditForm } from "@/hooks/profile";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { ActionSelector } from "@/layout/CombatActions";
 import { EditContent } from "@/layout/EditContent";
 import Modal from "@/layout/Modal";
 import { getJutsuMaxLevel } from "@/libs/jutsuProgression";
+import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { showMutationToast } from "@/libs/toast";
-import { isRetryableTrpcError } from "@/utils/error";
 import {
   canChangeUserRolesTo,
   canEditBloodline,
@@ -67,18 +68,18 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
   );
   const [confirmedJutsuAdjustment, setConfirmedJutsuAdjustment] =
     useState<JutsuAdjustmentSnapshot | null>(null);
-  const [isJutsuAdjustmentPending, setIsJutsuAdjustmentPending] = useState(false);
   const [committedJutsuAdjustments, setCommittedJutsuAdjustments] = useState<
     Map<string, CommittedJutsuAdjustment>
   >(() => new Map());
   const [confirmedItemAdjustment, setConfirmedItemAdjustment] =
     useState<ItemAdjustmentSnapshot | null>(null);
-  const [isItemAdjustmentPending, setIsItemAdjustmentPending] = useState(false);
   const [committedItemLevels, setCommittedItemLevels] = useState<Map<string, number>>(
     () => new Map(),
   );
-  const jutsuAdjustmentRequestRef = useRef<JutsuAdjustmentSnapshot | null>(null);
-  const itemAdjustmentRequestRef = useRef<ItemAdjustmentSnapshot | null>(null);
+  const jutsuAdjustmentFlight = useSingleFlight<JutsuAdjustmentSnapshot>();
+  const itemAdjustmentFlight = useSingleFlight<ItemAdjustmentSnapshot>();
+  const isJutsuAdjustmentPending = jutsuAdjustmentFlight.isPending;
+  const isItemAdjustmentPending = itemAdjustmentFlight.isPending;
   const currentTargetRef = useRef({
     userId,
     username: profile.username,
@@ -343,71 +344,54 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
   });
 
   const confirmJutsuAdjustment = async (snapshot: JutsuAdjustmentSnapshot) => {
-    if (jutsuAdjustmentRequestRef.current) return;
-    // Claim this exact target, owned row and requested state before React exposes pending state.
-    jutsuAdjustmentRequestRef.current = snapshot;
-    setIsJutsuAdjustmentPending(true);
-    try {
-      const result = await adjustJutsuLevel.mutateAsync({
-        userId: snapshot.userId,
-        jutsuId: snapshot.jutsuId,
-        level: snapshot.newLevel,
-        reskinId: snapshot.newReskinId,
-      });
-      if (
-        jutsuAdjustmentRequestRef.current !== snapshot ||
-        currentTargetRef.current.userId !== snapshot.userId ||
-        currentTargetRef.current.username !== snapshot.username
-      ) {
-        return;
-      }
-
-      if (!result.success) return showMutationToast(result);
-
-      showMutationToast(result);
-      // Overlay the exact committed row before refreshing. A stale query cannot put the old
-      // level/reskin back into the form or count badge while the authoritative cache catches up.
-      setCommittedJutsuAdjustments((current) => {
-        const next = new Map(current);
-        next.set(snapshot.userJutsuId, {
+    await jutsuAdjustmentFlight.run(snapshot, async () => {
+      try {
+        const result = await adjustJutsuLevel.mutateAsync({
+          userId: snapshot.userId,
+          jutsuId: snapshot.jutsuId,
           level: snapshot.newLevel,
           reskinId: snapshot.newReskinId,
-          reskinName: snapshot.newReskinName,
         });
-        return next;
-      });
-      setConfirmedJutsuAdjustment(null);
-      void Promise.allSettled([
-        utils.profile.getPublicUser.invalidate({ userId: snapshot.userId }),
-        utils.jutsu.getPublicUserJutsus.invalidate({ userId: snapshot.userId }),
-      ]);
-    } catch (error) {
-      // This caller owns transport feedback; other tRPC failures use the global handler.
-      // Close and refresh because this endpoint has no replay key.
-      if (error instanceof Error && isRetryableTrpcError(error)) {
-        showMutationToast({
-          success: false,
-          message: "The adjustment outcome is unknown. Refresh before trying again.",
+        if (
+          currentTargetRef.current.userId !== snapshot.userId ||
+          currentTargetRef.current.username !== snapshot.username
+        ) {
+          return;
+        }
+
+        if (!result.success) return showMutationToast(result);
+
+        showMutationToast(result);
+        // Overlay the exact committed row before refreshing. A stale query cannot put the old
+        // level/reskin back into the form or count badge while the authoritative cache catches up.
+        setCommittedJutsuAdjustments((current) => {
+          const next = new Map(current);
+          next.set(snapshot.userJutsuId, {
+            level: snapshot.newLevel,
+            reskinId: snapshot.newReskinId,
+            reskinName: snapshot.newReskinName,
+          });
+          return next;
         });
+        setConfirmedJutsuAdjustment(null);
+        void Promise.allSettled([
+          utils.profile.getPublicUser.invalidate({ userId: snapshot.userId }),
+          utils.jutsu.getPublicUserJutsus.invalidate({ userId: snapshot.userId }),
+        ]);
+      } catch (error) {
+        // Close and refresh because this endpoint has no replay key.
+        showRetryableErrorToast(
+          error,
+          "The adjustment outcome is unknown. Refresh before trying again.",
+        );
+        setConfirmedJutsuAdjustment(null);
+        void utils.jutsu.getPublicUserJutsus.invalidate({ userId: snapshot.userId });
       }
-      setConfirmedJutsuAdjustment(null);
-      void utils.jutsu.getPublicUserJutsus.invalidate({ userId: snapshot.userId });
-    } finally {
-      if (jutsuAdjustmentRequestRef.current === snapshot) {
-        jutsuAdjustmentRequestRef.current = null;
-        setIsJutsuAdjustmentPending(false);
-      }
-    }
+    });
   };
 
   const reviewItemAdjustment = itemLevelForm.handleSubmit((data) => {
-    if (
-      !selectedUserItem ||
-      isItemAdjustmentPending ||
-      itemAdjustmentRequestRef.current
-    ) {
-      return;
-    }
+    if (!selectedUserItem || itemAdjustmentFlight.current()) return;
     if (data.level === selectedUserItem.level) {
       itemLevelForm.setError("level", {
         message: "Change the level before reviewing",
@@ -446,55 +430,43 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
   });
 
   const confirmItemAdjustment = async (snapshot: ItemAdjustmentSnapshot) => {
-    // Claim the exact target, row and absolute value synchronously. React's mutation state is
-    // not visible until the next render, so this closes the double-click/Enter race.
-    if (itemAdjustmentRequestRef.current) return;
-    itemAdjustmentRequestRef.current = snapshot;
-    setIsItemAdjustmentPending(true);
-    try {
-      const result = await adjustItemLevel.mutateAsync({
-        userId: snapshot.userId,
-        userItemId: snapshot.userItemId,
-        level: snapshot.newLevel,
-      });
-      if (
-        itemAdjustmentRequestRef.current !== snapshot ||
-        currentTargetRef.current.userId !== snapshot.userId ||
-        currentTargetRef.current.username !== snapshot.username ||
-        currentTargetRef.current.isAi !== snapshot.isAi
-      ) {
-        return;
-      }
-
-      if (!result.success) return showMutationToast(result);
-
-      showMutationToast(result);
-      // Publish the authoritative level immediately. A stale refetch cannot put the old level
-      // back on the tile/form while the item query catches up.
-      setCommittedItemLevels((current) => {
-        const next = new Map(current);
-        next.set(snapshot.userItemId, snapshot.newLevel);
-        return next;
-      });
-      setConfirmedItemAdjustment(null);
-      void utils.item.getPublicUserItems.invalidate({ userId: snapshot.userId });
-    } catch (error) {
-      // This caller owns transport feedback; other tRPC failures use the global handler.
-      // Close and refresh because this endpoint has no replay key.
-      if (error instanceof Error && isRetryableTrpcError(error)) {
-        showMutationToast({
-          success: false,
-          message: "The adjustment outcome is unknown. Refresh before trying again.",
+    await itemAdjustmentFlight.run(snapshot, async () => {
+      try {
+        const result = await adjustItemLevel.mutateAsync({
+          userId: snapshot.userId,
+          userItemId: snapshot.userItemId,
+          level: snapshot.newLevel,
         });
+        if (
+          currentTargetRef.current.userId !== snapshot.userId ||
+          currentTargetRef.current.username !== snapshot.username ||
+          currentTargetRef.current.isAi !== snapshot.isAi
+        ) {
+          return;
+        }
+
+        if (!result.success) return showMutationToast(result);
+
+        showMutationToast(result);
+        // Publish the authoritative level immediately. A stale refetch cannot put the old level
+        // back on the tile/form while the item query catches up.
+        setCommittedItemLevels((current) => {
+          const next = new Map(current);
+          next.set(snapshot.userItemId, snapshot.newLevel);
+          return next;
+        });
+        setConfirmedItemAdjustment(null);
+        void utils.item.getPublicUserItems.invalidate({ userId: snapshot.userId });
+      } catch (error) {
+        // Close and refresh because this endpoint has no replay key.
+        showRetryableErrorToast(
+          error,
+          "The adjustment outcome is unknown. Refresh before trying again.",
+        );
+        setConfirmedItemAdjustment(null);
+        void utils.item.getPublicUserItems.invalidate({ userId: snapshot.userId });
       }
-      setConfirmedItemAdjustment(null);
-      void utils.item.getPublicUserItems.invalidate({ userId: snapshot.userId });
-    } finally {
-      if (itemAdjustmentRequestRef.current === snapshot) {
-        itemAdjustmentRequestRef.current = null;
-        setIsItemAdjustmentPending(false);
-      }
-    }
+    });
   };
 
   useEffect(() => {
@@ -547,8 +519,7 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
                 emptyText="No jutsus assigned to this user"
                 gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
                 onClick={(id) => {
-                  if (isJutsuAdjustmentPending || jutsuAdjustmentRequestRef.current)
-                    return;
+                  if (jutsuAdjustmentFlight.current()) return;
                   if (id === jutsu?.id) {
                     setJutsu(undefined);
                   } else {
@@ -740,8 +711,7 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
                 emptyText="No items assigned to this user"
                 gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
                 onClick={(id) => {
-                  if (isItemAdjustmentPending || itemAdjustmentRequestRef.current)
-                    return;
+                  if (itemAdjustmentFlight.current()) return;
                   setSelectedUserItemId(id === selectedUserItemId ? undefined : id);
                 }}
                 showBgColor={false}
@@ -1007,14 +977,14 @@ const DeleteUserQuestControl: React.FC<{
   const utils = api.useUtils();
   const [confirmedQuest, setConfirmedQuest] =
     useState<UserQuestDeletionSnapshot | null>(null);
-  const [isPending, setIsPending] = useState(false);
-  const requestRef = useRef<UserQuestDeletionSnapshot | null>(null);
+  const deletionFlight = useSingleFlight<UserQuestDeletionSnapshot>();
+  const isPending = deletionFlight.isPending;
   const deleteUserQuest = api.quests.deleteUserQuest.useMutation({
     meta: { handlesTransportError: true },
   });
 
   const openConfirmation = () => {
-    if (isPending || requestRef.current) return;
+    if (deletionFlight.current()) return;
     setConfirmedQuest({
       userId,
       username,
@@ -1029,11 +999,7 @@ const DeleteUserQuestControl: React.FC<{
   };
 
   const confirmDeletion = async (snapshot: UserQuestDeletionSnapshot) => {
-    // React exposes mutation state on the next render. Claim this exact history record
-    // synchronously so click/Enter cannot dispatch a second destructive request.
-    if (requestRef.current) return;
-    requestRef.current = snapshot;
-    setIsPending(true);
+    if (!deletionFlight.claim(snapshot)) return;
     onPendingChange?.(true);
 
     try {
@@ -1041,7 +1007,6 @@ const DeleteUserQuestControl: React.FC<{
         userId: snapshot.userId,
         questId: snapshot.questId,
       });
-      if (requestRef.current !== snapshot) return;
       if (!result.success) return showMutationToast(result);
 
       showMutationToast(result);
@@ -1051,22 +1016,16 @@ const DeleteUserQuestControl: React.FC<{
       setConfirmedQuest(null);
       void utils.quests.getUserQuests.invalidate({ userId: snapshot.userId });
     } catch (error) {
-      // The global handler owns ordinary tRPC errors. A transient failure remains locally
-      // actionable. Close and refresh because this endpoint has no replay key.
-      if (error instanceof Error && isRetryableTrpcError(error)) {
-        showMutationToast({
-          success: false,
-          message: "The deletion outcome is unknown. Refresh before trying again.",
-        });
-      }
+      // Close and refresh because this endpoint has no replay key.
+      showRetryableErrorToast(
+        error,
+        "The deletion outcome is unknown. Refresh before trying again.",
+      );
       setConfirmedQuest(null);
       void utils.quests.getUserQuests.invalidate({ userId: snapshot.userId });
     } finally {
-      if (requestRef.current === snapshot) {
-        requestRef.current = null;
-        setIsPending(false);
-        onPendingChange?.(false);
-      }
+      deletionFlight.release(snapshot);
+      onPendingChange?.(false);
     }
   };
 

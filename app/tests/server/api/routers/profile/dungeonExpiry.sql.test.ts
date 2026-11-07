@@ -32,11 +32,11 @@ describeWithDatabase("profile dungeon expiry reconciliation", () => {
     const response = await (await callerFor(profileRouter, USER_ID)).getUser();
     const stored = await db.query.userData.findFirst({ where: eq(userData.userId, USER_ID) });
     expect(stored).toMatchObject({ status: "AWAKE", battleId: null, curHealth: 100, curChakra: 200, curStamina: 300 });
-    expect(response.userData).toMatchObject({
+    expect(response.userData).toEqual(expect.objectContaining({
       status: stored?.status, battleId: stored?.battleId,
       curHealth: stored?.curHealth, curChakra: stored?.curChakra, curStamina: stored?.curStamina,
       curEnergy: stored?.curEnergy, regenAt: stored?.regenAt, updatedAt: stored?.updatedAt,
-    });
+    }));
     expect(await db.query.battle.findFirst()).toBeUndefined();
     expect(await db.query.dungeonMember.findFirst()).toMatchObject({ activeUserId: null });
     expect(response.notifications.some(link => link.name === "In combat" || link.name === "Active Dungeon Squad")).toBe(false);

@@ -1,10 +1,11 @@
 "use client";
 
-import { ExternalLink, ImageOff, Loader2 } from "lucide-react";
+import { ExternalLink, ImageOff } from "lucide-react";
 import type React from "react";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { type ConceptEmotion, ConceptReactions } from "@/layout/ConceptReactions";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { showMutationToast } from "@/libs/toast";
@@ -13,8 +14,6 @@ import { useUserData } from "@/utils/UserContext";
 interface EmbeddedConceptArtProps {
   imageId: string;
 }
-
-type ConceptEmotion = "like" | "love" | "laugh";
 
 /**
  * Compact concept art component for embedding in conversations
@@ -82,16 +81,6 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
   const isVideo = image.mediaType === "video";
   const hasVideo = isVideo && image.video;
 
-  // Check user reactions
-  const hasLike = image?.likes?.find(
-    (like) => like.userId === user?.userId && like.type === "like",
-  );
-  const hasLove = image?.likes?.find(
-    (like) => like.userId === user?.userId && like.type === "love",
-  );
-  const hasLaugh = image?.likes?.find(
-    (like) => like.userId === user?.userId && like.type === "laugh",
-  );
   const isEmotionPending = pendingEmotion !== null;
 
   return (
@@ -130,72 +119,14 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
       >
         {/* Voting buttons */}
         <div className="flex items-center gap-1 text-white text-xs">
-          <button
-            type="button"
-            className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-transparent ${hasLike ? "bg-slate-700" : ""}`}
+          <ConceptReactions
+            image={image}
+            userId={user?.userId}
+            pendingEmotion={pendingEmotion}
             disabled={isEmotionPending}
-            aria-busy={pendingEmotion === "like"}
-            aria-pressed={!!hasLike}
-            aria-label={
-              pendingEmotion === "like"
-                ? "Updating"
-                : `${hasLike ? "Remove" : "Add"} heart reaction`
-            }
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              void toggleEmotion("like");
-            }}
-          >
-            {pendingEmotion === "like" && (
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-            )}
-            ❤️ {image.n_likes}
-          </button>
-          <button
-            type="button"
-            className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-transparent ${hasLove ? "bg-slate-700" : ""}`}
-            disabled={isEmotionPending}
-            aria-busy={pendingEmotion === "love"}
-            aria-pressed={!!hasLove}
-            aria-label={
-              pendingEmotion === "love"
-                ? "Updating"
-                : `${hasLove ? "Remove" : "Add"} thumbs-up reaction`
-            }
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              void toggleEmotion("love");
-            }}
-          >
-            {pendingEmotion === "love" && (
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-            )}
-            👍 {image.n_loves}
-          </button>
-          <button
-            type="button"
-            className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-transparent ${hasLaugh ? "bg-slate-700" : ""}`}
-            disabled={isEmotionPending}
-            aria-busy={pendingEmotion === "laugh"}
-            aria-pressed={!!hasLaugh}
-            aria-label={
-              pendingEmotion === "laugh"
-                ? "Updating"
-                : `${hasLaugh ? "Remove" : "Add"} laugh reaction`
-            }
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              void toggleEmotion("laugh");
-            }}
-          >
-            {pendingEmotion === "laugh" && (
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-            )}
-            🤣 {image.n_laugh}
-          </button>
+            buttonClassName="flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-transparent"
+            onToggle={(type) => void toggleEmotion(type)}
+          />
           {isEmotionPending && (
             <span className="sr-only" role="status" aria-live="polite">
               Updating

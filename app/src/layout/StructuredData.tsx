@@ -1,18 +1,8 @@
-import { DISCORD_INVITE_URL, IMG_LOGO_FULL } from "@/drizzle/constants";
+import { GITHUB_REPO_URL, IMG_LOGO_FULL, SOCIAL_LINKS } from "@/drizzle/constants";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/libs/seo";
 
-// Profiles Google can use to connect the site to its social presence in the knowledge
-// panel. Mirrors the links surfaced in MenuBoxProfile.
-const SOCIAL_PROFILES = [
-  DISCORD_INVITE_URL,
-  "https://twitter.com/RealTheNinjaRPG",
-  "https://www.facebook.com/profile.php?id=61554961626034",
-  "https://www.instagram.com/theninjarpg/",
-  "https://www.tiktok.com/@theninjarpg",
-  "https://www.youtube.com/@fullstackscientist",
-  "https://www.reddit.com/r/theninjarpg/",
-  "https://github.com/studie-tech/TheNinjaRPG",
-];
+// Profiles Google can use to connect the site to its social presence in the knowledge panel.
+const SOCIAL_PROFILES = [...SOCIAL_LINKS.map((link) => link.url), GITHUB_REPO_URL];
 
 const GRAPH = {
   "@context": "https://schema.org",

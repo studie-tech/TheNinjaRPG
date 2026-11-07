@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import { SHRINE_BOOST_BASE_PERC, SHRINE_BOOST_COST } from "@/drizzle/constants";
 import * as contentBox from "@/layout/ContentBox";
+import * as itemWithEffects from "@/layout/ItemWithEffects";
 import { ShrineHall } from "@/layout/ShrineHall";
 import * as table from "@/layout/Table";
 import type { UserWithRelations } from "@/routers/profile";
@@ -37,6 +38,7 @@ describe("ShrineHall reserve boost locks", () => {
       ({ children }: { children: ReactNode }) => <>{children}</>,
     );
     vi.spyOn(table, "default").mockImplementation(() => <></>);
+    vi.spyOn(itemWithEffects, "default").mockImplementation(() => <></>);
   });
 
   afterEach(() => {
@@ -95,10 +97,51 @@ describe("ShrineHall reserve boost locks", () => {
     expect(view.getByText("Sector 100")).toBeTruthy();
     expect(view.queryByText("Sector 290")).toBeNull();
   });
+
+  const defenders = (activeAiIds: string[], unlockedAiIds: string[]) => {
+    const view = renderShrineHall(
+      [{ id: 1, sector: 100, villageId: "reserve-village", shrineLevel: 2 }],
+      {
+        ais: ["live-a", "live-b", "live-c", "live-d"].map((userId) => ({
+          userId,
+          username: userId,
+          level: 50,
+        })),
+        settings: { activeAiIds, unlockedAiIds },
+      },
+    );
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Defenders" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    return view;
+  };
+
+  it("does not count retired defenders against the assignment cap", () => {
+    const retired = ["retired-a", "retired-b", "retired-c"];
+    const view = defenders(retired, [...retired, "live-a"]);
+    expect(view.getByRole("button", { name: "Assign" }).hasAttribute("disabled")).toBe(
+      false,
+    );
+    expect(view.queryByText(/Maximum defenders assigned/)).toBeNull();
+    expect(view.getByText("Using default AI defenders")).toBeTruthy();
+  });
+
+  it("disables assignment once live defenders fill the cap", () => {
+    const live = ["live-a", "live-b", "live-c"];
+    const view = defenders(live, [...live, "live-d"]);
+    expect(view.getByRole("button", { name: "Assign" }).hasAttribute("disabled")).toBe(
+      true,
+    );
+    expect(view.getByText(/Maximum defenders assigned/)).toBeTruthy();
+  });
 });
 
 /** Render the Shrine Hall for a Kage whose village owns the given sectors. */
-const renderShrineHall = (shrines: object[]) => {
+const renderShrineHall = (
+  shrines: object[],
+  defenders: { ais?: object[]; settings?: object } = {},
+) => {
   const user = {
     userId: "kage",
     villageId: "reserve-village",
@@ -113,6 +156,7 @@ const renderShrineHall = (shrines: object[]) => {
       shrineSettings: {
         activeBoosts: { Training: new Date(Date.now() + 3600000).toISOString() },
         boostTemplate: [],
+        ...defenders.settings,
       },
     },
   } as unknown as NonNullable<UserWithRelations>;
@@ -130,7 +174,7 @@ const renderShrineHall = (shrines: object[]) => {
     }),
     shrine: {
       getCapturedSectors: { useQuery: () => ({ data: shrines }) },
-      getShrineAis: { useQuery: () => ({ data: [] }) },
+      getShrineAis: { useQuery: () => ({ data: defenders.ais ?? [] }) },
       getBoostTemplate: { useQuery: () => ({ data: templateData }) },
       upgradeShrine: mutation,
       activateBoost: mutation,

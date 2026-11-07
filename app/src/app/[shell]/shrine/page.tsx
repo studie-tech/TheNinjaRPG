@@ -20,7 +20,11 @@ import RamenShop from "@/layout/RamenShop";
 import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
 import StatusBar from "@/layout/StatusBar";
 import { WarFieldActions } from "@/layout/WarFieldActions";
-import { getWarSide } from "@/libs/objectiveWar";
+import {
+  findShrineAttackWar,
+  getVillageWarShrineAction,
+  getWarSide,
+} from "@/libs/objectiveWar";
 import { isRaidCurrentlyActive } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
@@ -121,39 +125,26 @@ export default function Shrine() {
   const isUserQueuedForThisSector =
     userData.status === "QUEUED" && userQueuedBattle?.sector === userData.sector;
 
-  // Check if this sector is protected
-  const isReserved = MAP_RESERVED_SECTORS.includes(userData.sector);
+  // Check if this sector is protected; objective wars open reserved shrines
+  const isReserved =
+    MAP_RESERVED_SECTORS.includes(userData.sector) &&
+    !findShrineAttackWar(
+      sectorData.warData ?? [],
+      userData.villageId,
+      userData.userId,
+      userData.sector,
+    )?.rules;
   const isHome = !!sectorData.village;
 
   // Check if user can attack OR defend the shrine in a Village War or Raid
-  // Attack: Attackers at defender's village, Defenders at attacker's village (reduces shrine HP)
-  // Defend: Attackers at their own village when damaged, Defenders at their own village when damaged (restores shrine HP)
-  const userCanBattleVillageWarShrine = sectorData.warData?.some((war) => {
-    if (!["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) return false;
-
-    const side = getWarSide(war, userData.villageId, userData.userId);
-    const isUserOnAttackerSide = side === war.attackerVillageId;
-    const isUserOnDefenderSide = side === war.defenderVillageId;
-
-    const atDefenderVillage = war.defenderVillage?.sector === userData.sector;
-    const atAttackerVillage = war.attackerVillage?.sector === userData.sector;
-
-    // Attack scenarios: at enemy's village
-    const canAttack =
-      (atDefenderVillage && isUserOnAttackerSide) ||
-      (atAttackerVillage && isUserOnDefenderSide);
-
-    // Defend scenarios: at own village when shrine is damaged
-    const canDefend =
-      (atAttackerVillage &&
-        isUserOnAttackerSide &&
-        war.attackerShrineHp < war.attackerShrineMaxHp) ||
-      (atDefenderVillage &&
-        isUserOnDefenderSide &&
-        war.defenderShrineHp < war.defenderShrineMaxHp);
-
-    return canAttack || canDefend;
-  });
+  const userCanBattleVillageWarShrine = sectorData.warData?.some(
+    (war) =>
+      getVillageWarShrineAction(
+        war,
+        getWarSide(war, userData.villageId, userData.userId),
+        userData.sector,
+      ) !== null,
+  );
 
   // Home sectors are protected UNLESS user can battle in a Village War/Raid
   const isProtected = isReserved || (isHome && !userCanBattleVillageWarShrine);
@@ -294,56 +285,21 @@ export default function Shrine() {
               </TabsContent>
               <TabsContent value="info" className="mt-4">
                 <div className="flex flex-col items-center">
-                  {sectorData.sectorData ? (
-                    userIsOwner ? (
-                      <p>
-                        This sector is owned by your village. You can defend it when
-                        other villages attack.
-                      </p>
-                    ) : (
-                      <p>
-                        This sector is claimed by{" "}
-                        <strong>{sectorData.sectorData?.village.name}</strong>.{" "}
-                        {isProtected
-                          ? "However, because it is a protected sector, it cannot be attacked."
-                          : "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
-                      </p>
-                    )
-                  ) : (
-                    <p>
-                      This sector is unclaimed.{" "}
-                      {!isProtected &&
-                        "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
-                    </p>
-                  )}
+                  <SectorClaimDescription
+                    ownerVillage={sectorData.sectorData?.village.name}
+                    userIsOwner={userIsOwner}
+                    isProtected={isProtected}
+                  />
                 </div>
               </TabsContent>
             </Tabs>
           ) : (
             <div className="flex flex-col items-center text-center">
-              {sectorData.sectorData ? (
-                userIsOwner ? (
-                  <p>
-                    This sector is owned by your village. You can defend it when other
-                    villages attack.
-                  </p>
-                ) : (
-                  <p>
-                    {" "}
-                    This sector is claimed by{" "}
-                    <strong>{sectorData.sectorData.village.name}</strong>.{" "}
-                    {isProtected
-                      ? "However, because it is a protected sector, it cannot be attacked."
-                      : "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
-                  </p>
-                )
-              ) : (
-                <p>
-                  This sector is unclaimed.{" "}
-                  {!isProtected &&
-                    "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
-                </p>
-              )}
+              <SectorClaimDescription
+                ownerVillage={sectorData.sectorData?.village.name}
+                userIsOwner={userIsOwner}
+                isProtected={isProtected}
+              />
               {isProtected && (
                 <p className="mt-2 font-semibold text-amber-600">
                   {isReserved
@@ -497,6 +453,43 @@ export default function Shrine() {
   );
 }
 
+/** Who holds the sector, and whether its shrine can be attacked. */
+const SectorClaimDescription = ({
+  ownerVillage,
+  userIsOwner,
+  isProtected,
+}: {
+  ownerVillage: string | undefined;
+  userIsOwner: boolean;
+  isProtected: boolean;
+}) => {
+  if (!ownerVillage) {
+    return (
+      <p>
+        This sector is unclaimed.{" "}
+        {!isProtected &&
+          "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
+      </p>
+    );
+  }
+  if (userIsOwner) {
+    return (
+      <p>
+        This sector is owned by your village. You can defend it when other villages
+        attack.
+      </p>
+    );
+  }
+  return (
+    <p>
+      This sector is claimed by <strong>{ownerVillage}</strong>.{" "}
+      {isProtected
+        ? "However, because it is a protected sector, it cannot be attacked."
+        : "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
+    </p>
+  );
+};
+
 // Component to render a single war
 const WarCard = ({
   war,
@@ -549,26 +542,15 @@ const WarCard = ({
     : war.defenderShrineStatus;
 
   // Determine action type: attack or defend
-  // Attackers at own village = defend (if shrine damaged)
-  // Attackers at enemy village = attack
-  // Defenders at own village = defend (if shrine damaged)
-  // Defenders at enemy village = attack
-  const isDefendAction =
-    isVillageWar &&
-    ((isUserAttacker &&
-      atAttackerVillage &&
-      war.attackerShrineHp < war.attackerShrineMaxHp) ||
-      (isUserDefender &&
-        atDefenderVillage &&
-        war.defenderShrineHp < war.defenderShrineMaxHp));
+  const shrineAction = getVillageWarShrineAction(war, sideVillageId, sector);
+  const isDefendAction = shrineAction === "defend";
 
   // For Village Wars: users can attack/defend based on location and shrine state
   const canAttackVillageWar =
-    isVillageWar &&
+    shrineAction === "attack" &&
+    targetShrineHp > 0 &&
     !hideAttackButton &&
-    !isProtected &&
-    ((isUserAttacker && atDefenderVillage && war.defenderShrineHp > 0) ||
-      (isUserDefender && atAttackerVillage && war.attackerShrineHp > 0));
+    !isProtected;
 
   const canDefendVillageWar =
     isVillageWar && !hideAttackButton && !isProtected && isDefendAction;

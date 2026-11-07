@@ -1,16 +1,15 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
-import React, { use, useState } from "react";
+import { use, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canModerateReskin } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type JutsuReskinUpdateSchema,
   jutsuReskinUpdateSchema,
@@ -19,10 +18,12 @@ import {
 export default function ReskinEdit(props: { params: Promise<{ reskinId: string }> }) {
   // State
   const params = use(props.params);
-  const router = useRouter();
   const reskinId = params.reskinId;
   const [saveError, setSaveError] = useState<string | null>(null);
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(
+    canModerateReskin,
+    "/manual/jutsu/reskins",
+  );
 
   // tRPC utils
   const utils = api.useUtils();
@@ -79,15 +80,8 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
       },
     });
 
-  // Redirect if not authorized
-  React.useEffect(() => {
-    if (userData && !canModerateReskin(userData.role)) {
-      router.push("/manual/jutsu/reskins");
-    }
-  }, [userData, router]);
-
   // Prevent unauthorized access
-  if (isPending || !userData || !canModerateReskin(userData.role) || !reskin) {
+  if (isPending || !userData || !hasAccess || !reskin) {
     return <Loader explanation="Loading data" />;
   }
 

@@ -137,7 +137,7 @@ describeWithDatabase("Stronghold membership and restoration", () => {
       },
     });
     expect((await callerForDatabase(clanRouter, "leader", guarded).upgradeHideoutToStronghold({ clanId: "faction" })).success).toBe(false);
-    expect(await db.query.village.findFirst()).toMatchObject({ type: "HIDEOUT", lastMaintenancePaidAt: before?.lastMaintenancePaidAt });
+    expect(await db.query.village.findFirst()).toEqual(expect.objectContaining({ type: "HIDEOUT", lastMaintenancePaidAt: before?.lastMaintenancePaidAt }));
     expect((await db.query.clan.findFirst())?.bank).toBe(changed === "bank" ? STRONGHOLD_REESTABLISH_COST - 1 : STRONGHOLD_REESTABLISH_COST * 2);
   });
 

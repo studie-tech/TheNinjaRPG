@@ -41,7 +41,6 @@ import {
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -91,6 +90,8 @@ import type { Bloodline, Village } from "@/drizzle/schema";
 import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
+import { usePendingIds } from "@/hooks/usePendingIds";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { ActionSettings } from "@/layout/ActionSettings";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
@@ -105,7 +106,6 @@ import { CharacterDeletionSettings } from "@/layout/DeleteUserButton";
 import { DiscordLinkSettings } from "@/layout/DiscordLinkSettings";
 import { ElementalMastery } from "@/layout/ElementalMastery";
 import { GameSettingsPanel } from "@/layout/GameSettings";
-import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -116,6 +116,7 @@ import {
   ProfileSettingsNavigation,
 } from "@/layout/ProfileSettingsNavigation";
 import { ReadingSettings } from "@/layout/ReadingSettings";
+import { RepPurchaseConfirmModal } from "@/layout/RepPurchaseConfirmModal";
 import { CurrentSageMode } from "@/layout/SageMode";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import { Titles } from "@/layout/Titles";
@@ -139,6 +140,7 @@ import {
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
 } from "@/libs/profile";
+import { freeResetNote } from "@/libs/skillReset";
 import {
   getTavernTitleClass,
   getTavernUsernameClass,
@@ -160,11 +162,11 @@ import {
   isStaffMember,
   isStaffRole,
 } from "@/utils/permissions";
-import { useUserSearch } from "@/utils/search";
+import { useUserPicker, useUserSearch } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
+import { DAY_S, getFirstOfNextMonth, secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import {
   ActionMoveTowardsOpponent,
   AiRule,
@@ -179,7 +181,6 @@ import {
   genders,
   getAttributeGroup,
   getCharacterAttributes,
-  getSearchValidator,
   type SkinColor,
   skin_colors,
 } from "@/validators/register";
@@ -658,8 +659,8 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   const [battleDescriptionDraft, setBattleDescriptionDraft] = useState(
     userData?.showBattleDescription ?? false,
   );
-  const battleDescriptionRequestRef = useRef(false);
-  const preferencesRequestRef = useRef(false);
+  const battleDescriptionFlight = useSingleFlight();
+  const preferencesFlight = useSingleFlight();
 
   // Default auto-combat preference (persisted on the user)
   const [autoCombat, setAutoCombat] = useAutoCombatSetting();
@@ -685,38 +686,35 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   });
 
   useEffect(() => {
-    if (!battleDescriptionRequestRef.current && userData) {
+    if (!battleDescriptionFlight.current() && userData) {
       setBattleDescriptionDraft(userData.showBattleDescription);
     }
   }, [userData]);
 
   const handleBattleDescriptionChange = async (checked: boolean) => {
-    if (battleDescriptionRequestRef.current) return;
-
     const previousValue = battleDescriptionDraft;
-    battleDescriptionRequestRef.current = true;
-    setBattleDescriptionDraft(checked);
+    await battleDescriptionFlight.run(true, async () => {
+      setBattleDescriptionDraft(checked);
 
-    try {
-      const result = await updateBattleDescription({
-        showBattleDescription: checked,
-      });
-      if (!result.success) {
-        showMutationToast(result);
+      try {
+        const result = await updateBattleDescription({
+          showBattleDescription: checked,
+        });
+        if (!result.success) {
+          showMutationToast(result);
+          setBattleDescriptionDraft(previousValue);
+        }
+      } catch (error) {
+        showMutationToast({
+          success: false,
+          message:
+            error instanceof Error && error.message
+              ? error.message
+              : "Could not update the preference",
+        });
         setBattleDescriptionDraft(previousValue);
       }
-    } catch (error) {
-      showMutationToast({
-        success: false,
-        message:
-          error instanceof Error && error.message
-            ? error.message
-            : "Could not update the preference",
-      });
-      setBattleDescriptionDraft(previousValue);
-    } finally {
-      battleDescriptionRequestRef.current = false;
-    }
+    });
   };
 
   const { mutate: updateAiProfile, isPending } = api.ai.updateAiProfile.useMutation({
@@ -752,20 +750,17 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
 
   // Form submission
   const onSubmit = async (values: UpdateUserPreferencesSchema) => {
-    if (preferencesRequestRef.current) return;
-
-    preferencesRequestRef.current = true;
-    try {
-      const result = await updatePreferences(values);
-      showMutationToast(result);
-      if (result.success) {
-        await updateUser(values);
+    await preferencesFlight.run(true, async () => {
+      try {
+        const result = await updatePreferences(values);
+        showMutationToast(result);
+        if (result.success) {
+          await updateUser(values);
+        }
+      } catch {
+        // Mutation errors are surfaced by the shared tRPC error handler. Keep the draft.
       }
-    } catch {
-      // Mutation errors are surfaced by the shared tRPC error handler. Keep the draft.
-    } finally {
-      preferencesRequestRef.current = false;
-    }
+    });
   };
 
   // Loaders
@@ -1048,20 +1043,10 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
 const Marriage: React.FC = () => {
   // tRPC utility
   const utils = api.useUtils();
-  const divorceRequestRef = useRef(new Set<string>());
-  const [divorcingUserIds, setDivorcingUserIds] = useState(() => new Set<string>());
+  const divorces = usePendingIds();
 
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethods, user: targetUser } = useUserPicker(maxUsers);
 
   const { data: marriages } = api.marriage.getMarriedUsers.useQuery(
     {},
@@ -1098,10 +1083,7 @@ const Marriage: React.FC = () => {
   const { mutateAsync: divorce } = api.marriage.divorce.useMutation({ onSuccess });
 
   const handleDivorce = async (userId: string) => {
-    if (divorceRequestRef.current.has(userId)) return;
-
-    divorceRequestRef.current.add(userId);
-    setDivorcingUserIds((current) => new Set(current).add(userId));
+    if (!divorces.begin(userId)) return;
 
     try {
       await divorce({ userId });
@@ -1109,12 +1091,7 @@ const Marriage: React.FC = () => {
       // The shared tRPC error handler surfaces transport errors. Keep the
       // confirmation open so the user can safely retry.
     } finally {
-      divorceRequestRef.current.delete(userId);
-      setDivorcingUserIds((current) => {
-        const next = new Set(current);
-        next.delete(userId);
-        return next;
-      });
+      divorces.end(userId);
     }
   };
 
@@ -1129,7 +1106,7 @@ const Marriage: React.FC = () => {
       <Label className="pt-2">Users who are married to you</Label>
       <div className="grid grid-cols-6">
         {marriages?.map((user) => {
-          const isDivorcing = divorcingUserIds.has(user.userId);
+          const isDivorcing = divorces.ids.has(user.userId);
 
           return (
             <div
@@ -1536,9 +1513,6 @@ const SwapVillage: React.FC = () => {
     return <Loader explanation="Loading profile page..." />;
   }
 
-  // Derived data
-  const canAfford = userData && userData.reputationPoints >= COST_SWAP_VILLAGE;
-
   // Show component
   return (
     <div className="mt-2">
@@ -1559,34 +1533,16 @@ const SwapVillage: React.FC = () => {
         />
       )}
       {isFetching && <Loader explanation="Loading villages" />}
-      <Modal
-        title="Confirm Purchase"
-        proceed_label={
-          isSwapping
-            ? undefined
-            : canAfford
-              ? `Swap for ${COST_SWAP_VILLAGE} reps`
-              : `Need ${COST_SWAP_VILLAGE - userData.reputationPoints} reps`
-        }
-        isOpen={isOpen && !!village}
+      <RepPurchaseConfirmModal
+        item={village}
+        cost={COST_SWAP_VILLAGE}
+        reputationPoints={userData.reputationPoints}
+        verb="Swap"
+        isPending={isSwapping}
+        isOpen={isOpen}
         setIsOpen={setIsOpen}
-        isValid={false}
-        onAccept={() => {
-          if (canAfford && village) {
-            swap({ villageId: village.id });
-          } else {
-            setIsOpen(false);
-          }
-        }}
-        confirmClassName={
-          canAfford
-            ? "bg-blue-600 text-white hover:bg-blue-700"
-            : "bg-red-600 text-white hover:bg-red-700"
-        }
-      >
-        {village && !isSwapping && <ItemWithEffects item={village} key={village.id} />}
-        {isSwapping && village && <Loader explanation="Purchasing" />}
-      </Modal>
+        onBuy={(item) => swap({ villageId: item.id })}
+      />
     </div>
   );
 };
@@ -1655,8 +1611,6 @@ const SwapBloodline: React.FC = () => {
   const hasAvailableSwaps = bloodlines && bloodlines.length > 0;
   const isDisabled = !hasAvailableSwaps;
   const isFreeSwap = hasFreeSwapAvailable;
-  const canAfford =
-    isFreeSwap || (userData && userData.reputationPoints >= COST_SWAP_BLOODLINE);
 
   // Show component
   return (
@@ -1703,38 +1657,17 @@ const SwapBloodline: React.FC = () => {
           build your history.
         </div>
       )}
-      <Modal
-        title="Confirm Purchase"
-        proceed_label={
-          isSwapping
-            ? undefined
-            : isFreeSwap
-              ? "Swap for free"
-              : canAfford
-                ? `Swap for ${COST_SWAP_BLOODLINE} reps`
-                : `Need ${COST_SWAP_BLOODLINE - userData.reputationPoints} reps`
-        }
-        isOpen={isOpen && !!bloodline}
+      <RepPurchaseConfirmModal
+        item={bloodline}
+        cost={COST_SWAP_BLOODLINE}
+        reputationPoints={userData.reputationPoints}
+        verb="Swap"
+        isFree={isFreeSwap}
+        isPending={isSwapping}
+        isOpen={isOpen}
         setIsOpen={setIsOpen}
-        isValid={false}
-        onAccept={() => {
-          if (canAfford && bloodline) {
-            swap({ bloodlineId: bloodline.id });
-          } else {
-            setIsOpen(false);
-          }
-        }}
-        confirmClassName={
-          canAfford
-            ? "bg-blue-600 text-white hover:bg-blue-700"
-            : "bg-red-600 text-white hover:bg-red-700"
-        }
-      >
-        {bloodline && !isSwapping && (
-          <ItemWithEffects item={bloodline} key={bloodline.id} />
-        )}
-        {isSwapping && bloodline && <Loader explanation="Purchasing" />}
-      </Modal>
+        onBuy={(item) => swap({ bloodlineId: item.id })}
+      />
     </div>
   );
 };
@@ -1745,7 +1678,7 @@ const SwapBloodline: React.FC = () => {
 const ResetStats: React.FC = () => {
   // State
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
-  const submissionInFlight = useRef(false);
+  const submissionFlight = useSingleFlight();
 
   // Mutations
   const { mutateAsync: updateStats, isPending } =
@@ -1765,16 +1698,13 @@ const ResetStats: React.FC = () => {
     });
 
   const submitStatRedistribution = async (data: StatSchemaType) => {
-    if (submissionInFlight.current) return;
-
-    submissionInFlight.current = true;
-    try {
-      await updateStats(data);
-    } catch {
-      // The mutation's onError handler displays the actionable error to the user.
-    } finally {
-      submissionInFlight.current = false;
-    }
+    await submissionFlight.run(true, async () => {
+      try {
+        await updateStats(data);
+      } catch {
+        // The mutation's onError handler displays the actionable error to the user.
+      }
+    });
   };
 
   // Only show if we have userData
@@ -1860,11 +1790,7 @@ const AvatarChange: React.FC = () => {
             uploadRevision.current = prepareUserUpdate();
           }}
           onClientUploadComplete={(res) => {
-            const serverData = res?.[0]?.serverData;
-            if (serverData?.error) {
-              showMutationToast({ success: false, message: serverData.error });
-              return;
-            }
+            const serverData = readUploadResult(res);
             if (serverData?.fileUrl) {
               if ("userPatch" in serverData && serverData.userPatch)
                 void updateUser(serverData.userPatch, {
@@ -1873,9 +1799,7 @@ const AvatarChange: React.FC = () => {
               else void updateUser(undefined, { revision: uploadRevision.current });
             }
           }}
-          onUploadError={(error: Error) => {
-            showMutationToast({ success: false, message: error.message });
-          }}
+          onUploadError={showUploadError}
         />
       </div>
     );
@@ -1893,9 +1817,9 @@ const AvatarChange: React.FC = () => {
 /** Edit saved palettes and compatible traits while sharing the authoritative appearance snapshot. */
 const AttributeChange: React.FC = () => {
   const { data: spriteUser, updateUser: updateSpriteUser } = useRequiredUserData();
-  const [pendingAttribute, setPendingAttribute] = useState<string | null>(null);
+  const saveFlight = useSingleFlight<string>();
+  const pendingAttribute = saveFlight.pending;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const isSavingRef = useRef(false);
   const {
     data,
     refetch,
@@ -1929,26 +1853,22 @@ const AttributeChange: React.FC = () => {
     attribute: string,
     save: () => Promise<BaseServerResponse>,
   ) => {
-    if (isSavingRef.current) return;
-    isSavingRef.current = true;
-    setPendingAttribute(attribute);
-    setErrorMessage(null);
-    try {
-      const result = await save();
-      showMutationToast(result);
-      if (result.success) await refetch();
-      else setErrorMessage(result.message ?? "Could not save appearance. Try again.");
-    } catch (error) {
-      // The shared handler reports transport failures; keep the saved selection and allow retry here.
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not save appearance. Try again.",
-      );
-    } finally {
-      isSavingRef.current = false;
-      setPendingAttribute(null);
-    }
+    await saveFlight.run(attribute, async () => {
+      setErrorMessage(null);
+      try {
+        const result = await save();
+        showMutationToast(result);
+        if (result.success) await refetch();
+        else setErrorMessage(result.message ?? "Could not save appearance. Try again.");
+      } catch (error) {
+        // The shared handler reports transport failures; keep the saved selection and allow retry here.
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Could not save appearance. Try again.",
+        );
+      }
+    });
   };
 
   return (
@@ -2237,9 +2157,9 @@ const NameChange: React.FC = () => {
   // State
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showNameChangeConfirm, setShowNameChangeConfirm] = useState(false);
-  const [isChangingUsername, setIsChangingUsername] = useState(false);
+  const usernameFlight = useSingleFlight();
+  const isChangingUsername = usernameFlight.isPending;
   const [usernameDraft, setUsernameDraft] = useState("");
-  const usernameRequestRef = useRef(false);
 
   // Username search
   const { form, searchTerm } = useUserSearch();
@@ -2270,31 +2190,26 @@ const NameChange: React.FC = () => {
   });
 
   const handleUsernameChange = async () => {
-    if (usernameRequestRef.current) return;
-
     const submittedUsername = usernameDraft;
-    usernameRequestRef.current = true;
-    setIsChangingUsername(true);
-    try {
-      const data = await updateUsername({ username: submittedUsername });
-      showMutationToast(data);
-      if (data.success) {
-        // The paid mutation has already committed. A failed cache refresh must
-        // not leave the confirmation retryable and charge the user twice.
-        setShowNameChangeConfirm(false);
-      } else {
+    await usernameFlight.run(true, async () => {
+      try {
+        const data = await updateUsername({ username: submittedUsername });
+        showMutationToast(data);
+        if (data.success) {
+          // The paid mutation has already committed. A failed cache refresh must
+          // not leave the confirmation retryable and charge the user twice.
+          setShowNameChangeConfirm(false);
+        } else {
+          setUsernameDraft(submittedUsername);
+          form.setValue("username", submittedUsername, { shouldValidate: true });
+        }
+      } catch {
+        // The shared tRPC error handler surfaces transport failures. Leave the
+        // confirmation and draft open so the user can correct or retry it.
         setUsernameDraft(submittedUsername);
         form.setValue("username", submittedUsername, { shouldValidate: true });
       }
-    } catch {
-      // The shared tRPC error handler surfaces transport failures. Leave the
-      // confirmation and draft open so the user can correct or retry it.
-      setUsernameDraft(submittedUsername);
-      form.setValue("username", submittedUsername, { shouldValidate: true });
-    } finally {
-      usernameRequestRef.current = false;
-      setIsChangingUsername(false);
-    }
+    });
   };
 
   // Only show if we have userData
@@ -2589,8 +2504,8 @@ const ChangeGender: React.FC = () => {
   // State
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showGenderConfirmation, setShowGenderConfirmation] = useState(false);
-  const [isChangingGender, setIsChangingGender] = useState(false);
-  const genderChangeRequestRef = useRef(false);
+  const genderChangeFlight = useSingleFlight();
+  const isChangingGender = genderChangeFlight.isPending;
 
   // Mutations
   const { mutateAsync: changeGender } = api.blackmarket.changeUserGender.useMutation({
@@ -2632,36 +2547,32 @@ const ChangeGender: React.FC = () => {
   });
 
   const handleGenderChange = async () => {
-    if (genderChangeRequestRef.current || !userData) return;
+    if (!userData) return;
 
     const submittedGender = form.getValues("gender");
-    genderChangeRequestRef.current = true;
-    setIsChangingGender(true);
-
-    try {
-      const data = await changeGender({ gender: submittedGender });
-      showMutationToast(data);
-      if (data.success) {
-        // The purchase has committed. Close even if cache reconciliation fails
-        // so retrying the dialog cannot charge again.
-        setShowGenderConfirmation(false);
-      } else {
+    await genderChangeFlight.run(true, async () => {
+      try {
+        const data = await changeGender({ gender: submittedGender });
+        showMutationToast(data);
+        if (data.success) {
+          // The purchase has committed. Close even if cache reconciliation fails
+          // so retrying the dialog cannot charge again.
+          setShowGenderConfirmation(false);
+        } else {
+          form.setValue("gender", submittedGender, {
+            shouldDirty: true,
+            shouldValidate: true,
+          });
+        }
+      } catch {
+        // The shared tRPC error handler surfaces transport failures. Keep the
+        // confirmation and selected gender open so the user can retry.
         form.setValue("gender", submittedGender, {
           shouldDirty: true,
           shouldValidate: true,
         });
       }
-    } catch {
-      // The shared tRPC error handler surfaces transport failures. Keep the
-      // confirmation and selected gender open so the user can retry.
-      form.setValue("gender", submittedGender, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-    } finally {
-      genderChangeRequestRef.current = false;
-      setIsChangingGender(false);
-    }
+    });
   };
 
   // Only show if we have userData
@@ -3081,15 +2992,8 @@ const ResetSkills: React.FC = () => {
   const canAffordPaid = userData.reputationPoints >= COST_SKILL_RESET;
   const canAfford = Boolean(isFree) || canAffordPaid;
 
-  // Calculate when skill resets reset (monthly - 1st of next month)
-  const now = new Date();
-  const nextMonth = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0),
-  );
-  const secondsUntilNextMonth = Math.floor(
-    (nextMonth.getTime() - now.getTime()) / 1000,
-  );
-  const skillResetResetTime = secondsFromNow(secondsUntilNextMonth);
+  // Skill resets renew monthly
+  const skillResetResetTime = getFirstOfNextMonth();
 
   return (
     <div className="space-y-4 p-4">
@@ -3131,11 +3035,11 @@ const ResetSkills: React.FC = () => {
             {isPending ? (
               <Loader size={5} />
             ) : isFree ? (
-              isStaffMember(userData) ? (
-                "Reset Skills (Free for staff)"
-              ) : (
-                `Reset Skills (${resetInfo?.freeResetsRemaining} free shared resets remaining)`
-              )
+              `Reset Skills (${freeResetNote(
+                isStaffMember(userData),
+                resetInfo?.freeResetsRemaining ?? 0,
+                "free shared resets",
+              )})`
             ) : canAffordPaid ? (
               `Reset Skills for ${COST_SKILL_RESET} Reps`
             ) : (

@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -22,20 +21,19 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { SkillTreeFolder } from "@/drizzle/schema";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Increment used when assigning order to new folders */
 const FOLDER_ORDER_INCREMENT = 10;
 
 export default function ManualSkillTreeFolder() {
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(canChangeContent, "/manual");
   const utils = api.useUtils();
 
   // Modal state
@@ -56,12 +54,12 @@ export default function ManualSkillTreeFolder() {
   const { data: folders, isPending: foldersLoading } =
     api.skillTree.getAllFolders.useQuery(
       { includeHidden: true },
-      { enabled: !!userData && canChangeContent(userData.role) },
+      { enabled: hasAccess },
     );
 
   const { data: allSkills } = api.skillTree.getAll.useQuery(
     { limit: 500, hidden: undefined },
-    { enabled: !!userData && canChangeContent(userData.role) },
+    { enabled: hasAccess },
   );
 
   // Mutations
@@ -184,14 +182,7 @@ export default function ManualSkillTreeFolder() {
     return allSkills?.data?.filter((s) => s.folderId === folderId).length || 0;
   };
 
-  // Redirect if not authorized
-  useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
-      router.push("/manual");
-    }
-  }, [userData, router]);
-
-  if (!userData || !canChangeContent(userData.role)) {
+  if (!userData || !hasAccess) {
     return <Loader explanation="Checking permissions..." />;
   }
 

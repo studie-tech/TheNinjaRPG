@@ -1,8 +1,10 @@
-import { BattleTypes, LetterRanks, StatTypes } from "@/drizzle/constants";
+import { LetterRanks, StatTypes } from "@/drizzle/constants";
 import {
+  battleTypesField,
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  minCountField,
   toOptions,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
@@ -14,20 +16,8 @@ interface BloodlineBalanceFilteringProps {
 const makeSchema = () =>
   defineFilteringSchema({
     fields: [
-      {
-        id: "battleTypes",
-        label: "Battle Types",
-        type: "multi-select",
-        defaultValue: ["COMBAT", "SPARRING"],
-        options: toOptions(BattleTypes),
-      },
-      {
-        id: "minCount",
-        label: "Minimum Count",
-        type: "number",
-        defaultValue: undefined,
-        normalizeForFilter: (v) => (v !== undefined && v >= 1 ? v : undefined),
-      },
+      battleTypesField(["COMBAT", "SPARRING"]),
+      minCountField,
       {
         id: "bloodlineRanks",
         label: "Bloodline Ranks",

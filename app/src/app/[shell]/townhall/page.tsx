@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -42,10 +42,11 @@ import {
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
   KAGE_ELDER_REMOVAL_LOCK_SECS,
+  KAGE_MAX_ELDERS,
   KAGE_REMOVAL_COOLDOWN_DAYS,
   WAR_FUNDS_COST,
 } from "@/drizzle/constants";
-import type { VillageAlliance } from "@/drizzle/schema";
+import type { Village, VillageAlliance } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
@@ -60,14 +61,18 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
 import { ShrineHall } from "@/layout/ShrineHall";
+import { UserAvatarTile } from "@/layout/UserAvatarTile";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { VillageMission, VillageStructureMaintenance } from "@/layout/VillageMission";
+import { VillageMission } from "@/layout/VillageMission";
+import { VillageStructureMaintenance } from "@/layout/VillageStructureMaintenance";
 import { WarRoom } from "@/layout/WarSystem";
 import { showMutationToast } from "@/libs/toast";
+import { isFactionVillage } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
 import { canTakeKage } from "@/utils/permissions";
+import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -76,7 +81,6 @@ import {
   type PrestigeTransferSchema,
   type PrestigeTransferSchemaInput,
 } from "@/validators/misc";
-import type { UserSearchResult } from "@/validators/register";
 
 /** Route village governance and diplomacy to the panels available to the current character. */
 export default function TownHall() {
@@ -182,11 +186,8 @@ const ElderHall: React.FC<{
   const { timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
   const syncedTime = Date.now() - timeDiff;
   const [removalReason, setRemovalReason] = useState("");
-  const nomineeForm = useForm<{ username: string; users: UserSearchResult[] }>({
-    defaultValues: { username: "", users: [] },
-  });
-  const nomineeId = useWatch({ control: nomineeForm.control, name: "users" })[0]
-    ?.userId;
+  const { methods: nomineeForm, user: nominee } = useUserPicker();
+  const nomineeId = nominee?.userId;
   const [governanceMessage, setGovernanceMessage] = useState("");
   const { data: removalHistory, refetch: refetchHistory } =
     api.kage.getRemovalHistory.useQuery(
@@ -328,8 +329,8 @@ const ElderHall: React.FC<{
       >
         <p className="pb-2">
           The Elder Council is composed of representatives from the village&apos;s most
-          active clans. Each month, elders are automatically selected from the top 3
-          clans by activity points. Clan rankings are locked on the{" "}
+          active clans. Each month, elders are automatically selected from the top{" "}
+          {KAGE_MAX_ELDERS} clans by activity points. Clan rankings are locked on the{" "}
           {ELDER_NOMINATION_CUTOFF_DAY}th of each month, and clan leaders can nominate a
           member to become elder between the {ELDER_NOMINATION_CUTOFF_DAY}th and{" "}
           {ELDER_NOMINATION_DEADLINE_DAY}th if their clan qualifies.
@@ -374,20 +375,7 @@ const ElderHall: React.FC<{
             )}
             {elders?.map((elder) => (
               <div key={elder.userId} className="relative">
-                <Link href={`/userid/${elder.userId}`} className="text-center">
-                  <AvatarImage
-                    href={elder.avatar}
-                    alt={elder.username}
-                    hover_effect={true}
-                    size={100}
-                  />
-                  <div>
-                    <div className="font-bold">{elder.username}</div>
-                    <div>
-                      Lvl. {elder.level} {capitalizeFirstLetter(elder.rank)}
-                    </div>
-                  </div>
-                </Link>
+                <UserAvatarTile user={elder} className="text-center" />
               </div>
             ))}
           </div>
@@ -397,7 +385,7 @@ const ElderHall: React.FC<{
       <ContentBox
         title="Clan Activity Rankings"
         initialBreak={true}
-        subtitle="Top 3 clans will have their nominees become elders next month"
+        subtitle={`Top ${KAGE_MAX_ELDERS} clans will have their nominees become elders next month`}
       >
         {isClansLoading ? (
           <Loader explanation="Loading clan rankings" />
@@ -1137,15 +1125,8 @@ const AllianceList: React.FC<{
       if (!matchesSearch) return false;
 
       // Type filter
-      if (typeFilter === "VILLAGE" && !["VILLAGE", "OUTLAW"].includes(entity.type)) {
-        return false;
-      }
-      if (
-        typeFilter === "FACTION" &&
-        !["HIDEOUT", "STRONGHOLD"].includes(entity.type)
-      ) {
-        return false;
-      }
+      if (typeFilter === "VILLAGE" && !isPlayerVillageType(entity)) return false;
+      if (typeFilter === "FACTION" && !isFactionVillage(entity)) return false;
 
       // Status filter
       if (statusFilter === "ALL") return true;
@@ -1155,8 +1136,8 @@ const AllianceList: React.FC<{
     })
     // Sort: villages first, then factions, alphabetically within each group
     .sort((a, b) => {
-      const aIsVillage = ["VILLAGE", "OUTLAW"].includes(a.type);
-      const bIsVillage = ["VILLAGE", "OUTLAW"].includes(b.type);
+      const aIsVillage = isPlayerVillageType(a);
+      const bIsVillage = isPlayerVillageType(b);
       if (aIsVillage && !bIsVillage) return -1;
       if (!aIsVillage && bIsVillage) return 1;
       return a.name.localeCompare(b.name);
@@ -1299,7 +1280,7 @@ const AllianceCard: React.FC<{
   );
 
   // Determine entity type display
-  const isVillage = ["VILLAGE", "OUTLAW"].includes(entity.type);
+  const isVillage = isPlayerVillageType(entity);
   const typeLabel = isVillage ? "Village" : "Faction";
   const typeColors = isVillage
     ? "text-blue-600 bg-blue-100"
@@ -1420,3 +1401,7 @@ const AllianceCard: React.FC<{
     </div>
   );
 };
+
+/** Alliance entities listed as villages; a safezone is neither this nor a faction. */
+const isPlayerVillageType = (entity: Pick<Village, "type">) =>
+  entity.type === "VILLAGE" || entity.type === "OUTLAW";

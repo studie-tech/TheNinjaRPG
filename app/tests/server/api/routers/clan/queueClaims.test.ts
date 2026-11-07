@@ -160,8 +160,8 @@ describeWithDatabase("clan queue claim ownership", () => {
     // Read the mutable connection at submission, including a newly connected socket.
     if (delivery !== "disconnected") actor.connection.socket_id = "4.1";
     const setDeleteError = vi.fn();
-    const invoke = new Function("deletingBattleId", "deleteSubmissionInFlight", "setDeleteError", "removeBattle", "pusher", "showMutationToast", "setDeletedBattleIds", "setDeletingBattleId", "joinedBattleId", "setJoinedBattleId", "utils", `return (${action});`)(
-      "old", { current: false }, setDeleteError, removeBattle, { connection: actor.connection }, vi.fn(), vi.fn(), vi.fn(), "old", vi.fn(), utilsFor(actor),
+    const invoke = new Function("deletingBattleId", "deleteFlight", "setDeleteError", "removeBattle", "pusher", "showMutationToast", "setDeletedBattleIds", "setDeletingBattleId", "joinedBattleId", "setJoinedBattleId", "utils", `return (${action});`)(
+      "old", { run: (_request: unknown, task: () => Promise<void>) => task() }, setDeleteError, removeBattle, { connection: actor.connection }, vi.fn(), vi.fn(), vi.fn(), "old", vi.fn(), utilsFor(actor),
     ) as () => Promise<void>;
     try {
       await invoke();

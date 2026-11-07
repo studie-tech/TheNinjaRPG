@@ -6,27 +6,35 @@ import {
   SHRINE_HP_BY_LEVEL,
 } from "@/drizzle/constants";
 import type { Village, VillageAlliance, VillageStructure, War } from "@/drizzle/schema";
-import type { BattleWar } from "@/libs/combat/types";
-import { getWarSide } from "@/libs/objectiveWar";
+import { isObjectiveWarOpen } from "@/libs/objectiveWar";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { findRelationship } from "@/utils/alliance";
 
 /**
- * Checks if two villages fight on the same side of any war
- * @param wars - The wars to check
- * @param targetVillageId - The village ID to check
- * @param userVillageId - The village ID to check
- * @returns Whether the villages are war allies
+ * The cover name a player wears for `viewer`, or null when their identity is public.
+ * Open-war mercenaries are hidden from everyone else, and ANBU from other villages. The
+ * sector roster and Sensory reveals share it.
  */
-export const isWarAllies = (
-  wars: BattleWar[] | null | undefined,
-  targetVillageId: string | null | undefined,
-  userVillageId: string | null | undefined,
-) =>
-  !!wars?.some((war) => {
-    const side = getWarSide(war, targetVillageId ?? null);
-    return !!side && side === getWarSide(war, userVillageId ?? null);
-  });
+export const getMapDisguise = (
+  viewer: { userId: string; villageId: string | null },
+  target: { userId: string; anbuSquad?: { villageId: string } | null },
+  wars: (Parameters<typeof isObjectiveWarOpen>[0] & {
+    warMercenaries?: { userId: string }[];
+  })[],
+) => {
+  const isHiredElsewhere =
+    target.userId !== viewer.userId &&
+    wars.some(
+      (war) =>
+        isObjectiveWarOpen(war) &&
+        war.warMercenaries?.some((mercenary) => mercenary.userId === target.userId),
+    );
+  if (isHiredElsewhere) return "Mercenary";
+  if (target.anbuSquad && target.anbuSquad.villageId !== viewer.villageId) {
+    return "ANBU Member";
+  }
+  return null;
+};
 
 /**
  * Checks if a village can join a war

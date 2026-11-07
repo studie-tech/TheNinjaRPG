@@ -1,11 +1,15 @@
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
 import { eq, gt } from "drizzle-orm";
 import { GET as runDailyReports } from "@/app/api/daily-reports/route";
 import { userData, userReport, userReportComment } from "@/drizzle/schema";
 import * as gameSettings from "@/libs/gamesettings";
 import { Pusher } from "@/libs/pusher";
+import * as reportQueries from "@/queries/reports";
 import {
   clearUserBanWithoutActiveReport,
+  listUserReportForClear,
+  listUserReportForClear2,
+  listUserReportForClear3,
   noActiveReportGuard,
 } from "@/queries/reports";
 import { reportsRouter } from "@/server/api/routers/reports";
@@ -149,5 +153,96 @@ describeWithDatabase("moderation sanctions", () => {
     );
     expect(reset.rowsAffected).toBe(0);
     expect(await target()).toMatchObject({ isBanned: true });
+  });
+
+  describe("silence clearing", () => {
+    const expired = { banEnd: new Date(Date.now() - 60_000) };
+    const running = { banEnd: new Date(Date.now() + 86_400_000) };
+    const flagTarget = async (flags: Partial<typeof userData.$inferInsert>) => {
+      const db = await getTestDatabase();
+      await db.update(userData).set(flags).where(eq(userData.userId, "target"));
+      return db;
+    };
+    const runDailyJob = async () => {
+      stubCronAuth(() => null);
+      vi.spyOn(gameSettings, "lockWithDailyTimer").mockResolvedValue({
+        isNewDay: true,
+        isClaimed: true,
+      } as Awaited<ReturnType<typeof gameSettings.lockWithDailyTimer>>);
+      return runDailyReports(new Request("http://localhost/api/daily-reports"));
+    };
+
+    it("getBan lifts an expired silence while a ban runs", async () => {
+      const db = await flagTarget({ isBanned: true, isSilenced: true });
+      await insertCase({ status: "SILENCE_ACTIVATED", ...expired });
+      await insertCase({ id: "ban", status: "BAN_ACTIVATED", ...running });
+      await callerForDatabase(reportsRouter, "target", db).getBan();
+      expect(await target()).toMatchObject({ isBanned: true, isSilenced: false });
+    });
+
+    it("the daily job lifts an expired silence while a ban runs", async () => {
+      await flagTarget({ isBanned: true, isSilenced: true });
+      await insertCase({ status: "SILENCE_ACTIVATED", ...expired });
+      await insertCase({ id: "ban", status: "BAN_ACTIVATED", ...running });
+      expect((await runDailyJob()).status).toBe(200);
+      expect(await target()).toMatchObject({ isBanned: true, isSilenced: false });
+    });
+
+    it("clearing a silence report lifts the flag while a ban runs", async () => {
+      const db = await flagTarget({ isBanned: true, isSilenced: true });
+      await insertCase({ status: "SILENCE_ACTIVATED", ...expired });
+      await insertCase({ id: "ban", status: "BAN_ACTIVATED", ...running });
+      const staff = callerForDatabase(reportsRouter, "staff", db);
+      expect(await staff.clear(decision)).toMatchObject({ success: true });
+      expect(await target()).toMatchObject({ isBanned: true, isSilenced: false });
+    });
+
+    it.each(["SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"] as const)(
+      "a running %s blocks getBan, the daily job and clear",
+      async (status) => {
+        const db = await flagTarget({ isSilenced: true });
+        await insertCase({ status: "SILENCE_ACTIVATED", ...expired });
+        await insertCase({ id: "running", status, ...running });
+
+        await callerForDatabase(reportsRouter, "target", db).getBan();
+        expect(await target()).toMatchObject({ isSilenced: true });
+
+        expect((await runDailyJob()).status).toBe(200);
+        expect(await target()).toMatchObject({ isSilenced: true });
+
+        const staff = callerForDatabase(reportsRouter, "staff", db);
+        expect(await staff.clear(decision)).toMatchObject({ success: true });
+        expect(await target()).toMatchObject({ isSilenced: true });
+      },
+    );
+
+    it("clear treats a report ending this instant as over, like getBan and the daily job", async () => {
+      const db = await getTestDatabase();
+      const banEnd = new Date(Date.now() + 3_600_000);
+      await insertCase({ id: "ban", status: "BAN_ACTIVATED", banEnd });
+      await insertCase({ id: "silence", status: "SILENCE_ACTIVATED", banEnd });
+      await insertCase({ id: "trade", status: "TRADE_BAN_ACTIVATED", banEnd });
+      setSystemTime(banEnd);
+      try {
+        const other = { id: "other" };
+        expect(
+          await Promise.all([
+            listUserReportForClear(db, "target", other),
+            listUserReportForClear2(db, "target", other),
+            listUserReportForClear3(db, "target", other),
+          ]),
+        ).toEqual([[], [], []]);
+      } finally {
+        setSystemTime();
+      }
+    });
+
+    it("clear rechecks running reports with the same boundary", async () => {
+      const db = await flagTarget({ isSilenced: true });
+      await insertCase({ status: "SILENCE_ACTIVATED", ...expired });
+      const guard = vi.spyOn(reportQueries, "noActiveReportGuard");
+      await callerForDatabase(reportsRouter, "staff", db).clear(decision);
+      expect(guard).toHaveBeenCalledWith(db, "target", gt);
+    });
   });
 });

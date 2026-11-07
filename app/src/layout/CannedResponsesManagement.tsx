@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { CannedResponse } from "@/drizzle/schema";
+import { usePendingIds } from "@/hooks/usePendingIds";
 import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -29,9 +30,7 @@ export default function CannedResponsesManagement({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingResponse, setEditingResponse] = useState<CannedResponse | null>(null);
   const [formData, setFormData] = useState({ title: "", description: "" });
-  const [deletingResponseIds, setDeletingResponseIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const deletions = usePendingIds();
   const utils = api.useUtils();
 
   const { data: cannedResponses, isLoading } = api.support.getCannedResponses.useQuery(
@@ -66,13 +65,7 @@ export default function CannedResponsesManagement({
       );
       void utils.support.getCannedResponses.invalidate();
     },
-    onSettled: (_result, _error, { id }) => {
-      setDeletingResponseIds((current) => {
-        const next = new Set(current);
-        next.delete(id);
-        return next;
-      });
-    },
+    onSettled: (_result, _error, { id }) => deletions.end(id),
   });
 
   if (!userData || !canEditCannedResponses(userData.role)) {
@@ -101,9 +94,7 @@ export default function CannedResponsesManagement({
   };
 
   const handleDelete = (id: string) => {
-    if (deletingResponseIds.has(id)) return;
-    setDeletingResponseIds((current) => new Set(current).add(id));
-    deleteMutation.mutate({ id });
+    if (deletions.begin(id)) deleteMutation.mutate({ id });
   };
 
   const handleCopy = (description: string) => {
@@ -145,7 +136,7 @@ export default function CannedResponsesManagement({
           ) : (
             <div className="max-h-96 space-y-4 overflow-y-auto">
               {cannedResponses?.map((response) => {
-                const isDeleting = deletingResponseIds.has(response.id);
+                const isDeleting = deletions.ids.has(response.id);
                 return (
                   <Card key={response.id} className="relative" aria-busy={isDeleting}>
                     <CardHeader className="pb-3">

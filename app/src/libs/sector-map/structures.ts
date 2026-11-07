@@ -3,6 +3,7 @@ import { WAR_SHRINE_IMAGE_BY_BIOME } from "@/drizzle/constants";
 import type { VillageStructure } from "@/drizzle/schema";
 import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { resolveSectorAnchor } from "@/libs/sector-map/validation";
 import { getBiomeAtSectorAnchor } from "@/libs/travel";
 
 /** Synthetic map structure with a fresh identity; longitude/latitude are local tile col/row. */
@@ -57,7 +58,7 @@ export const createShrineStructure = (
   map: NormalizedSectorMap,
   globalTileType: number,
 ) => {
-  const anchor = map.anchors.find((anchor) => anchor.key === "shrine.default");
+  const anchor = resolveSectorAnchor(map, "shrine.default");
   const art = Object.values(WORLD_STRUCTURE_ART).find(
     (art) => art.route === "/shrine" && art.sector === map.sector,
   );
@@ -76,3 +77,13 @@ export const createShrineStructure = (
     id: "sector-shrine",
   };
 };
+
+/** A sector's structures plus the synthetic shrine, unless one already routes to /shrine. */
+export const withSectorShrine = <T extends { route: string }>(
+  structures: T[],
+  map: NormalizedSectorMap,
+  globalTileType: number,
+): (T | ReturnType<typeof createShrineStructure>)[] =>
+  structures.some((structure) => structure.route === "/shrine")
+    ? structures
+    : [...structures, createShrineStructure(map, globalTileType)];

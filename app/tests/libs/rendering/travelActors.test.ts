@@ -42,7 +42,7 @@ describe("travel actor snapshots", () => {
     expect(result.filter((recipe) => recipe.user).every((recipe) => recipe.spread)).toBe(true);
   });
   it("never exposes self actions or a masked profile", () => {
-    expect(travelActionAvailability(viewer, player({ userId: "self" }), true)).toEqual({ attack: false, heal: false, info: false });
-    expect(travelActionAvailability(viewer, player({ isMasked: true }), false).info).toBe(false);
+    expect(travelActionAvailability(viewer, player({ userId: "self" }), true, null)).toEqual({ attack: false, heal: false, info: false });
+    expect(travelActionAvailability(viewer, player({ isMasked: true }), false, null).info).toBe(false);
   });
 });

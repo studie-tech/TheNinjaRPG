@@ -13,7 +13,7 @@ import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/locals
 import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { LEGAL_LINKS } from "@/libs/legalLinks";
+import { LEGAL_LINKS, STORE_SUBSCRIPTION_URLS } from "@/libs/legalLinks";
 import { appEvents, platform, purchases } from "@/libs/native";
 import {
   fetchFreshStoreObservation,
@@ -31,6 +31,7 @@ import {
   storeRestoreReconciliation,
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { sleep } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import { storePurchaseLockSchema } from "@/validators/nativePurchases";
@@ -831,8 +832,7 @@ export default function NativeStore() {
     const federal = catalogue?.federal.find(
       (item) => item.productId === id || item.androidProductId === id,
     );
-    if (federal)
-      return `${federal.federalStatus.charAt(0)}${federal.federalStatus.slice(1).toLowerCase()} Federal`;
+    if (federal) return `${capitalizeFirstLetter(federal.federalStatus)} Federal`;
     return "Store purchase";
   };
   if (catalogueError)
@@ -1068,8 +1068,7 @@ export default function NativeStore() {
                   >
                     <div>
                       <p className="font-semibold text-[14px]">
-                        {plan.federalStatus.charAt(0)}
-                        {plan.federalStatus.slice(1).toLowerCase()}
+                        {capitalizeFirstLetter(plan.federalStatus)}
                       </p>
                       <p className="text-muted-foreground text-xs">
                         {listed
@@ -1134,8 +1133,8 @@ export default function NativeStore() {
             <NativeExternalLink
               href={
                 storePlatform === "ios"
-                  ? "https://apps.apple.com/account/subscriptions"
-                  : "https://play.google.com/store/account/subscriptions"
+                  ? STORE_SUBSCRIPTION_URLS.ios
+                  : STORE_SUBSCRIPTION_URLS.android
               }
             >
               Manage subscriptions

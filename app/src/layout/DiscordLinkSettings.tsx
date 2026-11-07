@@ -1,35 +1,32 @@
 "use client";
 
-import { Link2, Star, Unlink } from "lucide-react";
+import { Star, Unlink } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   DISCORD_MAX_CHARACTERS_PER_ACCOUNT,
-  DISCORD_MIN_ACCOUNT_AGE_DAYS,
   DISCORD_UNLINK_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
+import { DiscordAuthorizeButton, DiscordLinkRules } from "@/layout/DiscordLinkRules";
 import Loader from "@/layout/Loader";
 import { DISCORD_AUTOMATIC_LINK_TEXT } from "@/libs/discordLink";
 import { showMutationToast } from "@/libs/toast";
+import type { BaseServerResponse } from "@/validators/base";
 
 /** Link status and actions for the signed-in character's Discord account. */
 export const DiscordLinkSettings: React.FC = () => {
   const utils = api.useUtils();
   const { data, isPending } = api.discord.getStatus.useQuery();
+  const onLinkChange = async (result: BaseServerResponse) => {
+    showMutationToast(result);
+    if (result.success) await utils.discord.getStatus.invalidate();
+  };
   const { mutate: unlink, isPending: isUnlinking } = api.discord.unlink.useMutation({
-    onSuccess: async (result) => {
-      showMutationToast(result);
-      if (result.success) await utils.discord.getStatus.invalidate();
-    },
+    onSuccess: onLinkChange,
   });
   const { mutate: setPrimary, isPending: isSettingPrimary } =
-    api.discord.setPrimary.useMutation({
-      onSuccess: async (result) => {
-        showMutationToast(result);
-        if (result.success) await utils.discord.getStatus.invalidate();
-      },
-    });
+    api.discord.setPrimary.useMutation({ onSuccess: onLinkChange });
 
   if (isPending) return <Loader explanation="Loading Discord link" />;
   if (!data?.enabled) return null;
@@ -41,25 +38,8 @@ export const DiscordLinkSettings: React.FC = () => {
           Link your Discord account to unlock the TheNinja-RPG Discord server. Your
           server nickname follows your character name and you receive your village role.
         </p>
-        <ul className="list-disc pl-5 text-muted-foreground text-sm">
-          <li>
-            One Discord account per character; a Discord account can link up to{" "}
-            {DISCORD_MAX_CHARACTERS_PER_ACCOUNT} characters.
-          </li>
-          <li>
-            Discord accounts must be at least {DISCORD_MIN_ACCOUNT_AGE_DAYS} days old.
-          </li>
-          <li>
-            After unlinking, linking a different account takes{" "}
-            {DISCORD_UNLINK_COOLDOWN_DAYS} days.
-          </li>
-        </ul>
-        <Button asChild className="gap-2">
-          <a href="/api/discord/authorize">
-            <Link2 className="h-4 w-4" />
-            Link Discord account
-          </a>
-        </Button>
+        <DiscordLinkRules />
+        <DiscordAuthorizeButton label="Link Discord account" />
       </div>
     );
   }
@@ -103,12 +83,7 @@ export const DiscordLinkSettings: React.FC = () => {
             Discord no longer accepts updates for this link, so your Verified Ninja role
             may lapse. Re-link to restore it.
           </p>
-          <Button asChild className="gap-2">
-            <a href="/api/discord/authorize">
-              <Link2 className="h-4 w-4" />
-              Re-link Discord
-            </a>
-          </Button>
+          <DiscordAuthorizeButton label="Re-link Discord" />
         </div>
       )}
       <Confirm

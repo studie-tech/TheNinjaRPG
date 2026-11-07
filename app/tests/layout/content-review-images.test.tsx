@@ -5,6 +5,7 @@ import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import { sceneAssetIds } from "@/libs/contentReview/paths";
 import { createToastMock } from "../setup/toastMock";
 import type { ContentProposalStatus } from "@/drizzle/constants";
+import * as logbook from "@/layout/Logbook";
 import * as UserContext from "@/utils/UserContext";
 
 const state: {
@@ -77,11 +78,6 @@ vi.mock("@/app/_trpc/client", () => ({
   },
 }));
 vi.mock("@/layout/BattlefieldPreview", () => ({ BattlefieldPreview: () => null }));
-vi.mock("@/layout/Logbook", () => ({
-  QuestDialogScene: ({ background, characters }: { background: string; characters: string[] }) => (
-    <div data-scene="true"><img src={background} alt="Background" />{characters.map((image) => <img key={image} src={image} alt="Character" />)}</div>
-  ),
-}));
 vi.mock("@/layout/ItemWithEffects", () => ({ default: () => null }));
 vi.mock("@/libs/toast", createToastMock);
 vi.mock("@/layout/ContentImage", () => ({
@@ -105,6 +101,9 @@ describe("proposal review detail", () => {
     vi.restoreAllMocks();
   });
   beforeEach(() => {
+    vi.spyOn(logbook, "QuestDialogScene").mockImplementation(({ background, characters }) => (
+      <div data-scene="true"><img src={background} alt="Background" />{characters.map((image) => <img key={image} src={image} alt="Character" />)}</div>
+    ));
     vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
       prepareUserUpdate: vi.fn(),
       updateUser: vi.fn(),

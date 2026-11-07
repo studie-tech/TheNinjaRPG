@@ -1,6 +1,6 @@
 import { gt } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ActiveBanStates } from "@/drizzle/constants";
+import { ActiveBanStates, ActiveSilenceStates } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
@@ -65,10 +65,7 @@ export async function GET(request: Request) {
       // Track which type of report is expiring
       if (ActiveBanStates.includes(report.status)) {
         userBanReports.set(userId, true);
-      } else if (
-        report.status === "SILENCE_ACTIVATED" ||
-        report.status === "TIMEOUT_ACTIVATED"
-      ) {
+      } else if (ActiveSilenceStates.includes(report.status)) {
         userSilenceReports.set(userId, true);
       } else if (report.status === "TRADE_BAN_ACTIVATED") {
         userTradeBanReports.set(userId, true);
@@ -93,10 +90,7 @@ export async function GET(request: Request) {
 
       if (ActiveBanStates.includes(report.status)) {
         userHasActiveBan.set(report.reportedUserId, true);
-      } else if (
-        report.status === "SILENCE_ACTIVATED" ||
-        report.status === "TIMEOUT_ACTIVATED"
-      ) {
+      } else if (ActiveSilenceStates.includes(report.status)) {
         userHasActiveSilence.set(report.reportedUserId, true);
       } else if (report.status === "TRADE_BAN_ACTIVATED") {
         userHasActiveTradeBan.set(report.reportedUserId, true);

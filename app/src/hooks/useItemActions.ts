@@ -6,7 +6,7 @@ import {
   getInventoryQuantities,
   getSoldInventory,
 } from "@/deltas/item";
-import type { UserItemWithRelations } from "@/drizzle/schema";
+import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
 import {
@@ -15,7 +15,7 @@ import {
 } from "@/libs/itemConsumption";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Binds per-item tRPC mutations to the shared inventory and profile cache controllers.
@@ -23,11 +23,9 @@ import { useRequiredUserData } from "@/utils/UserContext";
  * confirmed success, while actions with settlement handlers also dismiss after rejection.
  */
 export const useItemActions = ({
-  userData,
   useritem,
   onDone,
 }: {
-  userData: NonNullable<UserWithRelations>;
   useritem: UserItemWithRelations | undefined;
   onDone: () => void;
 }) => {
@@ -35,8 +33,6 @@ export const useItemActions = ({
   const utils = api.useUtils();
   const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
     useInventoryCacheUpdate();
-  const { prepareConsumptionUpdate, updateConsumption } =
-    useItemConsumptionCacheUpdate();
 
   // Dismiss the initiating view for actions that finish on settlement.
   const onSettled = () => {
@@ -69,58 +65,9 @@ export const useItemActions = ({
     onSettled,
   });
 
-  const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
-    onMutate: () => ({
-      userRevision: prepareUserUpdate(),
-      consumption: prepareConsumptionUpdate(),
-    }),
-    onSuccess: async (data, variables, context) => {
-      finishItemConsumeRequest(userData.userId, variables.userItemId);
-      if (data.success && "rewards" in data && data.rewards) {
-        showRewardToast(
-          data.notifications ?? [],
-          data.rewards,
-          data.message,
-          false,
-          undefined,
-          undefined,
-          data.cacheRewards,
-          data.petRewards,
-        );
-      } else {
-        let message = data.message || "Consume failed";
-        if ("notifications" in data && data.notifications) {
-          for (const notification of data.notifications || []) {
-            message += `\n${notification}`;
-          }
-        }
-        showMutationToast({ success: data.success, message });
-      }
-      if (data.success) {
-        // The action is complete; keep reconciliation off the dialog's pending path.
-        void Promise.allSettled([
-          updateUser(data, { revision: context.userRevision }).then((profileApplied) =>
-            updateConsumption(data, context.consumption, profileApplied),
-          ),
-        ]);
-      } else if (useritem?.item.itemType === "MEAL") {
-        // A rejected snapshot must refresh the next panel's quantity and account state.
-        await Promise.all([
-          utils.profile.getUser.invalidate(),
-          utils.item.getUserItemsWithVariants.invalidate(),
-        ]);
-      }
-    },
-    onError: async (error, _input, context) => {
-      const message = getItemConsumeErrorMessage(error, useritem?.item);
-      if (message) showMutationToast({ success: false, message });
-      await updateUser(undefined);
-      await updateConsumption(
-        undefined,
-        context?.consumption ?? prepareConsumptionUpdate(),
-        false,
-      );
-    },
+  const { consume, isConsuming } = useConsumeItem({
+    useritem,
+    inventoryQuery: "getUserItemsWithVariants",
     onSettled,
   });
 
@@ -275,3 +222,87 @@ export const useItemActions = ({
 // Alias the procedure so its action name is not interpreted as a React hook. Optional
 // access lets the module load where tests replace the client without this router.
 const repairWithKitProcedure = api.item?.useRepairItem;
+
+/**
+ * Consume one stack and reconcile profile, inventory and effect caches. `useritem` is the
+ * selected stack and `inventoryQuery` the inventory view the caller shows.
+ */
+export const useConsumeItem = ({
+  useritem,
+  inventoryQuery,
+  onSettled,
+}: {
+  useritem: { item: Pick<Item, "itemType" | "effects"> } | undefined;
+  inventoryQuery: "getUserItems" | "getUserItemsWithVariants";
+  onSettled: () => void;
+}) => {
+  // Selecting the id alone keeps the travel map from rendering on every move.
+  const {
+    data: userId,
+    prepareUserUpdate,
+    updateUser,
+  } = useUserDataSelector(selectUserId);
+  const utils = api.useUtils();
+  const { prepareConsumptionUpdate, updateConsumption } =
+    useItemConsumptionCacheUpdate();
+
+  const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
+    onMutate: () => ({
+      userRevision: prepareUserUpdate(),
+      consumption: prepareConsumptionUpdate(),
+    }),
+    onSuccess: async (data, variables, context) => {
+      finishItemConsumeRequest(userId ?? "", variables.userItemId);
+      if (data.success && "rewards" in data && data.rewards) {
+        showRewardToast(
+          data.notifications ?? [],
+          data.rewards,
+          data.message,
+          false,
+          undefined,
+          undefined,
+          data.cacheRewards,
+          data.petRewards,
+        );
+      } else {
+        let message = data.message || "Consume failed";
+        if ("notifications" in data && data.notifications) {
+          for (const notification of data.notifications || []) {
+            message += `\n${notification}`;
+          }
+        }
+        showMutationToast({ success: data.success, message });
+      }
+      if (data.success) {
+        // The action is complete; keep reconciliation off the dialog's pending path.
+        void Promise.allSettled([
+          updateUser(data, { revision: context.userRevision }).then((profileApplied) =>
+            updateConsumption(data, context.consumption, profileApplied),
+          ),
+        ]);
+      } else if (useritem?.item.itemType === "MEAL") {
+        // A rejected snapshot must refresh the next view's quantity and account state.
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.item[inventoryQuery].invalidate(),
+        ]);
+      }
+    },
+    onError: async (error, _input, context) => {
+      const message = getItemConsumeErrorMessage(error, useritem?.item);
+      if (message) showMutationToast({ success: false, message });
+      await updateUser(undefined);
+      await updateConsumption(
+        undefined,
+        context?.consumption ?? prepareConsumptionUpdate(),
+        false,
+      );
+    },
+    onSettled,
+  });
+
+  return { consume, isConsuming };
+};
+
+/** Subscribe item actions to account identity without observing unrelated profile fields. */
+const selectUserId = (user: NonNullable<UserWithRelations>) => user.userId;

@@ -11,8 +11,8 @@ import {
   Waypoints,
 } from "lucide-react";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
+import type { UseFormReturn } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +42,7 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
+import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { calcBankInterest, getStrucBoost } from "@/utils/village";
@@ -50,7 +51,6 @@ import {
   type MoneyTransferSchema,
   type MoneyTransferSchemaInput,
 } from "@/validators/bank";
-import { getSearchValidator } from "@/validators/register";
 
 export default function Bank() {
   // State
@@ -142,40 +142,14 @@ export default function Bank() {
 
   // User search
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethods, user: targetUser } = useUserPicker(maxUsers);
 
   // User search for ledger sender
-  const userSearchSchemaFrom = getSearchValidator({ max: maxUsers });
-  const userSearchMethodsFrom = useForm<z.infer<typeof userSearchSchemaFrom>>({
-    resolver: zodResolver(userSearchSchemaFrom),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUserFrom = useWatch({
-    control: userSearchMethodsFrom.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethodsFrom, user: targetUserFrom } =
+    useUserPicker(maxUsers);
 
   // User search for ledger receiver
-  const userSearchSchemaTo = getSearchValidator({ max: maxUsers });
-  const userSearchMethodsTo = useForm<z.infer<typeof userSearchSchemaTo>>({
-    resolver: zodResolver(userSearchSchemaTo),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUserTo = useWatch({
-    control: userSearchMethodsTo.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethodsTo, user: targetUserTo } = useUserPicker(maxUsers);
 
   // Getting bank transers
   const {
@@ -258,30 +232,13 @@ export default function Bank() {
             <p className="text-lg">{money.toLocaleString()} ryo</p>
             <h2 className="font-bold text-xl">Money on hand</h2>
             <div className="w-full px-4 pt-3">
-              <Form {...toBankForm}>
-                <form onSubmit={onDeposit} className="relative">
-                  <FormField
-                    control={toBankForm.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem className="flex w-full flex-col">
-                        <FormControl>
-                          <Input
-                            id="amount"
-                            placeholder="Transfer to bank"
-                            {...field}
-                            value={field.value as number}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button className="absolute top-0 right-0" type="submit">
-                    <ChevronsRight className="h-5 w-5" />
-                  </Button>
-                </form>
-              </Form>
+              <AmountForm
+                form={toBankForm}
+                onSubmit={onDeposit}
+                id="amount-to-bank"
+                placeholder="Transfer to bank"
+                icon={<ChevronsRight className="h-5 w-5" />}
+              />
             </div>
           </div>
           <div className="flex flex-col items-center">
@@ -289,30 +246,13 @@ export default function Bank() {
             <p className="text-lg">{bank.toLocaleString()} ryo</p>
             <h2 className="font-bold text-xl">Money in bank</h2>
             <div className="w-full px-4 pt-3">
-              <Form {...toPocketForm}>
-                <form onSubmit={onWithdraw} className="relative">
-                  <FormField
-                    control={toPocketForm.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem className="flex w-full flex-col">
-                        <FormControl>
-                          <Input
-                            id="amount"
-                            placeholder="Transfer to pocket"
-                            {...field}
-                            value={field.value as number}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button className="absolute top-0 right-0" type="submit">
-                    <ChevronsLeft className="h-5 w-5" />
-                  </Button>
-                </form>
-              </Form>
+              <AmountForm
+                form={toPocketForm}
+                onSubmit={onWithdraw}
+                id="amount-to-pocket"
+                placeholder="Transfer to pocket"
+                icon={<ChevronsLeft className="h-5 w-5" />}
+              />
             </div>
           </div>
         </div>
@@ -358,30 +298,14 @@ export default function Bank() {
             showAi={false}
             maxUsers={maxUsers}
           />
-          <Form {...toUserForm}>
-            <form onSubmit={onTransfer} className="relative mt-2 mr-1 px-1">
-              <FormField
-                control={toUserForm.control}
-                name="amount"
-                render={({ field }) => (
-                  <FormItem className="flex w-full flex-col">
-                    <FormControl>
-                      <Input
-                        id="amount"
-                        placeholder="Amount to transfer"
-                        {...field}
-                        value={field.value as number}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button className="absolute top-0 right-0" type="submit">
-                <ChevronsUp className="h-5 w-5" />
-              </Button>
-            </form>
-          </Form>
+          <AmountForm
+            form={toUserForm}
+            onSubmit={onTransfer}
+            id="amount-to-user"
+            placeholder="Amount to transfer"
+            icon={<ChevronsUp className="h-5 w-5" />}
+            className="relative mt-2 mr-1 px-1"
+          />
         </div>
       </ContentBox>
       <ContentBox
@@ -434,3 +358,45 @@ export default function Bank() {
     </>
   );
 }
+
+/** Amount input with its submit button inside the field. */
+const AmountForm = ({
+  form,
+  onSubmit,
+  id,
+  placeholder,
+  icon,
+  className = "relative",
+}: {
+  form: UseFormReturn<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>;
+  onSubmit: React.FormEventHandler<HTMLFormElement>;
+  id: string;
+  placeholder: string;
+  icon: React.ReactNode;
+  className?: string;
+}) => (
+  <Form {...form}>
+    <form onSubmit={onSubmit} className={className}>
+      <FormField
+        control={form.control}
+        name="amount"
+        render={({ field }) => (
+          <FormItem className="flex w-full flex-col">
+            <FormControl>
+              <Input
+                id={id}
+                placeholder={placeholder}
+                {...field}
+                value={field.value as number}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <Button className="absolute top-0 right-0" type="submit">
+        {icon}
+      </Button>
+    </form>
+  </Form>
+);

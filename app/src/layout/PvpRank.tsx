@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, OctagonX, Star } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +13,7 @@ import {
   RANKED_LOADOUT_MAX_WEAPONS,
 } from "@/drizzle/constants";
 import type { Item, Jutsu } from "@/drizzle/schema";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import BanInfo from "@/layout/BanInfo";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
@@ -26,8 +27,8 @@ import {
   getJutsuCategoryDef,
 } from "@/libs/jutsu";
 import { validateItemLoadout, validateJutsuLoadout } from "@/libs/ranked_pvp";
+import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { showMutationToast } from "@/libs/toast";
-import { isRetryableTrpcError } from "@/utils/error";
 import { useRequireInVillage } from "@/utils/UserContext";
 import type { RankedLoadoutSchema } from "@/validators/pvpRank";
 
@@ -74,14 +75,7 @@ export const RankedLoadoutSelector: React.FC = () => {
   );
 
   const { data: weapons, isFetching: isLoadingWeapons } = api.item.getAll.useQuery(
-    {
-      itemType: "WEAPON",
-      limit: 100,
-      onlyInShop: true,
-      eventItems: false,
-      minRepsCost: 0,
-      maxSeichiSilverCost: 0,
-    },
+    { itemType: "WEAPON", ...RANKED_SHOP_ITEMS },
     {
       enabled: activeTab === "weapons",
     },
@@ -89,14 +83,7 @@ export const RankedLoadoutSelector: React.FC = () => {
 
   const { data: consumables, isFetching: isLoadingConsumables } =
     api.item.getAll.useQuery(
-      {
-        itemType: "CONSUMABLE",
-        limit: 100,
-        onlyInShop: true,
-        eventItems: false,
-        minRepsCost: 0,
-        maxSeichiSilverCost: 0,
-      },
+      { itemType: "CONSUMABLE", ...RANKED_SHOP_ITEMS },
       {
         enabled: activeTab === "consumables",
       },
@@ -122,18 +109,16 @@ export const RankedLoadoutSelector: React.FC = () => {
   const updateLoadout = api.pvpRank.updateRankedLoadout.useMutation({
     meta: { handlesTransportError: true },
   });
-  const saveRef = useRef<RankedLoadoutSaveSnapshot | null>(null);
-  const [pendingSave, setPendingSave] = useState<RankedLoadoutSaveSnapshot | null>(
-    null,
-  );
-  const isSaving = pendingSave !== null;
+  const saveFlight = useSingleFlight<RankedLoadoutSaveSnapshot>();
+  const pendingSave = saveFlight.pending;
+  const isSaving = saveFlight.isPending;
 
   const saveLoadout = async (
     loadout: RankedLoadoutSchema,
     kind: RankedLoadoutSaveKind,
     targetId: string | null,
   ) => {
-    if (!rankedLoadout || !userData || saveRef.current) return false;
+    if (!rankedLoadout || !userData) return false;
 
     const snapshot: RankedLoadoutSaveSnapshot = {
       userId: userData.userId,
@@ -142,58 +127,52 @@ export const RankedLoadoutSelector: React.FC = () => {
       targetId,
       loadout,
     };
-    // The ref closes the same-tick gap before React can paint the disabled state.
-    saveRef.current = snapshot;
-    setPendingSave(snapshot);
 
-    try {
-      const result = await updateLoadout.mutateAsync({
-        ...snapshot.loadout,
-      });
-      if (saveRef.current !== snapshot) return false;
+    const saved = await saveFlight.run(snapshot, async () => {
+      try {
+        const result = await updateLoadout.mutateAsync({
+          ...snapshot.loadout,
+        });
+        if (!saveFlight.owns(snapshot)) return false;
 
-      if (!result.success) {
+        if (!result.success) {
+          showMutationToast(result);
+          return false;
+        }
         showMutationToast(result);
+
+        if (kind === "equip-weapon" || kind === "equip-consumable") {
+          setIsItemModalOpen(false);
+          setSelectedItem((current) =>
+            current?.id === targetId ? undefined : current,
+          );
+        } else if (kind === "equip-jutsu") {
+          setIsOpen(false);
+          setSelectedJutsu((current) =>
+            current?.id === targetId ? undefined : current,
+          );
+        }
+        void utils.pvpRank.getRankedLoadout.invalidate();
+        return true;
+      } catch (error) {
+        showRetryableErrorToast(
+          error,
+          "Could not save the ranked loadout. Check your connection and retry.",
+        );
         return false;
       }
-      showMutationToast(result);
-
-      if (kind === "equip-weapon" || kind === "equip-consumable") {
-        setIsItemModalOpen(false);
-        setSelectedItem((current) => (current?.id === targetId ? undefined : current));
-      } else if (kind === "equip-jutsu") {
-        setIsOpen(false);
-        setSelectedJutsu((current) => (current?.id === targetId ? undefined : current));
-      }
-      void utils.pvpRank.getRankedLoadout.invalidate();
-      return true;
-    } catch (error) {
-      // Ordinary tRPC errors are already owned by the global mutation handler.
-      if (error instanceof Error && isRetryableTrpcError(error)) {
-        showMutationToast({
-          success: false,
-          message:
-            "Could not save the ranked loadout. Check your connection and retry.",
-        });
-      }
-      return false;
-    } finally {
-      if (saveRef.current === snapshot) {
-        saveRef.current = null;
-        setPendingSave(null);
-      }
-    }
+    });
+    return saved ?? false;
   };
 
   // Ignore a late response if the authenticated user or selected loadout changes underneath it.
   useEffect(() => {
-    const pending = saveRef.current;
+    const pending = saveFlight.current();
     if (
       pending &&
       (pending.userId !== userData?.userId || pending.loadoutId !== rankedLoadout?.id)
     ) {
-      saveRef.current = null;
-      setPendingSave(null);
+      saveFlight.release();
     }
   }, [rankedLoadout?.id, userData?.userId]);
 
@@ -217,7 +196,7 @@ export const RankedLoadoutSelector: React.FC = () => {
   const favoriteConsumables = rankedLoadout?.loadout.favoriteConsumableIds ?? [];
 
   const handleUnequipAll = () => {
-    if (!rankedLoadout || saveRef.current) return;
+    if (!rankedLoadout || saveFlight.current()) return;
     void saveLoadout(
       {
         ...rankedLoadout.loadout,
@@ -233,18 +212,10 @@ export const RankedLoadoutSelector: React.FC = () => {
   // Process data with favorite sorting. Restricted items/jutsu are hidden unless
   // already equipped so players can unequip them before queueing.
   const filteredWeapons =
-    weapons?.data.filter(
-      (weapon) =>
-        weapon.repsCost === 0 &&
-        (!weapon.requiredSkillId || loadoutWeapons.includes(weapon.id)) &&
-        (!weapon.bloodlineId || loadoutWeapons.includes(weapon.id)),
-    ) || [];
+    weapons?.data.filter((weapon) => isRankedItemShown(weapon, loadoutWeapons)) || [];
   const filteredConsumables =
-    consumables?.data.filter(
-      (consumable) =>
-        consumable.repsCost === 0 &&
-        (!consumable.requiredSkillId || loadoutConsumables.includes(consumable.id)) &&
-        (!consumable.bloodlineId || loadoutConsumables.includes(consumable.id)),
+    consumables?.data.filter((consumable) =>
+      isRankedItemShown(consumable, loadoutConsumables),
     ) || [];
   const flatJutsu = allJutsu?.pages.flatMap((page) => page.data) ?? [];
   const equippedItems = rankedLoadout
@@ -252,41 +223,12 @@ export const RankedLoadoutSelector: React.FC = () => {
     : [];
 
   // Sort items with equipped first, then favorites, then normal ordering
-  const sortedWeapons = filteredWeapons.sort((a, b) => {
-    const aIsEquipped = loadoutWeapons.includes(a.id);
-    const bIsEquipped = loadoutWeapons.includes(b.id);
-    const aIsFavorite = favoriteWeapons.includes(a.id);
-    const bIsFavorite = favoriteWeapons.includes(b.id);
-
-    // Equipped items come first
-    if (aIsEquipped && !bIsEquipped) return -1;
-    if (!aIsEquipped && bIsEquipped) return 1;
-
-    // If both are equipped or both are not equipped, sort by favorite status
-    if (aIsFavorite && !bIsFavorite) return -1;
-    if (!aIsFavorite && bIsFavorite) return 1;
-
-    // If both have same favorite status, maintain original order
-    return 0;
-  });
-
-  const sortedConsumables = filteredConsumables.sort((a, b) => {
-    const aIsEquipped = loadoutConsumables.includes(a.id);
-    const bIsEquipped = loadoutConsumables.includes(b.id);
-    const aIsFavorite = favoriteConsumables.includes(a.id);
-    const bIsFavorite = favoriteConsumables.includes(b.id);
-
-    // Equipped items come first
-    if (aIsEquipped && !bIsEquipped) return -1;
-    if (!aIsEquipped && bIsEquipped) return 1;
-
-    // If both are equipped or both are not equipped, sort by favorite status
-    if (aIsFavorite && !bIsFavorite) return -1;
-    if (!aIsFavorite && bIsFavorite) return 1;
-
-    // If both have same favorite status, maintain original order
-    return 0;
-  });
+  const sortedWeapons = filteredWeapons.sort(
+    equippedThenFavorite(loadoutWeapons, favoriteWeapons),
+  );
+  const sortedConsumables = filteredConsumables.sort(
+    equippedThenFavorite(loadoutConsumables, favoriteConsumables),
+  );
 
   const processedJutsu = flatJutsu
     .map((jutsu) => ({
@@ -302,86 +244,25 @@ export const RankedLoadoutSelector: React.FC = () => {
       (jutsu) => jutsu.battleUsageType !== "PVE" || loadoutJutsus.includes(jutsu.id),
     )
     .filter((jutsu) => !jutsu.villageId || loadoutJutsus.includes(jutsu.id))
-    .sort((a, b) => {
-      const aIsEquipped = loadoutJutsus.includes(a.id);
-      const bIsEquipped = loadoutJutsus.includes(b.id);
-      const aIsFavorite = favoriteJutsus.includes(a.id);
-      const bIsFavorite = favoriteJutsus.includes(b.id);
-
-      // Equipped jutsus come first
-      if (aIsEquipped && !bIsEquipped) return -1;
-      if (!aIsEquipped && bIsEquipped) return 1;
-
-      // If both are equipped, maintain their order in the loadout
-      if (aIsEquipped && bIsEquipped) {
-        const aIndex = loadoutJutsus.indexOf(a.id);
-        const bIndex = loadoutJutsus.indexOf(b.id);
-        return aIndex - bIndex;
-      }
-
-      // If both are not equipped, sort by favorite status
-      if (aIsFavorite && !bIsFavorite) return -1;
-      if (!aIsFavorite && bIsFavorite) return 1;
-
-      // If both have same favorite status, maintain original order
-      return 0;
-    });
+    .sort(equippedThenFavorite(loadoutJutsus, favoriteJutsus, true));
 
   // Handle favorite toggling
-  const handleToggleFavoriteJutsu = (jutsu: Jutsu) => {
-    if (!rankedLoadout || saveRef.current) return;
-    const isFavorite = favoriteJutsus.includes(jutsu.id);
-    const newFavoriteJutsus = isFavorite
-      ? favoriteJutsus.filter((id) => id !== jutsu.id)
-      : [...favoriteJutsus, jutsu.id];
-
+  const handleToggleFavorite = (kind: keyof typeof FAVORITE_FIELDS, id: string) => {
+    if (!rankedLoadout || saveFlight.current()) return;
+    const field = FAVORITE_FIELDS[kind];
     void saveLoadout(
       {
         ...rankedLoadout.loadout,
-        favoriteJutsuIds: newFavoriteJutsus,
+        [field]: toggleId(rankedLoadout.loadout[field] ?? [], id),
       },
-      "favorite-jutsu",
-      jutsu.id,
-    );
-  };
-
-  const handleToggleFavoriteWeapon = (weapon: Item) => {
-    if (!rankedLoadout || saveRef.current) return;
-    const isFavorite = favoriteWeapons.includes(weapon.id);
-    const newFavoriteWeapons = isFavorite
-      ? favoriteWeapons.filter((id) => id !== weapon.id)
-      : [...favoriteWeapons, weapon.id];
-
-    void saveLoadout(
-      {
-        ...rankedLoadout.loadout,
-        favoriteWeaponIds: newFavoriteWeapons,
-      },
-      "favorite-weapon",
-      weapon.id,
-    );
-  };
-
-  const handleToggleFavoriteConsumable = (consumable: Item) => {
-    if (!rankedLoadout || saveRef.current) return;
-    const isFavorite = favoriteConsumables.includes(consumable.id);
-    const newFavoriteConsumables = isFavorite
-      ? favoriteConsumables.filter((id) => id !== consumable.id)
-      : [...favoriteConsumables, consumable.id];
-
-    void saveLoadout(
-      {
-        ...rankedLoadout.loadout,
-        favoriteConsumableIds: newFavoriteConsumables,
-      },
-      "favorite-consumable",
-      consumable.id,
+      kind,
+      id,
     );
   };
 
   // Handle jutsu equipping
   const handleToggleJutsu = (jutsu: Jutsu) => {
-    if (!rankedLoadout || saveRef.current) return;
+    if (!rankedLoadout || saveFlight.current()) return;
     const alreadyEquipped = loadoutJutsus.includes(jutsu.id);
 
     // If equipping (not unequipping), check limits
@@ -403,9 +284,7 @@ export const RankedLoadoutSelector: React.FC = () => {
     void saveLoadout(
       {
         ...rankedLoadout.loadout,
-        jutsuIds: !alreadyEquipped
-          ? [...loadoutJutsus, jutsu.id]
-          : loadoutJutsus.filter((id) => id !== jutsu.id),
+        jutsuIds: toggleId(loadoutJutsus, jutsu.id),
       },
       "equip-jutsu",
       jutsu.id,
@@ -429,7 +308,7 @@ export const RankedLoadoutSelector: React.FC = () => {
   };
 
   const handleToggleWeapon = (weapon: Item) => {
-    if (!rankedLoadout || saveRef.current) return;
+    if (!rankedLoadout || saveFlight.current()) return;
     const alreadyEquipped = loadoutWeapons.includes(weapon.id);
 
     // If equipping (not unequipping), check limits
@@ -441,9 +320,7 @@ export const RankedLoadoutSelector: React.FC = () => {
     void saveLoadout(
       {
         ...rankedLoadout.loadout,
-        weaponIds: !alreadyEquipped
-          ? [...loadoutWeapons, weapon.id]
-          : loadoutWeapons.filter((id) => id !== weapon.id),
+        weaponIds: toggleId(loadoutWeapons, weapon.id),
       },
       "equip-weapon",
       weapon.id,
@@ -451,7 +328,7 @@ export const RankedLoadoutSelector: React.FC = () => {
   };
 
   const handleToggleConsumable = (consumable: Item) => {
-    if (!rankedLoadout || saveRef.current) return;
+    if (!rankedLoadout || saveFlight.current()) return;
     const alreadyEquipped = loadoutConsumables.includes(consumable.id);
 
     // If equipping (not unequipping), check limits
@@ -463,9 +340,7 @@ export const RankedLoadoutSelector: React.FC = () => {
     void saveLoadout(
       {
         ...rankedLoadout.loadout,
-        consumableIds: !alreadyEquipped
-          ? [...loadoutConsumables, consumable.id]
-          : loadoutConsumables.filter((id) => id !== consumable.id),
+        consumableIds: toggleId(loadoutConsumables, consumable.id),
       },
       "equip-consumable",
       consumable.id,
@@ -547,7 +422,7 @@ export const RankedLoadoutSelector: React.FC = () => {
                   showBgColor={false}
                   showLabels={false}
                   onClick={(id) => {
-                    if (saveRef.current) return;
+                    if (saveFlight.current()) return;
                     const item = sortedWeapons?.find((w) => w.id === id);
                     if (item) {
                       setSelectedItem(item);
@@ -572,7 +447,7 @@ export const RankedLoadoutSelector: React.FC = () => {
                   showBgColor={false}
                   showLabels={false}
                   onClick={(id) => {
-                    if (saveRef.current) return;
+                    if (saveFlight.current()) return;
                     const item = sortedConsumables?.find((c) => c.id === id);
                     if (item) {
                       setSelectedItem(item);
@@ -590,7 +465,7 @@ export const RankedLoadoutSelector: React.FC = () => {
                   showBgColor={false}
                   showLabels={true}
                   onClick={(id) => {
-                    if (saveRef.current) return;
+                    if (saveFlight.current()) return;
                     setSelectedJutsu(processedJutsu?.find((jutsu) => jutsu.id === id));
                     setIsOpen(true);
                   }}
@@ -627,13 +502,14 @@ export const RankedLoadoutSelector: React.FC = () => {
               <Button
                 variant="outline"
                 disabled={isSaving}
-                onClick={() => {
-                  if (selectedItem.itemType === "WEAPON") {
-                    handleToggleFavoriteWeapon(selectedItem);
-                  } else {
-                    handleToggleFavoriteConsumable(selectedItem);
-                  }
-                }}
+                onClick={() =>
+                  handleToggleFavorite(
+                    selectedItem.itemType === "WEAPON"
+                      ? "favorite-weapon"
+                      : "favorite-consumable",
+                    selectedItem.id,
+                  )
+                }
                 className="flex items-center gap-2"
               >
                 {pendingSave?.targetId === selectedItem.id &&
@@ -723,7 +599,7 @@ export const RankedLoadoutSelector: React.FC = () => {
               <Button
                 variant="outline"
                 disabled={isSaving}
-                onClick={() => handleToggleFavoriteJutsu(selectedJutsu)}
+                onClick={() => handleToggleFavorite("favorite-jutsu", selectedJutsu.id)}
                 className="flex items-center gap-2"
               >
                 {pendingSave?.kind === "favorite-jutsu" &&
@@ -766,3 +642,45 @@ export const RankedLoadoutSelector: React.FC = () => {
     </>
   );
 };
+
+/** Ranked battles draw from free shop items only. */
+const RANKED_SHOP_ITEMS = {
+  limit: 100,
+  onlyInShop: true,
+  eventItems: false,
+  minRepsCost: 0,
+  maxSeichiSilverCost: 0,
+};
+
+/** Loadout field behind each favorite save. */
+const FAVORITE_FIELDS = {
+  "favorite-jutsu": "favoriteJutsuIds",
+  "favorite-weapon": "favoriteWeaponIds",
+  "favorite-consumable": "favoriteConsumableIds",
+} as const;
+
+/** Add an id, or remove it when already present. */
+const toggleId = (ids: string[], id: string) =>
+  ids.includes(id) ? ids.filter((entry) => entry !== id) : [...ids, id];
+
+/** Restricted items stay listed once equipped, so they can be taken off before queueing. */
+const isRankedItemShown = (item: Item, equippedIds: string[]) =>
+  item.repsCost === 0 &&
+  (!item.requiredSkillId || equippedIds.includes(item.id)) &&
+  (!item.bloodlineId || equippedIds.includes(item.id));
+
+/** Order equipped entries first, then favorites; other ties keep their incoming order. */
+const equippedThenFavorite =
+  (equippedIds: string[], favoriteIds: string[], keepLoadoutOrder = false) =>
+  (a: { id: string }, b: { id: string }) => {
+    const aIsEquipped = equippedIds.includes(a.id);
+    const bIsEquipped = equippedIds.includes(b.id);
+    if (aIsEquipped !== bIsEquipped) return aIsEquipped ? -1 : 1;
+    if (keepLoadoutOrder && aIsEquipped) {
+      return equippedIds.indexOf(a.id) - equippedIds.indexOf(b.id);
+    }
+    const aIsFavorite = favoriteIds.includes(a.id);
+    const bIsFavorite = favoriteIds.includes(b.id);
+    if (aIsFavorite !== bIsFavorite) return aIsFavorite ? -1 : 1;
+    return 0;
+  };

@@ -5,6 +5,7 @@ import {
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  minCountField,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 
@@ -15,13 +16,7 @@ interface RankedRankDistributionFilteringProps {
 const makeSchema = () =>
   defineFilteringSchema({
     fields: [
-      {
-        id: "minCount",
-        label: "Minimum Count",
-        type: "number",
-        defaultValue: undefined,
-        normalizeForFilter: (v) => (v !== undefined && v >= 1 ? v : undefined),
-      },
+      minCountField,
       {
         id: "minLevel",
         label: "Min Level",

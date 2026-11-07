@@ -63,10 +63,8 @@ export const LevelStats: React.FC<LevelStatsProps> = (props) => {
 
   return (
     <div className="relative w-[99%]">
-      <canvas ref={chartRef} id="baseUsage"></canvas>
-      {chartRef.current !== null && (
-        <ExportGraph canvas={chartRef.current} filename="level_distribution" />
-      )}
+      <canvas ref={chartRef} id="levelDistribution"></canvas>
+      <ExportGraph canvasRef={chartRef} filename="level_distribution" />
     </div>
   );
 };
@@ -426,21 +424,7 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
       unknownData.push(usersAtStep.filter((d) => d.deviceType === "unknown").length);
     }
 
-    // If in dropoff mode, convert counts to dropoffs
-    if (mode === "dropoff") {
-      for (let i = 0; i < mobileData.length - 1; i++) {
-        const mobileNext = mobileData[i + 1] ?? 0;
-        const desktopNext = desktopData[i + 1] ?? 0;
-        const unknownNext = unknownData[i + 1] ?? 0;
-        mobileData[i] = (mobileData[i] ?? 0) - mobileNext;
-        desktopData[i] = (desktopData[i] ?? 0) - desktopNext;
-        unknownData[i] = (unknownData[i] ?? 0) - unknownNext;
-      }
-      // Last step has no dropoff (no next step to compare to)
-      mobileData[mobileData.length - 1] = 0;
-      desktopData[desktopData.length - 1] = 0;
-      unknownData[unknownData.length - 1] = 0;
-    }
+    const toSeries = mode === "dropoff" ? toDropoff : (counts: number[]) => counts;
 
     const chart = new ChartJS(ctx, {
       type: "bar",
@@ -449,19 +433,19 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
         datasets: [
           {
             label: "Mobile",
-            data: mobileData,
+            data: toSeries(mobileData),
             borderColor: "hsl(150 70% 45%)",
             backgroundColor: "hsl(150 70% 60% / 0.7)",
           },
           {
             label: "Desktop",
-            data: desktopData,
+            data: toSeries(desktopData),
             borderColor: "hsl(210 70% 45%)",
             backgroundColor: "hsl(210 70% 60% / 0.7)",
           },
           {
             label: "Unknown",
-            data: unknownData,
+            data: toSeries(unknownData),
             borderColor: "hsl(0 0% 45%)",
             backgroundColor: "hsl(0 0% 60% / 0.7)",
           },
@@ -637,14 +621,12 @@ export const UsageStats: React.FC<UsageStatsProps> = (props) => {
   return (
     <div className="relative w-[99%]">
       <canvas ref={chartRef} id="baseUsage"></canvas>
-      {chartRef.current !== null && (
-        <ExportGraph canvas={chartRef.current} filename="usage_statistics" />
-      )}
+      <ExportGraph canvasRef={chartRef} filename="usage_statistics" />
     </div>
   );
 };
 
-export const getUsageChart = (
+const getUsageChart = (
   ctx: CanvasRenderingContext2D,
   groups: Groups,
   labels: ChartLabel[],
@@ -687,3 +669,9 @@ export const getUsageChart = (
   });
   return myChart;
 };
+
+/** Users lost after each step; the last step has no next step to compare to. */
+const toDropoff = (counts: number[]) =>
+  counts.map((count, step) =>
+    step < counts.length - 1 ? count - (counts[step + 1] ?? 0) : 0,
+  );

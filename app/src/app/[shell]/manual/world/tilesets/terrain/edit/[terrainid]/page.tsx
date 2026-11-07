@@ -1,8 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
-import { use, useEffect, useRef } from "react";
+import { use, useRef } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -12,13 +11,14 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { COMBAT_BIOMES } from "@/drizzle/constants";
 import type { MapTerrain } from "@/drizzle/schema";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
 import Loader from "@/layout/Loader";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import { mapTerrainValidator, type ZodMapTerrainType } from "@/validators/mapTerrain";
 
 /** Content-staff edit page for a single map terrain: redirects non-editors to /profile, then delegates to SingleEditMapTerrain */
@@ -27,23 +27,27 @@ export default function MapTerrainEdit(props: {
 }) {
   const params = use(props.params);
   const terrainId = params.terrainid;
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(canChangeContent);
 
-  const { data, isPending, refetch } = api.mapTerrain.get.useQuery(
+  const { data, isPending, isError, isFetching, refetch } = api.mapTerrain.get.useQuery(
     { id: terrainId },
     { enabled: !!terrainId && !!userData },
   );
 
-  // Redirect to profile if not content or admin
-  useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
-      router.push("/profile");
-    }
-  }, [userData, router]);
-
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="terrain"
+        subtitle="Map Terrain Management"
+        backHref="/manual/world/tilesets"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return <SingleEditMapTerrain terrain={data} refetch={refetch} />;

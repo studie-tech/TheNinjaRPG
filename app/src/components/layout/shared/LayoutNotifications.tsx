@@ -1,6 +1,13 @@
 "use client";
 
-import { Bell, ChevronDown, Info, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+  Bell,
+  ChevronDown,
+  Info,
+  type LucideIcon,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Link from "@/layout/Link";
@@ -23,16 +30,18 @@ const notificationColorMap = {
   hidden: "bg-gray-600",
 } as const;
 
+const NOTIFICATION_ICONS: Partial<
+  Record<keyof typeof notificationColorMap, LucideIcon>
+> = { red: ShieldAlert, blue: Info, green: ShieldCheck };
+
 interface NotificationListProps {
   notifications?: NavBarDropdownLink[];
   layout: "desktop" | "mobile";
-  className?: string;
 }
 
 const NotificationList: React.FC<NotificationListProps> = ({
   notifications,
   layout,
-  className = "",
 }) => {
   if (!notifications || notifications.length === 0) return null;
 
@@ -57,27 +66,14 @@ const NotificationList: React.FC<NotificationListProps> = ({
           layout === "mobile"
             ? "w-full shrink-0 whitespace-normal px-3 py-2 text-xs"
             : "py-[1px] pl-3 text-xs lg:text-base",
-          notification.color
-            ? notificationColorMap[notification.color]
-            : "bg-slate-500",
+          notificationBg(notification.color),
           isInPopover && "border border-slate-600 px-3 py-2",
         )}
       >
-        {notification.color === "red" && (
-          <ShieldAlert
-            className={cn("mr-1 text-white", isInPopover ? "mr-2 h-4 w-4" : "h-5 w-5")}
-          />
-        )}
-        {notification.color === "blue" && (
-          <Info
-            className={cn("mr-1 text-white", isInPopover ? "mr-2 h-4 w-4" : "h-5 w-5")}
-          />
-        )}
-        {notification.color === "green" && (
-          <ShieldCheck
-            className={cn("mr-1 text-white", isInPopover ? "mr-2 h-4 w-4" : "h-5 w-5")}
-          />
-        )}
+        <NotificationIcon
+          color={notification.color}
+          className={cn("mr-1 text-white", isInPopover ? "mr-2 h-4 w-4" : "h-5 w-5")}
+        />
         <span className="text-white">{notification.name}</span>
       </div>
     </Link>
@@ -103,18 +99,13 @@ const NotificationList: React.FC<NotificationListProps> = ({
                 layout === "mobile"
                   ? "w-full shrink-0 whitespace-normal px-3 py-2"
                   : "py-[1px] pl-3",
-                firstNotification.color
-                  ? notificationColorMap[firstNotification.color]
-                  : "bg-slate-500",
+                notificationBg(firstNotification.color),
               )}
             >
-              {firstNotification.color === "red" && (
-                <ShieldAlert className="mr-1 h-5 w-5" />
-              )}
-              {firstNotification.color === "blue" && <Info className="mr-1 h-5 w-5" />}
-              {firstNotification.color === "green" && (
-                <ShieldCheck className="mr-1 h-5 w-5" />
-              )}
+              <NotificationIcon
+                color={firstNotification.color}
+                className="mr-1 h-5 w-5"
+              />
               {group} ({count})
             </div>
           </PopoverTrigger>
@@ -139,17 +130,15 @@ const NotificationList: React.FC<NotificationListProps> = ({
     return <>{allElements}</>;
   }
 
-  return <ul className={cn("grid grid-cols-1 gap-[1px]", className)}>{allElements}</ul>;
+  return <div className="grid grid-cols-1 gap-[1px]">{allElements}</div>;
 };
 
 interface CollapsibleNotificationsProps {
   notifications?: NavBarDropdownLink[];
-  className?: string;
 }
 
 export const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
   notifications,
-  className = "",
 }) => {
   const [isCollapsed, setIsCollapsed] = useLocalStorage(
     "notificationsCollapsed",
@@ -201,11 +190,7 @@ export const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> =
         }}
       >
         <div className="overflow-hidden">
-          <NotificationList
-            notifications={notifications}
-            layout="desktop"
-            className={className}
-          />
+          <NotificationList notifications={notifications} layout="desktop" />
         </div>
       </div>
     </div>
@@ -291,3 +276,16 @@ export const MobileNotificationsPopover: React.FC<MobileNotificationsPopoverProp
     </Popover>
   );
 };
+
+/** Render a status icon only for notification colors that have one. */
+const NotificationIcon: React.FC<{
+  color: NavBarDropdownLink["color"];
+  className: string;
+}> = ({ color, className }) => {
+  const Icon = color && NOTIFICATION_ICONS[color];
+  return Icon ? <Icon className={className} /> : null;
+};
+
+/** Resolve the notification badge color, with a neutral background when unspecified. */
+const notificationBg = (color: NavBarDropdownLink["color"]) =>
+  color ? notificationColorMap[color] : "bg-slate-500";

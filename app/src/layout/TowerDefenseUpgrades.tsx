@@ -266,6 +266,45 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
     );
   };
 
+  const renderTabs = () => {
+    const compact = mode === "inRun";
+    return (
+      <Tabs
+        value={activeTab}
+        defaultValue="ATTACK"
+        onValueChange={(v) => onTabChange?.(v as TowerDefenseUpgradeCategory)}
+        className="w-full"
+      >
+        <TabsList className={compact ? "mb-2 w-full" : "mb-3"}>
+          {categories.map((category, i) => (
+            <TabsTrigger
+              key={`${category}-${i}`}
+              value={category}
+              className={compact ? "flex-1 gap-1.5" : "gap-2"}
+            >
+              {getCategoryIcon(category, compact ? "h-3.5 w-3.5" : undefined)}
+              <span
+                className={compact ? "hidden text-xs sm:inline" : "hidden sm:inline"}
+              >
+                {getCategoryLabel(category)}
+              </span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {categories.map((category, i) => (
+          <TabsContent
+            key={`${category}-${i}`}
+            value={category}
+            className={compact ? "mt-0" : undefined}
+          >
+            {renderCategoryContent(category)}
+          </TabsContent>
+        ))}
+      </Tabs>
+    );
+  };
+
   if (mode === "permanent") {
     // Guest mode - show login prompt instead of upgrades
     if (isGuest) {
@@ -315,31 +354,7 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs
-            value={activeTab}
-            defaultValue="ATTACK"
-            onValueChange={(v) => onTabChange?.(v as TowerDefenseUpgradeCategory)}
-            className="w-full"
-          >
-            <TabsList className="mb-3">
-              {categories.map((category, i) => (
-                <TabsTrigger
-                  key={`${category}-${i}`}
-                  value={category}
-                  className="gap-2"
-                >
-                  {getCategoryIcon(category)}
-                  <span className="hidden sm:inline">{getCategoryLabel(category)}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {categories.map((category, i) => (
-              <TabsContent key={`${category}-${i}`} value={category}>
-                {renderCategoryContent(category)}
-              </TabsContent>
-            ))}
-          </Tabs>
+          {renderTabs()}
 
           <p className="mt-3 text-center text-muted-foreground text-xs">
             Hover over upgrades for details. Click to purchase.
@@ -361,33 +376,7 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
           </Badge>
         </div>
 
-        <Tabs
-          value={activeTab}
-          defaultValue="ATTACK"
-          onValueChange={(v) => onTabChange?.(v as TowerDefenseUpgradeCategory)}
-          className="w-full"
-        >
-          <TabsList className="mb-2 w-full">
-            {categories.map((category, i) => (
-              <TabsTrigger
-                key={`${category}-${i}`}
-                value={category}
-                className="flex-1 gap-1.5"
-              >
-                {getCategoryIcon(category, "h-3.5 w-3.5")}
-                <span className="hidden text-xs sm:inline">
-                  {getCategoryLabel(category)}
-                </span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {categories.map((category, i) => (
-            <TabsContent key={`${category}-${i}`} value={category} className="mt-0">
-              {renderCategoryContent(category)}
-            </TabsContent>
-          ))}
-        </Tabs>
+        {renderTabs()}
       </CardContent>
     </Card>
   );

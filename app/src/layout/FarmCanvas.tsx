@@ -7,7 +7,7 @@ import WebGlError from "@/layout/WebGLError";
 import { createFarmScene } from "@/libs/rendering/scenes/farm";
 import { FARM_CANVAS_MIN_HEIGHT } from "@/libs/rendering/scenes/farmLayout";
 import { useUserData } from "@/utils/UserContext";
-import type { FarmEffect, FarmPlotState, FarmVisualState } from "@/validators/farming";
+import type { FarmEffect, FarmVisualState } from "@/validators/farming";
 
 export type FarmCanvasHandle = {
   updateState: (state: FarmVisualState) => void;
@@ -17,7 +17,7 @@ export type FarmCanvasHandle = {
 
 type FarmCanvasProps = {
   initialState: FarmVisualState;
-  onPlotClick: (slotIndex: number, plot: FarmPlotState | undefined) => void;
+  onPlotClick: (slotIndex: number) => void;
   /** A press on the field outside every plot. */
   onFieldClick?: () => void;
   ref?: Ref<FarmCanvasHandle>;
@@ -54,7 +54,7 @@ const FarmCanvasInner = ({
         initialState: current.current.state,
         getTimeDiff: () => current.current.timeDiff,
         showDayNight: () => current.current.showDayNightMapOverlays,
-        onPlotClick: (slot, plot) => current.current.onPlotClick(slot, plot),
+        onPlotClick: (slot) => current.current.onPlotClick(slot),
         onFieldClick: () => current.current.onFieldClick?.(),
       });
       // Server state can arrive while the renderer and artwork are loading.

@@ -11,6 +11,7 @@ import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import { type ChatStartUser, chatDraftsAtom } from "@/libs/chatPanel";
 import { stripBlockquotes } from "@/utils/sanitize";
+import { stripHtmlPreview } from "@/utils/string";
 
 /**
  * One conversation in the chat panel: messages oldest to newest with the composer
@@ -276,7 +277,7 @@ export function ChatConversation({
                   Replying to <strong>{quote.username}</strong>{" "}
                   <span className="text-muted-foreground">
                     {format(quote.createdAt, "HH:mm")} ·{" "}
-                    {stripBlockquotes(quote.content).replace(/<[^>]*>/g, " ")}
+                    {stripHtmlPreview(stripBlockquotes(quote.content))}
                   </span>
                 </span>
                 <button

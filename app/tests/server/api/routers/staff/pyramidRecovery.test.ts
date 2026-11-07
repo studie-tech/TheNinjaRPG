@@ -94,7 +94,7 @@ describeWithDatabase("staff Pyramid recovery", () => {
   it("releases a hunting encounter while preserving preparation and partial allowance", async () => {
     const { database } = await setupHuntingEncounter();
     expect((await (await callerFor(staffRouter, "staff")).forceAwake({ userId: "hero", reason: "Recover a stranded hunter" })).success).toBe(true);
-    expect(await database.query.huntingSession.findFirst()).toMatchObject({ battleId: null, readyAt: new Date(0), version: 2 });
+    expect(await database.query.huntingSession.findFirst()).toEqual(expect.objectContaining({ battleId: null, readyAt: new Date(0), version: 2 }));
     expect((await database.query.huntingProgress.findFirst())?.used).toBe(1);
     expect(await database.query.battle.findFirst({ where: eq(battle.id, "hunt") })).toBeUndefined();
     const oldTab = await callerFor(combatRouter, "hero");
@@ -114,7 +114,7 @@ describeWithDatabase("staff Pyramid recovery", () => {
     const { database } = await setupHuntingEncounter();
     await runRawSql("CREATE TRIGGER staff_hunt_cleanup_failure BEFORE DELETE ON Battle FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cleanup failed'");
     await expect((await callerFor(staffRouter, "staff")).forceAwake({ userId: "hero", reason: "Recover a stranded hunter" })).rejects.toThrow("Failed query");
-    expect(await database.query.huntingSession.findFirst()).toMatchObject({ battleId: null, readyAt: new Date(0), version: 2 });
+    expect(await database.query.huntingSession.findFirst()).toEqual(expect.objectContaining({ battleId: null, readyAt: new Date(0), version: 2 }));
     expect(await database.query.battle.findFirst({ where: eq(battle.id, "hunt") })).toBeDefined();
     await runRawSql("DROP TRIGGER staff_hunt_cleanup_failure");
     const oldTab = await callerFor(combatRouter, "hero");
@@ -130,7 +130,7 @@ describeWithDatabase("staff Pyramid recovery", () => {
     expect(getIsolatedPyramid(profile.userData)).toBeUndefined();
     const board = await (await callerFor(huntingRouter, "hero")).getBoard();
     expect(board.user).toMatchObject({ status: "AWAKE", huntingExperience: 123 });
-    expect(board.session).toMatchObject({ battleId: null, readyAt: new Date(0), version: 2 });
+    expect(board.session).toEqual(expect.objectContaining({ battleId: null, readyAt: new Date(0), version: 2 }));
     expect(board.progress).toEqual([expect.objectContaining({ used: 1, cooldownUntil: null })]);
   });
 

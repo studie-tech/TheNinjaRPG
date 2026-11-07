@@ -34,7 +34,7 @@ describeWithDatabase("village expulsion clan cleanup", () => {
     const result = await fetchUpdatedUser({ client: db, userId: "expelled" });
     expect(result.user).toMatchObject({ isOutlaw: true, clanId: null, clan: null });
     expect(result.requiresUserRefresh).toBe(true);
-    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "expelled") })).toMatchObject({ clanId: null, joinedVillageAt: kicked?.joinedVillageAt });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "expelled") })).toEqual(expect.objectContaining({ clanId: null, joinedVillageAt: kicked?.joinedVillageAt }));
     expect(await db.query.clan.findFirst({ where: eq(clan.id, "old-clan") })).toMatchObject({ leaderId: "remaining" });
   });
 

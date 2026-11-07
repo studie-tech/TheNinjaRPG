@@ -1,10 +1,7 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,11 +16,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { QueryError } from "@/layout/QueryError";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import type { AppRouter } from "@/server/api/root";
+import { useUserPicker } from "@/utils/search";
 import { parentalSettingsSchema } from "@/validators/parentalControls";
-import { getSearchValidator } from "@/validators/register";
 
 /** Loads account settings and resets the form from the saved policy after saving or reloading. */
 export function ParentalControls() {
@@ -32,10 +30,10 @@ export function ParentalControls() {
   if (isPending) return <Loader explanation="Loading parental controls" />;
   if (error || !data)
     return (
-      <div role="alert">
-        Could not load parental controls.{" "}
-        <Button onClick={() => void refetch()}>Try again</Button>
-      </div>
+      <QueryError
+        message="Could not load parental controls."
+        onRetry={() => void refetch()}
+      />
     );
   return (
     <ParentalSettingsForm
@@ -71,16 +69,7 @@ function ParentalSettingsForm({
   const [message, setMessage] = useState<{ success: boolean; message: string } | null>(
     null,
   );
-  const searchSchema = getSearchValidator({ max: 50 });
-  const searchForm = useForm<z.infer<typeof searchSchema>>({
-    resolver: zodResolver(searchSchema),
-    defaultValues: { username: "", users: settings.approvedPlayers },
-  });
-  const users = useWatch({
-    control: searchForm.control,
-    name: "users",
-    defaultValue: settings.approvedPlayers,
-  });
+  const { methods: searchForm, users } = useUserPicker(50, settings.approvedPlayers);
   const utils = api.useUtils();
   const save = api.parentalControls.save.useMutation({
     onSuccess: async (result) => {
@@ -208,49 +197,29 @@ function ParentalSettingsForm({
         )}
         {(settings.hasPin || enabled) && (
           <div className="space-y-3 border-t pt-4">
-            <div className="space-y-1">
-              <Label htmlFor="parental-pin">
-                {settings.hasPin ? "Parent PIN" : "Create a parent PIN"}
-              </Label>
-              <Input
-                id="parental-pin"
-                type="password"
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={6}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="Six digits"
-              />
-            </div>
+            <PinField
+              id="parental-pin"
+              label={settings.hasPin ? "Parent PIN" : "Create a parent PIN"}
+              value={pin}
+              onChange={setPin}
+              placeholder="Six digits"
+            />
             {settings.hasPin && enabled && (
-              <div className="space-y-1">
-                <Label htmlFor="parental-new-pin">New PIN (optional)</Label>
-                <Input
-                  id="parental-new-pin"
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  maxLength={6}
-                  value={newPin}
-                  onChange={(e) => setNewPin(e.target.value)}
-                  placeholder="Leave empty to keep your PIN"
-                />
-              </div>
+              <PinField
+                id="parental-new-pin"
+                label="New PIN (optional)"
+                value={newPin}
+                onChange={setNewPin}
+                placeholder="Leave empty to keep your PIN"
+              />
             )}
             {(creatingPin || changingPin) && (
-              <div className="space-y-1">
-                <Label htmlFor="parental-confirm-pin">Confirm PIN</Label>
-                <Input
-                  id="parental-confirm-pin"
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  maxLength={6}
-                  value={confirmPin}
-                  onChange={(e) => setConfirmPin(e.target.value)}
-                />
-              </div>
+              <PinField
+                id="parental-confirm-pin"
+                label="Confirm PIN"
+                value={confirmPin}
+                onChange={setConfirmPin}
+              />
             )}
             <p className="text-muted-foreground text-xs">
               Five PIN attempts are allowed every 15 minutes. Forgot the PIN?{" "}
@@ -291,3 +260,26 @@ function ParentalSettingsForm({
     </form>
   );
 }
+
+/** Collect a controlled, masked PIN without enabling browser credential autofill. */
+const PinField: React.FC<{
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}> = ({ id, label, value, onChange, placeholder }) => (
+  <div className="space-y-1">
+    <Label htmlFor={id}>{label}</Label>
+    <Input
+      id={id}
+      type="password"
+      inputMode="numeric"
+      autoComplete="off"
+      maxLength={6}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+    />
+  </div>
+);

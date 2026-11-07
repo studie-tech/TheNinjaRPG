@@ -1,32 +1,21 @@
 import type React from "react";
-import type {
-  FederalStatus,
-  TavernColorPreset,
-  UserRank,
-  UserRole,
-} from "@/drizzle/constants";
+import type { TavernColorPreset } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import Link from "@/layout/Link";
 import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { resolveTavernColorClasses } from "@/libs/tavernColors";
+import type { UserCard } from "@/queries/userColumns";
+import { contrastingTextColor } from "@/utils/color";
 import { capitalizeFirstLetter } from "@/utils/string";
 
 export interface PostProps {
-  user?: {
-    userId: string;
-    username: string;
-    avatar: string | null;
-    level: number;
-    rank: UserRank;
-    isOutlaw: boolean;
-    role: UserRole;
+  user?: UserCard & {
     displayTitle?: string | null;
     villageKageId?: string | null;
     villageName?: string | null;
     villageHexColor?: string | null;
     nRecruited?: number | null;
-    federalStatus: FederalStatus;
     tavernUsernameColor?: TavernColorPreset;
     tavernTitleColor?: TavernColorPreset;
     tavernMessages?: number | null;
@@ -107,8 +96,11 @@ const Post: React.FC<PostProps> = (props) => {
         )}
         {props.user.villageName && props.user.villageHexColor && (
           <span
-            className={`m-1 rounded-md p-1 ${["hyorin", "shirohana", "akasumi"].includes(props.user.villageName.toLowerCase()) ? "text-black" : "text-white"}`}
-            style={{ backgroundColor: props.user.villageHexColor }}
+            className="m-1 rounded-md p-1"
+            style={{
+              backgroundColor: props.user.villageHexColor,
+              color: contrastingTextColor(props.user.villageHexColor),
+            }}
           >
             {props.user.villageName}
           </span>

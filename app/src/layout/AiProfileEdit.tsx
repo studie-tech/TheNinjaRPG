@@ -1,12 +1,4 @@
-import {
-  Check,
-  ChevronsUpDown,
-  FilePlus,
-  Save,
-  SquareArrowDown,
-  SquareArrowUp,
-  Trash2,
-} from "lucide-react";
+import { FilePlus, Save, SquareArrowDown, SquareArrowUp, Trash2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import type React from "react";
 import { Fragment, useEffect, useState } from "react";
@@ -14,19 +6,10 @@ import { api } from "@/app/_trpc/client";
 import Toggle from "@/components/control/Toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { NumberInput } from "@/components/ui/number-input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -38,6 +21,7 @@ import Accordion from "@/layout/Accordion";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
+import { SearchSelect } from "@/layout/SearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import { getUnique } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
@@ -673,10 +657,22 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                         <i>{rule.action.description}</i>
                       </div>
                       {"jutsuId" in rule.action && (
-                        <JutsuSelect
+                        <SearchSelect
+                          label="Specific jutsu"
+                          searchLabel="Search jutsu"
+                          emptyText="No jutsu found."
+                          // A saved ID stays selected until the player picks a replacement.
+                          placeholder={
+                            rule.action.jutsuId
+                              ? "Selected jutsu unavailable"
+                              : "Select jutsu"
+                          }
                           disabled={!canEdit}
                           value={rule.action.jutsuId}
-                          jutsus={jutsus}
+                          options={jutsus.map((entry) => ({
+                            value: entry.jutsuId,
+                            label: entry.jutsu.name,
+                          }))}
                           onChange={(e) =>
                             updateAction(ruleIndex, (action) => ({
                               ...action,
@@ -937,66 +933,3 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
 };
 
 export default AiProfileEdit;
-
-/** Search allowed jutsu while retaining saved IDs until the player selects a replacement. */
-const JutsuSelect = ({
-  value,
-  onChange,
-  jutsus,
-  disabled,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  jutsus: AiProfileEditProps["userData"]["jutsus"];
-  disabled: boolean;
-}) => {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    // Saving or losing edit access must not leave a picker open when editing resumes.
-    if (disabled) setOpen(false);
-  }, [disabled]);
-  return (
-    <Popover open={!disabled && open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-label="Specific jutsu"
-          aria-expanded={!disabled && open}
-          disabled={disabled}
-          className="w-full justify-between"
-        >
-          <span className="truncate">
-            {jutsus.find((entry) => entry.jutsuId === value)?.jutsu.name ||
-              (value ? "Selected jutsu unavailable" : "Select jutsu")}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-        <Command label="Search jutsu">
-          <CommandInput placeholder="Search jutsu..." />
-          <CommandList>
-            <CommandEmpty>No jutsu found.</CommandEmpty>
-            <CommandGroup>
-              {jutsus.map((entry) => (
-                <CommandItem
-                  key={entry.jutsuId}
-                  value={entry.jutsuId}
-                  keywords={[entry.jutsu.name]}
-                  onSelect={() => {
-                    onChange(entry.jutsuId);
-                    setOpen(false);
-                  }}
-                >
-                  {entry.jutsu.name}
-                  {entry.jutsuId === value && <Check className="ml-auto h-4 w-4" />}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-};

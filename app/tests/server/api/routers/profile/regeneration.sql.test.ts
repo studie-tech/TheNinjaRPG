@@ -77,7 +77,7 @@ describeWithDatabase("profile regeneration after village expulsion", () => {
     expect(result.requiresProgressionRefresh).toBe(true);
     expect(result.requiresUserRefresh).toBe(true);
     // Losing settlement discards the old village's calculated recovery as well as its relations.
-    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "expelled") })).toMatchObject({ ...membership, curHealth: 0, regenAt: new Date(NOW.getTime() - 60_000) });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "expelled") })).toEqual(expect.objectContaining({ ...membership, curHealth: 0, regenAt: new Date(NOW.getTime() - 60_000) }));
   });
 
   it("settles accrued ticks at the member rate and projects future ticks at the outlaw rate", async () => {
@@ -86,9 +86,9 @@ describeWithDatabase("profile regeneration after village expulsion", () => {
     const persisted = await db.query.userData.findFirst({ where: eq(userData.userId, "expelled") });
     const next = await fetchUpdatedUser({ client: db, userId: "expelled" });
     expect(first.user).toMatchObject({ isOutlaw: true, regeneration: 50, regenerationWithoutTimedBuffs: 50, curHealth: 115, curChakra: 115, curStamina: 115 });
-    expect(persisted).toMatchObject({ regeneration: 100, curHealth: 115, regenAt: NOW,
+    expect(persisted).toEqual(expect.objectContaining({ regeneration: 100, curHealth: 115, regenAt: NOW,
       villagePrestige: 100, villageId: VILLAGE_SYNDICATE_ID, isOutlaw: true, joinedVillageAt: NOW,
-    });
+    }));
     expect(next.user?.regeneration).toBe(first.user?.regeneration);
     expect(next.user?.regenerationWithoutTimedBuffs).toBe(first.user?.regenerationWithoutTimedBuffs);
     setSystemTime(new Date(NOW.getTime() + 60_000));
@@ -128,10 +128,10 @@ describeWithDatabase("profile regeneration after village expulsion", () => {
     expect(first.user).toMatchObject({ isOutlaw: true, curHealth: accrued, curChakra: accrued, curStamina: accrued });
     expect(first.user?.regeneration).toBeCloseTo(future);
     expect(first.user?.regenerationWithoutTimedBuffs).toBeCloseTo(future);
-    expect(persisted).toMatchObject({ regeneration: 100, curHealth: accrued, curChakra: accrued, curStamina: accrued,
+    expect(persisted).toEqual(expect.objectContaining({ regeneration: 100, curHealth: accrued, curChakra: accrued, curStamina: accrued,
       villagePrestige: 100, villageId: VILLAGE_SYNDICATE_ID, isOutlaw: true, joinedVillageAt: NOW,
       regenAt: status === "BATTLE" ? new Date(NOW.getTime() - 60_000) : NOW,
-    });
+    }));
     expect(next.user?.regeneration).toBe(first.user?.regeneration);
     expect(next.user?.joinedVillageAt).toEqual(NOW);
     setSystemTime(new Date(NOW.getTime() + 60_000));
@@ -182,12 +182,12 @@ describeWithDatabase("profile regeneration after village expulsion", () => {
     // Travel settles at the returned destination rate; only the first tick earns the meal bonus.
     const recovery = hasMeal ? 135 : 100;
     expect(result.success).toBe(true);
-    expect(saved).toMatchObject({
+    expect(saved).toEqual(expect.objectContaining({
       status: "AWAKE", travelFinishAt: null, regenAt: NOW,
       villageId: VILLAGE_SYNDICATE_ID, isOutlaw: true, regeneration: 100,
       curHealth: recovery, curChakra: recovery, curStamina: recovery, curEnergy: recovery,
       energyQueueHead: 0,
-    });
+    }));
     expect(await readEnergyQueue("expelled")).toMatchObject([{ stat: "offence", energy: 1000 }]);
     const next = await fetchUpdatedUser({ client: db, userId: "expelled" });
     expect(next.user?.regenerationWithoutTimedBuffs).toBe(50);

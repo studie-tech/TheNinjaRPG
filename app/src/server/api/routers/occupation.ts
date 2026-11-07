@@ -10,12 +10,15 @@ import {
 import {
   CRAFTING_TIMES_MINS,
   MAP_WAKE_ISLAND_SECTOR,
-  OCCUPATION_CHANGE_COOLDOWN_DAYS,
   OCCUPATIONS,
 } from "@/drizzle/constants";
 import { userData, userItem } from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";
-import { getCookingLevel, getCookingSeconds } from "@/libs/cooking";
+import {
+  getCookingExperience,
+  getCookingLevel,
+  getCookingSeconds,
+} from "@/libs/cooking";
 import {
   calculateItemConsumption,
   craftingStartBlockMessage,
@@ -35,6 +38,7 @@ import {
   getInventoryBucketFullMessage,
   splitIntoStacks,
 } from "@/libs/item";
+import { getOccupationChangeDaysRemaining } from "@/libs/occupation";
 import { getPvpBoost } from "@/libs/pvpExperience";
 import {
   filterQuestTrackersForDbPersist,
@@ -100,7 +104,6 @@ import {
   getNextUserSnapshotAt,
   getSecondPrecisionDate,
 } from "@/utils/time";
-import type { QueryCondition } from "@/utils/typeutils";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { cookItemInputSchema } from "@/validators/cooking";
 import {
@@ -133,15 +136,8 @@ export const occupationRouter = createTRPCRouter({
 
       // Guard
       if (user.occupation && user.occupationSignupAt) {
-        const daysSinceSignup = Math.floor(
-          (Date.now() - user.occupationSignupAt.getTime()) / (1000 * 60 * 60 * 24),
-        );
-
-        if (
-          daysSinceSignup < OCCUPATION_CHANGE_COOLDOWN_DAYS &&
-          !canChangeContent(user.role)
-        ) {
-          const daysRemaining = OCCUPATION_CHANGE_COOLDOWN_DAYS - daysSinceSignup;
+        const daysRemaining = getOccupationChangeDaysRemaining(user.occupationSignupAt);
+        if (daysRemaining > 0 && !canChangeContent(user.role)) {
           return errorResponse(
             `You must wait ${daysRemaining} more day(s) before changing occupations`,
           );
@@ -374,10 +370,10 @@ export const occupationRouter = createTRPCRouter({
         ? 0
         : (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
       const cookingExpGain = isMeal
-        ? Math.floor(
-            itemWithRequirements.cookingExperience *
-              outputQuantity *
-              (1 + getTerritoryWarBoost(user)),
+        ? getCookingExperience(
+            itemWithRequirements.cookingExperience,
+            outputQuantity,
+            getTerritoryWarBoost(user),
           )
         : 0;
       const expGain = getCraftingExperienceGain(
@@ -433,9 +429,7 @@ export const occupationRouter = createTRPCRouter({
         }
         const taken = await Promise.all(
           allConsumptions.map((consumption) =>
-            takeCraftMaterial(ctx.drizzle, ctx.userId, consumption, [
-              eq(userItem.isInAuction, false),
-            ]),
+            takeCraftMaterial(ctx.drizzle, ctx.userId, consumption),
           ),
         );
         if (taken.some((ok) => !ok)) {
@@ -1018,12 +1012,11 @@ export const occupationRouter = createTRPCRouter({
     }),
 });
 
-/** Debit one material stack, failing when it no longer holds the planned quantity. */
+/** Debit one material stack, failing when it changed or was listed at auction. */
 const takeCraftMaterial = (
   client: Pick<DrizzleClient, "update" | "delete">,
   userId: string,
   consumption: { userItemId: string; consumeQuantity: number; newQuantity: number },
-  where?: QueryCondition[],
 ) =>
   updateUserItemQuantityAtomically({
     client,
@@ -1031,5 +1024,5 @@ const takeCraftMaterial = (
     userItemId: consumption.userItemId,
     expectedQuantity: consumption.consumeQuantity + consumption.newQuantity,
     nextQuantity: consumption.newQuantity,
-    where,
+    where: [eq(userItem.isInAuction, false)],
   });

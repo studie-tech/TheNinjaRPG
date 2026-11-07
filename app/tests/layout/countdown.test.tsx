@@ -39,6 +39,16 @@ describe("Countdown completion", () => {
     expect(rendered).toHaveBeenCalledTimes(1);
     expect(finished).toHaveBeenCalledTimes(1);
   });
+  it("renders the time left through a custom format until the deadline", () => {
+    const view = render(<Countdown targetDate={new Date(BASE + 3000)} format={(ms) => `[${ms}]`} />);
+    const label = view.container.querySelector("span")!;
+    expect(label.textContent).toBe("[3000]");
+    advance(1000);
+    expect(label.textContent).toBe("[2000]");
+    advance(2000);
+    expect(view.container.textContent).toBe("Done");
+  });
+
   it("waits for the actual deadline and calls the latest callback once", () => {
     const previous = vi.fn();
     const latest = vi.fn();

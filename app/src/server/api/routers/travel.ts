@@ -6,8 +6,6 @@ import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
 import { getFinishGlobalMoveUserUpdate, getRobPlayerUserUpdate } from "@/deltas/travel";
 import {
-  ANBU_STEALTH_BASE_CHANCE_PERC,
-  ANBU_STEALTH_CHANGE_PER_LEVEL,
   IMG_AVATAR_DEFAULT,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   REGEN_SECONDS,
@@ -20,6 +18,7 @@ import {
   VILLAGE_PROTECTOR_AI_ID,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
+import { anbuStealthChance } from "@/libs/anbu";
 import {
   anonymousSpriteAppearance,
   resolveSpriteAppearance,
@@ -28,8 +27,7 @@ import { getQuestMapLocations } from "@/libs/mapLocations";
 import { isQuestComplete } from "@/libs/objectives";
 import {
   getWarRelationship,
-  isObjectiveWarActive,
-  isObjectiveWarOpen,
+  isWarObjectiveLeader,
   maskWarObjectives,
   withMercenaryParticipation,
 } from "@/libs/objectiveWar";
@@ -49,6 +47,11 @@ import {
 import { ISOLATED_PYRAMID_MESSAGE } from "@/libs/questRun";
 import { hasEnergyQueue } from "@/libs/queue";
 import {
+  beyondSectorMapEdge,
+  isOnSectorMapEdge,
+  type SectorMapEdge,
+} from "@/libs/sector-map/crossing";
+import {
   chebyshevDistance,
   findNearestWalkableCoordinate,
   isReachableCoordinate,
@@ -67,6 +70,7 @@ import {
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
 import { fetchActionUser } from "@/queries/actionReadiness";
+import { getMapDisguise } from "@/libs/war";
 import {
   fetchAllGameSettings,
   fetchUser,
@@ -433,16 +437,9 @@ export const travelRouter = createTRPCRouter({
           return true;
         })
         .map((u) => {
-          const contract = warData
-            .filter((w) => isObjectiveWarOpen(w))
-            .flatMap((w) => w.warMercenaries ?? [])
-            .find((m) => m.userId === u.userId);
-          const warRelationship = getWarRelationship(
-            warData.filter((w) => isObjectiveWarActive(w)),
-            user,
-            u,
-          );
-          const isMasked = !!contract && u.userId !== ctx.userId;
+          const disguise = getMapDisguise(user, u, warData);
+          const warRelationship = getWarRelationship(warData, user, u) ?? null;
+          const isMasked = disguise === "Mercenary";
           // Raw traits and inventory inputs stay server-side; masked users receive a uniform below.
           const { attributes, items, gender, spriteBodyStyle, ...publicUser } = u;
           const participant = {
@@ -459,15 +456,15 @@ export const travelRouter = createTRPCRouter({
           if (isMasked)
             return {
               ...participant,
-              username: "Mercenary",
+              username: disguise,
               spriteAppearance: anonymousSpriteAppearance(),
               avatar: IMG_AVATAR_DEFAULT,
               avatarLight: IMG_AVATAR_DEFAULT,
             };
-          if (u.anbuSquad && u.anbuSquad.villageId !== user.villageId) {
+          if (disguise && u.anbuSquad) {
             return {
               ...participant,
-              username: `ANBU Member`,
+              username: disguise,
               spriteAppearance: anonymousSpriteAppearance(true),
               avatar: u.anbuSquad.image,
               avatarLight: u.anbuSquad.image,
@@ -525,10 +522,7 @@ export const travelRouter = createTRPCRouter({
           maskWarObjectives(
             w,
             user.villageId,
-            user.rank === "ELDER" ||
-              [w.attackerVillage?.kageId, w.defenderVillage?.kageId].includes(
-                user.userId,
-              ),
+            isWarObjectiveLeader(user, user.village),
             ctx.userId,
           ),
         ),
@@ -1090,8 +1084,7 @@ export const travelRouter = createTRPCRouter({
             if (Math.random() < (travelLength * chance) / 100) {
               // Chance of ANBU squad avoiding attack
               const anbuChance = user?.anbuId
-                ? ANBU_STEALTH_BASE_CHANCE_PERC +
-                  (user?.anbuSquad?.stealthLevel ?? 0) * ANBU_STEALTH_CHANGE_PER_LEVEL
+                ? anbuStealthChance(user?.anbuSquad?.stealthLevel ?? 0)
                 : 0;
               if (Math.random() < anbuChance / 100) {
                 return actionReadinessResponse(
@@ -1228,7 +1221,7 @@ const resolveAdjacentCrossing = (
   current: { x: number; y: number },
   target: { x: number; y: number },
 ):
-  | { valid: true; direction: "north" | "east" | "south" | "west" }
+  | { valid: true; direction: SectorMapEdge }
   | { valid: false; error: string }
   | null => {
   const outWest = target.x === -1;
@@ -1244,18 +1237,16 @@ const resolveAdjacentCrossing = (
   if (outCount !== 1 || (!inX && !inY)) {
     return { valid: false, error: "Only adjacent sectors can be reached by walking" };
   }
-  if (outNorth || outSouth) {
-    const atEdge = outNorth ? current.y === map.height - 1 : current.y === 0;
-    if (!atEdge || target.x !== current.x) {
-      return { valid: false, error: "You must be at the matching edge to cross over" };
-    }
-    return { valid: true, direction: outNorth ? "north" : "south" };
-  }
-  const atEdge = outWest ? current.x === 0 : current.x === map.width - 1;
-  if (!atEdge || target.y !== current.y) {
+  const direction = outNorth ? "north" : outSouth ? "south" : outWest ? "west" : "east";
+  const beyond = beyondSectorMapEdge(map, direction, current);
+  if (
+    !isOnSectorMapEdge(map, direction, current) ||
+    target.x !== beyond.x ||
+    target.y !== beyond.y
+  ) {
     return { valid: false, error: "You must be at the matching edge to cross over" };
   }
-  return { valid: true, direction: outWest ? "west" : "east" };
+  return { valid: true, direction };
 };
 
 /** Complete travel and consume its recovery ticks without training queued stats. */

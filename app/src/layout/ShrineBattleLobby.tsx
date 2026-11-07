@@ -25,6 +25,7 @@ import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 type ShrineBattleData =
   inferRouterOutputs<AppRouter>["shrine"]["getShrineBattles"][number];
@@ -54,53 +55,45 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
     { refetchInterval: 5000, refetchIntervalInBackground: false },
   );
 
+  /** Applies a lobby mutation's outcome; `applyProfile` is off for plain refusals. */
+  const applyLobbyResult = async (
+    data: UserDeltaResponse,
+    revision: number | undefined,
+    applyProfile = data.success || !!data.userPatch,
+  ) => {
+    if (applyProfile) await updateUser(data, { revision });
+    showMutationToast(data);
+    if (data.success) {
+      await utils.shrine.getShrineBattles.invalidate();
+    }
+  };
+
   // Mutations
   const { mutate: challengeShrine, isPending: isChallenging } =
     api.shrine.challengeShrine.useMutation({
       onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch) await updateUser(data, { revision });
-        showMutationToast(data);
-        if (data.success) {
-          await utils.shrine.getShrineBattles.invalidate();
-        }
-      },
+      onSuccess: (data, _variables, revision) => applyLobbyResult(data, revision),
     });
 
   const { mutate: joinBattle, isPending: isJoining } =
     api.shrine.joinShrineBattle.useMutation({
       onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch) await updateUser(data, { revision });
-        showMutationToast(data);
-        if (data.success) {
-          await utils.shrine.getShrineBattles.invalidate();
-        }
-      },
+      onSuccess: (data, _variables, revision) => applyLobbyResult(data, revision),
     });
 
   const { mutate: leaveBattle, isPending: isLeaving } =
     api.shrine.leaveShrineBattle.useMutation({
       onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        await updateUser(data, { revision });
-        showMutationToast(data);
-        if (data.success) {
-          await utils.shrine.getShrineBattles.invalidate();
-        }
-      },
+      // A refused leave means the queue moved on, so the profile always reconciles.
+      onSuccess: (data, _variables, revision) => applyLobbyResult(data, revision, true),
     });
 
   const { mutate: initiateBattle, isPending: isInitiating } =
     api.shrine.initiateShrineBattle.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch) await updateUser(data, { revision });
-        showMutationToast(data);
-        if (data.success) {
-          await utils.shrine.getShrineBattles.invalidate();
-          if (data.battleId) pushToCombat(router, data.battleId);
-        }
+        await applyLobbyResult(data, revision);
+        if (data.success && data.battleId) pushToCombat(router, data.battleId);
       },
     });
 
@@ -129,7 +122,6 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
             size="lg"
             className="w-full max-w-md"
             onClick={() => challengeShrine({ sectorNumber })}
-            disabled={isChallenging}
           >
             <Swords className="mr-2 h-5 w-5" />
             Create Shrine Attack Party
@@ -207,61 +199,34 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
   return (
     <div className="rounded-lg border bg-card p-4 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Attackers Section */}
-        <div className="flex-1">
-          <div className="mb-2 flex items-center gap-2 font-semibold text-sm">
-            <Swords className="h-4 w-4 text-red-500" />
-            Attackers ({attackers.length}/{SHRINE_BATTLE_MAX_USERS_PER_SIDE})
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {attackers.map((q) => (
-              <UserSlot key={q.userId} user={q.user} />
-            ))}
-            {Array.from(
-              { length: SHRINE_BATTLE_MAX_USERS_PER_SIDE - attackers.length },
-              (_, idx) => `attacker-empty-${idx}`,
-            ).map((key) => (
-              <EmptySlot
-                key={key}
-                canJoin={canJoinAsAttacker}
-                onJoin={() => onJoin("ATTACKER")}
-              />
-            ))}
-          </div>
-        </div>
+        <QueueSide
+          side="attacker"
+          icon={<Swords className="h-4 w-4 text-red-500" />}
+          label="Attackers"
+          entries={attackers}
+          canJoin={canJoinAsAttacker}
+          onJoin={() => onJoin("ATTACKER")}
+        />
 
         {/* VS Divider */}
         <div className="flex items-center justify-center px-4">
           <span className="font-bold text-lg text-muted-foreground">VS</span>
         </div>
 
-        {/* Defenders Section */}
-        <div className="flex-1">
-          <div className="mb-2 flex items-center gap-2 font-semibold text-sm">
-            <Shield className="h-4 w-4 text-blue-500" />
-            Defenders ({defenders.length}/{SHRINE_BATTLE_MAX_USERS_PER_SIDE})
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {defenders.map((q) => (
-              <UserSlot key={q.userId} user={q.user} />
-            ))}
-            {Array.from(
-              { length: SHRINE_BATTLE_MAX_USERS_PER_SIDE - defenders.length },
-              (_, idx) => `defender-empty-${idx}`,
-            ).map((key) => (
-              <EmptySlot
-                key={key}
-                canJoin={canJoinAsDefender}
-                onJoin={() => onJoin("DEFENDER")}
-              />
-            ))}
-          </div>
+        <QueueSide
+          side="defender"
+          icon={<Shield className="h-4 w-4 text-blue-500" />}
+          label="Defenders"
+          entries={defenders}
+          canJoin={canJoinAsDefender}
+          onJoin={() => onJoin("DEFENDER")}
+        >
           {defenders.length === 0 && (
             <p className="mt-1 text-muted-foreground text-xs">
               AI defenders will be used if no players join
             </p>
           )}
-        </div>
+        </QueueSide>
       </div>
 
       {/* Action Buttons & Timer */}
@@ -345,6 +310,36 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
   );
 };
 
+/** Render one shrine battle roster with its optional join control and side-specific details. */
+const QueueSide: React.FC<QueueSideProps> = ({
+  side,
+  icon,
+  label,
+  entries,
+  canJoin,
+  onJoin,
+  children,
+}) => (
+  <div className="flex-1">
+    <div className="mb-2 flex items-center gap-2 font-semibold text-sm">
+      {icon}
+      {label} ({entries.length}/{SHRINE_BATTLE_MAX_USERS_PER_SIDE})
+    </div>
+    <div className="flex flex-wrap gap-2">
+      {entries.map((q) => (
+        <UserSlot key={q.userId} user={q.user} />
+      ))}
+      {Array.from(
+        { length: SHRINE_BATTLE_MAX_USERS_PER_SIDE - entries.length },
+        (_, idx) => `${side}-empty-${idx}`,
+      ).map((key) => (
+        <EmptySlot key={key} canJoin={canJoin} onJoin={onJoin} />
+      ))}
+    </div>
+    {children}
+  </div>
+);
+
 interface UserSlotProps {
   user: {
     username: string;
@@ -403,3 +398,13 @@ const EmptySlot: React.FC<EmptySlotProps> = ({ canJoin, onJoin }) => {
 };
 
 export default ShrineBattleLobby;
+
+interface QueueSideProps {
+  side: "attacker" | "defender";
+  icon: React.ReactNode;
+  label: string;
+  entries: ShrineBattleData["queue"];
+  canJoin: boolean;
+  onJoin: () => void;
+  children?: React.ReactNode;
+}

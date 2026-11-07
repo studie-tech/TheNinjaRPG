@@ -106,10 +106,12 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import Table from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { finishedImbuementItems, isImbuing } from "@/libs/item";
 import { getAuctionSellerPayout } from "@/libs/itemEconomy";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
+import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { CreateAuctionListingSchema } from "@/validators/auction";
@@ -117,7 +119,6 @@ import {
   auctionListingSchemaForItem,
   type createAuctionListingSchema,
 } from "@/validators/auction";
-import { getSearchValidator } from "@/validators/register";
 import { AuctionOffers, NewOfferDialog } from "./Offers";
 
 type AuctionListingRow = RouterOutputs["auction"]["getAuctionListings"]["data"][number];
@@ -813,7 +814,7 @@ interface AuctionDetailsDialogProps {
  * @param setIsOpen - Function to set the dialog open state
  * @returns Auction details dialog
  */
-const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
+export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   auctionId,
   isOpen,
   setIsOpen,
@@ -1010,9 +1011,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
           <ItemWithEffects
             item={{
               ...listing.userItem.item,
-              imbuements: listing.userItem.imbuements.map(
-                (imbuement) => imbuement.item,
-              ),
+              imbuements: finishedImbuementItems(listing.userItem),
               curDurability: listing.userItem.durability,
             }}
             showStatistic="item"
@@ -1520,11 +1519,7 @@ export const NewAuctionListingDialog: React.FC<{
 
   // Search Form for DIRECT auctions
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
+  const { methods: userSearchMethods } = useUserPicker(maxUsers);
 
   // Mutations
   const [itemSearchTerm, setItemSearchTerm] = useState("");
@@ -1543,7 +1538,8 @@ export const NewAuctionListingDialog: React.FC<{
         item.item?.canBeTraded &&
         item.equipped === "NONE" &&
         (!item.craftingFinishedAt || new Date(item.craftingFinishedAt) < new Date()) &&
-        !item.isInAuction
+        !item.isInAuction &&
+        !isImbuing(item)
       );
     }) || [];
 

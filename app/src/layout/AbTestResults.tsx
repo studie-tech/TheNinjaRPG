@@ -13,7 +13,7 @@ import VisitorFiltering, {
 } from "@/layout/VisitorFiltering";
 import { LEMU_EXPERIMENT, lemuLabel } from "@/libs/lemuExperiment";
 import {
-  betaPdf,
+  betaCurve,
   betaPosterior,
   kde,
   mean,
@@ -185,21 +185,11 @@ const ExperimentRow: React.FC<{
   }, [aSamples, bSamples]);
 
   // Beta PDFs over [0,1]
-  const x = useMemo(() => Array.from({ length: 200 }, (_, i) => i / 199), []);
-  const aPdf = useMemo(
-    () =>
-      x.map((xi) =>
-        betaPdf(Math.min(1 - 1e-9, Math.max(1e-9, xi)), aPost.a ?? 1, aPost.b ?? 1),
-      ),
-    [x, aPost.a, aPost.b],
+  const { x, pdf: aPdf } = useMemo(
+    () => betaCurve(aPost.a, aPost.b),
+    [aPost.a, aPost.b],
   );
-  const bPdf = useMemo(
-    () =>
-      x.map((xi) =>
-        betaPdf(Math.min(1 - 1e-9, Math.max(1e-9, xi)), bPost.a ?? 1, bPost.b ?? 1),
-      ),
-    [x, bPost.a, bPost.b],
-  );
+  const { pdf: bPdf } = useMemo(() => betaCurve(bPost.a, bPost.b), [bPost.a, bPost.b]);
 
   // Improvement KDE on a smart grid based on quantiles
   const impGrid = useMemo(() => {
@@ -236,10 +226,8 @@ const ExperimentRow: React.FC<{
   const hasWarnings =
     unbalancedTraffic || insufficientConversions || insufficientExposures;
 
-  const aLabel =
-    experiment === WALLPAPER_EXPERIMENT ? wallpaperLabel(aV.variant) : aV.variant;
-  const bLabel =
-    experiment === WALLPAPER_EXPERIMENT ? wallpaperLabel(bV.variant) : bV.variant;
+  const aLabel = variantLabel(experiment, aV.variant);
+  const bLabel = variantLabel(experiment, bV.variant);
 
   return (
     <div className="grid grid-cols-1 gap-3 rounded-md border p-3 md:grid-cols-2">
@@ -416,12 +404,7 @@ const ExperimentResults = ({ exp }: { exp: ExperimentAgg }) => {
   const [selectedVariant, setSelectedVariant] = useState(defaultVariant?.variant);
   const selected =
     exp.variants.find((arm) => arm.variant === selectedVariant) ?? defaultVariant;
-  const label = (variant: string) =>
-    exp.experiment === WALLPAPER_EXPERIMENT
-      ? wallpaperLabel(variant)
-      : exp.experiment === LEMU_EXPERIMENT
-        ? lemuLabel(variant)
-        : variant;
+  const label = (variant: string) => variantLabel(exp.experiment, variant);
   const totalLoaded = exp.variants.reduce((total, arm) => total + arm.loaded, 0);
 
   return (
@@ -524,13 +507,9 @@ const VariantDistribution = ({
   label: string;
 }) => {
   const posterior = betaPosterior(variant.register, variant.loaded);
-  const x = useMemo(() => Array.from({ length: 200 }, (_, i) => i / 199), []);
-  const pdf = useMemo(
-    () =>
-      x.map((value) =>
-        betaPdf(Math.min(1 - 1e-9, Math.max(1e-9, value)), posterior.a, posterior.b),
-      ),
-    [x, posterior.a, posterior.b],
+  const { x, pdf } = useMemo(
+    () => betaCurve(posterior.a, posterior.b),
+    [posterior.a, posterior.b],
   );
   return (
     <div className="rounded-md border p-3">
@@ -551,4 +530,11 @@ const VariantDistribution = ({
       />
     </div>
   );
+};
+
+/** Readable name of a variant in the experiments that define one. */
+const variantLabel = (experiment: string, variant: string) => {
+  if (experiment === WALLPAPER_EXPERIMENT) return wallpaperLabel(variant);
+  if (experiment === LEMU_EXPERIMENT) return lemuLabel(variant);
+  return variant;
 };

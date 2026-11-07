@@ -1,12 +1,8 @@
 import type { Metadata } from "next";
+import { SITE_URL } from "@/drizzle/constants";
 import { htmlToPlainText } from "@/utils/sanitize";
 
-/**
- * Canonical origin for the site. Every absolute URL emitted in metadata, the sitemap
- * and structured data is built from this, so the www/non-www split never produces two
- * indexable copies of the same page.
- */
-export const SITE_URL = "https://www.theninja-rpg.com";
+export { SITE_URL };
 export const SITE_NAME = "TheNinja-RPG";
 
 /** Route of the generated 1200x630 social card (app/opengraph-image.tsx). */

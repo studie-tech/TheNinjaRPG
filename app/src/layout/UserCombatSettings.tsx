@@ -48,6 +48,9 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   const lightLayoutChanged = lightLayout !== initialLightLayout;
   const resourceBarsId = React.useId();
   const battleFocus = supportsBattleFocus && config.battleFocus;
+  const isHiddenPanel = (id: CombatLayoutComponentId) =>
+    (id === "timeline" && !config.showTimeline) ||
+    (id === "battlelog" && !config.showBattleLog);
 
   return (
     <Popover>
@@ -226,11 +229,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                 </div>
                 <SortableList
                   items={config.layoutOrder
-                    .filter((id) => {
-                      if (id === "timeline" && !config.showTimeline) return false;
-                      if (id === "battlelog" && !config.showBattleLog) return false;
-                      return true;
-                    })
+                    .filter((id) => !isHiddenPanel(id))
                     .map((id) => ({
                       id,
                       label:
@@ -243,11 +242,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                       (item) => item.id as CombatLayoutComponentId,
                     );
                     // Hidden panels retain their relative order until shown again.
-                    const hiddenIds = config.layoutOrder.filter(
-                      (id) =>
-                        (id === "timeline" && !config.showTimeline) ||
-                        (id === "battlelog" && !config.showBattleLog),
-                    );
+                    const hiddenIds = config.layoutOrder.filter(isHiddenPanel);
                     config.setLayoutOrder([...reorderedIds, ...hiddenIds]);
                   }}
                   itemClassName="py-1.5"

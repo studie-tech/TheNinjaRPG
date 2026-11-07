@@ -5,11 +5,11 @@ import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { HUNTING_CONTRACT_DEFAULTS, HUNTING_RANKS } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import { LabeledField } from "@/layout/LabeledField";
 import Loader from "@/layout/Loader";
 import { SearchSelect } from "@/layout/SearchSelect";
 import { canChangeContent } from "@/utils/permissions";
@@ -154,26 +154,26 @@ export default function HuntingEditor() {
         )}
         <fieldset disabled={pending} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Habitat name">
+            <LabeledField label="Habitat name">
               <Input
                 value={content.name}
                 onChange={(e) => patch({ name: e.target.value })}
               />
-            </Field>
-            <Field label="Habitat sectors (comma separated)">
+            </LabeledField>
+            <LabeledField label="Habitat sectors (comma separated)">
               <SectorInput
                 key={id ?? "new"}
                 values={content.sectors}
                 onChange={(sectors) => patch({ sectors })}
               />
-            </Field>
+            </LabeledField>
           </div>
-          <Field label="Description">
+          <LabeledField label="Description">
             <Textarea
               value={content.description}
               onChange={(e) => patch({ description: e.target.value })}
             />
-          </Field>
+          </LabeledField>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -203,13 +203,13 @@ export default function HuntingEditor() {
                 </Button>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Contract name">
+                <LabeledField label="Contract name">
                   <Input
                     value={c.name}
                     onChange={(e) => edit(ci, { name: e.target.value })}
                   />
-                </Field>
-                <Field label="Creature">
+                </LabeledField>
+                <LabeledField label="Creature">
                   <SearchSelect
                     label="Creature"
                     value={c.aiId}
@@ -221,8 +221,8 @@ export default function HuntingEditor() {
                       []
                     }
                   />
-                </Field>
-                <Field label="Required hunting rank">
+                </LabeledField>
+                <LabeledField label="Required hunting rank">
                   <select
                     className="w-full rounded border bg-background p-2"
                     value={c.rank}
@@ -234,21 +234,21 @@ export default function HuntingEditor() {
                       <option key={r}>{r}</option>
                     ))}
                   </select>
-                </Field>
-                <Field label="Combat difficulty">
+                </LabeledField>
+                <LabeledField label="Combat difficulty">
                   <Input
                     value={c.difficulty}
                     onChange={(e) => edit(ci, { difficulty: e.target.value })}
                   />
-                </Field>
-                <Field label="Approved encounter sectors">
+                </LabeledField>
+                <LabeledField label="Approved encounter sectors">
                   <SectorInput
                     key={c.id}
                     values={c.sectors}
                     onChange={(sectors) => edit(ci, { sectors })}
                   />
-                </Field>
-                <Field label="Preparation time (seconds)">
+                </LabeledField>
+                <LabeledField label="Preparation time (seconds)">
                   <NumberInput
                     value={c.preparationSeconds}
                     min={0}
@@ -256,8 +256,8 @@ export default function HuntingEditor() {
                     step={1}
                     onValueChange={(v) => edit(ci, { preparationSeconds: v })}
                   />
-                </Field>
-                <Field label="Successful hunts per allowance">
+                </LabeledField>
+                <LabeledField label="Successful hunts per allowance">
                   <NumberInput
                     value={c.hunts}
                     min={1}
@@ -265,8 +265,8 @@ export default function HuntingEditor() {
                     step={1}
                     onValueChange={(v) => edit(ci, { hunts: v })}
                   />
-                </Field>
-                <Field label="Cooldown after final hunt (seconds)">
+                </LabeledField>
+                <LabeledField label="Cooldown after final hunt (seconds)">
                   <NumberInput
                     value={c.cooldownSeconds}
                     min={1}
@@ -274,8 +274,8 @@ export default function HuntingEditor() {
                     step={1}
                     onValueChange={(v) => edit(ci, { cooldownSeconds: v })}
                   />
-                </Field>
-                <Field label="Hunting experience per victory">
+                </LabeledField>
+                <LabeledField label="Hunting experience per victory">
                   <NumberInput
                     value={c.experience}
                     min={0}
@@ -283,7 +283,7 @@ export default function HuntingEditor() {
                     step={1}
                     onValueChange={(v) => edit(ci, { experience: v })}
                   />
-                </Field>
+                </LabeledField>
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -302,7 +302,7 @@ export default function HuntingEditor() {
                   key={`${c.id}-${ri}`}
                   className="grid grid-cols-1 items-end gap-2 sm:grid-cols-4"
                 >
-                  <Field label="Material">
+                  <LabeledField label="Material">
                     <SearchSelect
                       label="Material"
                       value={r.itemId}
@@ -321,8 +321,8 @@ export default function HuntingEditor() {
                           .map((m) => ({ value: m.id, label: m.name })) ?? []
                       }
                     />
-                  </Field>
-                  <Field label="Quantity">
+                  </LabeledField>
+                  <LabeledField label="Quantity">
                     <NumberInput
                       value={r.quantity}
                       min={1}
@@ -336,8 +336,8 @@ export default function HuntingEditor() {
                         })
                       }
                     />
-                  </Field>
-                  <Field label="Drop chance (%)">
+                  </LabeledField>
+                  <LabeledField label="Drop chance (%)">
                     <NumberInput
                       value={r.chance}
                       min={0.01}
@@ -351,7 +351,7 @@ export default function HuntingEditor() {
                         })
                       }
                     />
-                  </Field>
+                  </LabeledField>
                   <Button
                     variant="outline"
                     onClick={() =>
@@ -388,14 +388,6 @@ export default function HuntingEditor() {
   );
 }
 /** Associate each visible field caption with its nested control. */
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <Label className="block space-y-1">
-      <span className="block">{label}</span>
-      {children}
-    </Label>
-  );
-}
 /** Preserve comma-separated edits while replacing the draft on selection or reset. */
 function SectorInput({
   values,

@@ -225,7 +225,7 @@ describeWithDatabase("web store payments", () => {
       const result = await owner.captureStoreOrder({orderId:"TESTORDER123456789"});
       expect(result).toMatchObject({success:false});
       expect(result.message).toContain("declined");
-      expect(await db.query.webStoreOrder.findFirst()).toMatchObject({captureAttemptId:null,expiresAt:new Date(0),grantedAt:null});
+      expect(await db.query.webStoreOrder.findFirst()).toEqual(expect.objectContaining({captureAttemptId:null,expiresAt:new Date(0),grantedAt:null}));
       expect((await owner.createStoreOrder({recipientId:"recipient",selection:{type:"bundle",bundleId:limited.bundleId}})).success).toBe(true);
     } finally {fetchMock.mockRestore();}
     expect(await db.query.paypalTransaction.findMany()).toHaveLength(0);
@@ -821,9 +821,9 @@ describeWithDatabase("web store payments", () => {
       const result = await owner.captureStoreOrder({ orderId: "TESTORDER123456789" });
       expect(result.success).toBe(false);
       expect(captures).toBe(0);
-      expect(await db.query.webStoreOrder.findFirst({ where: eq(webStoreOrder.id, order.id) })).toMatchObject({
+      expect(await db.query.webStoreOrder.findFirst({ where: eq(webStoreOrder.id, order.id) })).toEqual(expect.objectContaining({
         expiresAt, grantedAt: null, captureId: null,
-      });
+      }));
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(0);
       expect(result.message).toContain("Approve this checkout");
     } finally { fetchMock.mockRestore(); }

@@ -61,7 +61,7 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getBanOrSilenceRestriction } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import { UploadDropzone } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError, UploadDropzone } from "@/utils/uploadthing";
 import {
   conceptArtFilterSchema,
   conceptArtPromptSchema,
@@ -637,20 +637,13 @@ const ConceptArtImageSelector: React.FC<{
             <UploadDropzone
               endpoint="conceptArtFrameUploader"
               onClientUploadComplete={(res) => {
-                const serverData = res?.[0]?.serverData;
-                if (serverData?.error) {
-                  showMutationToast({ success: false, message: serverData.error });
-                  return;
-                }
-                const url = serverData?.fileUrl;
+                const url = readUploadResult(res)?.fileUrl;
                 if (url) {
                   onChange(url);
                   setIsOpen(false);
                 }
               }}
-              onUploadError={(error: Error) => {
-                showMutationToast({ success: false, message: error.message });
-              }}
+              onUploadError={showUploadError}
               className="ut-button:bg-primary ut-allowed-content:text-xs ut-label:text-sm"
             />
           </TabsContent>

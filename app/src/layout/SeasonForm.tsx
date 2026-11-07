@@ -9,12 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Form,
   FormControl,
   FormField,
@@ -31,22 +25,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { RANKED_DIVISIONS, STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
-import { EditContent, type FormEntry } from "@/layout/EditContent";
+import { RANKED_DIVISIONS } from "@/drizzle/constants";
+import type { FormEntry } from "@/layout/EditContent";
+import {
+  REWARD_DIALOG_AMOUNT_FIELDS,
+  RewardDialog,
+  useRewardDialogFormData,
+} from "@/layout/RewardDialog";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
-import { canAwardReputation } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
 import {
   type RankedSeason,
   type RankedSeasonInput,
   rankedSeasonSchema,
 } from "@/validators/pvpRank";
-import {
-  ObjectiveReward,
-  type ObjectiveRewardInputType,
-  type ObjectiveRewardType,
-} from "@/validators/rewards";
+import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 
 type FormValues = RankedSeason;
 type FormValuesInput = RankedSeasonInput;
@@ -70,16 +63,7 @@ export default function SeasonForm({
   const submitInFlightRef = useRef(false);
   const utils = api.useUtils();
 
-  // Get user data for permission checks
-  const { data: userData } = useUserData();
-  const userRole = userData?.role ?? "USER";
-  const hasReputationPermission = canAwardReputation(userRole);
-  // Queries used in reward editor dialogs
-  const { data: items } = api.item.getAllNames.useQuery(undefined);
-  const { data: jutsus } = api.jutsu.getAllNames.useQuery(undefined);
-  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
-  const { data: badges } = api.badge.getAll.useQuery(undefined);
-  const { data: titles } = api.title.getAllNames.useQuery();
+  const rewardFormData = useRewardDialogFormData(REWARD_DIALOG_AMOUNT_FIELDS);
 
   const form = useForm<FormValuesInput, unknown, FormValues>({
     resolver: zodResolver(rankedSeasonSchema),
@@ -137,74 +121,6 @@ export default function SeasonForm({
       "rewards",
       currentRewards.filter((_, i) => i !== index),
     );
-  };
-
-  // Build formData for reward edit dialog
-  const buildRewardFormData = () => {
-    const data: FormEntry<keyof ObjectiveRewardType>[] = [
-      { id: "reward_money", type: "number" },
-      { id: "reward_seichi_silver", type: "number" },
-      { id: "reward_clanpoints", type: "number" },
-      { id: "reward_anbupoints", type: "number" },
-      { id: "reward_exp", type: "number" },
-      { id: "reward_pet_experience", type: "number" },
-      { id: "reward_tokens", type: "number" },
-      { id: "reward_prestige", type: "number" },
-      {
-        id: "reward_reputation",
-        type: "number",
-        readonly: !hasReputationPermission,
-      },
-      { id: "reward_rank", type: "str_array", values: UserRanks },
-      { id: "reward_village_membership", type: "str_array", values: STARTER_VILLAGES },
-    ];
-
-    if (items) {
-      data.push({
-        id: "reward_items",
-        type: "db_values_with_number",
-        values: items,
-        doubleWidth: true,
-        label: "Reward Items [and drop chance%]",
-      });
-    }
-
-    if (jutsus) {
-      data.push({
-        id: "reward_jutsus",
-        type: "db_values",
-        values: jutsus,
-        multiple: true,
-      });
-    }
-
-    if (bloodlines) {
-      data.push({
-        id: "reward_bloodlines",
-        type: "db_values",
-        values: bloodlines,
-        multiple: true,
-      });
-    }
-
-    if (titles)
-      data.push({
-        id: "reward_titles",
-        label: "Give Title",
-        type: "db_values",
-        values: titles,
-        multiple: true,
-      });
-    if (badges?.data) {
-      data.push({
-        id: "reward_badges",
-        type: "db_values",
-        values: badges.data,
-        multiple: true,
-      });
-    }
-
-    return data;
   };
 
   return (
@@ -383,14 +299,14 @@ export default function SeasonForm({
 
                   {/* Reward dialog for this division */}
                   {editingDivisionIndex === divisionIndex && (
-                    <RewardDialog
+                    <SeasonRewardDialog
                       open={true}
                       onOpenChange={() => {
                         if (!isSubmitting) setEditingDivisionIndex(null);
                       }}
                       divisionIndex={divisionIndex}
                       parentForm={form}
-                      buildRewardFormData={buildRewardFormData}
+                      formData={rewardFormData}
                       disabled={isSubmitting}
                       pendingText={seasonId ? "Saving" : "Creating"}
                     />
@@ -425,82 +341,40 @@ export default function SeasonForm({
   );
 }
 
-interface RewardDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  divisionIndex: number;
-  parentForm: UseFormReturn<FormValuesInput, unknown, FormValues>;
-  buildRewardFormData: () => FormEntry<keyof ObjectiveRewardType>[];
-  disabled: boolean;
-  pendingText: string;
-}
-
-const RewardDialog: React.FC<RewardDialogProps> = ({
-  open,
-  onOpenChange,
-  divisionIndex,
-  parentForm,
-  buildRewardFormData,
-  disabled,
-  pendingText,
-}) => {
+/** Edit one division's watched reward value through the shared staged reward form. */
+const SeasonRewardDialog: React.FC<SeasonRewardDialogProps> = (props) => {
+  const { divisionIndex, parentForm, ...dialogProps } = props;
   const parentReward = useWatch({
     control: parentForm.control,
     name: `rewards.${divisionIndex}.rewards`,
   });
-  const rewardForm = useForm<ObjectiveRewardInputType, unknown, ObjectiveRewardType>({
-    resolver: zodResolver(ObjectiveReward),
-    values: parentReward ?? ObjectiveReward.parse({}),
-    defaultValues: parentReward ?? ObjectiveReward.parse({}),
-    mode: "all",
-  });
-
-  const handleSave = rewardForm.handleSubmit((data) => {
-    const currentRewards = [...parentForm.getValues("rewards")];
-    const prev = currentRewards[divisionIndex];
-    if (!prev) return;
-
-    currentRewards[divisionIndex] = {
-      ...prev,
-      rewards: data,
-    };
-
-    void parentForm.setValue("rewards", currentRewards, { shouldDirty: true });
-    onOpenChange(false);
-  });
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!disabled) onOpenChange(nextOpen);
+    <RewardDialog
+      {...dialogProps}
+      value={parentReward}
+      onSave={(data) => {
+        const currentRewards = [...parentForm.getValues("rewards")];
+        const prev = currentRewards[divisionIndex];
+        if (!prev) return;
+
+        currentRewards[divisionIndex] = {
+          ...prev,
+          rewards: data,
+        };
+
+        void parentForm.setValue("rewards", currentRewards, { shouldDirty: true });
       }}
-    >
-      <DialogContent
-        className="max-h-screen max-w-3xl overflow-y-auto"
-        closeDisabled={disabled}
-        onEscapeKeyDown={(event) => {
-          if (disabled) event.preventDefault();
-        }}
-        onInteractOutside={(event) => {
-          if (disabled) event.preventDefault();
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Edit Rewards</DialogTitle>
-        </DialogHeader>
-        <EditContent
-          schema={ObjectiveReward}
-          form={rewardForm as UseFormReturn<ObjectiveRewardType, unknown>}
-          formData={buildRewardFormData()}
-          showSubmit={true}
-          buttonTxt="Save Rewards"
-          onAccept={handleSave}
-          submitDisabled={disabled}
-          submitLoading={disabled}
-          submitLoadingText={pendingText}
-        />
-      </DialogContent>
-    </Dialog>
+    />
   );
 };
+
+interface SeasonRewardDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  divisionIndex: number;
+  parentForm: UseFormReturn<FormValuesInput, unknown, FormValues>;
+  formData: FormEntry<keyof ObjectiveRewardType>[];
+  disabled: boolean;
+  pendingText: string;
+}

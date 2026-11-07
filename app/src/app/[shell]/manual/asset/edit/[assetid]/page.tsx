@@ -2,12 +2,14 @@
 
 import { FolderOpen, Pause, Play } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, use, useEffect, useState } from "react";
+import { Suspense, use, useState } from "react";
 import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import type { UserRole } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import { useAssetEditForm } from "@/hooks/asset";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import {
@@ -20,24 +22,16 @@ import { LpcAssetEditor } from "@/layout/LpcAssetEditor";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { assetTypeLabels, getAssetLibraryReturnTo } from "@/libs/assetLibrary";
 import { canChangeContent, canSuggestContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import type { ZodGameAssetType } from "@/validators/asset";
 import { gameAssetValidator } from "@/validators/asset";
 
 /** Gate editing by staff permissions and provide recoverable loading/not-found states. */
 export default function AssetEdit(props: { params: Promise<{ assetid: string }> }) {
   const { assetid } = use(props.params);
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
-  const canOpenEditor =
-    !!userData && (canChangeContent(userData.role) || canSuggestContent(userData.role));
+  const { userData, hasAccess } = useRequireRole(canOpenAssetEditor);
   const { data, isPending, error, refetch } = api.gameAsset.get.useQuery({
     id: assetid,
   });
-
-  useEffect(() => {
-    if (userData && !canOpenEditor) router.push("/profile");
-  }, [userData, canOpenEditor]);
 
   if (error) {
     return (
@@ -58,7 +52,7 @@ export default function AssetEdit(props: { params: Promise<{ assetid: string }> 
       </ContentBox>
     );
   }
-  if (isPending || !userData || !canOpenEditor || !data)
+  if (isPending || !userData || !hasAccess || !data)
     return <Loader explanation="Loading asset" />;
 
   return (
@@ -257,3 +251,7 @@ function SingleEditAsset({
     </ContentBox>
   );
 }
+
+/** Allow both direct content editors and staff who submit review suggestions. */
+const canOpenAssetEditor = (role: UserRole) =>
+  canChangeContent(role) || canSuggestContent(role);

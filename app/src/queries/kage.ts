@@ -238,12 +238,12 @@ export const executeResultForUpgradeStructure = (
         `);
 
 /**
- * Build the `village` update for `payStructureMaintenance`, setting `tokens` and
- * `structureMaintenanceDue`, including predicates on `id`, `type`, `kageId`.
+ * Pay exactly the displayed bill in one statement, retaining Kage, membership,
+ * ban and balance guards so concurrent billing or payments cannot change the debit.
  */
 export const updateVillageForPayStructureMaintenance = (
   client: Pick<DrizzleClient, "update" | "select">,
-  input: { villageId: string },
+  input: { villageId: string; expectedDue: number },
   ctx: { userId: string },
 ) =>
   client
@@ -258,6 +258,7 @@ export const updateVillageForPayStructureMaintenance = (
         eq(village.type, "VILLAGE"),
         eq(village.kageId, ctx.userId),
         sql`${village.structureMaintenanceDue} > 0`,
+        eq(village.structureMaintenanceDue, input.expectedDue),
         gte(village.tokens, village.structureMaintenanceDue),
         exists(
           client

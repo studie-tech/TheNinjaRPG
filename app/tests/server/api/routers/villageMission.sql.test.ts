@@ -313,9 +313,50 @@ describeWithDatabase("Village Missions and maintenance on real MySQL", () => {
     const kage = await callerFor(kageRouter, "leader");
     expect((await kage.upgradeStructure({ structureId: "bank", villageId: "v1" })).success).toBe(false);
     await db.update(village).set({ tokens: 200_000 }).where(eq(village.id, "v1"));
-    const payments = await Promise.all([kage.payStructureMaintenance({ villageId: "v1" }), kage.payStructureMaintenance({ villageId: "v1" })]);
+    const payments = await Promise.all([kage.payStructureMaintenance({ villageId: "v1", expectedDue: 200_000 }), kage.payStructureMaintenance({ villageId: "v1", expectedDue: 200_000 })]);
     expect(payments.filter((r) => r.success)).toHaveLength(1);
     expect((await state())?.tokens).toBe(0);
+  });
+
+  it("pays the displayed bill in one statement and returns only its confirmed village change", async () => {
+    const db = await getTestDatabase();
+    await db.update(village).set({ structureMaintenanceDue: 200_000 }).where(eq(village.id, "v1"));
+    const kage = await callerFor(kageRouter, "leader");
+    const recorded = await recordQueries(() => kage.payStructureMaintenance({ villageId: "v1", expectedDue: 200_000 }));
+    // Shared isolation middleware reads QuestHistory before the one-statement endpoint.
+    expect(recorded.statements).toHaveLength(2);
+    expect(recorded.statements[0]).toMatch(/select.*QuestHistory/i);
+    expect(recorded.statements[1]).toMatch(/^update /i);
+    expect(recorded.result).toEqual({ success: true, message: "Structure maintenance paid",
+      userDelta: { village: { id: "v1", tokens: -200_000 } },
+      userPatch: { village: { id: "v1", structureMaintenanceDue: 0 } } });
+    expect(await state()).toMatchObject({ tokens: 300_000, structureMaintenanceDue: 0 });
+  });
+
+  it("asks unsupported clients to reload before issuing any payment statement", async () => {
+    const kage = await callerFor(kageRouter, "leader");
+    const recorded = await recordQueries(() => kage.payStructureMaintenance({ villageId: "v1" }));
+    expect(recorded.result).toMatchObject({ success: false, message: expect.stringContaining("Reload") });
+    expect(recorded.statements).toHaveLength(1);
+    expect(recorded.statements[0]).toMatch(/select.*QuestHistory/i);
+  });
+
+  it.each(["changed bill", "insufficient funds", "different Kage", "different village", "banned", "faction", "already paid"])("rejects %s without debit or a speculative projection", async reason => {
+    const db = await getTestDatabase();
+    await db.update(village).set({ structureMaintenanceDue: reason === "changed bill" ? 250_000 : reason === "already paid" ? 0 : 200_000,
+      tokens: reason === "insufficient funds" ? 100_000 : 500_000,
+      kageId: reason === "different Kage" ? "member" : "leader", type: reason === "faction" ? "OUTLAW" : "VILLAGE" }).where(eq(village.id, "v1"));
+    if (reason === "different village" || reason === "banned") await db.update(userData).set({ villageId: reason === "different village" ? "v2" : "v1", isBanned: reason === "banned" }).where(eq(userData.userId, "leader"));
+    const before = await state();
+    const kage = await callerFor(kageRouter, "leader");
+    const recorded = await recordQueries(() => kage.payStructureMaintenance({ villageId: "v1", expectedDue: 200_000 }));
+    expect(recorded.result).toMatchObject({ success: false, message: expect.stringContaining("try again") });
+    expect(recorded.result.userDelta).toBeUndefined();
+    expect(recorded.result.userPatch).toBeUndefined();
+    expect(recorded.statements).toHaveLength(2);
+    expect(recorded.statements[0]).toMatch(/select.*QuestHistory/i);
+    expect(recorded.statements[1]).toMatch(/^update /i);
+    expect(await state()).toEqual(before);
   });
 
   it("racing structure upgrades charge only once and reject maximum level", async () => {

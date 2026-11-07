@@ -2,7 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { use } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
@@ -12,36 +12,42 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuideArticle } from "@/drizzle/schema";
 import { useGuideEditForm } from "@/hooks/guide";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
 import Loader from "@/layout/Loader";
 import { prepareGuideHtml } from "@/libs/guide/html";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import { GuideArticleValidator, type ZodGuideArticleType } from "@/validators/guide";
 
 export default function GuideEdit(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
   const guideId = params.id;
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(canChangeContent);
 
-  const { data, isPending, refetch } = api.guide.get.useQuery(
+  const { data, isPending, isError, isFetching, refetch } = api.guide.get.useQuery(
     { id: guideId },
     { enabled: !!guideId && !!userData },
   );
 
-  useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
-      void router.push("/profile");
-    }
-  }, [userData, router]);
-
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="guide"
+        subtitle="Guide Management"
+        backHref="/guide"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return <SingleEditGuide article={data} refetch={refetch} />;

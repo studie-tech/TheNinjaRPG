@@ -9,8 +9,6 @@ import {
   SendHorizontal,
   Trash2,
   TrendingUp,
-  Zap,
-  ZapOff,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
@@ -42,44 +40,38 @@ import {
 } from "@/components/ui/select";
 import type { UserRank } from "@/drizzle/constants";
 import {
-  ANBU_ESPIONAGE_BASE_CHANCE_PERC,
-  ANBU_ESPIONAGE_CHANGE_PER_LEVEL,
   ANBU_ESPIONAGE_POINTS_COST,
   ANBU_ESPIONAGE_PRESTIGE_COST,
   ANBU_ESPIONAGE_UPGRADE_COST,
   ANBU_MAX_ESPIONAGE_LEVEL,
   ANBU_MAX_STEALTH_LEVEL,
   ANBU_MEMBER_RANK_REQUIREMENT,
-  ANBU_STEALTH_BASE_CHANCE_PERC,
-  ANBU_STEALTH_CHANGE_PER_LEVEL,
   ANBU_STEALTH_UPGRADE_COST,
 } from "@/drizzle/constants";
 import type { UserNindo } from "@/drizzle/schema";
-import { useLocalStorage } from "@/hooks/localstorage";
-import AutoAttackModal from "@/layout/AutoAttackModal";
+import { usePendingIds } from "@/hooks/usePendingIds";
+import { AutoAttackToggle } from "@/layout/AutoAttackModal";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { GroupOrders } from "@/layout/GroupOrders";
 import Loader from "@/layout/Loader";
 import QuestPicker from "@/layout/QuestPicker";
-import RichInput from "@/layout/RichInput";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserRequestSystem from "@/layout/UserRequestSystem";
+import { anbuEspionageChance, anbuStealthChance } from "@/libs/anbu";
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import type { AnbuRouter } from "@/routers/anbu";
 import type { UserWithRelations } from "@/routers/profile";
 import type { BaseServerResponse } from "@/server/api/trpc";
-import { parseHtml } from "@/utils/parse";
 import { canEditClans } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
-import { UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import type { AnbuRenameSchema } from "@/validators/anbu";
 import { anbuRenameSchema } from "@/validators/anbu";
-import type { MutateContentSchema } from "@/validators/comments";
-import { mutateContentSchema } from "@/validators/comments";
 
 export default function ANBUDetails(props: { params: Promise<{ anbuid: string }> }) {
   const params = use(props.params);
@@ -205,22 +197,9 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   // State for espionage
   const [selectedVillage, setSelectedVillage] = useState<string>("");
 
-  // Auto attack state
-  const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>(
-    "autoAttackMode",
-    false,
-  );
-  const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
-
-  // Keep kick progress scoped to the affected member so other rows remain usable.
-  // The ref closes the brief gap before state re-renders and prevents double submits.
-  const kickingMemberIdsRef = useRef<Set<string>>(new Set());
-  const [kickingMemberIds, setKickingMemberIds] = useState<Set<string>>(new Set());
-
-  // Promotion is also target-scoped: one member can show progress without
-  // blocking the rest of the roster. The ref prevents rapid duplicate submits.
-  const promotingMemberIdsRef = useRef<Set<string>>(new Set());
-  const [promotingMemberIds, setPromotingMemberIds] = useState<Set<string>>(new Set());
+  // Kicks and promotions are scoped to one member so other rows remain usable.
+  const kicks = usePendingIds();
+  const promotions = usePendingIds();
 
   // Leaving is independent from member management and only blocks its own control.
   // The ref closes the gap before the mutation pending state reaches the UI.
@@ -229,28 +208,6 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   // Disbanding only conflicts with leaving the same squad. Keep a synchronous
   // guard alongside the rendered pending state to close the pre-render gap.
   const disbandPendingRef = useRef(false);
-
-  const setMemberKickPending = (memberId: string, pending: boolean) => {
-    const next = new Set(kickingMemberIdsRef.current);
-    if (pending) {
-      next.add(memberId);
-    } else {
-      next.delete(memberId);
-    }
-    kickingMemberIdsRef.current = next;
-    setKickingMemberIds(next);
-  };
-
-  const setMemberPromotionPending = (memberId: string, pending: boolean) => {
-    const next = new Set(promotingMemberIdsRef.current);
-    if (pending) {
-      next.add(memberId);
-    } else {
-      next.delete(memberId);
-    }
-    promotingMemberIdsRef.current = next;
-    setPromotingMemberIds(next);
-  };
 
   // Mutations
   const onSuccess = async (data: BaseServerResponse) => {
@@ -269,15 +226,11 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   });
   const { mutate: kick } = api.anbu.kickMember.useMutation({
     onSuccess,
-    onSettled: (_data, _error, variables) => {
-      setMemberKickPending(variables.memberId, false);
-    },
+    onSettled: (_data, _error, variables) => kicks.end(variables.memberId),
   });
   const { mutate: promote } = api.anbu.promoteMember.useMutation({
     onSuccess,
-    onSettled: (_data, _error, variables) => {
-      setMemberPromotionPending(variables.memberId, false);
-    },
+    onSettled: (_data, _error, variables) => promotions.end(variables.memberId),
   });
   const { mutate: upgradeEspionage, isPending: isUpgradingEspionage } =
     api.anbu.purchaseEspionageUpgrade.useMutation({ onSuccess });
@@ -314,15 +267,11 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   const currentImage = useWatch({ control: renameForm.control, name: "image" });
 
   const kickMember = (memberId: string) => {
-    if (kickingMemberIdsRef.current.has(memberId)) return;
-    setMemberKickPending(memberId, true);
-    kick({ squadId, memberId });
+    if (kicks.begin(memberId)) kick({ squadId, memberId });
   };
 
   const promoteMember = (memberId: string) => {
-    if (promotingMemberIdsRef.current.has(memberId)) return;
-    setMemberPromotionPending(memberId, true);
-    promote({ squadId, memberId });
+    if (promotions.begin(memberId)) promote({ squadId, memberId });
   };
 
   const leaveSquad = () => {
@@ -346,8 +295,8 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
 
   // Adjust members for table
   const members = squad.members.map((member) => {
-    const isKickingMember = kickingMemberIds.has(member.userId);
-    const isPromotingMember = promotingMemberIds.has(member.userId);
+    const isKickingMember = kicks.ids.has(member.userId);
+    const isPromotingMember = promotions.ids.has(member.userId);
     const isMemberActionPending = isKickingMember || isPromotingMember;
 
     return {
@@ -452,32 +401,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
       padding={false}
       topRightContent={
         <div className="flex flex-row items-center gap-1">
-          {userData?.anbuId &&
-            (autoAttackMode ? (
-              <Button
-                className="text-red-500"
-                aria-label="Disable auto attack"
-                hoverText="Auto Attack"
-                onClick={() => setAutoAttackMode(false)}
-              >
-                <Zap className="h-5 w-5" />
-              </Button>
-            ) : (
-              <Button
-                className="hover:text-red-500"
-                aria-label="Configure auto attack"
-                hoverText="Auto Attack"
-                onClick={() => setShowAutoAttackModal(true)}
-              >
-                <ZapOff className="h-5 w-5" />
-              </Button>
-            ))}
-          {/* Auto Attack Configuration Modal */}
-          <AutoAttackModal
-            isOpen={showAutoAttackModal}
-            setIsOpen={setShowAutoAttackModal}
-            onEnable={() => setAutoAttackMode(true)}
-          />
+          {userData?.anbuId && <AutoAttackToggle iconClassName="h-5 w-5" />}
           {isLeader && (
             <Confirm
               title="Rename Squad"
@@ -516,27 +440,14 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                     <UploadButton
                       endpoint="anbuUploader"
                       onClientUploadComplete={(res) => {
-                        const serverData = res?.[0]?.serverData;
-                        if (serverData?.error) {
-                          showMutationToast({
-                            success: false,
-                            message: serverData.error,
-                          });
-                          return;
-                        }
-                        const url = serverData?.fileUrl;
+                        const url = readUploadResult(res)?.fileUrl;
                         if (url) {
                           renameForm.setValue("image", url, {
                             shouldDirty: true,
                           });
                         }
                       }}
-                      onUploadError={(error: Error) => {
-                        showMutationToast({
-                          success: false,
-                          message: error.message,
-                        });
-                      }}
+                      onUploadError={showUploadError}
                     />
                   </div>
                   <FormField
@@ -572,88 +483,28 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                     Current Squad Points: {squad.points}
                   </div>
 
-                  {/* Espionage Upgrade */}
-                  <div className="rounded-lg border p-4">
-                    <h3 className="mb-2 font-semibold">Espionage Level</h3>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Improves intelligence gathering capabilities against enemy
-                      villages during wars.
-                    </p>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Current Level: {squad.espionageLevel} / {ANBU_MAX_ESPIONAGE_LEVEL}
-                    </p>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Success Rate:{" "}
-                      {ANBU_ESPIONAGE_BASE_CHANCE_PERC +
-                        squad.espionageLevel * ANBU_ESPIONAGE_CHANGE_PER_LEVEL}
-                      %
-                      {squad.espionageLevel < ANBU_MAX_ESPIONAGE_LEVEL && (
-                        <span className="text-green-600">
-                          {" "}
-                          →{" "}
-                          {ANBU_ESPIONAGE_BASE_CHANCE_PERC +
-                            (squad.espionageLevel + 1) *
-                              ANBU_ESPIONAGE_CHANGE_PER_LEVEL}
-                          %
-                        </span>
-                      )}
-                    </p>
-                    <p className="mb-4 text-muted-foreground text-sm">
-                      Upgrade Cost: {ANBU_ESPIONAGE_UPGRADE_COST} points
-                    </p>
-                    <Button
-                      onClick={() => upgradeEspionage({ squadId })}
-                      disabled={
-                        isUpgradingEspionage ||
-                        squad.espionageLevel >= ANBU_MAX_ESPIONAGE_LEVEL ||
-                        squad.points < ANBU_ESPIONAGE_UPGRADE_COST
-                      }
-                      className="w-full"
-                    >
-                      {isUpgradingEspionage ? "Upgrading" : "Upgrade Espionage"}
-                    </Button>
-                  </div>
-
-                  {/* Stealth Upgrade */}
-                  <div className="rounded-lg border p-4">
-                    <h3 className="mb-2 font-semibold">Stealth Level</h3>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Reduces the chance of being detected by guards when infiltrating
-                      enemy villages.
-                    </p>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Current Level: {squad.stealthLevel} / {ANBU_MAX_STEALTH_LEVEL}
-                    </p>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Success Rate:{" "}
-                      {ANBU_STEALTH_BASE_CHANCE_PERC +
-                        squad.stealthLevel * ANBU_STEALTH_CHANGE_PER_LEVEL}
-                      %
-                      {squad.stealthLevel < ANBU_MAX_STEALTH_LEVEL && (
-                        <span className="text-green-600">
-                          {" "}
-                          →{" "}
-                          {ANBU_STEALTH_BASE_CHANCE_PERC +
-                            (squad.stealthLevel + 1) * ANBU_STEALTH_CHANGE_PER_LEVEL}
-                          %
-                        </span>
-                      )}
-                    </p>
-                    <p className="mb-4 text-muted-foreground text-sm">
-                      Upgrade Cost: {ANBU_STEALTH_UPGRADE_COST} points
-                    </p>
-                    <Button
-                      onClick={() => upgradeStealth({ squadId })}
-                      disabled={
-                        isUpgradingStealth ||
-                        squad.stealthLevel >= ANBU_MAX_STEALTH_LEVEL ||
-                        squad.points < ANBU_STEALTH_UPGRADE_COST
-                      }
-                      className="w-full"
-                    >
-                      {isUpgradingStealth ? "Upgrading" : "Upgrade Stealth"}
-                    </Button>
-                  </div>
+                  <SquadUpgradeCard
+                    name="Espionage"
+                    description="Improves intelligence gathering capabilities against enemy villages during wars."
+                    level={squad.espionageLevel}
+                    maxLevel={ANBU_MAX_ESPIONAGE_LEVEL}
+                    chance={anbuEspionageChance}
+                    cost={ANBU_ESPIONAGE_UPGRADE_COST}
+                    points={squad.points}
+                    isUpgrading={isUpgradingEspionage}
+                    onUpgrade={() => upgradeEspionage({ squadId })}
+                  />
+                  <SquadUpgradeCard
+                    name="Stealth"
+                    description="Reduces the chance of being detected by guards when infiltrating enemy villages."
+                    level={squad.stealthLevel}
+                    maxLevel={ANBU_MAX_STEALTH_LEVEL}
+                    chance={anbuStealthChance}
+                    cost={ANBU_STEALTH_UPGRADE_COST}
+                    points={squad.points}
+                    isUpgrading={isUpgradingStealth}
+                    onUpgrade={() => upgradeStealth({ squadId })}
+                  />
                 </div>
               </DialogContent>
             </Dialog>
@@ -675,10 +526,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   </div>
 
                   <div className="text-muted-foreground text-sm">
-                    Success Rate:{" "}
-                    {ANBU_ESPIONAGE_BASE_CHANCE_PERC +
-                      squad.espionageLevel * ANBU_ESPIONAGE_CHANGE_PER_LEVEL}
-                    %
+                    Success Rate: {anbuEspionageChance(squad.espionageLevel)}%
                   </div>
 
                   {/* Cost Requirements */}
@@ -846,16 +694,11 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
   // Destructure
   const { squadId, title, subtitle, type, canPost, order } = props;
 
-  // Keep progress local to this order card: leader and Kage orders can both be
-  // rendered on the page and should not block each other. The ref closes the
-  // brief pre-render gap so a rapid second confirmation cannot submit twice.
-  const updatePendingRef = useRef(false);
-
   // utils
   const utils = api.useUtils();
 
-  // Mutations
-  const { mutate: notice, isPending: isUpdatingNotice } =
+  // Mutations are per card: leader and Kage orders must not block each other.
+  const { mutateAsync: notice, isPending: isUpdatingNotice } =
     api.anbu.upsertNotice.useMutation({
       onSuccess: async (data: BaseServerResponse) => {
         showMutationToast(data);
@@ -863,79 +706,38 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
           await utils.anbu.get.invalidate();
         }
       },
-      onSettled: () => {
-        updatePendingRef.current = false;
-      },
     });
 
-  // Content
-  const content = order?.content ?? "No current orders";
-
-  // Order form
-  const {
-    handleSubmit,
-    control,
-    formState: { errors },
-  } = useForm<MutateContentSchema>({
-    defaultValues: { content },
-    resolver: zodResolver(mutateContentSchema),
-  });
-  const onUpdateOrder = handleSubmit((data) => {
-    if (updatePendingRef.current) return;
-    updatePendingRef.current = true;
-    notice({ ...data, type, squadId });
-  });
-
   return (
-    <ContentBox
+    <GroupOrders
       title={title}
       subtitle={subtitle}
-      initialBreak={true}
-      topRightContent={
-        <div>
-          {canPost && (
-            <Confirm
-              id={`update-${type.toLowerCase()}-orders`}
-              title="Update Orders"
-              proceed_label={isUpdatingNotice ? "Updating" : "Submit"}
-              disabled={isUpdatingNotice}
-              confirmDisabled={isUpdatingNotice}
-              button={
-                <Button
-                  id={`edit-${type.toLowerCase()}-orders`}
-                  hoverText={isUpdatingNotice ? "Updating" : "Edit Orders"}
-                  disabled={isUpdatingNotice}
-                  loading={isUpdatingNotice}
-                  aria-busy={isUpdatingNotice}
-                  aria-label={isUpdatingNotice ? `Updating ${title}` : `Edit ${title}`}
-                >
-                  {!isUpdatingNotice && <FilePenLine className="h-5 w-5" />}
-                  <span
-                    className={isUpdatingNotice ? undefined : "sr-only"}
-                    role={isUpdatingNotice ? "status" : undefined}
-                    aria-live="polite"
-                  >
-                    {isUpdatingNotice ? "Updating" : `Edit ${title}`}
-                  </span>
-                </Button>
-              }
-              onAccept={onUpdateOrder}
-            >
-              <RichInput
-                id="content"
-                label="Contents of your orders"
-                height="300"
-                placeholder={content}
-                control={control}
-                error={errors.content?.message}
-              />
-            </Confirm>
-          )}
-        </div>
-      }
-    >
-      {parseHtml(content)}
-    </ContentBox>
+      content={order?.content ?? "No current orders"}
+      canPost={canPost}
+      dialogId={`update-${type.toLowerCase()}-orders`}
+      isPending={isUpdatingNotice}
+      onSubmit={(data) => notice({ ...data, type, squadId })}
+      renderTrigger={(open) => (
+        <Button
+          id={`edit-${type.toLowerCase()}-orders`}
+          hoverText={isUpdatingNotice ? "Updating" : "Edit Orders"}
+          disabled={isUpdatingNotice}
+          loading={isUpdatingNotice}
+          aria-busy={isUpdatingNotice}
+          aria-label={isUpdatingNotice ? `Updating ${title}` : `Edit ${title}`}
+          onClick={open}
+        >
+          {!isUpdatingNotice && <FilePenLine className="h-5 w-5" />}
+          <span
+            className={isUpdatingNotice ? undefined : "sr-only"}
+            role={isUpdatingNotice ? "status" : undefined}
+            aria-live="polite"
+          >
+            {isUpdatingNotice ? "Updating" : `Edit ${title}`}
+          </span>
+        </Button>
+      )}
+    />
   );
 };
 
@@ -1064,3 +866,42 @@ const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
     </ContentBox>
   );
 };
+
+/** A purchasable squad stat: its level, the chance it yields and the upgrade button. */
+const SquadUpgradeCard: React.FC<{
+  name: string;
+  description: string;
+  level: number;
+  maxLevel: number;
+  chance: (level: number) => number;
+  cost: number;
+  points: number;
+  isUpgrading: boolean;
+  onUpgrade: () => void;
+}> = (props) => (
+  <div className="rounded-lg border p-4">
+    <h3 className="mb-2 font-semibold">{props.name} Level</h3>
+    <p className="mb-2 text-muted-foreground text-sm">{props.description}</p>
+    <p className="mb-2 text-muted-foreground text-sm">
+      Current Level: {props.level} / {props.maxLevel}
+    </p>
+    <p className="mb-2 text-muted-foreground text-sm">
+      Success Rate: {props.chance(props.level)}%
+      {props.level < props.maxLevel && (
+        <span className="text-green-600"> → {props.chance(props.level + 1)}%</span>
+      )}
+    </p>
+    <p className="mb-4 text-muted-foreground text-sm">
+      Upgrade Cost: {props.cost} points
+    </p>
+    <Button
+      onClick={props.onUpgrade}
+      disabled={
+        props.isUpgrading || props.level >= props.maxLevel || props.points < props.cost
+      }
+      className="w-full"
+    >
+      {props.isUpgrading ? "Upgrading" : `Upgrade ${props.name}`}
+    </Button>
+  </div>
+);

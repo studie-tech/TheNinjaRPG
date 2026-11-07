@@ -111,20 +111,22 @@ export const lockWithGameTimer = async (
   return gameTimerWaitResponse(claim.prevTime, deltaTime);
 };
 
-/** Atomically claim one rolling hour. */
+/**
+ * Atomically claim once per UTC calendar hour, so a minute-0 cron that fires slightly early
+ * still gets its tick.
+ */
 export const lockWithHourlyTimer = async (client: DrizzleClient, name: string) => {
   const claim = await claimGameTimer(
     client,
     name,
-    (previous, now) => now.getTime() - previous.getTime() >= 60 * 60 * 1000,
+    (previous, now) =>
+      isDifferentDay(now, previous) || now.getUTCHours() !== previous.getUTCHours(),
   );
   return {
     ...claim,
     isNewHour: claim.isClaimed,
     response: Response.json(
-      claim.isClaimed
-        ? null
-        : "Wait until an hour has passed before running this again",
+      claim.isClaimed ? null : "Wait until the next hour to run this again",
     ),
   };
 };
@@ -192,7 +194,6 @@ const startedSince =
 /**
  * Run a cron's work under a period claim: answer with the wait response when another run
  * holds it, and hand the period back on failure so the next invocation retries.
- * `keepClaimOnError` is for work a same-period rerun must not repeat.
  */
 export const runClaimedCron = async (
   claim: {
@@ -202,18 +203,15 @@ export const runClaimedCron = async (
   },
   endpoint: string,
   work: () => Promise<Response>,
-  { keepClaimOnError = false } = {},
 ) => {
   if (!claim.isClaimed) return claim.response;
   try {
     return await work();
   } catch (cause) {
-    if (!keepClaimOnError) {
-      try {
-        await claim.release();
-      } catch (rollbackCause) {
-        console.error(`Failed to release the ${endpoint} timer`, rollbackCause);
-      }
+    try {
+      await claim.release();
+    } catch (rollbackCause) {
+      console.error(`Failed to release the ${endpoint} timer`, rollbackCause);
     }
     return handleEndpointError(cause, { endpoint });
   }

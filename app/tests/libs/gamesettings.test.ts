@@ -79,7 +79,7 @@ for (const [name, lock] of [
       expect(await loser.release()).toBe(false);
       expect(store.read().time).toEqual(now);
       expect(await winner.release()).toBe(true);
-      expect(store.read()).toMatchObject({ time: oldTime, value: 0 });
+      expect(store.read()).toEqual(expect.objectContaining({ time: oldTime, value: 0 }));
       expect(await winner.release()).toBe(false);
     });
 
@@ -93,7 +93,7 @@ for (const [name, lock] of [
       expect(second.isClaimed).toBe(true);
       expect(await first.release()).toBe(false);
       expect(await first.update(10, oldTime)).toBe(false);
-      expect(store.read()).toMatchObject({ time: later, value: 0 });
+      expect(store.read()).toEqual(expect.objectContaining({ time: later, value: 0 }));
       expect(await second.release()).toBe(true);
       expect(store.read().time).toEqual(now);
     });
@@ -111,7 +111,9 @@ for (const [name, lock] of [
 
 describe("timer cadence", () => {
   it.each([
-    ["hourly", lockWithHourlyTimer, "2026-10-21T09:31:00Z", false],
+    ["hourly", lockWithHourlyTimer, "2026-10-21T10:00:00Z", false],
+    ["hourly", lockWithHourlyTimer, "2026-10-21T09:59:59.999Z", true],
+    ["hourly", lockWithHourlyTimer, "2026-10-21T09:31:00Z", true],
     ["hourly", lockWithHourlyTimer, "2026-10-21T09:30:10Z", true],
     ["hourly", lockWithHourlyTimer, "2026-10-20T10:30:10Z", true],
     ["minute", lockWithMinuteTimer, "2026-10-21T10:30:00Z", false],
@@ -127,6 +129,16 @@ describe("timer cadence", () => {
     const store = timerStore(new Date(previous));
     expect((await lock(store.client, "timer")).isClaimed).toBe(expected);
     expect(store.where).toHaveBeenCalledTimes(expected ? 1 : 0);
+  });
+
+  it("runs a */10 hourly cron once per hour and a minute-0 cron despite an early fire", async () => {
+    const store = timerStore();
+    const claims: boolean[] = [];
+    for (const time of ["09:00:05", "09:10:05", "09:50:05", "10:00:02", "10:10:02"]) {
+      setSystemTime(new Date(`2026-10-21T${time}Z`));
+      claims.push((await lockWithHourlyTimer(store.client, "timer")).isClaimed);
+    }
+    expect(claims).toEqual([true, false, false, true, false]);
   });
 
   it("keeps the generic timer name, duration tolerance and false/Response contract", async () => {
@@ -151,7 +163,7 @@ describe("timer cadence", () => {
     const marker = new Date("2026-10-20T23:59:59.999Z");
     expect(await claim.update(1, marker)).toBe(true);
     expect(await claim.release()).toBe(false);
-    expect(store.read()).toMatchObject({ time: marker, value: 1 });
+    expect(store.read()).toEqual(expect.objectContaining({ time: marker, value: 1 }));
   });
 });
 

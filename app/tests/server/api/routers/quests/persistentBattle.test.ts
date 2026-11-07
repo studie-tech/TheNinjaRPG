@@ -248,7 +248,7 @@ describeWithDatabase("persistent isolated Pyramid battle status", () => {
       await client.update(questHistory).set({ periodCompletes: 2, periodStartAt: period === "missing" ? null : period === "expired" ? new Date(current.getTime() - 86_400_000) : current }).where(eq(questHistory.questId, "pyramid"));
       await finishTracker();
       expect((await api.quests.checkRewards({ questId: "pyramid", nextObjectiveId: `${TERMINAL_DIALOG_PREFIX}finish` })).success).toBe(true);
-      expect(await client.query.questHistory.findFirst({ where: eq(questHistory.questId, "pyramid") })).toMatchObject({ completed: 1, previousCompletes: 1, periodCompletes: period === "current" ? 3 : 1, periodStartAt: current });
+      expect(await client.query.questHistory.findFirst({ where: eq(questHistory.questId, "pyramid") })).toEqual(expect.objectContaining({ completed: 1, previousCompletes: 1, periodCompletes: period === "current" ? 3 : 1, periodStartAt: current }));
     });
   }
 

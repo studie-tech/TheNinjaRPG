@@ -35,8 +35,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   COST_STREAK_CATCHUP_DAY,
-  MAX_EXPERIENCE_LEVEL,
-  MAX_PLAYER_LEVEL,
+  MASTERY_QUEUE_KIND_LABELS,
   MasteryQueueKinds,
 } from "@/drizzle/constants";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
@@ -51,16 +50,18 @@ import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { LogbookActive } from "@/layout/Logbook";
+import { QueryError } from "@/layout/QueryError";
 import { PendingRewardChoices } from "@/layout/RewardChoice";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { bankAccessBlockMessage } from "@/libs/bank";
 import { getRewardPreview } from "@/libs/objectives";
-import { calcLevelRequirements } from "@/libs/profile";
 import {
   buildDashboardCatalogue,
   type DashboardCatalogueEntry,
   dashboardContentActionLabel,
+  dashboardContentGroupLabels,
   dashboardContentHref,
+  dashboardLevelPercent,
   dashboardLevelProgress,
   dashboardRaidAction,
   dashboardTrainingAction,
@@ -70,21 +71,14 @@ import {
 } from "@/libs/profileDashboard";
 import { cn } from "@/libs/shadui";
 import { getMasteryTrainingState, masteryTrainingEndsAt } from "@/libs/train";
+import { moveItem } from "@/utils/array";
 import { calculatePercent } from "@/utils/math";
-import { capitalizeFirstLetter } from "@/utils/string";
+import { capitalizeFirstLetter, stripHtmlPreview } from "@/utils/string";
 import { nextUtcDayAt } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 const dashboardSections = ["now", "catalogue", "progress"] as const;
 type DashboardSectionId = (typeof dashboardSections)[number];
-
-const categoryLabels = {
-  events: "Events",
-  missions: "Missions & crimes",
-  story: "Story",
-  battlePyramids: "Battle pyramids",
-  raids: "Raids",
-} as const;
 
 /** Summarize actionable progress, rewards and the current occupation in reorderable sections. */
 export default function ProfileDashboard({ settings }: { settings?: React.ReactNode }) {
@@ -113,12 +107,8 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
     }
   }, []);
   const moveSection = (id: DashboardSectionId, direction: -1 | 1) => {
-    const index = sectionOrder.indexOf(id);
-    const target = index + direction;
-    if (target < 0 || target >= sectionOrder.length) return;
-    const next = [...sectionOrder];
-    next.splice(index, 1);
-    next.splice(target, 0, id);
+    const next = moveItem(sectionOrder, sectionOrder.indexOf(id), direction);
+    if (next === sectionOrder) return;
     setSectionOrder(next);
     safeLocalStorageSetItem("profileDashboardOrder", JSON.stringify(next));
   };
@@ -169,7 +159,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
           ? [
               {
                 kind,
-                label: kind === "ELEMENT" ? "Elemental" : "Mastery",
+                label: MASTERY_QUEUE_KIND_LABELS[kind],
                 title: capitalizeFirstLetter(noCase(session.stat)),
                 startedAt: session.startedAt,
                 endsAt: masteryTrainingEndsAt(userData, kind),
@@ -278,16 +268,8 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
   const visibleCraftTimers = craftingTimers.filter(
     (timer) => !(timer.kind === "crafting" && occupationLine.craftTimer),
   );
-  const levelRequirement = calcLevelRequirements(userData.level);
   const isMilestoneProgression = userData.rank === "ELITE JONIN";
-  const levelProgress = isMilestoneProgression
-    ? calculatePercent(
-        userData.level - MAX_EXPERIENCE_LEVEL,
-        MAX_PLAYER_LEVEL - MAX_EXPERIENCE_LEVEL,
-      )
-    : levelRequirement > 0
-      ? Math.min(100, (userData.experience / levelRequirement) * 100)
-      : 100;
+  const levelProgress = dashboardLevelPercent(userData);
   const claimsLoading = streaks.isLoading || interest.isLoading || dashboard.isLoading;
   const claimsFailed = streaks.isError || interest.isError || dashboard.isError;
   const streakNeedsAttention = Boolean(
@@ -325,7 +307,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             )}
             {streaks.isError && (
               <div className="border-t py-3 first:border-t-0">
-                <RetryPanel
+                <QueryError
+                  layout="panel"
+                  retryLabel="Retry"
                   message="The activity streak could not be loaded."
                   onRetry={() => void streaks.refetch()}
                 />
@@ -333,7 +317,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             )}
             {interest.isError && (
               <div className="border-t py-3 first:border-t-0">
-                <RetryPanel
+                <QueryError
+                  layout="panel"
+                  retryLabel="Retry"
                   message="Bank interest could not be loaded."
                   onRetry={() => void interest.refetch()}
                 />
@@ -341,7 +327,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             )}
             {dashboard.isError && (
               <div className="border-t py-3 first:border-t-0">
-                <RetryPanel
+                <QueryError
+                  layout="panel"
+                  retryLabel="Retry"
                   message="Raid rewards could not be loaded."
                   onRetry={() => void dashboard.refetch()}
                 />
@@ -666,7 +654,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             ))}
             {sidebarTimers.isError && (
               <div className="border-t py-3">
-                <RetryPanel
+                <QueryError
+                  layout="panel"
+                  retryLabel="Retry"
                   message="Training and crafting timers could not be loaded."
                   onRetry={() => void sidebarTimers.refetch()}
                 />
@@ -784,7 +774,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             </div>
           )}
           {dashboard.isError && (
-            <RetryPanel
+            <QueryError
+              layout="panel"
+              retryLabel="Retry"
               message="Quest discovery could not be loaded. This is not the same as having no available content."
               onRetry={() => void dashboard.refetch()}
             />
@@ -1149,7 +1141,7 @@ function ElapsedMeter({
   const adjustedStart = startedAt.getTime() + timeDiff;
   const adjustedEnd = endsAt.getTime() + timeDiff;
   const duration = Math.max(adjustedEnd - adjustedStart, 1);
-  const progress = Math.min(100, Math.max(0, ((now - adjustedStart) / duration) * 100));
+  const progress = calculatePercent(now - adjustedStart, duration);
 
   useEffect(() => {
     hasFinishedRef.current = false;
@@ -1165,22 +1157,6 @@ function ElapsedMeter({
   }, [progress]);
 
   return <Progress value={progress} className="mt-1.5 h-1.5" />;
-}
-
-function RetryPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
-      <span>{message}</span>
-      <Button
-        size="sm"
-        variant="outline"
-        className="hover:text-black"
-        onClick={onRetry}
-      >
-        <RotateCcw className="mr-1 h-4 w-4" /> Retry
-      </Button>
-    </div>
-  );
 }
 
 /** Present board or travel actions with ban precedence in the restriction label. */
@@ -1212,7 +1188,7 @@ function ContentCard({
       </div>
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{categoryLabels[entry.category]}</Badge>
+          <Badge variant="outline">{dashboardContentGroupLabels[entry.category]}</Badge>
           {entry.availability !== "travel" && (
             <Badge
               variant="outline"
@@ -1228,7 +1204,7 @@ function ContentCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-sm">
         <p className="line-clamp-3 text-muted-foreground">
-          {plainText(entry.description) || "No description has been published."}
+          {stripHtmlPreview(entry.description) || "No description has been published."}
         </p>
         <p className="flex items-center gap-1 text-xs">
           <MapPin className="h-3.5 w-3.5" /> {entry.location}
@@ -1254,9 +1230,3 @@ function ContentCard({
     </Card>
   );
 }
-
-const plainText = (value: string | null) =>
-  value
-    ?.replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim() ?? "";

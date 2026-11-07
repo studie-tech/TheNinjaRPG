@@ -150,8 +150,8 @@ describeWithDatabase("Atomic hunting settlement", () => {
     })).rejects.toThrow("Hunting character or inventory changed during settlement");
     const inventory = await db.query.userItem.findMany();
     expect(inventory).toHaveLength(2);
-    expect(inventory.find((item) => item.id === "carried-a")).toMatchObject({ userId: "hunter", quantity: 4, durability: 100, updatedAt });
-    expect(inventory.find((item) => item.id === "carried-b")).toMatchObject({ userId: "hunter", quantity: 2, durability: 100, updatedAt });
+    expect(inventory.find((item) => item.id === "carried-a")).toEqual(expect.objectContaining({ userId: "hunter", quantity: 4, durability: 100, updatedAt }));
+    expect(inventory.find((item) => item.id === "carried-b")).toEqual(expect.objectContaining({ userId: "hunter", quantity: 2, durability: 100, updatedAt }));
     expect(await db.query.huntingReceipt.findMany()).toHaveLength(0);
     expect((await db.query.huntingProgress.findFirst())?.used).toBe(0);
     expect((await db.query.userData.findFirst())?.huntingExperience).toBe(123);

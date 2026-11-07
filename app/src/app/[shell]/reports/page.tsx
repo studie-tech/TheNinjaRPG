@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { TERR_BOT_ID } from "@/drizzle/constants";
+import { usePendingIds } from "@/hooks/usePendingIds";
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -25,9 +26,8 @@ export default function Reports() {
   // State
   const { data: userData } = useRequiredUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const [clearingReportIds, setClearingReportIds] = useState<string[]>([]);
+  const clearing = usePendingIds();
   const [clearedReportIds, setClearedReportIds] = useState<string[]>([]);
-  const clearingReportIdsRef = useRef(new Set<string>());
   const clearedReportIdsRef = useRef(new Set<string>());
 
   // Two-level filtering
@@ -76,25 +76,12 @@ export default function Reports() {
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
     },
-    onSettled: (_data, _error, variables) => {
-      clearingReportIdsRef.current.delete(variables.object_id);
-      setClearingReportIds((current) =>
-        current.filter((reportId) => reportId !== variables.object_id),
-      );
-    },
+    onSettled: (_data, _error, variables) => clearing.end(variables.object_id),
   });
 
   const handleClearAiReport = (reportId: string) => {
-    // React state updates after this event, so keep a synchronous report-scoped
-    // guard as well. Other report cards remain independently actionable.
-    if (
-      clearingReportIdsRef.current.has(reportId) ||
-      clearedReportIdsRef.current.has(reportId)
-    ) {
-      return;
-    }
-    clearingReportIdsRef.current.add(reportId);
-    setClearingReportIds((current) => [...current, reportId]);
+    // Other report cards remain independently actionable.
+    if (clearedReportIdsRef.current.has(reportId) || !clearing.begin(reportId)) return;
     clearReport.mutate({
       comment: "False positive from AI",
       object_id: reportId,
@@ -152,7 +139,7 @@ export default function Reports() {
             const reportedUser = entry.reportedUser;
             const isAi =
               "reporterUserId" in report && report.reporterUserId === TERR_BOT_ID;
-            const isClearing = clearingReportIds.includes(report.id);
+            const isClearing = clearing.ids.has(report.id);
             const isCleared = clearedReportIds.includes(report.id);
             return (
               reportedUser && (

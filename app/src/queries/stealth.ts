@@ -4,7 +4,6 @@
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { STEALTH_SENSORY_CAP } from "@/drizzle/constants";
 import { userData, villageAlliance } from "@/drizzle/schema";
-import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
@@ -68,7 +67,9 @@ export const listUserDataForUseSensory = (
       experience: true,
       rank: true,
       status: true,
+      isBanned: true,
     },
+    with: { anbuSquad: { columns: { villageId: true } } },
   });
 
 /** Build the `villageAlliance` selection for `useSensory`. */
@@ -76,22 +77,22 @@ export const selectVillageAllianceForUseSensory = (
   client: Pick<DrizzleClient, "select">,
 ) => client.select().from(villageAlliance);
 
-/** Claim the scan and reveal its targets in one guarded statement so a lost recovery cannot reveal other players. */
+/** Build the guarded claim of a Sensory scan, applying any action recovery with it. */
 export const updateUserDataForUseSensory = (
-  client: Pick<DrizzleClient, "execute">,
+  client: Pick<DrizzleClient, "update">,
   lastSensoryAt: Date,
   ctx: { userId: string },
   readiness?: ActionReadinessWrite,
-  detectedUserIds: string[] = [],
 ) =>
-  client.execute(sql`
-  UPDATE ${userData} LEFT JOIN ${userData} AS detected
-    ON detected.userId IN (${sql.join(detectedUserIds.length ? detectedUserIds.map((id) => sql`${id}`) : [sql`NULL`], sql`, `)})
-  SET ${actionReadinessSqlSet(readiness, [])} ${userData.lastSensoryAt} = ${lastSensoryAt},
-    detected.stealthActive = false, detected.stealthActivatedAt = NULL
-  WHERE ${userData.userId} = ${ctx.userId}
-    AND ${readiness?.where ?? eq(userData.status, "AWAKE")}
-`);
+  client
+    .update(userData)
+    .set({ ...readiness?.set, lastSensoryAt })
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
+      ),
+    );
 
 /** Build the update that clears active stealth and its activation time for the selected users. */
 export const clearStealthForUsers = (

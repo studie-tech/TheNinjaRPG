@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -27,8 +26,8 @@ import UserSearchSelect from "@/layout/UserSearchSelect";
 import { hasForumContent } from "@/libs/forumContent";
 import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi } from "@/utils/permissions";
+import { useUserPicker } from "@/utils/search";
 import { useUserData } from "@/utils/UserContext";
-import { getSearchValidator } from "@/validators/register";
 
 /** Keep browse shortcuts compact in the header and expose staff tools only to eligible accounts. */
 export const ForumNavigation = ({
@@ -258,11 +257,7 @@ export const ForumComposer = ({
   const form = useForm<Draft>({
     defaultValues: { content: "", title: "", kind: defaultKind, tags: "", image: "" },
   });
-  const searchSchema = getSearchValidator({ max: 1 });
-  const senderForm = useForm<z.infer<typeof searchSchema>>({
-    defaultValues: { username: "", users: [] },
-  });
-  const senders = useWatch({ control: senderForm.control, name: "users" });
+  const { methods: senderForm, users: senders } = useUserPicker();
   const [storageAvailable, setStorageAvailable] = useState(true);
   const values = useWatch({ control: form.control });
   const [recovery, setRecovery] = useState<Draft | null>(null);

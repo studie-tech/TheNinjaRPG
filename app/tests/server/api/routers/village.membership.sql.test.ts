@@ -109,8 +109,8 @@ describeWithDatabase("village membership changes", () => {
     expect(result).toMatchObject({ success: false, message: "Cannot join while banned" });
   });
 
-  it("releases students and non-HOME requests on join and swap", async () => {
-    for (const operation of ["joinVillage", "swapVillage"] as const) {
+  it("releases students and non-HOME requests on leave, join and swap", async () => {
+    for (const operation of ["leaveVillage", "joinVillage", "swapVillage"] as const) {
       await resetTables(userData, userRequest);
       await insertUsers([
         { userId: MEMBER, username: MEMBER, villageId: "home", isOutlaw: operation === "joinVillage", rank: "JONIN", role: "MODERATOR", reputationPoints: 1000 },
@@ -118,10 +118,14 @@ describeWithDatabase("village membership changes", () => {
       ]);
       const db = await getTestDatabase();
       await db.insert(userRequest).values({ id: "clan-request", senderId: MEMBER, receiverId: "other", status: "PENDING", type: "CLAN" });
-      const result = await callerForDatabase(villageRouter, MEMBER, db)[operation]({ villageId: "destination" });
+      await db.insert(userRequest).values({ id: "home-request", senderId: MEMBER, receiverId: "other", status: "PENDING", type: "HOME" });
+      const caller = callerForDatabase(villageRouter, MEMBER, db);
+      const result = operation === "leaveVillage"
+        ? await caller.leaveVillage()
+        : await caller[operation]({ villageId: "destination" });
       expect(result.success).toBe(true);
       expect((await userOf("student"))?.senseiId).toBeNull();
-      expect(await db.query.userRequest.findMany()).toHaveLength(0);
+      expect((await db.query.userRequest.findMany()).map((request) => request.id)).toEqual(["home-request"]);
     }
   });
 });

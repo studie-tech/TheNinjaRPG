@@ -1,9 +1,13 @@
 import {
   type AllianceState,
+  RANKS_RESTRICTED_FROM_PVP,
+  type UserRank,
+  type UserStatus,
   VILLAGE_SYNDICATE_ID,
   WAR_FUNDS_COST,
 } from "@/drizzle/constants";
 import type { Village, VillageAlliance } from "@/drizzle/schema";
+import { getWarRelationship } from "@/libs/objectiveWar";
 
 /** Whether a relationship row links the two villages, in either direction. */
 export const isVillagePair = (
@@ -70,27 +74,74 @@ export const findVillageUserRelationship = (
 };
 
 /**
- * Whether a map user is friendly to the viewer: a target's `allianceStatus` override wins,
- * then a shared village or a formal alliance.
+ * How the map regards a player. A war side wins, as in combat. `warRelationship` from the
+ * sector snapshot is the only source for other players' mercenary contracts, so its answer
+ * stands, null included; the viewer's war list applies only to targets it did not cover.
+ * Otherwise a resolved `allianceStatus`, a shared village, and diplomacy decide.
  */
-export const isMapUserAlly = (
+export const mapAttackRelation = (
   viewer:
     | {
+        userId: string;
         villageId: string | null;
-        village?: Parameters<typeof findVillageUserRelationship>[0] | null;
+        village?: Parameters<typeof getAllyStatus>[0];
       }
     | null
     | undefined,
-  target: { villageId: string | null; allianceStatus?: AllianceState },
-) => {
-  const relationship =
-    viewer?.village && findVillageUserRelationship(viewer.village, target.villageId);
-  return (
-    target.allianceStatus === "ALLY" ||
-    (target.allianceStatus !== "ENEMY" &&
-      (target.villageId === viewer?.villageId || relationship?.status === "ALLY"))
-  );
+  target: {
+    userId: string;
+    villageId: string | null;
+    allianceStatus?: AllianceState;
+    warRelationship?: "ALLY" | "ENEMY" | null;
+  },
+  wars: Parameters<typeof getWarRelationship>[0] | null | undefined,
+): AllianceState => {
+  const warRelationship =
+    target.warRelationship === undefined && viewer
+      ? getWarRelationship(wars ?? [], viewer, target)
+      : target.warRelationship;
+  if (warRelationship) return warRelationship;
+  if (target.allianceStatus === "ALLY" || target.allianceStatus === "ENEMY") {
+    return target.allianceStatus;
+  }
+  if (!target.villageId) return "NEUTRAL";
+  if (target.villageId === viewer?.villageId) return "ALLY";
+  return getAllyStatus(viewer?.village, target.villageId);
 };
+
+/** Whether map controls offer an attack: an awake, unbanned, PvP-eligible target, and no ally unless opted in. */
+export const canShowMapAttack = (
+  viewer: Parameters<typeof mapAttackRelation>[0],
+  target: Parameters<typeof mapAttackRelation>[1] & {
+    rank: UserRank;
+    status: UserStatus;
+    isBanned?: boolean;
+  },
+  allyAttack: boolean,
+  wars: Parameters<typeof mapAttackRelation>[2],
+) =>
+  target.status === "AWAKE" &&
+  !target.isBanned &&
+  !RANKS_RESTRICTED_FROM_PVP.includes(target.rank) &&
+  (allyAttack || mapAttackRelation(viewer, target, wars) !== "ALLY");
+
+/**
+ * Whether ANBU auto-attack engages a player. It takes the map's attack rule without the
+ * ally opt-in, and a stored ALLY status keeps a player safe even when a war says enemy.
+ * Overworld NPCs share the map list but are fought through the interact flow.
+ */
+export const isAutoAttackTarget = (
+  viewer: NonNullable<Parameters<typeof canShowMapAttack>[0]>,
+  target: Parameters<typeof canShowMapAttack>[1] & { level: number; isNpc?: boolean },
+  wars: Parameters<typeof canShowMapAttack>[3],
+  minLevel: number,
+) =>
+  !!target.userId &&
+  target.userId !== viewer.userId &&
+  !target.isNpc &&
+  target.allianceStatus !== "ALLY" &&
+  target.level >= minLevel &&
+  canShowMapAttack(viewer, target, false, wars);
 
 /**
  * Finds the relationship status between two villages.

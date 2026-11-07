@@ -4,6 +4,8 @@ import {
   BANK_INTEREST_CLAIM_DAYS,
   PET_FEED_COOLDOWN_HOURS,
   REGEN_SECONDS,
+  SHRINE_BOOST_DURATION_HOURS,
+  SHRINE_BOOST_SLOTS_PER_DAY,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
 } from "@/drizzle/constants";
 import { clamp } from "@/utils/math";
@@ -253,6 +255,17 @@ export const isSameDay = (date1: Date, date2: Date): boolean => {
 };
 
 /**
+ * Browser-local yyyy-MM-dd for local midnight `months` ago, the value of a date input.
+ * Month ends overflow as `Date.setMonth` does: May 31 minus 3 months is March 3.
+ */
+export const getLocalDateStringMonthsAgo = (months: number) => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setMonth(date.getMonth() - months);
+  return format(date, "yyyy-MM-dd");
+};
+
+/**
  * Check if a date is today (UTC-based comparison)
  */
 export const isToday = (date: Date | null): boolean => {
@@ -283,6 +296,10 @@ export const getDateKey = (date: Date): string => {
 /** Zero-padded UTC day (YYYY-MM-DD), the format of date columns; getDateKey is unpadded. */
 export const getUtcDayKey = (now = new Date()) => now.toISOString().slice(0, 10);
 
+/** Whether a date column's end has passed; availability stops at midnight UTC of that date. */
+export const hasEndDatePassed = (endsAt?: string | null, now = new Date()) =>
+  !!endsAt && new Date(endsAt) <= now;
+
 /**
  * Return the next meal time, or null if this companion has never been fed.
  * The rolling cooldown is independent of battles and UTC day boundaries.
@@ -300,6 +317,27 @@ export const formatSecondsToTimeDisplay = (totalSeconds: number): string => {
     return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
   }
   return `${totalSeconds}s`;
+};
+
+/**
+ * Compact length such as "2h", "1h 30m" or "45m", rounded up to whole minutes. Under a
+ * minute it reads as seconds.
+ */
+export const formatHoursMinutes = (totalSeconds: number): string => {
+  if (totalSeconds < 60) return formatSecondsToTimeDisplay(totalSeconds);
+  const totalMinutes = Math.ceil(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (!hours) return `${minutes}m`;
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+};
+
+/** Clock-style time left: "MM:SS", "HH:MM:SS" from one hour up, "1d HH:MM:SS" from one day. */
+export const formatClockTime = (ms: number): string => {
+  const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(ms);
+  const parts = days > 0 || hours > 0 ? [hours, minutes, seconds] : [minutes, seconds];
+  const clock = parts.map((part) => part.toString().padStart(2, "0")).join(":");
+  return days > 0 ? `${days}d ${clock}` : clock;
 };
 
 /**
@@ -326,7 +364,11 @@ export const getFirstOfNextMonth = (): Date => {
  */
 export const getSlotIndex = (utcHour: number): number => {
   if (!Number.isFinite(utcHour)) return 0;
-  return clamp(Math.floor(utcHour / 2), 0, 11);
+  return clamp(
+    Math.floor(utcHour / SHRINE_BOOST_DURATION_HOURS),
+    0,
+    SHRINE_BOOST_SLOTS_PER_DAY - 1,
+  );
 };
 
 /**
@@ -335,7 +377,13 @@ export const getSlotIndex = (utcHour: number): number => {
  */
 export const getCurrentSlotBoundary = (d: Date = new Date()): Date => {
   const boundary = new Date(d);
-  boundary.setUTCHours(Math.floor(d.getUTCHours() / 2) * 2, 0, 0, 0);
+  boundary.setUTCHours(
+    Math.floor(d.getUTCHours() / SHRINE_BOOST_DURATION_HOURS) *
+      SHRINE_BOOST_DURATION_HOURS,
+    0,
+    0,
+    0,
+  );
   return boundary;
 };
 

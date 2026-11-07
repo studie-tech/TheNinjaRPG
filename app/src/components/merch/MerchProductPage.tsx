@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Minus, Plus, ShoppingBag } from "lucide-react";
+import { ArrowRight, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -17,6 +17,7 @@ import {
 import { MERCH_PRODUCT_DETAILS } from "@/libs/merch/products";
 import { MerchProductCard } from "./MerchCollection";
 import { useMerch } from "./MerchProvider";
+import { MerchQuantityStepper } from "./MerchQuantityStepper";
 
 export function MerchProductPage({ handle }: { handle: string }) {
   const { products, loading, error, retry, preview, busy, message, add } = useMerch();
@@ -169,25 +170,12 @@ export function MerchProductPage({ handle }: { handle: string }) {
             ))}
           {selectionMessage && <p role="status">{selectionMessage}</p>}
           <div className="merch-purchase">
-            <div className="merch-quantity">
-              <button
-                type="button"
-                aria-label="Decrease quantity"
-                disabled={quantity === 1 || busy}
-                onClick={() => setQuantity(quantity - 1)}
-              >
-                <Minus size={16} />
-              </button>
-              <span>{quantity}</span>
-              <button
-                type="button"
-                aria-label="Increase quantity"
-                disabled={quantity === 10 || busy}
-                onClick={() => setQuantity(quantity + 1)}
-              >
-                <Plus size={16} />
-              </button>
-            </div>
+            <MerchQuantityStepper
+              value={quantity}
+              disabled={busy}
+              iconSize={16}
+              onChange={setQuantity}
+            />
             <button
               type="button"
               className="merch-button"

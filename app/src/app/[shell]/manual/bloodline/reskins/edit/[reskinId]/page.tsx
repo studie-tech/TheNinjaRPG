@@ -3,20 +3,20 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FilePlus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { use, useState } from "react";
+import { use, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent, canModerateReskin } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type BloodlineReskinUpdateSchema,
   bloodlineReskinUpdateSchema,
@@ -35,7 +35,10 @@ export default function BloodlineReskinEdit(props: {
 
 function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
   const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(
+    canModerateReskin,
+    "/manual/bloodline/reskins",
+  );
   const utils = api.useUtils();
 
   // Queries
@@ -109,15 +112,8 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
       },
     });
 
-  // Redirect if not authorized
-  React.useEffect(() => {
-    if (userData && !canModerateReskin(userData.role)) {
-      router.push("/manual/bloodline/reskins");
-    }
-  }, [userData, router]);
-
   // Prevent unauthorized access
-  if (isPending || !userData || !canModerateReskin(userData.role)) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
   }
 

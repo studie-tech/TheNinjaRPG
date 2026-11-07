@@ -926,7 +926,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     expect(await client.query.user2conversation.findFirst({ where: eq(user2conversation.userId, "helper") })).toBeUndefined();
     await client.update(quest).set({ questRank: "C" }).where(eq(quest.id, "team-quest"));
     expect((await helper.join({ partyId: party.id })).success).toBe(true);
-    expect(await client.query.questHistory.findFirst({ where: eq(questHistory.id, "receipt") })).toMatchObject({ completed: 1, previousCompletes: 1, previousAttempts: 2, endAt });
+    expect(await client.query.questHistory.findFirst({ where: eq(questHistory.id, "receipt") })).toEqual(expect.objectContaining({ completed: 1, previousCompletes: 1, previousAttempts: 2, endAt }));
     expect((await client.query.userData.findFirst({ where: eq(userData.userId, "helper") }))?.questPartyId).toBe(party.id);
   });
 
@@ -957,7 +957,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     const claimed = await (await callerFor(questsRouter, "helper")).checkRewards({ questId: "team-quest" });
     expect(claimed.success).toBe(true);
     const receipt = await client.query.questHistory.findFirst({ where: eq(questHistory.id, "receipt") });
-    expect(receipt).toMatchObject({ completed: 0, previousCompletes: 1, previousAttempts: 2, endAt });
+    expect(receipt).toEqual(expect.objectContaining({ completed: 0, previousCompletes: 1, previousAttempts: 2, endAt }));
     expect((await client.query.userData.findFirst({ where: eq(userData.userId, "helper") }))?.money).toBe(100);
   });
 

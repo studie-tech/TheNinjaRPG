@@ -3,9 +3,11 @@
 import { FilePlus, Pencil, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { usePendingIds } from "@/hooks/usePendingIds";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
@@ -24,9 +26,8 @@ export default function MapTilesets() {
   const { data: userData } = useUserData();
   const canEdit = Boolean(userData && canChangeContent(userData.role));
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const createInFlightRef = useRef(false);
-  const [deletingAssetIds, setDeletingAssetIds] = useState<string[]>([]);
-  const deletingAssetIdsRef = useRef(new Set<string>());
+  const createFlight = useSingleFlight();
+  const assetDeletions = usePendingIds();
 
   const { data: assets, refetch, isPending } = api.mapAsset.getAll.useQuery();
 
@@ -41,15 +42,11 @@ export default function MapTilesets() {
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
     },
-    onSettled: () => {
-      createInFlightRef.current = false;
-    },
+    onSettled: () => createFlight.release(),
   });
 
   const handleCreate = (category: "prop" | "structure" = "prop") => {
-    // isPending updates after React renders; the ref closes the same-tick double-click gap.
-    if (createInFlightRef.current) return;
-    createInFlightRef.current = true;
+    if (!createFlight.claim()) return;
     if (category === "structure") create({ category });
     else create();
   };
@@ -62,21 +59,12 @@ export default function MapTilesets() {
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
     },
-    onSettled: (_data, _error, variables) => {
-      deletingAssetIdsRef.current.delete(variables.id);
-      setDeletingAssetIds((current) =>
-        current.filter((assetId) => assetId !== variables.id),
-      );
-    },
+    onSettled: (_data, _error, variables) => assetDeletions.end(variables.id),
   });
 
   const handleDelete = (id: string) => {
-    // React state updates after this handler, so retain a synchronous per-asset
-    // guard as well. Other asset cards remain independent and usable.
-    if (deletingAssetIdsRef.current.has(id)) return;
-    deletingAssetIdsRef.current.add(id);
-    setDeletingAssetIds((current) => [...current, id]);
-    remove({ id });
+    // Other asset cards remain independent and usable.
+    if (assetDeletions.begin(id)) remove({ id });
   };
 
   const categories = useMemo(() => {
@@ -146,15 +134,13 @@ export default function MapTilesets() {
           <p className="italic">No map assets yet.</p>
         )}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {shownAssets.map((asset) => {
-            const isDeleting = deletingAssetIds.includes(asset.id);
-            return (
-              <div
-                key={asset.id}
-                className="relative flex flex-col rounded-lg border bg-popover p-2"
-                aria-busy={isDeleting}
-                data-map-asset-id={asset.id}
-              >
+          {shownAssets.map((asset) => (
+            <LibraryCard
+              key={asset.id}
+              name={asset.name}
+              assetKey={asset.key}
+              dataAttributes={{ "data-map-asset-id": asset.id }}
+              preview={
                 <div className="relative flex aspect-square w-full items-center justify-center rounded-md bg-linear-to-b from-sky-100 to-emerald-100">
                   <Image
                     src={asset.imageUrl}
@@ -164,92 +150,21 @@ export default function MapTilesets() {
                     className="object-contain p-2"
                   />
                 </div>
-                <p className="mt-1 truncate font-semibold" title={asset.name}>
-                  {asset.name}
-                </p>
-                <p className="truncate text-muted-foreground text-xs" title={asset.key}>
-                  {asset.key}
-                </p>
-                <div className="flex flex-wrap gap-1 py-1 text-xs">
-                  <span className="rounded bg-secondary px-1 text-secondary-foreground">
-                    {asset.category}
-                  </span>
-                  {asset.windAffected && (
-                    <span className="rounded bg-secondary px-1 text-secondary-foreground">
-                      wind
-                    </span>
-                  )}
-                  {asset.small && (
-                    <span className="rounded bg-secondary px-1 text-secondary-foreground">
-                      small
-                    </span>
-                  )}
-                  {asset.randomRotation && (
-                    <span className="rounded bg-secondary px-1 text-secondary-foreground">
-                      rotates
-                    </span>
-                  )}
-                </div>
-                {canEdit && (
-                  <div className="mt-auto flex gap-2 pt-1">
-                    <Link
-                      href={`/manual/world/tilesets/edit/${asset.id}`}
-                      className={isDeleting ? "pointer-events-none grow" : "grow"}
-                      aria-disabled={isDeleting}
-                      tabIndex={isDeleting ? -1 : undefined}
-                      onClick={(event) => {
-                        if (isDeleting) event.preventDefault();
-                      }}
-                    >
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="w-full"
-                        disabled={isDeleting}
-                      >
-                        <Pencil className="mr-1 h-4 w-4" />
-                        Edit
-                      </Button>
-                    </Link>
-                    <Confirm
-                      title="Delete map asset"
-                      button={
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          disabled={isDeleting}
-                          loading={isDeleting}
-                          aria-label={
-                            isDeleting
-                              ? `Deleting ${asset.name}`
-                              : `Delete ${asset.name}`
-                          }
-                        >
-                          {!isDeleting && <Trash2 className="h-4 w-4" />}
-                        </Button>
-                      }
-                      disabled={isDeleting}
-                      isLoading={isDeleting}
-                      proceed_loading_label="Deleting"
-                      onAccept={() => handleDelete(asset.id)}
-                    >
-                      Delete {asset.name} ({asset.key})? Maps referencing this key will
-                      stop rendering the decoration until the key exists again.
-                    </Confirm>
-                  </div>
-                )}
-                {isDeleting && (
-                  <div
-                    className="absolute inset-0 z-10 flex cursor-wait items-center justify-center rounded-lg bg-slate-950/75 font-semibold text-white backdrop-blur-[1px]"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <Loader explanation="Deleting" noPadding size={24} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              }
+              tags={[
+                asset.category,
+                asset.windAffected && "wind",
+                asset.small && "small",
+                asset.randomRotation && "rotates",
+              ]}
+              canEdit={canEdit}
+              editHref={`/manual/world/tilesets/edit/${asset.id}`}
+              isDeleting={assetDeletions.ids.has(asset.id)}
+              deleteTitle="Delete map asset"
+              deleteText={`Delete ${asset.name} (${asset.key})? Maps referencing this key will stop rendering the decoration until the key exists again.`}
+              onDelete={() => handleDelete(asset.id)}
+            />
+          ))}
         </div>
       </ContentBox>
       <MapTerrainSection canEdit={canEdit} />
@@ -265,9 +180,8 @@ export default function MapTilesets() {
  */
 const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const router = useRouter();
-  const createInFlightRef = useRef(false);
-  const [deletingTerrainIds, setDeletingTerrainIds] = useState<string[]>([]);
-  const deletingTerrainIdsRef = useRef(new Set<string>());
+  const createFlight = useSingleFlight();
+  const terrainDeletions = usePendingIds();
   const { data: terrains, refetch, isPending } = api.mapTerrain.getAll.useQuery();
 
   const { mutate: create, isPending: isCreating } = api.mapTerrain.create.useMutation({
@@ -281,15 +195,11 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
     },
-    onSettled: () => {
-      createInFlightRef.current = false;
-    },
+    onSettled: () => createFlight.release(),
   });
 
   const handleCreate = () => {
-    // React's pending state is asynchronous, so guard same-tick double clicks too.
-    if (createInFlightRef.current) return;
-    createInFlightRef.current = true;
+    if (!createFlight.claim()) return;
     create();
   };
 
@@ -301,21 +211,12 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
     },
-    onSettled: (_data, _error, variables) => {
-      deletingTerrainIdsRef.current.delete(variables.id);
-      setDeletingTerrainIds((current) =>
-        current.filter((terrainId) => terrainId !== variables.id),
-      );
-    },
+    onSettled: (_data, _error, variables) => terrainDeletions.end(variables.id),
   });
 
   const handleDelete = (id: string) => {
-    // State updates after this handler, so also guard same-tick confirmation
-    // submissions synchronously. Deletes for other terrain cards stay independent.
-    if (deletingTerrainIdsRef.current.has(id)) return;
-    deletingTerrainIdsRef.current.add(id);
-    setDeletingTerrainIds((current) => [...current, id]);
-    remove({ id });
+    // Deletes for other terrain cards stay independent.
+    if (terrainDeletions.begin(id)) remove({ id });
   };
 
   return (
@@ -347,15 +248,13 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       </p>
       {isPending && <Loader explanation="Loading terrains" />}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {(terrains ?? []).map((terrain) => {
-          const isDeleting = deletingTerrainIds.includes(terrain.id);
-          return (
-            <div
-              key={terrain.id}
-              className="relative flex flex-col rounded-lg border bg-popover p-2"
-              aria-busy={isDeleting}
-              data-map-terrain-id={terrain.id}
-            >
+        {(terrains ?? []).map((terrain) => (
+          <LibraryCard
+            key={terrain.id}
+            name={terrain.name}
+            assetKey={terrain.key}
+            dataAttributes={{ "data-map-terrain-id": terrain.id }}
+            preview={
               <div className="flex aspect-square w-full overflow-hidden rounded-md">
                 {terrain.colors.map((color, idx) => (
                   <div
@@ -365,98 +264,126 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   />
                 ))}
               </div>
-              <p className="mt-1 truncate font-semibold" title={terrain.name}>
-                {terrain.name}
-              </p>
-              <p className="truncate text-muted-foreground text-xs" title={terrain.key}>
-                {terrain.key}
-              </p>
-              <div className="flex flex-wrap gap-1 py-1 text-xs">
-                <span className="rounded bg-secondary px-1 text-secondary-foreground">
-                  arena: {terrain.battleBiome}
-                </span>
-                {terrain.isWater && (
-                  <span className="rounded bg-secondary px-1 text-secondary-foreground">
-                    water
-                  </span>
-                )}
-                {terrain.depression > 0 && (
-                  <span className="rounded bg-secondary px-1 text-secondary-foreground">
-                    sunken
-                  </span>
-                )}
-                <span className="rounded bg-secondary px-1 text-secondary-foreground">
-                  cost {terrain.defaultWalkCost}
-                </span>
-                {terrain.protected && (
-                  <span className="rounded bg-secondary px-1 text-secondary-foreground">
-                    built-in
-                  </span>
-                )}
-              </div>
-              {canEdit && (
-                <div className="mt-auto flex gap-2 pt-1">
-                  <Link
-                    href={`/manual/world/tilesets/terrain/edit/${terrain.id}`}
-                    className={isDeleting ? "pointer-events-none grow" : "grow"}
-                    aria-disabled={isDeleting}
-                    tabIndex={isDeleting ? -1 : undefined}
-                    onClick={(event) => {
-                      if (isDeleting) event.preventDefault();
-                    }}
-                  >
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full"
-                      disabled={isDeleting}
-                    >
-                      <Pencil className="mr-1 h-4 w-4" />
-                      Edit
-                    </Button>
-                  </Link>
-                  {!terrain.protected && (
-                    <Confirm
-                      title="Delete terrain"
-                      button={
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          disabled={isDeleting}
-                          loading={isDeleting}
-                          aria-label={
-                            isDeleting
-                              ? `Deleting ${terrain.name}`
-                              : `Delete ${terrain.name}`
-                          }
-                        >
-                          {!isDeleting && <Trash2 className="h-4 w-4" />}
-                        </Button>
-                      }
-                      disabled={isDeleting}
-                      isLoading={isDeleting}
-                      proceed_loading_label="Deleting"
-                      onAccept={() => handleDelete(terrain.id)}
-                    >
-                      Delete {terrain.name} ({terrain.key})? Map tiles painted with this
-                      terrain will render as grassland until the key exists again.
-                    </Confirm>
-                  )}
-                </div>
-              )}
-              {isDeleting && (
-                <div
-                  className="absolute inset-0 z-10 flex cursor-wait items-center justify-center rounded-lg bg-slate-950/75 font-semibold text-white backdrop-blur-[1px]"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <Loader explanation="Deleting" noPadding size={24} />
-                </div>
-              )}
-            </div>
-          );
-        })}
+            }
+            tags={[
+              `arena: ${terrain.battleBiome}`,
+              terrain.isWater && "water",
+              terrain.depression > 0 && "sunken",
+              `cost ${terrain.defaultWalkCost}`,
+              terrain.protected && "built-in",
+            ]}
+            canEdit={canEdit}
+            editHref={`/manual/world/tilesets/terrain/edit/${terrain.id}`}
+            isDeleting={terrainDeletions.ids.has(terrain.id)}
+            deleteTitle="Delete terrain"
+            deleteText={`Delete ${terrain.name} (${terrain.key})? Map tiles painted with this terrain will render as grassland until the key exists again.`}
+            onDelete={terrain.protected ? undefined : () => handleDelete(terrain.id)}
+          />
+        ))}
       </div>
     </ContentBox>
   );
 };
+
+/** Gallery tile of one shared map asset or terrain with its edit and delete actions. */
+const LibraryCard: React.FC<LibraryCardProps> = (props) => {
+  const { name, assetKey, dataAttributes, preview, tags, canEdit, editHref } = props;
+  const { isDeleting, deleteTitle, deleteText, onDelete } = props;
+  return (
+    <div
+      className="relative flex flex-col rounded-lg border bg-popover p-2"
+      aria-busy={isDeleting}
+      {...dataAttributes}
+    >
+      {preview}
+      <p className="mt-1 truncate font-semibold" title={name}>
+        {name}
+      </p>
+      <p className="truncate text-muted-foreground text-xs" title={assetKey}>
+        {assetKey}
+      </p>
+      <div className="flex flex-wrap gap-1 py-1 text-xs">
+        {tags
+          .filter((tag) => tag !== false)
+          .map((tag) => (
+            <span
+              key={tag}
+              className="rounded bg-secondary px-1 text-secondary-foreground"
+            >
+              {tag}
+            </span>
+          ))}
+      </div>
+      {canEdit && (
+        <div className="mt-auto flex gap-2 pt-1">
+          <Link
+            href={editHref}
+            className={isDeleting ? "pointer-events-none grow" : "grow"}
+            aria-disabled={isDeleting}
+            tabIndex={isDeleting ? -1 : undefined}
+            onClick={(event) => {
+              if (isDeleting) event.preventDefault();
+            }}
+          >
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-full"
+              disabled={isDeleting}
+            >
+              <Pencil className="mr-1 h-4 w-4" />
+              Edit
+            </Button>
+          </Link>
+          {onDelete && (
+            <Confirm
+              title={deleteTitle}
+              button={
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={isDeleting}
+                  loading={isDeleting}
+                  aria-label={isDeleting ? `Deleting ${name}` : `Delete ${name}`}
+                >
+                  {!isDeleting && <Trash2 className="h-4 w-4" />}
+                </Button>
+              }
+              disabled={isDeleting}
+              isLoading={isDeleting}
+              proceed_loading_label="Deleting"
+              onAccept={onDelete}
+            >
+              {deleteText}
+            </Confirm>
+          )}
+        </div>
+      )}
+      {isDeleting && (
+        <div
+          className="absolute inset-0 z-10 flex cursor-wait items-center justify-center rounded-lg bg-slate-950/75 font-semibold text-white backdrop-blur-[1px]"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader explanation="Deleting" noPadding size={24} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface LibraryCardProps {
+  name: string;
+  assetKey: string;
+  dataAttributes: Record<string, string>;
+  preview: React.ReactNode;
+  /** Falsy entries are skipped, so a tag can be listed with its condition. */
+  tags: (string | false)[];
+  canEdit: boolean;
+  editHref: string;
+  isDeleting: boolean;
+  deleteTitle: string;
+  deleteText: string;
+  /** Omit for entries that cannot be deleted. */
+  onDelete?: () => void;
+}

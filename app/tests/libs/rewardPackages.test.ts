@@ -285,6 +285,12 @@ describe("reward packages", () => {
     expect(result.rewards.reward_money).toBe(60);
     expect(result.rewards.reward_items).toEqual(["item","item"]);
   });
+  it("carries material drops from direct-only objectives", () => {
+    const objective=SimpleObjective.parse({id:"objective",task:"user_level",value:1,reward_hunter_items:true,reward_hunter_items_ids:["hide"],reward_gathering_items:true,reward_gathering_items_ids:["herb"]});
+    const quiet=SimpleObjective.parse({id:"quiet",task:"user_level",value:1,reward_money:5});
+    const {rewards}=getReward(makeUser({reward:QuestReward.parse({reward_gathering_items_ids:["ore"]}),objectives:[objective,quiet]}),"q1");
+    expect(rewards).toMatchObject({reward_hunter_items:true,reward_hunter_items_ids:["hide"],reward_gathering_items:true,reward_gathering_items_ids:["ore","herb"]});
+  });
   it("matches mixed objective structural previews and preserves later objective ordering", () => {
     for (const [directRank, packageRank] of [["CHUNIN", "JONIN"], ["JONIN", "CHUNIN"]] as const) {
       const mixed = QuestReward.parse({ reward_rank: directRank, reward_village_membership: "AKIKAZE", reward_money: 10,

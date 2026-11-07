@@ -6,8 +6,8 @@ import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { UserInfoCell } from "@/layout/UserInfoCell";
 import { useInfinitePagination } from "@/libs/pagination";
-import { showUserRank } from "@/libs/profile";
 import { canSeeIps } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
@@ -39,15 +39,7 @@ export default function PublicProfile(props: { params: Promise<{ ip: string }> }
     .flatMap((page) => page.data)
     .map((user) => ({
       ...user,
-      info: (
-        <div>
-          <p className="font-bold">{user.username}</p>
-          <p>
-            Lvl. {user.level} {showUserRank(user)}
-          </p>
-          <p>{user.village?.name || "Syndicate"}</p>
-        </div>
-      ),
+      info: <UserInfoCell user={user} />,
     }));
   type User = ArrayElement<typeof allUsers>;
 

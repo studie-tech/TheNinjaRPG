@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { getAcceptRequestUserUpdate, getLeaveSenseiUserUpdate } from "@/deltas/sensei";
-import { SENSEI_MAX_ACTIVE_STUDENTS, SENSEI_RANKS } from "@/drizzle/constants";
+import { SENSEI_MAX_ACTIVE_STUDENTS, SENSEI_REQUIRED_RANK } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
+import { hasRequiredRank } from "@/libs/train";
 import { fetchUser } from "@/queries/profile";
 import {
   fetchStudents,
@@ -9,7 +10,6 @@ import {
   updateUserDataForRemoveStudent,
 } from "@/queries/sensei";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
-
 import { fetchRequest, updateRequestState } from "@/routers/sparring";
 import {
   baseServerResponse,
@@ -54,10 +54,13 @@ export const senseiRouter = createTRPCRouter({
       if (target.villageId !== user.villageId) {
         return errorResponse("Sensei must be from same village");
       }
-      if (SENSEI_RANKS.includes(user.rank) && target.rank !== "GENIN") {
+      if (hasRequiredRank(user.rank, SENSEI_REQUIRED_RANK) && target.rank !== "GENIN") {
         return errorResponse("Can only teach Genin");
       }
-      if (user.rank === "GENIN" && !SENSEI_RANKS.includes(target.rank)) {
+      if (
+        user.rank === "GENIN" &&
+        !hasRequiredRank(target.rank, SENSEI_REQUIRED_RANK)
+      ) {
         return errorResponse("Genin can only learn from Jonin and higher");
       }
       // Mutate

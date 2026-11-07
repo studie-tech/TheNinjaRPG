@@ -1,7 +1,7 @@
 "use client";
 
 import { BookOpen, Gem, Hammer, Info, Star, Wrench, Zap } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   CRAFTING_TIMES_MINS,
 } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -29,10 +30,15 @@ import {
   getImbueBlockedMessage,
   getImbuementRankCapMessage,
 } from "@/libs/crafting";
-import { calcItemRepairCost } from "@/libs/item";
-import { needsInventoryRepair } from "@/libs/repair";
+import {
+  calcItemRepairCost,
+  finishedImbuementItems,
+  finishedImbuements,
+  isImbuing,
+} from "@/libs/item";
+import { calcRepairAllCost } from "@/libs/repair";
+import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { showMutationToast } from "@/libs/toast";
-import { isRetryableTrpcError } from "@/utils/error";
 import { canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -63,20 +69,9 @@ export default function OccupationCrafting() {
     });
 
   // Get currently imbuing items
-  const activeImbuingItem = (userItems || []).find(
-    (userItem) =>
-      userItem.imbuements &&
-      userItem.imbuements.length > 0 &&
-      userItem.imbuements.some(
-        (imbuement) =>
-          imbuement.craftingFinishedAt &&
-          new Date(imbuement.craftingFinishedAt) > new Date(),
-      ),
-  );
-  const activeImbuement = activeImbuingItem?.imbuements?.find(
-    (imbuement) =>
-      imbuement.craftingFinishedAt &&
-      new Date(imbuement.craftingFinishedAt) > new Date(),
+  const activeImbuingItem = (userItems || []).find((userItem) => isImbuing(userItem));
+  const activeImbuement = activeImbuingItem?.imbuements.find(
+    (imbuement) => imbuement.craftingFinishedAt > new Date(),
   );
 
   const imbueItemMutation = api.occupation.imbueItem.useMutation({
@@ -146,28 +141,26 @@ export default function OccupationCrafting() {
     UserItemWithRelations | undefined
   >(undefined);
   const [isImbueModalOpen, setIsImbueModalOpen] = useState<boolean>(false);
-  const [pendingImbueRequest, setPendingImbueRequest] = useState<{
+  const imbueFlight = useSingleFlight<{
     userItemId: string;
     userCrystalItemId: string;
     crystalItemId: string;
     targetName: string;
     crystalName: string;
-  } | null>(null);
+  }>();
   const [committedImbue, setCommittedImbue] = useState<{
     userItemId: string;
     imbuementItemId: string;
     targetName: string;
     crystalName: string;
   } | null>(null);
-  const imbueInFlightRef = useRef(false);
   const [removeImbuementTarget, setRemoveImbuementTarget] =
     useState<ImbuementRemoval | null>(null);
-  const [pendingRemoveImbuement, setPendingRemoveImbuement] =
-    useState<ImbuementRemoval | null>(null);
+  const removeImbuementFlight = useSingleFlight<ImbuementRemoval>();
+  const pendingRemoveImbuement = removeImbuementFlight.pending;
   const [removedImbuementIds, setRemovedImbuementIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const removeImbuementInFlightRef = useRef(false);
 
   // Clear the optimistic success marker only after authoritative inventory data contains the
   // exact imbuement. Until then it prevents stale cache data from exposing another imbue action.
@@ -189,6 +182,7 @@ export default function OccupationCrafting() {
   const craftingStatus = userData
     ? getCurrentCraftingStatus(userData, userItems || [])
     : null;
+  const currentCraftingUserItemId = craftingStatus?.currentCraftingUserItemId;
 
   // Derive crystals and imbuable items from user inventory
   const crystals = (userItems || []).filter(
@@ -201,6 +195,16 @@ export default function OccupationCrafting() {
     (userItem) => userItem.item?.canBeImbued && userItem.quantity > 0,
   );
 
+  /** Imbuements in effect: finished, and not removed by this session's mutations. */
+  const shownImbuements = <
+    T extends { id: string; craftingFinishedAt: Date | null },
+  >(userItem: {
+    imbuements: T[];
+  }) =>
+    finishedImbuements(userItem).filter(
+      (imbuement) => !removedImbuementIds.has(imbuement.id),
+    );
+
   // Calculate max crystals per item based on crafting rank
   const userCraftingRank = craftingStatus?.craftingRank || "NOVICE";
   const maxCrystalsPerItem = CRAFTING_MAX_IMBUED_ITEMS[userCraftingRank];
@@ -212,12 +216,7 @@ export default function OccupationCrafting() {
       userCraftingRank,
       itemMaxImbuements,
     );
-    const currentCrystals =
-      userItem.imbuements?.filter(
-        (imbuement) =>
-          imbuement.craftingFinishedAt &&
-          new Date(imbuement.craftingFinishedAt) <= new Date(),
-      ).length || 0;
+    const currentCrystals = finishedImbuements(userItem).length;
     return {
       userItem,
       effectiveMaxImbuements,
@@ -264,7 +263,6 @@ export default function OccupationCrafting() {
   /** Submit the captured item/crystal pair once and retain its committed success marker. */
   const handleImbueItem = async () => {
     if (
-      imbueInFlightRef.current ||
       committedImbue ||
       !selectedImbuableItem ||
       !selectedCrystalUserItem ||
@@ -273,8 +271,7 @@ export default function OccupationCrafting() {
       return;
     }
 
-    // Capture the exact target and crystal synchronously. React's pending flag is only visible on
-    // the next render, so the ref is the same-tick duplicate-submit guard for click and Enter.
+    // Capture the exact target and crystal for the whole request.
     const request = {
       userItemId: selectedImbuableItem.id,
       userCrystalItemId: selectedCrystalUserItem.id,
@@ -282,93 +279,80 @@ export default function OccupationCrafting() {
       targetName: selectedImbuableItem.item?.name || "item",
       crystalName: selectedCrystalUserItem.item?.name || "crystal",
     };
-    imbueInFlightRef.current = true;
-    setPendingImbueRequest(request);
 
-    const revision = prepareUserUpdate();
-    try {
-      const data = await imbueItemMutation.mutateAsync({
-        userItemId: request.userItemId,
-        userCrystalItemId: request.userCrystalItemId,
-      });
-      showMutationToast(data);
-      if (data.success || ("userRecovery" in data && data.userRecovery))
-        await updateUser(data, { revision, refetch: false });
-      if (!data.success) return;
-
-      // Commit local truth before closing or refreshing. A failed/stale refetch cannot expose a
-      // second charge while the server is already imbuing this exact target with this crystal.
-      setCommittedImbue({
-        userItemId: request.userItemId,
-        imbuementItemId: request.crystalItemId,
-        targetName: request.targetName,
-        crystalName: request.crystalName,
-      });
-      setIsImbueModalOpen(false);
-      setSelectedImbuableItem(undefined);
-      setSelectedCrystalUserItem(undefined);
-      void Promise.allSettled([
-        utils.item.getUserItems.invalidate(),
-        utils.profile.getSidebarTimers.invalidate(),
-      ]);
-    } catch (error) {
-      // This caller owns transport feedback and retains the exact item/crystal selection.
-      // Other tRPC failures use the global handler.
-      if (error instanceof Error && isRetryableTrpcError(error)) {
-        showMutationToast({
-          success: false,
-          message: "Could not imbue this item. Check your connection and try again.",
+    await imbueFlight.run(request, async () => {
+      const revision = prepareUserUpdate();
+      try {
+        const data = await imbueItemMutation.mutateAsync({
+          userItemId: request.userItemId,
+          userCrystalItemId: request.userCrystalItemId,
         });
+        showMutationToast(data);
+        if (data.success || ("userRecovery" in data && data.userRecovery))
+          await updateUser(data, { revision, refetch: false });
+        if (!data.success) return;
+
+        // Commit local truth before closing or refreshing. A failed/stale refetch cannot expose a
+        // second charge while the server is already imbuing this exact target with this crystal.
+        setCommittedImbue({
+          userItemId: request.userItemId,
+          imbuementItemId: request.crystalItemId,
+          targetName: request.targetName,
+          crystalName: request.crystalName,
+        });
+        setIsImbueModalOpen(false);
+        setSelectedImbuableItem(undefined);
+        setSelectedCrystalUserItem(undefined);
+        void Promise.allSettled([
+          utils.item.getUserItems.invalidate(),
+          utils.profile.getSidebarTimers.invalidate(),
+        ]);
+      } catch (error) {
+        // The exact item/crystal selection stays in place for a retry.
+        showRetryableErrorToast(
+          error,
+          "Could not imbue this item. Check your connection and try again.",
+        );
       }
-    } finally {
-      imbueInFlightRef.current = false;
-      setPendingImbueRequest(null);
-    }
+    });
   };
 
   /** Remove the captured imbuement once while preserving a separately changed selection. */
   const handleRemoveImbuement = async () => {
     const target = removeImbuementTarget;
-    if (!target || removeImbuementInFlightRef.current) return;
+    if (!target) return;
 
-    // Capture the exact inventory row and imbuement synchronously. React's pending flag is only
-    // visible on the next render, so the ref is the same-tick duplicate-submit guard.
+    // Capture the exact inventory row and imbuement for the whole request.
     const request = { ...target };
-    removeImbuementInFlightRef.current = true;
-    setPendingRemoveImbuement(request);
 
-    try {
-      const data = await removeImbuementMutation.mutateAsync({
-        userItemImbuementId: request.userItemImbuementId,
-      });
-      showMutationToast(data);
-      if (!data.success) return;
-
-      // Hide only the committed imbuement before any refresh. The marker deliberately survives
-      // stale inventory results, so the destructive action cannot reappear after the server has
-      // already removed it; sibling items and imbuements remain available.
-      setRemovedImbuementIds((current) => {
-        const next = new Set(current);
-        next.add(request.userItemImbuementId);
-        return next;
-      });
-      setRemoveImbuementTarget((current) =>
-        current?.userItemImbuementId === request.userItemImbuementId ? null : current,
-      );
-      void utils.item.getUserItems.invalidate();
-    } catch (error) {
-      // This caller owns transport feedback and retains the exact target for retry.
-      // Other tRPC failures use the global handler.
-      if (error instanceof Error && isRetryableTrpcError(error)) {
-        showMutationToast({
-          success: false,
-          message: `Could not remove ${request.crystalName}. Check your connection and try again.`,
+    await removeImbuementFlight.run(request, async () => {
+      try {
+        const data = await removeImbuementMutation.mutateAsync({
+          userItemImbuementId: request.userItemImbuementId,
         });
+        showMutationToast(data);
+        if (!data.success) return;
+
+        // Hide only the committed imbuement before any refresh. The marker deliberately survives
+        // stale inventory results, so the destructive action cannot reappear after the server has
+        // already removed it; sibling items and imbuements remain available.
+        setRemovedImbuementIds((current) => {
+          const next = new Set(current);
+          next.add(request.userItemImbuementId);
+          return next;
+        });
+        setRemoveImbuementTarget((current) =>
+          current?.userItemImbuementId === request.userItemImbuementId ? null : current,
+        );
+        void utils.item.getUserItems.invalidate();
+      } catch (error) {
+        // The exact target stays in place for a retry.
+        showRetryableErrorToast(
+          error,
+          `Could not remove ${request.crystalName}. Check your connection and try again.`,
+        );
       }
-    } finally {
-      removeImbuementInFlightRef.current = false;
-      setPendingRemoveImbuement(null);
-    }
+    });
   };
 
   const rankProgress = getCraftingRankProgress(userData?.craftingExperience || 0);
@@ -498,33 +482,24 @@ export default function OccupationCrafting() {
                   new Date(craftingStatus.craftingFinishedAt) <= new Date() && (
                     <div className="font-medium text-green-600 text-sm">Finished!</div>
                   )}
-                {/* Find the currently crafting userItem to get its ID */}
-                {userItems &&
-                  (() => {
-                    const currentlyCraftingUserItem = userItems.find(
-                      (ui) =>
-                        ui.craftingFinishedAt &&
-                        new Date(ui.craftingFinishedAt) > new Date(),
-                    );
-                    return currentlyCraftingUserItem &&
-                      canChangeContent(userData?.role || "USER") ? (
-                      <Button
-                        onClick={() =>
-                          finishCraftingImmediatelyMutation.mutate({
-                            userItemId: currentlyCraftingUserItem.id,
-                          })
-                        }
-                        disabled={finishCraftingImmediatelyMutation.isPending}
-                        loading={finishCraftingImmediatelyMutation.isPending}
-                        variant="outline"
-                        size="sm"
-                        className="w-fit"
-                      >
-                        <Zap className="mr-2 h-4 w-4" />
-                        Instant Finish (Staff)
-                      </Button>
-                    ) : null;
-                  })()}
+                {currentCraftingUserItemId &&
+                  canChangeContent(userData?.role || "USER") && (
+                    <Button
+                      onClick={() =>
+                        finishCraftingImmediatelyMutation.mutate({
+                          userItemId: currentCraftingUserItemId,
+                        })
+                      }
+                      disabled={finishCraftingImmediatelyMutation.isPending}
+                      loading={finishCraftingImmediatelyMutation.isPending}
+                      variant="outline"
+                      size="sm"
+                      className="w-fit"
+                    >
+                      <Zap className="mr-2 h-4 w-4" />
+                      Instant Finish (Staff)
+                    </Button>
+                  )}
               </div>
             </CardContent>
           </Card>
@@ -714,7 +689,7 @@ export default function OccupationCrafting() {
                           isOpen={isImbueModalOpen}
                           setIsOpen={setIsImbueModalOpen}
                           isValid={false}
-                          isLoading={pendingImbueRequest !== null}
+                          isLoading={imbueFlight.isPending}
                           keepOpenOnAccept
                           proceedDisabled={committedImbue !== null}
                           onAccept={() => void handleImbueItem()}
@@ -729,9 +704,9 @@ export default function OccupationCrafting() {
                                 <ItemWithEffects
                                   item={{
                                     ...selectedImbuableItem.item,
-                                    imbuements: selectedImbuableItem.imbuements.map(
-                                      (i) => i.item,
-                                    ),
+                                    imbuements: shownImbuements(
+                                      selectedImbuableItem,
+                                    ).map((i) => i.item),
                                   }}
                                 />
                               )}
@@ -784,15 +759,7 @@ export default function OccupationCrafting() {
         {/* Manage Existing Imbuements */}
         {(() => {
           const itemsWithImbuements = (userItems || []).filter(
-            (userItem) =>
-              userItem.imbuements &&
-              userItem.imbuements.length > 0 &&
-              userItem.imbuements.some(
-                (imbuement) =>
-                  !removedImbuementIds.has(imbuement.id) &&
-                  (!imbuement.craftingFinishedAt ||
-                    new Date(imbuement.craftingFinishedAt) <= new Date()),
-              ),
+            (userItem) => shownImbuements(userItem).length > 0,
           );
 
           return itemsWithImbuements.length > 0 ? (
@@ -820,12 +787,7 @@ export default function OccupationCrafting() {
                         <div>
                           <h4 className="font-semibold">{userItem.item?.name}</h4>
                           {(() => {
-                            const done = (userItem.imbuements || []).filter(
-                              (i) =>
-                                !removedImbuementIds.has(i.id) &&
-                                (!i.craftingFinishedAt ||
-                                  new Date(i.craftingFinishedAt) <= new Date()),
-                            ).length;
+                            const done = shownImbuements(userItem).length;
                             return (
                               <p className="text-muted-foreground text-sm">
                                 {done} imbuement{done !== 1 ? "s" : ""}
@@ -837,63 +799,52 @@ export default function OccupationCrafting() {
                       <ItemWithEffects
                         item={{
                           ...userItem.item,
-                          imbuements:
-                            userItem.imbuements
-                              ?.filter((i) => !removedImbuementIds.has(i.id))
-                              .map((i) => i.item) || [],
+                          imbuements: shownImbuements(userItem).map((i) => i.item),
                         }}
                       />
                       {/* Imbuements with remove buttons */}
-                      {userItem.imbuements && userItem.imbuements.length > 0 && (
+                      {userItem.imbuements.length > 0 && (
                         <div className="mt-3 rounded-lg bg-purple-100 p-3">
                           <h4 className="mb-2 font-semibold text-purple-800">
                             Imbuements
                           </h4>
                           <div className="space-y-2">
-                            {userItem.imbuements
-                              .filter(
-                                (imbuement) =>
-                                  !removedImbuementIds.has(imbuement.id) &&
-                                  (!imbuement.craftingFinishedAt ||
-                                    new Date(imbuement.craftingFinishedAt) <=
-                                      new Date()),
-                              )
-                              .map((imbuement) => (
-                                <div
-                                  key={imbuement.id}
-                                  className="flex items-center justify-between rounded bg-white p-2"
-                                >
-                                  <div className="flex items-center space-x-2">
-                                    <ContentImage
-                                      image={imbuement.item.image}
-                                      alt={imbuement.item.name}
-                                      className="h-8 w-8"
-                                    />
-                                    <span className="font-medium">
-                                      {imbuement.item.name}
-                                    </span>
-                                  </div>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    disabled={
-                                      pendingRemoveImbuement?.userItemImbuementId ===
-                                      imbuement.id
-                                    }
-                                    onClick={() => {
-                                      setRemoveImbuementTarget({
-                                        userItemId: userItem.id,
-                                        userItemImbuementId: imbuement.id,
-                                        targetName: userItem.item?.name || "item",
-                                        crystalName: imbuement.item.name,
-                                        returnsCrystal: !userItem.item?.canBeImbued,
-                                      });
-                                    }}
-                                  >
-                                    Remove
-                                  </Button>
+                            {shownImbuements(userItem).map((imbuement) => (
+                              <div
+                                key={imbuement.id}
+                                className="flex items-center justify-between rounded bg-white p-2"
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <ContentImage
+                                    image={imbuement.item.image}
+                                    alt={imbuement.item.name}
+                                    className="h-8 w-8"
+                                  />
+                                  <span className="font-medium">
+                                    {imbuement.item.name}
+                                  </span>
                                 </div>
-                              ))}
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={
+                                    pendingRemoveImbuement?.userItemImbuementId ===
+                                    imbuement.id
+                                  }
+                                  onClick={() => {
+                                    setRemoveImbuementTarget({
+                                      userItemId: userItem.id,
+                                      userItemImbuementId: imbuement.id,
+                                      targetName: userItem.item?.name || "item",
+                                      crystalName: imbuement.item.name,
+                                      returnsCrystal: !userItem.item?.canBeImbued,
+                                    });
+                                  }}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       )}
@@ -917,7 +868,7 @@ export default function OccupationCrafting() {
           proceed_label="Remove"
           proceed_loading_label="Removing"
           confirmClassName="bg-red-600 text-white hover:bg-red-700"
-          isLoading={pendingRemoveImbuement !== null}
+          isLoading={removeImbuementFlight.isPending}
           keepOpenOnAccept
           onAccept={() => void handleRemoveImbuement()}
         >
@@ -949,7 +900,8 @@ export default function OccupationCrafting() {
 
         {/* Repair Items */}
         {(() => {
-          const itemsNeedingRepair = (userItems || []).filter(needsInventoryRepair);
+          const { itemsNeedingRepair, totalCost: totalRepairCost } =
+            calcRepairAllCost(userItems);
 
           return itemsNeedingRepair.length > 0 ? (
             <Card>
@@ -967,10 +919,6 @@ export default function OccupationCrafting() {
                 <div className="space-y-4">
                   {/* Repair All Button */}
                   {(() => {
-                    const totalRepairCost = itemsNeedingRepair.reduce(
-                      (total, userItem) => total + calcItemRepairCost(userItem),
-                      0,
-                    );
                     const canAfford = (userData?.money || 0) >= totalRepairCost;
                     return (
                       <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted/50 p-4">
@@ -1041,7 +989,7 @@ export default function OccupationCrafting() {
                         <ItemWithEffects
                           item={{
                             ...userItem.item,
-                            imbuements: userItem.imbuements?.map((i) => i.item) || [],
+                            imbuements: finishedImbuementItems(userItem),
                             curDurability: userItem.durability,
                           }}
                         />

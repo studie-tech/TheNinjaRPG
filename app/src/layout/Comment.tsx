@@ -21,6 +21,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { canDeleteComment, canSeeSecretData } from "@/utils/permissions";
 import { splitQuotedReply } from "@/utils/richText";
+import { stripHtmlPreview } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
 import type { DeleteCommentSchema, MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
@@ -137,7 +138,6 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
 };
 
 /**
-/**
  * Base component on which other comment components are built
  * @param props
  * @returns
@@ -156,7 +156,7 @@ interface BaseCommentProps extends PostProps {
   setQuoteId?: (id: string) => void;
 }
 const BaseComment: React.FC<BaseCommentProps> = (props) => {
-  // State// Reference for emoji element
+  // Reference for emoji element
   const { data: userData } = useUserData();
   const emojiRef = useRef<HTMLDivElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -365,12 +365,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
                       undone.
                     </p>
                     <blockquote className="line-clamp-3 border-muted-foreground/40 border-l-4 pl-3 text-muted-foreground text-sm italic">
-                      “
-                      {props.comment.content
-                        .replace(/<[^>]*>/g, " ")
-                        .replace(/\s+/g, " ")
-                        .trim()}
-                      ”
+                      “{stripHtmlPreview(props.comment.content)}”
                     </blockquote>
                   </div>
                 </Confirm>

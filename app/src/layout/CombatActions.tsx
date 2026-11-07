@@ -14,7 +14,7 @@ import type { Bloodline, Item, ItemRarity, Jutsu } from "@/drizzle/schema";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import { getActionPointCost } from "@/libs/combat/actions";
+import { getActionPointCost, getRemainingCooldown } from "@/libs/combat/actions";
 import { canSetHotkeys } from "@/libs/combat/hotkeys";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { isActionRangeLimited } from "@/libs/hexgrid";
@@ -138,26 +138,13 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
     const selectedItem = filtered.find((i) => i.id === selectedId);
     if (!selectedItem) return;
 
-    // Check if action is on cooldown
-    const isOnCooldown =
-      selectedItem.cooldown &&
-      selectedItem.cooldown > 0 &&
-      currentRound !== undefined &&
-      selectedItem.lastUsedRound !== undefined &&
-      currentRound - selectedItem.lastUsedRound < selectedItem.cooldown;
-
-    const effectiveActionCost =
-      combatMode && props.battle && props.userId
-        ? getActionPointCost(props.userId, props.battle, selectedItem as CombatAction)
-        : selectedItem.actionCostPerc;
-
-    // Check if user has insufficient AP
-    const insufficientAP =
-      userActionPoints !== undefined &&
-      effectiveActionCost !== undefined &&
-      userActionPoints < effectiveActionCost;
-
-    if (isOnCooldown || insufficientAP) {
+    if (
+      getRemainingCooldown(selectedItem, currentRound) > 0 ||
+      lacksActionPoints(getEffectiveActionCost(selectedItem, props), {
+        combatMode,
+        userActionPoints,
+      })
+    ) {
       onClick(selectedId);
     }
   }, [
@@ -273,40 +260,16 @@ interface ActionOptionProps {
 
 export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   const { item, settings } = props;
-  const {
-    cooldown,
-    image,
-    name,
-    rarity,
-    frames,
-    speed,
-    lastUsedRound,
-    warning,
-    isReskinned,
-    actionCostPerc,
-  } = item;
+  const { cooldown, image, name, rarity, frames, speed, warning, isReskinned } = item;
 
   // Derived values
-  const cooldownPerc = Math.max(
-    cooldown && settings.currentRound && lastUsedRound
-      ? 100 - (100 * (settings.currentRound - lastUsedRound)) / cooldown
-      : 0,
-    0,
-  );
+  const remainingCooldown = getRemainingCooldown(item, settings.currentRound);
+  const cooldownPerc = cooldown ? (100 * remainingCooldown) / cooldown : 0;
   const elements = item.effects
     ? item.effects.flatMap((e) => ("elements" in e && e.elements ? e.elements : []))
     : [];
-  const effectiveActionCost =
-    settings.combatMode && settings.battle && settings.userId
-      ? getActionPointCost(settings.userId, settings.battle, item as CombatAction)
-      : actionCostPerc;
-
-  // Check if user has insufficient AP (only in combat mode)
-  const insufficientAP =
-    settings.combatMode &&
-    settings.userActionPoints !== undefined &&
-    effectiveActionCost !== undefined &&
-    settings.userActionPoints < effectiveActionCost;
+  const effectiveActionCost = getEffectiveActionCost(item, settings);
+  const insufficientAP = lacksActionPoints(effectiveActionCost, settings);
 
   // Keep unavailable actions unselectable for both pointer and keyboard activation.
   const handleClick = () => {
@@ -430,14 +393,9 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
                 background: `conic-gradient(#ededed ${cooldownPerc}%, rgba(0, 0, 0, 0.1) 0deg)`,
               }}
             ></div>
-            {cooldown &&
-              settings.currentRound &&
-              lastUsedRound &&
-              cooldown - (settings.currentRound - lastUsedRound) > 0 && (
-                <div className="pointer-events-none absolute right-0 bottom-0 left-0 z-10 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-slate-400 bg-slate-300 font-bold text-base text-black">
-                  {cooldown - (settings.currentRound - lastUsedRound)}
-                </div>
-              )}
+            <div className="pointer-events-none absolute right-0 bottom-0 left-0 z-10 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-slate-400 bg-slate-300 font-bold text-base text-black">
+              {remainingCooldown}
+            </div>
           </>
         )}
         {/* Insufficient AP overlay */}
@@ -525,3 +483,35 @@ const actionHoverSummary = (item: ActionItemProps, actionCost: number | undefine
     .filter(Boolean)
     .join(" · ");
 };
+
+/** An action's AP cost: its effective cost in combat, otherwise its listed cost. */
+const getEffectiveActionCost = (
+  item: ActionItemProps,
+  settings: ActionCostSettings,
+) => {
+  const { combatMode, battle, userId } = settings;
+  return combatMode && battle && userId
+    ? getActionPointCost(userId, battle, item as CombatAction)
+    : item.actionCostPerc;
+};
+
+/**
+ * Check combat affordability using the resolved cost also shown on the action card.
+ * Unknown AP or cost leaves this UI-only guard inactive.
+ */
+const lacksActionPoints = (
+  cost: number | undefined,
+  settings: Pick<ActionSelectorSettingsProps, "combatMode" | "userActionPoints">,
+) => {
+  return (
+    !!settings.combatMode &&
+    settings.userActionPoints !== undefined &&
+    cost !== undefined &&
+    settings.userActionPoints < cost
+  );
+};
+
+type ActionCostSettings = Pick<
+  ActionSelectorSettingsProps,
+  "combatMode" | "battle" | "userId"
+>;

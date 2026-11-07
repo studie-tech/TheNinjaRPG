@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
@@ -84,19 +83,17 @@ import {
   canDeleteComment,
   canModerateRoles,
   canPostReportComment,
-  canReplyToStaffConversationWhileRestricted,
   canSeeReport,
   canSeeSecretData,
   canViewConversation,
   getBanOrSilenceRestriction,
+  getConversationComposeRestriction,
   getMessagingRestriction,
   isStaffRole,
-  RESTRICTED_STAFF_CONVERSATION_MESSAGE,
-  RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
 } from "@/utils/permissions";
 import { checkForBadWords, moderateUserText } from "@/utils/profanity";
 import { splitQuotedReply } from "@/utils/richText";
-import sanitize, { stripBlockquotes } from "@/utils/sanitize";
+import sanitize, { buildQuoteBlock } from "@/utils/sanitize";
 import {
   createConversationSchema,
   deleteCommentSchema,
@@ -505,28 +502,12 @@ export const commentsRouter = createTRPCRouter({
         sender && effectiveUserId === sender.userId ? sender.username : user.username;
       // Guard
       if (!convo) return errorResponse("Conversation not found");
-      if (convo.sendRestriction) return errorResponse(convo.sendRestriction);
-      const messagingRestriction = getMessagingRestriction(user);
-      if (messagingRestriction) {
-        // Only banned/silenced users may post in staff conversations (own help tickets).
-        // Other restrictions (e.g. level gate) are never bypassed.
-        const isBannedOrSilenced = user.isBanned || user.isSilenced;
-        if (!isBannedOrSilenced || !convo.isStaffAvailable) {
-          return errorResponse(messagingRestriction);
-        }
-        if (
-          !canReplyToStaffConversationWhileRestricted(
-            user,
-            convo.supportTicket?.createdByUserId,
-          )
-        ) {
-          return errorResponse(
-            convo.supportTicket
-              ? RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE
-              : RESTRICTED_STAFF_CONVERSATION_MESSAGE,
-          );
-        }
-      }
+      const composeRestriction = getConversationComposeRestriction(
+        user,
+        convo,
+        convo.supportTicket?.createdByUserId,
+      );
+      if (composeRestriction) return errorResponse(composeRestriction);
       if (!canViewConversation(convo, ctx.userId, user.role)) {
         return errorResponse("You are not allowed to view this conversation");
       }
@@ -566,10 +547,7 @@ export const commentsRouter = createTRPCRouter({
       let content = input.comment;
       if (quotes.length > 0) {
         const quoteContent = quotes
-          .map(
-            (q) =>
-              `<blockquote author="${q.user?.username || "Unknown"}" date="${format(q.createdAt, "MM/dd/yyyy")}">${stripBlockquotes(q.content)}</blockquote>`,
-          )
+          .map((q) => buildQuoteBlock({ ...q, username: q.user?.username }))
           .join("");
         content = `${quoteContent}\n\n${content}`;
       }

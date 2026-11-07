@@ -1,4 +1,4 @@
-import { getAssignedPetExperience, getAssignedPetCollection } from "@/deltas/pets";
+import { getAssignedPetExperience, getAssignedPetCollection, getSavedPetSettings, getSavedPetSettingsCollection } from "@/deltas/pets";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { ItemRarities, PetRarities, PET_ABILITY_SLOTS_BY_RARITY, type ItemRarity, MAP_WAKE_ISLAND_SECTOR, PET_BATTLE_CONFIG, PET_COLLECTION_SLOT_COST, PET_FEED_COOLDOWN_HOURS, PET_FEED_EXPERIENCE_BY_RARITY, PET_GENERATION_LEASE_MS, PET_GENERATION_RETRY_MS, PET_MAX_COLLECTION_SLOTS, PET_MAX_GENERATION_ATTEMPTS, PET_REPLACEMENT_COST, PET_SEICHI_SILVER_COST, PET_ART_PROVIDER_SETTING, PetArtProviders } from "@/drizzle/constants";
@@ -106,6 +106,33 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
   });
   afterEach(() => { vi.restoreAllMocks(); PET_BATTLE_CONFIG.enabled = true; setSystemTime(); });
 
+  it.each(["settings", "AI"] as const)("returns the exact public %s projection with no post-write read", async (kind) => {
+    const database = await getTestDatabase();
+    await readyPet(database, { generationToken: "private-artwork-lease", gender: "FEMALE" });
+    const api = callerForDatabase(petsRouter, userId, database);
+    const before = await api.getPet({ petId });
+    const collection = await api.getCollection();
+    const recorded = await recordQueries(() => kind === "settings"
+      ? api.updatePet({ petId, name: "  Kumo 守  ", battleEnabled: false, spawnPosition: "LEFT" })
+      : api.updateAiConfig({ petId, rules: [], includeDefaultRules: false }));
+    const result = recorded.result;
+    expect(result.success).toBe(true);
+    expect(result.petSettingsUpdate).toMatchObject({ id: petId, ownerId: userId, previousRevision: 0, revision: 1 });
+    expect(Object.keys(result.petSettingsUpdate!).sort()).toEqual(["id", "ownerId", "previousOwnerUpdatedAt", "previousRevision", "revision", "updatedAt", "name", "gender", "battleEnabled", "spawnPosition", "aiRules", "includeDefaultRules"].sort());
+    expect(JSON.stringify(result)).not.toContain("private-artwork-lease");
+    const writes = recorded.statements.filter(statement => /^\s*update /i.test(statement));
+    expect(writes).toHaveLength(1);
+    expect(recorded.statements.at(-1)).toBe(writes[0]);
+    // Isolation history, actor, owned pets, settings and PvP average are the existing initial reads.
+    expect(recorded.statements.filter(statement => /^\s*select /i.test(statement))).toHaveLength(5);
+    expect(getSavedPetSettings(before, result.petSettingsUpdate)).toEqual(await api.getPet({ petId }));
+    expect(getSavedPetSettingsCollection(collection, result.petSettingsUpdate)).toEqual(await api.getCollection());
+    const saved = await readPet(database);
+    const owner = await readOwner(database);
+    expect(result.petSettingsUpdate!.updatedAt).toEqual(saved!.updatedAt);
+    expect(result.userPatch!.updatedAt).toEqual(owner!.updatedAt);
+  });
+
   it.each(["settings", "activate", "feed", "assign", "evolve"] as const)("preserves queued companion XP while waking for %s", async (action) => {
     const database = await getTestDatabase();
     await readyPet(database, { experience: 7500 });
@@ -153,6 +180,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     expect(await readOwner(database)).toMatchObject({ status: "AWAKE", money: 23 });
     expect(await readPet(database)).toMatchObject({ name: "Recovered companion", revision: 1 });
     expect(executed.result.userPatch).toEqual({});
+    expect(executed.result.petSettingsUpdate).toBeUndefined();
     expect(executed.result.userRecovery?.userPatch).toMatchObject({ status: "AWAKE" });
   });
 
@@ -202,7 +230,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     const beforePet = await readPet(database);
     const query = await recordQueries(() => callerForDatabase(petsRouter, userId, database).getPet());
     expect(query.result).toMatchObject({ canAcquire: available, canFeed: available, canRankUp: available });
-    expect(query.statements.every((statement) => /^select /i.test(statement))).toBe(true);
+    expect(query.statements.every((statement) => /^\s*select /i.test(statement))).toBe(true);
     expect(await readOwner(database)).toEqual(beforeOwner);
     expect(await readPet(database)).toEqual(beforePet);
   });
@@ -821,7 +849,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
       await mealStack();
       const caller = callerForDatabase(petsRouter, userId, database);
       const input = { petId, userItemId: "meal-stack", expectedQuantity: 2 };
-      expect(await caller.getPet()).toMatchObject({ canFeed: false, feedAvailableAt: availableAt });
+      expect(await caller.getPet()).toEqual(expect.objectContaining({ canFeed: false, feedAvailableAt: availableAt }));
       const original = await readPet(database);
       expect(await caller.feedPet(input)).toMatchObject({ success: false,
         message: `Feed this companion once every ${PET_FEED_COOLDOWN_HOURS} hours. Wait until its next feeding is available.` });

@@ -1,8 +1,7 @@
 "use client";
 
-import type { Chart } from "chart.js/auto";
 import { Download, RefreshCw, RotateCcw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,9 +15,17 @@ import {
   CONTENT_PROPOSAL_RETENTION_DAYS,
   ContentProposalCategories,
   ContentProposalEntityTypes,
+  ContentProposalSources,
 } from "@/drizzle/constants";
+import { useLazyChart } from "@/hooks/useLazyChart";
 import Loader from "@/layout/Loader";
-import { CATEGORY_LABELS, ENTITY_LABELS } from "@/libs/contentReview/labels";
+import {
+  CATEGORY_LABELS,
+  ENTITY_LABELS,
+  SOURCE_LABELS,
+} from "@/libs/contentReview/labels";
+import { downloadCsv } from "@/utils/dom";
+import { formatPercent } from "@/utils/string";
 import type { ReviewStatsInput } from "@/validators/contentReview";
 
 export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) => {
@@ -153,8 +160,9 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
             }
             options={[
               ["ALL", "All sources"],
-              ["AGENT", "Content audit"],
-              ["STAFF", "Staff"],
+              ...ContentProposalSources.map(
+                (entry) => [entry, SOURCE_LABELS[entry]] as [string, string],
+              ),
             ]}
           />
           <StatsSelect
@@ -206,11 +214,11 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
               <Metric
                 label="Reviewed"
                 value={summary.reviewed.toLocaleString()}
-                detail={`${percent(summary.reviewCoverage)} of submissions`}
+                detail={`${formatPercent(summary.reviewCoverage)} of submissions`}
               />
               <Metric
                 label="Acceptance rate"
-                value={percent(summary.acceptanceRate)}
+                value={formatPercent(summary.acceptanceRate)}
                 detail={`${summary.accepted} accepted / ${summary.reviewed} reviewed`}
               />
               <Metric
@@ -249,7 +257,7 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
                             <td className="p-2">{row.total}</td>
                             <td className="p-2">{row.accepted}</td>
                             <td className="p-2">{row.REJECTED}</td>
-                            <td className="p-2">{percent(row.acceptanceRate)}</td>
+                            <td className="p-2">{formatPercent(row.acceptanceRate)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -295,8 +303,8 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
                         >
                           <td className="p-3 text-left font-medium">
                             {row.source === "STAFF"
-                              ? "Staff"
-                              : row.agentName || "Content audit"}
+                              ? SOURCE_LABELS.STAFF
+                              : row.agentName || SOURCE_LABELS.AGENT}
                           </td>
                           <td className="p-3 text-left">
                             {CATEGORY_LABELS[row.category]}
@@ -308,7 +316,7 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
                           <td className="p-3">{row.OUTDATED}</td>
                           <td className="p-3">{row.REVERTED}</td>
                           <td className="p-3 font-semibold">
-                            {percent(row.acceptanceRate)}
+                            {formatPercent(row.acceptanceRate)}
                           </td>
                         </tr>
                       ))}
@@ -335,106 +343,95 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
 
 const AcceptanceChart = ({ trend }: { trend: Stats["trend"] }) => {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    let chart: Chart<"bar" | "line"> | undefined;
-    setFailed(false);
-    void import("chart.js/auto")
-      .then(({ Chart: ChartJS }) => {
-        if (cancelled || !canvas.current) return;
-        const color = getComputedStyle(canvas.current).color;
-        chart = new ChartJS<"bar" | "line">(canvas.current, {
-          type: "bar",
-          data: {
-            labels: trend.map((row) => formatDate(row.date)),
-            datasets: [
-              {
-                type: "line",
-                label: "Acceptance %",
-                data: trend.map((row) => row.acceptanceRate),
-                yAxisID: "rate",
-                borderColor: "#2563eb",
-                backgroundColor: "#2563eb",
-                borderWidth: 2.5,
-                pointRadius: trend.length > 35 ? 1 : 3,
-                pointHoverRadius: 5,
-                spanGaps: false,
-                order: 0,
-              },
-              {
-                type: "bar",
-                label: "Accepted",
-                data: trend.map((row) => row.accepted),
-                yAxisID: "volume",
-                backgroundColor: "rgba(13, 148, 136, 0.5)",
-                stack: "reviews",
-                order: 1,
-              },
-              {
-                type: "bar",
-                label: "Rejected",
-                data: trend.map((row) => row.REJECTED),
-                yAxisID: "volume",
-                backgroundColor: "rgba(217, 119, 6, 0.45)",
-                stack: "reviews",
-                order: 1,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            color,
-            interaction: { mode: "index", intersect: false },
-            plugins: {
-              legend: {
-                position: "bottom",
-                labels: { color, usePointStyle: true, padding: 18 },
-              },
-              tooltip: {
-                callbacks: {
-                  afterTitle: (items) =>
-                    `${trend[items[0]?.dataIndex ?? 0]?.total ?? 0} suggestions submitted`,
-                  label: (item) =>
-                    `${item.dataset.label}: ${item.dataset.yAxisID === "rate" ? percent(item.parsed.y) : item.parsed.y}`,
-                },
-              },
+  const failed = useLazyChart(
+    canvas,
+    (ChartJS, element) => {
+      const color = getComputedStyle(element).color;
+      return new ChartJS<"bar" | "line">(element, {
+        type: "bar",
+        data: {
+          labels: trend.map((row) => formatDate(row.date)),
+          datasets: [
+            {
+              type: "line",
+              label: "Acceptance %",
+              data: trend.map((row) => row.acceptanceRate),
+              yAxisID: "rate",
+              borderColor: "#2563eb",
+              backgroundColor: "#2563eb",
+              borderWidth: 2.5,
+              pointRadius: trend.length > 35 ? 1 : 3,
+              pointHoverRadius: 5,
+              spanGaps: false,
+              order: 0,
             },
-            scales: {
-              x: {
-                stacked: true,
-                ticks: { color, maxTicksLimit: 8, maxRotation: 0 },
-                grid: { display: false },
-              },
-              rate: {
-                position: "left",
-                min: 0,
-                max: 100,
-                title: { display: true, text: "Acceptance (%)", color },
-                ticks: { color, stepSize: 25, callback: (value) => `${value}%` },
-                grid: { color: "rgba(128,128,128,0.12)" },
-              },
-              volume: {
-                position: "right",
-                stacked: true,
-                min: 0,
-                title: { display: true, text: "Reviewed suggestions", color },
-                ticks: { color, precision: 0 },
-                grid: { drawOnChartArea: false },
+            {
+              type: "bar",
+              label: "Accepted",
+              data: trend.map((row) => row.accepted),
+              yAxisID: "volume",
+              backgroundColor: "rgba(13, 148, 136, 0.5)",
+              stack: "reviews",
+              order: 1,
+            },
+            {
+              type: "bar",
+              label: "Rejected",
+              data: trend.map((row) => row.REJECTED),
+              yAxisID: "volume",
+              backgroundColor: "rgba(217, 119, 6, 0.45)",
+              stack: "reviews",
+              order: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          color,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: { color, usePointStyle: true, padding: 18 },
+            },
+            tooltip: {
+              callbacks: {
+                afterTitle: (items) =>
+                  `${trend[items[0]?.dataIndex ?? 0]?.total ?? 0} suggestions submitted`,
+                label: (item) =>
+                  `${item.dataset.label}: ${item.dataset.yAxisID === "rate" ? formatPercent(item.parsed.y) : item.parsed.y}`,
               },
             },
           },
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
+          scales: {
+            x: {
+              stacked: true,
+              ticks: { color, maxTicksLimit: 8, maxRotation: 0 },
+              grid: { display: false },
+            },
+            rate: {
+              position: "left",
+              min: 0,
+              max: 100,
+              title: { display: true, text: "Acceptance (%)", color },
+              ticks: { color, stepSize: 25, callback: (value) => `${value}%` },
+              grid: { color: "rgba(128,128,128,0.12)" },
+            },
+            volume: {
+              position: "right",
+              stacked: true,
+              min: 0,
+              title: { display: true, text: "Reviewed suggestions", color },
+              ticks: { color, precision: 0 },
+              grid: { drawOnChartArea: false },
+            },
+          },
+        },
       });
-    return () => {
-      cancelled = true;
-      chart?.destroy();
-    };
-  }, [trend]);
+    },
+    [trend],
+  );
   return failed ? (
     <p role="status" className="py-8 text-sm">
       The chart could not load. Use the period data below to investigate results.
@@ -494,8 +491,6 @@ const Metric = ({
     <p className="text-muted-foreground text-xs">{detail}</p>
   </div>
 );
-const percent = (value: number | null) =>
-  value == null ? "—" : `${value.toFixed(1)}%`;
 const formatDate = (date: string) =>
   new Date(date).toLocaleDateString("en-GB", {
     day: "numeric",
@@ -504,36 +499,31 @@ const formatDate = (date: string) =>
     timeZone: "UTC",
   });
 const downloadStats = (data: Stats) => {
-  const csv = [
+  downloadCsv(
     [
-      "Period starts (UTC)",
-      "Submitted",
-      "Accepted",
-      "Rejected",
-      "Pending",
-      "Outdated",
-      "Reverted",
-      "Acceptance %",
+      [
+        "Period starts (UTC)",
+        "Submitted",
+        "Accepted",
+        "Rejected",
+        "Pending",
+        "Outdated",
+        "Reverted",
+        "Acceptance %",
+      ],
+      ...data.trend.map((row) => [
+        row.date,
+        row.total,
+        row.accepted,
+        row.REJECTED,
+        row.PENDING,
+        row.OUTDATED,
+        row.REVERTED,
+        row.acceptanceRate?.toFixed(2) ?? "",
+      ]),
     ],
-    ...data.trend.map((row) => [
-      row.date,
-      row.total,
-      row.accepted,
-      row.REJECTED,
-      row.PENDING,
-      row.OUTDATED,
-      row.REVERTED,
-      row.acceptanceRate?.toFixed(2) ?? "",
-    ]),
-  ]
-    .map((row) => row.join(","))
-    .join("\r\n");
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `content-review-${data.start.slice(0, 10)}-${data.end.slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+    `content-review-${data.start.slice(0, 10)}-${data.end.slice(0, 10)}.csv`,
+  );
 };
 const DEFAULT_FILTERS: ReviewStatsInput = {
   days: CONTENT_PROPOSAL_RETENTION_DAYS,

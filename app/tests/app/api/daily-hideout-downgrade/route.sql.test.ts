@@ -79,6 +79,6 @@ describeWithDatabase("Stronghold monthly maintenance", () => {
     });
     expect((await GET(request())).status).toBe(200);
     expect((await db.query.clan.findFirst())?.points).toBe(cost * 2);
-    expect(await db.query.village.findFirst()).toMatchObject({ type: "HIDEOUT", wasDowngraded: false, lastMaintenancePaidAt: dueAt });
+    expect(await db.query.village.findFirst()).toEqual(expect.objectContaining({ type: "HIDEOUT", wasDowngraded: false, lastMaintenancePaidAt: dueAt }));
   });
 });

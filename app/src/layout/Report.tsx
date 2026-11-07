@@ -5,8 +5,8 @@ import type React from "react";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import type { FederalStatus, UserRank, UserRole } from "@/drizzle/constants";
 import { showMutationToast } from "@/libs/toast";
+import type { UserCard } from "@/queries/userColumns";
 import { parseHtml } from "@/utils/parse";
 import { useUserData } from "@/utils/UserContext";
 import {
@@ -21,16 +21,7 @@ import RichInput from "./RichInput";
 interface ReportUserProps {
   button: React.ReactNode;
   system: (typeof systems)[number];
-  user: {
-    userId: string;
-    username: string;
-    avatar: string | null;
-    level: number;
-    rank: UserRank;
-    isOutlaw: boolean;
-    role: UserRole;
-    federalStatus: FederalStatus;
-  };
+  user: UserCard;
   content: {
     id: string;
     content?: string;

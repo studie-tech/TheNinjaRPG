@@ -41,7 +41,7 @@ import {
   isDeletedStoreUserId,
   settleRecordedLedger,
 } from "@/server/utils/purchases/grant";
-import { checkRecruitSignupEligibility } from "@/server/utils/recruitment";
+import { checkRecruitSignupEligibility, isKnownIp } from "@/server/utils/recruitment";
 import {
   carryoverReportId,
   discardUnpublishedSanctions,
@@ -286,7 +286,7 @@ export const registerRouter = createTRPCRouter({
           id: selectedBloodline.id,
           rank: selectedBloodline.rank,
         }),
-        ...(ctx.userIp
+        ...(isKnownIp(ctx.userIp)
           ? [upsertHistoricalIp(ctx.drizzle, ctx.userId, ctx.userIp)]
           : []),
         ...(input.recruiter_userid

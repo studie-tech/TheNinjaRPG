@@ -19,6 +19,8 @@ import {
   huntingEligibility,
   huntingSessionStage,
 } from "@/libs/hunting/contracts";
+import { getScrollBehavior } from "@/utils/dom";
+import { pushToCombat } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 import type { HuntingReceipt } from "@/validators/hunting";
 import type { UserDeltaResponse } from "@/validators/userCache";
@@ -97,7 +99,7 @@ export function HuntingBoard({
           utils.hunting.getSession.invalidate(),
           utils.combat.getBattle.invalidate(),
         ]);
-        if (!onStarted) router.push("/combat");
+        if (!onStarted) pushToCombat(router, result.battleId);
       } else {
         if (result.userRecovery) await updateUser(result, { revision, refetch: false });
         await board.refetch();
@@ -282,11 +284,7 @@ export function HuntingBoard({
                       requestAnimationFrame(() => {
                         selector.current?.focus({ preventScroll: true });
                         selector.current?.scrollIntoView({
-                          behavior: window.matchMedia(
-                            "(prefers-reduced-motion: reduce)",
-                          ).matches
-                            ? "auto"
-                            : "smooth",
+                          behavior: getScrollBehavior(),
                           block: "start",
                         });
                       });

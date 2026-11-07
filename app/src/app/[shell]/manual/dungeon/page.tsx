@@ -26,6 +26,7 @@ import {
   RetryQuestDelays,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import { LabeledField } from "@/layout/LabeledField";
 import Loader from "@/layout/Loader";
 import { MapLocationPreview } from "@/layout/MapLocationPreview";
 import { SearchSelect } from "@/layout/SearchSelect";
@@ -242,13 +243,13 @@ export default function DungeonEditor() {
                 />
               )}
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Name">
+                <LabeledField label="Name">
                   <Input
                     value={content.name}
                     onChange={(e) => patch({ name: e.target.value })}
                   />
-                </Field>
-                <Field label="Entrance artwork">
+                </LabeledField>
+                <LabeledField label="Entrance artwork">
                   <select
                     aria-label="Entrance artwork"
                     className="w-full rounded border bg-background p-2"
@@ -262,8 +263,8 @@ export default function DungeonEditor() {
                       </option>
                     ))}
                   </select>
-                </Field>
-                <Field label="Entrance size multiplier">
+                </LabeledField>
+                <LabeledField label="Entrance size multiplier">
                   <NumberInput
                     min={0.2}
                     max={5}
@@ -271,8 +272,8 @@ export default function DungeonEditor() {
                     value={content.structureScale}
                     onChange={(e) => patch({ structureScale: Number(e.target.value) })}
                   />
-                </Field>
-                <Field label="Battle background">
+                </LabeledField>
+                <LabeledField label="Battle background">
                   <select
                     className="w-full rounded border bg-background p-2"
                     value={content.background}
@@ -286,17 +287,17 @@ export default function DungeonEditor() {
                       <option key={b}>{b}</option>
                     ))}
                   </select>
-                </Field>
+                </LabeledField>
                 <div className="sm:col-span-2">
-                  <Field label="Description">
+                  <LabeledField label="Description">
                     <Textarea
                       rows={2}
                       value={content.description}
                       onChange={(e) => patch({ description: e.target.value })}
                     />
-                  </Field>
+                  </LabeledField>
                 </div>
-                <Field label="Expiration (new lobbies only)">
+                <LabeledField label="Expiration (new lobbies only)">
                   <Input
                     type="datetime-local"
                     value={
@@ -310,32 +311,32 @@ export default function DungeonEditor() {
                       })
                     }
                   />
-                </Field>
-                <Field label="Published">
+                </LabeledField>
+                <LabeledField label="Published">
                   <Switch
                     checked={!content.hidden}
                     onCheckedChange={(published) => patch({ hidden: !published })}
                   />
-                </Field>
-                <Field label="Sector">
+                </LabeledField>
+                <LabeledField label="Sector">
                   <NumberInput
                     value={content.sector}
                     onValueChange={(value) => patch({ sector: value })}
                   />
-                </Field>
+                </LabeledField>
                 <div className="flex gap-2">
-                  <Field label="Longitude">
+                  <LabeledField label="Longitude">
                     <NumberInput
                       value={content.longitude}
                       onValueChange={(value) => patch({ longitude: value })}
                     />
-                  </Field>
-                  <Field label="Latitude">
+                  </LabeledField>
+                  <LabeledField label="Latitude">
                     <NumberInput
                       value={content.latitude}
                       onValueChange={(value) => patch({ latitude: value })}
                     />
-                  </Field>
+                  </LabeledField>
                 </div>
               </div>
               <section
@@ -349,7 +350,7 @@ export default function DungeonEditor() {
                   {DUNGEON_LOBBY_SECONDS / 60} minutes.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Required level">
+                  <LabeledField label="Required level">
                     <NumberInput
                       min={1}
                       max={MAX_PLAYER_LEVEL}
@@ -360,8 +361,8 @@ export default function DungeonEditor() {
                         })
                       }
                     />
-                  </Field>
-                  <Field label="Prerequisite quest">
+                  </LabeledField>
+                  <LabeledField label="Prerequisite quest">
                     <SearchSelect
                       label="Prerequisite quest"
                       placeholder="No prerequisite"
@@ -382,8 +383,8 @@ export default function DungeonEditor() {
                         })
                       }
                     />
-                  </Field>
-                  <Field label="Required entry item">
+                  </LabeledField>
+                  <LabeledField label="Required entry item">
                     <SearchSelect
                       label="Required entry item"
                       placeholder="No item required"
@@ -404,8 +405,8 @@ export default function DungeonEditor() {
                         })
                       }
                     />
-                  </Field>
-                  <Field label="Entry item quantity">
+                  </LabeledField>
+                  <LabeledField label="Entry item quantity">
                     <NumberInput
                       min={1}
                       max={MAX_ITEM_STACK_SIZE}
@@ -419,9 +420,9 @@ export default function DungeonEditor() {
                         })
                       }
                     />
-                  </Field>
+                  </LabeledField>
                   {(["maxAttempts", "maxCompletes"] as const).map((field) => (
-                    <Field
+                    <LabeledField
                       key={field}
                       label={
                         field === "maxAttempts"
@@ -466,10 +467,10 @@ export default function DungeonEditor() {
                           </span>
                         )}
                       </div>
-                    </Field>
+                    </LabeledField>
                   ))}
                   {(["attemptDelay", "retryDelay"] as const).map((field) => (
-                    <Field
+                    <LabeledField
                       key={field}
                       label={
                         field === "attemptDelay"
@@ -501,7 +502,7 @@ export default function DungeonEditor() {
                           </option>
                         ))}
                       </select>
-                    </Field>
+                    </LabeledField>
                   ))}
                 </div>
               </section>
@@ -609,7 +610,7 @@ export default function DungeonEditor() {
                       </Button>
                     </div>
                     {wi > 0 && (
-                      <Field label="Minimum rounds between wave starts">
+                      <LabeledField label="Minimum rounds between wave starts">
                         <NumberInput
                           min={0}
                           max={ENCOUNTER_MAX_WAVE_DELAY_ROUNDS}
@@ -621,7 +622,7 @@ export default function DungeonEditor() {
                             })
                           }
                         />
-                      </Field>
+                      </LabeledField>
                     )}
                     <div className="space-y-2">
                       {groupEnemies(wave.aiIds).map(({ ai, quantity }, aiIndex) => (
@@ -651,7 +652,7 @@ export default function DungeonEditor() {
                               }}
                             />
                           </div>
-                          <Field label="Quantity">
+                          <LabeledField label="Quantity">
                             <EnemyQuantity
                               label={`Wave ${wi + 1} enemy ${aiIndex + 1} quantity`}
                               max={DUNGEON_MAX_MOBS}
@@ -669,7 +670,7 @@ export default function DungeonEditor() {
                                 })
                               }
                             />
-                          </Field>
+                          </LabeledField>
                           <Button
                             variant="secondary"
                             size="icon"
@@ -735,7 +736,7 @@ export default function DungeonEditor() {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {(["money", "experience", "tokens", "prestige"] as const).map(
                     (key) => (
-                      <Field
+                      <LabeledField
                         key={key}
                         label={
                           key === "money"
@@ -756,7 +757,7 @@ export default function DungeonEditor() {
                             })
                           }
                         />
-                      </Field>
+                      </LabeledField>
                     ),
                   )}
                 </div>
@@ -826,7 +827,7 @@ export default function DungeonEditor() {
                         }}
                       />
                     </div>
-                    <Field label="Chance (%)">
+                    <LabeledField label="Chance (%)">
                       <NumberInput
                         aria-label={`Drop ${i + 1} chance (%)`}
                         className="w-20"
@@ -839,8 +840,8 @@ export default function DungeonEditor() {
                           patch({ rewards: { ...content.rewards, drops } });
                         }}
                       />
-                    </Field>
-                    <Field label="Quantity">
+                    </LabeledField>
+                    <LabeledField label="Quantity">
                       <NumberInput
                         aria-label={`Drop ${i + 1} quantity`}
                         className="w-20"
@@ -854,7 +855,7 @@ export default function DungeonEditor() {
                           patch({ rewards: { ...content.rewards, drops } });
                         }}
                       />
-                    </Field>
+                    </LabeledField>
                     <Button
                       variant="secondary"
                       size="icon"
@@ -922,13 +923,6 @@ export default function DungeonEditor() {
 }
 
 /** Keep field labels and controls together in the editor's responsive grid. */
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <Label className="block space-y-1">
-    <span className="block">{label}</span>
-    {children}
-  </Label>
-);
-
 /**
  * Preserve invalid numeric drafts locally; combat's repeated-ID arrays hold valid counts only.
  * Echo NumberInput's callback value, including NaN, until corrected or the source count changes.

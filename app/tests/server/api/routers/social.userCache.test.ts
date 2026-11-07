@@ -78,7 +78,7 @@ describeWithDatabase("social mutation profile projections", () => {
       expect(getUser).not.toHaveBeenCalled();
       const cached = client.getQueryData<typeof initial>(key)!;
       expect(cached.userData?.pveFights).toBe(9);
-      expect(cached.userData).toMatchObject({ curHealth: initial.userData?.curHealth, curChakra: initial.userData?.curChakra, curStamina: initial.userData?.curStamina, curEnergy: initial.userData?.curEnergy, regenAt: initial.userData?.regenAt });
+      expect(cached.userData).toEqual(expect.objectContaining({ curHealth: initial.userData?.curHealth, curChakra: initial.userData?.curChakra, curStamina: initial.userData?.curStamina, curEnergy: initial.userData?.curEnergy, regenAt: initial.userData?.regenAt }));
       expect(cached.userData?.questData).toEqual(initial.userData?.questData);
       expect(cached.achievementProgress).toEqual(initial.achievementProgress);
       const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "projection-user") });

@@ -50,40 +50,29 @@ const SliderField: React.FC<SliderFieldProps> = (props) => {
         {props.label ? `${props.label}.` : ""}
         {selectedLabel ? ` ${selectedLabel}` : ""}
       </label>
-      <div
-        className={`flex flex-row items-center ${props.disabled ? "opacity-50" : ""}`}
-      >
-        <MinusCircle
-          aria-disabled={props.disabled}
-          className={`mr-2 inline-block h-10 w-10 fill-orange-100 text-orange-800 ${props.disabled ? "cursor-not-allowed" : "hover:cursor-pointer hover:fill-orange-600"}`}
-          onClick={() =>
-            !props.disabled && props.watchedValue > props.min
-              ? props.setValue(props.id, props.watchedValue - (props.step ?? 1))
-              : null
+      <SliderStepper
+        disabled={props.disabled}
+        onDecrement={() => {
+          if (!props.disabled && props.watchedValue > props.min) {
+            props.setValue(props.id, props.watchedValue - (props.step ?? 1));
           }
-        />
-        <input
-          id={props.id}
-          type="range"
-          min={props.min}
-          max={props.max}
-          step={props.step ?? 1}
-          disabled={props.disabled}
-          defaultValue={props.default}
-          {...props?.register?.(props.id, { valueAsNumber: true })}
-          className="h-5 w-full cursor-pointer appearance-none rounded-lg bg-orange-200 accent-orange-800 disabled:cursor-not-allowed"
-          onChange={(e) => handleChange(props.id, Number(e.target.value))}
-        />
-        <PlusCircle
-          aria-disabled={props.disabled}
-          className={`ml-2 inline-block h-10 w-10 fill-orange-100 text-orange-800 ${props.disabled ? "cursor-not-allowed" : "hover:cursor-pointer hover:fill-orange-600"}`}
-          onClick={() =>
-            !props.disabled && props.watchedValue < props.max
-              ? props.setValue(props.id, props.watchedValue + (props.step ?? 1))
-              : null
+        }}
+        onIncrement={() => {
+          if (!props.disabled && props.watchedValue < props.max) {
+            props.setValue(props.id, props.watchedValue + (props.step ?? 1));
           }
-        />
-      </div>
+        }}
+        inputProps={{
+          id: props.id,
+          min: props.min,
+          max: props.max,
+          step: props.step ?? 1,
+          disabled: props.disabled,
+          defaultValue: props.default,
+          ...props?.register?.(props.id, { valueAsNumber: true }),
+          onChange: (e) => handleChange(props.id, Number(e.target.value)),
+        }}
+      />
       {props.error && <p className="text-red-500 text-xs italic"> {props.error}</p>}
     </div>
   );
@@ -107,29 +96,54 @@ export const UncontrolledSliderField: React.FC<UncontrolledSliderFieldProps> = (
       <label htmlFor={props.id} className="mb-2 block font-medium">
         {props.label ? props.label : ""}
       </label>
-      <div className="flex flex-row items-center">
-        <MinusCircle
-          className="mr-2 inline-block h-10 w-10 fill-orange-100 text-orange-800 hover:cursor-pointer hover:fill-orange-600"
-          onClick={() =>
-            props.setValue(props.value > props.min ? props.value - 1 : props.value)
-          }
-        />
-        <input
-          id={props.id}
-          type="range"
-          value={props.value}
-          min={props.min}
-          max={props.max}
-          onChange={(e) => props.setValue(parseInt(e.target.value, 10))}
-          className="h-5 w-full cursor-pointer appearance-none rounded-lg bg-orange-200 accent-orange-800"
-        />
-        <PlusCircle
-          className="ml-2 inline-block h-10 w-10 fill-orange-100 text-orange-800 hover:cursor-pointer hover:fill-orange-600"
-          onClick={() =>
-            props.setValue(props.value < props.max ? props.value + 1 : props.value)
-          }
-        />
-      </div>
+      <SliderStepper
+        onDecrement={() =>
+          props.setValue(props.value > props.min ? props.value - 1 : props.value)
+        }
+        onIncrement={() =>
+          props.setValue(props.value < props.max ? props.value + 1 : props.value)
+        }
+        inputProps={{
+          id: props.id,
+          value: props.value,
+          min: props.min,
+          max: props.max,
+          onChange: (e) => props.setValue(parseInt(e.target.value, 10)),
+        }}
+      />
+    </div>
+  );
+};
+
+const STEPPER_ICON_CLASS = "inline-block h-10 w-10 fill-orange-100 text-orange-800";
+
+/** The range input between its minus and plus buttons. */
+const SliderStepper: React.FC<{
+  disabled?: boolean;
+  onDecrement: () => void;
+  onIncrement: () => void;
+  inputProps: React.ComponentProps<"input">;
+}> = ({ disabled, onDecrement, onIncrement, inputProps }) => {
+  const iconState = disabled
+    ? "cursor-not-allowed"
+    : "hover:cursor-pointer hover:fill-orange-600";
+  return (
+    <div className={`flex flex-row items-center ${disabled ? "opacity-50" : ""}`}>
+      <MinusCircle
+        aria-disabled={disabled}
+        className={`mr-2 ${STEPPER_ICON_CLASS} ${iconState}`}
+        onClick={onDecrement}
+      />
+      <input
+        type="range"
+        {...inputProps}
+        className="h-5 w-full cursor-pointer appearance-none rounded-lg bg-orange-200 accent-orange-800 disabled:cursor-not-allowed"
+      />
+      <PlusCircle
+        aria-disabled={disabled}
+        className={`ml-2 ${STEPPER_ICON_CLASS} ${iconState}`}
+        onClick={onIncrement}
+      />
     </div>
   );
 };

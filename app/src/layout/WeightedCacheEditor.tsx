@@ -15,15 +15,12 @@ import {
   CACHE_PROBABILITY_TOTAL,
 } from "@/drizzle/constants";
 import {
-  CACHE_RESTRICTED_REWARD_MESSAGE,
+  type CacheIssue,
   cacheItemChance,
   cacheItemIds,
+  getWeightedCacheIssues,
 } from "@/libs/weightedCache";
-import {
-  type WeightedCache,
-  weightedCacheDraftSchema,
-  weightedCacheSchema,
-} from "@/validators/weightedCache";
+import type { WeightedCache } from "@/validators/weightedCache";
 
 /**
  * Edit the parent-owned cache draft without discarding incomplete or inactive settings.
@@ -49,29 +46,11 @@ export const WeightedCacheEditor = ({
   disabled?: boolean;
 }) => {
   const editor = useRef<HTMLElement>(null);
-  const validation = (
-    isActive ? weightedCacheSchema : weightedCacheDraftSchema
-  ).safeParse(cache);
-  const issues: CacheIssue[] = [...(validation.error?.issues ?? [])];
   const itemById = new Map(items.map((item) => [item.id, item]));
-  if (!isLoading && !isError)
-    cache.tiers.forEach((tier, tierIndex) => {
-      tier.entries.forEach((entry, entryIndex) => {
-        entry.items.forEach((reward, itemIndex) => {
-          const rewardItem = itemById.get(reward.itemId);
-          if (!rewardItem)
-            issues.push({
-              path: ["tiers", tierIndex, "entries", entryIndex, "items", itemIndex],
-              message: `Remove or replace missing item: ${reward.itemId}`,
-            });
-          else if (rewardItem.isRestrictedCacheReward)
-            issues.push({
-              path: ["tiers", tierIndex, "entries", entryIndex, "items", itemIndex],
-              message: CACHE_RESTRICTED_REWARD_MESSAGE,
-            });
-        });
-      });
-    });
+  const { issues, isSchemaValid } = getWeightedCacheIssues(cache, itemById, {
+    isActive,
+    catalogReady: !isLoading && !isError,
+  });
   const renderErrors = (errors: CacheIssue[]) =>
     errors.map((issue, index) => (
       <p
@@ -327,7 +306,7 @@ export const WeightedCacheEditor = ({
                         className="flex flex-wrap items-center gap-2 text-sm"
                       >
                         <span className="min-w-0 flex-1 break-words">
-                          {items.find((item) => item.id === reward.itemId)?.name ??
+                          {itemById.get(reward.itemId)?.name ??
                             `Missing item: ${reward.itemId}`}{" "}
                           quantity
                         </span>
@@ -405,7 +384,7 @@ export const WeightedCacheEditor = ({
           </Button>
         </p>
       )}
-      {validation.success && (
+      {isSchemaValid && (
         <div className="space-y-1 text-sm">
           <h4 className="font-semibold">Reward summary</h4>
           <p>
@@ -424,7 +403,7 @@ export const WeightedCacheEditor = ({
                   entry.items
                     .map(
                       (item) =>
-                        `${item.quantity} × ${items.find((value) => value.id === item.itemId)?.name ?? item.itemId}`,
+                        `${item.quantity} × ${itemById.get(item.itemId)?.name ?? item.itemId}`,
                     )
                     .join(" + "),
                 )
@@ -433,8 +412,8 @@ export const WeightedCacheEditor = ({
           ))}
           {cacheItemIds(cache).map((id) => (
             <p key={id}>
-              {items.find((item) => item.id === id)?.name ?? id}:{" "}
-              {cacheItemChance(cache, id).toFixed(2)}% chance per opening
+              {itemById.get(id)?.name ?? id}: {cacheItemChance(cache, id).toFixed(2)}%
+              chance per opening
             </p>
           ))}
         </div>
@@ -563,5 +542,3 @@ const cacheIssueMessage = (cache: WeightedCache, issue: CacheIssue) => {
       : issue.message;
   return `${location}: ${message}`;
 };
-
-type CacheIssue = { path: PropertyKey[]; message: string };

@@ -3,19 +3,15 @@ import type React from "react";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 
-interface WebGL2WarningProps {
-  onProceed: () => void;
-}
-
 /**
- * Component that displays a warning when WebGL2 is not supported
+ * Component that displays a warning when WebGL is unavailable
  * Allows user to proceed anyway or refresh the page
  */
-const WebGL2Warning: React.FC<WebGL2WarningProps> = ({ onProceed }) => {
+const WebGLWarning: React.FC<WebGLWarningProps> = ({ onProceed }) => {
   return (
     <ContentBox
-      title="WebGL2 Not Supported"
-      subtitle="Your browser does not support WebGL2"
+      title="WebGL Not Available"
+      subtitle="This browser cannot start WebGL"
       alreadyHasH1
       defaultBackHref="/"
     >
@@ -24,15 +20,16 @@ const WebGL2Warning: React.FC<WebGL2WarningProps> = ({ onProceed }) => {
         <div className="space-y-2 text-center">
           <p className="font-bold text-lg">Limited Functionality Warning</p>
           <p className="text-muted-foreground">
-            WebGL2 is required for core game features. You will NOT be able to:
+            WebGL is required for core game features. You will NOT be able to:
           </p>
           <ul className="inline-block space-y-1 text-left text-muted-foreground">
             <li>• Engage in combat</li>
             <li>• Travel on the map</li>
-            <li>• View 3D graphics and animations</li>
+            <li>• View the game&apos;s scenes and animations</li>
           </ul>
           <p className="pt-2 text-muted-foreground">
-            Please update your browser to the latest version for the full experience.
+            Turn on hardware acceleration or try another browser for the full
+            experience.
           </p>
         </div>
         <div className="flex flex-col gap-3 pt-4 sm:flex-row">
@@ -48,15 +45,32 @@ const WebGL2Warning: React.FC<WebGL2WarningProps> = ({ onProceed }) => {
   );
 };
 
+/** Explains why a browser without WebGL cannot create an account. */
+export const WebGLUnsupported: React.FC = () => {
+  return (
+    <div className="flex flex-col items-center justify-center space-y-4 p-6 text-center">
+      <AlertTriangle className="h-20 w-20 text-orange-500" />
+      <p className="font-bold text-lg">This browser cannot run the game</p>
+      <p className="text-muted-foreground">
+        WebGL is unavailable, so combat and travel would not work. Turn on hardware
+        acceleration or try another browser, then create your account there.
+      </p>
+      <Button variant="default" onClick={() => window.location.reload()}>
+        Refresh Page
+      </Button>
+    </div>
+  );
+};
+
 /**
  * Small banner component to show persistent warning after user proceeds
  */
-export const WebGL2WarningBanner: React.FC = () => {
+export const WebGLWarningBanner: React.FC = () => {
   return (
     <div className="mb-4 rounded-md border border-orange-500 bg-orange-500/10 p-4">
       <div className="flex items-center gap-2 text-orange-500">
         <AlertTriangle className="h-5 w-5" />
-        <span className="font-semibold">WebGL2 Not Available</span>
+        <span className="font-semibold">WebGL Not Available</span>
       </div>
       <p className="mt-1 text-muted-foreground text-sm">
         You will not be able to use combat or travel features.
@@ -65,4 +79,8 @@ export const WebGL2WarningBanner: React.FC = () => {
   );
 };
 
-export default WebGL2Warning;
+export default WebGLWarning;
+
+interface WebGLWarningProps {
+  onProceed: () => void;
+}

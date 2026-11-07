@@ -18,6 +18,9 @@
  * conversion and differently sized authored maps.
  */
 
+import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import type { SectorPoint } from "@/libs/sector-map/world-types";
+
 export type EdgeIndex = 0 | 1 | 2 | 3;
 
 export const EDGE_NORTH = 0;
@@ -60,6 +63,83 @@ export const edgeCell = (
     default:
       return { x: 0, y: p };
   }
+};
+
+/** A rendered sector-map border, named as the player sees it. */
+export type SectorMapEdge = "north" | "east" | "south" | "west";
+
+type SectorMapSize = Pick<NormalizedSectorMap, "width" | "height">;
+
+const GLOBE_EDGE_BY_NAME: Record<SectorMapEdge, EdgeIndex> = {
+  north: EDGE_NORTH,
+  east: EDGE_EAST,
+  south: EDGE_SOUTH,
+  west: EDGE_WEST,
+};
+
+/** Translate a named map border through the globe's edge-to-renderer orientation. */
+const sectorMapEdgeIndex = (edge: SectorMapEdge) =>
+  sectorMapEdgeForGlobeEdge(GLOBE_EDGE_BY_NAME[edge]);
+
+/** Window offset of the sector across a rendered border; larger dy is north. */
+export const sectorMapEdgeOffset = (edge: SectorMapEdge) => ({
+  dx: edge === "east" ? 1 : edge === "west" ? -1 : 0,
+  dy: edge === "north" ? 1 : edge === "south" ? -1 : 0,
+});
+
+/** Border cell at an along-edge position: a column for north/south, else a row. */
+export const sectorMapEdgeCell = (
+  map: SectorMapSize,
+  edge: SectorMapEdge,
+  along: number,
+): SectorPoint => edgeCell(sectorMapEdgeIndex(edge), along, map.width, map.height);
+
+/** Border cell that shares a point's position along the edge. */
+const projectOntoSectorMapEdge = (
+  map: SectorMapSize,
+  edge: SectorMapEdge,
+  point: SectorPoint,
+) =>
+  sectorMapEdgeCell(map, edge, edgeParam(sectorMapEdgeIndex(edge), point.x, point.y));
+
+/** Whether a tile sits on the given rendered border. */
+export const isOnSectorMapEdge = (
+  map: SectorMapSize,
+  edge: SectorMapEdge,
+  point: SectorPoint,
+) => {
+  const cell = projectOntoSectorMapEdge(map, edge, point);
+  return cell.x === point.x && cell.y === point.y;
+};
+
+/** The out-of-range tile one step past a border, which movement reads as a crossing. */
+export const beyondSectorMapEdge = (
+  map: SectorMapSize,
+  edge: SectorMapEdge,
+  point: SectorPoint,
+): SectorPoint => {
+  const cell = projectOntoSectorMapEdge(map, edge, point);
+  const { dx, dy } = sectorMapEdgeOffset(edge);
+  return { x: cell.x + dx, y: cell.y + dy };
+};
+
+/** Nearest tile along the given border, closest to `preferred`. */
+export const findNearestWalkableEdgeTile = (
+  map: Pick<NormalizedSectorMap, "tiles" | "width" | "height">,
+  edge: SectorMapEdge,
+  preferred: SectorPoint,
+): SectorPoint | null => {
+  const candidates = map.tiles.filter((tile) => isOnSectorMapEdge(map, edge, tile));
+  let best: SectorPoint | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  candidates.forEach((tile) => {
+    const dist = Math.abs(tile.x - preferred.x) + Math.abs(tile.y - preferred.y);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { x: tile.x, y: tile.y };
+    }
+  });
+  return best;
 };
 
 /** Map an exit parameter (0..lenA-1) to the neighbour's entry parameter (0..lenB-1) */

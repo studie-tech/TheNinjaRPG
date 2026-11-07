@@ -1,11 +1,14 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
-import { api } from "@/app/_trpc/client";
-import type { MasteryQueueKind, TimedMasteryName } from "@/drizzle/constants";
+import type { ReactNode } from "react";
+import {
+  MASTERY_QUEUE_KIND_LABELS,
+  type MasteryQueueKind,
+  type TimedMasteryName,
+} from "@/drizzle/constants";
+import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
 import { TimedQueue } from "@/layout/TimedQueue";
 import { getMasteryQueue } from "@/libs/queue";
-import { showMutationToast } from "@/libs/toast";
 import {
   getMasteryQueueSchedule,
   getMasteryTrainingState,
@@ -14,7 +17,6 @@ import {
 } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { getQueueTotalCapacity } from "@/utils/paypal";
-import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Masteries queued to start one after another behind the active mastery session. */
 export const MasteryTrainingQueue = ({
@@ -32,29 +34,13 @@ export const MasteryTrainingQueue = ({
   isProcessing: boolean;
   kind?: MasteryQueueKind;
 }) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
-  const [error, setError] = useState<string | null>(null);
+  const { saveQueue, isPending, error } = useMasteryTrainingQueue();
   const entries = getMasteryQueue(user, kind);
   const session = getMasteryTrainingState(user, kind);
   const schedule = getMasteryQueueSchedule(user, entries, new Date(), kind);
   const activeEndsAt = masteryTrainingEndsAt(user, kind);
-  const label = kind === "ELEMENT" ? "Elemental" : "Mastery";
+  const label = MASTERY_QUEUE_KIND_LABELS[kind];
   const block = entries[0] ? queuedMasteryStartBlockMessage(user, entries[0]) : null;
-
-  const { mutate: saveQueue, isPending } =
-    api.train.updateMasteryTrainingQueue.useMutation({
-      onMutate: () => ({ revision: prepareUserUpdate() }),
-      onSuccess: (result) => {
-        showMutationToast(result);
-        setError(result.success ? null : result.message);
-      },
-      onError: (cause) => setError(cause.message),
-      onSettled: (result, _error, _variables, context) =>
-        updateUser(result, {
-          revision: context?.revision,
-          achievementProgress: result?.achievementProgress,
-        }),
-    });
 
   if (!session.stat && !entries.length) return null;
 

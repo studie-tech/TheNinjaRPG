@@ -128,7 +128,12 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
-import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
+import {
+  calcRepairAllCost,
+  calculateKitsToUse,
+  getRepairKits,
+  needsInventoryRepair,
+} from "@/libs/repair";
 import { filterRollableSageModes } from "@/libs/sageMode";
 import {
   getShopDiscounts,
@@ -3006,15 +3011,11 @@ export const itemRouter = createTRPCRouter({
       }
 
       // Filter items that need repair (carried inventory only — not home/auction)
-      const itemsNeedingRepair = useritems.filter(needsInventoryRepair);
+      const { itemsNeedingRepair, totalCost: totalRepairCost } =
+        calcRepairAllCost(useritems);
       if (itemsNeedingRepair.length === 0) {
         return errorResponse("No items need repair");
       }
-      // Calculate total repair cost
-      const totalRepairCost = itemsNeedingRepair.reduce(
-        (total, useritem) => total + calcItemRepairCost(useritem),
-        0,
-      );
       if (user.money < totalRepairCost) {
         return errorResponse(
           `Insufficient funds. Total repair cost is ${totalRepairCost} ryo, but you only have ${user.money} ryo`,

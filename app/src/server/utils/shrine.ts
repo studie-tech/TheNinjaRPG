@@ -61,6 +61,18 @@ export function setShrineSettingsKeyExpression(
 }
 
 /**
+ * CAS predicate that is TRUE iff the stored id list still equals the snapshot a
+ * replacement was built from. JSON array equality is order-sensitive, and a missing
+ * key reads as an empty list.
+ */
+export function shrineSettingsKeyUnchangedPredicate(
+  key: "unlockedAiIds" | "activeAiIds",
+  snapshot: string[],
+): ReturnType<typeof sql> {
+  return sql`COALESCE(JSON_EXTRACT(${village.shrineSettings}, ${`$.${key}`}), JSON_ARRAY()) = CAST(${JSON.stringify(snapshot)} AS JSON)`;
+}
+
+/**
  * CAS predicate that is TRUE iff village.shrineSettings.$.activeBoosts.<boostType>
  * is missing or already expired at `nowIso`. Used inside UPDATE WHERE clauses to
  * make boost activation idempotent — concurrent writers (cron template tick vs

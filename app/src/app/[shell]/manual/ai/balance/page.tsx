@@ -1,18 +1,16 @@
 "use client";
 
-import { BarChart3, Pencil, Trash2 } from "lucide-react";
 import type React from "react";
 import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
-import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/localstorage";
 import AiBalanceFiltering, {
   getFilter,
   useFiltering,
 } from "@/layout/AiBalanceFiltering";
-import Confirm from "@/layout/Confirm";
+import { ClearBattleDataButton } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
-import Link from "@/layout/Link";
+import { ContentLinksCell } from "@/layout/ContentLinksCell";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
@@ -20,7 +18,7 @@ import UserFiltering, {
   getFilter as getUserFilter,
   useFiltering as useUserFiltering,
 } from "@/layout/UserFiltering";
-import { showMutationToast } from "@/libs/toast";
+import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -56,18 +54,6 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
   // Queries
   const { data, isPending } = api.data.getAiBalanceStatistics.useQuery(filter);
 
-  // Mutations
-  const { mutate: deleteAllData, isPending: isDeleting } =
-    api.data.deleteAllDataBattleAction.useMutation({
-      onSuccess: async (result) => {
-        showMutationToast(result);
-        if (result.success) {
-          // Invalidate the AI balance statistics query to refresh the data
-          await utils.data.getAiBalanceStatistics.invalidate();
-        }
-      },
-    });
-
   const utils = api.useUtils();
 
   // Process data for table
@@ -76,41 +62,15 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
     (() => {
       const groups = groupBy(data, "name");
       const rows = Array.from(groups.entries()).map(([name, entries]) => {
-        const wins = entries
-          .filter((entry) => entry.battleWon === 1)
-          .reduce((acc, curr) => acc + (curr.count || 0), 0);
-
-        const flees = entries
-          .filter((entry) => entry.battleWon === 2)
-          .reduce((acc, curr) => acc + (curr.count || 0), 0);
-
-        const losses = entries
-          .filter((entry) => entry.battleWon === 0)
-          .reduce((acc, curr) => acc + (curr.count || 0), 0);
-
-        const totalUsage = wins + flees + losses;
-        const winRate = totalUsage > 0 ? (wins / totalUsage) * 100 : 0;
+        const outcomes = summarizeBattleOutcomes(entries);
 
         // Extract AI ID from the name or use the aiUserId
-        const aiUserId = entries[0]?.aiUserId;
+        const aiUserId = entries[0]?.aiUserId ?? "";
 
         return {
           name,
-          links: (
-            <div className="flex items-center gap-2">
-              <Link href={`/manual/ai/statistics/${aiUserId}`}>
-                <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-              </Link>
-              <Link href={`/manual/ai/edit/${aiUserId}`}>
-                <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
-              </Link>
-            </div>
-          ),
-          totalUsage,
-          wins,
-          flees,
-          losses,
-          winRate: `${winRate.toFixed(1)}%`,
+          links: <ContentLinksCell type="ai" id={aiUserId} canEdit />,
+          ...outcomes,
         };
       });
 
@@ -148,30 +108,11 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
           {navTabs}
           <AiBalanceFiltering state={filterState} />
           {canDelete && (
-            <Confirm
-              title="Clear All AI Battle Data"
-              button={
-                <Button size="icon">
-                  <Trash2 className="h-5 w-5 cursor-pointer" />
-                </Button>
-              }
-              proceed_label="Clear Data"
-              confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onAccept={(e) => {
-                e.preventDefault();
-                deleteAllData({ type: "ai" });
-              }}
-            >
-              {isDeleting ? (
-                <Loader explanation="Deleting data" />
-              ) : (
-                <>
-                  Are you sure you want to clear all AI battle action data? This action
-                  cannot be undone and will reset all AI usage statistics. This action
-                  will be logged for future audit and review.
-                </>
-              )}
-            </Confirm>
+            <ClearBattleDataButton
+              type="ai"
+              label="AI"
+              onCleared={() => utils.data.getAiBalanceStatistics.invalidate()}
+            />
           )}
         </div>
       }
@@ -221,18 +162,7 @@ const AiEffectsBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) =
     power: row.power,
     rounds: row.rounds,
     powerPerLevel: row.powerPerLevel,
-    links: (
-      <div className="flex items-center gap-2">
-        <Link href={`/manual/ai/statistics/${row.id}`}>
-          <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-        </Link>
-        {canEdit && (
-          <Link href={`/manual/ai/edit/${row.id}`}>
-            <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
-          </Link>
-        )}
-      </div>
-    ),
+    links: <ContentLinksCell type="ai" id={row.id} canEdit={canEdit} />,
   }));
 
   // Table columns

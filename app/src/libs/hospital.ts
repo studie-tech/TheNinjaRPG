@@ -11,9 +11,10 @@ import {
   MEDNIN_MIN_RANK,
   MEDNIN_REQUIRED_EXP,
 } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
+import type { UserData, VillageStructure } from "@/drizzle/schema";
 import { hasRequiredRank } from "@/libs/train";
 import { secondsFromDate } from "@/utils/time";
+import { getStrucBoost } from "@/utils/village";
 
 /**
  * Calculates the cost of healing for a user.
@@ -43,6 +44,19 @@ export const calcHealFinish = (info: {
     new Date(user.regenAt),
   );
 };
+
+/** Heal finish for a user whose loaded village carries its own hospital structures. */
+export const calcUserHealFinish = (
+  user: Pick<UserData, "regenAt"> & {
+    village?: { structures?: VillageStructure[] } | null;
+  },
+  timeDiff?: number,
+) =>
+  calcHealFinish({
+    user,
+    timeDiff,
+    boost: getStrucBoost("hospitalSpeedupPerLvl", user.village?.structures),
+  });
 
 // Minimal user type for calculating mednin things
 type Healer = Pick<UserData, "medicalExperience" | "rank">;

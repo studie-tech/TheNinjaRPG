@@ -1,6 +1,5 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
 import {
   DoorOpen,
@@ -12,7 +11,6 @@ import {
   Loader2,
   Medal,
   RefreshCw,
-  Search,
   ShieldAlert,
   ShieldCheck,
   Star,
@@ -30,14 +28,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import type {
   CombatStatName,
@@ -64,11 +59,12 @@ import {
   IMG_TRAIN_TAI_OFF,
   IMG_TRAIN_WILLPOWER,
   JUTSU_LEVEL_CAP,
+  MASTERY_QUEUE_KIND_LABELS,
   MASTERY_RANK_CAPS,
   MAX_DAILY_TRAININGS,
   MAX_JUTSU_TRAIN_TIME_MS,
   MasteryNames,
-  SENSEI_RANKS,
+  SENSEI_REQUIRED_RANK,
   SENSEI_STUDENT_RYO_PER_MISSION,
   STATS_PER_ENERGY,
   STEALTH_SENSORY_CAP,
@@ -82,11 +78,12 @@ import type { Jutsu } from "@/drizzle/schema";
 import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
-import AvatarImage from "@/layout/Avatar";
+import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { CovertStatCard } from "@/layout/CovertStatCard";
 import { getElementImg } from "@/layout/ElementImage";
 import {
   EnergyTrainingQueue,
@@ -108,6 +105,7 @@ import PublicUserComponent from "@/layout/PublicUser";
 import QuestPicker from "@/layout/QuestPicker";
 import { calcCurrent } from "@/layout/StatusBar";
 import { TimedQueue } from "@/layout/TimedQueue";
+import { UserAvatarTile } from "@/layout/UserAvatarTile";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
@@ -137,6 +135,7 @@ import {
   findJutsuInTraining,
   getMasteryTrainingState,
   getTrainingSections,
+  hasRequiredRank,
   isJutsuInTraining,
   isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,
@@ -152,10 +151,10 @@ import { isTutorialJutsuPickStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
+import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
-import { getSearchValidator } from "@/validators/register";
 
 const getJutsuLevelCap = (_jutsu: { parentJutsuId?: string | null }) => JUTSU_LEVEL_CAP;
 
@@ -180,7 +179,8 @@ export default function Training() {
   if (!access) return <Loader explanation="Accessing Training Grounds" />;
 
   // Show sensei component
-  const showSenseiSystem = [...SENSEI_RANKS, "GENIN"].includes(userData.rank);
+  const showSenseiSystem =
+    userData.rank === "GENIN" || hasRequiredRank(userData.rank, SENSEI_REQUIRED_RANK);
   const energyQueueLength = getEnergyQueue(userData).length;
   const trainingSections = getTrainingSections(showSenseiSystem);
 
@@ -290,21 +290,12 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
 
   // User search
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethods, user: targetUser } = useUserPicker(maxUsers);
 
   // Queries
   const { data: students, isFetching } = api.sensei.getStudents.useQuery(
     { userId: userData.userId },
-    { enabled: SENSEI_RANKS.includes(userData.rank) },
+    { enabled: hasRequiredRank(userData.rank, SENSEI_REQUIRED_RANK) },
   );
 
   const { data: requests } = api.sensei.getRequests.useQuery(undefined, {
@@ -390,7 +381,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
     isRejecting ||
     isCancelling ||
     isRemoving;
-  const canSensei = SENSEI_RANKS.includes(userData.rank);
+  const canSensei = hasRequiredRank(userData.rank, SENSEI_REQUIRED_RANK);
   const message = canSensei
     ? "Search for Genin to take in as students."
     : "Search for Jonin to be your sensei. ";
@@ -415,13 +406,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
               {students.map((user) => (
                 <div className="relative" key={user.userId}>
-                  <Link href={`/userid/${user.userId}`} className="text-center">
-                    <AvatarImage
-                      href={user.avatar}
-                      alt={user.username}
-                      hover_effect={true}
-                      size={100}
-                    />
+                  <UserAvatarTile user={user} className="text-center">
                     {user.rank === "GENIN" && (
                       <Confirm
                         title="Remove Student"
@@ -436,13 +421,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
                         You are about to remove this user as your student. Confirm?
                       </Confirm>
                     )}
-                    <div>
-                      <div className="font-bold">{user.username}</div>
-                      <div>
-                        Lvl. {user.level} {capitalizeFirstLetter(user.rank)}
-                      </div>
-                    </div>
-                  </Link>
+                  </UserAvatarTile>
                 </div>
               ))}
             </div>
@@ -607,16 +586,8 @@ const StatsTraining: React.FC<
       onError: () => utils.profile.getUser.invalidate(),
     });
 
-  const { mutate: queueMasteryTraining, isPending: isQueueingMastery } =
-    api.train.updateMasteryTrainingQueue.useMutation({
-      onMutate: () => ({ revision: prepareUserUpdate() }),
-      onSuccess: (result) => showMutationToast(result),
-      onSettled: (result, _error, _variables, context) =>
-        updateUser(result, {
-          revision: context?.revision,
-          achievementProgress: result?.achievementProgress,
-        }),
-    });
+  const { saveQueue: queueMasteryTraining, isPending: isQueueingMastery } =
+    useMasteryTrainingQueue();
 
   const { mutate: stopMasteryTraining, isPending: isStoppingMastery } =
     api.train.stopMasteryTraining.useMutation({
@@ -684,7 +655,7 @@ const StatsTraining: React.FC<
         <Button
           size="icon"
           variant="ghost"
-          aria-label={`Collect and stop ${kind === "ELEMENT" ? "elemental" : "mastery"} training`}
+          aria-label={`Collect and stop ${MASTERY_QUEUE_KIND_LABELS[kind].toLowerCase()} training`}
           disabled={isPending}
           onClick={() => collectMasteryTraining()}
         >
@@ -696,7 +667,7 @@ const StatsTraining: React.FC<
     return (
       <Popover>
         <PopoverTrigger
-          aria-label={`Collect and stop ${kind === "ELEMENT" ? "elemental" : "mastery"} training`}
+          aria-label={`Collect and stop ${MASTERY_QUEUE_KIND_LABELS[kind].toLowerCase()} training`}
           disabled={isPending}
           className="flex h-9 w-9 items-center justify-center"
         >
@@ -973,7 +944,7 @@ const StatsTraining: React.FC<
                           : session.stat
                             ? (queuedMasteryStartBlockMessage(userData, entry) ??
                               (masteryEntries.length >= getQueueWaitingSlots(userData)
-                                ? `${kind === "ELEMENT" ? "Elemental" : "Mastery"} queue is full`
+                                ? `${MASTERY_QUEUE_KIND_LABELS[kind]} queue is full`
                                 : null))
                             : masteryTrainingBlockMessage(
                                 actionPrerequisiteUser(userData),
@@ -1711,9 +1682,6 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
-  const stealthProgress = (stealthStatus.stealth / STEALTH_SENSORY_CAP) * 100;
-  const sensoryProgress = (stealthStatus.sensory / STEALTH_SENSORY_CAP) * 100;
-
   // Check if currently training
   const isTraining = !!stealthStatus.covertTrainingType;
   const trainingType = stealthStatus.covertTrainingType;
@@ -1759,97 +1727,29 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
           </div>
         )}
 
-        {/* Stealth Section - hidden when training */}
-        {!isTraining && (
-          <div className="rounded-lg border p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Eye className="h-5 w-5 text-purple-600" />
-              <h3 className="font-bold text-lg">Stealth</h3>
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-1 flex justify-between">
-                  <span className="text-sm">Progress</span>
-                  <span className="font-medium text-sm">
-                    {Math.floor(stealthStatus.stealth).toLocaleString()} /{" "}
-                    {STEALTH_SENSORY_CAP.toLocaleString()}
-                  </span>
-                </div>
-                <Progress value={stealthProgress} className="h-2" />
-                <div className="mt-3 space-y-1 text-muted-foreground text-sm">
-                  <p>
-                    Duration: {Math.floor(stealthStatus.stealthDurationMax / 60)} min
-                  </p>
-                  <p>Keep Chance: {stealthStatus.stealthKeepChance.toFixed(1)}%</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
+        {/* Skill sections - hidden when training */}
+        {!isTraining &&
+          (["stealth", "sensory"] as const).map((type) => (
+            <CovertStatCard
+              key={type}
+              kind={type}
+              status={stealthStatus}
+              actions={[10, 30].map((minutes) => (
                 <Button
-                  onClick={() => trainCovert({ type: "stealth", minutes: 10 })}
-                  disabled={isTrainingCovert || stealthProgress >= 100}
+                  key={minutes}
+                  onClick={() => trainCovert({ type, minutes })}
+                  disabled={
+                    isTrainingCovert ||
+                    (stealthStatus[type] / STEALTH_SENSORY_CAP) * 100 >= 100
+                  }
                   className="w-full"
                 >
                   <Timer className="mr-1 h-4 w-4" />
-                  {isTrainingCovert ? "Starting..." : "Train 10 min"}
+                  {isTrainingCovert ? "Starting..." : `Train ${minutes} min`}
                 </Button>
-                <Button
-                  onClick={() => trainCovert({ type: "stealth", minutes: 30 })}
-                  disabled={isTrainingCovert || stealthProgress >= 100}
-                  className="w-full"
-                >
-                  <Timer className="mr-1 h-4 w-4" />
-                  {isTrainingCovert ? "Starting..." : "Train 30 min"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Sensory Section - hidden when training */}
-        {!isTraining && (
-          <div className="rounded-lg border p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Search className="h-5 w-5 text-blue-600" />
-              <h3 className="font-bold text-lg">Sensory</h3>
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-1 flex justify-between">
-                  <span className="text-sm">Progress</span>
-                  <span className="font-medium text-sm">
-                    {Math.floor(stealthStatus.sensory).toLocaleString()} /{" "}
-                    {STEALTH_SENSORY_CAP.toLocaleString()}
-                  </span>
-                </div>
-                <Progress value={sensoryProgress} className="h-2" />
-                <div className="mt-3 space-y-1 text-muted-foreground text-sm">
-                  <p>
-                    Detection Chance: {stealthStatus.sensoryDetectChance.toFixed(1)}%
-                  </p>
-                  <p>Cooldown: {Math.floor(stealthStatus.sensoryCooldown)} sec</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={() => trainCovert({ type: "sensory", minutes: 10 })}
-                  disabled={isTrainingCovert || sensoryProgress >= 100}
-                  className="w-full"
-                >
-                  <Timer className="mr-1 h-4 w-4" />
-                  {isTrainingCovert ? "Starting..." : "Train 10 min"}
-                </Button>
-                <Button
-                  onClick={() => trainCovert({ type: "sensory", minutes: 30 })}
-                  disabled={isTrainingCovert || sensoryProgress >= 100}
-                  className="w-full"
-                >
-                  <Timer className="mr-1 h-4 w-4" />
-                  {isTrainingCovert ? "Starting..." : "Train 30 min"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+              ))}
+            />
+          ))}
 
         {/* Info Box */}
         <div className="rounded-lg border border-border bg-muted p-4 text-sm">

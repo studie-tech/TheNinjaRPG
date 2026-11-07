@@ -1,10 +1,12 @@
 import type {
   BanState,
+  QuestType,
   StaffApprovalGroup,
   SupportTicketStatus,
   UserRole,
 } from "@/drizzle/constants";
 import {
+  ABANDONABLE_QUEST_TYPES,
   isStaffApprovalGroup,
   MESSAGING_MIN_LEVEL,
   messagingLevelMessage,
@@ -151,6 +153,11 @@ export const canPlayHiddenQuests = (role: UserRole) => {
     "EVENT-ADMIN",
   ].includes(role);
 };
+
+/** Regular players abandon only the listed quest types; every other role abandons any. */
+export const canAbandonQuestType = (role: UserRole, questType: QuestType) =>
+  role !== "USER" ||
+  (ABANDONABLE_QUEST_TYPES as readonly QuestType[]).includes(questType);
 
 export const canSubmitNotification = (role: UserRole) =>
   SENIOR_STAFF_ROLES.includes(role);
@@ -439,6 +446,37 @@ export const canReplyToStaffConversationWhileRestricted = (
   if (!user.isBanned && !user.isSilenced) return false;
   if (!supportTicketCreatedByUserId) return false;
   return supportTicketCreatedByUserId === user.userId;
+};
+
+/**
+ * Why a user cannot post in a conversation, or null when they can. The server enforces
+ * this on every post; the client reads it to choose between the composer and its message.
+ */
+export const getConversationComposeRestriction = (
+  user:
+    | Pick<UserData, "userId" | "isBanned" | "isSilenced" | "level">
+    | null
+    | undefined,
+  convo:
+    | { sendRestriction?: string | null; isStaffAvailable?: boolean }
+    | null
+    | undefined,
+  supportTicketCreatedByUserId: string | null | undefined,
+): string | null => {
+  if (convo?.sendRestriction) return convo.sendRestriction;
+  const messagingRestriction = user ? getMessagingRestriction(user) : null;
+  if (!user || !messagingRestriction) return messagingRestriction;
+  // Only banned/silenced users may post in staff conversations (own help tickets).
+  // Other restrictions (e.g. level gate) are never bypassed.
+  if ((!user.isBanned && !user.isSilenced) || !convo?.isStaffAvailable) {
+    return messagingRestriction;
+  }
+  if (canReplyToStaffConversationWhileRestricted(user, supportTicketCreatedByUserId)) {
+    return null;
+  }
+  return supportTicketCreatedByUserId
+    ? RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE
+    : RESTRICTED_STAFF_CONVERSATION_MESSAGE;
 };
 
 export const canEscalateBan = (user: UserData, report: UserReport) => {

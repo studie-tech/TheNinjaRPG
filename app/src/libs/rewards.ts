@@ -26,23 +26,7 @@ export const collapseRewards = (
       collapsed.reward_mastery_rank = reward.reward_mastery_rank;
     }
 
-    // Only set reward hunter items to true if any of the rewards have it
-    if (reward.reward_hunter_items) {
-      collapsed.reward_hunter_items = true;
-    }
-
-    // Only set reward gathering items to true if any of the rewards have it
-    if (reward.reward_gathering_items) {
-      collapsed.reward_gathering_items = true;
-    }
-
-    // Concatenate valid ids
-    if (reward.reward_hunter_items_ids) {
-      collapsed.reward_hunter_items_ids.push(...reward.reward_hunter_items_ids);
-    }
-    if (reward.reward_gathering_items_ids) {
-      collapsed.reward_gathering_items_ids.push(...reward.reward_gathering_items_ids);
-    }
+    mergeMaterialDrops(collapsed, reward);
 
     // Concatenate array rewards (nullish-guarded: legacy JSON rows from callers that
     // skip Zod normalization may predate a field, leaving it undefined)
@@ -75,4 +59,15 @@ export const collapseRewards = (
   });
 
   return collapsed;
+};
+
+/** Add a reward's hunter and gathering material drops to `target`; a set flag stays set. */
+export const mergeMaterialDrops = (
+  target: ObjectiveRewardType,
+  reward: ObjectiveRewardType,
+) => {
+  if (reward.reward_hunter_items) target.reward_hunter_items = true;
+  if (reward.reward_gathering_items) target.reward_gathering_items = true;
+  target.reward_hunter_items_ids.push(...(reward.reward_hunter_items_ids ?? []));
+  target.reward_gathering_items_ids.push(...(reward.reward_gathering_items_ids ?? []));
 };

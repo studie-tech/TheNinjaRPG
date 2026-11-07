@@ -37,7 +37,6 @@ import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import { DashboardSettings } from "@/layout/DashboardSettings";
-import ItemWithEffects from "@/layout/ItemWithEffects";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
@@ -49,11 +48,12 @@ import Logbook, {
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import ProfileDashboard from "@/layout/ProfileDashboard";
+import { EffectsPopover, PvpRecord } from "@/layout/ProfileStats";
 import { QuestTeams } from "@/layout/QuestTeams";
 import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { WarDashboardNotices } from "@/layout/WarDashboardNotices";
 import { calcMedninRank } from "@/libs/hospital";
-import { experienceToNextLevel, showUserRank } from "@/libs/profile";
+import { experienceToNextLevel, formatPvpWinRate, showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { isTutorialActive } from "@/libs/tutorial";
@@ -266,6 +266,9 @@ function CharacterProfile() {
 
   // Derived
   const expRequired = userData && experienceToNextLevel(userData);
+  const rankedWinRate =
+    userData &&
+    formatPvpWinRate(userData.rankedWins, userData.rankedBattles - userData.rankedWins);
 
   // Loader
   if (!userData) {
@@ -315,20 +318,7 @@ function CharacterProfile() {
             <p>PvP Streak: {userData.pvpStreak}</p>
             {/* The profile owner uses the same display preference as public viewers. */}
             {userData.showPvpRecord && (
-              <>
-                <p>PvP Wins: {userData.pvpWins}</p>
-                <p>PvP Losses: {userData.pvpLosses}</p>
-                <p>
-                  PvP Win Rate:{" "}
-                  {userData.pvpWins + userData.pvpLosses > 0
-                    ? (
-                        (userData.pvpWins / (userData.pvpWins + userData.pvpLosses)) *
-                        100
-                      ).toFixed(1)
-                    : "0"}
-                  %
-                </p>
-              </>
+              <PvpRecord wins={userData.pvpWins} losses={userData.pvpLosses} />
             )}
             <button
               type="button"
@@ -361,16 +351,7 @@ function CharacterProfile() {
                         <p>LP: {userData.rankedLp}</p>
                         <p>Battles: {userData.rankedBattles}</p>
                         <p>Wins: {userData.rankedWins}</p>
-                        <p>
-                          Win Rate:{" "}
-                          {userData.rankedBattles > 0
-                            ? (
-                                (userData.rankedWins / userData.rankedBattles) *
-                                100
-                              ).toFixed(1)
-                            : "0"}
-                          %
-                        </p>
+                        <p>Win Rate: {rankedWinRate}%</p>
                         <p>Current Streak: {userData.rankedStreak}</p>
                         <p>Seichi Silver: {userData.seichiSilver}</p>
                       </div>
@@ -452,39 +433,14 @@ function CharacterProfile() {
             <p>
               Bloodline:{" "}
               {userData.bloodline ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <span className="cursor-pointer font-bold hover:text-orange-500">
-                      {userData.bloodline.name}
-                    </span>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[500px] max-w-[90vw]">
-                    <ItemWithEffects item={userData.bloodline} />
-                  </PopoverContent>
-                </Popover>
+                <EffectsPopover item={userData.bloodline} />
               ) : (
                 "None"
               )}
             </p>
             <p>
               Sage Mode:{" "}
-              {equippedSageMode ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="cursor-pointer font-bold hover:text-orange-500"
-                    >
-                      {equippedSageMode.name}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[500px] max-w-[90vw]">
-                    <ItemWithEffects item={equippedSageMode} />
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                "None"
-              )}
+              {equippedSageMode ? <EffectsPopover item={equippedSageMode} /> : "None"}
             </p>
             <p>ANBU: {userData.anbuSquad?.name || "None"}</p>
             <p>
@@ -611,11 +567,7 @@ function CharacterProfile() {
               <span className="text-muted-foreground">Wins:</span> {userData.rankedWins}
             </p>
             <p>
-              <span className="text-muted-foreground">Win rate:</span>{" "}
-              {userData.rankedBattles > 0
-                ? ((userData.rankedWins / userData.rankedBattles) * 100).toFixed(1)
-                : "0"}
-              %
+              <span className="text-muted-foreground">Win rate:</span> {rankedWinRate}%
             </p>
             <p>
               <span className="text-muted-foreground">Current streak:</span>{" "}

@@ -11,6 +11,7 @@ import {
   WYSIWYG_TILE_HEIGHT,
 } from "@/libs/sector-map/tiled";
 import { buildTiledProject, TILED_KIT_README } from "@/libs/sector-map/tiled-project";
+import { downloadBlob } from "@/utils/dom";
 import { sleep } from "@/utils/time";
 import type { TiledProperty } from "@/validators/tiled";
 
@@ -218,21 +219,6 @@ export const ensureFullTerrainPalette = (
     }
     tiles.push({ id: nextId++, type: entry.terrain, properties });
   }
-};
-
-/**
- * Save a Blob client-side via a temporary anchor click; the object URL is
- * revoked afterwards so the blob memory can be released
- */
-const triggerDownload = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
 };
 
 export interface SpriteFile {
@@ -604,7 +590,7 @@ export const downloadSectorForTiled = async (
   );
   zip.file("README.txt", TILED_KIT_README);
   const blob = await zip.generateAsync({ type: "blob" });
-  triggerDownload(blob, `sector-${sector}.zip`);
+  downloadBlob(blob, `sector-${sector}.zip`);
   // Sprites that stayed unreachable after retries: the kit still works, but
   // these decorations show as point markers - the caller should tell the
   // creator so they can re-download instead of authoring with a partial palette

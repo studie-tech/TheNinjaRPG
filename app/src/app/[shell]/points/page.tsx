@@ -11,7 +11,6 @@ import {
 import { Check, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api, onError } from "@/app/_trpc/client";
 import NativeStore from "@/components/native/NativeStore";
 import { Button } from "@/components/ui/button";
@@ -60,6 +59,7 @@ import {
   FED_SILVER_JUTSU_LOADOUTS,
   FED_SILVER_JUTSU_SLOTS,
   FEDERAL_MONTHLY_USD_CENTS,
+  type FederalStatus,
   FederalStatuses,
   IMG_REPSHOP_BRONZE,
   IMG_REPSHOP_GOLD,
@@ -75,6 +75,7 @@ import {
   WEB_REP_PRESETS,
 } from "@/drizzle/constants";
 import { useNativeShell } from "@/hooks/useNativeShell";
+import { useStoreDeliveryRefresh } from "@/hooks/useStoreDeliveryRefresh";
 import BanInfo from "@/layout/BanInfo";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -93,6 +94,7 @@ import Table from "@/layout/Table";
 import { TransactionHistory } from "@/layout/TransactionHistory";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
+import { isPayPalCleanupError } from "@/utils/error";
 import {
   calcFedUgradeCost,
   dynamicMonthlyRepCap,
@@ -100,11 +102,11 @@ import {
   fedStatusRepsCost,
   reps2dollars,
 } from "@/utils/paypal";
+import { useRecipientPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { BuyRepsSchema, SearchPaypalTransactionSchema } from "@/validators/points";
 import { buyRepsSchema, searchPaypalTransactionSchema } from "@/validators/points";
-import { getSearchValidator } from "@/validators/register";
 import { StoreBundles } from "./StoreBundles";
 import { StoreCheckout } from "./StoreCheckout";
 
@@ -115,20 +117,65 @@ const OPTIONS = {
   intent: "capture",
 };
 
-/**
- * Helper to check if an error is a PayPal cleanup error that should be suppressed.
- * These occur when users navigate away while PayPal buttons are initializing,
- * or when users close the PayPal popup before the transaction completes.
- */
-const isPayPalCleanupError = (err: unknown): boolean => {
-  const errorMessage = err?.toString() ?? "";
-  return (
-    errorMessage.includes("zoid destroyed") ||
-    errorMessage.includes("popup close") ||
-    errorMessage.includes("Window closed") ||
-    errorMessage.includes("Component closed") ||
-    errorMessage.includes("Target window is closed")
-  );
+/** Plan ids stay literal `process.env` reads so Next.js inlines them. */
+const FEDERAL_TIERS: { status: FederalTier; image: string; planId: string }[] = [
+  {
+    status: "NORMAL",
+    image: IMG_REPSHOP_BRONZE,
+    planId: process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL,
+  },
+  {
+    status: "SILVER",
+    image: IMG_REPSHOP_SILVER,
+    planId: process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER,
+  },
+  {
+    status: "GOLD",
+    image: IMG_REPSHOP_GOLD,
+    planId: process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD,
+  },
+];
+
+const FEDERAL_TIER_BENEFITS = {
+  NORMAL: {
+    title: "Normal",
+    usernameColor: "Blue",
+    inventorySlots: FED_NORMAL_INVENTORY_SLOTS,
+    eventItems: FED_EVENT_ITEMS_NORMAL,
+    cookingSlots: FED_COOKING_NORMAL_SLOTS,
+    jutsuSlots: FED_NORMAL_JUTSU_SLOTS,
+    bankInterest: FED_NORMAL_BANK_INTEREST,
+    jutsuLoadouts: FED_NORMAL_JUTSU_LOADOUTS,
+    itemLoadouts: FED_NORMAL_ITEM_LOADOUTS,
+    skillTreeResets: SKILL_TREE_RESET_FREE_NORMAL,
+    avatarSize: "512KB",
+  },
+  SILVER: {
+    title: "Silver",
+    usernameColor: "Silver",
+    inventorySlots: FED_SILVER_INVENTORY_SLOTS,
+    eventItems: FED_EVENT_ITEMS_SILVER,
+    cookingSlots: FED_COOKING_SILVER_SLOTS,
+    jutsuSlots: FED_SILVER_JUTSU_SLOTS,
+    bankInterest: FED_SILVER_BANK_INTEREST,
+    jutsuLoadouts: FED_SILVER_JUTSU_LOADOUTS,
+    itemLoadouts: FED_SILVER_ITEM_LOADOUTS,
+    skillTreeResets: SKILL_TREE_RESET_FREE_SILVER,
+    avatarSize: "1MB",
+  },
+  GOLD: {
+    title: "Gold",
+    usernameColor: "Gold",
+    inventorySlots: FED_GOLD_INVENTORY_SLOTS,
+    eventItems: FED_EVENT_ITEMS_GOLD,
+    cookingSlots: FED_COOKING_GOLD_SLOTS,
+    jutsuSlots: FED_GOLD_JUTSU_SLOTS,
+    bankInterest: FED_GOLD_BANK_INTEREST,
+    jutsuLoadouts: FED_GOLD_JUTSU_LOADOUTS,
+    itemLoadouts: FED_GOLD_ITEM_LOADOUTS,
+    skillTreeResets: SKILL_TREE_RESET_FREE_GOLD,
+    avatarSize: "2MB",
+  },
 };
 
 /**
@@ -262,20 +309,8 @@ const ReputationStore = () => {
     control: repFormMethods.control,
     name: "reputationPoints",
   });
-  const userSearchSchema = getSearchValidator({ max: 1 });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    defaultValues: { username: "", users: [] },
-    resolver: zodResolver(userSearchSchema),
-  });
-  const watchedUsers = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
-  useEffect(() => {
-    if (userData && watchedUsers.length === 0)
-      userSearchMethods.setValue("users", [userData]);
-  }, [userData, watchedUsers, userSearchMethods]);
+  const { methods: userSearchMethods, users: watchedUsers } =
+    useRecipientPicker(userData);
   const isAllowanceReady = !isLoadingLimit && !isError;
   const monthlyRemaining = isAllowanceReady
     ? Math.max(0, dynamicMonthlyRepCap(userData) - (purchasedReps ?? 0))
@@ -421,7 +456,7 @@ const PayPalSubscriptionButton = (props: {
   subscriptionPlan: string;
   userId: string;
   imageSrc: string;
-  buttonStatus: (typeof FederalStatuses)[number];
+  buttonStatus: FederalTier;
   currentUserStatus: (typeof FederalStatuses)[number];
   onSuccess?: () => void;
 }) => {
@@ -492,83 +527,6 @@ const PayPalSubscriptionButton = (props: {
   // If not loaded yet, show loader
   if (isPending) return <Loader explanation="Processing..." />;
 
-  const normalBenefits = (
-    <>
-      <h2 className="font-bold">Normal Support</h2>
-      <ul className="mx-2 mb-2 ml-6 list-disc text-xs">
-        <li>Blue username in tavern</li>
-        <li>+{FED_NORMAL_INVENTORY_SLOTS} Normal Inventory space</li>
-        <li>
-          +{FED_EVENT_ITEMS_NORMAL - FED_EVENT_ITEMS_DEFAULT} Event inventory space
-        </li>
-        <li>+{FED_COOKING_NORMAL_SLOTS} Cooking inventory space</li>
-        <li>
-          +{PET_FED_COLLECTION_SLOTS.NORMAL} companion collection slot while active
-        </li>
-        <li>+{FED_NORMAL_JUTSU_SLOTS} Jutsu slot</li>
-        <li>+{FED_NORMAL_BANK_INTEREST}% bank interest</li>
-        <li>{FED_JUTSU_LOADOUTS_BASE + FED_NORMAL_JUTSU_LOADOUTS} jutsu loadouts</li>
-        <li>{FED_ITEM_LOADOUTS_BASE + FED_NORMAL_ITEM_LOADOUTS} item loadouts</li>
-        <li>+{SKILL_TREE_RESET_FREE_NORMAL} skill tree resets per month</li>
-        <li>
-          {QUEUE_WAITING_SLOTS.NORMAL} waiting slots in each training and crafting queue
-        </li>
-        <li>Custom avatar (512KB)</li>
-      </ul>
-    </>
-  );
-
-  const silverBenefits = (
-    <>
-      <h2 className="font-bold">Silver Support</h2>
-      <ul className="mx-2 mb-2 ml-6 list-disc text-xs">
-        <li>Silver username in tavern</li>
-        <li>+{FED_SILVER_INVENTORY_SLOTS} Normal Inventory space</li>
-        <li>
-          +{FED_EVENT_ITEMS_SILVER - FED_EVENT_ITEMS_DEFAULT} Event inventory space
-        </li>
-        <li>+{FED_COOKING_SILVER_SLOTS} Cooking inventory space</li>
-        <li>
-          +{PET_FED_COLLECTION_SLOTS.SILVER} companion collection slots while active
-        </li>
-        <li>+{FED_SILVER_JUTSU_SLOTS} Jutsu slots</li>
-        <li>+{FED_SILVER_BANK_INTEREST}% bank interest</li>
-        <li>{FED_JUTSU_LOADOUTS_BASE + FED_SILVER_JUTSU_LOADOUTS} jutsu loadouts</li>
-        <li>{FED_ITEM_LOADOUTS_BASE + FED_SILVER_ITEM_LOADOUTS} item loadouts</li>
-        <li>+{SKILL_TREE_RESET_FREE_SILVER} skill tree resets per month</li>
-        <li>
-          {QUEUE_WAITING_SLOTS.SILVER} waiting slots in each training and crafting queue
-        </li>
-        <li>Custom avatar (1MB)</li>
-      </ul>
-    </>
-  );
-
-  const goldBenefits = (
-    <>
-      <h2 className="font-bold">Gold Support</h2>
-      <ul className="mx-2 mb-2 ml-6 list-disc text-xs">
-        <li>Gold username in tavern</li>
-        <li>+{FED_GOLD_INVENTORY_SLOTS} Normal Inventory space</li>
-        <li>+{FED_EVENT_ITEMS_GOLD - FED_EVENT_ITEMS_DEFAULT} Event inventory space</li>
-        <li>+{FED_COOKING_GOLD_SLOTS} Cooking inventory space</li>
-        <li>
-          +{PET_FED_COLLECTION_SLOTS.GOLD} companion collection slots while active
-        </li>
-        <li>+{FED_GOLD_JUTSU_SLOTS} Jutsu slots</li>
-        <li>+{FED_GOLD_BANK_INTEREST}% bank interest</li>
-        <li>{FARM_GOLD_FED_TIME_REDUCTION_PERCENT}% faster farming</li>
-        <li>{FED_JUTSU_LOADOUTS_BASE + FED_GOLD_JUTSU_LOADOUTS} jutsu loadouts</li>
-        <li>{FED_ITEM_LOADOUTS_BASE + FED_GOLD_ITEM_LOADOUTS} item loadouts</li>
-        <li>+{SKILL_TREE_RESET_FREE_GOLD} skill tree resets per month</li>
-        <li>
-          {QUEUE_WAITING_SLOTS.GOLD} waiting slots in each training and crafting queue
-        </li>
-        <li>Custom avatar (2MB)</li>
-      </ul>
-    </>
-  );
-
   // Derived vars
   const current = FederalStatuses.indexOf(props.currentUserStatus);
   const next = FederalStatuses.indexOf(props.buttonStatus);
@@ -596,9 +554,7 @@ const PayPalSubscriptionButton = (props: {
         )}
       </div>
       <div className="flex-1">
-        {props.buttonStatus === "NORMAL" && normalBenefits}
-        {props.buttonStatus === "SILVER" && silverBenefits}
-        {props.buttonStatus === "GOLD" && goldBenefits}
+        <FederalTierBenefits status={props.buttonStatus} />
       </div>
       <div className="z-0 rounded-lg border-2 border-black bg-amber-200 p-2 text-center text-black hover:cursor-pointer hover:bg-orange-200">
         {isResolved ? (
@@ -672,28 +628,14 @@ const PayPalSubscriptionButton = (props: {
         ) : (
           <p>PayPal checkout is temporarily unavailable.</p>
         )}
-        {props.buttonStatus === "NORMAL" && (
-          <h3 className="font-bold italic">
-            ${FEDERAL_MONTHLY_USD_CENTS.NORMAL / 100} USD / Month
-          </h3>
-        )}
-        {props.buttonStatus === "SILVER" && (
-          <h3 className="font-bold italic">
-            ${FEDERAL_MONTHLY_USD_CENTS.SILVER / 100} USD / Month
-          </h3>
-        )}
-        {props.buttonStatus === "GOLD" && (
-          <h3 className="font-bold italic">
-            ${FEDERAL_MONTHLY_USD_CENTS.GOLD / 100} USD / Month
-          </h3>
-        )}
+        <h3 className="font-bold italic">
+          ${FEDERAL_MONTHLY_USD_CENTS[props.buttonStatus] / 100} USD / Month
+        </h3>
       </div>
-      {props.buttonStatus !== "NONE" && (
-        <StripeCheckoutButton
-          userId={props.userId}
-          purchase={{ type: "federal", federalStatus: props.buttonStatus }}
-        />
-      )}
+      <StripeCheckoutButton
+        userId={props.userId}
+        purchase={{ type: "federal", federalStatus: props.buttonStatus }}
+      />
       {hasSubscription && canUpgrade && (
         <Confirm
           title="Confirm Upgrade"
@@ -732,21 +674,9 @@ const PayPalSubscriptionButton = (props: {
           button={
             <div className="mt-2 w-full rounded-lg border-2 border-black bg-amber-200 p-2 text-center text-black hover:cursor-pointer hover:bg-orange-200">
               Or, buy with
-              {props.buttonStatus === "NORMAL" && (
-                <h3 className="font-bold italic">
-                  {fedStatusRepsCost("NORMAL")} Reputation Points
-                </h3>
-              )}
-              {props.buttonStatus === "SILVER" && (
-                <h3 className="font-bold italic">
-                  {fedStatusRepsCost("SILVER")} Reputation Points
-                </h3>
-              )}
-              {props.buttonStatus === "GOLD" && (
-                <h3 className="font-bold italic">
-                  {fedStatusRepsCost("GOLD")} Reputation Points
-                </h3>
-              )}
+              <h3 className="font-bold italic">
+                {fedStatusRepsCost(props.buttonStatus)} Reputation Points
+              </h3>
             </div>
           }
           onAccept={(e) => {
@@ -767,29 +697,50 @@ const PayPalSubscriptionButton = (props: {
   );
 };
 
+/** Benefit list of one federal tier. */
+const FederalTierBenefits = ({ status }: { status: FederalTier }) => {
+  const benefits = FEDERAL_TIER_BENEFITS[status];
+  const collectionSlots = PET_FED_COLLECTION_SLOTS[status];
+  return (
+    <>
+      <h2 className="font-bold">{benefits.title} Support</h2>
+      <ul className="mx-2 mb-2 ml-6 list-disc text-xs">
+        <li>{benefits.usernameColor} username in tavern</li>
+        <li>+{benefits.inventorySlots} Normal Inventory space</li>
+        <li>+{benefits.eventItems - FED_EVENT_ITEMS_DEFAULT} Event inventory space</li>
+        <li>+{benefits.cookingSlots} Cooking inventory space</li>
+        <li>
+          +{collectionSlots} companion collection{" "}
+          {collectionSlots === 1 ? "slot" : "slots"} while active
+        </li>
+        <li>
+          +{benefits.jutsuSlots} Jutsu {benefits.jutsuSlots === 1 ? "slot" : "slots"}
+        </li>
+        <li>+{benefits.bankInterest}% bank interest</li>
+        {status === "GOLD" && (
+          <li>{FARM_GOLD_FED_TIME_REDUCTION_PERCENT}% faster farming</li>
+        )}
+        <li>{FED_JUTSU_LOADOUTS_BASE + benefits.jutsuLoadouts} jutsu loadouts</li>
+        <li>{FED_ITEM_LOADOUTS_BASE + benefits.itemLoadouts} item loadouts</li>
+        <li>+{benefits.skillTreeResets} skill tree resets per month</li>
+        <li>
+          {QUEUE_WAITING_SLOTS[status]} waiting slots in each training and crafting
+          queue
+        </li>
+        <li>Custom avatar ({benefits.avatarSize})</li>
+      </ul>
+    </>
+  );
+};
+
 /**
  * Federal Store component
  */
 const FederalStore = () => {
   const { data: userData } = useRequiredUserData();
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    defaultValues: { username: "", users: [] },
-    resolver: zodResolver(userSearchSchema),
-  });
-  const watchedUsers = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
-  const selectedUser = watchedUsers?.[0];
-
-  useEffect(() => {
-    if (userData?.username && watchedUsers.length === 0) {
-      userSearchMethods.setValue("users", [userData]);
-    }
-  }, [userData, userSearchMethods, watchedUsers]);
+  const { methods: userSearchMethods, user: selectedUser } =
+    useRecipientPicker(userData);
 
   const status = selectedUser?.federalStatus;
 
@@ -822,56 +773,24 @@ const FederalStore = () => {
       )}
 
       <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-        <div>
-          {selectedUser && userData ? (
-            <PayPalSubscriptionButton
-              subscriptionPlan={process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL}
-              userId={selectedUser.userId}
-              imageSrc={IMG_REPSHOP_BRONZE}
-              buttonStatus="NORMAL"
-              currentUserStatus={selectedUser.federalStatus}
-              onSuccess={() => {
-                userSearchMethods.setValue("users", []);
-              }}
-            />
-          ) : (
-            <Loader />
-          )}
-        </div>
-
-        <div>
-          {selectedUser && userData ? (
-            <PayPalSubscriptionButton
-              subscriptionPlan={process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER}
-              userId={selectedUser.userId}
-              imageSrc={IMG_REPSHOP_SILVER}
-              buttonStatus="SILVER"
-              currentUserStatus={selectedUser.federalStatus}
-              onSuccess={() => {
-                userSearchMethods.setValue("users", []);
-              }}
-            />
-          ) : (
-            <Loader />
-          )}
-        </div>
-
-        <div>
-          {selectedUser && userData ? (
-            <PayPalSubscriptionButton
-              subscriptionPlan={process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD}
-              userId={selectedUser.userId}
-              imageSrc={IMG_REPSHOP_GOLD}
-              buttonStatus="GOLD"
-              currentUserStatus={selectedUser.federalStatus}
-              onSuccess={() => {
-                userSearchMethods.setValue("users", []);
-              }}
-            />
-          ) : (
-            <Loader />
-          )}
-        </div>
+        {FEDERAL_TIERS.map(({ status, image, planId }) => (
+          <div key={status}>
+            {selectedUser && userData ? (
+              <PayPalSubscriptionButton
+                subscriptionPlan={planId}
+                userId={selectedUser.userId}
+                imageSrc={image}
+                buttonStatus={status}
+                currentUserStatus={selectedUser.federalStatus}
+                onSuccess={() => {
+                  userSearchMethods.setValue("users", []);
+                }}
+              />
+            ) : (
+              <Loader />
+            )}
+          </div>
+        ))}
       </div>
     </>
   );
@@ -945,6 +864,7 @@ const SubscriptionsOverview = () => {
 const LookupTransaction = () => {
   // tRPC utility
   const utils = api.useUtils();
+  const refreshStoreDelivery = useStoreDeliveryRefresh();
 
   // Form
   const searchForm = useForm<SearchPaypalTransactionSchema>({
@@ -957,14 +877,7 @@ const LookupTransaction = () => {
     onSuccess: async (data) => {
       showMutationToast(data);
       // A lookup can apply some receipts before another delivery fails.
-      await Promise.all([
-        utils.profile.getUser.invalidate(),
-        utils.item.getUserItems.invalidate(),
-        utils.item.getUserItemsWithVariants.invalidate(),
-        utils.paypal.getRecentRepsCount.invalidate(),
-        utils.paypal.getPaypalTransactions.invalidate(),
-        utils.paypal.getStoreBundles.invalidate(),
-      ]);
+      await Promise.all([utils.profile.getUser.invalidate(), refreshStoreDelivery()]);
     },
   });
 
@@ -1034,3 +947,5 @@ const LookupTransaction = () => {
     </ContentBox>
   );
 };
+
+type FederalTier = Exclude<FederalStatus, "NONE">;

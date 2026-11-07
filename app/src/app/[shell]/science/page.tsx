@@ -44,7 +44,7 @@ export default function Science() {
         topRightContent={
           <BloodlineStatistics
             trigger={
-              <Button id="filter-bloodline">
+              <Button id="bloodline-statistics">
                 <BarChart2 className="h-6 w-6 hover:text-orange-500 sm:mr-2" />
                 <p className="hidden sm:block">Roll Statistics</p>
               </Button>

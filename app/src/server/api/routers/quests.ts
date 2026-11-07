@@ -115,6 +115,7 @@ import {
   formatQuestEntryCost,
   getIsolatedPyramid,
   getQuestEntryRequirements,
+  getQuestEntryStock,
   ISOLATED_PYRAMID_MESSAGE,
   isBetweenPyramidBattles,
   isManagedQuestRun,
@@ -195,6 +196,7 @@ import {
   insertUserItemForUpdateRewards,
   insertUserJutsuForUpdateRewards,
   insertUserRewardsForUpdateRewards,
+  listCarriedItemsForQuestEntry,
   listItemForAssignQuestToUser,
   listOverworldAiPlacementForPrepareOverworldBindings,
   listQuestForGetAll,
@@ -205,7 +207,6 @@ import {
   listQuestsByIds,
   listRewardPackageForUpdate,
   listUserItemForHandleQuestConsequences,
-  listUserItemForSpecificQuests,
   revertQuestCompletionAfterFailedClaim,
   selectBadgeForResolveRewardChoiceDisplays,
   selectBadgeForUpdateRewards,
@@ -300,6 +301,7 @@ import {
 import { awardRecruitRankMilestonesSafely } from "@/server/utils/recruitment";
 import {
   getUserRegenerationGain,
+  regenTicksSql,
   userRegenerationGainSql,
 } from "@/server/utils/regeneration";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
@@ -309,6 +311,7 @@ import { recordVillageMissionProgress } from "@/server/utils/villageMission";
 import { chunkArray, getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
+  canAbandonQuestType,
   canAwardReputation,
   canChangeContent,
   canEditQuests,
@@ -318,6 +321,7 @@ import {
 } from "@/utils/permissions";
 import {
   getNextUserSnapshotAt,
+  hasEndDatePassed,
   periodStart,
   regenTicksSince,
   secondsFromDate,
@@ -465,7 +469,7 @@ export const questsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       // Query
-      const [{ user }, events] = await Promise.all([
+      const [{ user }, events, inventory] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -476,12 +480,18 @@ export const questsRouter = createTRPCRouter({
           level: input.level ?? 0,
           ranks: input.rank,
         }),
+        listCarriedItemsForQuestEntry(ctx.drizzle, ctx),
       ]);
       if (!user) return [];
       events.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
-      return events.filter((e) => isAvailableUserQuests(e, user, true).check);
+      return events
+        .filter((e) => isAvailableUserQuests(e, user, true).check)
+        .map((entry) => ({
+          ...entry,
+          entryRequirements: getQuestEntryStock(entry.content, inventory),
+        }));
     }),
   missionHall: protectedProcedure
     .meta({
@@ -538,7 +548,7 @@ export const questsRouter = createTRPCRouter({
           questTypes: [input.questType],
           level: input.level,
         }),
-        listUserItemForSpecificQuests(ctx.drizzle, ctx),
+        listCarriedItemsForQuestEntry(ctx.drizzle, ctx),
       ]);
       if (!user) return [];
       quests.forEach((r) => {
@@ -548,17 +558,7 @@ export const questsRouter = createTRPCRouter({
         .filter((e) => isAvailableUserQuests(e, user, true).check)
         .map((entry) => ({
           ...entry,
-          entryRequirements: getQuestEntryRequirements(entry.content).map(
-            (required) => ({
-              ...required,
-              name:
-                inventory.find((row) => row.itemId === required.itemId)?.item.name ??
-                required.itemId,
-              owned: inventory
-                .filter((row) => row.itemId === required.itemId)
-                .reduce((sum, row) => sum + row.quantity, 0),
-            }),
-          ),
+          entryRequirements: getQuestEntryStock(entry.content, inventory),
         }));
     }),
   upcomingQuests: protectedProcedure
@@ -849,25 +849,7 @@ export const questsRouter = createTRPCRouter({
             : {}),
         };
       }
-      if (
-        user.role === "USER" &&
-        ![
-          "mission",
-          "crime",
-          "event",
-          "errand",
-          "story",
-          "hunting",
-          "gathering",
-          "medical",
-          "battlepyramid",
-          "pvp",
-          "war",
-          "overworld",
-          "mastery",
-          "special",
-        ].includes(current.questType)
-      ) {
+      if (!canAbandonQuestType(user.role, current.questType)) {
         return errorResponse(`Cannot abandon ${current.questType} quest type.`);
       }
       if (
@@ -2991,7 +2973,7 @@ export const assignQuestToUser = async (args: {
   if (questData.startsAt && questData.startsAt > new Date().toISOString()) {
     return errorResponse(`Quest starts in the future`);
   }
-  if (questData.endsAt && questData.endsAt < new Date().toISOString()) {
+  if (hasEndDatePassed(questData.endsAt)) {
     return errorResponse(`Quest has ended`);
   }
 
@@ -3382,7 +3364,7 @@ export const upsertQuestEntry = async (
     : {};
   // Use the persisted pools/clock: a competing account write must not replay recovery
   // or overwrite the pools after the story's quest tracker has already been claimed.
-  const recoveryTicks = sql`FLOOR(GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, ${recoveredAt})) / ${REGEN_SECONDS * 1_000_000})`;
+  const recoveryTicks = regenTicksSql(userData.regenAt, recoveredAt);
   const poolRecovery = userRegenerationGainSql(user, userData.regenAt, recoveredAt);
   const recoveryUpdate = settleRecovery
     ? {

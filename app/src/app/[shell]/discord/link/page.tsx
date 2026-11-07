@@ -1,17 +1,13 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { CheckCircle2, Link2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import {
-  DISCORD_MAX_CHARACTERS_PER_ACCOUNT,
-  DISCORD_MIN_ACCOUNT_AGE_DAYS,
-  DISCORD_UNLINK_COOLDOWN_DAYS,
-} from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import { DiscordAuthorizeButton, DiscordLinkRules } from "@/layout/DiscordLinkRules";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import {
@@ -81,14 +77,7 @@ const DiscordLinkOutcome: React.FC<{
       <h2 className="font-bold text-lg">{copy.title}</h2>
       <p className="max-w-prose">{copy.description}</p>
       <div className="flex flex-row flex-wrap justify-center gap-2 pt-2">
-        {RETRYABLE.includes(result) && (
-          <Button asChild className="gap-2">
-            <a href="/api/discord/authorize">
-              <Link2 className="h-4 w-4" />
-              Try again
-            </a>
-          </Button>
-        )}
+        {RETRYABLE.includes(result) && <DiscordAuthorizeButton label="Try again" />}
         <Link href="/profile?tab=edit">
           <Button variant="secondary">Profile settings</Button>
         </Link>
@@ -138,28 +127,11 @@ const DiscordLinkStart: React.FC = () => {
           your village role.
         </p>
       )}
-      <ul className="list-disc pl-5 text-muted-foreground text-sm">
-        <li>
-          One Discord account per character; a Discord account can link up to{" "}
-          {DISCORD_MAX_CHARACTERS_PER_ACCOUNT} characters.
-        </li>
-        <li>
-          Discord accounts must be at least {DISCORD_MIN_ACCOUNT_AGE_DAYS} days old.
-        </li>
-        <li>
-          After unlinking, linking a different Discord account takes{" "}
-          {DISCORD_UNLINK_COOLDOWN_DAYS} days, and unlinked characters count toward the
-          limit for as long.
-        </li>
-        <li>Indefinite bans and silences in the game also apply on Discord.</li>
-      </ul>
+      <DiscordLinkRules />
       <div>
-        <Button asChild className="gap-2">
-          <a href="/api/discord/authorize">
-            <Link2 className="h-4 w-4" />
-            {data.link?.needsRelink ? "Re-link Discord" : "Continue with Discord"}
-          </a>
-        </Button>
+        <DiscordAuthorizeButton
+          label={data.link?.needsRelink ? "Re-link Discord" : "Continue with Discord"}
+        />
       </div>
     </div>
   );

@@ -27,6 +27,7 @@ import {
   WAR_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
 import { useQuestStartCacheUpdate } from "@/hooks/useQuestStartCacheUpdate";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
@@ -35,15 +36,16 @@ import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   fallbackQuestsFilter,
   getMissionHallSettings,
+  getMissionHallTileQuests,
   isReducedMissionReward,
   missionHallStartBlockedMessage,
   questDailyQuota,
 } from "@/libs/quest";
+import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { availableQuestLetterRanks } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
-import { isRetryableTrpcError } from "@/utils/error";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
 
@@ -60,13 +62,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
   activeUserIdRef.current = userData.userId;
   const activeContextRef = useRef(activeContext);
   activeContextRef.current = activeContext;
-  const startRequestRef = useRef<{
+  const startFlight = useSingleFlight<{
     context: string;
     questId: string;
     userSector: number;
-  } | null>(null);
+  }>();
+  const pendingQuestId = startFlight.pending?.questId ?? null;
   const randomStartRequestRef = useRef(false);
-  const [pendingQuestId, setPendingQuestId] = useState<string | null>(null);
   const [committedStart, setCommittedStart] = useState<{
     context: string;
     questId: string;
@@ -108,71 +110,48 @@ export default function MissionHall({ userData }: MissionHallProps) {
   });
 
   const startSpecificQuest = async (quest: { id: string }) => {
-    // Mutation pending state is only visible on the next render. Capture the quest, sector, and
-    // user context synchronously so a rapid click/Enter cannot submit twice or act on new props.
-    if (startRequestRef.current || randomStartRequestRef.current || isPending) {
-      return false;
-    }
+    // Capture the quest, sector, and user context so a late response cannot act on new props.
+    if (randomStartRequestRef.current || isPending) return false;
     const request = {
       context: activeContext,
       questId: quest.id,
       userSector: userData.sector,
     };
-    startRequestRef.current = request;
-    setPendingQuestId(request.questId);
+    const started = await startFlight.run(request, async () => {
+      const userRevision = prepareUserUpdate();
+      const questSnapshot = prepareQuestStartUpdate();
+      try {
+        const data = await startQuest({
+          questId: request.questId,
+          userSector: request.userSector,
+          supportsAnnouncements: true,
+        });
+        // Consumed announcements belong to this account even when its quest context changed.
+        if (activeUserIdRef.current === userData.userId) showMutationToast(data);
+        if (activeContextRef.current !== request.context) return false;
 
-    const userRevision = prepareUserUpdate();
-    const questSnapshot = prepareQuestStartUpdate();
-    try {
-      const data = await startQuest({
-        questId: request.questId,
-        userSector: request.userSector,
-        supportsAnnouncements: true,
-      });
-      // Consumed announcements belong to this account even when its quest context changed.
-      if (activeUserIdRef.current === userData.userId) showMutationToast(data);
-      if (
-        startRequestRef.current !== request ||
-        activeContextRef.current !== request.context
-      ) {
+        if (!data.success) return false;
+
+        // The server has committed a mutually-exclusive mission. Suppress every stale start action
+        // before cache work; failed invalidation must not expose another start on old hall data.
+        setCommittedStart({ context: request.context, questId: request.questId });
+        void Promise.allSettled([
+          updateUser(data, { revision: userRevision }).then((profileApplied) =>
+            updateQuestStart(data, questSnapshot, profileApplied),
+          ),
+        ]);
+        return true;
+      } catch (error) {
+        if (activeContextRef.current === request.context) {
+          showRetryableErrorToast(
+            error,
+            "Could not start this quest. Check your connection and try again.",
+          );
+        }
         return false;
       }
-
-      if (!data.success) return false;
-
-      // The server has committed a mutually-exclusive mission. Suppress every stale start action
-      // before cache work; failed invalidation must not expose another start on old hall data.
-      setCommittedStart({ context: request.context, questId: request.questId });
-      setPendingQuestId(null);
-      void Promise.allSettled([
-        updateUser(data, { revision: userRevision }).then((profileApplied) =>
-          updateQuestStart(data, questSnapshot, profileApplied),
-        ),
-      ]);
-      return true;
-    } catch (error) {
-      // This caller owns transport recovery feedback; other tRPC failures use the global handler.
-      if (
-        startRequestRef.current === request &&
-        activeContextRef.current === request.context &&
-        error instanceof Error &&
-        isRetryableTrpcError(error)
-      ) {
-        showMutationToast({
-          success: false,
-          message: "Could not start this quest. Check your connection and try again.",
-        });
-      }
-      return false;
-    } finally {
-      if (startRequestRef.current === request) {
-        startRequestRef.current = null;
-        // This state belongs to the exact request guarded above. Clear it even if navigation or
-        // fresh profile props changed context while the request was in flight; otherwise the new
-        // hall context would remain disabled forever after correctly ignoring a stale response.
-        setPendingQuestId(null);
-      }
-    }
+    });
+    return started ?? false;
   };
 
   // Derived
@@ -279,7 +258,6 @@ export default function MissionHall({ userData }: MissionHallProps) {
       {!currentQuest && !isPending && (
         <div className="grid grid-cols-3 gap-4 p-3 text-center italic">
           {getMissionHallSettings(userData.isOutlaw).map((setting) => {
-            // Count how many of this type and rank are available
             const { filtered, rankInfo } = fallbackQuestsFilter(
               regularMissions,
               userData,
@@ -289,15 +267,12 @@ export default function MissionHall({ userData }: MissionHallProps) {
             const isErrand = setting.type === "errand";
             const isMedical = setting.type === "medical";
             const isPvp = setting.type === "pvp";
-            const dailyPvpMissions = userData.dailyPvpMissions;
-            // For PvP missions, count all ranks user has access to; for others, filter by setting rank
-            // Also ensure we filter by quest type since fallbackQuestsFilter doesn't filter non-medical types
-            const count = isPvp
-              ? (filtered?.filter(
-                  (q) =>
-                    q.questType === "pvp" && availableUserRanks.includes(q.questRank),
-                )?.length ?? 0)
-              : (filtered?.filter((q) => q.questRank === setting.rank)?.length ?? 0);
+            const available = getMissionHallTileQuests(
+              setting,
+              filtered,
+              availableUserRanks,
+            );
+            const count = available.length;
             const quota = questDailyQuota(setting.type, userData);
             const capped = !!quota && quota.current >= quota.limit;
             // Checks
@@ -314,50 +289,20 @@ export default function MissionHall({ userData }: MissionHallProps) {
 
             // Handle mission picker cases (PvP, Medical, A-rank)
             if (isPvp || isMedical || setting.rank === "A") {
-              // For PvP, show all ranks user has access to and ensure we filter by quest type
-              // For others, filter by setting rank
-              const missions =
-                (isPvp
-                  ? filtered?.filter(
-                      (q) =>
-                        q.questType === "pvp" &&
-                        availableUserRanks.includes(q.questRank),
-                    )
-                  : filtered?.filter((q) => q.questRank === setting.rank)
-                )?.map((q) => ({
-                  id: q.id,
-                  name: q.name,
-                  image: q.image || undefined,
-                })) || [];
+              const missions = available.map((q) => ({
+                id: q.id,
+                name: q.name,
+                image: q.image || undefined,
+              }));
 
-              // Determine daily limit configuration
-              const limitConfig = isPvp
-                ? {
-                    current: dailyPvpMissions,
-                    limit: PVP_MISSIONS_PER_DAY,
-                    typeName: "PvP",
-                    dialogTitle: "Accept PvP Mission",
-                  }
+              const typeName = isPvp ? "PvP" : isMedical ? "medical" : "";
+              const dialogTitle = isPvp
+                ? "Accept PvP Mission"
                 : isMedical
-                  ? {
-                      current: userData.dailyMedicalMissions,
-                      limit: MEDICAL_MISSIONS_PER_DAY,
-                      typeName: "medical",
-                      dialogTitle: "Accept Medical Mission",
-                    }
-                  : {
-                      current: userData.dailyMissions,
-                      limit: MISSIONS_PER_DAY,
-                      typeName: "",
-                      dialogTitle: "Accept Mission",
-                    };
-
-              const isDailyLimitReached = limitConfig.current >= limitConfig.limit;
+                  ? "Accept Medical Mission"
+                  : "Accept Mission";
               const isReducedRewards =
                 setting.rank === "A" &&
-                !isErrand &&
-                !isMedical &&
-                !isPvp &&
                 isReducedMissionReward(userData.dailyMissions, {
                   phase: "pre-start",
                 }) &&
@@ -375,15 +320,14 @@ export default function MissionHall({ userData }: MissionHallProps) {
                   interactionDisabled={isSpecificStartBlocked}
                   pendingMissionId={pendingQuestId}
                   onMissionSelect={startSpecificQuest}
-                  dialogTitle={limitConfig.dialogTitle}
+                  dialogTitle={dialogTitle}
                   dialogDescription={(mission) =>
-                    isDailyLimitReached ? (
-                      `You have reached your daily ${limitConfig.typeName ? `${limitConfig.typeName} ` : ""}mission limit of ${limitConfig.limit} ${limitConfig.typeName ? `${limitConfig.typeName} ` : ""}missions. Please try again tomorrow.`
+                    capped ? (
+                      `You have reached your daily ${typeName ? `${typeName} ` : ""}mission limit of ${quota?.limit} ${typeName ? `${typeName} ` : ""}missions. Please try again tomorrow.`
                     ) : (
                       <>
                         Are you sure you want to accept the{" "}
-                        {limitConfig.typeName ? `${limitConfig.typeName} ` : ""}mission
-                        &quot;
+                        {typeName ? `${typeName} ` : ""}mission &quot;
                         {mission.name}&quot;? You can only have one active{" "}
                         {setting.rank === "A" ? "mission" : classifier} at a time.
                         {isReducedRewards && (
@@ -402,10 +346,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
                       </>
                     )
                   }
-                  actionDisabled={isDailyLimitReached}
-                  actionText={
-                    isDailyLimitReached ? "Daily Limit Reached" : "Accept Mission"
-                  }
+                  actionDisabled={capped}
+                  actionText={capped ? "Daily Limit Reached" : "Accept Mission"}
                   additionalContent={() => (
                     <>
                       {isReducedRewards && (
@@ -413,7 +355,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           {ADDITIONAL_MISSION_REWARD_MULTIPLIER * 100}% Rewards
                         </p>
                       )}
-                      {isDailyLimitReached && (
+                      {capped && (
                         <p className="text-red-500 text-sm">Daily Limit Reached</p>
                       )}
                     </>
@@ -423,11 +365,10 @@ export default function MissionHall({ userData }: MissionHallProps) {
             } else {
               const isReducedRewards =
                 !isErrand &&
-                !isMedical &&
-                !isPvp &&
                 isReducedMissionReward(userData.dailyMissions, {
                   phase: "pre-start",
                 });
+              const assignment = isErrand ? "errand" : "mission";
               return (
                 <Fragment key={setting.name}>
                   <AlertDialog>
@@ -461,19 +402,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                               {ADDITIONAL_MISSION_REWARD_MULTIPLIER * 100}% Rewards
                             </p>
                           )}
-                        {!isErrand &&
-                          !isPvp &&
-                          userData.dailyMissions >= MISSIONS_PER_DAY && (
-                            <p className="text-red-500 text-sm">Daily Limit Reached</p>
-                          )}
-                        {isErrand && userData.dailyErrands >= ERRANDS_PER_DAY && (
-                          <p className="text-red-500 text-sm">Daily Limit Reached</p>
-                        )}
-                        {isMedical &&
-                          userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY && (
-                            <p className="text-red-500 text-sm">Daily Limit Reached</p>
-                          )}
-                        {isPvp && dailyPvpMissions >= PVP_MISSIONS_PER_DAY && (
+                        {capped && (
                           <p className="text-red-500 text-sm">Daily Limit Reached</p>
                         )}
                       </button>
@@ -482,28 +411,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Accept Random Mission</AlertDialogTitle>
                         <AlertDialogDescription>
-                          {!isErrand &&
-                          !isMedical &&
-                          !isPvp &&
-                          userData.dailyMissions >= MISSIONS_PER_DAY ? (
-                            `You have reached your daily mission limit of ${MISSIONS_PER_DAY} missions. Please try again tomorrow.`
-                          ) : isErrand && userData.dailyErrands >= ERRANDS_PER_DAY ? (
-                            `You have reached your daily errand limit of ${ERRANDS_PER_DAY} errands. Please try again tomorrow.`
-                          ) : isMedical &&
-                            userData.dailyMedicalMissions >=
-                              MEDICAL_MISSIONS_PER_DAY ? (
-                            `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`
-                          ) : isPvp && dailyPvpMissions >= PVP_MISSIONS_PER_DAY ? (
-                            `You have reached your daily PvP mission limit of ${PVP_MISSIONS_PER_DAY} PvP missions. Please try again tomorrow.`
+                          {capped ? (
+                            `You have reached your daily ${assignment} limit of ${quota?.limit} ${assignment}s. Please try again tomorrow.`
                           ) : (
                             <>
                               Are you sure you want to accept a random{" "}
-                              {isMedical
-                                ? "medical mission"
-                                : isPvp
-                                  ? "PvP mission"
-                                  : `${setting.rank}-rank ${setting.type}`}
-                              ? You can only have one active {classifier} at a time.
+                              {`${setting.rank}-rank ${setting.type}`}? You can only
+                              have one active {classifier} at a time.
                               {isReducedRewards && (
                                 <>
                                   <br />
@@ -523,14 +437,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        {(!isErrand &&
-                          !isMedical &&
-                          !isPvp &&
-                          userData.dailyMissions >= MISSIONS_PER_DAY) ||
-                        (isErrand && userData.dailyErrands >= ERRANDS_PER_DAY) ||
-                        (isMedical &&
-                          userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) ||
-                        (isPvp && dailyPvpMissions >= PVP_MISSIONS_PER_DAY) ? (
+                        {capped ? (
                           <AlertDialogAction disabled>
                             Daily Limit Reached
                           </AlertDialogAction>
@@ -540,7 +447,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                             onClick={(e) => {
                               e.preventDefault();
                               if (
-                                startRequestRef.current ||
+                                startFlight.current() ||
                                 randomStartRequestRef.current
                               ) {
                                 return;

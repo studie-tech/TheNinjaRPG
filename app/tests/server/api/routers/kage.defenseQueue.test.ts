@@ -128,7 +128,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const defender = await callerFor(kageRouter, "defender");
     const results = await Promise.all([defender.requestInstantDefense({ id: m.id }), defender.requestInstantDefense({ id: m.id })]);
     expect(results.filter((r) => r.success)).toHaveLength(1);
-    expect((await db.query.kageDefendedChallenges.findFirst())).toMatchObject({ scheduledAt: m.scheduledAt, checkedInAt: null, status: "SCHEDULED", startedAt: null, rescheduled: false });
+    expect((await db.query.kageDefendedChallenges.findFirst())).toEqual(expect.objectContaining({ scheduledAt: m.scheduledAt, checkedInAt: null, status: "SCHEDULED", startedAt: null, rescheduled: false }));
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("first", "event", expect.objectContaining({ route: "/townhall#Kage" }));
   });
   it("sends and dismisses invitations with one guarded write each and no transactions", async () => {
@@ -199,7 +199,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     setSystemTime(new Date(now.getTime() + KAGE_DEFENSE_INSTANT_REQUEST_MINUTES * 60_000));
     expect((await defender.requestInstantDefense({ id: m.id })).success).toBe(true);
     expect((await db.query.village.findFirst())!.kageSchedule!.instantChallenge!.id).not.toBe(input.instantRequestId);
-    expect((await db.query.kageDefendedChallenges.findFirst())).toMatchObject({ scheduledAt: m.scheduledAt, checkedInAt: null, status: "SCHEDULED", rescheduled: false });
+    expect((await db.query.kageDefendedChallenges.findFirst())).toEqual(expect.objectContaining({ scheduledAt: m.scheduledAt, checkedInAt: null, status: "SCHEDULED", rescheduled: false }));
   });
   it("expires an unanswered invitation without attendance, prestige or scheduling penalties", async () => {
     const { m, input } = await invite(); const db = await getTestDatabase();
@@ -208,7 +208,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     expect((await challenger.startDefense(input)).success).toBe(false);
     const home = (await db.query.village.findFirst())!;
     expect(home.kageSchedule!.instantChallenge).toBeUndefined(); expect(home.kageSchedule!.missedStarts).toBe(0);
-    expect((await db.query.kageDefendedChallenges.findFirst())).toMatchObject({ scheduledAt: m.scheduledAt, checkedInAt: null, status: "SCHEDULED", startedAt: null, rescheduled: false });
+    expect((await db.query.kageDefendedChallenges.findFirst())).toEqual(expect.objectContaining({ scheduledAt: m.scheduledAt, checkedInAt: null, status: "SCHEDULED", startedAt: null, rescheduled: false }));
     expect((await db.query.userData.findMany()).every((user) => user.villagePrestige === KAGE_PRESTIGE_REQUIREMENT)).toBe(true);
   });
   it.each(["defender", "first"])("lets %s dismiss an invitation while stale and outsider responses cannot affect a new one", async (actor) => {
@@ -243,7 +243,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     expect(results.filter((r) => r.success)).toHaveLength(1);
     const fights = await db.query.battle.findMany(); expect(fights).toHaveLength(1);
     expect(fights[0]?.battleType).toBe("KAGE_PVP");
-    expect((await db.query.kageDefendedChallenges.findFirst())).toMatchObject({ scheduledAt: m.scheduledAt, status: "BATTLE", startedAt: now });
+    expect((await db.query.kageDefendedChallenges.findFirst())).toEqual(expect.objectContaining({ scheduledAt: m.scheduledAt, status: "BATTLE", startedAt: now }));
     expect((await db.query.village.findFirst())!.kageSchedule!.instantChallenge).toBeUndefined();
     expect((await db.query.userData.findMany()).filter((u) => ["first", "defender"].includes(u.userId)).every((u) => u.status === "BATTLE" && u.battleId === fights[0]!.id)).toBe(true);
   });
@@ -265,7 +265,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     } });
     expect((await callerForDatabase(kageRouter, "first", wrapped).startDefense(input)).success).toBe(false);
     expect(await db.query.battle.findMany()).toHaveLength(0);
-    expect((await db.query.kageDefendedChallenges.findFirst())).toMatchObject({ scheduledAt: m.scheduledAt, status: "SCHEDULED", startedAt: null });
+    expect((await db.query.kageDefendedChallenges.findFirst())).toEqual(expect.objectContaining({ scheduledAt: m.scheduledAt, status: "SCHEDULED", startedAt: null }));
   });
 
   it("reads completed defense history while waiting challengers retain no result", async () => {
@@ -648,7 +648,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     expect(await db.query.battle.findFirst()).toBeUndefined();
     await syncKageDefense(db, villageId);
     const stored = (await db.query.kageDefendedChallenges.findFirst({ where: eq(kageDefendedChallenges.id, m.id) }))!;
-    expect(stored).toMatchObject({ id: m.id, status: "COMPLETED", didWin: 0, rounds: fight.round, resolvedAt: now, userId: "first", kageId: "defender" });
+    expect(stored).toEqual(expect.objectContaining({ id: m.id, status: "COMPLETED", didWin: 0, rounds: fight.round, resolvedAt: now, userId: "first", kageId: "defender" }));
     await updateKage(db, fight, result); await updateKage(db, fight, result);
     expect(await db.query.kageDefendedChallenges.findMany()).toHaveLength(1);
     expect(stored.startedAt).toEqual(now);

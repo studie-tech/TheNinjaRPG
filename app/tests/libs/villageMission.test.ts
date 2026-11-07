@@ -3,7 +3,8 @@ import { applyEffects } from "@/libs/combat/process";
 import { alignBattle } from "@/libs/combat/util";
 import { claimVillageMissionCombatEvents } from "@/libs/combat/villageMission";
 import type { CombatResult } from "@/libs/combat/types";
-import { villageMissionCompletionEvents } from "@/libs/villageMission";
+import type { Quest } from "@/drizzle/schema";
+import { isVillageMissionAvailable, villageMissionCompletionEvents } from "@/libs/villageMission";
 import { villageMissionContentError } from "@/validators/villageMission";
 import { makeBattleUser, makeCompleteBattle } from "./combat/helpers/battleScenario";
 
@@ -25,6 +26,21 @@ it("counts defeated human opponents while excluding escapees, allies, summons an
   expect(claimVillageMissionCombatEvents(battle, "winner", result)).toEqual({ pvp_kills: 1 });
   expect(claimVillageMissionCombatEvents({ ...battle, battleType: "SPARRING" }, "winner", result)).toEqual({});
   expect(claimVillageMissionCombatEvents(battle, "winner", { ...result, didWin: 0 })).toEqual({});
+});
+
+it.each([
+  ["2026-10-18T23:59:59.999Z", true],
+  ["2026-10-19T00:00:00.000Z", false],
+  ["2026-10-19T17:17:00.000Z", false],
+])("stops offering a mission at midnight UTC of its end date (%s)", (now, available) => {
+  const mission = {
+    questType: "village_mission",
+    hidden: false,
+    consecutiveObjectives: false,
+    endsAt: "2026-10-19",
+    content: { reward: { reward_tokens: 100 }, objectives: [{ id: "x", task: "siege_operation", description: "Siege", value: 1 }] },
+  } as unknown as Quest;
+  expect(isVillageMissionAvailable(mission, "v1", new Date(now))).toBe(available);
 });
 
 it("rejects story objectives and sequential village missions", () => {

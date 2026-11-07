@@ -72,7 +72,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { canReskinFreely, canTransferJutsu } from "@/utils/permissions";
 import { DAY_S, secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
 
@@ -1067,27 +1067,14 @@ export default function MyJutsu() {
                       <UploadButton
                         endpoint="imageUploader"
                         onClientUploadComplete={(res) => {
-                          const serverData = res?.[0]?.serverData;
-                          if (serverData?.error) {
-                            showMutationToast({
-                              success: false,
-                              message: serverData.error,
-                            });
-                            return;
-                          }
-                          const url = serverData?.fileUrl;
+                          const url = readUploadResult(res)?.fileUrl;
                           if (url) {
                             reskinForm.setValue("image", url, {
                               shouldValidate: true,
                             });
                           }
                         }}
-                        onUploadError={(error: Error) => {
-                          showMutationToast({
-                            success: false,
-                            message: error.message,
-                          });
-                        }}
+                        onUploadError={showUploadError}
                       />
                     </div>
                   </div>

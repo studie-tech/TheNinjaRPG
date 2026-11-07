@@ -1,30 +1,16 @@
 import type {
-  FederalStatus,
   SupportTicketActivityAction,
   SupportTicketCategory,
   SupportTicketPriority,
   SupportTicketStatus,
-  UserRank,
-  UserRole,
 } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT, SUPPORT_TICKET_COLORS } from "@/drizzle/constants";
 import type { SupportTicket, UserData } from "@/drizzle/schema";
+import type { UserCard } from "@/queries/userColumns";
 import type { UpdateSupportTicketSchema } from "@/validators/support";
 
 /** Hide staff identity from regular users. */
-export const anonymizeStaffInfo = (
-  user: {
-    userId: string;
-    username: string;
-    avatar: string | null;
-    role: UserRole;
-    level: number;
-    rank: UserRank;
-    isOutlaw: boolean;
-    federalStatus: FederalStatus;
-  },
-  viewer: UserData,
-) => {
+export const anonymizeStaffInfo = (user: UserCard, viewer: UserData) => {
   if (viewer.role === "USER" && user.role !== "USER") {
     return {
       userId: user.userId,

@@ -1,15 +1,13 @@
 "use client";
 
-import { InfoIcon, Pencil } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useContentDetails } from "@/hooks/useContentDetails";
 import ContentBox from "@/layout/ContentBox";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import Link from "@/layout/Link";
+import { ContentDetailsModal } from "@/layout/ContentDetailsModal";
+import { ContentLinksCell } from "@/layout/ContentLinksCell";
 import Loader from "@/layout/Loader";
-import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import SkillTreeBalanceFiltering, {
   getFilter,
@@ -54,23 +52,11 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
   const state = useSkillTreeFiltering();
   const { data: userData } = useUserData();
 
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedSkillId, setSelectedSkillId] = useState<string>("");
+  const details = useContentDetails();
 
   // Queries
   const { data, isPending } = api.data.getSkillTreeEffectsBalanceStatistics.useQuery(
     getSkillTreeFilter(state),
-  );
-
-  // Skill details query for modal
-  const {
-    data: skillDetails,
-    isPending: isSkillDetailsPending,
-    isError: isSkillDetailsError,
-  } = api.skillTree.get.useQuery(
-    { id: selectedSkillId },
-    { enabled: !!selectedSkillId },
   );
 
   // Can edit skill
@@ -82,20 +68,13 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
         return {
           name: skill.name,
           links: (
-            <div className="flex items-center gap-2">
-              {canEdit && (
-                <Link href={`/manual/skillTree/edit/${skill.id}`}>
-                  <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                </Link>
-              )}
-              <InfoIcon
-                className="h-4 w-4 cursor-pointer text-muted-foreground hover:text-primary"
-                onClick={() => {
-                  setSelectedSkillId(skill.id);
-                  setIsModalOpen(true);
-                }}
-              />
-            </div>
+            <ContentLinksCell
+              type="skillTree"
+              id={skill.id}
+              canEdit={canEdit}
+              hideStatistics
+              onInfo={() => details.open(skill.id)}
+            />
           ),
           tier: skill.tier,
           costSkillPoints: skill.costSkillPoints,
@@ -106,8 +85,7 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
         };
       });
     })
-    .sort((a, b) => b.power - a.power)
-    .filter(Boolean);
+    .sort((a, b) => b.power - a.power);
 
   type SkillTreeBalanceRow = ArrayElement<typeof tableData>;
 
@@ -143,30 +121,7 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
         {!isPending && tableData && <Table data={tableData} columns={columns} />}
       </ContentBox>
 
-      {/* Modal for skill details */}
-      <Modal
-        isOpen={isModalOpen}
-        setIsOpen={setIsModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedSkillId("");
-        }}
-        title="Skill Details"
-      >
-        {isSkillDetailsPending && <Loader explanation="Loading skill details" />}
-        {!isSkillDetailsPending && skillDetails && (
-          <ItemWithEffects
-            item={skillDetails}
-            showEdit={canEdit ? "skillTree" : undefined}
-          />
-        )}
-        {isSkillDetailsError && (
-          <p role="alert">Skill details could not be loaded. Please try again.</p>
-        )}
-        {!isSkillDetailsPending && !isSkillDetailsError && !skillDetails && (
-          <p role="alert">This skill could not be found.</p>
-        )}
-      </Modal>
+      <ContentDetailsModal type="skillTree" canEdit={canEdit} {...details} />
     </>
   );
 };
@@ -183,23 +138,13 @@ const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
   const filterState = useFiltering();
   const { data: userData } = useUserData();
 
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedSkillId, setSelectedSkillId] = useState<string>("");
+  const details = useContentDetails();
 
   // Get filter object
   const filter = getFilter(filterState);
 
   // Queries
   const { data, isPending } = api.data.getSkillTreeBalanceStatistics.useQuery(filter);
-  const {
-    data: skillDetails,
-    isPending: isSkillDetailsPending,
-    isError: isSkillDetailsError,
-  } = api.skillTree.get.useQuery(
-    { id: selectedSkillId },
-    { enabled: !!selectedSkillId },
-  );
 
   // Check if user can change content
   const canEdit = canChangeContent(userData?.role ?? "USER");
@@ -209,20 +154,13 @@ const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
     return {
       name: skill.name,
       links: (
-        <div className="flex items-center gap-2">
-          {canEdit && (
-            <Link href={`/manual/skillTree/edit/${skill.skillId}`}>
-              <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
-            </Link>
-          )}
-          <InfoIcon
-            className="h-4 w-4 cursor-pointer text-muted-foreground hover:text-primary"
-            onClick={() => {
-              setSelectedSkillId(skill.skillId);
-              setIsModalOpen(true);
-            }}
-          />
-        </div>
+        <ContentLinksCell
+          type="skillTree"
+          id={skill.skillId}
+          canEdit={canEdit}
+          hideStatistics
+          onInfo={() => details.open(skill.skillId)}
+        />
       ),
       tier: skill.tier,
       costSkillPoints: skill.costSkillPoints,
@@ -263,30 +201,7 @@ const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
         {!isPending && tableData && <Table data={tableData} columns={columns} />}
       </ContentBox>
 
-      {/* Modal for skill details */}
-      <Modal
-        isOpen={isModalOpen}
-        setIsOpen={setIsModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedSkillId("");
-        }}
-        title="Skill Details"
-      >
-        {isSkillDetailsPending && <Loader explanation="Loading skill details" />}
-        {!isSkillDetailsPending && skillDetails && (
-          <ItemWithEffects
-            item={skillDetails}
-            showEdit={canEdit ? "skillTree" : undefined}
-          />
-        )}
-        {isSkillDetailsError && (
-          <p role="alert">Skill details could not be loaded. Please try again.</p>
-        )}
-        {!isSkillDetailsPending && !isSkillDetailsError && !skillDetails && (
-          <p role="alert">This skill could not be found.</p>
-        )}
-      </Modal>
+      <ContentDetailsModal type="skillTree" canEdit={canEdit} {...details} />
     </>
   );
 };

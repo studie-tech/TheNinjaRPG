@@ -3,6 +3,7 @@ import {
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  minCountField,
   toOptions,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
@@ -21,13 +22,7 @@ const makeSchema = () =>
         defaultValue: [],
         options: toOptions(RANKED_RANKS),
       },
-      {
-        id: "minCount",
-        label: "Minimum Count",
-        type: "number",
-        defaultValue: undefined,
-        normalizeForFilter: (v) => (v !== undefined && v >= 1 ? v : undefined),
-      },
+      minCountField,
     ] as const,
   });
 

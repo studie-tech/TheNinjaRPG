@@ -263,6 +263,11 @@ export const VILLAGE_MAINTAINED_STRUCTURE_ROUTES = [
   "/anbu", "/bank", "/battlearena", "/clanhall", "/home", "/hospital",
   "/itemshop", "/missionhall", "/ramenshop", "/townhall", "/traininggrounds",
 ] as const;
+/** Shared-progress objectives only a village mission can carry. */
+export const VILLAGE_MISSION_ONLY_TASKS = [
+  "siege_operation",
+  "combined_mission_effort",
+] as const;
 export const VILLAGE_MISSION_TASKS = [
   "pvp_kills", "siege_operation", "combined_mission_effort",
   "d_missions_total", "c_missions_total", "b_missions_total", "a_missions_total",
@@ -542,6 +547,8 @@ export type AutomoderationCategory = (typeof AutomoderationCategories)[number];
 
 // Forum pagination
 export const FORUM_BOARD_THREADS_PER_PAGE = 20;
+/** Threads per page in game-destination forums; the first page is server-rendered. */
+export const FANCY_FORUM_THREADS_PER_PAGE = 10;
 /** Posts per page in a forum thread. The thread route server-renders this many. */
 export const FORUM_THREAD_POSTS_PER_PAGE = 10;
 
@@ -565,7 +572,8 @@ export const UserRoles = [
 ] as const;
 export type UserRole = (typeof UserRoles)[number];
 
-export const UserRolesWithSkillTreeAccess = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"];
+/** Minimum progression rank for skill-tree access in UI and server guards. */
+export const SKILL_TREE_REQUIRED_RANK: UserRank = "CHUNIN";
 
 // Staff Applications
 export const StaffApplicationStates = ["PENDING", "APPROVED", "REJECTED"] as const;
@@ -745,6 +753,17 @@ export const ItemTypes = [
 ] as const;
 export type ItemType = (typeof ItemTypes)[number];
 
+/** Item types that never enter combat, so they need no effects or effect assets. */
+export const NonBattleItemTypes = [
+  "MATERIAL",
+  "COOKING",
+  "CRYSTAL",
+  "FURNITURE",
+] as const satisfies readonly ItemType[];
+/** Description of a newly created item until staff replace it. */
+export const DEFAULT_ITEM_DESCRIPTION = "New item description";
+/** Shortest jutsu and bloodline description the content checks accept. */
+export const MIN_CONTENT_DESCRIPTION_LENGTH = 50;
 export const NonActionItemTypes: ItemType[] = [
   "MEAL",
   "MATERIAL",
@@ -771,6 +790,12 @@ export type BanState = (typeof BanStates)[number];
 
 /** Report states that enforce a ban; an escalated ban stays in force until an admin decides. */
 export const ActiveBanStates: BanState[] = ["BAN_ACTIVATED", "BAN_ESCALATED"];
+
+/** Report states that enforce a silence; a timeout is a short silence. Bans do not count. */
+export const ActiveSilenceStates: BanState[] = [
+  "SILENCE_ACTIVATED",
+  "TIMEOUT_ACTIVATED",
+];
 
 /** Sanctions that outlive a deleted account; timeouts count as silences. */
 export const SanctionTombstoneTypes = ["BAN", "SILENCE"] as const;
@@ -1070,6 +1095,23 @@ export const MISSION_HALL_QUEST_TYPES: readonly QuestType[] = [
   "war",
 ];
 export const NPC_ONLY_QUEST_TYPES = ["overworld"] as const satisfies readonly QuestType[];
+/** Quest types a regular player may abandon. */
+export const ABANDONABLE_QUEST_TYPES = [
+  "mission",
+  "crime",
+  "event",
+  "errand",
+  "story",
+  "hunting",
+  "gathering",
+  "medical",
+  "battlepyramid",
+  "pvp",
+  "overworld",
+  "mastery",
+  "special",
+  "war",
+] as const satisfies readonly QuestType[];
 /** Types started only through a dedicated acquisition flow, never from public listings. */
 export const RESTRICTED_QUEST_TYPES = [
   ...NPC_ONLY_QUEST_TYPES,
@@ -1231,6 +1273,11 @@ export const STATS_PER_ENERGY = 0.085;
 export const QueueKinds = ["JUTSU", "CRAFT", "MASTERY", "ENERGY", "ELEMENT"] as const;
 export const MasteryQueueKinds = ["MASTERY", "ELEMENT"] as const;
 export type MasteryQueueKind = (typeof MasteryQueueKinds)[number];
+/** Player-facing names for the two mastery training queue categories. */
+export const MASTERY_QUEUE_KIND_LABELS: Record<MasteryQueueKind, string> = {
+  MASTERY: "Mastery",
+  ELEMENT: "Elemental",
+};
 export type QueueKind = (typeof QueueKinds)[number];
 /** Queue kinds started on a timer and settled in the database. */
 export const TimedQueueKinds = ["JUTSU", "CRAFT"] as const satisfies readonly QueueKind[];
@@ -1727,7 +1774,8 @@ export const ANBU_STEALTH_CHANGE_PER_LEVEL = 5;
 export const ANBU_STEALTH_UPGRADE_COST = 200;
 
 // Sensei config
-export const SENSEI_RANKS = ["JONIN", "ELITE JONIN", "ELDER"];
+/** Minimum progression rank for becoming a sensei. */
+export const SENSEI_REQUIRED_RANK: UserRank = "JONIN";
 export const SENSEI_STUDENT_RYO_PER_MISSION = 100;
 export const SENSEI_GENIN_TRAIN_EXP_BOOST_PERC = 5; // % extra stat training experience for Genin
 export const SENSEI_GENIN_MED_EXP_SHARE_PERC = 5; // % of medical exp shared to Genin student when sensei heals
@@ -2226,6 +2274,8 @@ export const SHRINE_BOOST_BASE_PERC = 10; // Base shrine boost with 1+ shrines (
 export const SHRINE_BOOST_PER_SHRINE_PERC = 3.33; // Additional boost per shrine (~3.33% per additional shrine for 10-20% range)
 export const SHRINE_UPGRADE_COST = 60_000;
 export const SHRINE_BOOST_DURATION_HOURS = 2;
+/** Each boost template slot lasts one boost. Stored template `slotIndex` values depend on this layout. */
+export const SHRINE_BOOST_SLOTS_PER_DAY = 24 / SHRINE_BOOST_DURATION_HOURS;
 export const SHRINE_AI_UNLOCK_COST = 10_000;
 export const SHRINE_WEEKLY_MAINTENANCE_COST = 5_000;
 export const SHRINE_MAX_AI_ASSIGNMENTS = 3;
@@ -2440,6 +2490,8 @@ export const CONVERSATION_PAUSE_HIDDEN_MINS = 5;
 /** Conversations a player can mute individually in the chat panel. */
 export const MAX_MUTED_CONVERSATIONS = 100;
 export const MESSAGING_MIN_LEVEL = 3;
+/** Recipients a player can add when starting a conversation. */
+export const CONVERSATION_MAX_USERS = 5;
 export const FORUM_MIN_LEVEL = 3;
 export const AUCTION_HOUSE_MIN_LEVEL = 15;
 export const REP_TRADE_MIN_LEVEL = 15;
@@ -2535,6 +2587,17 @@ export const ID_SFX_CLEAR = "mOSkDnYv4hchkPbhdpTDd";
 // Discord invite link
 export const DISCORD_INVITE_URL = "https://discord.gg/eNtgPdAh7j";
 
+/**
+ * Canonical origin for the site. Every absolute URL emitted in metadata, the sitemap
+ * and structured data is built from this, so the www/non-www split never produces two
+ * indexable copies of the same page.
+ */
+export const SITE_URL = "https://www.theninja-rpg.com";
+
+// Source repository
+export const GITHUB_REPO_URL = "https://github.com/studie-tech/TheNinjaRPG";
+export const GITHUB_ISSUES_URL = `${GITHUB_REPO_URL}/issues`;
+
 // GitHub issue token
 export const GITHUB_API_ENDPOINT =
   "https://api.github.com/repos/studie-tech/TheNinjaRPG";
@@ -2578,6 +2641,8 @@ export const FARM_PVP_LOSS_TIME_REDUCTION_SECONDS = 60;
 export const FARM_PVP_WIN_TIME_REDUCTION_SECONDS = 90;
 export const FARM_GOLD_FED_TIME_REDUCTION_PERCENT = 15;
 export const FARM_MAX_CROP_SELL_QUANTITY = 50;
+/** Maximum quantity per farm-shop purchase, shared by its controls and validator. */
+export const FARM_MAX_SHOP_PURCHASE_QUANTITY = 99;
 export const FARM_CROPS_PER_EXTRACTOR = 10;
 export const FARM_SEED_EXTRACTION_SECONDS_PER_CROP = 5 * 60;
 export const FARM_WATER_EXPERIENCE = 15;
@@ -3104,6 +3169,41 @@ export const IMG_ICON_TWITTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMi2fCxtsO4cexqW2RDgkE3zZbNXSFGitmnar.png";
 export const IMG_ICON_YOUTUBE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy7pL6jukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.png";
+
+/** The game's social profiles, for the sidebar icons and the schema.org sameAs graph. */
+export const SOCIAL_LINKS = [
+  { url: DISCORD_INVITE_URL, image: IMG_ICON_DISCORD, alt: "Discord" },
+  {
+    url: "https://www.facebook.com/profile.php?id=61554961626034",
+    image: IMG_ICON_FACEBOOK,
+    alt: "Facebook",
+  },
+  {
+    url: "https://www.youtube.com/@fullstackscientist",
+    image: IMG_ICON_YOUTUBE,
+    alt: "Youtube",
+  },
+  {
+    url: "https://twitter.com/RealTheNinjaRPG",
+    image: IMG_ICON_TWITTER,
+    alt: "Twitter",
+  },
+  {
+    url: "https://www.instagram.com/theninjarpg/",
+    image: IMG_ICON_INSTAGRAM,
+    alt: "Instagram",
+  },
+  {
+    url: "https://www.tiktok.com/@theninjarpg",
+    image: IMG_ICON_TIKTOK,
+    alt: "Tiktok",
+  },
+  {
+    url: "https://www.reddit.com/r/theninjarpg/",
+    image: IMG_ICON_REDDIT,
+    alt: "Reddit",
+  },
+] as const;
 export const IMG_ICON_MOVE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJepKSYSyV3OvUJQExAi0bGoIZDF74LqSnHRdp.png";
 export const IMG_ICON_HEAL =

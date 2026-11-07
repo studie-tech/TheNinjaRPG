@@ -1,33 +1,32 @@
 "use client";
 
-import { FileMinus, FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { use } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { Bloodline } from "@/drizzle/schema";
 import { useBloodlineEditForm } from "@/hooks/bloodline";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { BloodlineHelper } from "@/layout/ContentHelp";
-import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
+import { EditContent } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
+import { EffectTagListEditor } from "@/layout/EffectTagListEditor";
 import Loader from "@/layout/Loader";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
-import type { ZodAllTags, ZodBloodlineType } from "@/validators/combat";
-import { BloodlineValidator, DamageTag, tagTypes } from "@/validators/combat";
+import type { ZodBloodlineType } from "@/validators/combat";
+import { BloodlineValidator, DamageTag } from "@/validators/combat";
 
 export default function BloodlineEdit(props: {
   params: Promise<{ bloodlineid: string }>;
 }) {
   const params = use(props.params);
-  const router = useRouter();
   const bloodlineId = params.bloodlineid;
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(isStaffRole);
 
   // Queries
-  const { data, isPending, refetch } = api.bloodline.get.useQuery(
+  const { data, isPending, isError, isFetching, refetch } = api.bloodline.get.useQuery(
     { id: bloodlineId },
     { retry: false, enabled: !!bloodlineId && !!userData },
   );
@@ -35,16 +34,21 @@ export default function BloodlineEdit(props: {
   // Convert key null values to empty strings, preparing data for form
   setNullsToEmptyStrings(data);
 
-  // Redirect to profile if not staff
-  useEffect(() => {
-    if (userData && !isStaffRole(userData.role)) {
-      void router.push("/profile");
-    }
-  }, [userData]);
-
   // Prevent unauthorized access
-  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="bloodline"
+        subtitle="Bloodline Management"
+        backHref="/manual/bloodline"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return (
@@ -74,26 +78,6 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
     setEffects,
     handleBloodlineSubmit,
   } = useBloodlineEditForm(props.bloodline, props.refetch);
-
-  // Filter out any undefined effects from useWatch
-  const validEffects = (effects?.filter((e): e is ZodAllTags => e !== undefined) ??
-    []) as ZodAllTags[];
-
-  // Icon for adding tag
-  const AddTagIcon = (
-    <FilePlus
-      className="h-6 w-6 cursor-pointer hover:text-orange-500"
-      onClick={() => {
-        setEffects([
-          ...validEffects,
-          DamageTag.parse({
-            description: "placeholder",
-            residualModifier: 0,
-          }),
-        ]);
-      }}
-    />
-  );
 
   // Show panel controls
   return (
@@ -134,48 +118,18 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
         )}
       </ContentBox>
 
-      {validEffects.length === 0 && (
-        <ContentBox
-          title={`Bloodline Tags`}
-          initialBreak={true}
-          topRightContent={<div className="flex flex-row">{AddTagIcon}</div>}
-        >
-          Please add effects to this bloodline
-        </ContentBox>
-      )}
-      {validEffects.map((tag, i) => {
-        return (
-          <ContentBox
-            key={`${tag.type}-${i}`}
-            title={`Bloodline Tag #${i + 1}`}
-            subtitle="Control battle effects"
-            initialBreak={true}
-            topRightContent={
-              <div className="flex flex-row">
-                {AddTagIcon}
-                <FileMinus
-                  className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                  onClick={() => {
-                    const newEffects = [...validEffects];
-                    newEffects.splice(i, 1);
-                    setEffects(newEffects);
-                  }}
-                />
-              </div>
-            }
-          >
-            <EffectFormWrapper
-              allowActivityBonuses
-              idx={i}
-              type="bloodline"
-              tag={tag}
-              availableTags={tagTypes}
-              effects={validEffects}
-              setEffects={setEffects}
-            />
-          </ContentBox>
-        );
-      })}
+      <EffectTagListEditor
+        allowActivityBonuses
+        type="bloodline"
+        effects={effects}
+        setEffects={setEffects}
+        newTag={() =>
+          DamageTag.parse({ description: "placeholder", residualModifier: 0 })
+        }
+        tagTitle="Bloodline Tag"
+        emptyTitle="Bloodline Tags"
+        emptyText="Please add effects to this bloodline"
+      />
     </>
   );
 };

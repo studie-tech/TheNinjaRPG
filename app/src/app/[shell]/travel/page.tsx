@@ -33,17 +33,8 @@ import {
 import { useForm, useWatch } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from "@/components/ui/form";
+import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
@@ -53,8 +44,6 @@ import {
 } from "@/components/ui/tooltip";
 import {
   HIDEOUT_COST,
-  MAP_SECTOR_ID_MAX,
-  MAP_SECTOR_ID_MIN,
   MAP_WAR_TORN_BATTLEGROUND_COLOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MAX_TRAVEL_PINS,
@@ -64,11 +53,12 @@ import {
   VILLAGE_REDUCED_GAINS_DAYS,
 } from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
+import { useAutoAttackMode } from "@/hooks/autoAttack";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useMap } from "@/hooks/map";
 import { useTutorialStep } from "@/hooks/tutorial";
-import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
+import { useConsumeItem } from "@/hooks/useItemActions";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import { useMapAssetLibrary } from "@/hooks/useMapAssetLibrary";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
@@ -77,6 +67,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { FindSectorPopover, SectorIdField } from "@/layout/FindSectorPopover";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -90,11 +81,7 @@ import { WarFieldActions } from "@/layout/WarFieldActions";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
-import {
-  finishItemConsumeRequest,
-  getItemConsumeErrorMessage,
-  getItemConsumeInput,
-} from "@/libs/itemConsumption";
+import { getItemConsumeInput } from "@/libs/itemConsumption";
 import {
   findNearestWalkableCoordinate,
   isReachableCoordinate,
@@ -102,7 +89,7 @@ import {
 } from "@/libs/sector-map/validation";
 import type { GlobalTile, SectorPoint } from "@/libs/sector-map/world-types";
 import { getRemainingSensoryCooldown, getStealthStatus } from "@/libs/stealth";
-import { showMutationToast, showRewardToast } from "@/libs/toast";
+import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import {
   calcGlobalTravelTime,
@@ -110,7 +97,6 @@ import {
   optimisticGlobalTravelStart,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
-import { isMapUserAlly } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
 import {
@@ -170,14 +156,7 @@ function Travel() {
     "showOwnership",
     false,
   );
-  const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>(
-    "autoAttackMode",
-    false,
-  );
-  const [sensoryAllyAttack, setSensoryAllyAttack] = useLocalStorage<boolean>(
-    "friendlyAttackSensory",
-    false,
-  );
+  const [autoAttackMode, setAutoAttackMode] = useAutoAttackMode();
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showSorrounding, setShowSorrounding] = useState<boolean>(false);
   const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
@@ -508,16 +487,6 @@ function Travel() {
     name: "sector",
   }) as number | undefined;
 
-  // Find sector form
-  const findSectorForm = useForm<SectorFormInput, unknown, SectorForm>({
-    mode: "all",
-    resolver: zodResolver(sectorFormSchema),
-  });
-  const findSectorValue = useWatch({
-    control: findSectorForm.control,
-    name: "sector",
-  }) as number | undefined;
-
   useEffect(() => {
     if (userData && globe) {
       const tile = globe.tiles[userData.sector];
@@ -700,54 +669,9 @@ function Travel() {
       },
     });
 
-  const { prepareConsumptionUpdate, updateConsumption } =
-    useItemConsumptionCacheUpdate();
-  const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
-    onMutate: () => ({
-      userRevision: prepareUserUpdate(),
-      consumption: prepareConsumptionUpdate(),
-    }),
-    onSuccess: async (data, variables, context) => {
-      finishItemConsumeRequest(userData?.userId ?? "", variables.userItemId);
-      if (data.success && "rewards" in data && data.rewards) {
-        showRewardToast(
-          data.notifications ?? [],
-          data.rewards,
-          data.message,
-          false,
-          undefined,
-          undefined,
-          data.cacheRewards,
-          data.petRewards,
-        );
-      } else {
-        showMutationToast(data);
-      }
-      if (data.success) {
-        // The action is complete; keep reconciliation off the dialog's pending path.
-        void Promise.allSettled([
-          updateUser(data, { revision: context.userRevision }).then((profileApplied) =>
-            updateConsumption(data, context.consumption, profileApplied),
-          ),
-        ]);
-      } else if (useritem?.item.itemType === "MEAL") {
-        // A rejected snapshot must refresh the next modal's quantity and account state.
-        await Promise.all([
-          utils.profile.getUser.invalidate(),
-          utils.item.getUserItems.invalidate(),
-        ]);
-      }
-    },
-    onError: async (error, _input, context) => {
-      const message = getItemConsumeErrorMessage(error, useritem?.item);
-      if (message) showMutationToast({ success: false, message });
-      await updateUser(undefined);
-      await updateConsumption(
-        undefined,
-        context?.consumption ?? prepareConsumptionUpdate(),
-        false,
-      );
-    },
+  const { consume, isConsuming } = useConsumeItem({
+    useritem,
+    inventoryQuery: "getUserItems",
     onSettled: () => {
       setIsOpen(false);
       setUserItem(undefined);
@@ -1130,67 +1054,15 @@ function Travel() {
               </>
             )}
             {activeTab === globalLink && (
-              <Popover>
-                <PopoverTrigger>
+              <FindSectorPopover
+                focusSector={focusSector}
+                onFocusSector={setFocusSector}
+                trigger={
                   <Locate
                     className={`mr-2 h-7 w-7 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
                   />
-                </PopoverTrigger>
-                <PopoverContent>
-                  <p className="py-2 font-semibold">Find Sector</p>
-                  <p className="pb-2 text-muted-foreground text-sm">
-                    Enter a sector ID to locate it on the map.
-                  </p>
-                  <Form {...findSectorForm}>
-                    <form
-                      onSubmit={findSectorForm.handleSubmit((data) => {
-                        setFocusSector(data.sector);
-                      })}
-                      className="flex flex-col gap-2"
-                    >
-                      <FormField
-                        control={findSectorForm.control}
-                        name="sector"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <NumberInput
-                                className="w-full"
-                                placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
-                                {...field}
-                                value={field.value as number}
-                                onValueChange={field.onChange}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          type="submit"
-                          size="sm"
-                          className="flex-1"
-                          disabled={!Number.isFinite(findSectorValue)}
-                        >
-                          Find Sector{" "}
-                          {Number.isFinite(findSectorValue) ? findSectorValue : "..."}
-                        </Button>
-                        {focusSector !== null && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setFocusSector(null)}
-                          >
-                            Clear
-                          </Button>
-                        )}
-                      </div>
-                    </form>
-                  </Form>
-                </PopoverContent>
-              </Popover>
+                }
+              />
             )}
             <Popover open={isQuickTravelOpen} onOpenChange={setQuickTravelOpen}>
               <PopoverTrigger aria-label="Quick Travel">
@@ -1324,24 +1196,7 @@ function Travel() {
                     })}
                     className="flex flex-col gap-2 border-t pt-3"
                   >
-                    <FormField
-                      control={quickTravelForm.control}
-                      name="sector"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <NumberInput
-                              className="w-full"
-                              placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
-                              {...field}
-                              value={field.value as number}
-                              onValueChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <SectorIdField control={quickTravelForm.control} />
                     <Button
                       type="submit"
                       size="sm"
@@ -1590,7 +1445,6 @@ function Travel() {
                 player={player}
                 userData={userData}
                 villageData={villageData}
-                sensoryAllyAttack={sensoryAllyAttack}
                 isAttackingRevealed={isAttackingRevealed}
                 pendingAttackTarget={pendingAttackTarget}
                 attackRevealedUser={attackRevealedUser}
@@ -1600,15 +1454,6 @@ function Travel() {
                 setShowRevealedPlayersModal={setShowRevealedPlayersModal}
               />
             ))}
-            {/* Ally attack toggle */}
-            <div className="flex flex-row items-center pt-3">
-              <Checkbox
-                className="m-1 mr-3"
-                checked={sensoryAllyAttack}
-                onCheckedChange={() => setSensoryAllyAttack(!sensoryAllyAttack)}
-              />
-              <Label>Attack button on allies</Label>
-            </div>
           </div>
         </Modal>
       )}
@@ -1876,7 +1721,6 @@ const StealthControls: React.FC<{
  * @param player - The revealed player
  * @param userData - The user data
  * @param villageData - The village data
- * @param sensoryAllyAttack - Whether to attack allies
  * @param isAttackingRevealed - Whether the user is attacking a revealed player
  * @param pendingAttackTarget - The target of the pending attack
  * @param attackRevealedUser - The function to attack a revealed player
@@ -1888,7 +1732,6 @@ const RevealedPlayerCard = ({
   player,
   userData,
   villageData,
-  sensoryAllyAttack,
   isAttackingRevealed,
   pendingAttackTarget,
   attackRevealedUser,
@@ -1900,7 +1743,6 @@ const RevealedPlayerCard = ({
   player: RevealedPlayer;
   userData: ReturnType<typeof useRequiredUserData>["data"];
   villageData: { id: string; name: string; hexColor: string }[] | undefined;
-  sensoryAllyAttack: boolean;
   isAttackingRevealed: boolean;
   pendingAttackTarget: {
     userId: string;
@@ -1929,11 +1771,11 @@ const RevealedPlayerCard = ({
     player.latitude === userData?.latitude && player.longitude === userData?.longitude;
 
   const village = villageData?.find((v) => v.id === player.villageId);
-  const villageName = village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
+  const villageName =
+    village?.name ?? (player.villageId || player.isMasked ? "Unknown" : "Outlaw");
   const villageColor = village?.hexColor ?? "gray";
 
-  const isAlly = isMapUserAlly(userData, { villageId: player.villageId });
-  const showAttack = sensoryAllyAttack || !isAlly;
+  const showAttack = player.canAttack;
 
   return (
     <div
@@ -1943,7 +1785,7 @@ const RevealedPlayerCard = ({
       <div>
         <p className="font-semibold">{player.username}</p>
         <p className="text-muted-foreground text-sm">
-          Lvl. {player.level} -{" "}
+          {player.level !== null && `Lvl. ${player.level} - `}
           <span style={{ color: villageColor }}>{villageName}</span>
         </p>
         <p className="text-muted-foreground text-sm">
@@ -1993,7 +1835,7 @@ const RevealedPlayerCard = ({
             Attack
           </Button>
         ) : !showAttack ? (
-          <span className="text-muted-foreground text-sm italic">Ally</span>
+          <span className="text-muted-foreground text-sm italic">Cannot attack</span>
         ) : null}
       </div>
     </div>
@@ -2010,5 +1852,7 @@ type RevealedPlayer = {
   longitude: number;
   latitude: number;
   villageId: string | null;
-  level: number;
+  level: number | null;
+  isMasked: boolean;
+  canAttack: boolean;
 };

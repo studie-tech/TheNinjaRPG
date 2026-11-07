@@ -132,7 +132,7 @@ describe("posting moderation scheduling", () => {
     expect((await cases[0]!.run(db)).success).toBe(true);
     expect(defer).not.toHaveBeenCalled();
     expect((await cases[1]!.run(db)).success).toBe(true);
-    expect(defer.mock.calls[0]?.[1]).toMatchObject({ relationType: "privateMessage", createdAt: comment.createdAt });
+    expect(defer.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ relationType: "privateMessage", createdAt: comment.createdAt }));
   });
 
   it.each(["clanOrder", "anbuOrder", "kageOrder"] as const)("defers shared %s Nindo updates", async (type) => {

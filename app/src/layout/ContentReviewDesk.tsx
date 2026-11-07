@@ -18,7 +18,11 @@ import ContentBox from "@/layout/ContentBox";
 import { CategoryBadge, ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import { ContentReviewStats } from "@/layout/ContentReviewStats";
 import Loader from "@/layout/Loader";
-import { CATEGORY_LABELS, STATUS_LABELS } from "@/libs/contentReview/labels";
+import {
+  CATEGORY_LABELS,
+  SOURCE_LABELS,
+  STATUS_LABELS,
+} from "@/libs/contentReview/labels";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
@@ -154,7 +158,7 @@ export const ContentReviewDesk: React.FC = () => {
               <FilterChip
                 key={entry}
                 isActive={source === entry}
-                label={entry === "AGENT" ? "Content audit" : "Staff"}
+                label={SOURCE_LABELS[entry]}
                 onClick={() => {
                   setSource(source === entry ? null : entry);
                   setBulkIds(new Set());
@@ -305,8 +309,8 @@ const QueueCard: React.FC<{
           {item.status === "OUTDATED" && item.outdatedReason
             ? item.outdatedReason
             : item.source === "AGENT"
-              ? "Content audit"
-              : (item.createdBy ?? "Staff")}
+              ? SOURCE_LABELS.AGENT
+              : (item.createdBy ?? SOURCE_LABELS.STAFF)}
         </span>
       </button>
     </div>

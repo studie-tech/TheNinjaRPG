@@ -1,13 +1,14 @@
 import { LetterRanks, QuestTypes, RESTRICTED_QUEST_TYPES } from "@/drizzle/constants";
 import {
   buildFilter,
+  type ContentEditContext,
   ContentFiltering,
   defineFilteringSchema,
+  hiddenVisibilityField,
   toOptions,
+  useContentEditContext,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
 import { allObjectiveTasks } from "@/validators/objectives";
 import { QUEST_FILTER_MAX_LEVEL } from "@/validators/quest";
 
@@ -37,7 +38,7 @@ export const makeQuestFilteringSchema = () =>
         // Types with dedicated acquisition flows are redacted from player listings, so these
         // only ever produce an empty result.
         filterOptions: (opts, ctx) =>
-          (ctx as { canChangeContent?: boolean } | undefined)?.canChangeContent
+          (ctx as ContentEditContext | undefined)?.canEdit
             ? opts
             : opts.filter(
                 (o) => !(RESTRICTED_QUEST_TYPES as readonly string[]).includes(o.value),
@@ -81,29 +82,12 @@ export const makeQuestFilteringSchema = () =>
         dataSource: "bloodlines",
         filterOptions: (opts) => opts.sort((a, b) => a.label.localeCompare(b.label)),
       },
-      {
-        id: "hidden",
-        label: "Visibility",
-        type: "tri-state",
-        defaultValue: undefined,
-        visibleIf: (ctx) =>
-          Boolean(
-            (ctx as { canChangeContent?: boolean } | undefined)?.canChangeContent,
-          ),
-        triStateLabels: {
-          labelActive: "Hidden",
-          labelInactive: "Visible",
-          labelAll: "All Visibility",
-        },
-      },
+      hiddenVisibilityField(),
     ] as const,
   });
 
 const QuestFiltering: React.FC<QuestFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
-  const context = {
-    canChangeContent: Boolean(userData && canChangeContent(userData.role)),
-  };
+  const context = useContentEditContext();
   return (
     <ContentFiltering
       schema={makeQuestFilteringSchema()}

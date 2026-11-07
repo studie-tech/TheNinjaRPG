@@ -18,6 +18,7 @@ import {
   preferredMerchImage,
   productFromPrice,
 } from "@/libs/merch/catalog";
+import { getScrollBehavior } from "@/utils/dom";
 import type { MerchProduct } from "@/validators/merch";
 import { useMerch } from "./MerchProvider";
 
@@ -82,11 +83,9 @@ export function MerchCollection() {
   const selectCollection = (name: string) => {
     setCollection(name);
     setLimit(24);
-    document.getElementById("collection")?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-    });
+    document
+      .getElementById("collection")
+      ?.scrollIntoView({ behavior: getScrollBehavior() });
   };
   const clearFilters = () => {
     setSearch("");

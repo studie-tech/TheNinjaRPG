@@ -4,8 +4,6 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   ANBU_DELAY_SECS,
-  ANBU_ESPIONAGE_BASE_CHANCE_PERC,
-  ANBU_ESPIONAGE_CHANGE_PER_LEVEL,
   ANBU_ESPIONAGE_POINTS_COST,
   ANBU_ESPIONAGE_PRESTIGE_COST,
   ANBU_ESPIONAGE_UPGRADE_COST,
@@ -18,6 +16,7 @@ import {
 } from "@/drizzle/constants";
 import type { AnbuSquad } from "@/drizzle/schema";
 import { anbuSquad } from "@/drizzle/schema";
+import { anbuEspionageChance } from "@/libs/anbu";
 import { getServerPusher } from "@/libs/pusher";
 import { hasRequiredRank } from "@/libs/train";
 import {
@@ -534,9 +533,7 @@ export const anbuRouter = createTRPCRouter({
       }
 
       // Calculate success chance
-      const successChance =
-        ANBU_ESPIONAGE_BASE_CHANCE_PERC +
-        userSquad.espionageLevel * ANBU_ESPIONAGE_CHANGE_PER_LEVEL;
+      const successChance = anbuEspionageChance(userSquad.espionageLevel);
 
       const rollResult = Math.random() * 100;
       const success = rollResult < successChance;

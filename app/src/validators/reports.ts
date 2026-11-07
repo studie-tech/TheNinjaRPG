@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { FederalStatus, UserRank, UserRole } from "@/drizzle/constants";
 import { BanStates, TimeUnits } from "@/drizzle/constants";
+import type { UserCard } from "@/queries/userColumns";
 
 export const systems = [
   "forum_comment",
@@ -40,16 +40,8 @@ export const userReviewSchema = z.object({
 });
 export type UserReviewSchema = z.infer<typeof userReviewSchema>;
 
-export type AdditionalContext = {
-  userId: string;
+export type AdditionalContext = UserCard & {
   authorId?: string;
-  username: string;
-  avatar: string | null;
-  level: number;
-  rank: UserRank;
-  federalStatus: FederalStatus;
-  isOutlaw: boolean;
-  role: UserRole;
   content: string;
   createdAt: Date;
 };

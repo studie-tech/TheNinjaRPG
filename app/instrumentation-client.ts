@@ -18,8 +18,15 @@ import {
   isProxyError as isProxyErrorPattern,
   isSafariJsonError as isSafariJsonErrorPattern,
   type StackFrame,
+  isCookiebotStack,
   isExtensionExecutorEvent,
+  isGoogleTagStack,
+  isInjectedContentPath,
   isInjectedWalletRejection,
+  isMediaFilterPath,
+  isPayPalCleanupError,
+  isPayPalSdkStack,
+  PAYPAL_CLEANUP_PATTERNS,
 } from "@/utils/error";
 
 Sentry.init({
@@ -85,7 +92,6 @@ Sentry.init({
     /^Load failed/, // iOS Safari network error - occurs when device goes to sleep, network changes, or CDN requests fail (may include domain suffix)
     "Clerk: Failed to load Clerk", // Clerk script load failure - typically on very old browsers (Android 5.x, Chrome 95) that don't support modern JS
     "failed to load script", // Clerk's underlying script loading error (cause of the above) - network issues on mobile devices
-    "Illegal invocation", // Third-party script error (Facebook in-app browser or Cookiebot)
     "Can't find variable: EmptyRanges", // Browser extension error (CodeMirror-based extensions)
     "Can't find variable: DarkReader", // DarkReader browser extension error - dark mode extension may fail to initialize
     "xbrowser is not defined", // Browser extension/password manager autofill error - occurs when third-party autofill scripts (browser extensions, Android WebView bridge) reference undefined xbrowser variable
@@ -114,8 +120,8 @@ Sentry.init({
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
-  beforeSend(event) {
-    if (isPayPalSdkError(event)) {
+  beforeSend(event, hint) {
+    if (isPayPalSdkError(event, hint)) {
       return null; // Drop the event
     }
     if (isGoogleTranslateError(event)) {
@@ -124,7 +130,7 @@ Sentry.init({
     if (isClerkStorageError(event)) {
       return null; // Drop Clerk storage access errors
     }
-    if (isThirdPartyInjectedError(event)) {
+    if (isThirdPartyInjectedError(event, hint)) {
       return null; // Drop errors from injected scripts (e.g. Facebook/Cookiebot)
     }
     if (isExtensionExecutorError(event)) {
@@ -136,7 +142,7 @@ Sentry.init({
     if (isEffectInterruptError(event)) {
       return null; // Drop Effect-TS fiber interruption errors (SpacetimeDB SDK)
     }
-    if (isDataCloneError(event)) {
+    if (isDataCloneError(event, hint)) {
       return null; // Drop DataCloneError from third-party scripts (gtag, mediafilter)
     }
     if (isReplicateApiError(event)) {
@@ -246,19 +252,17 @@ declare global {
 }
 
 /**
- * Check if an error is a PayPal cleanup error that should be suppressed.
- * These occur when users navigate away while PayPal buttons are initializing.
+ * Cross-window SDK noise that stays out of Sentry. The checkout page does not treat these
+ * as cleanup and still shows its error toast for them.
  */
-const isPayPalCleanupError = (err: unknown): boolean => {
+const PAYPAL_CROSS_WINDOW_PATTERNS = ["postrobot_method", "paypal_js_sdk"];
+
+/** Check if a rejection is PayPal cleanup or cross-window noise that should be suppressed. */
+const isPayPalRejection = (err: unknown): boolean => {
   const errorMessage = err?.toString() ?? "";
   return (
-    errorMessage.includes("zoid destroyed") ||
-    errorMessage.includes("popup close") ||
-    errorMessage.includes("Window closed") ||
-    errorMessage.includes("Component closed") ||
-    errorMessage.includes("Target window is closed") ||
-    errorMessage.includes("postrobot_method") ||
-    errorMessage.includes("paypal_js_sdk")
+    isPayPalCleanupError(err) ||
+    PAYPAL_CROSS_WINDOW_PATTERNS.some((pattern) => errorMessage.includes(pattern))
   );
 };
 
@@ -408,20 +412,17 @@ const isGoogleTranslateError = (event: Sentry.ErrorEvent): boolean => {
  * UX note: PayPal buttons render and work correctly despite these errors. The errors
  * are logged to PayPal's internal analytics and are not actionable by us.
  */
-const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
+const isPayPalSdkError = (
+  event: Sentry.ErrorEvent,
+  hint: Sentry.EventHint,
+): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
-  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
   // Check message for PayPal-related error patterns
   const paypalErrorPatterns = [
-    "zoid destroyed",
-    "popup close",
-    "Window closed",
-    "Component closed",
-    "Target window is closed",
-    "postrobot_method",
-    "paypal_js_sdk",
+    ...PAYPAL_CLEANUP_PATTERNS,
+    ...PAYPAL_CROSS_WINDOW_PATTERNS,
     "Can not send postrobot",
     "Bootstrap Error", // PayPal SDK zoid bootstrap/initialization errors
   ];
@@ -430,13 +431,9 @@ const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
     return true;
   }
 
-  // Check if the error originates from PayPal SDK (sdk/js in stack trace)
-  const isFromPayPalSdk = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("sdk/js") ||
-      frame.filename?.includes("paypal") ||
-      frame.abs_path?.includes("sdk/js") ||
-      frame.abs_path?.includes("paypal"),
+  // Check if the error originates from the PayPal SDK
+  const isFromPayPalSdk = isPayPalSdkStack(
+    (hint.originalException as Error | null | undefined)?.stack,
   );
 
   if (isFromPayPalSdk && message.includes("closed")) {
@@ -472,33 +469,36 @@ const isExtensionExecutorError = (event: Sentry.ErrorEvent): boolean =>
 /**
  * Check if an error is from an injected third-party script like Facebook or Cookiebot.
  * These often cause "Illegal invocation" errors in document.createEvent or similar.
+ *
+ * UX: no game screen or loading state waits on these scripts. A failed inject_content.js
+ * stays inside its own callback, and without a Cookiebot answer the consent readers in
+ * `libs/cookieConsent.ts` treat optional categories as declined, so tracking stays off and
+ * embeds show their click-to-load placeholder.
  */
-const isThirdPartyInjectedError = (event: Sentry.ErrorEvent): boolean => {
+const isThirdPartyInjectedError = (
+  event: Sentry.ErrorEvent,
+  hint: Sentry.EventHint,
+): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
-  const isInjectedScript = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("inject_content.js") ||
-      frame.filename?.includes("uc.js") ||
-      frame.filename?.includes("cc.js") ||
-      frame.abs_path?.includes("inject_content.js") ||
-      frame.abs_path?.includes("uc.js") ||
-      frame.abs_path?.includes("cc.js"),
+  const isCookiebotScript = isCookiebotStack(
+    (hint.originalException as Error | null | undefined)?.stack,
   );
+  const isInjectedScript =
+    isCookiebotScript ||
+    stackFrames.some(
+      (frame) =>
+        isInjectedContentPath(frame.filename) || isInjectedContentPath(frame.abs_path),
+    );
 
   // Filter Illegal invocation errors from any injected script
   if (isInjectedScript && message.includes("Illegal invocation")) {
     return true;
   }
 
-  // Filter Cookiebot-specific errors (cc.js) when manipulating DOM elements
+  // Filter Cookiebot-specific errors when manipulating DOM elements
   // sortBannerButtons tries to set innerHTML on null element
-  const isCookiebotScript = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("cc.js") || frame.abs_path?.includes("cc.js"),
-  );
-
   if (isCookiebotScript && message.includes("Cannot set properties of null")) {
     return true;
   }
@@ -525,8 +525,14 @@ const isEffectInterruptError = (event: Sentry.ErrorEvent): boolean => {
  * These occur when scripts like Google Analytics (gtag) or mediafilter inject
  * code that tries to postMessage with DOM elements that cannot be cloned.
  * Common in Facebook's in-app browser.
+ *
+ * UX: only that script's message is lost. The game never reads it, so no screen, loading
+ * state or player action depends on it.
  */
-const isDataCloneError = (event: Sentry.ErrorEvent): boolean => {
+const isDataCloneError = (
+  event: Sentry.ErrorEvent,
+  hint: Sentry.EventHint,
+): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
@@ -537,12 +543,12 @@ const isDataCloneError = (event: Sentry.ErrorEvent): boolean => {
   if (!isDataCloneMessage) return false;
 
   // Check if the error originates from third-party scripts
-  return stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("gtag/js") ||
-      frame.filename?.includes("mediafilter") ||
-      frame.abs_path?.includes("gtag/js") ||
-      frame.abs_path?.includes("mediafilter"),
+  return (
+    isGoogleTagStack((hint.originalException as Error | null | undefined)?.stack) ||
+    stackFrames.some(
+      (frame) =>
+        isMediaFilterPath(frame.filename) || isMediaFilterPath(frame.abs_path),
+    )
   );
 };
 
@@ -2283,7 +2289,7 @@ const ensureBrowserErrorHandler = () => {
   // Capture unhandled promise rejections
   window.addEventListener("unhandledrejection", (event) => {
     // Skip PayPal cleanup errors - these are expected when users navigate away
-    if (isPayPalCleanupError(event.reason)) {
+    if (isPayPalRejection(event.reason)) {
       event.preventDefault();
       return;
     }

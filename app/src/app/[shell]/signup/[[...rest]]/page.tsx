@@ -3,13 +3,14 @@
 import { SignUp } from "@clerk/nextjs";
 import NativeSignIn from "@/components/native/NativeSignIn";
 import { useNativeShell } from "@/hooks/useNativeShell";
-import { useWebGL2Detection } from "@/hooks/webgl";
+import { useWebGLDetection } from "@/hooks/webgl";
 import ContentBox from "@/layout/ContentBox";
-import WebGlError from "@/layout/WebGLError";
+import { WebGLUnsupported } from "@/layout/WebGLWarning";
+import { clerkAuthAppearance } from "@/libs/clerkAppearance";
 import { usePublicPathname } from "@/utils/routing";
 
 export default function SignupUser() {
-  const { webglError, isChecking } = useWebGL2Detection();
+  const { webglError, isChecking } = useWebGLDetection();
   const isNativeShell = useNativeShell();
   const pathname = usePublicPathname();
 
@@ -21,11 +22,11 @@ export default function SignupUser() {
     return (
       <ContentBox
         title="Browser Not Supported"
-        subtitle="WebGL2 is required to play this game"
+        subtitle="WebGL is required to play this game"
         alreadyHasH1
         defaultBackHref="/"
       >
-        <WebGlError />
+        <WebGLUnsupported />
       </ContentBox>
     );
   }
@@ -45,36 +46,10 @@ export default function SignupUser() {
           path="/signup"
           routing="path"
           signInUrl="/login"
-          appearance={{
-            elements: {
-              rootBox: "!w-full [color-scheme:light]",
-              cardBox: "!w-full",
-              // Use Clerk style overrides: its generated display rules can override
-              // Tailwind utilities and expose duplicate WebView OAuth buttons.
-              ...(isNativeShell
-                ? {
-                    // Keep Clerk's instructions on verification and recovery steps.
-                    ...(pathname === "/signup" ? { header: { display: "none" } } : {}),
-                    card: {
-                      background: "transparent",
-                      boxShadow: "none",
-                      padding: "16px 0",
-                    },
-                    cardBox: { width: "100%", boxShadow: "none" },
-                    headerTitle: { color: "hsl(var(--card-foreground))" },
-                    headerSubtitle: { color: "hsl(var(--card-foreground))" },
-                    formHeaderTitle: { color: "hsl(var(--card-foreground))" },
-                    formHeaderSubtitle: { color: "hsl(var(--card-foreground))" },
-                    formFieldLabel: { color: "hsl(var(--card-foreground))" },
-                    identityPreviewText: { color: "hsl(var(--card-foreground))" },
-                    footer: { background: "transparent", backgroundImage: "none" },
-                    footerActionText: { color: "hsl(var(--card-foreground))" },
-                    socialButtons: { display: "none" },
-                    dividerRow: { display: "none" },
-                  }
-                : {}),
-            },
-          }}
+          appearance={clerkAuthAppearance({
+            isNativeShell,
+            hideHeader: pathname === "/signup",
+          })}
         />
       </div>
     </ContentBox>

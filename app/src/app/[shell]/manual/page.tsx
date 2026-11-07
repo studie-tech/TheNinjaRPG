@@ -35,7 +35,7 @@ import {
   IMG_MANUAL_TRAVEL,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
-import Image from "@/layout/Image";
+import { ImageLinkGrid } from "@/layout/ImageLinkGrid";
 import Link from "@/layout/Link";
 import {
   canChangeContent,
@@ -127,26 +127,11 @@ export default function ManualMain() {
         initialBreak={true}
         alreadyHasH1={true}
       >
-        <div className="grid grid-cols-4 gap-4 text-center font-bold">
-          {entries
+        <ImageLinkGrid
+          entries={entries
             .sort((a, b) => a.name.localeCompare(b.name))
-            .map((page) => (
-              <Link
-                key={page.name}
-                href={`/manual/${page.name}`}
-                className="flex flex-col items-center"
-              >
-                <Image
-                  className="rounded-2xl border-2 border-black hover:cursor-pointer hover:opacity-50"
-                  src={page.img}
-                  alt={page.name}
-                  width={125}
-                  height={125}
-                />
-                <p>{page.name}</p>
-              </Link>
-            ))}
-        </div>
+            .map((page) => ({ ...page, href: `/manual/${page.name}` }))}
+        />
       </ContentBox>
     </>
   );

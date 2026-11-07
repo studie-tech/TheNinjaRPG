@@ -218,12 +218,12 @@ describeWithDatabase("forum authorization, administration and discussion lifecyc
     expect(await db.query.forumPost.findMany({ where: eq(forumPost.threadId, id) })).toEqual(posts);
     expect(await db.query.forumRead.findMany()).toEqual(reads); expect(await db.query.forumReaction.findMany()).toEqual(reactions);
     const copied = await db.query.forumThread.findFirst({ where: eq(forumThread.id, result.threadId!) });
-    expect(copied).toMatchObject({ boardId, nPosts: 2, kind: "QUESTION", tags: ["strategy"], acceptedPostId: null, updatedAt: source!.updatedAt });
+    expect(copied).toEqual(expect.objectContaining({ boardId, nPosts: 2, kind: "QUESTION", tags: ["strategy"], acceptedPostId: null, updatedAt: source!.updatedAt }));
     const copiedPosts = await db.query.forumPost.findMany({ where: eq(forumPost.threadId, result.threadId!), orderBy: [forumPost.createdAt, forumPost.id] });
     expect(copied?.lastPostId).toBe(copiedPosts.at(-1)?.id);
     expect(copiedPosts.map(p => [p.userId, p.authorId, p.content, p.createdAt])).toEqual(visible.map(p => [p.userId, p.authorId, p.content, p.createdAt]));
     expect(copiedPosts.every(p => p.isApproved && !p.deletedAt && !p.publicationIntent)).toBe(true);
-    expect(await db.query.forumBoard.findFirst({ where: eq(forumBoard.id, boardId) })).toMatchObject({ nThreads: boardId === "general" ? 2 : 1, nPosts: boardId === "general" ? 4 : 2, updatedAt: source!.updatedAt });
+    expect(await db.query.forumBoard.findFirst({ where: eq(forumBoard.id, boardId) })).toEqual(expect.objectContaining({ nThreads: boardId === "general" ? 2 : 1, nPosts: boardId === "general" ? 4 : 2, updatedAt: source!.updatedAt }));
     if (boardId !== "general") expect(await db.query.forumBoard.findFirst({ where: eq(forumBoard.id, "general") })).toEqual(sourceBoard);
     const audits = await db.query.forumAudit.findMany({ where: eq(forumAudit.action, "topic.copy") }); expect(audits).toHaveLength(1);
     expect(audits[0]).toMatchObject({ actorId: adminId, boardId: "general", targetId: id, reason: "Share reviewed guidance", before: { thread: { id, acceptedPostId: answer.id, tags: ["strategy"], summary: "Reviewed guidance" }, postIds: expect.arrayContaining(posts.map(p => p.id)) }, after: { threadId: result.threadId, boardId } });
@@ -733,7 +733,7 @@ describeWithDatabase("forum authorization, administration and discussion lifecyc
     expect((await reader.getThreads({ boardId: "general", view: "unread", limit: 20 })).threads).toHaveLength(0);
     expect((await admin.moderatePost({ postId: "m-pending", action: "APPROVE", reason: "Publish reviewed advice" })).success).toBe(true);
     const unread = await reader.getThreads({ boardId: "general", view: "unread", limit: 20 });
-    expect(unread.threads[0]).toMatchObject({ id, unread: true, resumePostId: sameTime ? "a-prior" : "zz-prior", updatedAt: latestAt, lastPostId: "z-latest" });
+    expect(unread.threads[0]).toEqual(expect.objectContaining({ id, unread: true, resumePostId: sameTime ? "a-prior" : "zz-prior", updatedAt: latestAt, lastPostId: "z-latest" }));
     expect((await reader.resolvePost({ postId: unread.threads[0]!.resumePostId! }))?.threadId).toBe(id);
     expect((await db.query.forumRead.findMany()).filter(r => r.threadId === other || r.userId === playerId)).toEqual(unaffected);
     expect((await db.query.forumPost.findFirst({ where: eq(forumPost.id, "m-pending") }))?.createdAt).toEqual(pendingAt);

@@ -1,9 +1,8 @@
 "use client";
 
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { Earth, House, MessageCircle, Music } from "lucide-react";
+import { Earth, House, MessageCircle } from "lucide-react";
 import type React from "react";
-import { Suspense } from "react";
 import PixelPublicHeader from "@/components/layout/PixelPublicHeader";
 import {
   Sheet,
@@ -21,9 +20,14 @@ import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { cn } from "@/libs/shadui";
 import { LayoutBackground } from "./shared/LayoutBackground";
+import {
+  FloatingHelpButton,
+  MobileSidebarStack,
+  RightSheetBody,
+} from "./shared/LayoutChrome";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
-import { isClerkElement } from "./shared/layoutUtils";
+import { keepSheetOpenForClerk } from "./shared/layoutUtils";
 import {
   ANONYMOUS_PIXEL_NAV_LINKS,
   PIXEL_MOBILE_HEADER_BUTTON_STYLE,
@@ -63,26 +67,11 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
       data-layout-variant="pixel"
     >
       {(userData || isAnonymousLayout) && (
-        <div
-          data-battle-focus-layer
-          className={cn(
-            "fixed bottom-1 rounded-full bg-slate-500",
-            userData
-              ? cn(
-                  "z-[65] md:bottom-5",
-                  swapSides ? "left-1 md:left-5" : "right-1 md:right-5",
-                )
-              : "right-1 z-50 md:right-5 md:bottom-5",
-          )}
-        >
-          <LowerRightHelpBtn className="hidden md:block">
-            {userData ? (
-              <MessageCircle className={cn(variantClasses.yellowButton)} />
-            ) : (
-              <Music className={cn(variantClasses.yellowButton)} />
-            )}
-          </LowerRightHelpBtn>
-        </div>
+        <FloatingHelpButton
+          hasCharacter={!!userData}
+          swapSides={swapSides}
+          iconClassName={variantClasses.yellowButton}
+        />
       )}
       <LayoutBackground
         variant="pixel"
@@ -161,27 +150,17 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                       data-reading-surface
                       side="left"
                       className="w-[min(88vw,360px)] border-sky-200/20 bg-slate-950/95 p-4 text-slate-50 backdrop-blur-md"
-                      onInteractOutside={(event) => {
-                        if (isClerkElement(event.target)) event.preventDefault();
-                      }}
+                      onInteractOutside={keepSheetOpenForClerk}
                     >
                       <SheetHeader className="space-y-0 text-left">
                         <VisuallyHidden.Root>
                           <SheetTitle>Player menu</SheetTitle>
                         </VisuallyHidden.Root>
-                        <Suspense fallback={<Loader explanation="Loading..." />}>
-                          {pathname === "/combat" ? (
-                            <>
-                              <div className="relative pt-4">{leftSideBar}</div>
-                              {leftSideBarMainMenu}
-                            </>
-                          ) : (
-                            <>
-                              {leftSideBarMainMenu}
-                              <div className="relative pt-4">{leftSideBar}</div>
-                            </>
-                          )}
-                        </Suspense>
+                        <MobileSidebarStack
+                          isCombat={pathname === "/combat"}
+                          leftSideBar={leftSideBar}
+                          mainMenu={leftSideBarMainMenu}
+                        />
                       </SheetHeader>
                     </SheetContent>
                   </Sheet>
@@ -227,22 +206,18 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     <SheetContent
                       data-reading-surface
                       className="w-[min(88vw,360px)] border-sky-200/20 bg-slate-950/95 p-4 text-slate-50 backdrop-blur-md"
-                      onInteractOutside={(event) => {
-                        if (isClerkElement(event.target)) event.preventDefault();
-                      }}
+                      onInteractOutside={keepSheetOpenForClerk}
                     >
                       <VisuallyHidden.Root>
                         <SheetTitle>Game menu</SheetTitle>
                       </VisuallyHidden.Root>
-                      <Suspense fallback={<Loader explanation="Loading..." />}>
-                        <SheetHeader className="space-y-0 text-left">
-                          {/* biome-ignore lint/a11y/useKeyWithClickEvents: Sheet panel - clicking outside content closes it, keyboard handled by Sheet component */}
-                          {/* biome-ignore lint/a11y/noStaticElementInteractions: Sheet panel uses click to close when clicking non-interactive areas */}
-                          <div ref={rightSideBarRef} onClick={handleRightSidebarClick}>
-                            {rightSideBar}
-                          </div>
-                        </SheetHeader>
-                      </Suspense>
+                      <RightSheetBody
+                        headerClassName="space-y-0 text-left"
+                        sidebarRef={rightSideBarRef}
+                        onClick={handleRightSidebarClick}
+                      >
+                        {rightSideBar}
+                      </RightSheetBody>
                     </SheetContent>
                   </Sheet>
                 </div>

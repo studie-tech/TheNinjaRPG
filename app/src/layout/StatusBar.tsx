@@ -17,7 +17,7 @@ import {
 } from "@/libs/timedBuffs";
 import { nextRegenerationTickAt, regenTicksSince, secondsPassed } from "@/utils/time";
 
-interface StatusBarProps {
+export interface StatusBarProps {
   title: string;
   regen?: number;
   lastRegenAt?: Date | null;

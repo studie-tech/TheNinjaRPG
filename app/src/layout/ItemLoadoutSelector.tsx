@@ -7,23 +7,15 @@ import { getEquippedInventory } from "@/deltas/item";
 import { getRenamedLoadouts } from "@/deltas/loadout";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
-import LoadoutSelector from "@/layout/LoadoutSelector";
+import LoadoutSelector, {
+  type LoadoutSelectorDisplayProps,
+} from "@/layout/LoadoutSelector";
 import { showMutationToast } from "@/libs/toast";
 import { fedItemLoadouts } from "@/utils/paypal";
 import { useUserDataSelector } from "@/utils/UserContext";
 
-interface ItemLoadoutSelectorProps {
-  size?: "small" | "large";
-  label?: string;
-  variant?: "sheet" | "dropdown";
-  compact?: boolean;
-  renamable?: boolean;
-  onSelectOverride?: (loadoutId: string, displayName: string) => void;
-  selectedOverrideId?: string | null;
-}
-
 /** Select or rename an item loadout and reconcile its profile, equipment and inventory caches. */
-const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
+const ItemLoadoutSelector: React.FC<LoadoutSelectorDisplayProps> = (props) => {
   // State
   const {
     data: availableSlots,
@@ -31,8 +23,6 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
     updateUser,
   } = useUserDataSelector(fedItemLoadouts);
 
-  // tRPC utility
-  const utils = api.useUtils();
   const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
 
   // How many loadouts?
@@ -83,9 +73,9 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
     <LoadoutSelector
       {...props}
       config={{
-        getQuery: () => queryResult,
-        selectMutation: () => mutationResult,
-        renameMutation: () => renameResult,
+        query: queryResult,
+        selectMutation: mutationResult,
+        renameMutation: renameResult,
         maxLoadoutsFn: fedItemLoadouts,
         getSelectedId: (userData) => userData.itemLoadout,
       }}

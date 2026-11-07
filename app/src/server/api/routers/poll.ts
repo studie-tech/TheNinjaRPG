@@ -55,7 +55,7 @@ import {
   votePollSchema,
 } from "@/validators/poll";
 
-const POLL_RANK_MESSAGE = "Too low rank to vote. Must be at least Genin.";
+const POLL_RANK_MESSAGE = "Too low rank to use polls. Must be at least Genin.";
 
 export const pollRouter = createTRPCRouter({
   // Create a new poll
@@ -178,6 +178,9 @@ export const pollRouter = createTRPCRouter({
         findPollOptionForAddOption(ctx.drizzle, input),
       ]);
       // Guard
+      if (!canInteractWithPolls(user.rank)) {
+        return errorResponse(POLL_RANK_MESSAGE);
+      }
       if (!existingPoll) return errorResponse("Poll not found");
       if (existingOption) return errorResponse("Option already exists");
       if (!existingPoll.isActive) return errorResponse("Poll is not active");

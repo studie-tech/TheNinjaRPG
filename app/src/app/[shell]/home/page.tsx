@@ -56,13 +56,15 @@ import { getHomeRooms } from "@/libs/homeProperty";
 import {
   byItemName,
   calcMaxHouseSpecialItems,
-  finishedImbuementItems,
   getHomeStorageBucket,
+  type HomeStorageBucket,
   showsItemLevelBadge,
   userItemActionBadges,
+  userItemDisplay,
 } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { remainingXpToLevel } from "@/libs/train";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
 
@@ -237,64 +239,19 @@ function Residence() {
     (useritem) =>
       !useritem.craftingFinishedAt || useritem.craftingFinishedAt < new Date(),
   );
-  // Filter normal items (non-materials, non-cooking)
-  const storedItems =
-    filteredItems
-      ?.filter(
-        (useritem) =>
-          useritem.storedAtHome && getHomeStorageBucket(useritem.item) === "normal",
-      )
-      .sort(byItemName) ?? [];
-  const nonStoredItems =
-    filteredItems
-      ?.filter((useritem) => !useritem.storedAtHome)
-      .filter((useritem) => useritem.equipped === "NONE")
-      .filter((useritem) =>
-        ["normal", "furniture"].includes(getHomeStorageBucket(useritem.item)),
-      )
-      .sort(byItemName) ?? [];
-
-  // Filter materials separately
-  const storedMaterials =
-    filteredItems
-      ?.filter(
-        (useritem) =>
-          useritem.storedAtHome && getHomeStorageBucket(useritem.item) === "materials",
-      )
-      .sort(byItemName) ?? [];
-  const nonStoredMaterials =
-    filteredItems
-      ?.filter((useritem) => !useritem.storedAtHome)
-      .filter((useritem) => useritem.equipped === "NONE")
-      .filter((useritem) => getHomeStorageBucket(useritem.item) === "materials")
-      .sort(byItemName) ?? [];
-
-  // Filter cooking separately
-  const storedCooking =
-    filteredItems
-      ?.filter(
-        (useritem) =>
-          useritem.storedAtHome && getHomeStorageBucket(useritem.item) === "cooking",
-      )
-      .sort(byItemName) ?? [];
-  const nonStoredCooking =
-    filteredItems
-      ?.filter((useritem) => !useritem.storedAtHome)
-      .filter((useritem) => useritem.equipped === "NONE")
-      .filter((useritem) => getHomeStorageBucket(useritem.item) === "cooking")
-      .sort(byItemName) ?? [];
-
-  const storedFurniture =
-    filteredItems
-      ?.filter((owned) => owned.storedAtHome && owned.item.itemType === "FURNITURE")
-      .sort(byItemName) ?? [];
+  const storedItems = homeStorageList(filteredItems, true, ["normal"]);
+  const nonStoredItems = homeStorageList(filteredItems, false, ["normal", "furniture"]);
+  const storedMaterials = homeStorageList(filteredItems, true, ["materials"]);
+  const nonStoredMaterials = homeStorageList(filteredItems, false, ["materials"]);
+  const storedCooking = homeStorageList(filteredItems, true, ["cooking"]);
+  const nonStoredCooking = homeStorageList(filteredItems, false, ["cooking"]);
+  const storedFurniture = homeStorageList(filteredItems, true, ["furniture"]);
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const matchesFilters = (userItem: UserItemWithItem) =>
     userItem.item.name.toLowerCase().includes(normalizedSearch) &&
     (itemTypeFilter === "ALL" || userItem.item.itemType === itemTypeFilter) &&
     (rarityFilter === "ALL" || userItem.item.rarity === rarityFilter);
   const visibleStoredFurniture = storedFurniture.filter(matchesFilters);
-  const storedFurnitureBadges = userItemActionBadges(storedFurniture);
   const visibleStoredItems = storedItems.filter(matchesFilters);
   const visibleStoredMaterials = storedMaterials.filter(matchesFilters);
   const visibleStoredCooking = storedCooking.filter(matchesFilters);
@@ -312,12 +269,19 @@ function Residence() {
   const canStoreMoreMaterials = storedMaterials.length < maxHouseMaterials;
   const canStoreMoreCooking = storedCooking.length < maxHouseCooking;
 
-  const storedItemBadges = userItemActionBadges(storedItems);
-  const storedMaterialBadges = userItemActionBadges(storedMaterials);
-  const storedCookingBadges = userItemActionBadges(storedCooking);
-  const inventoryItemBadges = userItemActionBadges(nonStoredItems);
-  const inventoryMaterialBadges = userItemActionBadges(nonStoredMaterials);
-  const inventoryCookingBadges = userItemActionBadges(nonStoredCooking);
+  /** Pressing the selected item closes its details; any other opens them. */
+  const toggleSelectedItem = (id: string) => {
+    if (id === selectedItem?.id) {
+      setSelectedItem(undefined);
+      setIsModalOpen(false);
+    } else {
+      const item = userItems?.find((item) => item.id === id);
+      if (item) {
+        setSelectedItem(item);
+        setIsModalOpen(true);
+      }
+    }
+  };
 
   // Filter upgrades and downgrades
   const upgrades = availableUpgrades?.filter((upgrade) => upgrade.isUpgrade) || [];
@@ -565,22 +529,16 @@ function Residence() {
                           {homeStorage > 0 && (
                             <span className="ml-2">+{homeStorage} Item Storage</span>
                           )}
-                          {userData &&
-                            homeData &&
-                            calcMaxHouseSpecialItems(homeData.storage) > 0 && (
-                              <span className="ml-2">
-                                +{calcMaxHouseSpecialItems(homeData.storage)} Material
-                                Storage
-                              </span>
-                            )}
-                          {userData &&
-                            homeData &&
-                            calcMaxHouseSpecialItems(homeData.storage) > 0 && (
-                              <span className="ml-2">
-                                +{calcMaxHouseSpecialItems(homeData.storage)} Cooking
-                                Storage
-                              </span>
-                            )}
+                          {maxHouseMaterials > 0 && (
+                            <span className="ml-2">
+                              +{maxHouseMaterials} Material Storage
+                            </span>
+                          )}
+                          {maxHouseCooking > 0 && (
+                            <span className="ml-2">
+                              +{maxHouseCooking} Cooking Storage
+                            </span>
+                          )}
                         </div>
                       </div>
                     </CardTitle>
@@ -787,7 +745,7 @@ function Residence() {
                       <SelectItem value="ALL">All Types</SelectItem>
                       {ItemTypes.map((itemType) => (
                         <SelectItem key={itemType} value={itemType}>
-                          {itemType.charAt(0) + itemType.slice(1).toLowerCase()}
+                          {capitalizeFirstLetter(itemType)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -803,7 +761,7 @@ function Residence() {
                       <SelectItem value="ALL">All Rarities</SelectItem>
                       {ItemRarities.map((rarity) => (
                         <SelectItem key={rarity} value={rarity}>
-                          {rarity.charAt(0) + rarity.slice(1).toLowerCase()}
+                          {capitalizeFirstLetter(rarity)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -874,30 +832,10 @@ function Residence() {
                     </div>
                   ) : (
                     <div className="p-3">
-                      <ActionSelector
-                        items={visibleStoredItems?.map((useritem) => ({
-                          ...useritem.item,
-                          ...useritem,
-                        }))}
-                        counts={storedItemBadges.counts}
-                        levels={storedItemBadges.levels}
+                      <HomeItemGrid
+                        items={visibleStoredItems}
                         selectedId={selectedItem?.id}
-                        showBgColor={false}
-                        showLabels={false}
-                        onClick={(id) => {
-                          if (id === selectedItem?.id) {
-                            setSelectedItem(undefined);
-                            setIsModalOpen(false);
-                          } else {
-                            const item = visibleStoredItems?.find(
-                              (item) => item.id === id,
-                            );
-                            if (item) {
-                              setSelectedItem(item);
-                              setIsModalOpen(true);
-                            }
-                          }
-                        }}
+                        onSelect={toggleSelectedItem}
                       />
                     </div>
                   )}
@@ -912,30 +850,10 @@ function Residence() {
                     </div>
                   ) : (
                     <div className="p-3">
-                      <ActionSelector
-                        items={visibleStoredFurniture?.map((useritem) => ({
-                          ...useritem.item,
-                          ...useritem,
-                        }))}
-                        counts={storedFurnitureBadges.counts}
-                        levels={storedFurnitureBadges.levels}
+                      <HomeItemGrid
+                        items={visibleStoredFurniture}
                         selectedId={selectedItem?.id}
-                        showBgColor={false}
-                        showLabels={false}
-                        onClick={(id) => {
-                          if (id === selectedItem?.id) {
-                            setSelectedItem(undefined);
-                            setIsModalOpen(false);
-                          } else {
-                            const item = visibleStoredFurniture?.find(
-                              (item) => item.id === id,
-                            );
-                            if (item) {
-                              setSelectedItem(item);
-                              setIsModalOpen(true);
-                            }
-                          }
-                        }}
+                        onSelect={toggleSelectedItem}
                       />
                     </div>
                   )}
@@ -953,30 +871,10 @@ function Residence() {
                         </div>
                       ) : (
                         <div className="p-3">
-                          <ActionSelector
-                            items={visibleStoredMaterials?.map((useritem) => ({
-                              ...useritem.item,
-                              ...useritem,
-                            }))}
-                            counts={storedMaterialBadges.counts}
-                            levels={storedMaterialBadges.levels}
+                          <HomeItemGrid
+                            items={visibleStoredMaterials}
                             selectedId={selectedItem?.id}
-                            showBgColor={false}
-                            showLabels={false}
-                            onClick={(id) => {
-                              if (id === selectedItem?.id) {
-                                setSelectedItem(undefined);
-                                setIsModalOpen(false);
-                              } else {
-                                const item = visibleStoredMaterials?.find(
-                                  (item) => item.id === id,
-                                );
-                                if (item) {
-                                  setSelectedItem(item);
-                                  setIsModalOpen(true);
-                                }
-                              }
-                            }}
+                            onSelect={toggleSelectedItem}
                           />
                         </div>
                       )}
@@ -996,30 +894,10 @@ function Residence() {
                         </div>
                       ) : (
                         <div className="p-3">
-                          <ActionSelector
-                            items={visibleStoredCooking?.map((useritem) => ({
-                              ...useritem.item,
-                              ...useritem,
-                            }))}
-                            counts={storedCookingBadges.counts}
-                            levels={storedCookingBadges.levels}
+                          <HomeItemGrid
+                            items={visibleStoredCooking}
                             selectedId={selectedItem?.id}
-                            showBgColor={false}
-                            showLabels={false}
-                            onClick={(id) => {
-                              if (id === selectedItem?.id) {
-                                setSelectedItem(undefined);
-                                setIsModalOpen(false);
-                              } else {
-                                const item = visibleStoredCooking?.find(
-                                  (item) => item.id === id,
-                                );
-                                if (item) {
-                                  setSelectedItem(item);
-                                  setIsModalOpen(true);
-                                }
-                              }
-                            }}
+                            onSelect={toggleSelectedItem}
                           />
                         </div>
                       )}
@@ -1043,16 +921,9 @@ function Residence() {
                       {visibleInventoryItems.length > 0 && (
                         <div className="mb-4">
                           <h4 className="mb-2 font-semibold">Items</h4>
-                          <ActionSelector
-                            items={visibleInventoryItems?.map((useritem) => ({
-                              ...useritem.item,
-                              ...useritem,
-                            }))}
-                            counts={inventoryItemBadges.counts}
-                            levels={inventoryItemBadges.levels}
+                          <HomeItemGrid
+                            items={visibleInventoryItems}
                             selectedId={selectedItem?.id}
-                            showBgColor={false}
-                            showLabels={false}
                             greyedIds={visibleInventoryItems
                               ?.filter(
                                 (owned) =>
@@ -1060,18 +931,7 @@ function Residence() {
                                   !canStoreMoreItems,
                               )
                               .map((owned) => owned.id)}
-                            onClick={(id) => {
-                              if (id === selectedItem?.id) {
-                                setSelectedItem(undefined);
-                                setIsModalOpen(false);
-                              } else {
-                                const item = userItems?.find((item) => item.id === id);
-                                if (item) {
-                                  setSelectedItem(item);
-                                  setIsModalOpen(true);
-                                }
-                              }
-                            }}
+                            onSelect={toggleSelectedItem}
                           />
                         </div>
                       )}
@@ -1079,16 +939,9 @@ function Residence() {
                       {visibleInventoryMaterials.length > 0 && (
                         <div className="mb-4">
                           <h4 className="mb-2 font-semibold">Materials</h4>
-                          <ActionSelector
-                            items={visibleInventoryMaterials?.map((useritem) => ({
-                              ...useritem.item,
-                              ...useritem,
-                            }))}
-                            counts={inventoryMaterialBadges.counts}
-                            levels={inventoryMaterialBadges.levels}
+                          <HomeItemGrid
+                            items={visibleInventoryMaterials}
                             selectedId={selectedItem?.id}
-                            showBgColor={false}
-                            showLabels={false}
                             greyedIds={
                               !canStoreMoreMaterials
                                 ? visibleInventoryMaterials?.map(
@@ -1096,18 +949,7 @@ function Residence() {
                                   )
                                 : undefined
                             }
-                            onClick={(id) => {
-                              if (id === selectedItem?.id) {
-                                setSelectedItem(undefined);
-                                setIsModalOpen(false);
-                              } else {
-                                const item = userItems?.find((item) => item.id === id);
-                                if (item) {
-                                  setSelectedItem(item);
-                                  setIsModalOpen(true);
-                                }
-                              }
-                            }}
+                            onSelect={toggleSelectedItem}
                           />
                         </div>
                       )}
@@ -1115,16 +957,9 @@ function Residence() {
                       {visibleInventoryCooking.length > 0 && (
                         <div>
                           <h4 className="mb-2 font-semibold">Cooking</h4>
-                          <ActionSelector
-                            items={visibleInventoryCooking?.map((useritem) => ({
-                              ...useritem.item,
-                              ...useritem,
-                            }))}
-                            counts={inventoryCookingBadges.counts}
-                            levels={inventoryCookingBadges.levels}
+                          <HomeItemGrid
+                            items={visibleInventoryCooking}
                             selectedId={selectedItem?.id}
-                            showBgColor={false}
-                            showLabels={false}
                             greyedIds={
                               !canStoreMoreCooking
                                 ? visibleInventoryCooking?.map(
@@ -1132,18 +967,7 @@ function Residence() {
                                   )
                                 : undefined
                             }
-                            onClick={(id) => {
-                              if (id === selectedItem?.id) {
-                                setSelectedItem(undefined);
-                                setIsModalOpen(false);
-                              } else {
-                                const item = userItems?.find((item) => item.id === id);
-                                if (item) {
-                                  setSelectedItem(item);
-                                  setIsModalOpen(true);
-                                }
-                              }
-                            }}
+                            onSelect={toggleSelectedItem}
                           />
                         </div>
                       )}
@@ -1180,13 +1004,7 @@ function Residence() {
                     </p>
                   )}
                 <ItemWithEffects
-                  item={{
-                    ...selectedItem.item,
-                    imbuements: finishedImbuementItems(selectedItem),
-                    curDurability: selectedItem.durability,
-                    level: selectedItem.level,
-                    experience: selectedItem.experience,
-                  }}
+                  item={userItemDisplay(selectedItem)}
                   key={selectedItem.id}
                   showStatistic="item"
                 />
@@ -1201,3 +1019,45 @@ function Residence() {
     </>
   );
 }
+
+/** One storage or inventory grid, with the badges of the rows it shows. */
+const HomeItemGrid = ({
+  items,
+  selectedId,
+  greyedIds,
+  onSelect,
+}: {
+  items: UserItemWithItem[];
+  selectedId?: string;
+  greyedIds?: string[];
+  onSelect: (id: string) => void;
+}) => {
+  const badges = userItemActionBadges(items);
+  return (
+    <ActionSelector
+      items={items.map((useritem) => ({ ...useritem.item, ...useritem }))}
+      counts={badges.counts}
+      levels={badges.levels}
+      selectedId={selectedId}
+      showBgColor={false}
+      showLabels={false}
+      greyedIds={greyedIds}
+      onClick={onSelect}
+    />
+  );
+};
+
+/** Sorted rows of the given storage buckets; carried rows must be unequipped to be stored. */
+const homeStorageList = (
+  userItems: UserItemWithRelations[] | undefined,
+  stored: boolean,
+  buckets: HomeStorageBucket[],
+) =>
+  (userItems ?? [])
+    .filter(
+      (useritem) =>
+        useritem.storedAtHome === stored &&
+        (stored || useritem.equipped === "NONE") &&
+        buckets.includes(getHomeStorageBucket(useritem.item)),
+    )
+    .sort(byItemName);

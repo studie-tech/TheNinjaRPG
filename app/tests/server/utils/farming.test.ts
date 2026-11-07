@@ -45,11 +45,11 @@ describe("farm collection catalog", () => {
       "Carrot",
     ]);
     expect(result).toMatchObject({ collected: 1, total: 2 });
-    expect(result.items[1]).toMatchObject({
+    expect(result.items[1]).toEqual(expect.objectContaining({
       itemId: "crop-carrot",
       harvested: true,
       firstHarvestedAt: harvestedAt,
-    });
+    }));
   });
 });
 

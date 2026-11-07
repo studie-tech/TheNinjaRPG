@@ -1,10 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { UsersRound, Zap, ZapOff } from "lucide-react";
-import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
+import { UsersRound } from "lucide-react";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +14,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useLocalStorage } from "@/hooks/localstorage";
-import AutoAttackModal from "@/layout/AutoAttackModal";
+import { AutoAttackToggle } from "@/layout/AutoAttackModal";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
 import Confirm from "@/layout/Confirm";
@@ -26,12 +23,12 @@ import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
+import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { getEffectiveStructureLevel } from "@/utils/village";
 import type { AnbuCreateSchema } from "@/validators/anbu";
 import { anbuCreateSchema } from "@/validators/anbu";
-import { getSearchValidator } from "@/validators/register";
 
 export default function ANBU() {
   // Utils
@@ -40,13 +37,6 @@ export default function ANBU() {
   // Must be in allied village
   const { userData, sectorVillage, access } = useRequireInVillage("/anbu");
   const structure = sectorVillage?.structures.find((s) => s.name === "ANBU");
-
-  // Auto attack state
-  const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>(
-    "autoAttackMode",
-    false,
-  );
-  const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
 
   // Queries
   const { data } = api.anbu.getAll.useQuery(
@@ -110,16 +100,7 @@ export default function ANBU() {
 
   // User search
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethods, user: targetUser } = useUserPicker(maxUsers);
 
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -160,26 +141,9 @@ export default function ANBU() {
         padding={false}
         topRightContent={
           <>
-            {userData?.anbuId &&
-              (autoAttackMode ? (
-                <Button
-                  className="mr-2 text-red-500"
-                  aria-label="Disable auto attack"
-                  hoverText="Auto Attack"
-                  onClick={() => setAutoAttackMode(false)}
-                >
-                  <Zap className="h-7 w-7" />
-                </Button>
-              ) : (
-                <Button
-                  className="mr-2 hover:text-red-500"
-                  aria-label="Configure auto attack"
-                  hoverText="Auto Attack"
-                  onClick={() => setShowAutoAttackModal(true)}
-                >
-                  <ZapOff className="h-7 w-7" />
-                </Button>
-              ))}
+            {userData?.anbuId && (
+              <AutoAttackToggle className="mr-2" iconClassName="h-7 w-7" />
+            )}
             {canCreateMore && (isKage || isElder) && (
               <Confirm
                 title="Create a new squad"
@@ -231,13 +195,6 @@ export default function ANBU() {
           linkColumn={"id"}
         />
       </ContentBox>
-
-      {/* Auto Attack Configuration Modal */}
-      <AutoAttackModal
-        isOpen={showAutoAttackModal}
-        setIsOpen={setShowAutoAttackModal}
-        onEnable={() => setAutoAttackMode(true)}
-      />
     </>
   );
 }

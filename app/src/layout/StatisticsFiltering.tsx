@@ -9,46 +9,42 @@ import {
   toOptions,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
+import { getLocalDateStringMonthsAgo } from "@/utils/time";
+
+const statisticsFilteringSchema = defineFilteringSchema({
+  fields: [
+    {
+      id: "battleType",
+      label: "Battle Type",
+      type: "single-select",
+      defaultValue: "None",
+      includeNone: true,
+      emptyValues: ["None"],
+      options: [{ value: "None", label: "All" }, ...toOptions(BattleTypes)],
+    },
+    {
+      id: "startDate",
+      label: "Start Date",
+      type: "date",
+      defaultValue: getLocalDateStringMonthsAgo(1),
+    },
+    {
+      id: "endDate",
+      label: "End Date",
+      type: "date",
+      defaultValue: "",
+    },
+  ] as const,
+});
 
 interface StatisticsFilteringProps {
   state: StatisticsFilteringState;
 }
 
-const makeSchema = () => {
-  const now = new Date();
-  const oneMonthAgo = new Date();
-  oneMonthAgo.setMonth(now.getMonth() - 1);
-  return defineFilteringSchema({
-    fields: [
-      {
-        id: "battleType",
-        label: "Battle Type",
-        type: "single-select",
-        defaultValue: "None",
-        includeNone: true,
-        emptyValues: ["None"],
-        options: [{ value: "None", label: "All" }, ...toOptions(BattleTypes)],
-      },
-      {
-        id: "startDate",
-        label: "Start Date",
-        type: "date",
-        defaultValue: oneMonthAgo.toISOString().slice(0, 10),
-      },
-      {
-        id: "endDate",
-        label: "End Date",
-        type: "date",
-        defaultValue: now.toISOString().slice(0, 10),
-      },
-    ] as const,
-  });
-};
-
 const StatisticsFiltering: React.FC<StatisticsFilteringProps> = ({ state }) => {
   return (
     <ContentFiltering
-      schema={makeSchema()}
+      schema={statisticsFilteringSchema}
       state={state.cf}
       triggerButtonId="filter-statistics"
     />
@@ -58,10 +54,10 @@ const StatisticsFiltering: React.FC<StatisticsFilteringProps> = ({ state }) => {
 export default StatisticsFiltering;
 
 export const getFilter = (state: StatisticsFilteringState) =>
-  buildFilter(state.cf, makeSchema());
+  buildFilter(state.cf, statisticsFilteringSchema);
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(makeSchema());
+  const cf = useContentFiltering(statisticsFilteringSchema);
   return {
     ...cf.values,
     cf,
