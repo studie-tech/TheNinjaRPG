@@ -2,19 +2,10 @@ import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   COOKING_BASE_SLOTS,
   DURABILITY_POINT_PRICE_PERCENT,
-  FED_COOKING_GOLD_SLOTS,
-  FED_COOKING_NORMAL_SLOTS,
-  FED_COOKING_SILVER_SLOTS,
-  FED_EVENT_ITEMS_DEFAULT,
-  FED_EVENT_ITEMS_GOLD,
-  FED_EVENT_ITEMS_NORMAL,
-  FED_EVENT_ITEMS_SILVER,
-  FED_GOLD_INVENTORY_SLOTS,
-  FED_MATERIALS_GOLD_SLOTS,
-  FED_MATERIALS_NORMAL_SLOTS,
-  FED_MATERIALS_SILVER_SLOTS,
-  FED_NORMAL_INVENTORY_SLOTS,
-  FED_SILVER_INVENTORY_SLOTS,
+  FED_COOKING_SLOTS,
+  FED_EVENT_ITEMS,
+  FED_INVENTORY_SLOTS,
+  FED_MATERIALS_SLOTS,
   HOME_FURNITURE_STORAGE_CAPACITY,
   type ItemSlot,
   ItemSlots,
@@ -82,19 +73,8 @@ const NON_COMBAT_EFFECTS = new Set<string>([
  * @param user - The user data.
  * @returns The maximum number of event items.
  */
-export const calcMaxEventItems = (user: UserData) => {
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return FED_EVENT_ITEMS_NORMAL + user.extraItemSlots;
-    case "SILVER":
-      return FED_EVENT_ITEMS_SILVER + user.extraItemSlots;
-    case "GOLD":
-      return FED_EVENT_ITEMS_GOLD + user.extraItemSlots;
-    default:
-      return FED_EVENT_ITEMS_DEFAULT + user.extraItemSlots;
-  }
-};
+export const calcMaxEventItems = (user: UserData) =>
+  FED_EVENT_ITEMS[getUserFederalStatus(user)] + user.extraItemSlots;
 
 /**
  * Calculates the maximum number of materials for a user.
@@ -102,19 +82,10 @@ export const calcMaxEventItems = (user: UserData) => {
  * @param user - The user data.
  * @returns The maximum number of materials.
  */
-export const calcMaxMaterials = (user: UserData) => {
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return MATERIALS_BASE_SLOTS + FED_MATERIALS_NORMAL_SLOTS + user.extraItemSlots;
-    case "SILVER":
-      return MATERIALS_BASE_SLOTS + FED_MATERIALS_SILVER_SLOTS + user.extraItemSlots;
-    case "GOLD":
-      return MATERIALS_BASE_SLOTS + FED_MATERIALS_GOLD_SLOTS + user.extraItemSlots;
-    default:
-      return MATERIALS_BASE_SLOTS + user.extraItemSlots;
-  }
-};
+export const calcMaxMaterials = (user: UserData) =>
+  MATERIALS_BASE_SLOTS +
+  FED_MATERIALS_SLOTS[getUserFederalStatus(user)] +
+  user.extraItemSlots;
 
 /** Home storage slots that do not extend the materials and cooking buckets. */
 const HOUSE_SPECIAL_ITEMS_OFFSET = 10;
@@ -130,19 +101,10 @@ export const calcMaxHouseSpecialItems = (homeStorage: number) =>
  * Calculates the maximum number of cooking items for a user:
  * base slots + federal bonus + purchased extra slots.
  */
-export const calcMaxCookingItems = (user: UserData) => {
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return COOKING_BASE_SLOTS + FED_COOKING_NORMAL_SLOTS + user.extraItemSlots;
-    case "SILVER":
-      return COOKING_BASE_SLOTS + FED_COOKING_SILVER_SLOTS + user.extraItemSlots;
-    case "GOLD":
-      return COOKING_BASE_SLOTS + FED_COOKING_GOLD_SLOTS + user.extraItemSlots;
-    default:
-      return COOKING_BASE_SLOTS + user.extraItemSlots;
-  }
-};
+export const calcMaxCookingItems = (user: UserData) =>
+  COOKING_BASE_SLOTS +
+  FED_COOKING_SLOTS[getUserFederalStatus(user)] +
+  user.extraItemSlots;
 
 /** Carried inventory backpack bucket. Dedicated types take priority over event. */
 export type InventoryBucket = "normal" | "event" | "materials" | "cooking";
@@ -254,19 +216,7 @@ export const getHomeStorageBucketFullMessage = (bucket: HomeStorageBucket): stri
  */
 export const calcMaxItems = (user: UserData) => {
   const base = 20;
-  const fedContrib = (user: UserData) => {
-    const status = getUserFederalStatus(user);
-    switch (status) {
-      case "NORMAL":
-        return FED_NORMAL_INVENTORY_SLOTS;
-      case "SILVER":
-        return FED_SILVER_INVENTORY_SLOTS;
-      case "GOLD":
-        return FED_GOLD_INVENTORY_SLOTS;
-    }
-    return 0;
-  };
-  return base + user.extraItemSlots + fedContrib(user);
+  return base + user.extraItemSlots + FED_INVENTORY_SLOTS[getUserFederalStatus(user)];
 };
 
 /**

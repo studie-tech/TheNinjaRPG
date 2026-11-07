@@ -1,10 +1,5 @@
 import type { FederalStatus } from "@/drizzle/constants";
-import {
-  JUTSU_TRANSFER_FREE_AMOUNT,
-  JUTSU_TRANSFER_FREE_GOLD,
-  JUTSU_TRANSFER_FREE_NORMAL,
-  JUTSU_TRANSFER_FREE_SILVER,
-} from "@/drizzle/constants";
+import { JUTSU_TRANSFER_FREE } from "@/drizzle/constants";
 import type { Jutsu, UserJutsuWithRelations } from "@/drizzle/schema";
 import { applyLinkedJutsuReskin } from "@/libs/jutsu/reskins";
 import type { MasteryStatSource } from "@/libs/mastery";
@@ -36,18 +31,8 @@ export const compareByLoadoutOrder =
   };
 
 /** Number of free jutsu level transfers available for the federal status. */
-export const getFreeTransfers = (federalStatus: FederalStatus) => {
-  switch (federalStatus) {
-    case "GOLD":
-      return JUTSU_TRANSFER_FREE_GOLD;
-    case "SILVER":
-      return JUTSU_TRANSFER_FREE_SILVER;
-    case "NORMAL":
-      return JUTSU_TRANSFER_FREE_NORMAL;
-    default:
-      return JUTSU_TRANSFER_FREE_AMOUNT;
-  }
-};
+export const getFreeTransfers = (federalStatus: FederalStatus) =>
+  JUTSU_TRANSFER_FREE[federalStatus];
 
 export interface ComputedJutsuLoadout {
   equipIds: string[];

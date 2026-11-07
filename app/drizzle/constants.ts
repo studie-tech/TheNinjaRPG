@@ -1719,10 +1719,9 @@ export const JUTSU_TRANSFER_DAYS = 20;
 export const JUTSU_TRANSFER_COST = 20;
 export const JUTSU_TRANSFER_MAX_LEVEL = 25;
 export const JUTSU_TRANSFER_MINIMUM_LEVEL = 10;
-export const JUTSU_TRANSFER_FREE_AMOUNT = 2;
-export const JUTSU_TRANSFER_FREE_NORMAL = 3;
-export const JUTSU_TRANSFER_FREE_SILVER = 4;
-export const JUTSU_TRANSFER_FREE_GOLD = 5;
+export const JUTSU_TRANSFER_FREE: Record<FederalStatus, number> = {
+  NONE: 2, NORMAL: 3, SILVER: 4, GOLD: 5,
+};
 
 // Jutsu reskin config
 export const RESKIN_LIMIT = 2;
@@ -2090,12 +2089,12 @@ export const FED_GOLD_REPS_COST = 50;
 export const FED_NORMAL_BANK_INTEREST = 2;
 export const FED_SILVER_BANK_INTEREST = 5;
 export const FED_GOLD_BANK_INTEREST = 8;
-export const FED_NORMAL_INVENTORY_SLOTS = 2;
-export const FED_SILVER_INVENTORY_SLOTS = 5;
-export const FED_GOLD_INVENTORY_SLOTS = 10;
-export const FED_NORMAL_JUTSU_SLOTS = 1;
-export const FED_SILVER_JUTSU_SLOTS = 2;
-export const FED_GOLD_JUTSU_SLOTS = 3;
+export const FED_INVENTORY_SLOTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 2, SILVER: 5, GOLD: 10,
+};
+export const FED_JUTSU_SLOTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 1, SILVER: 2, GOLD: 3,
+};
 export const FED_JUTSU_LOADOUTS_BASE = 2;
 export const FED_NORMAL_JUTSU_LOADOUTS = 1;
 export const FED_SILVER_JUTSU_LOADOUTS = 2;
@@ -2112,10 +2111,9 @@ export const ACTION_LOG_RELATED_MSG_MAX_LENGTH = 191;
 // Max magnitude of a single staff Seichi Silver adjustment (shared by the zod
 // schema and the client-side form validation so the bounds stay in sync).
 export const SEICHI_SILVER_ADJUST_LIMIT = 1_000_000;
-export const FED_EVENT_ITEMS_NORMAL = 15;
-export const FED_EVENT_ITEMS_SILVER = 20;
-export const FED_EVENT_ITEMS_GOLD = 25;
-export const FED_EVENT_ITEMS_DEFAULT = 10;
+export const FED_EVENT_ITEMS: Record<FederalStatus, number> = {
+  NONE: 10, NORMAL: 15, SILVER: 20, GOLD: 25,
+};
 
 // Missions config
 export const ERRANDS_PER_DAY = 50;
@@ -3601,15 +3599,15 @@ export const SUPPORT_TICKET_PRIORITY_DESCRIPTIONS: Record<
 
 // Materials inventory config
 export const MATERIALS_BASE_SLOTS = 25;
-export const FED_MATERIALS_NORMAL_SLOTS = 5;
-export const FED_MATERIALS_SILVER_SLOTS = 10;
-export const FED_MATERIALS_GOLD_SLOTS = 15;
+export const FED_MATERIALS_SLOTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 5, SILVER: 10, GOLD: 15,
+};
 
 // Cooking inventory config (mirrors materials)
 export const COOKING_BASE_SLOTS = 25;
-export const FED_COOKING_NORMAL_SLOTS = 5;
-export const FED_COOKING_SILVER_SLOTS = 10;
-export const FED_COOKING_GOLD_SLOTS = 15;
+export const FED_COOKING_SLOTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 5, SILVER: 10, GOLD: 15,
+};
 
 /**
  * Return rank-specific caps, or global ceilings when no rank is available.
