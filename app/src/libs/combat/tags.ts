@@ -1104,20 +1104,7 @@ const removeEffects = (
   instantConsumeIds?: Set<string>,
 ) => {
   const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-
-  let text =
-    effect.isNew && effect.rounds && effect.rounds > 0
-      ? `All ${type} status effects may be cleared from ${target.username} during the next ${effect.rounds} rounds. `
-      : "";
-
-  if (mainCheck) {
-    text = `${target.username} will be cleared of ${type} status effects on their next round. `;
-    effect.rounds = 2;
-    effect.power = 100;
-  } else {
-    text += `${target.username} could not be cleared of ${type} status effects this round. `;
-  }
+  if (Math.random() < power / 100) effect.power = 100;
 
   if (effect.power === 100) {
     // Remove user effects
@@ -1144,10 +1131,20 @@ const removeEffects = (
         e.rounds = 0;
       });
 
-    text = `${target.username} was cleared of all ${type} status effects. `;
     effect.rounds = 0;
+    return {
+      txt: `${target.username} was cleared of all ${type} status effects. `,
+      color: "blue",
+    } as ActionEffect;
   }
-  return { txt: text, color: "blue" } as ActionEffect;
+  const upcoming =
+    effect.isNew && effect.rounds && effect.rounds > 0
+      ? `All ${type} status effects may be cleared from ${target.username} during the next ${effect.rounds} rounds. `
+      : "";
+  return {
+    txt: `${upcoming}${target.username} could not be cleared of ${type} status effects this round. `,
+    color: "blue",
+  } as ActionEffect;
 };
 
 /**
@@ -1822,39 +1819,29 @@ export const wound = (
   const woundDamage =
     originalDamage > 0 ? Math.floor(originalDamage * (power / 100)) : 0;
 
-  if (shouldApply) {
-    // Only create wound damage when the target is the one taking an action
-    // This is the same logic used by other tags like residual damage
-    const isTargetsTurn = target.userId === effect.targetId;
+  if (shouldApply && woundDamage > 0) {
+    // Find or create a consequence for this target
+    let targetConsequence = Array.from(consequences.values()).find(
+      (c) => c.targetId === effect.targetId && c.userId === effect.creatorId,
+    );
 
-    if (isTargetsTurn) {
-      if (originalDamage > 0) {
-        if (woundDamage > 0) {
-          // Find or create a consequence for this target
-          let targetConsequence = Array.from(consequences.values()).find(
-            (c) => c.targetId === effect.targetId && c.userId === effect.creatorId,
-          );
-
-          if (!targetConsequence) {
-            targetConsequence = {
-              userId: effect.creatorId,
-              targetId: effect.targetId,
-              types: [
-                "wound",
-                ...("generalTypes" in effect && effect.generalTypes
-                  ? effect.generalTypes
-                  : []),
-                ...("elements" in effect && effect.elements ? effect.elements : []),
-              ],
-            };
-            consequences.set(`wound-${effect.id}`, targetConsequence);
-          }
-
-          // Add to existing wound damage or create new
-          targetConsequence.wound = (targetConsequence.wound || 0) + woundDamage;
-        }
-      }
+    if (!targetConsequence) {
+      targetConsequence = {
+        userId: effect.creatorId,
+        targetId: effect.targetId,
+        types: [
+          "wound",
+          ...("generalTypes" in effect && effect.generalTypes
+            ? effect.generalTypes
+            : []),
+          ...("elements" in effect && effect.elements ? effect.elements : []),
+        ],
+      };
+      consequences.set(`wound-${effect.id}`, targetConsequence);
     }
+
+    // Add to existing wound damage or create new
+    targetConsequence.wound = (targetConsequence.wound || 0) + woundDamage;
   }
 
   // Only show the message when the effect is first applied
