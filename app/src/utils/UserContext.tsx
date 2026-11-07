@@ -422,13 +422,12 @@ export const useRequiredUserDataSelector = <T,>(
   select: (user: NonNullable<UserWithRelations>) => T,
 ) => {
   const router = useRouter();
-  const { isLoaded, isSignedIn } = useUser();
   const info = useUserDataSelector(select);
-  const { data, status } = info;
+  const { data, status, isClerkLoaded, isSignedIn } = info;
   useEffect(() => {
-    if (isLoaded && (!isSignedIn || (data === undefined && status !== "pending")))
+    if (isClerkLoaded && (!isSignedIn || (data === undefined && status !== "pending")))
       router.push("/");
-  }, [status, data, isLoaded, isSignedIn, router]);
+  }, [status, data, isClerkLoaded, isSignedIn, router]);
   return info;
 };
 
@@ -469,7 +468,7 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
         setAccess(true);
       }
     }
-  }, [userData, sectorVillage, router, isSectorKnown, structureRoute, ownVillage]);
+  }, [userData, sectorVillage, router, isSectorKnown, structureRoute]);
   return {
     userData,
     prepareUserUpdate,
