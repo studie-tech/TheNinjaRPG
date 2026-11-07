@@ -204,12 +204,10 @@ export const skillTreeRouter = createTRPCRouter({
         return errorResponse("Skill not found");
       }
 
-      // Get activated skill IDs (shared logic)
-      const activatedSkillIds = userSkills
-        .filter((us) => us.activated)
-        .map((us) => us.skillId);
+      const activatedRows = userSkills.filter((us) => us.activated);
 
-      // Check prerequisites (shared logic)
+      // Check prerequisites
+      const activatedSkillIds = activatedRows.map((us) => us.skillId);
       const hasAllPrereqs = skill.requiredSkillIds.every((reqId) =>
         activatedSkillIds.includes(reqId),
       );
@@ -218,9 +216,10 @@ export const skillTreeRouter = createTRPCRouter({
       }
 
       // Calculate total used skill points (only activated skills count)
-      const totalUsedSkillPoints = userSkills
-        .filter((us) => us.activated)
-        .reduce((total, userSkill) => total + userSkill.skill.costSkillPoints, 0);
+      const totalUsedSkillPoints = activatedRows.reduce(
+        (total, userSkill) => total + userSkill.skill.costSkillPoints,
+        0,
+      );
 
       // Check if user has enough skill points (available = total - used)
       const availableSkillPoints = user.skillPoints - totalUsedSkillPoints;
@@ -323,6 +322,7 @@ export const skillTreeRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Check permissions
       const requestedFolderId = input.data.folderId || null;
+      const nextBloodlineId = input.data.bloodlineId || null;
       const [
         user,
         skill,
@@ -382,7 +382,7 @@ export const skillTreeRouter = createTRPCRouter({
         return errorResponse("Bloodline not found");
       const changesHierarchy =
         skill.tier !== input.data.tier ||
-        (skill.bloodlineId ?? null) !== (input.data.bloodlineId || null) ||
+        (skill.bloodlineId ?? null) !== nextBloodlineId ||
         JSON.stringify(skill.requiredSkillIds) !==
           JSON.stringify(input.data.requiredSkillIds);
       if (
@@ -393,7 +393,7 @@ export const skillTreeRouter = createTRPCRouter({
               tier.id === skill.id ||
               tier.tier >= input.data.tier ||
               tier.pathType !== input.data.pathType ||
-              (tier.bloodlineId ?? null) !== (input.data.bloodlineId || null),
+              (tier.bloodlineId ?? null) !== nextBloodlineId,
           ))
       ) {
         return errorResponse(
@@ -412,7 +412,7 @@ export const skillTreeRouter = createTRPCRouter({
         dependents.some(
           (tier) =>
             tier.pathType !== input.data.pathType ||
-            tier.bloodlineId !== (input.data.bloodlineId || null) ||
+            tier.bloodlineId !== nextBloodlineId ||
             tier.tier <= input.data.tier,
         )
       )
@@ -434,7 +434,7 @@ export const skillTreeRouter = createTRPCRouter({
         requiredSkillIds: input.data.requiredSkillIds,
         costSkillPoints: input.data.costSkillPoints,
         pathType: input.data.pathType,
-        bloodlineId: input.data.bloodlineId || null,
+        bloodlineId: nextBloodlineId,
         seichiSilverCost: input.data.seichiSilverCost,
         hidden: input.data.hidden,
         skillType: input.data.skillType,
@@ -580,7 +580,7 @@ export const skillTreeRouter = createTRPCRouter({
             };
 
       // Perform the reset
-      const writes: Promise<unknown>[] = [
+      await Promise.all([
         deleteUserSkills(ctx.drizzle, ctx.userId),
         insertActionLogForResetSkillPoints(
           ctx.drizzle,
@@ -588,9 +588,7 @@ export const skillTreeRouter = createTRPCRouter({
           user,
           resetActionLogDetails,
         ),
-      ];
-
-      await Promise.all(writes);
+      ]);
 
       return {
         success: true,
