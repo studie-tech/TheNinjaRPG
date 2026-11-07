@@ -307,6 +307,8 @@ describe("query telemetry header validation", () => {
     const clean = stripQueryMetricUserAttributes(original);
     expect(clean).toEqual({ name: "trpc.query.invalidation", value: 1, attributes: { target: "profile.getUser", "sentry.release": "version" } });
     expect(original.attributes["user.id"]).toBe("private-id");
+    const device = { name: "renderer.session", value: 1, attributes: { gpu: "Mali-G78", "user.id": "private-id" } };
+    expect(stripQueryMetricUserAttributes(device).attributes).toEqual({ gpu: "Mali-G78" });
     const unrelated = { ...original, name: "other.metric" };
     expect(stripQueryMetricUserAttributes(unrelated)).toBe(unrelated);
     const empty = { name: "trpc.mutation", value: 1 };

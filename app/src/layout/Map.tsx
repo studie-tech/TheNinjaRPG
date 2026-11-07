@@ -75,6 +75,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const current = useRef({ state, props });
   current.current = { state, props };
   const { scene, error } = useGameScene(
+    "globe",
     mountRef,
     async (mount, signal, onError) => {
       const instance = await createGlobeScene({

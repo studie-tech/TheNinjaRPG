@@ -89,6 +89,7 @@ export const createTravelScene = async (options: {
   };
   const game = await createGameRenderer({
     ...options,
+    surface: "travel",
     backgroundAlpha: 0.5,
     height: (width) =>
       options.mount.closest('[data-world-expanded="true"]')

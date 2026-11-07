@@ -46,7 +46,7 @@ it.each(["Won", "Lost", "Fled", "Draw"])("releases the canvas loop while %s rewa
     const leave = loop.subscribe(() => { renders++; });
     return { dispose: () => { leave(); disposed++; } };
   };
-  const hook = renderHook(({ enabled }) => useGameScene(mount, factory, "battle", enabled), { initialProps: { enabled: true } });
+  const hook = renderHook(({ enabled }) => useGameScene("combat", mount, factory, "battle", enabled), { initialProps: { enabled: true } });
   await waitFor(() => expect(hook.result.current.isReady).toBe(true));
   const queued = callbacks.entries().next().value;
   expect(queued).toBeDefined();
@@ -67,7 +67,7 @@ it("never initializes held results and cancels late scene completion", async () 
   let resolve = (_scene: { dispose: () => void }) => {};
   const mount = { current: document.createElement("div") };
   const factory = () => { starts++; return new Promise<{ dispose: () => void }>((complete) => { resolve = complete; }); };
-  const hook = renderHook(({ enabled }) => useGameScene(mount, factory, "battle", enabled), { initialProps: { enabled: false } });
+  const hook = renderHook(({ enabled }) => useGameScene("combat", mount, factory, "battle", enabled), { initialProps: { enabled: false } });
   expect(starts).toBe(0);
   hook.rerender({ enabled: true }); expect(starts).toBe(1);
   hook.unmount();

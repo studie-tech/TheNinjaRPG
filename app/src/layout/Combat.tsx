@@ -1070,6 +1070,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
     : null;
   const combat = useGameScene(
+    "combat",
     mountRef,
     async (mount, signal, onError) =>
       createCombatScene({

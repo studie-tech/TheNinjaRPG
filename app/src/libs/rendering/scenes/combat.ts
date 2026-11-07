@@ -89,6 +89,7 @@ export const createCombatScene = async (options: {
     ratio = hexGridHeightRatio(initial.battle.width, initial.battle.height);
   const game = await createGameRenderer({
     ...options,
+    surface: options.interactive === false ? "battlefield-preview" : "combat",
     touchAction: options.interactive === false ? "auto" : "none",
     width: options.viewport
       ? options.viewport.width * (options.viewport.magnify ?? 1)

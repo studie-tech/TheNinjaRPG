@@ -56,6 +56,7 @@ export const createTowerDefenseScene = async (options: {
     currentSize = options.initialGridSize;
   const game = await createGameRenderer({
     ...options,
+    surface: "tower-defense",
     background: 0x1a1a2e,
     height: (width) => width * hexGridHeightRatio(currentSize, currentSize),
   });

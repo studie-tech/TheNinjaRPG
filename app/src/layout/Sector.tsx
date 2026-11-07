@@ -2214,6 +2214,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     mapAssets: sectorWindow.mapAssets,
   };
   const travel = useGameScene(
+    "travel",
     mountRef,
     async (mount, signal, onError) =>
       createTravelScene({

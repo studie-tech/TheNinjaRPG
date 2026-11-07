@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { resolveSpriteAppearance, type SpriteUser } from "@/libs/lpc/appearance";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
+import { reportRendererFailure } from "@/libs/rendering/telemetry";
 import { cn } from "@/libs/shadui";
 import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
 
@@ -51,11 +52,18 @@ export const CharacterPreview = ({
         if (controller.signal.aborted) return;
         const game = await createGameRenderer({
           lpcCatalog: catalog ?? (await loadLpcCatalog()),
+          surface: "character-preview",
           mount: element,
           signal: controller.signal,
           width: 256,
           height: () => 256,
-          onError: () => setError(true),
+          onError: (cause) => {
+            reportRendererFailure(cause, {
+              surface: "character-preview",
+              phase: "frame",
+            });
+            setError(true);
+          },
         });
         dispose = game.dispose;
         // Preserve the square aspect when the rem-sized mount follows the player's font scale.
@@ -88,8 +96,10 @@ export const CharacterPreview = ({
           throw cause;
         }
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setError(true);
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        reportRendererFailure(cause, { surface: "character-preview", phase: "init" });
+        setError(true);
       });
     return () => {
       controller.abort();

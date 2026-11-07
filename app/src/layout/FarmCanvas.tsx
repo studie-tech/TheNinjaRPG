@@ -45,6 +45,7 @@ const FarmCanvasInner = ({
   current.current.onPlotClick = onPlotClick;
   current.current.onFieldClick = onFieldClick;
   const { scene, error, isReady } = useGameScene(
+    "farm",
     mountRef,
     async (mount, signal, onError) => {
       const instance = await createFarmScene({

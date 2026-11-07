@@ -44,6 +44,7 @@ export const createSectorPreview = async (options: {
   const ratio = hexGridHeightRatio(map.width, map.height);
   const game = await createGameRenderer({
     ...options,
+    surface: "sector-preview",
     touchAction: options.canMove() ? "none" : "auto",
     height: (width) => width * ratio,
     background: getBackgroundColor(map.tiles[0]?.battleBiome ?? "ground").color,

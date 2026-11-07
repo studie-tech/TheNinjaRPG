@@ -35,6 +35,7 @@ export const createFarmScene = async (options: {
 }) => {
   const game = await createGameRenderer({
     ...options,
+    surface: "farm",
     touchAction: "auto",
     background: 0x87ae73,
     height: (width) => Math.max(FARM_CANVAS_MIN_HEIGHT, width * 0.55),

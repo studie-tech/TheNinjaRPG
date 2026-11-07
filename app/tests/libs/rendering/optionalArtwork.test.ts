@@ -117,7 +117,7 @@ describe("optional farm crop artwork", () => {
     const pending = pendingTexture(), failure = new Error("Crop image unavailable");
     const fixture = renderer((path) => path === "crop.png" ? pending.promise : Promise.resolve(Texture.WHITE));
     const options = farmOptions(fixture), mount = { current: fixture.mount };
-    const hook = renderHook(() => useGameScene(mount, (element, signal, onError) => createFarmScene({ ...options, mount: element, signal, onError })));
+    const hook = renderHook(() => useGameScene("farm", mount, (element, signal, onError) => createFarmScene({ ...options, mount: element, signal, onError })));
     await waitFor(() => expect(hook.result.current.isReady).toBe(true));
     await act(async () => { pending.reject(failure); await Promise.resolve(); });
     expect(hook.result.current.error).toBe(false);

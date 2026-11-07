@@ -22,13 +22,14 @@ export const UNKNOWN_QUERY_ATTRIBUTION: QueryAttribution = {
   mutationContext: "none",
 };
 
-/** The SDK inherits setUser() attributes; load metrics need only aggregate dimensions. */
+/** The SDK inherits setUser() attributes; load and device metrics need only aggregate dimensions. */
 export const stripQueryMetricUserAttributes = <
   T extends { name: string; attributes?: Record<string, unknown> },
 >(
   metric: T,
 ): Omit<T, "attributes"> & { attributes?: Record<string, unknown> } =>
-  metric.name.startsWith("trpc.") && metric.attributes
+  (metric.name.startsWith("trpc.") || metric.name.startsWith("renderer.")) &&
+  metric.attributes
     ? {
         ...metric,
         attributes: Object.fromEntries(

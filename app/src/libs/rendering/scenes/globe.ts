@@ -45,6 +45,7 @@ export const createGlobeScene = async (options: {
 }) => {
   const game = await createGameRenderer({
     ...options,
+    surface: "globe",
     height: (width) => width,
   });
   try {
