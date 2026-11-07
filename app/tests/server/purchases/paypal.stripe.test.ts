@@ -4,7 +4,7 @@ import type Stripe from "stripe";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { paypalSubscription, paypalTransaction, stripeCheckout, stripePayment, storeUserIdAlias, userData, webStoreOrder } from "@/drizzle/schema";
 import { MAX_REPS_PER_MONTH } from "@/drizzle/constants";
-import { paypalRouter, reconcilePaypalSubscription, syncTransactions, updateReps, updateSubscription } from "@/server/api/routers/paypal";
+import { deliverPaypalReputation, paypalRouter, reconcilePaypalSubscription, syncTransactions, updateSubscription } from "@/server/api/routers/paypal";
 import { reserveStoreOrder, deliverStoreOrder } from "@/server/utils/webStore";
 import { stripeRouter } from "@/server/api/routers/stripe";
 import * as stripeClient from "@/server/utils/stripe/client";
@@ -57,7 +57,7 @@ const stripeApi = { checkout: { sessions: {
   create: vi.fn(async (params: Stripe.Checkout.SessionCreateParams) => { const session = { id: `cs_test_${params.client_reference_id}`, url: "https://checkout.stripe.com/test", metadata: params.metadata } as Stripe.Checkout.Session; stripeSessions.set(session.id, session); return session; }),
   retrieve: vi.fn(async (id: string) => stripeSessions.get(id)),
 } } } as unknown as Stripe;
-const paid = async (points = 20, overrides: Partial<Parameters<typeof updateReps>[0]> = {}) => { const value = reps2dollars(points); return updateReps({ client: await getTestDatabase(), createdById: BUYER, affectedUserId: TARGET, transactionId: "legacy_capture", transactionUpdatedDate: new Date().toISOString(), value, currency: "USD", status: "COMPLETED", reps: dollars2reps(value), type: "REP_PURCHASE", raw: {}, ...overrides }); };
+const paid = async (points = 20, overrides: Partial<Parameters<typeof deliverPaypalReputation>[0]> = {}) => { const value = reps2dollars(points); return deliverPaypalReputation({ client: await getTestDatabase(), createdById: BUYER, affectedUserId: TARGET, transactionId: "legacy_capture", transactionUpdatedDate: new Date().toISOString(), value, currency: "USD", status: "COMPLETED", reps: dollars2reps(value), type: "REP_PURCHASE", raw: {}, ...overrides }); };
 const target = async () => (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, TARGET) });
 
 describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {

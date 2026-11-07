@@ -3,6 +3,11 @@ import { nanoid } from "nanoid";
 import { stripePayment } from "@/drizzle/schema";
 import { handleEndpointError, lockWithGameTimer } from "@/libs/gamesettings";
 import {
+  creditPaypalReputation,
+  insertPaypalTransactionForAwardPaypalReferral,
+  insertRecruitmentRewardsForAwardPaypalReferral,
+} from "@/queries/paypal";
+import {
   executePaidForAwardStripeReferralReputation,
   insertRecruitmentRewardsForAwardStripeReferralReputation,
   selectMainTransactionForGET,
@@ -12,7 +17,6 @@ import {
   getPaypalAccessToken,
   getPaypalTransactions,
   syncTransactions,
-  updateReps,
 } from "@/server/api/routers/paypal";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
@@ -54,8 +58,7 @@ export async function GET(request: Request) {
         // Bundles can include ryo/items, so referral rewards use the reputation actually purchased.
         const referralBonus = Math.floor(transaction.reputationPoints * 0.1);
         msgs.push(`Add ${referralBonus} ref reps - invoiceId ${transaction.invoiceId}`);
-        await updateReps({
-          client: drizzleDB,
+        await awardPaypalReferral(drizzleDB, {
           createdById: transaction.createdById,
           transactionId: transaction.originalTransactionId,
           transactionUpdatedDate: transaction.transactionUpdatedDate,
@@ -78,6 +81,19 @@ export async function GET(request: Request) {
     return await handleEndpointError(cause);
   }
 }
+
+/**
+ * Record a recruiter's PayPal referral reward and credit it. Nothing here deduplicates: the
+ * unawarded-transaction join, run under the cron's game timer, prevents double awards.
+ */
+const awardPaypalReferral = async (
+  client: DrizzleClient,
+  input: Parameters<typeof insertPaypalTransactionForAwardPaypalReferral>[1],
+) => {
+  await insertPaypalTransactionForAwardPaypalReferral(client, input);
+  await insertRecruitmentRewardsForAwardPaypalReferral(client, input);
+  await creditPaypalReputation(client, input);
+};
 
 /** Pay the buyer's recruiter once for each delivered Stripe reputation receipt. */
 const awardStripeReferralReputation = async (client: DrizzleClient) => {

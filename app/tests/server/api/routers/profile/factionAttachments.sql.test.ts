@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { mpvpBattleQueue, quest, sector, userData, village, war } from "@/drizzle/schema";
-import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
 import { RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
@@ -36,7 +36,8 @@ const raid = (id: string, task: "open_raid" | "exclusive_raid", raidSector: numb
 });
 
 const fetchProfile = async (userId: string) =>
-  (await fetchUpdatedUser({ client: await getTestDatabase(), userId })).user;
+  (await fetchUpdatedUser({ client: await getTestDatabase(), userId }))
+    .user as UserWithRelations;
 
 describeWithDatabase("profile faction attachments", () => {
   beforeEach(async () => {
@@ -93,7 +94,7 @@ describeWithDatabase("profile faction attachments", () => {
       raid("non-sector-war", "exclusive_raid", 12),
     ]);
     const member = await fetchProfile("member");
-    const listed = [...(member?.activeRaids ?? [])].sort((a, b) => a.sector - b.sector);
+    const listed = [...(member?.activeRaids ?? [])].sort((a, b) => (a.sector ?? 0) - (b.sector ?? 0));
     expect(listed).toEqual([
       expect.objectContaining({ id: "open", raidType: "open", sector: 3 }),
       expect.objectContaining({ id: "owned", raidType: "exclusive", sector: 7 }),
