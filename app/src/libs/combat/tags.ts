@@ -102,9 +102,8 @@ export const realizeTag = <T extends BattleEffect>(props: {
   level: number | undefined;
   round?: number;
   barrierAbsorb?: number;
-  battle?: Battle; // Make battle optional since it's not always needed
 }): T => {
-  const { user, level, round, barrierAbsorb, battle } = props;
+  const { user, level, round, barrierAbsorb } = props;
   // Passive effects also enter here without passing through action selection or insertion.
   const tag = resolveElementalDamage(props.tag, user) as T;
   if ("rounds" in tag || tag.type === "increaseaggro" || tag.type === "decreaseaggro") {
@@ -131,9 +130,6 @@ export const realizeTag = <T extends BattleEffect>(props: {
     if (tag.curHealth > tag.maxHealth) {
       tag.curHealth = tag.maxHealth;
     }
-  }
-  if (battle && "rounds" in tag) {
-    tag.createdRound = battle.round; // Use battle round if available
   }
   return structuredClone(tag);
 };
@@ -2731,7 +2727,6 @@ export const summon = (
             actionId: "initial",
             level: newAi.level,
             round: battle.round,
-            battle,
           }) as UserEffect;
           realizedEffect.targetId = newAi.userId;
           realizedEffect.fromType = fromType;

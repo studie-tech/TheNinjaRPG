@@ -124,7 +124,7 @@ describe("passive effects", () => {
     });
   });
 
-  it("forwards the round and battle that date the effect", () => {
+  it("forwards the round that dates the effect", () => {
     const realized = realizePassiveEffect({
       tag: tag(),
       user,
@@ -132,8 +132,7 @@ describe("passive effects", () => {
       actionId: "skill-1",
       level: 0,
       fromType: "sageMode",
-      round: 4,
-      battle: makeCompleteBattle({ round: 7 }),
+      round: 7,
     });
     expect(realized.targetId).toBe("defender");
     expect(realized.createdRound).toBe(7);
