@@ -601,15 +601,19 @@ export const upsertQuestEntry = async (
   if (!isOpenAttempt) {
     user.questData = removeQuestTrackerByQuestId(user.questData, quest.id);
   }
+  const restart = { startedAt: new Date(), endAt: null, completed: 0 };
+  const versionReset = {
+    entryPaid: false,
+    isolated: quest.content.isolated ?? false,
+    questVersion: quest.updatedAt,
+  };
   // Check if the quest has already been started
   if (entry) {
-    const startedAt = new Date();
+    const reopened = { ...restart, ...(!isOpenAttempt ? versionReset : {}) };
     promises.push(
       updateQuestHistoryForUpsertQuestEntry(
         client,
-        startedAt,
-        isOpenAttempt,
-        quest,
+        reopened,
         entry,
         professionContract,
         noDelegatedAttempt,
@@ -617,17 +621,8 @@ export const upsertQuestEntry = async (
     );
     entry = {
       ...entry,
-      startedAt,
-      endAt: null,
-      completed: 0,
+      ...reopened,
       previousAttempts: entry.previousAttempts + 1,
-      ...(!isOpenAttempt
-        ? {
-            entryPaid: false,
-            isolated: quest.content.isolated ?? false,
-            questVersion: quest.updatedAt,
-          }
-        : {}),
     };
   } else {
     entry = {
@@ -635,17 +630,13 @@ export const upsertQuestEntry = async (
       userId: user.userId,
       questId: quest.id,
       questType: quest.questType,
-      startedAt: new Date(),
-      endAt: null,
-      completed: 0,
+      ...restart,
       previousCompletes: 0,
       previousAttempts: 1,
       periodCompletes: 0,
       periodStartAt: null,
       pendingRewardChoice: null,
-      entryPaid: false,
-      isolated: quest.content.isolated ?? false,
-      questVersion: quest.updatedAt,
+      ...versionReset,
     };
     // Idempotent on the (userId, questId) unique key: if a concurrent start (double-tap, or a
     // UI + overworld race, possibly past a stale `prevEntry`) already inserted the row, restart
@@ -653,13 +644,9 @@ export const upsertQuestEntry = async (
     // duplicate-key error. On the overworld path that throw would skip the caller's
     // clearActiveNpcQuest cleanup and strand the just-claimed NPC-mission slot.
     const duplicateUpdates = {
-      startedAt: entry.startedAt,
-      endAt: null,
-      completed: 0,
+      ...restart,
       previousAttempts: sql`${questHistory.previousAttempts} + 1`,
-      entryPaid: false,
-      isolated: quest.content.isolated ?? false,
-      questVersion: quest.updatedAt,
+      ...versionReset,
     };
     promises.push(
       insertQuestHistoryForUpsertQuestEntry(
