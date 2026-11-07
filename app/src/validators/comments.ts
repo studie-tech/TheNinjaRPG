@@ -12,11 +12,9 @@ export const mutateCommentSchema = z
 
 export type MutateCommentSchema = z.infer<typeof mutateCommentSchema>;
 
-export const deleteCommentSchema = z
-  .strictObject({
-    id: z.string(),
-  })
-  .required();
+export const deleteCommentSchema = z.strictObject({
+  id: z.string(),
+});
 
 export type DeleteCommentSchema = z.infer<typeof deleteCommentSchema>;
 
@@ -31,8 +29,8 @@ export const createConversationSchema = z
 
 export type CreateConversationSchema = z.infer<typeof createConversationSchema>;
 
-export const mutateContentSchema = z
-  .strictObject({ content: z.string().min(2).max(10000) })
-  .required();
+export const mutateContentSchema = z.strictObject({
+  content: z.string().min(2).max(10000),
+});
 
 export type MutateContentSchema = z.infer<typeof mutateContentSchema>;

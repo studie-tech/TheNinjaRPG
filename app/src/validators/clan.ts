@@ -91,7 +91,7 @@ export const getClanSearchSchema = (maxClans: number) =>
         z.object({
           id: z.string(),
           name: z.string(),
-          image: z.string().url().optional().nullish(),
+          image: z.url().nullish(),
         }),
       )
       .min(1)
