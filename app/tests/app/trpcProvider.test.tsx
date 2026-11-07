@@ -821,6 +821,51 @@ it.each([true, false])(
   },
 );
 
+it.each([
+  { name: "a query's server error", data: { code: "INTERNAL_SERVER_ERROR" }, fetches: 4 },
+  { name: "a query's error without data", fetches: 4 },
+  { name: "a query's rejected input", data: { code: "BAD_REQUEST" }, fetches: 1 },
+  { name: "a query's error with empty data", data: {}, fetches: 1 },
+  {
+    name: "a query's transient message despite its code",
+    message: "Failed to fetch",
+    data: { code: "BAD_REQUEST" },
+    fetches: 4,
+  },
+  { name: "a changed session", message: SESSION_CHANGED_MESSAGE, fetches: 1 },
+  { name: "an expired session", message: SESSION_EXPIRED_MESSAGE, fetches: 1 },
+  {
+    name: "a mutation's server error",
+    data: { code: "INTERNAL_SERVER_ERROR" },
+    mutation: true,
+    fetches: 1,
+  },
+  { name: "a mutation's error without data", mutation: true, fetches: 1 },
+])("sends $name $fetches time(s)", async ({ message, data, mutation, fetches }) => {
+  const retryLink = trpcClient.retryLink;
+  vi.spyOn(trpcClient, "retryLink").mockImplementation((options) =>
+    retryLink({ ...options, retryDelayMs: () => 0 }),
+  );
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(Sentry, "captureException").mockImplementation(() => "");
+  const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+    Response.json([
+      {
+        error: superjson.serialize({
+          message: message ?? "Server failed",
+          code: -32603,
+          ...(data ? { data } : {}),
+        }),
+      },
+    ]),
+  );
+  const { trpc } = mountProvider(session("a"));
+  await expect(
+    mutation ? trpc.home.toggleSleep.mutate() : trpc.profile.getUser.query(),
+  ).rejects.toBeInstanceOf(TRPCClientError);
+  expect(fetch).toHaveBeenCalledTimes(fetches);
+});
+
 it("leaves endpoint recovery feedback to the feature callback", async () => {
   const notice = "This action checked you out of the hospital for free.";
   vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json([
