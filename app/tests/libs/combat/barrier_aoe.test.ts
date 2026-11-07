@@ -13,6 +13,7 @@ import { describe, expect, it } from "bun:test";
 import { insertAction } from "@/libs/combat/actions";
 import { getBattleGrid } from "@/libs/combat/util";
 import { DamageTag } from "@/validators/combat";
+import { makeCombatAction } from "./helpers/battleScenario";
 import type {
   CombatAction,
   CompleteBattle,
@@ -87,25 +88,15 @@ const makeBattle = (): CompleteBattle =>
 
 /** AOE damage action centered on the barrier tile. */
 const makeAoeDamageAction = (): CombatAction =>
-  ({
+  makeCombatAction({
     id: "aoe-jutsu",
     name: "AOE Blast",
-    image: "/jutsu.png",
-    battleDescription: "",
-    type: "jutsu",
     target: "OPPONENT",
     method: "AOE_CIRCLE_SPAWN",
     range: 3,
-    healthCost: 0,
-    chakraCost: 0,
-    staminaCost: 0,
-    actionCostPerc: 10,
-    updatedAt: new Date("2020-01-01T00:00:00Z"),
-    cooldown: 0,
-    originalCooldown: 0,
     level: 1,
     effects: [DamageTag.parse({})],
-  }) as unknown as CombatAction;
+  });
 
 describe("AOE barrier absorption scaling", () => {
   it("assigns barrierAbsorb as a 0-1 fraction (absorbPercentage / 100), not the raw percentage", () => {

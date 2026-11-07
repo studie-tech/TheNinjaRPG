@@ -4,6 +4,7 @@ import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import { clone, summon } from "@/libs/combat/tags";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
+import { makeCompleteBattle } from "./helpers/battleScenario";
 
 // Drives the REAL applyEffects pipeline to settle whether a *blocked* summon
 // re-cast (player already has a live summon) can tear down the existing summon
@@ -133,27 +134,20 @@ const mkBattle = (
   usersState: BattleUserState[],
   groundEffects: GroundEffect[],
 ): CompleteBattle =>
-  ({
-    id: "battle-1",
+  makeCompleteBattle({
     activeUserId: PLAYER_ID,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     roundStartAt: new Date("2026-01-01T00:00:00Z"),
-    background: "default",
     width: 10,
     height: 10,
-    battleType: "COMBAT",
-    version: 1,
     round: 2,
-    rewardScaling: 1,
-    forceKeepPools: false,
     usersState,
-    usersEffects: [] as UserEffect[],
     groundEffects,
     extraState: { bloodlines: {}, jutsus: {}, items: {} },
-  }) as unknown as CompleteBattle;
+  });
 
-const liveSummonsOf = (state: BattleUserState[]) =>
+const summonsControlledByPlayer = (state: BattleUserState[]) =>
   state.filter((u) => u.isSummon && u.controllerId === PLAYER_ID);
 
 describe("summon teardown — positive control", () => {
@@ -173,7 +167,7 @@ describe("summon teardown — positive control", () => {
     const { newBattle } = applyEffects(battle, PLAYER_ID);
 
     // Confirms the harness actually exercises the teardown branch.
-    expect(liveSummonsOf(newBattle.usersState)).toHaveLength(0);
+    expect(summonsControlledByPlayer(newBattle.usersState)).toHaveLength(0);
   });
 });
 
@@ -187,13 +181,13 @@ describe("blocked summon re-cast does NOT remove the existing live summon", () =
 
     const pass1 = applyEffects(battle, PLAYER_ID).newBattle;
     // Block returns "already summoned" without tearing down anything.
-    expect(liveSummonsOf(pass1.usersState)).toHaveLength(1);
+    expect(summonsControlledByPlayer(pass1.usersState)).toHaveLength(1);
     // The blocked effect (rounds set to 0) is swept out in this same pass, so no
     // later alignBattle can retain it to drive the rounds===0 teardown.
     expect(pass1.groundEffects.filter((e) => e.type === "summon")).toHaveLength(0);
     // The existing summon therefore survives the next action.
     const pass2 = applyEffects(pass1, PLAYER_ID).newBattle;
-    expect(liveSummonsOf(pass2.usersState)).toHaveLength(1);
+    expect(summonsControlledByPlayer(pass2.usersState)).toHaveLength(1);
   });
 });
 

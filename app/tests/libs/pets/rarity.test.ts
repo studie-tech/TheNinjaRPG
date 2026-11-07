@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { type FederalStatus, FederalStatuses, PET_OPTION_COUNTS, PET_SPECIES_RARITY_WEIGHTS, PetRarities } from "@/drizzle/constants";
-import { getDailyPetOptions, isAvailablePetAppearance } from "@/libs/pets/catalogue";
+import { getDailyPetOptions, isAvailablePetAppearance, PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES } from "@/libs/pets/catalogue";
+import { getUtcDayKey } from "@/utils/time";
+import { acquirePetSchema } from "@/validators/pets";
 import { initialPetSpecies } from "./helpers/species";
 
 describe("companion species rarity", () => {
@@ -116,5 +118,44 @@ describe("companion species rarity", () => {
       expect(commonCounts[current]).toBeLessThan(commonCounts[previous]);
       expect(rareMenuCounts[current]).toBeGreaterThan(rareMenuCounts[previous]);
     }
+  });
+});
+
+describe("companion appearance choices", () => {
+  it("offers stable subscriber supersets from an explicit species catalogue", () => {
+    expect([initialPetSpecies.length, PET_PALETTES.length, PET_CHARACTERISTICS.length, PET_AURAS.length]).toEqual([67, 32, 16, 8]);
+    for (const catalogue of [initialPetSpecies, PET_PALETTES, PET_CHARACTERISTICS, PET_AURAS])
+      expect(new Set(catalogue.map(({ name }) => name)).size).toBe(catalogue.length);
+    const normal = getDailyPetOptions("one-player", "NONE", initialPetSpecies, "2026-10-11");
+    for (const status of ["NONE", "NORMAL", "SILVER", "GOLD"] as const) {
+      const choices = getDailyPetOptions("one-player", status, initialPetSpecies, "2026-10-11");
+      expect(choices).toEqual(getDailyPetOptions("one-player", status, initialPetSpecies, "2026-10-11"));
+      for (const key of ["species", "palettes", "characteristics", "auras"] as const) {
+        expect(choices[key]).toHaveLength(PET_OPTION_COUNTS[status]);
+        expect(choices[key].slice(0, 3)).toEqual(normal[key]);
+        expect(new Set(choices[key].map((option) => "id" in option ? option.id : option.index)).size).toBe(choices[key].length);
+      }
+    }
+    expect(getDailyPetOptions("another-player", "NONE", initialPetSpecies, "2026-10-11")).not.toEqual(normal);
+    expect(getDailyPetOptions("one-player", "NONE", initialPetSpecies, "2026-10-12")).not.toEqual(normal);
+  });
+
+  it("uses UTC days and rejects an unavailable trait", () => {
+    expect(getUtcDayKey(new Date("2026-10-11T23:30:00-05:00"))).toBe("2026-10-12");
+    const choices = getDailyPetOptions("player", "NONE", initialPetSpecies, "2026-10-11");
+    const selection = { speciesId: choices.species[0]!.id, paletteIndex: choices.palettes[0]!.index, characteristicIndex: choices.characteristics[0]!.index, auraIndex: choices.auras[0]!.index };
+    expect(isAvailablePetAppearance(selection, choices)).toBe(true);
+    const unavailable = initialPetSpecies.find(({ id }) => !choices.species.some((option) => option.id === id))!;
+    expect(isAvailablePetAppearance({ ...selection, speciesId: unavailable.id }, choices)).toBe(false);
+    expect(acquirePetSchema.safeParse({ name: "Kumo", dayKey: "2026-10-11", ...selection, auraIndex: 8 }).success).toBe(false);
+  });
+
+  it("removes claimed species without rolling replacements or changing other daily traits", () => {
+    const dayKey = "2026-10-18";
+    const original = getDailyPetOptions("player", "GOLD", initialPetSpecies, dayKey);
+    const speciesIds = [original.species[0]!.id, original.species[3]!.id];
+    const remaining = getDailyPetOptions("player", "GOLD", initialPetSpecies, dayKey, { dayKey, speciesIds });
+    expect(remaining).toEqual({ ...original, species: original.species.filter(({ id }) => !speciesIds.includes(id)) });
+    expect(getDailyPetOptions("player", "GOLD", initialPetSpecies, dayKey, { dayKey: "2026-10-17", speciesIds })).toEqual(original);
   });
 });

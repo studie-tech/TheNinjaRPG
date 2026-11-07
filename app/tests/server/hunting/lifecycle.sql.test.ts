@@ -9,23 +9,27 @@ import * as queueSettlement from "@/server/utils/userQueue";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { huntingRouter } from "@/routers/hunting";
 import { IncreaseHuntingYield } from "@/validators/combat";
-import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
-import { huntingContract, huntingHabitatContent, huntingMap } from "../../setup/hunting";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertDefaultAiProfile,
+} from "../../setup/factories";
+import { huntingContract, huntingHabitatContent, huntingMap, insertHuntingWorld } from "../../setup/hunting";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
 import type { DrizzleClient } from "@/server/db";
-import { beforeStatements, failStatements } from "../../setup/statements";
+import { beforeStatements, failStatements, inTransactions, overrideQuery } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("Hunting lifecycle", () => {
   beforeEach(async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json([{ result: [59, 60] }]));
+    stubRateLimitTransport({ answerOtherRequests: true });
     await resetTables(actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, quest, questHistory, trainingLog, userCookingJob, userData, userItem, userQueue);
     await insertUsers([{ userId: "hunter", occupation: "HUNTER", status: "AWAKE", huntingExperience: 123, sector: 1 }, { userId: "staff", role: "CODING-ADMIN" }, { userId: "enemy", isAi: true }]);
     await insertItems([{ id: "hide", canBeHunted: true }, { id: "tusk", canBeHunted: true }]);
-    const db = await getTestDatabase();
     const content = huntingHabitatContent();
     content.contracts.push({ ...huntingContract(), id: "second" });
-    await db.insert(huntingHabitat).values({ id: "forest", content, updatedAt: new Date() });
-    await db.insert(sectorMap).values({ id: "map", sector: 1, name: "Forest", width: 1, height: 1, status: "PUBLISHED", normalizedJson: huntingMap() });
+    await insertHuntingWorld(content);
   });
   afterEach(() => vi.restoreAllMocks());
   const accept = async () => {
@@ -39,7 +43,7 @@ describeWithDatabase("Hunting lifecycle", () => {
     const { hunter, session } = await accept();
     const db = await getTestDatabase();
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0, money: 100, cookingExperience: 0 }).where(eq(userData.userId, "hunter"));
     await db.update(huntingSession).set({ readyAt: new Date(0) });
     const hasQueue = ["jutsu", "craft", "queue-failure"].includes(settlement);
@@ -192,9 +196,7 @@ describeWithDatabase("Hunting lifecycle", () => {
     const { hunter, session } = await accept();
     const db = await getTestDatabase();
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await db
-      .insert(aiProfile)
-      .values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db
       .update(userData)
       .set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0 })
@@ -236,25 +238,19 @@ describeWithDatabase("Hunting lifecycle", () => {
     const { hunter, session } = await accept();
     const db = await getTestDatabase();
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0 }).where(eq(userData.userId, "hunter"));
     await db.update(huntingSession).set({ readyAt: new Date(0) });
     await db.update(huntingProgress).set({ used: 2 });
     const cooldownUntil = new Date(Date.now() + 60_000);
-    const query = new Proxy(db.query, { get(target, key, receiver) {
-      if (key === "huntingProgress") return {
-        findMany: async (...args: Parameters<typeof target.huntingProgress.findMany>) => {
-          const stale = await target.huntingProgress.findMany(...args);
-          // Advance the allowance after its parallel read, as a final victory does.
-          await db.update(huntingProgress).set({ used: 3, version: 1, cooldownUntil });
-          return stale;
-        },
-      };
-      return Reflect.get(target, key, receiver);
-    } });
-    const client = new Proxy(db, { get(target, key, receiver) {
-      return key === "query" ? query : Reflect.get(target, key, receiver);
-    } });
+    const client = overrideQuery(db, "huntingProgress", {
+      findMany: async (read, ...args) => {
+        const stale = await read(...args);
+        // Advance the allowance after its parallel read, as a final victory does.
+        await db.update(huntingProgress).set({ used: 3, version: 1, cooldownUntil });
+        return stale;
+      },
+    });
     expect(await callerForDatabase(huntingRouter, "hunter", client).start({ id: session.id })).toMatchObject({ success: false, message: "Your hunting session changed. Refresh the board and try again." });
     expect(await db.query.battle.findMany()).toHaveLength(0);
     expect(await db.query.battleHistory.findMany()).toHaveLength(0);
@@ -389,9 +385,5 @@ describeWithDatabase("Hunting lifecycle", () => {
 });
 
 /** Apply statement fault/interleaving hooks to the short finish transaction as well. */
-const withTransactionStatements = (database: DrizzleClient, wrap: (client: DrizzleClient) => DrizzleClient): DrizzleClient =>
-  new Proxy(wrap(database), { get(target, key, receiver) {
-    if (key === "transaction") return (...args: Parameters<typeof database.transaction>) =>
-      database.transaction((tx) => args[0](wrap(tx as unknown as DrizzleClient) as typeof tx));
-    return Reflect.get(target, key, receiver);
-  } });
+const withTransactionStatements = (database: DrizzleClient, wrap: (client: DrizzleClient) => DrizzleClient) =>
+  inTransactions(wrap(database), wrap);

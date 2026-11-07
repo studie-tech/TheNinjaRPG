@@ -6,7 +6,6 @@ import * as moderator from "@/libs/moderator";
 import * as replicate from "@/libs/replicate";
 import { CONCEPT_PROMPT, conceptartRouter } from "@/server/api/routers/conceptart";
 import { insertUsers } from "../../../setup/factories";
-import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 import { queueEnergy } from "../../../setup/queues";
 
@@ -16,19 +15,14 @@ const videoInput = { ...imageInput, negative_prompt: "", start_image: "https://e
 
 describeWithDatabase("concept art confirmed debits", () => {
   beforeEach(async () => {
-    const db = await getTestDatabase();
     await resetTables(userQueue, conceptImage, userData);
     await insertUsers([{ userId, reputationPoints: 1000 }]);
-    stubProfile("fetchUser", async (_client: unknown, id: string) => db.query.userData.findFirst({ where: eq(userData.userId, id) }));
     vi.spyOn(moderator, "classifyNsfwPrompt").mockResolvedValue({ isNsfw: false, reason: "Safe" });
     vi.spyOn(replicate, "fastTxt2imgReplicate").mockResolvedValue({ data: { ufsUrl: "https://example.com/ninja.webp" }, error: null } as Awaited<ReturnType<typeof replicate.fastTxt2imgReplicate>>);
     vi.spyOn(replicate, "startVideoGeneration").mockResolvedValue({ id: "prediction-1" } as Awaited<ReturnType<typeof replicate.startVideoGeneration>>);
   });
 
-  afterEach(() => {
-    resetServerModuleStubs();
-    vi.restoreAllMocks();
-  });
+  afterEach(() => vi.restoreAllMocks());
 
   it("returns only the confirmed image debit without a postwrite profile read", async () => {
     const db = await getTestDatabase();

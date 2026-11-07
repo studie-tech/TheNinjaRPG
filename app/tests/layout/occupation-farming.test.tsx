@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import OccupationFarming from "@/layout/OccupationFarming";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { testRouter } from "../setup/router";
 
 const refetch = vi.fn(async () => undefined);
 const query = {
@@ -43,15 +45,7 @@ vi.mock("@/layout/FarmHUD", () => ({
   FarmHUD: () => <div data-testid="farm-hud" />,
 }));
 
-const router = {
-  back: vi.fn(),
-  forward: vi.fn(),
-  refresh: vi.fn(),
-  push: vi.fn(),
-  replace: vi.fn(),
-  prefetch: vi.fn(),
-  bfcacheId: "farm-test",
-};
+const router = testRouter("farm-test");
 
 const renderFarm = () =>
   render(
@@ -107,13 +101,12 @@ beforeEach(() => {
   })) as unknown as typeof window.matchMedia;
   Element.prototype.scrollIntoView = vi.fn();
   window.scrollBy = vi.fn() as unknown as typeof window.scrollBy;
-  globalThis.ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  } as unknown as typeof ResizeObserver;
+  installBrowserGlobals({ events: [], resizeObserver: true });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  restoreBrowserGlobals();
+});
 
 /** Initial farm failures must leave loading and remain recoverable inside a residence. */
 describe("OccupationFarming load recovery", () => {

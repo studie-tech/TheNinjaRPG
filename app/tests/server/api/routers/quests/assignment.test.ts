@@ -7,30 +7,18 @@ import {
   upsertQuestEntries,
   upsertQuestEntry,
 } from "../../../../../src/server/api/routers/quests";
+import { trackerQuest } from "../../../../setup/quest";
 
-const quest = {
-  id: "mission-1",
+const quest = trackerQuest("mission-1", [], "mission", {
   name: "A-rank mission",
-  questType: "mission",
-  requiredFarmingLevel: 0,
   questRank: "A",
   retryDelay: "none",
-  hidden: false,
-  consecutiveObjectives: false,
   maxAttempts: 10,
   maxCompletes: 1,
-  requiredVillage: null,
-  requiredBloodlineId: null,
-  prerequisiteQuestId: null,
   requiredLevel: 1,
   maxLevel: 100,
-  medicalRank: null,
-  huntingRank: null,
-  gatheringRank: null,
   startsAt: null,
-  endsAt: null,
-  content: { objectives: [], reward: {}, sceneBackground: "", sceneCharacters: [] },
-};
+});
 
 const user = {
   userId: "user-1",
@@ -47,6 +35,42 @@ const user = {
   completedQuests: [],
   userQuests: [],
   questData: [],
+};
+
+const objectiveQuest = {
+  ...quest,
+  content: {
+    objectives: [
+      {
+        id: "obj-1",
+        task: "items_crafted",
+        value: 2,
+        description: "",
+        successDescription: "",
+      },
+    ],
+    reward: {},
+    sceneBackground: "",
+    sceneCharacters: [],
+  },
+};
+
+/** Write client for re-entering a quest whose history row is `entry`; `sets` records updates. */
+const entryClient = (entry: object) => {
+  const sets: Record<string, unknown>[] = [];
+  const client = {
+    update: vi.fn(() => ({
+      set: (value: Record<string, unknown>) => {
+        sets.push(value);
+        return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
+      },
+    })),
+    insert: vi.fn(() => ({
+      values: vi.fn(() => ({ onDuplicateKeyUpdate: vi.fn().mockResolvedValue(undefined) })),
+    })),
+    query: { questHistory: { findFirst: vi.fn().mockResolvedValue(entry) } },
+  } as never;
+  return { client, sets };
 };
 
 /** Minimal write client for the successful upsert + daily-counter assignment path. */
@@ -495,23 +519,6 @@ describe("assignQuestToUser compatibility", () => {
   it("keeps tracker progress when re-entering a quest attempt that is still open", async () => {
     // A `start_quest` objective consequence can name a quest the player is already working
     // through. Restart semantics would silently throw that progress away.
-    const objectiveQuest = {
-      ...quest,
-      content: {
-        objectives: [
-          {
-            id: "obj-1",
-            task: "items_crafted",
-            value: 2,
-            description: "",
-            successDescription: "",
-          },
-        ],
-        reward: {},
-        sceneBackground: "",
-        sceneCharacters: [],
-      },
-    };
     const openTracker = {
       id: objectiveQuest.id,
       goals: [{ id: "obj-1", done: false, value: 1 }],
@@ -527,20 +534,7 @@ describe("assignQuestToUser compatibility", () => {
       previousAttempts: 1,
     };
 
-    const sets: Record<string, unknown>[] = [];
-    const update = vi.fn(() => ({
-      set: (value: Record<string, unknown>) => {
-        sets.push(value);
-        return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
-      },
-    }));
-    const client = {
-      update,
-      insert: vi.fn(() => ({
-        values: vi.fn(() => ({ onDuplicateKeyUpdate: vi.fn().mockResolvedValue(undefined) })),
-      })),
-      query: { questHistory: { findFirst: vi.fn().mockResolvedValue(openEntry) } },
-    } as never;
+    const { client, sets } = entryClient(openEntry);
 
     await upsertQuestEntry(
       client,
@@ -566,23 +560,6 @@ describe("assignQuestToUser compatibility", () => {
   });
 
   it("resets stale tracker state when restarting an already-attempted quest", async () => {
-    const objectiveQuest = {
-      ...quest,
-      content: {
-        objectives: [
-          {
-            id: "obj-1",
-            task: "items_crafted",
-            value: 2,
-            description: "",
-            successDescription: "",
-          },
-        ],
-        reward: {},
-        sceneBackground: "",
-        sceneCharacters: [],
-      },
-    };
     const staleTracker = {
       id: objectiveQuest.id,
       goals: [{ id: "obj-1", done: true, value: 2 }],
@@ -598,20 +575,7 @@ describe("assignQuestToUser compatibility", () => {
       previousAttempts: 1,
     };
 
-    const sets: Record<string, unknown>[] = [];
-    const update = vi.fn(() => ({
-      set: (value: Record<string, unknown>) => {
-        sets.push(value);
-        return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
-      },
-    }));
-    const client = {
-      update,
-      insert: vi.fn(() => ({
-        values: vi.fn(() => ({ onDuplicateKeyUpdate: vi.fn().mockResolvedValue(undefined) })),
-      })),
-      query: { questHistory: { findFirst: vi.fn().mockResolvedValue(existingEntry) } },
-    } as never;
+    const { client, sets } = entryClient(existingEntry);
 
     await upsertQuestEntry(
       client,

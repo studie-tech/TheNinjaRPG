@@ -1,10 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import type { Jutsu } from "@/drizzle/schema";
 import { handleInjectedJutsus } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import { makeBattleUser, makeInjectBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeInjectBattle, makeJutsu } from "./helpers/battleScenario";
 
-const injected = { ...SAGE_MODE_ACTIVATION_JUTSU, id: "injected", requiredSkillId: "required" } as Jutsu;
+const injected = makeJutsu({ id: "injected", requiredSkillId: "required" });
 
 describe("injected jutsu skill requirements", () => {
   it("gates effect grants using the skill IDs preloaded in battle state", () => {

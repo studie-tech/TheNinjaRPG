@@ -18,6 +18,7 @@ import type { UserPatch } from "@/deltas/profile";
 import * as routing from "@/utils/routing";
 import { updateUserCache } from "@/utils/userCache";
 import * as UserContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const profile = (money = 100, userId = "actor", tutorialOn = true) => ({
@@ -76,11 +77,6 @@ const componentSpies: { mockRestore: () => void }[] = [];
 const dialogSpies: { mockRestore: () => void }[] = [];
 
 let close: (() => void) | undefined;
-const animationFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
-const customEvent = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
-const browserEvent = Object.getOwnPropertyDescriptor(globalThis, "Event");
-// The assistant re-places Lemu's portrait whenever its dock resizes.
-const resizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
 beforeEach(() => {
   componentSpies.push(vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({
     data: mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData,
@@ -91,8 +87,8 @@ beforeEach(() => {
     return { data: selected, updateUser: mocks.updateUser } as never;
   }));
   localStorage.clear();
-  Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
-  Object.defineProperty(globalThis, "Event", { configurable: true, value: window.Event });
+  // The assistant re-places Lemu's portrait whenever its dock resizes.
+  installBrowserGlobals({ resizeObserver: true, animationFrame: () => 0 });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   // Bun shares modules between suites; restore Objective after each test.
   componentSpies.push(vi.spyOn(objective, "Objective").mockImplementation(() => null));
@@ -112,8 +108,6 @@ beforeEach(() => {
   mocks.stepNumber = 0;
   mocks.visible = true;
   mocks.step = { id: "welcome", chapter: "student", title: "Welcome", description: "Welcome", page: "/profile" };
-  Object.defineProperty(globalThis, "requestAnimationFrame", { configurable: true, value: () => 0 });
-  Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } });
 });
 
 describe("TutorialAssistant highlight activation", () => {
@@ -179,14 +173,7 @@ afterEach(() => {
   close?.();
   close = undefined;
   mocks.client.clear();
-  if (customEvent) Object.defineProperty(globalThis, "CustomEvent", customEvent);
-  else Reflect.deleteProperty(globalThis, "CustomEvent");
-  if (browserEvent) Object.defineProperty(globalThis, "Event", browserEvent);
-  else Reflect.deleteProperty(globalThis, "Event");
-  if (animationFrame) Object.defineProperty(globalThis, "requestAnimationFrame", animationFrame);
-  else Reflect.deleteProperty(globalThis, "requestAnimationFrame");
-  if (resizeObserver) Object.defineProperty(globalThis, "ResizeObserver", resizeObserver);
-  else Reflect.deleteProperty(globalThis, "ResizeObserver");
+  restoreBrowserGlobals();
 });
 const renderAssistant = () => render(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
 

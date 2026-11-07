@@ -4,22 +4,19 @@ import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import { filterQuestTrackersForDbPersist, getNewTrackers, getReward } from "@/libs/quest";
 import { CombatActivityTasks, getObjectiveSchema, objectiveImageMap, QuestCompletionTasks, QuestTracker } from "@/validators/objectives";
 import type { AllObjectiveTask } from "@/validators/objectives";
+import { trackerQuest, trackerUser } from "../setup/quest";
 import { makeBattleUser, makeCompleteBattle } from "./combat/helpers/battleScenario";
 
 const completionTasks = [...Object.values(QuestCompletionTasks), "dungeons_completed", "raids_completed"] as const;
 const tasks = [...CombatActivityTasks, ...completionTasks];
 const makeUser = () => {
-  const definition = {
-    id: "achievement", name: "Adventurer", questType: "achievement", hidden: false,
-    consecutiveObjectives: false, maxAttempts: 0, maxCompletes: 1,
-    content: { objectives: tasks.map((task) => getObjectiveSchema(task).parse({ id: task, task, value: 10 })), reward: {} },
-  };
-  return {
-    userId: "attacker", level: 50, rank: "JONIN", role: "USER", villageId: "village",
-    sector: 1, village: { id: "village", sector: 1 }, activeWars: [],
-    bloodlineId: null, completedQuests: [], questData: [],
-    userQuests: [{ id: definition.id, questId: definition.id, questType: "achievement", completed: 0, previousCompletes: 0, previousAttempts: 0, endAt: null, quest: definition }],
-  } as unknown as Parameters<typeof getNewTrackers>[0];
+  const objectives = tasks.map((task) => getObjectiveSchema(task).parse({ id: task, task, value: 10 }));
+  const definition = trackerQuest("achievement", objectives, "achievement", { name: "Adventurer", maxAttempts: 0, maxCompletes: 1 });
+  return trackerUser(
+    [{ quest: definition, id: definition.id, questType: "achievement", endAt: null }],
+    [],
+    { userId: "attacker", villageId: "village", village: { id: "village", sector: 1 } },
+  );
 };
 const goal = (user: ReturnType<typeof makeUser>, task: AllObjectiveTask) =>
   user.questData?.find((tracker) => tracker.id === "achievement")?.goals.find((entry) => entry.id === task);

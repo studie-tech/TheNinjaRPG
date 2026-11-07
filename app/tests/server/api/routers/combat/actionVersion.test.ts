@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { inferProcedureInput, inferProcedureOutput } from "@trpc/server";
+import type { inferProcedureInput } from "@trpc/server";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import type { z } from "zod";
@@ -10,18 +10,11 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { makeBattleUser, makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
+import { resolverOf } from "../../../../setup/testDatabase";
 
 type ActionInput = inferProcedureInput<typeof combatRouter.performAction>;
-type ActionResolver = (options: {
-  ctx: { drizzle: DrizzleClient; userId: string; waitForRateLimit: () => Promise<void> };
-  input: ActionInput;
-  type: "mutation";
-  path: string;
-}) => Promise<inferProcedureOutput<typeof combatRouter.performAction>>;
 
-const resolver = (combatRouter.performAction._def as unknown as {
-  resolver: ActionResolver;
-}).resolver;
+const resolver = resolverOf(combatRouter.performAction);
 const schema = combatRouter.performAction._def.inputs[0] as z.ZodType<ActionInput>;
 const manual = { battleId: "version-battle", actionId: "wait", longitude: 0, latitude: 0 };
 
@@ -80,12 +73,47 @@ describe("manual combat snapshot versions", () => {
 
   it.each([undefined, 1])("keeps actionless polling independent of client version %s", async (version) => {
     const fixture = makeFight();
-    expect(await act(fixture.client, { battleId: manual.battleId, version })).toEqual({
-      notification: "Battle state was not changed",
+    const response = await act(fixture.client, { battleId: manual.battleId, version });
+    expect(response).toMatchObject({
+      updateClient: true,
+      battleUpdate: { id: manual.battleId, version: 3, activeUserId: "player" },
+      result: null,
+      logEntries: [],
+      updatedQuestIds: [],
     });
+    expect(response.notification).toBeUndefined();
     expect(fixture.read).toHaveBeenCalledTimes(1);
     expect(fixture.write).not.toHaveBeenCalled();
     expect(fixture.logs).toHaveLength(0);
+  });
+
+  it("reconciles an automatic tick that reaches the server after auto combat is disabled", async () => {
+    const fixture = makeFight(true);
+    let finishRead!: () => void;
+    const reading = new Promise<void>((resolve) => { finishRead = resolve; });
+    fixture.read.mockImplementationOnce(async () => {
+      await reading;
+      return structuredClone(fixture.saved);
+    });
+    const pending = act(fixture.client, { battleId: manual.battleId });
+    // The toggle commits while the automatic tick is still in flight.
+    fixture.saved.usersState[0]!.isAutoCombat = false;
+    fixture.saved.version += 1;
+    finishRead();
+    const response = await pending;
+    expect(response.notification).toBeUndefined();
+    expect(response).toMatchObject({
+      updateClient: true,
+      battleUpdate: { version: 4, activeUserId: "player" },
+      result: null,
+      logEntries: [],
+    });
+    expect(response.battleUpdate?.usersState.find((user) => user.userId === "player")?.isAutoCombat).toBe(false);
+    expect(fixture.saved.version).toBe(4);
+    expect(fixture.read).toHaveBeenCalledTimes(1);
+    expect(fixture.write).not.toHaveBeenCalled();
+    expect(fixture.logs).toHaveLength(0);
+    expect(Pusher.prototype.trigger).not.toHaveBeenCalled();
   });
 
   it("advances autonomous combat without a client version", async () => {

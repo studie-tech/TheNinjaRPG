@@ -1,3 +1,4 @@
+import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { describe, expect, it } from "bun:test";
 import { Container, type Mesh } from "pixi.js";
@@ -35,13 +36,91 @@ describe("regional world weather", () => {
   it("shares a smooth live front across rain, snowy regions and desert sandstorms", () => {
     for (const [biome, kind] of [["ground", "rain"], ["ocean", "rain"], ["snow", "snow"], ["ice", "snow"], ["dessert", "sandstorm"]] as const) {
       expect(getWorldWeather(biome, 180_000)).toEqual({ kind, intensity: 0.7 });
-      expect(getWorldWeather(biome, 540_000)).toEqual({ kind: "clear", intensity: 0 });
+      expect(getWorldWeather(biome, 540_000)).toEqual({ kind: "clouds", intensity: 1 });
       const before = getWorldWeather(biome, 120_000).intensity;
       expect(getWorldWeather(biome, 120_016).intensity - before).toBeGreaterThan(0);
       expect(getWorldWeather(biome, 120_016).intensity - before).toBeLessThan(0.001);
     }
     expect(getWorldWeather("default", 180_000).kind).toBe("clear");
     expect(getWorldWeather("ground", Number.NaN).kind).toBe("clear");
+  });
+
+  it("fades clouds in from the end of a front and out before the next", () => {
+    const before = getWorldWeather("ground", 361_000);
+    expect(before.kind).toBe("clouds");
+    expect(before.intensity).toBeGreaterThan(0);
+    expect(before.intensity).toBeLessThan(0.02);
+    expect(getWorldWeather("ground", 719_000).kind).toBe("clouds");
+    expect(getWorldWeather("ground", 719_000).intensity).toBeLessThan(0.02);
+    expect(getWorldWeather("default", 540_000).kind).toBe("clear");
+  });
+
+  it("shades only clear daylight, fading through dusk and hidden at night", () => {
+    const { weather, game, dispose } = fixture();
+    const frame = { now: 1000, delta: .016, reducedMotion: false };
+    const clouds = { kind: "clouds", intensity: 1 } as const;
+    const camera = { x: 0, y: 0 };
+    try {
+      weather.update(frame, clouds, camera, WORLD_NIGHT_BRIGHTNESS);
+      expect(weather.container.visible).toBe(false);
+      expect(weather.container.children).toHaveLength(0);
+      weather.update(frame, clouds, camera, WORLD_DAY_BRIGHTNESS);
+      expect(weather.container.visible).toBe(true);
+      const mesh = weather.container.getChildByLabel("weather-cloud-shadows") as Mesh;
+      const view = mesh.shader!.resources.clouds.uniforms.uView;
+      const noon = view[3];
+      expect(noon).toBeGreaterThan(0);
+      weather.update(frame, clouds, camera, (WORLD_DAY_BRIGHTNESS + WORLD_NIGHT_BRIGHTNESS) / 2);
+      expect(view[3]).toBeCloseTo(noon / 2);
+      game.visualEffects.weather = false;
+      weather.update(frame, clouds, camera, WORLD_DAY_BRIGHTNESS);
+      expect(weather.container.visible).toBe(false);
+      game.visualEffects.weather = true;
+      weather.update({ ...frame, reducedMotion: true }, clouds, camera, WORLD_DAY_BRIGHTNESS);
+      expect(weather.container.visible).toBe(false);
+    } finally { dispose(); }
+  });
+
+  it("swaps retained meshes between clouds and precipitation", () => {
+    const { weather, dispose } = fixture();
+    const frame = { now: 1000, delta: .016, reducedMotion: false }, camera = { x: 0, y: 0 };
+    try {
+      weather.update(frame, { kind: "clouds", intensity: 1 }, camera);
+      const clouds = weather.container.getChildByLabel("weather-cloud-shadows")!;
+      expect(weather.container.getChildByLabel("weather-particles")).toBeNull();
+      weather.update(frame, { kind: "rain", intensity: 1 }, camera);
+      const particles = weather.container.getChildByLabel("weather-particles")!;
+      expect([clouds.visible, particles.visible]).toEqual([false, true]);
+      weather.update(frame, { kind: "clouds", intensity: 1 }, camera);
+      expect([clouds.visible, particles.visible]).toEqual([true, false]);
+      expect(weather.container.children).toHaveLength(2);
+    } finally { dispose(); }
+  });
+
+  it.each([false, true])("keeps clouds on the ground and bounded across zoom and drift (light=%s)", (light) => {
+    const { weather, renderer, dispose } = fixture(light);
+    try {
+      weather.update({ now: 0, delta: 0, reducedMotion: false }, { kind: "clouds", intensity: 1 }, { x: 0, y: 0 }, 1, 1);
+      const mesh = weather.container.children[0] as Mesh;
+      const geometry = mesh.geometry;
+      const { uField } = mesh.shader!.resources.clouds.uniforms;
+      expect(geometry.getBuffer("aPosition").data.length / 8).toBe(light ? 16 : 36);
+      expect(Array.from(uField)).toEqual([0, 0, 2048, 2048]);
+      // Panning shifts the field by exactly the world's canvas offset.
+      weather.update({ now: 0, delta: 0, reducedMotion: false }, { kind: "clouds", intensity: 1 }, { x: 300, y: -40 }, 1, 1);
+      expect(Array.from(uField).slice(0, 2)).toEqual([300, -40]);
+      // Zooming scales the period with the ground.
+      weather.update({ now: 0, delta: 0, reducedMotion: false }, { kind: "clouds", intensity: 1 }, { x: 0, y: 0 }, 1, 2);
+      expect(Array.from(uField).slice(2)).toEqual([4096, 4096]);
+      // Clouds always wrap beyond a view larger than the base field.
+      renderer.height = 3000;
+      weather.update({ now: 0, delta: 0, reducedMotion: false }, { kind: "clouds", intensity: 1 }, { x: 0, y: 0 }, 1, 1);
+      expect(uField[3]).toBeGreaterThanOrEqual(3000 + 2 * 190);
+      // Offsets stay wrapped however long the page has been open.
+      weather.update({ now: 1e10, delta: 0, reducedMotion: false }, { kind: "clouds", intensity: 1 }, { x: 0, y: 0 }, 1, 1);
+      expect(Math.abs(uField[0])).toBeLessThan(uField[2]);
+      expect(mesh.geometry).toBe(geometry);
+    } finally { dispose(); }
   });
 
   it("allocates no mesh for clear skies, zero/invalid strength or reduced motion", () => {

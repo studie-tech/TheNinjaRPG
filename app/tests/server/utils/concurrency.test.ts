@@ -1,20 +1,53 @@
 import { getNextUserSnapshotAt } from "@/utils/time";
-import { clearActiveNpcQuest } from "@/queries/concurrency";
+import { clearActiveNpcQuest, refundPityCredit } from "@/queries/concurrency";
 
-import type { SQL } from "drizzle-orm";
+import { and, eq, type SQL } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/mysql-core";
 import { describe, expect, it, vi } from "bun:test";
-import { userData, userItem } from "@/drizzle/schema";
+import { bloodlineRolls, userData, userItem } from "@/drizzle/schema";
 import {
+  adjustSeichiSilverAtomically,
   battleClaimRollbackStatus,
   claimActiveNpcQuest,
   claimUserSnapshot,
   consumeUserItemAtomically,
   refundUserItemQuantityAtomically,
+  removeBloodlineFromPoolAtomically,
+  reservePityCredit,
   restoreStaleUserItemMergeClaims,
   updateUserItemQuantityAtomically,
   userItemMergeQuantityCase,
 } from "@/server/utils/concurrency";
+
+/** An `update().set().where()` chain whose write reports `rowsAffected`. */
+const updateChain = (rowsAffected: number) => {
+  const where = vi.fn().mockResolvedValue({ rowsAffected });
+  const set = vi.fn().mockReturnValue({ where });
+  const update = vi.fn().mockReturnValue({ set });
+  return { client: { update } as never, update, set, where };
+};
+
+const itemSnapshot = {
+  id: "item-row-1",
+  createdAt: new Date("2026-08-18T10:00:00.000Z"),
+  updatedAt: new Date("2026-08-18T10:00:00.000Z"),
+  userId: "user-1",
+  itemId: "repair-kit-1",
+  quantity: 5,
+  level: 1,
+  experience: 0,
+  equipped: "NONE",
+  durability: 100,
+  storedAtHome: false,
+  homeX: null,
+  homeY: null,
+  homeRotation: 0,
+  homeRoom: "main",
+  craftingFinishedAt: null,
+  isInAuction: false,
+  activeVariantId: null,
+  dropChancePerc: 0,
+} as const;
 
 describe("concurrency helpers", () => {
   it("advances a snapshot when the wall clock is in the same millisecond", () => {
@@ -26,20 +59,16 @@ describe("concurrency helpers", () => {
   });
 
   it("claims a user snapshot by touching updatedAt", async () => {
-    const where = vi.fn().mockResolvedValue({ rowsAffected: 1 });
-    const set = vi.fn().mockReturnValue({ where });
-    const client = {
-      update: vi.fn().mockReturnValue({ set }),
-    };
+    const { client, update, set, where } = updateChain(1);
 
     const result = await claimUserSnapshot({
-      client: client as never,
+      client,
       userId: "user-1",
       updatedAt: new Date("2026-05-01T10:00:00.000Z"),
       set: { status: "AWAKE" },
     });
 
-    expect(client.update).toHaveBeenCalledWith(userData);
+    expect(update).toHaveBeenCalledWith(userData);
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({
         updatedAt: expect.any(Date),
@@ -51,22 +80,17 @@ describe("concurrency helpers", () => {
   });
 
   it("updates quantity atomically when the row still matches the snapshot", async () => {
-    const where = vi.fn().mockResolvedValue({ rowsAffected: 1 });
-    const set = vi.fn().mockReturnValue({ where });
-    const client = {
-      update: vi.fn().mockReturnValue({ set }),
-      delete: vi.fn(),
-    };
+    const { client, update, set } = updateChain(1);
 
     const result = await updateUserItemQuantityAtomically({
-      client: client as never,
+      client,
       userId: "user-1",
       userItemId: "item-row-1",
       expectedQuantity: 3,
       nextQuantity: 1,
     });
 
-    expect(client.update).toHaveBeenCalledWith(userItem);
+    expect(update).toHaveBeenCalledWith(userItem);
     expect(set).toHaveBeenCalledWith({ quantity: 1 });
     expect(result).toBe(true);
   });
@@ -120,27 +144,6 @@ describe("concurrency helpers", () => {
     const onDuplicateKeyUpdate = vi.fn().mockResolvedValue({ rowsAffected: 2 });
     const values = vi.fn().mockReturnValue({ onDuplicateKeyUpdate });
     const client = { insert: vi.fn().mockReturnValue({ values }) };
-    const itemSnapshot = {
-      id: "item-row-1",
-      createdAt: new Date("2026-08-18T10:00:00.000Z"),
-      updatedAt: new Date("2026-08-18T10:00:00.000Z"),
-      userId: "user-1",
-      itemId: "repair-kit-1",
-      quantity: 5,
-      level: 1,
-      experience: 0,
-      equipped: "NONE",
-      durability: 100,
-      storedAtHome: false,
-      homeX: null,
-      homeY: null,
-      homeRotation: 0,
-          homeRoom: "main",
-      craftingFinishedAt: null,
-      isInAuction: false,
-      activeVariantId: null,
-      dropChancePerc: 0,
-    } as const;
 
     await refundUserItemQuantityAtomically({
       client: client as never,
@@ -170,27 +173,6 @@ describe("concurrency helpers", () => {
       .mockReturnValueOnce({ onDuplicateKeyUpdate })
       .mockReturnValueOnce(Promise.resolve({ rowsAffected: 1 }));
     const client = { insert: vi.fn().mockReturnValue({ values }) };
-    const itemSnapshot = {
-      id: "item-row-1",
-      createdAt: new Date("2026-08-18T10:00:00.000Z"),
-      updatedAt: new Date("2026-08-18T10:00:00.000Z"),
-      userId: "user-1",
-      itemId: "repair-kit-1",
-      quantity: 5,
-      level: 1,
-      experience: 0,
-      equipped: "NONE",
-      durability: 100,
-      storedAtHome: false,
-      homeX: null,
-      homeY: null,
-      homeRotation: 0,
-          homeRoom: "main",
-      craftingFinishedAt: null,
-      isInAuction: false,
-      activeVariantId: null,
-      dropChancePerc: 0,
-    } as const;
 
     await refundUserItemQuantityAtomically({
       client: client as never,
@@ -334,17 +316,15 @@ describe("active NPC quest slot", () => {
   });
 
   it("clears through a quest-scoped update so another quest's slot is preserved", async () => {
-    const where = vi.fn().mockResolvedValue({ rowsAffected: 0 });
-    const set = vi.fn().mockReturnValue({ where });
-    const client = { update: vi.fn().mockReturnValue({ set }) };
+    const { client, update, set, where } = updateChain(0);
 
     await clearActiveNpcQuest({
-      client: client as never,
+      client,
       userId: "user-1",
       questId: "quest-1",
     });
 
-    expect(client.update).toHaveBeenCalledWith(userData);
+    expect(update).toHaveBeenCalledWith(userData);
     expect(set).toHaveBeenCalledWith({ activeNpcQuestId: null });
     expect(where).toHaveBeenCalledTimes(1);
     const clearWhere = where.mock.calls[0]?.[0] as SQL;
@@ -354,5 +334,116 @@ describe("active NPC quest slot", () => {
       .where(clearWhere)
       .toSQL();
     expect(rendered.params).toEqual(["user-1", "quest-1"]);
+  });
+});
+
+describe("adjustSeichiSilverAtomically", () => {
+  it("succeeds on a positive delta (no floor predicate)", async () => {
+    const { client, update } = updateChain(1);
+    const ok = await adjustSeichiSilverAtomically({
+      client,
+      userId: "u1",
+      delta: 100,
+    });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(ok).toBe(true);
+  });
+
+  it("fails when a subtraction is blocked by the balance floor (0 rows)", async () => {
+    const { client } = updateChain(0);
+    const ok = await adjustSeichiSilverAtomically({
+      client,
+      userId: "u1",
+      delta: -100,
+    });
+    expect(ok).toBe(false);
+  });
+});
+
+const poolClient = (deleteRows: number, updateRows: number) => {
+  const deleteWhere = vi.fn().mockResolvedValue({ rowsAffected: deleteRows });
+  const del = vi.fn().mockReturnValue({ where: deleteWhere });
+  const updateWhere = vi.fn().mockResolvedValue({ rowsAffected: updateRows });
+  const set = vi.fn().mockReturnValue({ where: updateWhere });
+  const update = vi.fn().mockReturnValue({ set });
+  return { client: { delete: del, update } as never, del, update };
+};
+
+describe("removeBloodlineFromPoolAtomically", () => {
+  it("deletes non-NATURAL rows and nulls NATURAL rows; succeeds when rows change", async () => {
+    const { client, del, update } = poolClient(2, 1);
+    const ok = await removeBloodlineFromPoolAtomically({
+      client,
+      userId: "u1",
+      bloodlineId: "bl1",
+      now: new Date(0),
+    });
+    expect(del).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(ok).toBe(true);
+  });
+
+  it("fails when nothing changed (became equipped / not in pool)", async () => {
+    const { client } = poolClient(0, 0);
+    const ok = await removeBloodlineFromPoolAtomically({
+      client,
+      userId: "u1",
+      bloodlineId: "bl1",
+      now: new Date(0),
+    });
+    expect(ok).toBe(false);
+  });
+});
+
+describe("reservePityCredit", () => {
+  it("returns true when the CAS updates exactly one row", async () => {
+    const { client, where } = updateChain(1);
+    const won = await reservePityCredit({
+      client,
+      table: bloodlineRolls,
+      rollId: "roll1",
+      expectedPityRolls: 2,
+    });
+    expect(won).toBe(true);
+    // The reservation is only safe if the CAS is scoped to BOTH the roll id and the
+    // expected pity count — dropping the pityRolls equality would let a stale request
+    // fund a second grant. Assert the predicate, not just the mocked outcome.
+    expect(where).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledWith(
+      and(eq(bloodlineRolls.id, "roll1"), eq(bloodlineRolls.pityRolls, 2)),
+    );
+  });
+
+  it("returns false when the CAS matches zero rows (stale count / lost race)", async () => {
+    const { client, where } = updateChain(0);
+    const won = await reservePityCredit({
+      client,
+      table: bloodlineRolls,
+      rollId: "roll1",
+      expectedPityRolls: 2,
+    });
+    expect(won).toBe(false);
+    expect(where).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledWith(
+      and(eq(bloodlineRolls.id, "roll1"), eq(bloodlineRolls.pityRolls, 2)),
+    );
+  });
+});
+
+describe("refundPityCredit", () => {
+  it("issues a single decrement scoped to the roll id on the given table", async () => {
+    const { client, update, set, where } = updateChain(1);
+    await refundPityCredit({ client, table: bloodlineRolls, rollId: "roll1" });
+    // Unconditional decrement (no expectedPityRolls guard): one update, one set, one where.
+    expect(update).toHaveBeenCalledWith(bloodlineRolls);
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not throw when the refund matches zero rows", async () => {
+    const { client } = updateChain(0);
+    await expect(
+      refundPityCredit({ client, table: bloodlineRolls, rollId: "roll1" }),
+    ).resolves.toBeUndefined();
   });
 });

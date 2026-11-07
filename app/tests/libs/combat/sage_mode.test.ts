@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { applySageModeAfterRoundTransition, applySingleEffect } from "@/libs/combat/process";
+import { applySageModeAfterRoundTransition } from "@/libs/combat/process";
 import { cleanse, getPower } from "@/libs/combat/tags";
 import { isEffectActive } from "@/libs/combat/util";
 import {
@@ -8,13 +8,8 @@ import {
   makeEffect,
   makeTag,
 } from "./helpers/battleScenario";
-import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
-import type {
-  ActionEffect,
-  Consequence,
-  GroundEffect,
-  UserEffect,
-} from "@/libs/combat/types";
+import { activateSageMode, makeSageMode, makeSageUser } from "./helpers/sageMode";
+import type { UserEffect } from "@/libs/combat/types";
 
 /** Exhaustion fixture: a simple stat-reduction after-effect. */
 const exhaustionSageMode = () =>
@@ -216,30 +211,12 @@ describe("sage mode active-phase aura teardown at expiry", () => {
     });
 
   it("removes the active-phase visual aura once activationRounds elapse", () => {
-    const user = makeBattleUser("sage", {
-      sageModeId: "sage-aura",
-      curChakra: 5000,
-      maxChakra: 5000,
-      curStamina: 5000,
-      maxStamina: 5000,
-    });
+    const user = makeSageUser({ sageModeId: "sage-aura" });
     const battle = makeAuraBattle(user);
 
     // Activate: applyActivateSageMode realizes both fixture effects with
     // fromType "sageMode" and rounds = activationRounds (2).
-    const newUsersEffects: UserEffect[] = [];
-    applySingleEffect(
-      new Map<string, Consequence>(),
-      [user],
-      newUsersEffects,
-      [] as GroundEffect[],
-      [] as ActionEffect[],
-      new Set<string>(),
-      battle,
-      "sage",
-      makeActivateSageEffect("sage", { id: "act-aura" }),
-    );
-    battle.usersEffects = newUsersEffects;
+    battle.usersEffects = activateSageMode(user, battle, { id: "act-aura" });
     expect(user.sageModeActivated).toBe(true);
     expect(
       battle.usersEffects.some((e) => e.type === "visual" && e.fromType === "sageMode"),
@@ -295,31 +272,12 @@ describe("sage mode activation level scaling", () => {
     });
 
   const runScalingActivation = (sageMasteryExperience: number) => {
-    const user = makeBattleUser("sage", {
-      sageModeId: "sage-scaling",
-      sageMasteryExperience,
-      curChakra: 5000,
-      maxChakra: 5000,
-      curStamina: 5000,
-      maxStamina: 5000,
-    });
+    const user = makeSageUser({ sageModeId: "sage-scaling", sageMasteryExperience });
     const battle = makeCompleteBattle({
       usersState: [user],
       extraState: { sageModes: { "sage-scaling": makeScalingSageMode() } },
     });
-    const newUsersEffects: UserEffect[] = [];
-    applySingleEffect(
-      new Map<string, Consequence>(),
-      [user],
-      newUsersEffects,
-      [] as GroundEffect[],
-      [] as ActionEffect[],
-      new Set<string>(),
-      battle,
-      "sage",
-      makeActivateSageEffect("sage", { id: "act-scaling" }),
-    );
-    return newUsersEffects.find(
+    return activateSageMode(user, battle, { id: "act-scaling" }).find(
       (e) => e.fromType === "sageMode" && e.type === "increasestat",
     );
   };
@@ -365,31 +323,12 @@ describe("sage mode level2Effects activation", () => {
     });
 
   const runLevel2Activation = (sageMasteryExperience: number) => {
-    const user = makeBattleUser("sage", {
-      sageModeId: "sage-level2",
-      sageMasteryExperience,
-      curChakra: 5000,
-      maxChakra: 5000,
-      curStamina: 5000,
-      maxStamina: 5000,
-    });
+    const user = makeSageUser({ sageModeId: "sage-level2", sageMasteryExperience });
     const battle = makeCompleteBattle({
       usersState: [user],
       extraState: { sageModes: { "sage-level2": makeLevel2SageMode() } },
     });
-    const newUsersEffects: UserEffect[] = [];
-    applySingleEffect(
-      new Map<string, Consequence>(),
-      [user],
-      newUsersEffects,
-      [] as GroundEffect[],
-      [] as ActionEffect[],
-      new Set<string>(),
-      battle,
-      "sage",
-      makeActivateSageEffect("sage", { id: "act-level2" }),
-    );
-    return newUsersEffects
+    return activateSageMode(user, battle, { id: "act-level2" })
       .filter((e) => e.fromType === "sageMode" && e.type === "increasestat")
       .map((e) => getPower(e).power);
   };

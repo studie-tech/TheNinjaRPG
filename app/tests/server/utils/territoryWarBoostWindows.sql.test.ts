@@ -10,7 +10,7 @@ import { clan, notification, territoryWar, territoryWarScore, userData, village 
 import { getTerritoryWarBoost, getTerritoryWarPeriodBoost } from "@/libs/territoryWar";
 import type { DrizzleClient } from "@/server/db";
 import { resolveTerritoryWar, territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
-import { insertUsers } from "../../setup/factories";
+import { insertUsers, insertClans } from "../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const activityStart = new Date("2026-01-01T10:00:00.000Z");
@@ -49,7 +49,7 @@ describeWithDatabase("Territory War bonus history competitor scope", () => {
       { id: "other-village", name: "Other Village", kageId: "guardian", sector: 2 },
       { id: VILLAGE_SYNDICATE_ID, name: "Syndicate", kageId: "guardian", sector: 3 },
     ]);
-    await db.insert(clan).values(["winning-clan", "other-clan"].map(id => ({ id, name: id, image: "image", villageId: VILLAGE_SYNDICATE_ID, founderId: "guardian", leaderId: "guardian", leaderOrderId: "guardian" })));
+    await insertClans(["winning-clan", "other-clan"].map(id => ({ id, villageId: VILLAGE_SYNDICATE_ID, leaderId: "guardian" })));
     await insertUsers([{ userId: "guardian", isAi: true }, ...subjects.map(subject => ({ ...subject, username: subject.userId, regenAt: activityStart }))]);
   });
 

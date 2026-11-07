@@ -19,6 +19,7 @@ import * as TravelPosition from "@/layout/TravelPositionLabel";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { useGameMenu } from "@/libs/menus";
 import type { BaseServerResponse } from "@/validators/base";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 const sensoryCapture = vi.spyOn(client, "api" as never);
 const sensoryEndpoint = { useMutation: (_options: unknown) => ({ mutate: vi.fn(), isPending: false }) };
@@ -32,8 +33,6 @@ const { default: TravelPage } = await import("@/app/[shell]/travel/page");
 dynamicSpy.mockRestore();
 sensoryCapture.mockRestore();
 let actor: NonNullable<UserWithRelations>;
-const oldEvent = globalThis.Event;
-const oldCustomEvent = globalThis.CustomEvent;
 const query = { data: undefined, isLoading: false, isFetching: false };
 const mutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
 const stableUtils = new Proxy(
@@ -61,8 +60,7 @@ const push = vi.fn();
 beforeEach(() => {
   mutation.mutate.mockClear();
   mutation.isPending = false;
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   actor = {
     userId: "actor",
     status: "AWAKE",
@@ -168,10 +166,9 @@ beforeEach(() => {
 });
 afterEach(async () => {
   cleanup();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   vi.restoreAllMocks();
-  globalThis.Event = oldEvent;
-  globalThis.CustomEvent = oldCustomEvent;
+  restoreBrowserGlobals();
 });
 for (const [status, autoWakeUp, expected] of [
   ["AWAKE", true, true],

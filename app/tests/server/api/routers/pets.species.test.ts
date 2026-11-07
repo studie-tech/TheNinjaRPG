@@ -6,8 +6,9 @@ import { getPetAppearancePrompt } from "@/libs/pets/appearance";
 import * as socials from "@/libs/socials";
 import { petSpeciesRouter } from "@/server/api/routers/petSpecies";
 import { petsRouter } from "@/server/api/routers/pets";
-import { insertPetSpecies, insertUsers } from "../../../setup/factories";
+import { insertPetSpecies, insertUsers, insertUserPets } from "../../../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { overrideQuery } from "../../../setup/statements";
 
 const ownerId = "species-integration-owner";
 const species = {
@@ -52,12 +53,17 @@ describeWithDatabase("Authored species in companion flows", () => {
   it("uses staff edits in owned metadata and evolution prompts while preserving the accepted portrait", async () => {
     const database = await getTestDatabase();
     await insertPetSpecies([species]);
-    await database.insert(userPet).values({
-      id: "owned-mist-fox", userId: ownerId, name: "Miso", speciesId: species.id,
-      paletteIndex: 0, characteristicIndex: 0, auraIndex: 0,
-      rank: 2, experience: 10000, avatar: "https://example.com/accepted-miso.webp",
-      artRank: 2, generationStatus: "READY",
-    });
+    await insertUserPets([{
+      id: "owned-mist-fox",
+      userId: ownerId,
+      name: "Miso",
+      speciesId: species.id,
+      rank: 2,
+      experience: 10000,
+      avatar: "https://example.com/accepted-miso.webp",
+      artRank: 2,
+      generationStatus: "READY",
+    }]);
     const before = await database.query.userPet.findFirst();
     const data = {
       name: "Moon fox", description: "A moon fox with pearl ear tips and a ribbon-like tail",
@@ -81,17 +87,14 @@ describeWithDatabase("Authored species in companion flows", () => {
     const caller = callerForDatabase(petsRouter, ownerId, database);
     const view = await caller.getPet();
     const owner = await database.query.userData.findFirst();
-    const speciesQueries = new Proxy(database.query.petSpecies, { get(target, property, receiver) {
-      return property === "findMany" ? async () => {
-        const offered = await target.findMany();
+    const raced = overrideQuery(database, "petSpecies", {
+      findMany: async (read) => {
+        const offered = await read();
         // The request retains its offered snapshot, but payment must observe retirement.
         await database.update(petSpecies).set({ isActive: false }).where(eq(petSpecies.id, species.id));
         return offered;
-      } : Reflect.get(target, property, receiver);
-    } });
-    const raced = new Proxy(database, { get(target, property, receiver) {
-      return property === "query" ? { ...target.query, petSpecies: speciesQueries } : Reflect.get(target, property, receiver);
-    } });
+      },
+    });
     expect((await callerForDatabase(petsRouter, ownerId, raced).acquirePet({
       currency: "REPUTATION", name: "Miso", gender: "FEMALE", dayKey: view.dayKey, speciesId: species.id,
       paletteIndex: view.options.palettes[0]!.index,

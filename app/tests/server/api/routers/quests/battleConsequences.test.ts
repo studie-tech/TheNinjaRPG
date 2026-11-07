@@ -3,7 +3,8 @@ import { aiProfile, battle, userData } from "@/drizzle/schema";
 import { getNewTrackers } from "@/libs/quest";
 import { handleQuestConsequences } from "@/server/api/routers/quests";
 import { InstantStartBattleObjective } from "@/validators/objectives";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
+import { trackerQuest, trackerUser } from "../../../../setup/quest";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("quest battle rejection feedback", () => {
@@ -13,8 +14,7 @@ describeWithDatabase("quest battle rejection feedback", () => {
       { userId: "hero", status: "AWAKE", rank: "JONIN", level: 50, experience: 20000000 },
       { userId: "template", isAi: true },
     ]);
-    const client = await getTestDatabase();
-    await client.insert(aiProfile).values({ id: "Default", userId: "template", rules: [] });
+    await insertDefaultAiProfile({ userId: "template" });
   });
 
   for (const [allyId, number, message] of [
@@ -31,17 +31,12 @@ describeWithDatabase("quest battle rejection feedback", () => {
         opponentAIs: [{ ids: ["template"], number: 1 }],
         allyAIs: [{ ids: [allyId], number }],
       });
-      const user = {
-        ...hero, items: [], useritems: [], activeWars: [], completedQuests: [],
-        questData: [{ id: "quest", startAt: new Date().toISOString(), goals: [] }],
-        userQuests: [{
-          questId: "quest", completed: 0, previousAttempts: 0, previousCompletes: 0,
-          quest: {
-            id: "quest", name: "Allies", questType: "mission", hidden: false,
-            maxAttempts: 100, maxCompletes: 100, content: { objectives: [objective] },
-          },
-        }],
-      } as unknown as Parameters<typeof getNewTrackers>[0];
+      const quest = trackerQuest("quest", [objective], "mission", { name: "Allies" });
+      const user = trackerUser(
+        [quest],
+        [{ id: quest.id, startAt: new Date().toISOString(), goals: [] }],
+        { ...hero, items: [], useritems: [] },
+      );
       const tracking = getNewTrackers(user, [{ task: "any", contentId: "fight" }]);
       user.questData = tracking.trackers;
 

@@ -1,13 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { ADDITIONAL_MISSION_REWARD_MULTIPLIER, QuestRewardMetrics, type QuestType } from "@/drizzle/constants";
+import { ADDITIONAL_MISSION_REWARD_MULTIPLIER, QuestRewardMetrics } from "@/drizzle/constants";
 import { dataRouter } from "@/routers/data";
 import { collapseRewards } from "@/libs/rewards";
 import { getRewardArray } from "@/libs/objectives";
 import { masteryQuestTemplates } from "../setup/mastery";
+import { rewardOwnership, rewardUser as makeUser } from "../setup/quest";
+import { resolverOf } from "../setup/testDatabase";
 import { QuestValidator, SimpleObjective } from "@/validators/objectives";
 import { villageMissionContentError } from "@/validators/villageMission";
-import { getNewTrackers, getReward, postProcessRewards } from "@/libs/quest";
+import { getReward, postProcessRewards } from "@/libs/quest";
 import { buildRewardChoiceCards, getUnavailableRewardCards, maxRewardPicks, requiredRewardPicks, rewardFromChoiceCards, toggleRewardPick, validateRewardPicks, verifyRewardChoiceForSave } from "@/libs/rewardChoice";
 import { validateQuestRewardPackages } from "@/server/api/routers/rewardPackages";
 import { QuestReward, RewardNodeValidator, RewardPackageValidator } from "@/validators/rewardPackages";
@@ -16,14 +18,9 @@ import type { QuestContentType } from "@/validators/objectives";
 
 /** Create a normalized snapshot with distinct attachment and source identities. */
 const packageReward = (id: string, data: object) => ({ id, packageId: `source-${id}`, name: `Package ${id}`, description: "", rewards: ObjectiveReward.parse(data) });
-const ownership = { jutsuIds: new Set<string>(), bloodlineIds: new Set<string>(), badgeIds: new Set<string>(), sageModeIds: new Set<string>(), hasSageMode: false };
+const ownership = rewardOwnership();
 // These calculation tests supply a query stub and exercise the resolver without Redis middleware.
-const { resolver: questRewardStatistics } = dataRouter._def.procedures.getQuestRewardStatistics._def as unknown as {
-  resolver: (options: {
-    ctx: { drizzle: object };
-    input: { reward: (typeof QuestRewardMetrics)[number]; questTypes?: QuestType[] };
-  }) => Promise<{ value: number }[]>;
-};
+const questRewardStatistics = resolverOf(dataRouter.getQuestRewardStatistics);
 
 // Exercise the editor's actual copy handler, including the payload it sends to validation.
 const copyExpression = readFileSync(
@@ -71,50 +68,6 @@ describe("reward packages", () => {
     reward.reward_packages![0]!.rewards.reward_reputation = 10;
     expect(validateQuestRewardPackages({ ...content, reward }, { ...content, reward: QuestReward.parse({}) }, [], "CONTENT")).toBe("Package reputation must match its approved snapshot");
   });
-
-  /** Supply an active quest and player state for the real tracker and reward calculators. */
-  const makeUser = (content: Record<string, unknown>, questType = "mission") =>
-    ({
-      userId: "u1",
-      level: 50,
-      rank: "JONIN",
-      role: "USER",
-      villageId: "v1",
-      isOutlaw: false,
-      bloodlineId: null,
-      sector: 1,
-      village: { id: "v1", sector: 1 },
-      activeWars: [],
-      completedQuests: [],
-      dailyMissions: 0,
-      senseiId: null,
-      questData: [],
-      userQuests: [
-        {
-          id: "uq-1",
-          questId: "q1",
-          completed: 0,
-          previousAttempts: 0,
-          previousCompletes: 0,
-          quest: {
-            id: "q1",
-            name: "Quest",
-            questType,
-            hidden: false,
-            consecutiveObjectives: false,
-            maxAttempts: 10,
-            maxCompletes: 10,
-            content: {
-              objectives: [],
-              sceneBackground: "",
-              sceneCharacters: [],
-              ...content,
-            },
-          },
-        },
-      ],
-    }) as unknown as Parameters<typeof getNewTrackers>[0];
-
 
   it("validates and previews pet-only rewards and preserves direct and packaged choices", () => {
     expect(ObjectiveReward.safeParse({ reward_pet_experience: -1 }).success).toBe(false);

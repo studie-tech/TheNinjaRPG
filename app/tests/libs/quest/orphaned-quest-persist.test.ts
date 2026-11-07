@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { QuestTracker } from "@/validators/objectives";
+import { trackerQuest, trackerUser } from "../../setup/quest";
 
 // Regression: an orphaned QuestHistory row (its quest was deleted) resolves `uq.quest` to null.
 // filterQuestTrackersForDbPersist used to deref `uq.quest.questType` unguarded, throwing
@@ -58,55 +59,18 @@ describe("filterQuestTrackersForDbPersist — orphaned quest safety", () => {
 // filterQuestTrackersForDbPersist must not crash, so a purchase still persists its questData.
 describe("buy_item persist path tolerates an orphaned quest", () => {
   it("credits a live buy_item objective even when an orphan is present", () => {
-    const buyQuest = {
-      id: "buy-q",
-      name: "Buy Quest",
-      questType: "daily" as const,
-      hidden: false,
-      consecutiveObjectives: false,
-      maxAttempts: 100,
-      maxCompletes: 100,
-      requiredVillage: null,
-      requiredBloodlineId: null,
-      prerequisiteQuestId: null,
-      requiredLevel: null,
-      maxLevel: null,
-      medicalRank: null,
-      huntingRank: null,
-      gatheringRank: null,
-      endsAt: null,
-      content: {
-        objectives: [
-          {
-            id: "o",
-            task: "buy_item" as const,
-            value: 5,
-            buyItemIds: ["item-1"],
-            description: "",
-            successDescription: "",
-          },
-        ],
-        reward: {},
-        sceneBackground: "",
-        sceneCharacters: [],
+    const buyQuest = trackerQuest("buy-q", [
+      {
+        id: "o",
+        task: "buy_item" as const,
+        value: 5,
+        buyItemIds: ["item-1"],
+        description: "",
+        successDescription: "",
       },
-    };
-    const buyer = {
-      userId: "u1",
-      level: 50,
-      villageId: "v1",
-      isOutlaw: false,
-      bloodlineId: null,
-      sector: 1,
-      village: { id: "v1", sector: 1 },
-      activeWars: [],
-      completedQuests: [],
-      questData: [],
-      userQuests: [
-        orphanUserQuest,
-        { id: "qh-buy", questId: "buy-q", completed: 0, quest: buyQuest },
-      ],
-    } as unknown as Parameters<typeof getNewTrackers>[0];
+    ]);
+    const buyer = trackerUser([buyQuest]);
+    buyer.userQuests.unshift(orphanUserQuest as never);
 
     const { trackers } = getNewTrackers(buyer, [
       { task: "buy_item", increment: 2, contentId: "item-1" },

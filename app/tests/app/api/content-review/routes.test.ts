@@ -1,5 +1,5 @@
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import {
   badge,
   contentProposal,
@@ -10,9 +10,10 @@ import {
 import { POST } from "@/app/api/content-review/proposals/route";
 import { GET } from "@/app/api/content-review/snapshot/route";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { restoreEnvAfterEach } from "../../../setup/env";
 
 const SECRET = "test-content-review-secret";
-const originalSecret = process.env.CRON_SECRET;
+restoreEnvAfterEach("CRON_SECRET");
 
 const snapshotRequest = (auth?: string, focus = "grammar") =>
   new Request(`https://example.com/api/content-review/snapshot?focus=${focus}`, {
@@ -28,10 +29,6 @@ const submitRequest = (auth: string | undefined, body: string) =>
 
 beforeEach(() => {
   process.env.CRON_SECRET = SECRET;
-});
-
-afterEach(() => {
-  process.env.CRON_SECRET = originalSecret;
 });
 
 describe("content review routes authenticate like the crons", () => {

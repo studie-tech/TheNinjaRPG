@@ -11,6 +11,7 @@ import {
   TRPC_ANONYMOUS_HEADER,
   trpcSessionLink,
 } from "@/libs/trpcSession";
+import { deferred } from "../setup/deferred";
 
 const session = (id: string, getToken = async (): Promise<string | null> => id) =>
   ({ id, getToken }) as NonNullable<Clerk["session"]>;
@@ -136,8 +137,7 @@ describe("tRPC account lifetime", () => {
     const clerk: Pick<Clerk, "session"> = { session: session("a") };
     const scope = createTrpcSession(clerk);
     let finish!: () => void;
-    let started!: () => void;
-    const dispatched = new Promise<void>((resolve) => { started = resolve; });
+    const { promise: dispatched, resolve: started } = deferred<void>();
     const client = createTRPCClient<AppRouter>({
       links: [trpcSessionLink(scope), httpBatchLink({
         url: "http://localhost/api/trpc", transformer: superjson, headers: scope.headers,

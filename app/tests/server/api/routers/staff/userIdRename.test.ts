@@ -47,7 +47,8 @@ import {
   transferStorePurchases,
 } from "@/server/utils/purchases/grant";
 import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
-import { insertPetSpecies, insertUsers } from "../../../../setup/factories";
+import { insertPetSpecies, insertUsers, insertUserPets } from "../../../../setup/factories";
+import { characterInput, insertRegistrationContent } from "../../../../setup/registration";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import {
   callerFor,
@@ -57,9 +58,35 @@ import {
   resetTables,
 } from "../../../../setup/testDatabase";
 
+/**
+ * Apple ledger row owned by its buyer. Receipt dates stay with each test: a receipt without
+ * `grantedAt` is still pending.
+ */
+const storeReceipt = (
+  receipt: Omit<
+    typeof storePurchase.$inferInsert,
+    "id" | "originalUserId" | "store" | "rawData"
+  > &
+    Partial<Pick<typeof storePurchase.$inferInsert, "originalUserId">>,
+) => ({
+  id: nanoid(),
+  originalUserId: receipt.userId,
+  store: "APPLE" as const,
+  rawData: {},
+  ...receipt,
+});
+
 const STAFF = "rename-staff";
 const OLD_USER_ID = "rename-old-user";
 const NEW_USER_ID = "rename-new-user";
+const registerAgain = async (userId: string, tag: string, username: string) => {
+  await insertRegistrationContent(tag, STAFF);
+  const caller = await callerFor(registerRouter, userId);
+  return caller.createCharacter(
+    characterInput({ username, recruiter_userid: null, bloodlineId: `${tag}-bloodline` }),
+  );
+};
+
 describeWithDatabase("staff user-id rename", () => {
   beforeEach(async () => {
     await resetTables(
@@ -209,7 +236,7 @@ describeWithDatabase("staff user-id rename", () => {
       revision: 7,
     } satisfies typeof userPet.$inferInsert;
     await Promise.all([
-      database.insert(userPet).values([
+      insertUserPets([
         pet,
         { ...pet, id: "staff-companion", userId: STAFF },
         { ...pet, id: "parked-companion", storedExperience: 80 },
@@ -247,10 +274,7 @@ describeWithDatabase("staff user-id rename", () => {
 
   it("finishes a failed companion ownership move when the rename is retried", async () => {
     const database = await getTestDatabase();
-    await database.insert(userPet).values({
-      id: "retry-companion", userId: OLD_USER_ID, name: "Companion",
-      speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0,
-    });
+    await insertUserPets([{ id: "retry-companion", userId: OLD_USER_ID, name: "Companion" }]);
     await expect(
       callerForDatabase(staffRouter, STAFF, failStatements(database, userPet)).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
     ).rejects.toThrow("Statement failed on purpose");
@@ -265,7 +289,7 @@ describeWithDatabase("staff user-id rename", () => {
 
   it("retains rename intent without moving ownership when the character claim fails, then retries", async () => {
     const database = await getTestDatabase();
-    await database.insert(userPet).values({ id: "claim-companion", userId: OLD_USER_ID, name: "Companion", speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0 });
+    await insertUserPets([{ id: "claim-companion", userId: OLD_USER_ID, name: "Companion" }]);
     await database.insert(title).values({ id: "claim-title", name: "Private title", legacyOwnerId: OLD_USER_ID });
     await database.insert(userTitle).values({ userId: OLD_USER_ID, titleId: "claim-title" });
     await database.insert(huntingSession).values({ userId: OLD_USER_ID, id: "hunt-session", habitatId: "forest", contractId: "boar", sector: 1, startedAt: new Date() });
@@ -398,21 +422,15 @@ describeWithDatabase("staff user-id rename", () => {
         pushToken: nanoid(),
         endsAt: new Date(Date.now() + 60_000),
       }),
-      database.insert(storePurchase).values({
-        id: nanoid(),
+      database.insert(storePurchase).values(storeReceipt({
         userId: OLD_USER_ID,
-        originalUserId: OLD_USER_ID,
         transactionId: "deleted-user-ledger",
         productId: "tnr_reps_tier1",
-        store: "APPLE",
         reputationPoints: 8,
-        federalStatus: null,
-        isSandbox: false,
         acceptedAt: new Date(),
         grantedAt: new Date(),
         purchasedAt: new Date(),
-        rawData: {},
-      }),
+      })),
     ]);
 
     await deleteUser(database, OLD_USER_ID);
@@ -525,38 +543,7 @@ describeWithDatabase("staff user-id rename", () => {
     // of the game permanently, with no way back short of a new email address.
     const database = await getTestDatabase();
     await deleteUser(database, OLD_USER_ID);
-    await Promise.all([
-      database.insert(village).values({
-        id: "reclaim-horizon",
-        name: "Horizon",
-        sector: 1,
-        kageId: STAFF,
-      }),
-      database.insert(bloodline).values({
-        id: "reclaim-bloodline",
-        name: "Reclaim Bloodline",
-        image: "/bloodline.png",
-        description: "test",
-        effects: [],
-        rank: "D",
-      }),
-    ]);
-    const caller = await callerFor(registerRouter, OLD_USER_ID);
-    const created = await caller.createCharacter({
-      username: "Restarted",
-      gender: "Male",
-      hair_color: "Black",
-      eye_color: "Blue",
-      skin_color: "Light",
-      attribute_1: "Soft features",
-      attribute_2: "Glasses",
-      attribute_3: "Short Hair",
-      read_tos: true,
-      read_privacy: true,
-      read_earlyaccess: true,
-      recruiter_userid: null,
-      bloodlineId: "reclaim-bloodline",
-    });
+    const created = await registerAgain(OLD_USER_ID, "reclaim", "Restarted");
     expect(created.success).toBe(true);
     const reborn = await database.query.userData.findFirst({
       columns: { userId: true, earnedExperience: true },
@@ -574,70 +561,28 @@ describeWithDatabase("staff user-id rename", () => {
     const database = await getTestDatabase();
     const purchasedAt = new Date();
     await database.insert(storePurchase).values([
-      {
-        id: nanoid(),
+      storeReceipt({
         userId: OLD_USER_ID,
-        originalUserId: OLD_USER_ID,
         transactionId: "reps-spent-before-deletion",
         productId: "tnr_reps_tier1",
-        store: "APPLE",
         reputationPoints: 8,
-        federalStatus: null,
-        isSandbox: false,
         acceptedAt: purchasedAt,
         grantedAt: purchasedAt,
         purchasedAt,
-        rawData: {},
-      },
-      {
-        id: nanoid(),
+      }),
+      storeReceipt({
         userId: OLD_USER_ID,
-        originalUserId: OLD_USER_ID,
         transactionId: "gold-still-paid-for",
         productId: "tnr_federal_gold",
-        store: "APPLE",
         federalStatus: "GOLD",
-        isSandbox: false,
         acceptedAt: purchasedAt,
         grantedAt: purchasedAt,
         purchasedAt,
         expiresAt: new Date(purchasedAt.getTime() + 20 * 24 * 60 * 60 * 1000),
-        rawData: {},
-      },
+      }),
     ]);
     await deleteUser(database, OLD_USER_ID);
-    await Promise.all([
-      database.insert(village).values({
-        id: "registration-horizon",
-        name: "Horizon",
-        sector: 1,
-        kageId: STAFF,
-      }),
-      database.insert(bloodline).values({
-        id: "registration-bloodline",
-        name: "Registration Bloodline",
-        image: "/bloodline.png",
-        description: "test",
-        effects: [],
-        rank: "D",
-      }),
-    ]);
-    const caller = await callerFor(registerRouter, OLD_USER_ID);
-    const created = await caller.createCharacter({
-      username: "Reborn",
-      gender: "Male",
-      hair_color: "Black",
-      eye_color: "Blue",
-      skin_color: "Light",
-      attribute_1: "Soft features",
-      attribute_2: "Glasses",
-      attribute_3: "Short Hair",
-      read_tos: true,
-      read_privacy: true,
-      read_earlyaccess: true,
-      recruiter_userid: null,
-      bloodlineId: "registration-bloodline",
-    });
+    const created = await registerAgain(OLD_USER_ID, "registration", "Reborn");
     expect(created.success).toBe(true);
     const [reborn, alias] = await Promise.all([
       database.query.userData.findFirst({
@@ -663,63 +608,22 @@ describeWithDatabase("staff user-id rename", () => {
 
   const DAY = 86_400_000;
 
-  const registerAgain = async (userId: string, tag: string, username: string) => {
-    const database = await getTestDatabase();
-    await Promise.all([
-      database.insert(village).values({
-        id: `${tag}-horizon`,
-        name: "Horizon",
-        sector: 1,
-        kageId: STAFF,
-      }),
-      database.insert(bloodline).values({
-        id: `${tag}-bloodline`,
-        name: `${tag} bloodline`,
-        image: "/bloodline.png",
-        description: "test",
-        effects: [],
-        rank: "D",
-      }),
-    ]);
-    const caller = await callerFor(registerRouter, userId);
-    return await caller.createCharacter({
-      username,
-      gender: "Male",
-      hair_color: "Black",
-      eye_color: "Blue",
-      skin_color: "Light",
-      attribute_1: "Soft features",
-      attribute_2: "Glasses",
-      attribute_3: "Short Hair",
-      read_tos: true,
-      read_privacy: true,
-      read_earlyaccess: true,
-      recruiter_userid: null,
-      bloodlineId: `${tag}-bloodline`,
-    });
-  };
-
   it("records a renewal that lands while the character is gone, and the new character inherits it", async () => {
     // The old period ends and the store bills the next one between the deletion and the
     // new character. Dropping that renewal would leave the returning subscriber with
     // nothing live until the period after, while still being billed.
     const database = await getTestDatabase();
     const now = Date.now();
-    await database.insert(storePurchase).values({
-      id: nanoid(),
+    await database.insert(storePurchase).values(storeReceipt({
       userId: OLD_USER_ID,
-      originalUserId: OLD_USER_ID,
       transactionId: "period-before-deletion",
       productId: "tnr_federal_gold",
-      store: "APPLE",
       federalStatus: "GOLD",
-      isSandbox: false,
       acceptedAt: new Date(now - 20 * DAY),
       grantedAt: new Date(now - 20 * DAY),
       purchasedAt: new Date(now - 20 * DAY),
       expiresAt: new Date(now - 1),
-      rawData: {},
-    });
+    }));
     await deleteUser(database, OLD_USER_ID);
     await expect(
       grantStorePurchase(database, {
@@ -780,21 +684,16 @@ describeWithDatabase("staff user-id rename", () => {
     // returning character would be handed a tier that was cancelled or refunded.
     const database = await getTestDatabase();
     const now = Date.now();
-    await database.insert(storePurchase).values({
-      id: nanoid(),
+    await database.insert(storePurchase).values(storeReceipt({
       userId: OLD_USER_ID,
-      originalUserId: OLD_USER_ID,
       transactionId: "ended-in-window",
       productId: "tnr_federal_gold",
-      store: "APPLE",
       federalStatus: "GOLD",
-      isSandbox: false,
       acceptedAt: new Date(now - 20 * DAY),
       grantedAt: new Date(now - 20 * DAY),
       purchasedAt: new Date(now - 20 * DAY),
       expiresAt: new Date(now + 10 * DAY),
-      rawData: {},
-    });
+    }));
     await deleteUser(database, OLD_USER_ID);
     // No transaction id, the shape that used to land under the tombstone string.
     await revokeFederalStatus(database, OLD_USER_ID, {
@@ -842,21 +741,16 @@ describeWithDatabase("staff user-id rename", () => {
     const now = Date.now();
     await insertUsers([{ userId: "transfer-source", username: "transfer-src" }]);
     await Promise.all([
-      database.insert(storePurchase).values({
-        id: nanoid(),
+      database.insert(storePurchase).values(storeReceipt({
         userId: "transfer-source",
-        originalUserId: "transfer-source",
         transactionId: "moves-to-deleted",
         productId: "tnr_federal_gold",
-        store: "APPLE",
         federalStatus: "GOLD",
-        isSandbox: false,
         acceptedAt: new Date(now - 5 * DAY),
         grantedAt: new Date(now - 5 * DAY),
         purchasedAt: new Date(now - 5 * DAY),
         expiresAt: new Date(now + 25 * DAY),
-        rawData: {},
-      }),
+      })),
       database
         .update(userData)
         .set({ federalStatus: "GOLD" })
@@ -930,35 +824,24 @@ describeWithDatabase("staff user-id rename", () => {
     const database = await getTestDatabase();
     const now = Date.now();
     await database.insert(storePurchase).values([
-      {
-        id: nanoid(),
+      storeReceipt({
         userId: OLD_USER_ID,
-        originalUserId: OLD_USER_ID,
         transactionId: "gold-across-retry",
         productId: "tnr_federal_gold",
-        store: "APPLE",
         federalStatus: "GOLD",
-        isSandbox: false,
         acceptedAt: new Date(now - DAY),
         grantedAt: new Date(now - DAY),
         purchasedAt: new Date(now - DAY),
         expiresAt: new Date(now + 29 * DAY),
-        rawData: {},
-      },
-      {
-        id: nanoid(),
+      }),
+      storeReceipt({
         userId: OLD_USER_ID,
-        originalUserId: OLD_USER_ID,
         transactionId: "reps-across-retry",
         productId: "tnr_reps_tier1",
-        store: "APPLE",
         reputationPoints: 8,
-        federalStatus: null,
-        isSandbox: false,
         acceptedAt: new Date(now),
         purchasedAt: new Date(now),
-        rawData: {},
-      },
+      }),
     ]);
     await deleteUser(database, OLD_USER_ID);
     await database
@@ -980,20 +863,14 @@ describeWithDatabase("staff user-id rename", () => {
       columns: { reputationPoints: true },
       where: eq(userData.userId, OLD_USER_ID),
     });
-    await database.insert(storePurchase).values({
-      id: nanoid(),
+    await database.insert(storePurchase).values(storeReceipt({
       userId: OLD_USER_ID,
-      originalUserId: OLD_USER_ID,
       transactionId: "reps-pending-on-retry",
       productId: "tnr_reps_tier1",
-      store: "APPLE",
       reputationPoints: 8,
-      federalStatus: null,
-      isSandbox: false,
       acceptedAt: new Date(),
       purchasedAt: new Date(),
-      rawData: {},
-    });
+    }));
     await expect(
       registerAgain(OLD_USER_ID, "retry-existing", "Existing"),
     ).resolves.toEqual({
@@ -1256,20 +1133,14 @@ describeWithDatabase("staff user-id rename", () => {
     });
     const transactionId = nanoid();
     const purchasedAt = new Date();
-    await database.insert(storePurchase).values({
-      id: nanoid(),
+    await database.insert(storePurchase).values(storeReceipt({
       userId: OLD_USER_ID,
-      originalUserId: OLD_USER_ID,
       transactionId,
       productId: "tnr_reps_tier1",
-      store: "APPLE",
       reputationPoints: 8,
-      federalStatus: null,
-      isSandbox: false,
       acceptedAt: new Date(),
       purchasedAt,
-      rawData: {},
-    });
+    }));
 
     await expect(
       grantStorePurchase(database, {

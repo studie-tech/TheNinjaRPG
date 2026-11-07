@@ -9,15 +9,12 @@ import * as profileBox from "@/layout/MenuBoxProfile";
 import * as statusBar from "@/layout/StatusBar";
 import type { BattleState } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 let isDesktop = true;
-const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-  });
+  installBrowserGlobals();
   vi.spyOn(mediaQuery, "useMediaQuery").mockImplementation(() => isDesktop);
   vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
   vi.spyOn(pools, "useEffectivePools").mockReturnValue({
@@ -37,14 +34,11 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   vi.restoreAllMocks();
   document.body.innerHTML = "";
   document.body.style.overflow = "";
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 
 const fighter = (userId: string, direction: "left" | "right", extra = {}) => ({

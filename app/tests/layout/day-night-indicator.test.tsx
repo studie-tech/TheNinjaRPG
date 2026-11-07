@@ -7,13 +7,13 @@ import { getWorldCyclePosition } from "@/libs/dayNight";
 import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import type { UserWithRelations } from "@/routers/profile";
 import * as userContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const cycleStart = WORLD_CYCLE_SECONDS * 1000 * 100;
 const timeDiff = 90_000;
 let now = 0;
 const onChange = vi.fn();
 const onWeatherChange = vi.fn();
-const originalCustomEvent = globalThis.CustomEvent;
 const UserContext = createContext<{ timeDiff: number; data: UserWithRelations }>({ timeDiff: 0, data: undefined });
 
 /** Provider-controlled map preview with the real world clock. */
@@ -32,7 +32,7 @@ const PreviewMap = ({ role = "OWNER", editable = true, initialDate = null, initi
 };
 
 beforeEach(() => {
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals({ events: ["CustomEvent"] });
   // Staff access and the server-clock offset belong to this fixture's provider.
   vi.spyOn(userContext, "useUserInfo").mockImplementation(() => useContext(UserContext) as never);
   vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
@@ -44,7 +44,7 @@ beforeEach(() => {
   now = cycleStart + WORLD_DAY_SECONDS * 500 + timeDiff;
   vi.spyOn(Date, "now").mockImplementation(() => now);
 });
-afterEach(() => { cleanup(); globalThis.CustomEvent = originalCustomEvent; vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); restoreBrowserGlobals(); vi.restoreAllMocks(); });
 
 describe("staff lighting preview", () => {
   it("does not tick the preview popover while the displayed time is frozen", () => {
@@ -56,12 +56,12 @@ describe("staff lighting preview", () => {
     expect(rendered).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
-  it.each(["rain", "snow", "sandstorm"] as const)("previews %s locally, adjusts strength and restores regional conditions", (kind) => {
+  it.each(["clouds", "rain", "snow", "sandstorm"] as const)("previews %s locally, adjusts strength and restores regional conditions", (kind) => {
     const view = render(<PreviewMap />);
     fireEvent.click(view.getByRole("button", { name: "Preview map lighting and weather" }));
     const select = view.getByRole("combobox", { name: "Weather" });
     fireEvent.keyDown(select, { key: "ArrowDown" });
-    const labels = { rain: "Rain", snow: "Snow", sandstorm: "Sandstorm" };
+    const labels = { clouds: "Cloud shadows", rain: "Rain", snow: "Snow", sandstorm: "Sandstorm" };
     fireEvent.click(view.getByRole("option", { name: labels[kind] }));
     expect(onWeatherChange.mock.calls.at(-1)![0]).toEqual({ kind, intensity: .65 });
     fireEvent.change(view.getByRole("slider", { name: "Weather strength" }), { target: { value: "25" } });

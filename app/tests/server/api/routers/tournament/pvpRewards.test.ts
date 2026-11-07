@@ -5,7 +5,7 @@ import { Pusher } from "@/libs/pusher";
 import { updateRewards } from "@/server/api/routers/quests";
 import { syncTournamentState, tournamentRouter } from "@/server/api/routers/tournament";
 import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertClans } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("tournament PvP reward boost", () => {
@@ -15,7 +15,7 @@ describeWithDatabase("tournament PvP reward boost", () => {
       { userId: "prize-winner", username: "prize-winner", clanId: "prize-clan", pvpExperience: 1400, money: 0 },
       { userId: "prize-other", username: "prize-other", pvpExperience: 600 },
     ]);
-    await (await getTestDatabase()).insert(clan).values({ id: "prize-clan", name: "Prize clan", image: "", villageId: "", founderId: "prize-winner", leaderId: "prize-winner", leaderOrderId: "", bank: 1000 });
+    await insertClans([{ id: "prize-clan", name: "Prize clan", villageId: "", leaderId: "prize-winner", bank: 1000 }]);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());

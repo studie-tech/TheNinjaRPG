@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { PET_GENERATION_LEASE_MS, PET_MAX_GENERATION_ATTEMPTS } from "@/drizzle/constants";
 import { actionLog, userData, userPet, type UserPetInsert } from "@/drizzle/schema";
 import { profileRouter } from "@/routers/profile";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertUserPets } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -12,12 +12,21 @@ const input = { userId: "pet-owner", petId: "support-pet", reason: "Restore atte
 /** A failed companion keeps all authored identity and progression during support recovery. */
 const createPet = async (patch: Partial<UserPetInsert> = {}) => {
   const database = await getTestDatabase();
-  await database.insert(userPet).values({
-    id: input.petId, userId: input.userId, name: "Kuro", speciesId: "crow",
-    paletteIndex: 2, characteristicIndex: 3, auraIndex: 4,
-    rank: 2, experience: 1000, generationStatus: "FAILED", generationAttempts: PET_MAX_GENERATION_ATTEMPTS,
-    generationStartedAt: new Date(), ...patch,
-  });
+  await insertUserPets([{
+    id: input.petId,
+    userId: input.userId,
+    name: "Kuro",
+    speciesId: "crow",
+    paletteIndex: 2,
+    characteristicIndex: 3,
+    auraIndex: 4,
+    rank: 2,
+    experience: 1000,
+    generationStatus: "FAILED",
+    generationAttempts: PET_MAX_GENERATION_ATTEMPTS,
+    generationStartedAt: new Date(),
+    ...patch,
+  }]);
   return (await database.query.userPet.findFirst({ where: eq(userPet.id, input.petId) }))!;
 };
 

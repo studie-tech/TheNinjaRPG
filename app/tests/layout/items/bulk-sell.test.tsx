@@ -12,19 +12,14 @@ import * as inspector from "@/layout/items/ItemInspector";
 import { ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import * as mastery from "@/libs/mastery";
 import * as skills from "@/libs/skillRequirements";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
-const originalResizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
 let sellMany: ReturnType<typeof vi.fn>;
 let isSelling = false;
 let finish: (result: { soldUserItemIds: string[]; refused: { userItemId: string }[] }) => void;
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
-  }
   window.localStorage.clear();
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -40,9 +35,8 @@ beforeEach(() => {
     return { sellMany, isSelling };
   }) as typeof bulkSell.useBulkSellItems);
   vi.spyOn(itemActions, "useItemActions").mockReturnValue({ equip: vi.fn(), merge: vi.fn(), isEquipping: false, isPending: false } as never);
-  Object.defineProperty(globalThis, "ResizeObserver", {
-    configurable: true,
-    value: class {
+  installBrowserGlobals({
+    resizeObserver: class {
       constructor(private readonly callback: (entries: { contentRect: { width: number } }[]) => void) {}
       observe() {
         this.callback([{ contentRect: { width: 1000 } }]);
@@ -70,13 +64,7 @@ afterEach(() => {
   window.localStorage.clear();
   if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
   else Reflect.deleteProperty(window, "matchMedia");
-  if (originalResizeObserver) Object.defineProperty(globalThis, "ResizeObserver", originalResizeObserver);
-  else Reflect.deleteProperty(globalThis, "ResizeObserver");
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const stack = (name: string, rarity: string, extra: { cost?: number; quantity?: number; isEventItem?: boolean } = {}) =>

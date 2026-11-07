@@ -7,6 +7,8 @@ import type { AppRouter } from "@/api/root";
 import { createTrpcSession, trpcSessionLink } from "@/libs/trpcSession";
 import type { UserWithRelations } from "@/routers/profile";
 import type { RegisterDeviceInput } from "@/validators/push";
+import { deferred } from "../setup/deferred";
+import { capacitorWindow, installCapacitor, removeCapacitor } from "../setup/native";
 
 interface NativeLifecycleMocks {
   actionListeners: Array<(payload: unknown) => void>;
@@ -94,14 +96,6 @@ import { useNativePush } from "@/hooks/useNativePush";
 
 const TOKEN = "a".repeat(64);
 const mocks = getMocks();
-const capacitorWindow = window as typeof window & {
-  Capacitor?: {
-    getPlatform: () => string;
-    isNativePlatform: () => boolean;
-    Plugins: Record<string, Record<string, unknown>>;
-  };
-};
-
 const profile = (status: "AWAKE" | "HOSPITALIZED", userId = "user-a") =>
   ({
     regenAt: new Date(),
@@ -137,44 +131,40 @@ beforeEach(() => {
     const remove = subscribe(listeners, callback as (payload: T) => void);
     return { remove: async () => remove() };
   };
-  capacitorWindow.Capacitor = {
-    getPlatform: () => "ios",
-    isNativePlatform: () => true,
-    Plugins: {
-      App: {
-        addListener: (_event: string, callback: unknown) =>
-          listener(mocks.stateListeners, callback),
-      },
-      PushNotifications: {
-        addListener: (event: string, callback: unknown) => {
-          if (event === "registration") {
-            return listener(mocks.registrationListeners, callback);
-          }
-          if (event === "registrationError") {
-            return listener(mocks.registrationErrorListeners, callback);
-          }
-          return listener(mocks.actionListeners, callback);
-        },
-        checkPermissions: async () => ({
-          receive: await (mocks.pushCheckPermissions as () => Promise<string>)(),
-        }),
-        register: mocks.pushRegister,
-      },
-      TNRLiveActivity: {
-        addListener: (_event: string, callback: unknown) =>
-          listener(mocks.liveTokenListeners, callback),
-        end: mocks.endLiveActivity,
-        endKind: async (options?: { kind?: string }) =>
-          (mocks.endKind as (kind?: string) => Promise<void>)(options?.kind),
-        start: mocks.liveStart,
-      },
+  installCapacitor({
+    App: {
+      addListener: (_event: string, callback: unknown) =>
+        listener(mocks.stateListeners, callback),
     },
-  };
+    PushNotifications: {
+      addListener: (event: string, callback: unknown) => {
+        if (event === "registration") {
+          return listener(mocks.registrationListeners, callback);
+        }
+        if (event === "registrationError") {
+          return listener(mocks.registrationErrorListeners, callback);
+        }
+        return listener(mocks.actionListeners, callback);
+      },
+      checkPermissions: async () => ({
+        receive: await (mocks.pushCheckPermissions as () => Promise<string>)(),
+      }),
+      register: mocks.pushRegister,
+    },
+    TNRLiveActivity: {
+      addListener: (_event: string, callback: unknown) =>
+        listener(mocks.liveTokenListeners, callback),
+      end: mocks.endLiveActivity,
+      endKind: async (options?: { kind?: string }) =>
+        (mocks.endKind as (kind?: string) => Promise<void>)(options?.kind),
+      start: mocks.liveStart,
+    },
+  });
 });
 
 afterEach(() => {
   cleanup();
-  delete capacitorWindow.Capacitor;
+  removeCapacitor();
 });
 
 describe("native push ownership", () => {
@@ -187,14 +177,8 @@ describe("native push ownership", () => {
     };
     const credential = "w".repeat(32);
     let device: { token: string; widgetToken: string } | undefined;
-    let finishRegistration!: () => void;
-    let started!: () => void;
-    const dispatched = new Promise<void>((resolve) => {
-      started = resolve;
-    });
-    const responseReady = new Promise<void>((resolve) => {
-      finishRegistration = resolve;
-    });
+    const { promise: dispatched, resolve: started } = deferred<void>();
+    const { promise: responseReady, resolve: finishRegistration } = deferred<void>();
     const requests: { path: string; authorization: string | null }[] = [];
     let exposedWidgetToken: string | null | undefined;
     const createClient = () => {

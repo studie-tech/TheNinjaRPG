@@ -12,7 +12,13 @@ import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { CollectItem, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuestHistory, insertQuests, insertUsers } from "../setup/factories";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+  insertUserVotes,
+} from "../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
 
 const playerId = "reward-inventory-player";
@@ -41,7 +47,7 @@ describeWithDatabase("quest reward inventory reconciliation", () => {
       { id: "reward-inventory-tier", questType: "tier", content: { ...content, objectives: [SimpleObjective.parse({ id: "train", task: "stats_trained", value: 10000 })] } },
     ]);
     await insertQuestHistory([{ userId: playerId, questId: "reward-inventory-tier", questType: "tier" }]);
-    await (await getTestDatabase()).insert(userVote).values({ id: "reward-inventory-vote", userId: playerId, secret: "secret01", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId: playerId }]);
   });
   afterEach(() => invalidatePublishedMapCache());
 

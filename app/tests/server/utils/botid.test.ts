@@ -34,6 +34,7 @@ import {
   trpcPathsFromUrl,
   withBotIdGuard,
 } from "@/server/utils/botid";
+import { restoreEnvAfterEach } from "../../setup/env";
 
 const human = { isHuman: true, isBot: false, isVerifiedBot: false, bypassed: false };
 const bot = { isHuman: false, isBot: true, isVerifiedBot: false, bypassed: false };
@@ -48,7 +49,7 @@ const guardedMutation = (verdict: object) => {
 };
 
 const originalSetting = env.BOTID_ENFORCE;
-const originalVercelEnv = process.env.VERCEL_ENV;
+restoreEnvAfterEach("VERCEL_ENV");
 let warn: { mock: { calls: unknown[][] }; mockRestore: () => void };
 let info: { mock: { calls: unknown[][] }; mockRestore: () => void };
 
@@ -81,8 +82,6 @@ afterEach(() => {
   info.mockRestore();
   checkBotId.mockReset();
   env.BOTID_ENFORCE = originalSetting;
-  if (originalVercelEnv === undefined) delete process.env.VERCEL_ENV;
-  else process.env.VERCEL_ENV = originalVercelEnv;
 });
 
 describe("BotID check level", () => {
@@ -428,14 +427,15 @@ describe("BotID timing", () => {
   });
 });
 
+/** The client-side matcher botid@1.5 applies to a request's pathname. */
+const clientRegex = (routePath: string) =>
+  new RegExp(
+    `^${routePath.replace(/[.?+^$[\]\\(){}|-]/g, "\\$&").split("*").join(".*")}$`,
+  );
+
 describe("BotID protected procedures", () => {
-  /** The client-side matcher botid@1.5 applies to a request's pathname. */
-  const clientMatches = (routePath: string, pathname: string) =>
-    new RegExp(
-      `^${routePath.replace(/[.?+^$[\]\\(){}|-]/g, "\\$&").split("*").join(".*")}$`,
-    ).test(pathname);
   const matchedBy = (pathname: string) =>
-    BOTID_PROTECTED_ROUTES.filter((route) => clientMatches(route.path, pathname));
+    BOTID_PROTECTED_ROUTES.filter((route) => clientRegex(route.path).test(pathname));
 
   it("lists each procedure once", () => {
     expect(new Set(BOTID_PROTECTED_PROCEDURES).size).toBe(BOTID_PROTECTED_PROCEDURES.length);
@@ -465,10 +465,6 @@ describe("BotID protected procedures", () => {
 });
 
 describe("BotID client matcher with mixed check levels", () => {
-  const clientRegex = (routePath: string) =>
-    new RegExp(
-      `^${routePath.replace(/[.?+^$[\]\\(){}|-]/g, "\\$&").split("*").join(".*")}$`,
-    );
   /** botid@1.5 attaches the challenge of the first matching protect entry. */
   const firstMatch = (pathname: string) =>
     BOTID_PROTECTED_ROUTES.find((route) => clientRegex(route.path).test(pathname));

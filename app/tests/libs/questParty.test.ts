@@ -11,6 +11,10 @@ const fixture = (task = "stats_trained", value = 10) => {
   const party = { isPublic: false, battleId: null, createdAt: new Date(), id: "party", questId: "quest", leaderId: "one", memberIds: ["one", "two"], invitedUserIds: [], tracker: QuestTracker.parse({ id: "quest", goals: [goal] }), contributions: {}, version: 0 } as QuestParty;
   return { goal, quest, party };
 };
+const partyUser = (quest: { id: string }, questData: unknown[], patch: object) =>
+  ({ level: 50, rank: "JONIN", role: "USER", status: "AWAKE", userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData, ...patch }) as unknown as Parameters<typeof getNewTrackers>[0];
+const itemObjective = (task: "collect_item" | "deliver_item") =>
+  AllObjectives.parse({ id: "goal", task, ...(task === "collect_item" ? { collectItemIds: ["scroll"] } : { deliverItemIds: ["scroll"] }), item_name: "Scroll", sector: 1, longitude: 1, latitude: 1, sectorType: "specific", locationType: "specific" });
 const contributor = (party: QuestParty, userId: string, value: number) => ({ userId, questData: [{ ...projectPartyTracker(party), party: { id: party.id, generation: party.tracker.generation ?? 0, contributions: [ObjectiveTracker.parse({ id: "goal", value })] } }] });
 
 describe("quest team progress", () => {
@@ -21,7 +25,7 @@ describe("quest team progress", () => {
       AllObjectives.parse({ id: "goal", task: "defeat_opponents", overworldPlacementId: "deleted", opponentAIs: [{ ids: ["enemy"], number: 1 }], failObjectiveId: "recovery" }),
       AllObjectives.parse({ id: "recovery", task: "stats_trained", value: 10 }),
     ];
-    const user = { userId: "one", questPartyId: party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [projectPartyTracker(party)] } as unknown as Parameters<typeof getNewTrackers>[0];
+    const user = partyUser(quest, [projectPartyTracker(party)], { userId: "one", questPartyId: party.id });
     const result = getNewTrackers(user, [], undefined, new Map());
     expect(result.consequences.some((entry) => entry.type === "fail_quest")).toBe(false);
     const shared = mergePartyProgress(party, [{ userId: user.userId, questData: result.trackers }], quest);
@@ -98,14 +102,14 @@ describe("quest team progress", () => {
   });
   it("drops party metadata when continuing solo after leaving", () => {
     const { quest, party } = fixture();
-    const user = { userId: "one", level: 50, rank: "JONIN", role: "USER", status: "AWAKE", questPartyId: null, userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [projectPartyTracker(party)] } as unknown as Parameters<typeof getNewTrackers>[0];
+    const user = partyUser(quest, [projectPartyTracker(party)], { userId: "one", questPartyId: null });
     expect(getNewTrackers(user, [{ task: "stats_trained", increment: 1 }]).trackers[0]?.party).toBeUndefined();
   });
   it("completed helpers emit no reward or completion events to other quests", () => {
     const { quest, party } = fixture();
     party.tracker.goals[0]!.done = true;
     const other = { ...quest, id: "other", content: { ...quest.content, objectives: [AllObjectives.parse({ id: "other-goal", task: "complete_specific_quest", completeQuestIds: [quest.id], value: 10 })] } };
-    const user = { userId: "one", level: 50, rank: "JONIN", role: "USER", status: "AWAKE", questPartyId: party.id, userQuests: [{ id: `party-${party.id}`, questId: quest.id, completed: 0, previousCompletes: 0, quest }, { id: "other-history", questId: other.id, completed: 0, previousCompletes: 0, quest: other }], completedQuests: [], questData: [projectPartyTracker(party)], items: [] } as unknown as Parameters<typeof getReward>[0];
+    const user = partyUser(quest, [projectPartyTracker(party)], { userId: "one", questPartyId: party.id, items: [], userQuests: [{ id: `party-${party.id}`, questId: quest.id, completed: 0, previousCompletes: 0, quest }, { id: "other-history", questId: other.id, completed: 0, previousCompletes: 0, quest: other }] });
     const result = getReward(user, quest.id);
     expect(result.resolved).toBe(true);
     expect(result.rewards.reward_money).toBe(0);
@@ -131,7 +135,7 @@ it("each member starts shared follow-on quests once", () => {
   const { quest, party } = fixture();
   quest.content.objectives = [AllObjectives.parse({ id: "goal", task: "new_quest", newQuestIds: ["next"] })];
   party.tracker.goals[0]!.done = true;
-  const user = { userId: "one", questPartyId: party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [projectPartyTracker(party)] } as unknown as Parameters<typeof getNewTrackers>[0];
+  const user = partyUser(quest, [projectPartyTracker(party)], { userId: "one", questPartyId: party.id });
   const first = getNewTrackers(user, [{ task: "any" }], undefined, undefined, undefined, true);
   expect(first.consequences.some((entry) => entry.type === "start_quest" && entry.ids.includes("next"))).toBe(true);
   user.questData = [projectPartyTracker(party, first.trackers[0])];
@@ -142,7 +146,7 @@ it("replacements receive undelivered quest items once and shared delivery remove
   const { quest, party } = fixture();
   quest.content.objectives = [AllObjectives.parse({ id: "goal", task: "collect_item", collectItemIds: ["scroll"], item_name: "Secret scroll", sector: 1, longitude: 1, latitude: 1 }), AllObjectives.parse({ id: "delivery", task: "deliver_item", deliverItemIds: ["scroll"], item_name: "Secret scroll", sector: 2, longitude: 1, latitude: 1 })];
   party.tracker.goals = [ObjectiveTracker.parse({ id: "goal", done: true }), ObjectiveTracker.parse({ id: "delivery" })];
-  const user = { userId: "replacement", questPartyId: party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", sector: 3, longitude: 1, latitude: 1, items: [], userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [projectPartyTracker(party)] } as unknown as Parameters<typeof getNewTrackers>[0];
+  const user = partyUser(quest, [projectPartyTracker(party)], { userId: "replacement", questPartyId: party.id, sector: 3, longitude: 1, latitude: 1, items: [] });
   const first = getNewTrackers(user, [{ task: "any" }], undefined, undefined, undefined, true);
   expect(first.consequences.filter((c) => c.type === "add_item")).toEqual([{ type: "add_item", ids: ["scroll"] }]);
   user.questData = [projectPartyTracker(party, first.trackers[0])];
@@ -173,7 +177,7 @@ it("retains the undelivered quantity when two shared collections reuse an item b
     ];
     const tracker = projectPartyTracker(party);
     if (detached) delete tracker.party;
-    const user = { userId: "replacement", questPartyId: detached ? null : party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", sector: 3, longitude: 1, latitude: 1, items: [], userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [tracker] } as unknown as Parameters<typeof getNewTrackers>[0];
+    const user = partyUser(quest, [tracker], { userId: "replacement", questPartyId: detached ? null : party.id, sector: 3, longitude: 1, latitude: 1, items: [] });
     const result = getNewTrackers(user, [{ task: "any" }], undefined, undefined, undefined, true);
     expect(result.consequences.filter((consequence) => consequence.type === "add_item")).toEqual([{ type: "add_item", ids: ["scroll"] }]);
     expect(result.trackers[0]?.goals.filter((goal) => goal.done).every((goal) => goal.partyEffectsApplied)).toBe(true);
@@ -204,7 +208,7 @@ for (const consecutive of [false, true]) for (const detached of [false, true]) f
     const tracker = projectPartyTracker(party);
     tracker.goals.find((goal) => goal.id === "first")!.partyEffectsApplied = applied;
     if (detached) delete tracker.party;
-    const user = { userId: "helper", questPartyId: detached ? null : party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", sector: 3, longitude: 1, latitude: 1, items: [], userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [tracker] } as unknown as Parameters<typeof getNewTrackers>[0];
+    const user = partyUser(quest, [tracker], { userId: "helper", questPartyId: detached ? null : party.id, sector: 3, longitude: 1, latitude: 1, items: [] });
     const result = getNewTrackers(user, [{ task: "any" }], undefined, undefined, undefined, true);
     expect(result.consequences.filter((consequence) => consequence.type === "add_item")).toEqual([]);
     expect(result.consequences.filter((consequence) => consequence.type === "remove_item")).toEqual(Array.from({ length: applied ? 2 : 1 }, () => ({ type: "remove_item", ids: ["scroll"] })));
@@ -246,7 +250,7 @@ it("tracker-only processing defers personal team effects before and after depart
     party.tracker.goals[0]!.done = true;
     const tracker = projectPartyTracker(party);
     if (detached) delete tracker.party;
-    const user = { userId: "one", questPartyId: detached ? null : party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [tracker] } as unknown as Parameters<typeof getNewTrackers>[0];
+    const user = partyUser(quest, [tracker], { userId: "one", questPartyId: detached ? null : party.id });
     const deferred = getNewTrackers(user, [{ task: "stats_trained", increment: 1 }]);
     expect(deferred.consequences.some((c) => c.type === "start_quest")).toBe(false);
     expect(deferred.trackers[0]?.goals[0]?.partyEffectsApplied).toBe(false);
@@ -258,7 +262,7 @@ it("tracker-only processing defers personal team effects before and after depart
 it("collects a location item once when reward checking emits both any and collect_item", () => {
   const { quest, party } = fixture();
   quest.content.objectives = [AllObjectives.parse({ id: "goal", task: "collect_item", collectItemIds: ["scroll"], item_name: "Secret scroll", sector: 1, longitude: 1, latitude: 1, sectorType: "specific", locationType: "specific" })];
-  const user = { userId: "one", questPartyId: party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", sector: 1, longitude: 1, latitude: 1, items: [], userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [projectPartyTracker(party)] } as unknown as Parameters<typeof getReward>[0];
+  const user = partyUser(quest, [projectPartyTracker(party)], { userId: "one", questPartyId: party.id, sector: 1, longitude: 1, latitude: 1, items: [] });
   expect(getReward(user, quest.id).consequences.filter((c) => c.type === "add_item")).toEqual([{ type: "add_item", ids: ["scroll"] }]);
 });
 
@@ -266,11 +270,11 @@ for (const task of ["collect_item", "deliver_item"] as const) {
   it(`uses personal effect receipts independently of shared completion (${task})`, () => {
     for (const done of [false, true]) for (const applied of [false, true]) {
       const { quest, party } = fixture();
-      quest.content.objectives = [AllObjectives.parse({ id: "goal", task, ...(task === "collect_item" ? { collectItemIds: ["scroll"] } : { deliverItemIds: ["scroll"] }), item_name: "Scroll", sector: 1, longitude: 1, latitude: 1, sectorType: "specific", locationType: "specific" })];
+      quest.content.objectives = [itemObjective(task)];
       party.tracker.goals[0]!.done = done;
       const personal = projectPartyTracker(party);
       personal.goals[0]!.partyEffectsApplied = applied;
-      const user = { userId: "one", questPartyId: party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", sector: 1, longitude: 1, latitude: 1, useritems: [{ itemId: "scroll" }], userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [projectPartyTracker(party, personal)] } as unknown as Parameters<typeof getNewTrackers>[0];
+      const user = partyUser(quest, [projectPartyTracker(party, personal)], { userId: "one", questPartyId: party.id, sector: 1, longitude: 1, latitude: 1, useritems: [{ itemId: "scroll" }] });
       const result = getNewTrackers(user, [{ task: "any" }, { task }], undefined, undefined, undefined, true);
       expect(result.consequences.filter((consequence) => consequence.type === (task === "collect_item" ? "add_item" : "remove_item"))).toHaveLength(applied ? 0 : 1);
       expect(result.trackers[0]?.goals[0]).toMatchObject({ done: true, partyEffectsApplied: true });
@@ -281,7 +285,7 @@ for (const task of ["collect_item", "deliver_item"] as const) {
   it(`invalidates only reset goals' personal effect receipts (${task})`, () => {
     for (const done of [false, true]) for (const resetGoal of ["goal", "unrelated"]) {
       const { quest, party } = fixture();
-      quest.content.objectives = [AllObjectives.parse({ id: "goal", task, ...(task === "collect_item" ? { collectItemIds: ["scroll"] } : { deliverItemIds: ["scroll"] }), item_name: "Scroll", sector: 1, longitude: 1, latitude: 1, sectorType: "specific", locationType: "specific" })];
+      quest.content.objectives = [itemObjective(task)];
       const personal = projectPartyTracker(party);
       personal.goals[0]!.partyEffectsApplied = true;
       personal.goals[0]!.collected = true;
@@ -291,7 +295,7 @@ for (const task of ["collect_item", "deliver_item"] as const) {
       const projected = projectPartyTracker(party, personal);
       expect(projected.goals[0]?.partyEffectsApplied).toBe(resetGoal !== "goal");
       expect(projected.goals[0]?.collected).toBe(resetGoal !== "goal");
-      const user = { userId: "one", questPartyId: party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", sector: 1, longitude: 1, latitude: 1, useritems: [{ itemId: "scroll" }], userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [projected] } as unknown as Parameters<typeof getNewTrackers>[0];
+      const user = partyUser(quest, [projected], { userId: "one", questPartyId: party.id, sector: 1, longitude: 1, latitude: 1, useritems: [{ itemId: "scroll" }] });
       const result = getNewTrackers(user, [{ task: "any" }], undefined, undefined, undefined, true);
       expect(result.consequences.filter((consequence) => consequence.type === (task === "collect_item" ? "add_item" : "remove_item"))).toHaveLength(resetGoal === "goal" ? 1 : 0);
       expect(result.trackers[0]?.goals[0]?.done).toBe(true);
@@ -303,7 +307,7 @@ it("retains the next objective after an instant team objective completes", () =>
   const { quest, party } = fixture();
   quest.consecutiveObjectives = true;
   quest.content.objectives = [AllObjectives.parse({ id: "goal", task: "new_quest", newQuestIds: ["followon"], nextObjectiveId: "next-goal" }), AllObjectives.parse({ id: "next-goal", task: "stats_trained", value: 10 })];
-  const user = { userId: "one", questPartyId: party.id, level: 50, rank: "JONIN", role: "USER", status: "AWAKE", userQuests: [{ id: "history", questId: quest.id, completed: 0, previousCompletes: 0, quest }], completedQuests: [], questData: [projectPartyTracker(party)] } as unknown as Parameters<typeof getNewTrackers>[0];
+  const user = partyUser(quest, [projectPartyTracker(party)], { userId: "one", questPartyId: party.id });
   const result = getNewTrackers(user, [{ task: "any" }]);
   expect(result.trackers[0]?.goals[0]).toMatchObject({ done: true, selectedNextObjectiveId: "next-goal" });
   expect(result.trackers[0]?.goals[1]?.done).toBe(false);

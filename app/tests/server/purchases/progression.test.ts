@@ -18,7 +18,12 @@ import { calcFedUgradeCost } from "@/utils/paypal";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
+import {
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+  insertUserVotes,
+} from "../../setup/factories";
 import { comparableTrackers } from "../../setup/quest";
 import { failStatements } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
@@ -61,8 +66,7 @@ describeWithDatabase("purchase reputation progression", () => {
   beforeEach(async () => {
     await resetTables(paypalSubscription, stripePayment, storePurchase, storeUserIdAlias, notification, questHistory, quest, userVote, userData, gameSetting);
     await insertUsers([{ userId, username: "PurchaseProgress", role: "USER", rank: "JONIN", level: 50, primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true, regeneration: 0, money: 0, reputationPoints: 0, reputationPointsTotal: 0, updatedAt: new Date(), regenAt: new Date() }]);
-    const db = await getTestDatabase();
-    await db.insert(userVote).values({ id: "purchase-progress-vote", userId, secret: "payment1", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
   });
   afterEach(() => { subscriptions.splice(0).forEach((stop) => stop()); vi.restoreAllMocks(); });
 

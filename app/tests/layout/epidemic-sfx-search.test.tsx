@@ -5,6 +5,7 @@ import * as client from "@/app/_trpc/client";
 import { EpidemicSfxSearch } from "@/layout/EpidemicSfxSearch";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
+import { deferred } from "../setup/deferred";
 
 type Result = { success: boolean; message: string; assetId?: string };
 type Callbacks = { onMutate: () => void; onSuccess: (result: Result) => Promise<void>; onError: (error: Error) => void; onSettled: () => void };
@@ -63,11 +64,9 @@ const search = (onImported: (assetId: string) => void | Promise<void> = vi.fn(as
 
 describe("sound library import recovery", () => {
   it("refreshes each asset cache once and stays pending through the import callback", async () => {
-    let finishRefresh!: () => void;
-    const refreshGate = new Promise<void>((resolve) => { finishRefresh = resolve; });
+    const { promise: refreshGate, resolve: finishRefresh } = deferred<void>();
     for (const invalidate of Object.values(invalidations)) invalidate.mockReturnValueOnce(refreshGate);
-    let finish!: () => void;
-    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    const { promise: gate, resolve: finish } = deferred<void>();
     const onImported = vi.fn(async () => gate);
     const { view } = search(onImported);
     act(() => { fireEvent.click(view.getByRole("button", { name: /^Use this/ })); fireEvent.click(view.getByRole("button", { name: /^Use this/ })); });

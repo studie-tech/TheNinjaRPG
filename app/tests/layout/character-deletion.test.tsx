@@ -7,6 +7,7 @@ import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import DeleteUserButton, { CharacterDeletionSettings } from "@/layout/DeleteUserButton";
 import * as UserContext from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 type Result = UserDeltaResponse & { affectedUserId?: string };
 type Callbacks = { onMutate?: () => number | undefined; onSuccess: (result: Result, input?: unknown, revision?: number) => Promise<void>; onError: (error: { message: string }) => void };
@@ -23,12 +24,9 @@ const prepareUserUpdate = vi.fn(() => 7);
 const updateUser = vi.fn(async () => undefined);
 const userId = "character-owner";
 let cachedUserId = userId;
-// Radix dispatches DOM events; use the same realm as jsdom and restore Bun's globals.
-const browserGlobals = ["Event", "CustomEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  for (const key of browserGlobals) Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
+  installBrowserGlobals();
   vi.clearAllMocks();
   isPending = false;
   cachedUserId = userId;
@@ -48,11 +46,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 const mount = (deletionAt: Date | null = null) => render(<CharacterDeletionSettings userData={{ userId, deletionAt }} />);
 const open = (view: ReturnType<typeof mount>, scheduled = false) => {

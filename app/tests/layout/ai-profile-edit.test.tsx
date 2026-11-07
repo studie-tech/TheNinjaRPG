@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import { ActionMoveTowardsOpponent, ActionEndTurn, ActionSpecificCombo, ActionUseSpecificJutsu, getBackupRules, type AiRuleType } from "@/validators/ai";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const mocks = {
   profile: { id: "custom", includeDefaultRules: true, rules: [] as AiRuleType[] },
@@ -178,32 +179,16 @@ describe("AI coordinate editor", () => {
 });
 
 describe("AI action pickers", () => {
-  const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-  const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
-  let scrollDescriptor: PropertyDescriptor | undefined;
   beforeEach(() => {
-    Object.defineProperties(globalThis, {
-      Event: { configurable: true, value: window.Event },
-      CustomEvent: { configurable: true, value: window.CustomEvent },
-      ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-    });
-    scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
+    installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
     mocks.profile.rules[0]!.action = ActionUseSpecificJutsu.parse({ jutsuId: "fire" });
   });
   afterEach(async () => {
     await act(async () => {
       cleanup();
-      // Radix dispatches its unmount focus event on the next timer tick.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushRadixFocus();
     });
-    browserGlobals.forEach((key, index) => {
-      const descriptor = browserDescriptors[index];
-      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-      else Reflect.deleteProperty(globalThis, key);
-    });
-    if (scrollDescriptor) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
-    else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    restoreBrowserGlobals();
   });
   const jutsus = [
     { jutsuId: "fire", jutsu: { name: "Fire Ball" } },

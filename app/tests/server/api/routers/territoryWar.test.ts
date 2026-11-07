@@ -21,9 +21,17 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 import { IncreaseMaxPoolsTag } from "@/validators/combat";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertUserItems, insertUsers, insertQuests, insertQuestHistory } from "../../../setup/factories";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertQuests,
+  insertQuestHistory,
+  insertDefaultAiProfile,
+  insertClans,
+} from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, interceptExecute } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 const caller = (id = "leader") => callerFor(territoryWarRouter, id);
@@ -66,7 +74,7 @@ describeWithDatabase("Territory War participation", () => {
     ]);
     await insertUsers(["leader", "ally", "third", "fourth", "rival"].map(id => ({ userId: id, username: id, villageId: id === "rival" ? "enemy" : "home", status: "AWAKE" as const, rank: "JONIN" as const, level: 50, sector: 100, curHealth: 5000, maxHealth: 5000, curChakra: 5000, maxChakra: 5000, curStamina: 5000, maxStamina: 5000, regeneration: 0 })));
     await insertUsers([{ userId: "guardian", username: "guardian", isAi: true, isWarCamp: true, level: 50, curHealth: 100, maxHealth: 100 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default", rules: [] });
+    await insertDefaultAiProfile({ userId: "default" });
     await db.insert(territoryWar).values({ id: "event", predecessorId: "initial", sector: 100, guardianId: "guardian", startsAt: new Date(Date.now() - 1000), endsAt: new Date(Date.now() + 1800000) });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
@@ -114,17 +122,12 @@ describeWithDatabase("Territory War participation", () => {
       await queueEnergy(actorId, [{ stat: "offence", energy: 100 }]);
       const before = (await db.query.userData.findFirst({ where: eq(userData.userId, actorId) }))!;
       let interposed = false;
-      const raced = new Proxy(db, {
-        get(target, key, receiver) {
-          if (key !== "execute") return Reflect.get(target, key, receiver);
-          return async (statement: Parameters<typeof db.execute>[0]) => {
-            if (!interposed) {
-              interposed = true;
-              await db.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, actorId));
-            }
-            return target.execute(statement);
-          };
-        },
+      const raced = interceptExecute(db, async (_query, run) => {
+        if (!interposed) {
+          interposed = true;
+          await db.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, actorId));
+        }
+        return run();
       });
       const actor = callerForDatabase(territoryWarRouter, actorId, raced);
       const result = operation === "createTeam" ? await actor.createTeam({ eventId: "event" }) : await actor.joinTeam({ teamId: teamId! });
@@ -225,21 +228,16 @@ describeWithDatabase("Territory War participation", () => {
     const ally = await caller("ally");
     let statements = 0;
     let id = "";
-    const delayed = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "execute") return async (query: Parameters<typeof db.execute>[0]) => {
-          // The creator's membership is public before their separate status claim.
-          if (++statements === 2) {
-            const visible = await ally.getCurrent();
-            expect(visible.teams).toHaveLength(1);
-            id = visible.teams[0]!.id;
-            expect((await ally.joinTeam({ teamId: id })).success).toBe(true);
-            expect((await (await callerFor(homeRouter, "leader")).toggleSleep()).success).toBe(true);
-          }
-          return target.execute(query);
-        };
-        return Reflect.get(target, key, receiver);
-      },
+    const delayed = interceptExecute(db, async (_query, run) => {
+      // The creator's membership is public before their separate status claim.
+      if (++statements === 2) {
+        const visible = await ally.getCurrent();
+        expect(visible.teams).toHaveLength(1);
+        id = visible.teams[0]!.id;
+        expect((await ally.joinTeam({ teamId: id })).success).toBe(true);
+        expect((await (await callerFor(homeRouter, "leader")).toggleSleep()).success).toBe(true);
+      }
+      return run();
     });
     const created = await callerForDatabase(territoryWarRouter, "leader", delayed).createTeam({ eventId: "event" });
     expect(created.success).toBe(false);
@@ -308,7 +306,13 @@ describeWithDatabase("Territory War participation", () => {
   it("resolves any outlaw clan and displays that competitor's active bonus", async () => {
     const db = await getTestDatabase();
     const until = new Date(Date.now() + 3600000);
-    await db.insert(clan).values({ id: "faction", name: "Faction", image: "image", founderId: "leader", leaderId: "leader", leaderOrderId: "leader", villageId: VILLAGE_SYNDICATE_ID, territoryWarBoostUntil: until });
+    await insertClans([{
+      id: "faction",
+      name: "Faction",
+      leaderId: "leader",
+      villageId: VILLAGE_SYNDICATE_ID,
+      territoryWarBoostUntil: until,
+    }]);
     await db.update(userData).set({ isOutlaw: true, villageId: VILLAGE_SYNDICATE_ID, clanId: "faction" }).where(eq(userData.userId, "leader"));
     const current = await (await caller()).getCurrent();
     expect(current.competitor).toMatchObject({ id: "clan:faction", name: "Faction" });
@@ -321,7 +325,7 @@ describeWithDatabase("Territory War participation", () => {
 
   it.each(["active", "missing membership", "missing lobby", "missing event", "expired event"] as const)("rolls back a partially launched team with %s", async (ownership) => {
     const db = await getTestDatabase();
-    await db.insert(clan).values({ id: "citizen-clan", name: "Citizens", image: "image", founderId: "leader", leaderId: "leader", leaderOrderId: "leader", villageId: "home" });
+    await insertClans([{ id: "citizen-clan", name: "Citizens", leaderId: "leader", villageId: "home" }]);
     await db.update(userData).set({ clanId: "citizen-clan" });
     const leader = await caller();
     expect((await leader.createTeam({ eventId: "event" })).success).toBe(true);

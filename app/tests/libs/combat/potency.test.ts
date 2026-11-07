@@ -7,7 +7,6 @@ import {
 import { insertAction } from "@/libs/combat/actions";
 import { getPotencyDescription, resolvePotencyTags } from "@/libs/combat/potency";
 import { applyEffects } from "@/libs/combat/process";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { copy, getPower, mirror } from "@/libs/combat/tags";
 import type { CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { getBattleGrid, getEffectStackKey } from "@/libs/combat/util";
@@ -23,8 +22,10 @@ import {
 } from "@/validators/combat";
 import {
   makeBattleUser,
+  makeCombatAction,
   makeCompleteBattle,
   makeEffect,
+  makeJutsu,
   makeTag,
 } from "./helpers/battleScenario";
 
@@ -43,26 +44,17 @@ const makePotency = (
 const makeAction = (
   effects: ZodAllTags[],
   overrides: Partial<CombatAction> = {},
-): CombatAction => ({
-  id: "potency-jutsu",
-  name: "Potency test",
-  image: "/jutsu.png",
-  battleDescription: "",
-  type: "jutsu",
-  target: "OPPONENT",
-  method: "SINGLE",
-  range: 3,
-  healthCost: 0,
-  chakraCost: 0,
-  staminaCost: 0,
-  actionCostPerc: 10,
-  updatedAt: 0,
-  cooldown: 0,
-  originalCooldown: 0,
-  level: 0,
-  effects,
-  ...overrides,
-});
+): CombatAction =>
+  makeCombatAction({
+    id: "potency-jutsu",
+    name: "Potency test",
+    image: "/jutsu.png",
+    target: "OPPONENT",
+    range: 3,
+    level: 0,
+    effects,
+    ...overrides,
+  });
 
 const makeBattle = (usersEffects: UserEffect[] = []) =>
   makeCompleteBattle({
@@ -453,7 +445,7 @@ describe("potency element matching", () => {
       makeTag("increaseheal", { power: 40 }),
       makeTag("damage", { power: 40, elements: ["Fire"] }),
     ]);
-    action.data = { ...SAGE_MODE_ACTIVATION_JUTSU };
+    action.data = makeJutsu();
     for (const affectedTag of ["all", "none"] as const) {
       const tags = resolvePotencyTags(
         action,

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { eq } from "drizzle-orm";
-import type { ComponentProps, ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import { CRAFTING_TIMES_MINS, SHRINE_BOOST_BASE_PERC } from "@/drizzle/constants";
 import {
@@ -13,10 +12,7 @@ import {
   userQueue,
   village,
 } from "@/drizzle/schema";
-import * as combatActions from "@/layout/CombatActions";
 import { CraftingCatalog } from "@/layout/CraftingCatalog";
-import * as itemWithEffects from "@/layout/ItemWithEffects";
-import * as modal from "@/layout/Modal";
 import { getCraftingRank } from "@/libs/crafting";
 import { fetchUserItems } from "@/routers/item";
 import { occupationRouter } from "@/routers/occupation";
@@ -31,6 +27,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../setup/testDatabase";
+import { stubCraftingCatalog } from "./helpers/craftingCatalog";
 
 describeWithDatabase("CraftingCatalog shrine duration preview", () => {
   beforeEach(async () => {
@@ -45,33 +42,7 @@ describeWithDatabase("CraftingCatalog shrine duration preview", () => {
       sector,
       village,
     );
-    Object.assign(vi.spyOn(client, "api" as never), {
-      useUtils: () => ({}),
-      occupation: {
-        craftItem: {
-          useMutation: () => ({ mutate: vi.fn(), isPending: false }),
-        },
-      },
-    });
-    vi.spyOn(modal, "default").mockImplementation(
-      ({ children, isOpen }: { children: ReactNode; isOpen: boolean }) =>
-        isOpen ? <div>{children}</div> : null,
-    );
-    vi.spyOn(combatActions, "ActionSelector").mockImplementation(
-      ({
-        items,
-        onClick,
-      }: ComponentProps<typeof combatActions.ActionSelector>) => (
-        <>
-          {items?.map((entry) => (
-            <button key={entry.id} type="button" onClick={() => onClick(entry.id)}>
-              {entry.name}
-            </button>
-          ))}
-        </>
-      ),
-    );
-    vi.spyOn(itemWithEffects, "default").mockImplementation(() => null);
+    stubCraftingCatalog();
   });
 
   afterEach(() => {

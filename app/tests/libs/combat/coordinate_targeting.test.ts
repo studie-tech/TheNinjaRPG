@@ -25,9 +25,11 @@ import {
   type CoordinateTargeting,
 } from "@/validators/coordinateTargeting";
 import {
+  makeCombatAction,
   makeCompleteBattle,
   makeBattleUser,
   makeEffect,
+  makeJutsu,
 } from "./helpers/battleScenario";
 import type { Item, Jutsu } from "@/drizzle/schema";
 
@@ -41,27 +43,19 @@ const pattern = (
   randomCount: 1,
   ...overrides,
 });
-const action = (overrides: Partial<CombatAction> = {}): CombatAction => ({
-  id: "pattern",
-  name: "Pattern",
-  image: "",
-  battleDescription: "",
-  type: "jutsu",
-  target: "GROUND",
-  method: "COORDINATES",
-  coordinateTargeting: pattern(),
-  range: 2,
-  healthCost: 0,
-  chakraCost: 10,
-  staminaCost: 0,
-  actionCostPerc: 10,
-  updatedAt: 0,
-  cooldown: 0,
-  originalCooldown: 0,
-  level: 1,
-  effects: [DamageTag.parse({ power: 10, calculation: "static", rounds: 2 })],
-  ...overrides,
-});
+const action = (overrides: Partial<CombatAction> = {}): CombatAction =>
+  makeCombatAction({
+    id: "pattern",
+    name: "Pattern",
+    target: "GROUND",
+    method: "COORDINATES",
+    coordinateTargeting: pattern(),
+    range: 2,
+    chakraCost: 10,
+    level: 1,
+    effects: [DamageTag.parse({ power: 10, calculation: "static", rounds: 2 })],
+    ...overrides,
+  });
 const scenario = () => {
   const actor = makeBattleUser("actor", {
     longitude: 0,
@@ -647,34 +641,14 @@ describe("coordinate validation", () => {
     ).toBe(false);
   });
   it("requires a parent pattern and rejects coordinate parent movement", () => {
-    // Supply valid legacy fields to exercise the authoritative full content validator.
-    const data = {
-      name: "Pattern",
-      image: "",
-      description: "",
-      battleDescription: "",
-      extraBaseCost: 0,
-      jutsuWeapon: "NONE",
+    const data = makeJutsu({
       jutsuType: "AI",
-      jutsuRank: "D",
       requiredRank: "JONIN",
-      requiredLevel: 1,
       method: "COORDINATES",
       target: "EMPTY_GROUND",
-      range: 1,
-      healthCost: 0,
-      chakraCost: 0,
-      staminaCost: 0,
-      healthCostReducePerLvl: 0,
-      chakraCostReducePerLvl: 0,
-      staminaCostReducePerLvl: 0,
       actionCostPerc: 10,
-      cooldown: 0,
-      bloodlineId: null,
-      villageId: null,
       effects: [MoveTag.parse({})],
-      requiredBloodlineItemId: null,
-    };
+    });
     const result = JutsuValidator.safeParse({
       ...data,
       coordinateTargeting: pattern(),

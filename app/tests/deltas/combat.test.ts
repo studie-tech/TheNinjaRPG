@@ -1,4 +1,4 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "bun:test";
 import { CombatStatNames, ELEMENTAL_MASTERY_CAP, MasteryNames } from "@/drizzle/constants";
 import { battle } from "@/drizzle/schema";
@@ -9,7 +9,8 @@ import type { UserWithRelations } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { ZodAllTags } from "@/validators/combat";
 import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
-import { calcBattleResult, maskBattle } from "@/libs/combat/util";
+import { observeProfile, soloPveResult } from "../libs/combat/helpers/profileCache";
+import { maskBattle } from "@/libs/combat/util";
 import { QuestTracker } from "@/validators/objectives";
 import { getCombatInventoryUpdate } from "@/deltas/combat";
 
@@ -100,15 +101,12 @@ describe("confirmed combat profile reconciliation", () => {
       update.baseline.titleIds = ["first", "second"];
       current.activeTitleId = "second";
     }
-    const client = new QueryClient();
-    client.setQueryData(key, { userData: current });
-    let reads = 0;
-    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
-      queryFn: async () => { reads++; return { userData: { ...current, status: "AWAKE", battleId: null, money: 120 } }; } });
-    const close = observer.subscribe(() => {});
-    const revision = prepareUserUpdate(client, key);
-    await updateUserCache(client, key, (user) => combatProfilePatch(user, update), { revision, delta: update.userDelta });
-    const settled = client.getQueryData<{ userData: typeof current }>(key)!.userData;
+    const profile = observeProfile({ userData: current }, async () => ({
+      userData: { ...current, status: "AWAKE", battleId: null, money: 120 },
+    }));
+    const revision = profile.revision();
+    await profile.apply(update, revision);
+    const settled = profile.user();
     expect(settled.money).toBe(120);
     expect(settled.pveFights).toBe(11);
     expect(settled.offence).toBe(102);
@@ -116,23 +114,21 @@ describe("confirmed combat profile reconciliation", () => {
     expect(settled.items[0]!.durability).toBe(0);
     expect(settled.effectiveMasteries?.ninjutsuMastery).toBe(105);
     expect(settled.maxEnergy).toBeLessThan(current.maxEnergy);
-    expect(reads).toBe(0);
+    expect(profile.reads()).toBe(0);
     expect(combatProfilePatch(settled, update)).toBeUndefined();
-    await updateUserCache(client, key, (user) => combatProfilePatch(user, update), { revision, delta: update.userDelta });
-    expect(reads).toBe(1);
-    expect(client.getQueryData<{userData: typeof current}>(key)!.userData.money).toBe(120);
-    close(); client.clear();
+    await profile.apply(update, revision);
+    expect(profile.reads()).toBe(1);
+    expect(profile.user().money).toBe(120);
+    profile.close();
   });
 
   it("applies confirmed admission and completion through the same profile cache without fetching", async () => {
     const { current, update } = fixture();
     const initial = { ...current, status: "AWAKE" as const, battleId: null };
-    const client = new QueryClient();
-    client.setQueryData(key, { userData: initial });
-    let reads = 0;
-    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
-      queryFn: async () => { reads++; return { userData: { ...current, ...update.userPatch } }; } });
-    const close = observer.subscribe(() => {});
+    const profile = observeProfile({ userData: initial }, async () => ({
+      userData: { ...current, ...update.userPatch },
+    }));
+    const { client, key } = profile;
     try {
       const admission = getCombatAdmissionUserUpdate({
         cacheActor: { userId: current.userId, bracketImmunityLiftedUntil: new Date(0) },
@@ -143,17 +139,15 @@ describe("confirmed combat profile reconciliation", () => {
       await updateUserCache(client, key, { success: true, ...admission }, {
         revision: prepareUserUpdate(client, key), refetch: false,
       });
-      expect(client.getQueryData<{ userData: typeof current }>(key)?.userData).toMatchObject({
+      expect(profile.user()).toMatchObject({
         status: "BATTLE", battleId: update.battleId, pveFights: update.baseline.pveFights + 1,
       });
-      await updateUserCache(client, key, (user) => combatProfilePatch(user, update), {
-        revision: prepareUserUpdate(client, key), delta: update.userDelta,
-      });
-      expect(reads).toBe(0);
-      expect(client.getQueryData<{ userData: typeof current }>(key)?.userData).toMatchObject({
+      await profile.apply(update);
+      expect(profile.reads()).toBe(0);
+      expect(profile.user()).toMatchObject({
         status: "AWAKE", battleId: null, pveFights: update.userPatch.pveFights, money: 120,
       });
-    } finally { close(); client.clear(); }
+    } finally { profile.close(); }
   });
 
   it("adds the Assign XP notification when combat grants the first unassigned points", async () => {
@@ -188,24 +182,16 @@ describe("confirmed combat profile reconciliation", () => {
     expect(baseline.hadTrainingQueue).toBe(false);
     expect(combatProfilePatch(current, update)).toBeUndefined();
 
-    const client = new QueryClient();
-    client.setQueryData(key, { userData: current });
-    let reads = 0;
-    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
-      queryFn: async () => {
-        reads++;
-        return { userData: { ...current, ...server, status: "AWAKE", battleId: null } };
-      } });
-    const close = observer.subscribe(() => {});
-    await updateUserCache(client, key, (user) => combatProfilePatch(user, update), {
-      revision: prepareUserUpdate(client, key), delta: update.userDelta,
-    });
-    expect(reads).toBe(1);
-    expect(client.getQueryData<{ userData: typeof current }>(key)!.userData).toMatchObject({
+    const profile = observeProfile({ userData: current }, async () => ({
+      userData: { ...current, ...server, status: "AWAKE", battleId: null },
+    }));
+    await profile.apply(update);
+    expect(profile.reads()).toBe(1);
+    expect(profile.user()).toMatchObject({
       elementalMastery: { Wind: ELEMENTAL_MASTERY_CAP },
       currentlyTrainingElement: null, elementalTrainingStartedAt: null, dailyTrainings: 1,
     });
-    close(); client.clear();
+    profile.close();
   });
 
   it("falls back for another viewer, replacement battle, queue, changed progression or gear", () => {
@@ -286,8 +272,7 @@ describe("confirmed combat profile reconciliation", () => {
     const user = makeBattleUser("viewer", { isAi: false, direction: "left", curHealth: 100 });
     const enemy = makeBattleUser("ai", { isAi: true, direction: "right", curHealth: 0, leftBattle: true });
     const battle = makeCompleteBattle({ battleType: "ARENA", usersState: [user, enemy], extraState: { settings: [], profileCacheSnapshots: { viewer: snapshot } } });
-    const result = calcBattleResult(battle, "viewer", [])!;
-    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    const result = soloPveResult(battle, "viewer");
     expect(canCacheCombatCompletion(battle, result, "viewer")).toBe(true);
     expect(canCacheCombatCompletion({ ...battle, extraState: { ...battle.extraState, petIdsByOwner: { viewer: "pet-1" } } }, result, "viewer")).toBe(false);
     expect(canCacheCombatCompletion({ ...battle, battleType: "COMBAT" }, result, "viewer")).toBe(false);
@@ -308,8 +293,7 @@ describe("confirmed combat profile reconciliation", () => {
     const user = makeBattleUser("viewer", { isAi: false, direction: "left", curHealth: 100 });
     const enemy = makeBattleUser("ai", { isAi: true, direction: "right", curHealth: 0, leftBattle: true });
     const battle = makeCompleteBattle({ battleType: "ARENA", usersState: [user, enemy], extraState: { settings: [], profileCacheSnapshots: { viewer: snapshot } } });
-    const result = calcBattleResult(battle, "viewer", [])!;
-    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    const result = soloPveResult(battle, "viewer");
     expect(snapshot.hadTrainingQueue).toBe(true);
     expect(canCacheCombatCompletion(battle, result, "viewer")).toBe(false);
     expect(combatProfilePatch({ ...current, ...training }, update)).toBeUndefined();

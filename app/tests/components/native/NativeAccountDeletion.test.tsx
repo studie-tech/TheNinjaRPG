@@ -4,12 +4,12 @@ import * as clerkErrors from "@clerk/nextjs/errors";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import React from "react";
 import * as client from "@/app/_trpc/client";
-import * as dialog from "@/components/ui/dialog";
 import * as input from "@/components/ui/input";
 import * as shell from "@/hooks/useNativeShell";
 import * as contentBox from "@/layout/ContentBox";
 import { appleAuth } from "@/libs/native";
 import { NativeAccountDeletion } from "@/components/native/NativeAccountDeletion";
+import { stubDialog } from "../../setup/dialog";
 
 let screen: ReturnType<typeof within>;
 const state = { native: true, mutate: vi.fn(), signOut: vi.fn(), cancel: false };
@@ -69,49 +69,7 @@ beforeEach(() => {
       { displayName: input.Input.displayName },
     ),
   );
-  vi.spyOn(dialog, "Dialog").mockImplementation(({ open, children }) =>
-    open ? <>{children}</> : null,
-  );
-  vi.spyOn(dialog, "DialogContent").mockImplementation(
-    Object.assign(
-      ({ children }: React.ComponentProps<typeof dialog.DialogContent>) => (
-        <div role="dialog">{children}</div>
-      ),
-      { displayName: dialog.DialogContent.displayName },
-    ),
-  );
-  vi.spyOn(dialog, "DialogHeader").mockImplementation(
-    Object.assign(
-      ({ children }: React.ComponentProps<typeof dialog.DialogHeader>) => (
-        <div>{children}</div>
-      ),
-      { displayName: dialog.DialogHeader.displayName },
-    ),
-  );
-  vi.spyOn(dialog, "DialogFooter").mockImplementation(
-    Object.assign(
-      ({ children }: React.ComponentProps<typeof dialog.DialogFooter>) => (
-        <div>{children}</div>
-      ),
-      { displayName: dialog.DialogFooter.displayName },
-    ),
-  );
-  vi.spyOn(dialog, "DialogTitle").mockImplementation(
-    Object.assign(
-      ({ children }: React.ComponentProps<typeof dialog.DialogTitle>) => (
-        <h2>{children}</h2>
-      ),
-      { displayName: dialog.DialogTitle.displayName },
-    ),
-  );
-  vi.spyOn(dialog, "DialogDescription").mockImplementation(
-    Object.assign(
-      ({ children }: React.ComponentProps<typeof dialog.DialogDescription>) => (
-        <p>{children}</p>
-      ),
-      { displayName: dialog.DialogDescription.displayName },
-    ),
-  );
+  stubDialog();
   vi.spyOn(appleAuth, "isSupported").mockReturnValue(false);
 });
 const confirm = (phrase = "DELETE MY ACCOUNT") => {

@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { staffRouter } from "@/server/api/routers/staff";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
+import { restoreEnvAfterEach } from "../../../../setup/env";
 
-const originalDevUrl = process.env.DEV_DATABASE_URL;
+restoreEnvAfterEach("DEV_DATABASE_URL");
 
 const backup = (type: "ai" | "jutsu" = "ai") => ({
   id: "backup",
@@ -25,8 +26,6 @@ describe("development backup import", () => {
   afterEach(() => {
     resetServerModuleStubs();
     vi.restoreAllMocks();
-    if (originalDevUrl === undefined) delete process.env.DEV_DATABASE_URL;
-    else process.env.DEV_DATABASE_URL = originalDevUrl;
   });
 
   it.each(["ai", "jutsu"] as const)("preflights a %s backup before replacing content without a transaction", async type => {

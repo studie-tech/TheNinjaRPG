@@ -1,22 +1,20 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
-import { createTRPCReact } from "@trpc/react-query";
 import { afterEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import { chatMutePendingAtom } from "@/libs/chatPanel";
 import type { ReactNode } from "react";
 import superjson from "superjson";
-import type { AppRouter } from "@/api/root";
 import * as clientModule from "@/app/_trpc/client";
 import { MAX_MUTED_CONVERSATIONS } from "@/drizzle/constants";
 import { useChatMutes } from "@/hooks/useChatMutes";
 import * as toast from "@/libs/toast";
 import { mergeQueryChanges } from "@/utils/queryCache";
 import * as userContext from "@/utils/UserContext";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
 type PreferenceResponse = { success: boolean; message: string; userPatch?: { chatMuted?: boolean; mutedConversationIds?: string[]; unmutedTavernIds?: string[] } };
-const testApi = createTRPCReact<AppRouter>();
 afterEach(() => { cleanup(); getDefaultStore().set(chatMutePendingAtom, {}); vi.restoreAllMocks(); });
 
 function setup(ids: string[] = [], rejectBeforeMutation = false, taverns: { unmutedTavernIds?: string[] } = { unmutedTavernIds: [] }) {
@@ -38,7 +36,7 @@ function setup(ids: string[] = [], rejectBeforeMutation = false, taverns: { unmu
   const queryClient = new QueryClient({ mutationCache: new MutationCache({ onMutate: () => { if (rejectBeforeMutation) throw new Error("Session changed"); } }), defaultOptions: { mutations: { retry: false } } });
   const trpc = testApi.createClient({ links: [httpBatchLink({ url: "http://localhost/api/trpc", transformer: superjson, fetch })] });
   const hook = renderHook(() => ({ ...useChatMutes(), second: useChatMutes() }), { wrapper: ({ children }: { children: ReactNode }) => (
-    <testApi.Provider client={trpc} queryClient={queryClient}><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></testApi.Provider>
+    <TrpcTestProviders client={trpc} queryClient={queryClient}>{children}</TrpcTestProviders>
   ) });
   return { ...hook, updateUser, fetch, feedback, switchAccount: (userId: string) => { data = { ...data, userId }; }, respond: (value: PreferenceResponse | Error) => respond(value) };
 }

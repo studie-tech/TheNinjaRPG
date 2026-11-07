@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { count } from "drizzle-orm";
 import { bloodlineRolls } from "@/drizzle/schema";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { supportRouter } from "@/server/api/routers/support";
-import type { DrizzleClient } from "@/server/db";
 import { planetScaleFixture } from "../../../setup/planetscale";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { callerForDatabase } from "../../../setup/testDatabase";
 
@@ -14,13 +14,17 @@ const userId = "count-staff";
 
 describe("PlanetScale aggregate counts", () => {
   beforeEach(() => {
+    stubRateLimitTransport();
     stubProfile("fetchUser", async () => ({ userId, role: "ADMIN" }));
     stubProfile("fetchUpdatedUser", async () => ({
       user: { userId, status: "QUEUED" },
     }));
   });
 
-  afterEach(resetServerModuleStubs);
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetServerModuleStubs();
+  });
 
   it("returns numeric support totals and grouped summaries from INT64 strings", async () => {
     const { database } = planetScaleFixture((query) => {
@@ -126,16 +130,8 @@ describe("PlanetScale aggregate counts", () => {
       if (query.includes("QuestHistory")) return {};
       throw new Error(`Unexpected query: ${query}`);
     });
-    // Public-query middleware uses external Redis; this fixture exercises the resolver's counts.
-    const { resolver } = bloodlineRouter._def.procedures.getNaturalRollStatistics
-      ._def as unknown as {
-      resolver: (args: {
-        ctx: { drizzle: DrizzleClient; userId: string };
-        input: undefined;
-      }) => Promise<Record<string, number>>;
-    };
     expect(
-      await resolver({ ctx: { drizzle: database, userId }, input: undefined }),
+      await callerForDatabase(bloodlineRouter, userId, database).getNaturalRollStatistics(),
     ).toEqual({ D: 0, C: 0, B: 0, A: 0, S: 2, H: 0, none: 3 });
   });
 

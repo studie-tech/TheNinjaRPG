@@ -18,7 +18,8 @@ import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { spriteAnimationRouter } from "@/server/api/routers/spriteAnimation";
 import { ActionEndTurn, ActionUseSpecificJutsu } from "@/validators/ai";
 import { makeTag } from "../../libs/combat/helpers/battleScenario";
-import { insertUsers } from "../../setup/factories";
+import { insertUsers, insertJutsus, insertDefaultAiProfile } from "../../setup/factories";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -30,13 +31,7 @@ describeWithDatabase("combat sprite animation delivery", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(nextServer, "after").mockImplementation(() => {});
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     await resetTables(
       aiSpriteAnimation, spriteAnimation, battleAction, battle, actionLog,
       userJutsu, jutsu, aiProfile, userData,
@@ -111,11 +106,14 @@ describeWithDatabase("combat sprite animation delivery", () => {
     await db.delete(battle);
     await db.update(userData).set({ status: "AWAKE", battleId: null });
     await insertUsers([{ userId: "enemy", username: "Enemy", isAi: true, rank: "JONIN", level: 50 }]);
-    await db.insert(jutsu).values({
-      id: "summon", name: "Summon", description: "Summon", battleDescription: "%user summons a creature",
-      image: "/jutsu.png", effects: [makeTag("summon", { aiId: "ai", aiHp: 1000, power: 100, rounds: 3 })],
-      target: "EMPTY_GROUND", range: 3, requiredRank: "STUDENT", jutsuType: "NORMAL", actionCostPerc: 100,
-    });
+    await insertJutsus([{
+      id: "summon",
+      name: "Summon",
+      effects: [makeTag("summon", { aiId: "ai", aiHp: 1000, power: 100, rounds: 3 })],
+      target: "EMPTY_GROUND",
+      range: 3,
+      actionCostPerc: 100,
+    }]);
     await db.insert(userJutsu).values({ id: "owned-summon", userId: "player", jutsuId: "summon", equipped: true });
     await db.insert(spriteAnimation).values(["idle", "attack", "wait"].map((id) => ({
       id, name: id, url: `https://example.com/${id}.png`, columns: 6, rows: 2,
@@ -197,28 +195,38 @@ const startBattle = async ({
     { userId: "player", username: "Player", rank: "JONIN", level: 50 },
     { userId: "ai", username: "AI", isAi: true, inArena: true, rank: "JONIN", level: 50 },
   ]);
-  await db.insert(aiProfile).values({
-    id: "Default", userId: "ai", includeDefaultRules: false, rules: [
+  await insertDefaultAiProfile({
+    userId: "ai",
+    includeDefaultRules: false,
+    rules: [
       ...(withMovement ? [{ conditions: [], action: ActionUseSpecificJutsu.parse({ jutsuId: "jump", target: "COORDINATE", coordinates: { longitude: 5, latitude: 1 } }) }] : []),
       { conditions: [], action: ActionUseSpecificJutsu.parse({ jutsuId: "strike", target: "CLOSEST_OPPONENT" }) },
       { conditions: [], action: ActionEndTurn.parse({}) },
     ],
   });
   if (withMovement) {
-    await db.insert(jutsu).values({
-      id: "jump", name: "Jump", description: "Jump", battleDescription: "%user jumps across the battlefield",
-      image: "/jutsu.png", effects: [makeTag("move", { power: 100, rounds: 0 })],
-      target: "EMPTY_GROUND", range: 10, requiredRank: "STUDENT", jutsuType: "NORMAL", cooldown: 1, actionCostPerc: 20,
-    });
+    await insertJutsus([{
+      id: "jump",
+      name: "Jump",
+      effects: [makeTag("move", { power: 100, rounds: 0 })],
+      target: "EMPTY_GROUND",
+      range: 10,
+      cooldown: 1,
+      actionCostPerc: 20,
+    }]);
     await db.insert(userJutsu).values({ id: "owned-jump", userId: "ai", jutsuId: "jump", equipped: true });
   }
-  await db.insert(jutsu).values({
-    id: "strike", name: "Strike", description: "Strike", battleDescription: "%user strikes %target",
-    image: "/jutsu.png", effects: [makeTag("damage", {
+  await insertJutsus([{
+    id: "strike",
+    name: "Strike",
+    effects: [makeTag("damage", {
       power: 1, powerPerLevel: 0, calculation: "static", statTypes: [], generalTypes: [], elements: [], rounds: 0,
-    })], target: "OTHER_USER", range: 10, requiredRank: "STUDENT", jutsuType: "NORMAL",
-    cooldown: 1, actionCostPerc: 40,
-  });
+    })],
+    target: "OTHER_USER",
+    range: 10,
+    cooldown: 1,
+    actionCostPerc: 40,
+  }]);
   await db.insert(userJutsu).values({ id: "owned-strike", userId: "ai", jutsuId: "strike", equipped: true });
   if (animated) {
     await db.insert(spriteAnimation).values(["idle", "attack", "wait", ...(withMovement ? ["move"] : [])].map((id) => ({

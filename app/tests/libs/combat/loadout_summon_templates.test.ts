@@ -11,9 +11,10 @@ import type {
 } from "@/libs/combat/types";
 import { mergeExtraState } from "@/libs/combat/util";
 import { TerrainHex } from "@/libs/hexgrid";
-import { processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { AiRule } from "@/validators/ai";
+import { flatCombatStats } from "./helpers/battleScenario";
+import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 /**
  * Regression for support ticket i1jen8nR8S: "Summoning: Reptile Zoo" summons gave
@@ -96,18 +97,11 @@ const userJutsu = (owner: string, j: ReturnType<typeof jutsu>) => ({
 });
 
 const queryUser = (id: string, over: Record<string, unknown> = {}): CombatQueryUser =>
-  ({
-    userId: id, username: id, villageId: "village", level: 100, experience: 0,
-    rank: "JONIN", isAi: false, isSummon: false, bloodlineId: null, bloodline: null,
-    regenAt: new Date(), regeneration: 0, money: 0, longitude: 0, latitude: 0,
-    curHealth: 5000, maxHealth: 5000, curChakra: 5000, maxChakra: 5000,
-    curStamina: 5000, maxStamina: 5000, strength: 100, speed: 100, intelligence: 100,
-    willpower: 100, offence: 100, defence: 100,
-    ninjutsuMastery: 100, genjutsuMastery: 100, taijutsuMastery: 100,
-    bukijutsuMastery: 100, bloodlineMastery: 100, sageMastery: 100,
-    items: [], jutsus: [], effects: [], bloodright: [], userSkills: [], aiProfile: null,
+  makeCombatQueryUser(id, {
+    ...flatCombatStats(100), villageId: "village", rank: "JONIN", isAi: false, isSummon: false,
+    bloodlineId: null, longitude: 0, latitude: 0,
     ...over,
-  }) as unknown as CombatQueryUser;
+  });
 
 const torTemplate = queryUser(TOR_AI, {
   username: "Tor Tor", isAi: true, level: 30, aiProfileId: torProfile.id, aiProfile: torProfile,
@@ -127,10 +121,8 @@ const templateClient = () => {
 };
 
 const process = (client: DrizzleClient, users: CombatQueryUser[], left?: string[]) =>
-  processUsersForBattle(client, {
-    users, settings: [], relations: [], wars: [], villages: [], defaultProfile,
-    battleType: "COMBAT", hide: false, isSummon: false, width: WIDTH, height: HEIGHT,
-    leftSideUserIds: left,
+  preloadBattle(users, {
+    client, defaultProfile, width: WIDTH, height: HEIGHT, leftSideUserIds: left,
   });
 
 /**

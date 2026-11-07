@@ -2,25 +2,15 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true });
 });
 afterEach(async () => {
   cleanup();
-  // Radix restores focus on the next task, while it still needs DOM Event globals.
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  await act(flushRadixFocus);
+  restoreBrowserGlobals();
 });
 
 const mount = (overrides: Partial<Parameters<typeof AutoCombatControl>[0]> = {}) => {

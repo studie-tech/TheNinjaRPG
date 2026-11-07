@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
+import { getQueryKey } from "@trpc/react-query";
 import superjson from "superjson";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
 import type { BattleAction } from "@/drizzle/schema";
@@ -13,10 +11,11 @@ import CombatHistory from "@/layout/CombatHistory";
 import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
+import { deferred } from "../setup/deferred";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
 // Keep the real history component, subscription hook and tRPC query lifecycle;
 // control only websocket delivery, user context and the server's log responses.
-const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
 let entries: BattleAction[];
 let onEvent: ((event: BattleUpdate) => Promise<void>) | undefined;
@@ -33,6 +32,7 @@ const lethalEntry = {
   appliedEffects: [{ txt: "Victim takes 100 damage", color: "red" }],
   createdAt: new Date(), updatedAt: new Date(),
 } as BattleAction;
+const row = (version: number) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version });
 
 beforeEach(() => {
   entries = [];
@@ -57,11 +57,11 @@ const History = ({ state, listen }: { state: BattleState; listen: boolean }) => 
 
 /** Reuse the query cache across mounts to reproduce navigation with cached reads. */
 const mount = (listen = true, state = finalState, extra?: RouterInputs["combat"]["getBattleEntries"]) => {
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    if (op.path !== "combat.getBattleEntries") throw new Error(`Unexpected procedure ${op.path}`);
-    void Promise.resolve(readEntries()).then((data) => { observer.next({ result: { data } }); observer.complete(); });
-  })] });
-  const tree = (current: BattleState) => <testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}><History state={current} listen={listen} />{extra && <AdditionalHistory input={extra} />}</QueryClientProvider></testApi.Provider>;
+  const trpcClient = fakeTrpcClient((path) => {
+    if (path !== "combat.getBattleEntries") throw new Error(`Unexpected procedure ${path}`);
+    return readEntries();
+  });
+  const tree = (current: BattleState) => <TrpcTestProviders client={trpcClient} queryClient={queryClient}><History state={current} listen={listen} />{extra && <AdditionalHistory input={extra} />}</TrpcTestProviders>;
   const view = render(tree(state));
   return { ...view, changeState: (current: BattleState) => view.rerender(tree(current)) };
 };
@@ -101,8 +101,7 @@ it("refreshes a cached saved log when it is reopened after the final insert", as
 });
 
 it("discards a saved log's pre-insert request when reopened before it finishes", async () => {
-  let finishOldRead!: (rows: BattleAction[]) => void;
-  const oldResponse = new Promise<BattleAction[]>((resolve) => { finishOldRead = resolve; });
+  const { promise: oldResponse, resolve: finishOldRead } = deferred<BattleAction[]>();
   readEntries.mockImplementationOnce(() => oldResponse);
   const state = { ...finalState, result: null };
   const view = mount(false, state);
@@ -116,8 +115,7 @@ it("discards a saved log's pre-insert request when reopened before it finishes",
 });
 
 it("discards an in-flight pre-insert history response when the final event arrives", async () => {
-  let finishOldRead!: (rows: BattleAction[]) => void;
-  const oldResponse = new Promise<BattleAction[]>((resolve) => { finishOldRead = resolve; });
+  const { promise: oldResponse, resolve: finishOldRead } = deferred<BattleAction[]>();
   readEntries.mockImplementationOnce(() => oldResponse);
   const view = mount();
   await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
@@ -171,7 +169,7 @@ it.each(["websocket", "response"] as const)("merges ordinary %s actions with no 
 });
 
 it("repairs an already-claimed final version from a delta without a read, including duplicates and older delivery", async () => {
-  entries = [2, 1].map((version) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version }));
+  entries = [2, 1].map(row);
   const view = mount();
   await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
   for (const version of [4, 4, 3]) {
@@ -183,7 +181,6 @@ it("repairs an already-claimed final version from a delta without a read, includ
 
 it("preserves newer committed rows already fetched under an older refresh key", async () => {
   const oldInput = { battleId: "battle", refreshKey: 2, checkBattle: false, limit: 30 };
-  const row = (version: number) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version });
   queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, oldInput, "query"), [row(1)]);
   queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, { ...oldInput, refreshKey: 3 }, "query"), [row(3), row(2), row(1)]);
   const state = { battle: { id: "battle", version: 3 }, result: null, isPending: false } as BattleState;
@@ -196,7 +193,7 @@ it("preserves newer committed rows already fetched under an older refresh key", 
 it("updates a complete older held log directly when terminal state cannot advance its key", async () => {
   const state = { ...finalState, battle: { ...finalState.battle!, version: 3 } };
   const input = { battleId: "battle", refreshKey: 3, checkBattle: true, limit: 30 };
-  queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, input, "query"), [2, 1].map((version) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version })));
+  queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, input, "query"), [2, 1].map(row));
   const view = mount(true, state);
   await act(async () => { await onEvent?.({ version: 4, logEntries: superjson.serialize([lethalEntry]), finished: true }); });
   await waitFor(() => expect(view.getAllByText(/Victim takes 100 damage/)).toHaveLength(3));
@@ -221,7 +218,7 @@ it("cancels a pre-insert response before seeding a complete final page", async (
   let finishOldRead!: (rows: BattleAction[]) => void;
   readEntries.mockImplementationOnce(() => new Promise<BattleAction[]>((resolve) => { finishOldRead = resolve; }));
   const oldInput = { battleId: "battle", refreshKey: 3, checkBattle: true, limit: 30 };
-  queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, oldInput, "query"), [2, 1].map((version) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version })));
+  queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, oldInput, "query"), [2, 1].map(row));
   const view = mount();
   await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
   await act(async () => { await onEvent?.({ version: 4, logEntries: superjson.serialize([lethalEntry]), finished: true }); });
@@ -250,7 +247,6 @@ it.each([{ userFilter: "opponents" as const }, { showBasicActions: false }, { of
 it.each([5, 30, 1000])("merges only the freshest retained page for limit %i", async (limit) => {
   let sourceVisits = 0;
   const versions = 300;
-  const row = (version: number) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version });
   const input = { battleId: "battle", limit };
   for (let version = 2; version <= versions + 1; version++) {
     const rows = Array.from({ length: Math.min(version - 1, limit) }, (_, i) => new Proxy(row(version - 1 - i), {
@@ -270,7 +266,6 @@ it.each([5, 30, 1000])("merges only the freshest retained page for limit %i", as
 });
 
 it.each([{ latest: undefined }, { latest: [2, 1] }])("falls back to complete history when the latest key has missing data or gaps (%j)", async ({ latest }) => {
-  const row = (version: number) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version });
   const input = { battleId: "battle", limit: 5 };
   queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, { ...input, refreshKey: 4 }, "query"), [3, 2, 1].map(row));
   // A mounted version may have an in-flight read without any cached data yet.
@@ -283,7 +278,6 @@ it.each([{ latest: undefined }, { latest: [2, 1] }])("falls back to complete his
 });
 
 it("repairs multiple mounted terminal keys from the freshest complete page", async () => {
-  const row = (version: number) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version });
   const input = { battleId: "battle", checkBattle: true, limit: 30 };
   const oldest = { ...input, refreshKey: 2 };
   const held = { ...input, refreshKey: 3 };
@@ -299,7 +293,6 @@ it("repairs multiple mounted terminal keys from the freshest complete page", asy
 });
 
 it("recovers an inactive terminal key if a held result later remounts", async () => {
-  const row = (version: number) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version });
   const input = { battleId: "battle", checkBattle: true, limit: 30 };
   const heldKey = getQueryKey(testApi.combat.getBattleEntries, { ...input, refreshKey: 2 }, "query");
   queryClient.setQueryData(heldKey, [row(1)]);
@@ -315,7 +308,7 @@ it("recovers an inactive terminal key if a held result later remounts", async ()
 
 it("keeps saved unversioned logs on recovery reads even when a versioned source is complete", async () => {
   const input = { battleId: "battle", checkBattle: false, limit: 30 };
-  queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, { ...input, refreshKey: 3 }, "query"), [2, 1].map((version) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version })));
+  queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, { ...input, refreshKey: 3 }, "query"), [2, 1].map(row));
   const view = mount(false);
   await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
   entries = [lethalEntry];
@@ -326,12 +319,10 @@ it("keeps saved unversioned logs on recovery reads even when a versioned source 
 
 it("does not overwrite a newer page committed while cancellation is pending", async () => {
   const input = { battleId: "battle", limit: 5 };
-  const row = (version: number) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version });
   queryClient.setQueryData(getQueryKey(testApi.combat.getBattleEntries, { ...input, refreshKey: 3 }, "query"), [row(2), row(1)]);
   mount();
   await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
-  let finishCancellation!: () => void;
-  const pendingCancellation = new Promise<void>((resolve) => { finishCancellation = resolve; });
+  const { promise: pendingCancellation, resolve: finishCancellation } = deferred<void>();
   const cancel = vi.spyOn(queryClient, "cancelQueries").mockImplementationOnce(() => pendingCancellation);
   const pendingUpdate = applyLogs("battle", 4, [row(3)]);
   expect(cancel).toHaveBeenCalledTimes(1);
@@ -342,7 +333,6 @@ it("does not overwrite a newer page committed while cancellation is pending", as
 });
 
 it("updates complete saved logs without reads, preserving gap recovery and reordered events", async () => {
-  const row = (version: number) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version });
   entries = [2, 1].map(row);
   const view = mount(false);
   await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));

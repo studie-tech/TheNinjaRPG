@@ -1,14 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { createSerialQueue } from "@/utils/async";
+import { deferred } from "../setup/deferred";
 
 describe("createSerialQueue", () => {
   it("runs each operation after the previous one settles", async () => {
     const enqueue = createSerialQueue();
     const order: string[] = [];
-    let releaseFirst = () => {};
-    const gate = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
+    const { promise: gate, resolve: releaseFirst } = deferred<void>();
 
     const first = enqueue(async () => {
       await gate;

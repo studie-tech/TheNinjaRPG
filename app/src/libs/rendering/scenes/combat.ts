@@ -521,6 +521,7 @@ export const createCombatScene = async (options: {
           ),
         world.position,
         lightDate ? getWorldCycleBrightness(lightDate) : WORLD_DAY_BRIGHTNESS,
+        scale(),
       );
       if (shadows)
         shadows.update(

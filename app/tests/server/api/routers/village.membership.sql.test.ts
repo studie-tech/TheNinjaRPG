@@ -5,12 +5,11 @@ import { villageRouter } from "@/server/api/routers/village";
 import { insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { beforeStatements } from "../../../setup/statements";
+import { readUser } from "../../../setup/userReads";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const MEMBER = "moving-member";
 
-const userOf = async (userId: string) =>
-  (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) });
 
 describeWithDatabase("village membership changes", () => {
   beforeEach(async () => {
@@ -40,7 +39,7 @@ describeWithDatabase("village membership changes", () => {
       expect(result.success).toBe(true);
       expect(result.actionNotice).toContain(status === "ASLEEP" ? "woke you up" : "hospital for free");
       expect(result.message).toContain(result.actionNotice ?? "missing recovery notice");
-      expect(await userOf(MEMBER)).toMatchObject({ status: "AWAKE", villageId: "destination", money: 123, curHealth: 100 });
+      expect(await readUser(MEMBER)).toMatchObject({ status: "AWAKE", villageId: "destination", money: 123, curHealth: 100 });
     });
   }
 
@@ -56,7 +55,7 @@ describeWithDatabase("village membership changes", () => {
       const result = await callerForDatabase(villageRouter, MEMBER, db).joinVillage({ villageId: "destination" });
       expect(result.success).toBe(false);
       expect(result.actionNotice).toBeUndefined();
-      expect(await userOf(MEMBER)).toMatchObject({ status, villageId: "home", money: 123 });
+      expect(await readUser(MEMBER)).toMatchObject({ status, villageId: "home", money: 123 });
     }
   });
 
@@ -72,8 +71,8 @@ describeWithDatabase("village membership changes", () => {
     const result = await callerForDatabase(villageRouter, MEMBER, raced).joinVillage({ villageId: "destination" });
     expect(result.success).toBe(false);
     expect(result.actionNotice).toBeUndefined();
-    expect(await userOf(MEMBER)).toMatchObject({ status: "ASLEEP", villageId: "home", autoWakeUp: false });
-    expect((await userOf("student"))?.senseiId).toBe(MEMBER);
+    expect(await readUser(MEMBER)).toMatchObject({ status: "ASLEEP", villageId: "home", autoWakeUp: false });
+    expect((await readUser("student"))?.senseiId).toBe(MEMBER);
   });
 
   it("keeps reputation credited while a village swap is in flight", async () => {
@@ -84,7 +83,7 @@ describeWithDatabase("village membership changes", () => {
     }]);
     const result = await callerForDatabase(villageRouter, MEMBER, raced).swapVillage({ villageId: "destination" });
     expect(result.success).toBe(true);
-    expect(await userOf(MEMBER)).toMatchObject({ villageId: "destination", reputationPoints: 140 });
+    expect(await readUser(MEMBER)).toMatchObject({ villageId: "destination", reputationPoints: 140 });
   });
 
   it("leaves sensei requests and students untouched when the join loses its status guard", async () => {
@@ -99,7 +98,7 @@ describeWithDatabase("village membership changes", () => {
     }]);
     const result = await callerForDatabase(villageRouter, MEMBER, raced).joinVillage({ villageId: "destination" });
     expect(result.success).toBe(false);
-    expect((await userOf("student"))?.senseiId).toBe(MEMBER);
+    expect((await readUser("student"))?.senseiId).toBe(MEMBER);
     expect(await db.query.userRequest.findMany()).toHaveLength(1);
   });
 
@@ -124,7 +123,7 @@ describeWithDatabase("village membership changes", () => {
         ? await caller.leaveVillage()
         : await caller[operation]({ villageId: "destination" });
       expect(result.success).toBe(true);
-      expect((await userOf("student"))?.senseiId).toBeNull();
+      expect((await readUser("student"))?.senseiId).toBeNull();
       expect((await db.query.userRequest.findMany()).map((request) => request.id)).toEqual(["home-request"]);
     }
   });

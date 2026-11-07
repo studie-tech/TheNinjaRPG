@@ -2,11 +2,10 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import type { AiProfile, Jutsu } from "@/drizzle/schema";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
-import type { BattleWar, CombatQueryUser, ReturnedBattle } from "@/libs/combat/types";
+import type { BattleWar, ReturnedBattle } from "@/libs/combat/types";
 import { hasNoAvailableActions, maskBattle } from "@/libs/combat/util";
-import { processUsersForBattle } from "@/server/api/routers/combat";
-import type { DrizzleClient } from "@/server/db";
-import { makeBattleUser, makeCompleteBattle, makeEffect, makeTag } from "./helpers/battleScenario";
+import { flatCombatStats, makeBattleUser, makeCompleteBattle, makeEffect, makeTag } from "./helpers/battleScenario";
+import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const now = new Date("2026-10-11T12:00:00Z");
 
@@ -49,16 +48,13 @@ describe("battle privacy regressions", () => {
     ["COMBAT", false, "Player", "ANBU Member", "squad-avatar"],
     ["COMBAT", false, "Mercenary", "ANBU Member", "squad-avatar"],
   ] as const)("preserves %s anonymity for mercenary %s named %s", async (battleType, isMercenary, username, expectedName, expectedAvatar) => {
-    const user = {
-      ...makeBattleUser("fighter"), username, avatar: "profile-avatar",
-      avatarLight: "profile-avatar", regenAt: now, regeneration: 0, money: 0,
-      effects: [], bloodright: [], bloodlineId: null, userSkills: [], items: [], jutsus: [],
-      anbuId: "squad", anbuSquad: { id: "squad", image: "squad-avatar" },
-    } as unknown as CombatQueryUser;
-    const processed = await processUsersForBattle({} as DrizzleClient, {
-      users: [user], battleType, leftSideUserIds: ["attacker"],
-      hide: false, isSummon: false, width: 13, height: 9,
-      settings: [], relations: [], villages: [], defaultProfile: { id: "Default" } as AiProfile,
+    const user = makeCombatQueryUser("fighter", {
+      username, avatar: "profile-avatar", avatarLight: "profile-avatar", regenAt: now,
+      bloodlineId: null, anbuId: "squad", anbuSquad: { id: "squad", image: "squad-avatar" },
+    });
+    const processed = await preloadBattle([user], {
+      battleType, leftSideUserIds: ["attacker"], width: 13, height: 9,
+      defaultProfile: { id: "Default" } as AiProfile,
       wars: [{ id: "w", warMercenaries: isMercenary ? [{ userId: "fighter", sideVillageId: "a" }] : [] }] as unknown as BattleWar[],
     });
     expect(processed.usersState[0]).toMatchObject({ username: expectedName, avatar: expectedAvatar });
@@ -67,16 +63,13 @@ describe("battle privacy regressions", () => {
 
   it("strips private stat metadata from realized public catalogs without mutating battle state", async () => {
     const authored = makeTag("increasedamagegiven", { power: 12 });
-    const user = {
-      userId: "foe", username: "foe", villageId: "village", level: 50, experience: 0,
-      regenAt: now, regeneration: 0, money: 0, longitude: 0, latitude: 0,
+    const user = makeCombatQueryUser("foe", {
+      ...flatCombatStats(100), villageId: "village", level: 50, regenAt: now, longitude: 0, latitude: 0,
       curHealth: 1000, maxHealth: 1000, curChakra: 1000, maxChakra: 1000,
       curStamina: 1000, maxStamina: 1000,
-      strength: 100, speed: 70, intelligence: 80, willpower: 90,
-      offence: 100, defence: 100, preferredGeneral1: "Speed", preferredGeneral2: "Willpower",
-      ninjutsuMastery: 100, genjutsuMastery: 100, taijutsuMastery: 100,
-      bukijutsuMastery: 100, bloodlineMastery: 100, sageMastery: 100,
-      jutsus: [], effects: [], bloodright: [], userSkills: [], bloodlineId: "line",
+      speed: 70, intelligence: 80, willpower: 90,
+      preferredGeneral1: "Speed", preferredGeneral2: "Willpower",
+      bloodlineId: "line",
       cookingJobs: [{ id: "pending-meal", userId: "foe", experience: 250, finishesAt: new Date(now.getTime() + 60000) }],
       bloodline: { id: "line", name: "Visible bloodline", effects: [structuredClone(authored)], bloodrightTiers: [] },
       items: [{
@@ -86,13 +79,8 @@ describe("battle privacy regressions", () => {
           maxDurability: 100, bloodlineId: null, canBeImbued: false,
           battleUsageType: "BOTH", cooldown: 0, effects: [structuredClone(authored)] },
       }],
-    } as unknown as CombatQueryUser;
-    const processed = await processUsersForBattle({} as DrizzleClient, {
-      users: [user], battleType: "COMBAT", leftSideUserIds: ["foe"],
-      hide: false, isSummon: false, width: 10, height: 10,
-      settings: [], relations: [], wars: [], villages: [],
-      defaultProfile: { id: "default" } as AiProfile,
     });
+    const processed = await preloadBattle([user]);
     // A selected item can share the passive template stored in keystoneItems.
     expect(processed.usersState[0]).not.toHaveProperty("cookingJobs");
     expect(user.cookingJobs).toHaveLength(1);

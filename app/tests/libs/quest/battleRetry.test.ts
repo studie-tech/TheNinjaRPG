@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import type { QuestType } from "@/drizzle/constants";
 import { canRetryQuestBattle } from "@/libs/objectives";
 import { getNewTrackers } from "@/libs/quest";
+import { trackerQuest, trackerUser } from "../../setup/quest";
 
 // ---------------------------------------------------------------------------
 // The "Retry Battle" button on a start_battle objective must only be offered while
@@ -30,54 +30,19 @@ const terminalObjective = (id: string, task: "win_quest" | "fail_quest") =>
   ({ id, task, description: "", successDescription: "" }) as unknown;
 
 /** Minimal consecutive quest containing the supplied objectives. */
-const makeQuest = (objectives: unknown[]) => ({
-  id: "q1",
-  name: "Quest q1",
-  questType: "story" as QuestType,
-  hidden: false,
-  consecutiveObjectives: true,
-  maxAttempts: 1,
-  maxCompletes: 1,
-  requiredVillage: null,
-  requiredBloodlineId: null,
-  prerequisiteQuestId: null,
-  requiredLevel: null,
-  maxLevel: null,
-  medicalRank: null,
-  huntingRank: null,
-  gatheringRank: null,
-  endsAt: null,
-  content: { objectives, reward: {}, sceneBackground: "", sceneCharacters: [] },
-});
+const makeQuest = (objectives: unknown[]) =>
+  trackerQuest("q1", objectives as object[], "story", {
+    consecutiveObjectives: true,
+    maxAttempts: 1,
+    maxCompletes: 1,
+  });
 
 /** User parked on the battle objective of `quest`. */
 const makeUser = (quest: ReturnType<typeof makeQuest>) =>
-  ({
-    userId: "u1",
-    level: 50,
-    rank: "JONIN",
-    role: "USER",
-    villageId: "v1",
-    isOutlaw: false,
-    bloodlineId: null,
-    sector: 1,
-    village: { id: "v1", sector: 1 },
-    activeWars: [],
-    completedQuests: [],
-    questData: [
-      { id: quest.id, startAt: new Date(), goals: [{ id: "battle", done: false }] },
-    ],
-    userQuests: [
-      {
-        id: `uq-${quest.id}`,
-        questId: quest.id,
-        completed: 0,
-        previousAttempts: 1,
-        previousCompletes: 0,
-        quest,
-      },
-    ],
-  }) as unknown as Parameters<typeof getNewTrackers>[0];
+  trackerUser(
+    [{ quest, previousAttempts: 1 }],
+    [{ id: quest.id, startAt: new Date(), goals: [{ id: "battle", done: false }] }],
+  );
 
 /** Battle goal after the player lost against the quest AI. */
 const goalAfterLoss = (quest: ReturnType<typeof makeQuest>) =>

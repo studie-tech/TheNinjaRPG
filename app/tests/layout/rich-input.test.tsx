@@ -8,20 +8,14 @@ import * as toast from "@/libs/toast";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { actualRichInput as RichInput } from "../setup/preload";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const startUpload = vi.fn();
 const submit = vi.fn();
 const uploadPending = vi.fn();
 let spies: { mockRestore: () => void }[];
-const eventDescriptors = ["Event", "CustomEvent", "requestAnimationFrame", "cancelAnimationFrame"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    // Keep frame callbacks independent of jsdom intervals cleared by fake timers.
-    requestAnimationFrame: { configurable: true, value: (callback: FrameRequestCallback) => Number(setTimeout(() => callback(Date.now()), 0)) },
-    cancelAnimationFrame: { configurable: true, value: (id: number) => clearTimeout(id) },
-  });
+  installBrowserGlobals({ animationFrame: true });
   vi.clearAllMocks();
   startUpload.mockReset();
   spies = [
@@ -33,13 +27,9 @@ beforeEach(() => {
 });
 afterEach(async () => {
   cleanup();
-  // Radix restores focus on a deferred turn, using the DOM's Event constructor.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   for (const spy of spies) spy.mockRestore();
-  for (const [key, descriptor] of eventDescriptors) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
+  restoreBrowserGlobals();
 });
 
 const Composer = ({ initial = "", resetValue = "", disabled = false, plainText = false, autoFocus = false, refreshKey = 0, allowClipboardPaste = true, allowImages }: { initial?: string; resetValue?: string; disabled?: boolean; plainText?: boolean; autoFocus?: boolean; refreshKey?: number; allowClipboardPaste?: boolean; allowImages?: boolean }) => {
@@ -49,6 +39,20 @@ const Composer = ({ initial = "", resetValue = "", disabled = false, plainText =
 const editorFor = async (view: ReturnType<typeof render>) => {
   await waitFor(() => expect(view.getByRole("button", { name: "Bold" }).hasAttribute("disabled")).toBe(false));
   return view.getByRole("textbox", { name: "Message" });
+};
+/** Hold the next upload open; the returned call completes it with a file URL. */
+const deferUpload = (width: number, height: number) => {
+  let finish: (result: unknown) => void = () => {};
+  startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width, height }));
+  return (fileUrl: string) => act(async () => { finish([{ serverData: { fileUrl } }]); });
+};
+const selectAll = (editor: HTMLElement) => {
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 };
 const DialogComposer = () => {
   const [open, setOpen] = useState(true);
@@ -139,11 +143,7 @@ describe("rich input composer", () => {
     const view = render(<Composer initial={text} />);
     const editor = await editorFor(view);
     editor.focus();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
+    selectAll(editor);
     fireEvent.click(view.getByRole("button", { name: "Bold" }));
     fireEvent.click(view.getByRole("button", { name: "Send message" }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
@@ -154,10 +154,7 @@ describe("rich input composer", () => {
     const view = render(<Composer initial={`<${list}><li>Parent<${list}><li>Child</li></${list}></li><li>Sibling</li></${list}>`} />);
     const editor = await editorFor(view);
     editor.focus();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    window.getSelection()?.removeAllRanges();
-    window.getSelection()?.addRange(range);
+    selectAll(editor);
     fireEvent.click(view.getByRole("button", { name: "Bold" }));
     fireEvent.click(view.getByRole("button", { name: "Send message" }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
@@ -423,9 +420,7 @@ describe("rich input composer", () => {
   });
 
   it("blocks a parent form during upload and preserves original file bytes", async () => {
-    let finish: (result: unknown) => void = () => {};
-    startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width: 1920, height: 1080 }));
+    const finishUpload = deferUpload(1920, 1080);
     const view = render(<Composer initial="Draft" />);
     await editorFor(view);
     const file = new File(["original bytes"], "original.png", { type: "image/png" });
@@ -434,7 +429,7 @@ describe("rich input composer", () => {
     expect(view.getByRole("button", { name: "Send message" }).hasAttribute("disabled")).toBe(true);
     fireEvent.submit(view.container.querySelector("form")!);
     expect(submit).not.toHaveBeenCalled();
-    await act(async () => { finish([{ serverData: { fileUrl: "https://example.com/original.png" } }]); });
+    await finishUpload("https://example.com/original.png");
     await waitFor(() => expect(view.getByRole("textbox", { name: "Message" }).querySelector("img")?.getAttribute("width")).toBe("1920"));
     fireEvent.click(view.getByRole("button", { name: "Send message" }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
@@ -446,9 +441,7 @@ describe("rich input composer", () => {
   const pasteImage = (editor: HTMLElement, file = originalFile()) => fireEvent.paste(editor, { clipboardData: { files: [file] } });
 
   it.each(["paste", "file"])("inserts a visual %s at the saved selection without taking another control's focus", async (method) => {
-    let finish: (result: unknown) => void = () => {};
-    startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width: 1920, height: 1080 }));
+    const finishUpload = deferUpload(1920, 1080);
     const view = render(<Composer initial="Before after" />);
     const editor = await editorFor(view);
     const { default: Quill } = await import("quill");
@@ -469,7 +462,7 @@ describe("rich input composer", () => {
     const chosen = document.createElement("input");
     view.container.append(chosen);
     chosen.focus();
-    await act(async () => { finish([{ serverData: { fileUrl: "https://example.com/upload.png" } }]); });
+    await finishUpload("https://example.com/upload.png");
     await waitFor(() => expect(editor.querySelector("img")?.getAttribute("width")).toBe("1920"));
     expect(quill.getContents().ops).toEqual([{ insert: "Before " }, { insert: { image: "https://example.com/upload.png" }, attributes: { width: "1920", height: "1080", alt: "Uploaded image" } }, { insert: "after\n" }]);
     expect(document.activeElement).toBe(chosen);
@@ -479,9 +472,7 @@ describe("rich input composer", () => {
   });
 
   it.each(["editor", "body"])("restores the visual upload caret when focus stays on the %s", async (focus) => {
-    let finish: (result: unknown) => void = () => {};
-    startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width: 800, height: 600 }));
+    const finishUpload = deferUpload(800, 600);
     const view = render(<Composer initial="Before after" />);
     const editor = await editorFor(view);
     const { default: Quill } = await import("quill");
@@ -491,7 +482,7 @@ describe("rich input composer", () => {
     await waitFor(() => expect(startUpload).toHaveBeenCalled());
     if (focus === "body") editor.blur();
     expect(document.activeElement).toBe(focus === "body" ? document.body : editor);
-    await act(async () => { finish([{ serverData: { fileUrl: "https://example.com/upload.png" } }]); });
+    await finishUpload("https://example.com/upload.png");
     await waitFor(() => expect(quill.getSelection()).toEqual({ index: 8, length: 0 }));
     expect(document.activeElement).toBe(editor);
     expect(editor.querySelector("img")?.getAttribute("height")).toBe("600");
@@ -523,9 +514,7 @@ describe("rich input composer", () => {
   });
 
   it.each(["paste", "file"])("uploads a source %s at the selection without changing advanced HTML or dimensions", async (method) => {
-    let finish: (result: unknown) => void = () => {};
-    startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width: 1920, height: 1080 }));
+    const finishUpload = deferUpload(1920, 1080);
     const view = render(<Composer initial={advancedHtml} />);
     const editor = view.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
     editor.focus();
@@ -547,7 +536,7 @@ describe("rich input composer", () => {
     fireEvent.submit(view.container.querySelector("form")!);
     expect(startUpload).toHaveBeenCalledTimes(1);
     expect(submit).not.toHaveBeenCalled();
-    await act(async () => { finish([{ serverData: { fileUrl: "https://example.com/original.png" } }]); });
+    await finishUpload("https://example.com/original.png");
     const html = '<img src="https://example.com/original.png" alt="Uploaded image" width="1920" height="1080">';
     const expected = advancedHtml.replace("Replace me", html);
     await waitFor(() => expect(editor.value).toBe(expected));
@@ -577,9 +566,7 @@ describe("rich input composer", () => {
   });
 
   it.each(["reset", "refresh", "disabled", "unmount"])("discards a source upload completed after %s", async (change) => {
-    let finish: (result: unknown) => void = () => {};
-    startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width: 800, height: 600 }));
+    const finishUpload = deferUpload(800, 600);
     const view = render(<Composer initial={advancedHtml} resetValue="New draft" />);
     pasteImage(view.getByRole("textbox", { name: "Message" }));
     await waitFor(() => expect(startUpload).toHaveBeenCalled());
@@ -587,15 +574,13 @@ describe("rich input composer", () => {
     if (change === "refresh") view.rerender(<Composer initial={advancedHtml} refreshKey={1} />);
     if (change === "disabled") view.rerender(<Composer initial={advancedHtml} disabled />);
     if (change === "unmount") view.unmount();
-    await act(async () => { finish([{ serverData: { fileUrl: "https://example.com/stale.png" } }]); });
+    await finishUpload("https://example.com/stale.png");
     expect(uploadPending).toHaveBeenLastCalledWith(false);
     if (change !== "unmount") expect((view.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement).value).toBe(change === "reset" ? "New draft" : advancedHtml);
   });
 
   it("does not take focus from another control after a source upload", async () => {
-    let finish: (result: unknown) => void = () => {};
-    startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width: 800, height: 600 }));
+    const finishUpload = deferUpload(800, 600);
     const view = render(<Composer initial={advancedHtml} />);
     const editor = view.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
     editor.focus();
@@ -604,7 +589,7 @@ describe("rich input composer", () => {
     await waitFor(() => expect(startUpload).toHaveBeenCalled());
     const chosen = view.getByRole("button", { name: "Save" });
     chosen.focus();
-    await act(async () => { finish([{ serverData: { fileUrl: "https://example.com/upload.png" } }]); });
+    await finishUpload("https://example.com/upload.png");
     await waitFor(() => expect(editor.selectionStart).toBeGreaterThan(0));
     expect(document.activeElement).toBe(chosen);
   });

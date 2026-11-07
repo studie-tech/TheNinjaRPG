@@ -12,7 +12,7 @@ import {
 import { updateRaidProgress } from "@/libs/combat/database";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
-import { insertQuests, insertUsers } from "../../../../setup/factories";
+import { insertQuests, insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -35,8 +35,7 @@ describeWithDatabase("raid participation battle snapshots", () => {
     await insertQuests([{
       id: raidId, questType: "raid", raidBossCurrentHealth: 1000, raidBossMaxHealth: 1000,
     }]);
-    const database = await getTestDatabase();
-    await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
   }, 60_000);
   afterEach(() => vi.restoreAllMocks());
 

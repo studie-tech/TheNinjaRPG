@@ -1,5 +1,5 @@
-import type { BattleUserState } from "@/libs/combat/types";
-import { makeBattleUser } from "./battleScenario";
+import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
+import { flatCombatStats, makeBattleUser, makeCompleteBattle } from "./battleScenario";
 
 /** Shared AI actor defaults; each suite supplies its own opponents, rules and catalog. */
 export const makeAiUser = (over: Partial<BattleUserState>): BattleUserState =>
@@ -20,17 +20,20 @@ export const makeAiUser = (over: Partial<BattleUserState>): BattleUserState =>
     originalLevel: 10,
     originalLongitude: 1,
     originalLatitude: 1,
-    offence: 100,
-    defence: 100,
-    ninjutsuMastery: 100,
-    genjutsuMastery: 100,
-    taijutsuMastery: 100,
-    bukijutsuMastery: 100,
-    bloodlineMastery: 100,
-    sageMastery: 100,
-    strength: 100,
-    intelligence: 100,
-    willpower: 100,
-    speed: 100,
+    ...flatCombatStats(100),
     ...over,
+  });
+
+/** Shared AI-turn battle metadata; each suite supplies its battle type, board, roster and catalogs. */
+export const makeAiBattle = (
+  overrides: Parameters<typeof makeCompleteBattle>[0],
+): CompleteBattle =>
+  makeCompleteBattle({
+    version: 1,
+    rewardScaling: 1,
+    forceKeepPools: false,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    roundStartAt: new Date(0),
+    ...overrides,
   });

@@ -5,18 +5,16 @@ import * as client from "@/app/_trpc/client";
 import { WarRulesForm } from "@/layout/WarRulesForm";
 import * as toast from "@/libs/toast";
 import { defaultWarRules, type WarRules } from "@/validators/war";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 let rules: WarRules | undefined;
 let isPending: boolean;
 const save = vi.fn();
 const refetch = vi.fn();
 let onSuccess: (result: { success: boolean; message: string }, values: WarRules) => void;
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   rules = undefined;
   isPending = true;
   vi.clearAllMocks();
@@ -41,8 +39,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 describe("village war settings", () => {

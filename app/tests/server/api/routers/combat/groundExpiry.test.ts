@@ -10,6 +10,7 @@ import {
   makeEffect,
 } from "../../../../libs/combat/helpers/battleScenario";
 import { insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,
@@ -22,13 +23,7 @@ describeWithDatabase("polling combat ground expiry history", () => {
     await resetTables(battleAction, battle, userData);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(nextServer, "after").mockImplementation(() => {});
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
   });
   afterEach(() => vi.restoreAllMocks());
 

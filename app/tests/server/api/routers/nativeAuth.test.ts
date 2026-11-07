@@ -4,6 +4,7 @@ import { nativeAuthRouter } from "@/server/api/routers/nativeAuth";
 import { createTRPCRouter } from "@/server/api/trpc";
 import { drizzleDB } from "@/server/db";
 import * as storeModule from "@/server/utils/nativeAuth";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 
 const flowId = "f".repeat(43);
 const proof = "p".repeat(43);
@@ -29,14 +30,9 @@ beforeEach(() => {
   limitSuccess = true;
   // The limiter's method is an instance field; mock its transport rather than a
   // prototype so this suite never contacts the configured Redis service.
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
-    const commands = JSON.parse(String(init?.body)) as unknown[];
-    const resultFor = (command: unknown[]) => ({
-      result: command[0] === "evalsha" || command[0] === "eval" ? [limitSuccess ? 59 : -1, 60] : 1,
-    });
-    return Response.json(Array.isArray(commands[0])
-      ? commands.map(command => resultFor(command as unknown[]))
-      : resultFor(commands));
+  stubRateLimitTransport({
+    remaining: () => (limitSuccess ? 59 : -1),
+    unexpectedRequestMessage: "Unexpected HTTP request in native auth tests",
   });
   vi.spyOn(storeModule, "nativeAuthStore").mockReturnValue(mocks);
   vi.spyOn(clerk, "clerkClient").mockResolvedValue({

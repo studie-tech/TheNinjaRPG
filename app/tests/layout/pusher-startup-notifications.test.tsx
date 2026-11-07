@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { getDefaultStore } from "jotai";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import * as mastery from "@/hooks/useMasteryQueueRefresh";
 import * as refresh from "@/hooks/useRefreshAt";
@@ -18,8 +17,8 @@ import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider, useUserData } from "@/utils/UserContext";
 import { actualUserContext } from "../setup/preload";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 let userId = "player";
 beforeEach(() => {
@@ -362,13 +361,11 @@ function mount(
     return <p>{data?.username ?? status}</p>;
   };
   const Page = () => (
-    <testApi.Provider client={trpcClient} queryClient={qc}>
-      <QueryClientProvider client={qc}>
-        <UserContextProvider initialIsSignedIn>
-          <Probe />
-        </UserContextProvider>
-      </QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={qc}>
+      <UserContextProvider initialIsSignedIn>
+        <Probe />
+      </UserContextProvider>
+    </TrpcTestProviders>
   );
   const page = <Page />;
   const view = render(page);

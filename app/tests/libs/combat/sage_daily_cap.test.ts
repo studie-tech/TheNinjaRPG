@@ -1,33 +1,24 @@
 import { describe, expect, it } from "bun:test";
-import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
+import {
+  SAGE_MASTERY_DAILY_ACTIVATIONS,
+  SAGE_MODE_ACTIVATION_JUTSU_ID,
+} from "@/drizzle/constants";
 import { handleInjectedJutsus } from "@/libs/combat/actions";
-import { applySingleEffect } from "@/libs/combat/process";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import { makeBattleUser, makeInjectBattle } from "./helpers/battleScenario";
-import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
-import type {
-  ActionEffect,
-  Consequence,
-  GroundEffect,
-  UserEffect,
-} from "@/libs/combat/types";
+import { makeInjectBattle } from "./helpers/battleScenario";
+import { activateSageMode, makeSageMode, makeSageUser } from "./helpers/sageMode";
+import type { BattleUserState } from "@/libs/combat/types";
 
 const activationJutsus = {
   [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU,
 };
 
-/** Equipped sage at INITIATE daily cap (10), with the given activations used today. */
-const sageUser = (dailySageActivations: number) =>
-  makeBattleUser("sage", {
-    sageModeId: "sage-1",
-    sageModeUsedThisBattle: false,
-    sageMasteryExperience: 0, // cap = 10
-    dailySageActivations,
-  });
+/** Daily cap of an equipped sage with no mastery experience. */
+const DAILY_CAP = SAGE_MASTERY_DAILY_ACTIVATIONS.INITIATE;
 
 describe("sage activation daily-cap gating", () => {
   it("offers the Activation action below the daily cap", () => {
-    const user = sageUser(9);
+    const user = makeSageUser({ dailySageActivations: DAILY_CAP - 1 });
     const jutsus = handleInjectedJutsus(
       makeInjectBattle(user, { jutsus: activationJutsus }),
       user,
@@ -36,7 +27,7 @@ describe("sage activation daily-cap gating", () => {
   });
 
   it("hides the Activation action at the daily cap", () => {
-    const user = sageUser(10);
+    const user = makeSageUser({ dailySageActivations: DAILY_CAP });
     const jutsus = handleInjectedJutsus(
       makeInjectBattle(user, { jutsus: activationJutsus }),
       user,
@@ -45,39 +36,20 @@ describe("sage activation daily-cap gating", () => {
   });
 });
 
-/** Run one Activation through `applySingleEffect` against `user`. */
-const runActivate = (user: ReturnType<typeof makeBattleUser>) => {
-  const battle = makeInjectBattle(user, { sageModes: { "sage-1": makeSageMode() } });
-  applySingleEffect(
-    new Map<string, Consequence>(),
-    [user],
-    [] as UserEffect[],
-    [] as GroundEffect[],
-    [] as ActionEffect[],
-    new Set<string>(),
-    battle,
-    "sage",
-    makeActivateSageEffect(),
-  );
-};
+const runActivate = (user: BattleUserState) =>
+  activateSageMode(user, makeInjectBattle(user, { sageModes: { "sage-1": makeSageMode() } }));
 
 describe("sage activation daily-cap enforcement in combat", () => {
   it("refuses activation at the daily cap without spending resources", () => {
-    const user = makeBattleUser("sage", {
-      sageModeId: "sage-1", sageMasteryExperience: 0, dailySageActivations: 10,
-      curChakra: 5000, maxChakra: 5000, curStamina: 5000, maxStamina: 5000,
-    });
+    const user = makeSageUser({ dailySageActivations: DAILY_CAP, curChakra: 5000 });
     runActivate(user);
     expect(user.sageModeActivated).not.toBe(true);
     expect(user.curChakra).toBe(5000);
-    expect(user.dailySageActivations).toBe(10);
+    expect(user.dailySageActivations).toBe(DAILY_CAP);
   });
 
   it("activates below the cap and increments the daily count", () => {
-    const user = makeBattleUser("sage", {
-      sageModeId: "sage-1", sageMasteryExperience: 0, dailySageActivations: 3,
-      curChakra: 5000, maxChakra: 5000, curStamina: 5000, maxStamina: 5000,
-    });
+    const user = makeSageUser({ dailySageActivations: 3 });
     runActivate(user);
     expect(user.sageModeActivated).toBe(true);
     expect(user.dailySageActivations).toBe(4);

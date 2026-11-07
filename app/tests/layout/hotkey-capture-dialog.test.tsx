@@ -2,27 +2,17 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { HotkeyTarget } from "@/layout/HotkeyControls";
 import { HotkeyCaptureDialog } from "@/layout/HotkeyControls";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-// Radix dispatches DOM events through the global constructors.
-const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) =>
-  Object.getOwnPropertyDescriptor(globalThis, key),
-);
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
-  }
+  installBrowserGlobals();
 });
 
 afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const open = (onAssign = vi.fn(() => true)) => {

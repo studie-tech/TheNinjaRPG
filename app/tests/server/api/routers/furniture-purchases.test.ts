@@ -6,11 +6,10 @@ import { item, itemPurchaseCounter, itemVariant, userData, userItem, userItemImb
 import { calcMaxItems } from "@/libs/item";
 import { homeRouter } from "@/server/api/routers/home";
 import { itemRouter } from "@/server/api/routers/item";
-import type { DrizzleClient } from "@/server/db";
-
 import { FURNITURE_ITEM_DEFAULTS } from "@/validators/itemFurniture";
+
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
-import { beforeStatements, failStatements } from "../../../setup/statements";
+import { beforeStatements, failStatements, beforeTransaction, inTransactions } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const userId = "furniture-buyer";
@@ -121,14 +120,8 @@ describeWithDatabase("standard furniture purchases", () => {
     await storedRows(capacity - 1);
     const before = await snapshot();
     let downgrade: Awaited<ReturnType<ReturnType<typeof homeRouter.createCaller>["upgradeHome"]>> | undefined;
-    const raced = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "transaction") return Reflect.get(target, key, receiver);
-        return async (callback: Parameters<typeof database.transaction>[0]) => {
-          downgrade = await (await callerFor(homeRouter, userId)).upgradeHome({ homeType: "NONE" });
-          return database.transaction(callback);
-        };
-      },
+    const raced = beforeTransaction(database, async () => {
+      downgrade = await (await callerFor(homeRouter, userId)).upgradeHome({ homeType: "NONE" });
     });
     const purchase = await callerForDatabase(itemRouter, userId, raced).buy({ itemId: "furniture", villageId, stack: 1 });
     expect(downgrade?.success).toBe(true);
@@ -175,15 +168,9 @@ describeWithDatabase("standard furniture purchases", () => {
   it("rejects a stale balance snapshot before delivery", async () => {
     const database = await getTestDatabase();
     const before = await snapshot();
-    const raced = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "transaction") return Reflect.get(target, key, receiver);
-        return async (callback: Parameters<typeof database.transaction>[0]) => {
-          await database.update(userData).set({ money: 0, updatedAt: getNextUserSnapshotAt(before.owner.updatedAt) }).where(eq(userData.userId, userId));
-          return database.transaction(callback);
-        };
-      },
-    });
+    const raced = beforeTransaction(database, () =>
+      database.update(userData).set({ money: 0, updatedAt: getNextUserSnapshotAt(before.owner.updatedAt) }).where(eq(userData.userId, userId)),
+    );
     const api = callerForDatabase(itemRouter, userId, raced);
     expect((await api.buy({ itemId: "furniture", villageId, stack: 1 })).success).toBe(false);
     const after = await snapshot();
@@ -195,14 +182,7 @@ describeWithDatabase("standard furniture purchases", () => {
   it("rolls back payment when inventory delivery fails", async () => {
     const database = await getTestDatabase();
     const before = await snapshot();
-    const failing = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "transaction") return Reflect.get(target, key, receiver);
-        return (callback: Parameters<typeof database.transaction>[0]) => database.transaction((transaction) =>
-          callback(failStatements(transaction as unknown as DrizzleClient, userItem) as typeof transaction),
-        );
-      },
-    });
+    const failing = inTransactions(database, (tx) => failStatements(tx, userItem));
     const api = callerForDatabase(itemRouter, userId, failing);
     await expect(api.buy({ itemId: "furniture", villageId, stack: 1 })).rejects.toThrow("Statement failed on purpose");
     expect(await snapshot()).toEqual(before);

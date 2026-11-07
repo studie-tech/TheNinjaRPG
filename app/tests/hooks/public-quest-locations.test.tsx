@@ -1,7 +1,7 @@
-import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
+import { QueryClient, focusManager, onlineManager } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { PropsWithChildren } from "react";
@@ -10,8 +10,8 @@ import * as client from "@/app/_trpc/client";
 import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
 import { publicQuestLocations } from "@/libs/mapLocations";
 import { MoveToObjective } from "@/validators/objectives";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 let now = 0;
 beforeEach(() => {
@@ -63,7 +63,7 @@ const setup = (offset = 0, deferred = false, initialOffset = offset) => {
     else if (deferred) pending.push(complete);
     else void Promise.resolve().then(complete);
   })] });
-  const wrapper = ({ children }: PropsWithChildren) => <testApi.Provider client={trpc} queryClient={queryClient}><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></testApi.Provider>;
+  const wrapper = ({ children }: PropsWithChildren) => <TrpcTestProviders client={trpc} queryClient={queryClient}>{children}</TrpcTestProviders>;
   const view = renderHook(({ timeDiff }) => usePublicQuestLocations(timeDiff), { wrapper, initialProps: { timeDiff: initialOffset } });
   return { view, wrapper, queryClient, read, revisions, pending, setName: (value: string) => { name = value; }, fail: (value: boolean) => { fail = value; } };
 };

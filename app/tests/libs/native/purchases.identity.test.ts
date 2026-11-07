@@ -5,56 +5,45 @@ import {
   runPurchaseIdentityOperation,
   syncPurchaseIdentitySnapshot,
 } from "@/libs/native/purchases";
-
-const capacitorWindow = window as typeof window & {
-  Capacitor?: {
-    isNativePlatform: () => boolean;
-    getPlatform: () => string;
-    Plugins: Record<string, Record<string, unknown>>;
-  };
-};
+import { installCapacitor, removeCapacitor } from "../../setup/native";
 
 afterEach(() => {
-  delete capacitorWindow.Capacitor;
+  removeCapacitor();
 });
 
 describe("RevenueCat identity queue", () => {
   it("refreshes customer history before opening the purchase sheet", async () => {
     const events: string[] = [];
     const syncPurchases = vi.fn();
-    capacitorWindow.Capacitor = {
-      isNativePlatform: () => true,
-      getPlatform: () => "ios",
-      Plugins: {
-        Purchases: {
-          invalidateCustomerInfoCache: async () => {
-            events.push("invalidate");
-          },
-          getCustomerInfo: async () => {
-            events.push("customer-info");
-            return {
-              customerInfo: {
-                entitlements: { active: {} },
-                activeSubscriptions: [],
-                originalAppUserId: "player-a",
-                nonSubscriptionTransactions: [{
-                  transactionIdentifier: "rc-history-id",
-                  productIdentifier: "tnr_reps_tier1",
-                }],
-                subscriptionsByProductIdentifier: {
-                  tnr_federal_normal: { storeTransactionId: "apple-subscription-id" },
-                },
-              },
-            };
-          },
-          purchasePackage: async () => {
-            events.push("purchase");
-            return { userCancelled: true };
-          },
-          syncPurchases,
+    installCapacitor({
+      Purchases: {
+        invalidateCustomerInfoCache: async () => {
+          events.push("invalidate");
         },
+        getCustomerInfo: async () => {
+          events.push("customer-info");
+          return {
+            customerInfo: {
+              entitlements: { active: {} },
+              activeSubscriptions: [],
+              originalAppUserId: "player-a",
+              nonSubscriptionTransactions: [{
+                transactionIdentifier: "rc-history-id",
+                productIdentifier: "tnr_reps_tier1",
+              }],
+              subscriptionsByProductIdentifier: {
+                tnr_federal_normal: { storeTransactionId: "apple-subscription-id" },
+              },
+            },
+          };
+        },
+        purchasePackage: async () => {
+          events.push("purchase");
+          return { userCancelled: true };
+        },
+        syncPurchases,
       },
-    };
+    });
 
     const result = await purchaseForBoundIdentity(
       {
@@ -129,27 +118,23 @@ describe("RevenueCat identity queue", () => {
       .mockResolvedValue(undefined);
     const logIn = vi.fn().mockResolvedValue(undefined);
     const isConfigured = vi.fn().mockResolvedValue({ isConfigured: false });
-    capacitorWindow.Capacitor = {
-      isNativePlatform: () => true,
-      getPlatform: () => "ios",
-      Plugins: {
-        Purchases: {
-          isConfigured,
-          configure,
-          logIn,
-          getOfferings: vi.fn().mockResolvedValue({
-            current: { availablePackages: [] },
-          }),
-          getCustomerInfo: vi.fn().mockResolvedValue({
-            customerInfo: {
-              entitlements: { active: {} },
-              activeSubscriptions: [],
-              originalAppUserId: "player-a",
-            },
-          }),
-        },
+    installCapacitor({
+      Purchases: {
+        isConfigured,
+        configure,
+        logIn,
+        getOfferings: vi.fn().mockResolvedValue({
+          current: { availablePackages: [] },
+        }),
+        getCustomerInfo: vi.fn().mockResolvedValue({
+          customerInfo: {
+            entitlements: { active: {} },
+            activeSubscriptions: [],
+            originalAppUserId: "player-a",
+          },
+        }),
       },
-    };
+    });
 
     await expect(identity.bind("ios-key", "player-a")).rejects.toThrow(
       "SDK unavailable",

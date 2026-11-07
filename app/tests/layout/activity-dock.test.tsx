@@ -5,12 +5,12 @@ import { ActivityDock } from "@/layout/ActivityDock";
 import * as logbook from "@/layout/Logbook";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import * as context from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const eventDescriptor = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
 let user: { userId: string; tutorialOn: boolean; tutorialStep: number; userQuests: unknown[]; questData: unknown[] };
 beforeEach(() => {
   localStorage.clear();
-  Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
+  installBrowserGlobals({ events: ["CustomEvent"] });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   user = { userId: "dock-reader", tutorialOn: true, tutorialStep: 0, userQuests: [], questData: [] };
   vi.spyOn(context, "useUserData").mockImplementation(() => ({ data: user }) as never);
@@ -21,8 +21,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
-  if (eventDescriptor) Object.defineProperty(globalThis, "CustomEvent", eventDescriptor);
-  else Reflect.deleteProperty(globalThis, "CustomEvent");
+  restoreBrowserGlobals();
 });
 
 it("persists the chosen side and collapsed state without disabling the tutorial", () => {

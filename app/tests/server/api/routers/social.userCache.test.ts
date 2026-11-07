@@ -12,7 +12,12 @@ import { getMembershipUserPatch } from "@/deltas/social";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuests, insertUsers } from "../../../setup/factories";
+import {
+  insertQuests,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertClans,
+} from "../../../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 describeWithDatabase("social mutation profile projections", () => {
@@ -30,7 +35,7 @@ describeWithDatabase("social mutation profile projections", () => {
 
   it("derives the clan bonus from opening raw sources without reading after the write", async () => {
     const db = await getTestDatabase();
-    await db.insert(clan).values({ id: "regen-clan", name: "Regen", image: "", villageId: "old", founderId: "projection-user", leaderId: "projection-user", leaderOrderId: "order", regenBoost: 20 });
+    await insertClans([{ id: "regen-clan", name: "Regen", villageId: "old", leaderId: "projection-user", regenBoost: 20 }]);
     await db.update(userData).set({ regeneration: 10, clanId: "regen-clan" }).where(eq(userData.userId, "projection-user"));
     const [before, settings] = await Promise.all([findMembershipUserCache(db, "projection-user"), fetchAllGameSettings(db)]);
     if (!before) throw new Error("Missing profile");
@@ -50,7 +55,7 @@ describeWithDatabase("social mutation profile projections", () => {
       questData: [QuestTracker.parse({ id: "deleted-private", goals: [{ id: "secret", sector: 723, longitude: 41, latitude: 37 }] })],
     }).where(eq(userData.userId, "projection-user"));
     await insertUsers([{ userId: "opponent-secret", username: "SecretOpponent", isAi: true, rank: "JONIN", level: 50, curHealth: 9999 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "opponent-secret", rules: [] });
+    await insertDefaultAiProfile({ userId: "opponent-secret" });
     await insertQuests([{ id: "virtual-level", questType: "achievement", content: { objectives: [AllObjectives.parse({ id: "level", task: "user_level", value: 100 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
     const profile = callerForDatabase(profileRouter, "projection-user", db);
     const initial = await profile.getUser();
@@ -90,7 +95,7 @@ describeWithDatabase("social mutation profile projections", () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ bracketImmunityLiftedUntil: new Date(Date.now() + 60_000) }).where(eq(userData.userId, "projection-user"));
     await insertUsers([{ userId: "timer-ai", username: "TimerOpponent", isAi: true }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "timer-ai", rules: [] });
+    await insertDefaultAiProfile({ userId: "timer-ai" });
     const measured = await recordQueries(() => initiateBattle({ client: db, userIds: ["projection-user"], targetIds: ["timer-ai"], cacheUserId: "projection-user", biome: "default" }, "QUEST"));
     expect(measured.result.success).toBe(true);
     expect(measured.result.userPatch).toBeUndefined();

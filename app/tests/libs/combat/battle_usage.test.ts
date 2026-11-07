@@ -7,34 +7,35 @@ import {
 } from "@/drizzle/constants";
 import { availableUserActions } from "@/libs/combat/actions";
 import { fitsBattleUsage } from "@/libs/combat/participants";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import {
   makeBattleUser,
   makeBattleUserItem,
-  makeBattleWithWeapon,
   makeInjectBattle,
+  makeJutsu,
   makeTag,
+  makeWeapon,
 } from "./helpers/battleScenario";
 
 const USAGES = ["PVE", "PVP", "BOTH"] as const satisfies readonly BattleUsageType[];
 
 const battleWithUsageContent = (battleType: BattleType) => {
-  const jutsus = USAGES.map((usage) => ({
-    ...SAGE_MODE_ACTIVATION_JUTSU,
-    id: `jutsu-${usage}`,
-    name: `Jutsu ${usage}`,
-    battleUsageType: usage,
-    effects: [makeTag("heal")],
-  }));
-  const weapon = makeBattleWithWeapon().extraState.items!["weapon-1"]!;
-  const items = USAGES.map((usage) => ({
-    ...weapon,
-    id: `pill-${usage}`,
-    name: `Pill ${usage}`,
-    itemType: "CONSUMABLE" as const,
-    battleUsageType: usage,
-    effects: [makeTag("heal")],
-  }));
+  const jutsus = USAGES.map((usage) =>
+    makeJutsu({
+      id: `jutsu-${usage}`,
+      name: `Jutsu ${usage}`,
+      battleUsageType: usage,
+      effects: [makeTag("heal")],
+    }),
+  );
+  const items = USAGES.map((usage) =>
+    makeWeapon({
+      id: `pill-${usage}`,
+      name: `Pill ${usage}`,
+      itemType: "CONSUMABLE",
+      battleUsageType: usage,
+      effects: [makeTag("heal")],
+    }),
+  );
   const user = makeBattleUser("caster", {
     jutsus: jutsus.map((jutsu) => ({
       id: jutsu.id,

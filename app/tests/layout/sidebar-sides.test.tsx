@@ -1,7 +1,7 @@
 import * as clerk from "@clerk/nextjs";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import { useCombatPreferences } from "@/hooks/combat";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
@@ -24,11 +24,8 @@ import {
 } from "@/libs/layoutPreference";
 import { VISUAL_EFFECT_KEYS } from "@/libs/visualEffects";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) =>
-  Object.getOwnPropertyDescriptor(globalThis, key),
-);
 const LAYOUT_STYLESHEETS = ["layout-themes.css", "layout-directions.css"];
 let stylesheet: HTMLStyleElement | undefined;
 
@@ -55,11 +52,7 @@ afterEach(() => {
     if (key.startsWith("combat") || key === "showGridNumbers") localStorage.removeItem(key);
   }
   for (const key of Object.values(VISUAL_EFFECT_KEYS)) localStorage.removeItem(key);
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const mockFrameChrome = () => {
@@ -200,12 +193,12 @@ describe("Classic light layout", () => {
 });
 
 describe("game settings categories", () => {
+  beforeEach(() => {
+    installBrowserGlobals();
+  });
+
   const CombatSettingsProbe = ({ supportsBattleFocus }: { supportsBattleFocus: boolean }) => <UserCombatSettings config={useCombatPreferences()} supportsBattleFocus={supportsBattleFocus} />;
   const renderSettings = (withCombat = false, supportsBattleFocus = true) => {
-    // useLocalStorage syncs same-page readers with the DOM's own CustomEvent.
-    for (const key of browserGlobals) {
-      Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
-    }
     vi.spyOn(clerk, "useUser").mockReturnValue({ isSignedIn: false } as never);
     vi.spyOn(navigation, "useRouter").mockReturnValue({ refresh: vi.fn() } as never);
     Object.assign(vi.spyOn(client, "api" as never), {

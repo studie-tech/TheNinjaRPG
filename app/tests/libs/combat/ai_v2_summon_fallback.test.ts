@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
+import type { BattleUserState, CompleteBattle, ExtraState } from "@/libs/combat/types";
 import { TerrainHex } from "@/libs/hexgrid";
 import { ActionEndTurn, AiRule } from "@/validators/ai";
+import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
 import { makeEffect } from "./helpers/battleScenario";
 
 /**
@@ -16,33 +17,20 @@ const WIDTH = 10;
 const HEIGHT = 8;
 
 const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
-  ({
-    userId: "x", username: "x", controllerId: "x",
-    isAi: false, isSummon: false, isPiloted: false,
-    curHealth: 5000, maxHealth: 5000, curChakra: 5000, maxChakra: 5000,
-    curStamina: 5000, maxStamina: 5000, villageId: "v",
-    fledBattle: false, leftBattle: false, longitude: 0, latitude: 0,
-    actionPoints: 100, effects: [], jutsus: [], items: [], basicActions: [],
-    round: 0, direction: "left", isAggressor: false, rank: "JONIN",
-    highestGenerals: [], iAmHere: true, level: 60,
-    originalLevel: 60, originalLongitude: 0, originalLatitude: 0,
-    isOriginal: true, usedGenerals: {}, usedStats: {}, moneyStolen: 0,
-    allyVillage: false, usedActions: [], usedTagTypes: [], initiative: 0,
-    relationIds: [],
-    offence: 100, defence: 100, ninjutsuMastery: 100, genjutsuMastery: 100,
-    taijutsuMastery: 100, bukijutsuMastery: 100, bloodlineMastery: 100, sageMastery: 100,
-    strength: 100, intelligence: 100, willpower: 100, speed: 100,
+  makeAiUser({
+    isAi: false, villageId: "v", direction: "left", rank: "JONIN",
+    longitude: 0, latitude: 0, originalLongitude: 0, originalLatitude: 0,
+    level: 60, originalLevel: 60,
     ...over,
-  }) as unknown as BattleUserState;
+  });
 
 const mkBattle = (
   summon: Partial<BattleUserState>,
   aiProfiles: Record<string, unknown>,
 ): CompleteBattle =>
-  ({
-    id: "b1", battleType: "COMBAT", round: 1, version: 1, activeUserId: "summon",
-    createdAt: new Date(0), updatedAt: new Date(0), roundStartAt: new Date(),
-    background: "", width: WIDTH, height: HEIGHT, rewardScaling: 1, forceKeepPools: false,
+  makeAiBattle({
+    battleType: "COMBAT", activeUserId: "summon", roundStartAt: new Date(),
+    width: WIDTH, height: HEIGHT,
     usersState: [
       mkUser({ userId: "user_owner", username: "Owner", controllerId: "user_owner",
         longitude: 4, latitude: 3 }),
@@ -51,13 +39,8 @@ const mkBattle = (
       mkUser({ userId: "summon", username: "Tor Tor", controllerId: "user_owner",
         isAi: true, isSummon: true, longitude: 5, latitude: 3, ...summon }),
     ],
-    usersEffects: [], groundEffects: [],
-    extraState: {
-      jutsus: {}, jutsuReskins: {}, items: {}, bloodlines: {}, villages: {}, anbuSquads: {},
-      keystoneItems: {}, wars: {}, relations: {}, clans: {}, aiProfiles,
-      userQuests: {}, completedQuests: {}, questData: {}, bounties: {}, bountySignups: {},
-    },
-  }) as unknown as CompleteBattle;
+    extraState: { aiProfiles: aiProfiles as ExtraState["aiProfiles"] },
+  });
 
 const defaultProfile = {
   id: "Default", name: "Default", includeDefaultRules: true,

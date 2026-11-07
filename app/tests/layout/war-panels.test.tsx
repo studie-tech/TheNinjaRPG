@@ -2,10 +2,9 @@ import { act, cleanup, fireEvent, render, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as navigation from "next/navigation";
-import { type ComponentProps, type ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
-import * as select from "@/components/ui/select";
 import {
   WAR_ESPIONAGE_TARGET,
   WAR_POINT_CONVERSION_DAYS,
@@ -23,52 +22,17 @@ import * as UserContext from "@/utils/UserContext";
 import { SimpleObjective } from "@/validators/objectives";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { defaultWarRules } from "@/validators/war";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { controllableMutation, stubSelect } from "./helpers/warUi";
+import { testRouter } from "../setup/router";
 
 type ObjectiveInfo = NonNullable<RouterOutputs["war"]["getObjectiveWarInfo"]>;
 type MutationResult = UserDeltaResponse & { battleId?: string };
-type MutationCallbacks = {
-  onMutate?: () => number | undefined;
-  onSuccess?: (result: MutationResult, variables: unknown, revision: number | undefined) => void | Promise<void>;
-  onError?: (error: Error) => void;
-};
 type PollInterval = (query: {
   state: { data?: ObjectiveInfo | null };
 }) => number | false;
 
-/** Keep transport controllable while preserving each component's pending and feedback lifecycle. */
-const mutation = () => {
-  const mutate = vi.fn();
-  let callbacks: MutationCallbacks;
-  let revision: number | undefined;
-  let setPending: (pending: boolean) => void;
-  return {
-    mutate,
-    useMutation: (options: MutationCallbacks) => {
-      const [isPending, setIsPending] = useState(false);
-      const [variables, setVariables] = useState<unknown>();
-      callbacks = options;
-      setPending = setIsPending;
-      return {
-        isPending,
-        variables,
-        mutate: (input: unknown) => {
-          revision = options.onMutate?.();
-          mutate(input);
-          setVariables(input);
-          setIsPending(true);
-        },
-      };
-    },
-    respond: async (result: MutationResult) => {
-      await callbacks.onSuccess?.(result, undefined, revision);
-      setPending(false);
-    },
-    fail: (message: string) => {
-      callbacks.onError?.(new Error(message));
-      setPending(false);
-    },
-  };
-};
+const mutation = () => controllableMutation<MutationResult>();
 
 const start = mutation();
 const finish = mutation();
@@ -85,15 +49,7 @@ const invalidateWars = vi.fn(async () => {});
 const invalidateClaims = vi.fn(async () => {});
 const invalidateUser = vi.fn(async () => {});
 const updateUser = vi.fn(async (_patch: unknown) => {});
-const router = {
-  back: vi.fn(),
-  forward: vi.fn(),
-  refresh: vi.fn(),
-  push: vi.fn(),
-  replace: vi.fn(),
-  prefetch: vi.fn(),
-  bfcacheId: "war-panels",
-};
+const router = testRouter("war-panels");
 const NOW = Date.UTC(2026, 9, 1, 12);
 let nowMs: number;
 let timeDiff: number;
@@ -112,8 +68,6 @@ let mercenaries: RouterOutputs["war"]["getMercenaries"];
 let claims: RouterOutputs["war"]["getWarPointClaims"];
 let camps: RouterOutputs["war"]["getWarCampNotices"];
 let claimError: Error | null;
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 
 const makeInfo = (): ObjectiveInfo => ({
   war: {
@@ -213,8 +167,7 @@ const readyAttempt = (endsAt = new Date(NOW - 1000).toISOString()) => ({
 
 beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
   vi.clearAllMocks();
   vi.useFakeTimers();
   nowMs = NOW;
@@ -300,42 +253,14 @@ beforeEach(() => {
       </button>
     </div>
   ));
-  vi.spyOn(select, "Select").mockImplementation(
-    ({ value, onValueChange, children }: ComponentProps<typeof select.Select>) => (
-      <select
-        aria-label="Choose a war"
-        value={value}
-        onChange={(event) => onValueChange?.(event.target.value)}
-      >
-        {children}
-      </select>
-    ),
-  );
-  vi.spyOn(select, "SelectTrigger").mockImplementation(
-    Object.assign(() => <></>, { displayName: select.SelectTrigger.displayName }),
-  );
-  vi.spyOn(select, "SelectContent").mockImplementation(
-    Object.assign(
-      ({ children }: ComponentProps<typeof select.SelectContent>) => <>{children}</>,
-      { displayName: select.SelectContent.displayName },
-    ),
-  );
-  vi.spyOn(select, "SelectItem").mockImplementation(
-    Object.assign(
-      ({ value, children }: ComponentProps<typeof select.SelectItem>) => (
-        <option value={value}>{children}</option>
-      ),
-      { displayName: select.SelectItem.displayName },
-    ),
-  );
+  stubSelect("Choose a war");
 });
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 describe("war mercenary management", () => {

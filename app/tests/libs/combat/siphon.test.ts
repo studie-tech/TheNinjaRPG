@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { SHIELD_MAX_HEALTH } from "@/drizzle/constants";
 import { applyEffects } from "@/libs/combat/process";
-import type { CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";
+import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { getTagSchema, isPositiveUserEffect, SiphonTag } from "@/validators/combat";
-import { makeBattleUser, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCombatAction, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
 import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
 
 const ROUND = 3;
-const action = { chakraCost: 0, staminaCost: 0 } as CombatAction;
+const action = makeCombatAction();
 let effectId = 0;
 const runtime = (creatorId: string, targetId = creatorId) => ({
   id: `effect-${effectId++}`,

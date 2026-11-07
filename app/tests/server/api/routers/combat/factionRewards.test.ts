@@ -13,10 +13,18 @@ import { ObjectiveReward } from "@/validators/rewards";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { shrineRouter } from "@/server/api/routers/shrine";
-import { insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertQuests,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertClans,
+} from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables,
 } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
+import { aroundStatements } from "../../../../setup/statements";
 
 const participants = ["credit-actor", "credit-ally", "credit-enemy"];
 const winners = participants.slice(0, 2);
@@ -39,16 +47,19 @@ describeWithDatabase("combat team faction rewards", () => {
       aiProfile, raidParticipation, quest, userData, clan, anbuSquad, villageAlliance, village);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(nextServer, "after").mockImplementation(() => {});
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
     const db = await getTestDatabase();
     await db.insert(village).values(participants.map((id, index) => ({
       id, name: id, sector: index + 1, kageId: id, tokens: 1000,
     })));
-    await db.insert(clan).values(winners.map((id) => ({
-      id, name: id, image: "", villageId: id, founderId: id, leaderId: id,
-      leaderOrderId: `${id}-order`, points: 10, activityPoints: 20, pvpActivity: 4,
+    await insertClans(winners.map((id) => ({
+      id,
+      villageId: id,
+      leaderId: id,
+      leaderOrderId: `${id}-order`,
+      points: 10,
+      activityPoints: 20,
+      pvpActivity: 4,
     })));
     await db.insert(anbuSquad).values(winners.map((id) => ({
       id, name: id, image: "", villageId: id, leaderId: id, leaderOrderId: `${id}-order`,
@@ -61,7 +72,7 @@ describeWithDatabase("combat team faction rewards", () => {
       experience: 1000, pvpStreak: 1, curHealth: 100, maxHealth: 100,
       curChakra: 100, maxChakra: 100, curStamina: 100, maxStamina: 100, sector: 335,
     })));
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.insert(villageAlliance).values({ id: "credit-hostile", villageIdA: participants[0]!, villageIdB: participants[2]!, status: "ENEMY" });
   });
   afterEach(() => vi.restoreAllMocks());
@@ -195,23 +206,13 @@ describeWithDatabase("combat team faction rewards", () => {
     const db = await getTestDatabase();
     const saved = await startDecidedRaid();
     // Pause one finalizer at deletion so the other deterministically wins the claim.
-    let unblock!: () => void;
-    let reached!: () => void;
-    const gate = new Promise<void>((resolve) => { unblock = resolve; });
-    const ready = new Promise<void>((resolve) => { reached = resolve; });
-    const staleClient = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "delete") return Reflect.get(target, key, receiver);
-        return (...args: Parameters<typeof db.delete>) => {
-          if (args[0] !== battle) return db.delete(...args);
-          return { where: async (condition: Parameters<ReturnType<typeof db.delete>["where"]>[0]) => {
-            reached();
-            await gate;
-            return db.delete(battle).where(condition);
-          } };
-        };
-      },
-    });
+    const { promise: gate, resolve: unblock } = deferred<void>();
+    const { promise: ready, resolve: reached } = deferred<void>();
+    const staleClient = aroundStatements(db, battle, async (run) => {
+      reached();
+      await gate;
+      return run();
+    }, { operations: ["delete"] });
     const staleApi = callerForDatabase(combatRouter, winners[staleUser === "actor" ? 0 : 1]!, staleClient);
     const staleRequest = staleUser === "actor"
       ? staleApi.performAction({ battleId: saved.id })

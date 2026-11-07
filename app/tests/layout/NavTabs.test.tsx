@@ -4,45 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as storage from "@/hooks/localstorage";
 import NavTabs from "@/layout/NavTabs";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-const animationFrameDescriptor = Object.getOwnPropertyDescriptor(
-  globalThis,
-  "requestAnimationFrame",
-);
-const cancelAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(
-  globalThis,
-  "cancelAnimationFrame",
-);
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    requestAnimationFrame: {
-      configurable: true,
-      value: (callback: FrameRequestCallback) =>
-        Number(setTimeout(() => callback(Date.now()), 0)),
-    },
-    cancelAnimationFrame: {
-      configurable: true,
-      value: (id: number) => clearTimeout(id),
-    },
-  });
+  installBrowserGlobals({ events: [], animationFrame: true });
 });
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  if (animationFrameDescriptor)
-    Object.defineProperty(
-      globalThis,
-      "requestAnimationFrame",
-      animationFrameDescriptor,
-    );
-  else Reflect.deleteProperty(globalThis, "requestAnimationFrame");
-  if (cancelAnimationFrameDescriptor)
-    Object.defineProperty(
-      globalThis,
-      "cancelAnimationFrame",
-      cancelAnimationFrameDescriptor,
-    );
-  else Reflect.deleteProperty(globalThis, "cancelAnimationFrame");
+  restoreBrowserGlobals();
 });
 const options = ["Dashboard", "Character", "Achievements"];
 

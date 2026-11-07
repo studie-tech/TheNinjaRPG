@@ -2,12 +2,10 @@ import { getAssignExperienceUserUpdate, getSavedPetSettingsUpdate } from "@/delt
 import type { UserUpdateOptions } from "@/deltas/profile";
 import { afterEach, beforeEach, expect, it, setDefaultTimeout, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
+import { getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import * as toastUi from "@/components/ui/use-toast";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
@@ -34,11 +32,13 @@ import { petJutsuFixture, petSkillFixture } from "../libs/pets/helpers/abilities
 import { IncreaseStatTag } from "@/validators/combat";
 import type { PetTask } from "@/validators/petTasks";
 import { actualShowMutationToast } from "../setup/preload";
+import { deferred } from "../setup/deferred";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
 
-const testApi = createTRPCReact<AppRouter>();
 type PetView = RouterOutputs["pets"]["getPet"];
 let owner: {
   autoWakeUp?: boolean;
@@ -66,21 +66,12 @@ let timeDiff: number;
 let previousBattleEnabled: boolean;
 const prepareUserUpdate = vi.fn<() => number | undefined>(() => 17);
 const updateUser = vi.fn<(patch: UserPatch | undefined, mutation?: UserUpdateOptions) => Promise<boolean>>(async () => false);
-let scrollDescriptor: PropertyDescriptor | undefined;
 
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
   prepareUserUpdate.mockReset().mockReturnValue(17);
   updateUser.mockReset().mockResolvedValue(false);
-  scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   timeDiff = 0;
   previousBattleEnabled = PET_BATTLE_CONFIG.enabled;
   PET_BATTLE_CONFIG.enabled = true;
@@ -152,36 +143,27 @@ afterEach(() => {
   queryClient.clear();
   PET_BATTLE_CONFIG.enabled = previousBattleEnabled;
   vi.restoreAllMocks();
-  if (scrollDescriptor) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const mount = (strictMode = false) => {
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    const respond = async () => {
-      if (op.path === "profile.getUser") return getUser();
-      if (op.path === "pets.getPet") {
-        return getPet(op.input);
-      }
-      if (op.path === "pets.updatePet") return update(op.input);
-      if (op.path === "pets.unlockSlot") return unlockSlot(op.input);
-      if (op.path === "pets.updateAbilities") return saveAbilities(op.input);
-      if (op.path === "pets.feedPet") return feed(op.input);
-      if (op.path === "pets.updateAiConfig") return saveAi(op.input);
-      if (op.path === "pets.generateAppearance") return generate(op.input);
-      if (op.path === "pets.assignExperience") return assign(op.input);
-      if (op.path === "pets.rankUp") return evolve(op.input);
-      throw new Error(`Unexpected procedure ${op.path}`);
-    };
-    void respond().then((value) => { observer.next({ result: { data: value } }); observer.complete(); }, (error) => observer.error(error));
-  })] });
+  const trpcClient = fakeTrpcClient(async (path, input) => {
+    if (path === "profile.getUser") return getUser();
+    if (path === "pets.getPet") {
+      return getPet(input);
+    }
+    if (path === "pets.updatePet") return update(input);
+    if (path === "pets.unlockSlot") return unlockSlot(input);
+    if (path === "pets.updateAbilities") return saveAbilities(input);
+    if (path === "pets.feedPet") return feed(input);
+    if (path === "pets.updateAiConfig") return saveAi(input);
+    if (path === "pets.generateAppearance") return generate(input);
+    if (path === "pets.assignExperience") return assign(input);
+    if (path === "pets.rankUp") return evolve(input);
+    throw new Error(`Unexpected procedure ${path}`);
+  });
   return render(<PetProfile />, {
-    wrapper: ({ children }) => <testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></testApi.Provider>,
+    wrapper: ({ children }) => <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>,
     reactStrictMode: strictMode,
   });
 };
@@ -435,8 +417,7 @@ it.each(["FAILED", "READY"] as const)("waits for the final active image attempt 
 it("waits for a local final-attempt response before offering support for failed art", async () => {
   const pet = { ...data.pet!, rank: 2, artRank: 1, generationStatus: "FAILED" as const };
   data = { ...data, pet, pets: [pet], remainingGenerations: 1, canFeed: false };
-  let finishGeneration: () => void = () => undefined;
-  const generation = new Promise<void>((resolve) => { finishGeneration = resolve; });
+  const { promise: generation, resolve: finishGeneration } = deferred<void>();
   generate.mockImplementation(async () => {
     await generation;
     return { success: false, message: "Image creation failed." };
@@ -538,10 +519,8 @@ it.each(["rejection", "network error", "success"])("allows routine activity and 
   const other = { ...data.pet!, id: "second", name: "Sora" };
   data = { ...data, pets: [data.pet!, other], maxRank: 10, nextRank: PET_RANKS[7]!, canRankUp: true };
   getPet.mockImplementation((input: { petId: string }) => ({ ...data, pet: data.pets.find((entry) => entry.id === input.petId) }));
-  let finishGeneration: () => void = () => undefined;
-  const generation = new Promise<void>((resolve) => { finishGeneration = resolve; });
-  let finishAssignment: () => void = () => undefined;
-  const assignment = new Promise<void>((resolve) => { finishAssignment = resolve; });
+  const { promise: generation, resolve: finishGeneration } = deferred<void>();
+  const { promise: assignment, resolve: finishAssignment } = deferred<void>();
   assign.mockImplementation(async () => { await assignment; return { success: true, message: "Experience assigned" }; });
   generate.mockImplementation(async ({ petId }: { petId: string }) => {
     if (petId !== "companion") return { success: true, message: "Appearance ready" };
@@ -625,10 +604,8 @@ it.each(["rejection", "network error", "success"])("allows routine activity and 
 it.each([0, 3])("keeps evolution and artwork recoverable with %s attempts left in the previous rank", async (remainingGenerations) => {
   owner.rank = "ELITE JONIN";
   data = { ...data, maxRank: 10, nextRank: PET_RANKS[7]!, canRankUp: true, remainingGenerations };
-  let finishEvolution: () => void = () => undefined;
-  const evolution = new Promise<void>((resolve) => { finishEvolution = resolve; });
-  let finishGeneration: () => void = () => undefined;
-  const generation = new Promise<void>((resolve) => { finishGeneration = resolve; });
+  const { promise: evolution, resolve: finishEvolution } = deferred<void>();
+  const { promise: generation, resolve: finishGeneration } = deferred<void>();
   evolve.mockImplementation(async () => {
     await evolution;
     const pet = { ...data.pet!, rank: 8, generationStatus: "PENDING" as const };

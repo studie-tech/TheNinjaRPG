@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { buildCombatTrackerTasks } from "@/libs/combat/util";
-import { makeBattleUser } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 
 const makeResult = (didWin: number): CombatResult =>
@@ -8,13 +8,7 @@ const makeResult = (didWin: number): CombatResult =>
 
 const makeBattle = (
   usersState: ReturnType<typeof makeBattleUser>[],
-): CompleteBattle =>
-  ({
-    battleType: "COMBAT",
-    usersState,
-    usersEffects: [],
-    extraState: {},
-  }) as unknown as CompleteBattle;
+): CompleteBattle => makeCompleteBattle({ usersState });
 
 describe("buildCombatTrackerTasks — creatures_hunted", () => {
   it("emits +1 per defeated non-self, non-summon opponent on a win", () => {

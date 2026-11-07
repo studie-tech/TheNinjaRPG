@@ -1,18 +1,16 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { createTRPCReact } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
 import Forum from "@/app/[shell]/forum/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Link from "@/layout/Link";
 import * as UserContext from "@/utils/UserContext";
+import { testApi, TrpcTestProviders } from "../../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 let params: URLSearchParams;
 let originalUrl: string;
 let queryClient: QueryClient;
@@ -61,7 +59,7 @@ function renderForum() {
     observer.next({ result: { data } });
     observer.complete();
   })] });
-  const page = () => <testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}><Forum /></QueryClientProvider></testApi.Provider>;
+  const page = () => <TrpcTestProviders client={trpcClient} queryClient={queryClient}><Forum /></TrpcTestProviders>;
   return { ...render(page()), page };
 }
 

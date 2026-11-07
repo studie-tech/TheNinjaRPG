@@ -2,6 +2,8 @@ import alea from "alea";
 import { Container, Geometry, Mesh, Shader, UniformGroup } from "pixi.js";
 import type { CombatBiome } from "@/drizzle/constants";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
+import { createWorldCloudShadows } from "@/libs/rendering/worldCloudShadows";
+import { worldDaylight } from "@/libs/rendering/worldSunlight";
 import { clamp } from "@/utils/math";
 
 /** One texture-free draw places pixel precipitation above world art and below identity/UI layers. */
@@ -9,7 +11,10 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
   const container = new Container({ label: "world-weather", eventMode: "none" });
   const capacity = lightLayout ? 96 : 384;
   const atmosphere = lightLayout ? 3 : 9;
-  let geometry: Geometry | undefined, shader: Shader | undefined;
+  const cloudShadows = createWorldCloudShadows(game, container, lightLayout);
+  let geometry: Geometry | undefined,
+    shader: Shader | undefined,
+    particles: Mesh<Geometry, Shader> | undefined;
   let disposed = false;
   // View packs viewport, pixel size and density; weather packs clock, kind, strength and ambient light.
   const uniforms = new UniformGroup({
@@ -31,17 +36,25 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
       weather: WorldWeather,
       camera: { x: number; y: number },
       brightness = 1,
+      scale = 1,
     ) => {
       if (disposed) return;
-      const strength = Number.isFinite(weather.intensity)
-        ? clamp(weather.intensity, 0, 1)
-        : 0;
+      const isCloudy = weather.kind === "clouds";
+      const strength =
+        (Number.isFinite(weather.intensity) ? clamp(weather.intensity, 0, 1) : 0) *
+        (isCloudy ? worldDaylight(brightness) : 1);
       container.visible =
         game.visualEffects.weather &&
         weather.kind !== "clear" &&
         strength > 0 &&
         !frame.reducedMotion;
       if (!container.visible) return;
+      if (isCloudy) {
+        if (particles) particles.visible = false;
+        cloudShadows.update(frame, strength, camera, scale);
+        return;
+      }
+      cloudShadows.hide();
       if (!geometry) {
         const random = alea("world-weather");
         const positions = new Float32Array((capacity + atmosphere) * 8);
@@ -72,10 +85,15 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
           gl: { vertex, fragment },
           resources: { weather: uniforms },
         });
-        container.addChild(
-          new Mesh({ geometry, shader, label: "weather-particles", eventMode: "none" }),
-        );
+        particles = new Mesh({
+          geometry,
+          shader,
+          label: "weather-particles",
+          eventMode: "none",
+        });
+        container.addChild(particles);
       }
+      if (particles) particles.visible = true;
       const width = Math.max(1, game.renderer.width),
         height = Math.max(1, game.renderer.height);
       const view = uniforms.uniforms.uView,
@@ -98,11 +116,16 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
   };
 };
 
-/** Shared server-corrected visual fronts fade smoothly; snow/ice and desert select their own precipitation. */
+/**
+ * Shared server-corrected visual fronts fade smoothly; snow/ice and desert select their own
+ * precipitation, and scattered clouds cross the sky between fronts.
+ */
 export const getWorldWeather = (biome: CombatBiome, now: number): WorldWeather => {
   if (!Number.isFinite(now) || biome === "default")
     return { kind: "clear", intensity: 0 };
-  const intensity = Math.max(0, Math.sin((now * Math.PI * 2) / 720_000)) ** 2 * 0.7;
+  const front = Math.sin((now * Math.PI * 2) / 720_000);
+  if (front < 0) return { kind: "clouds", intensity: Math.min(1, -front * 2) };
+  const intensity = front ** 2 * 0.7;
   return {
     kind:
       intensity <= 0.001
@@ -189,6 +212,6 @@ void main() {
 }`;
 
 export type WorldWeather = {
-  kind: "clear" | "rain" | "snow" | "sandstorm";
+  kind: "clear" | "clouds" | "rain" | "snow" | "sandstorm";
   intensity: number;
 };

@@ -10,6 +10,7 @@ import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
 import OccupationCrafting from "@/layout/OccupationCrafting";
 import * as UserContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const procedure = {
   useQuery: () => ({ data: undefined, isPending: false }),
@@ -38,10 +39,6 @@ const imbuedRow = {
   ],
 };
 
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) =>
-  Object.getOwnPropertyDescriptor(globalThis, key),
-);
 /** Install the tRPC stub with the auction procedures a surface reads. */
 const stubApi = (auction: object = {}, rows: object[] = [imbuedRow], occupation: object = {}) =>
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -53,18 +50,7 @@ const stubApi = (auction: object = {}, rows: object[] = [imbuedRow], occupation:
   });
 
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: {
-      configurable: true,
-      value: class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    },
-  });
+  installBrowserGlobals({ resizeObserver: true });
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: { userId: "viewer", occupation: "CRAFTING", level: 1, bank: 0, reputationPoints: 0, money: 0, role: "USER" },
     prepareUserUpdate: vi.fn(),
@@ -81,11 +67,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const renderCrafting = () =>

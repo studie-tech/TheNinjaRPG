@@ -1,15 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
+import { QueryClient, focusManager, onlineManager } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { createTRPCReact } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
 import type { PropsWithChildren } from "react";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 type Notice = RouterOutputs["territoryWar"]["getNotice"];
 const clients: QueryClient[] = [];
 let now = 0;
@@ -58,16 +55,9 @@ const setup = (initial: Notice, timeDiff = 0) => {
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(queryClient);
-  const trpcClient = testApi.createClient({ links: [() => () => observable((observer) => {
-    void Promise.resolve().then(read).then((data) => {
-      observer.next({ result: { data } });
-      observer.complete();
-    }, (error) => observer.error(error));
-  })] });
+  const trpcClient = fakeTrpcClient(() => read());
   const wrapper = ({ children }: PropsWithChildren) => (
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </testApi.Provider>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
   );
   const view = renderHook(({ enabled, active, offset }) => useTerritoryWarNotice(enabled, offset, active), {
     wrapper, initialProps: { enabled: true, active: true, offset: timeDiff },

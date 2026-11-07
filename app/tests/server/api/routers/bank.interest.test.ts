@@ -14,6 +14,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { inTransactions, failStatements } from "../../../setup/statements";
 
 describe("bank interest UTC window", () => {
   it.each([
@@ -91,32 +92,11 @@ describeWithDatabase("bank interest claims", () => {
 
   it("rolls back claimed records if crediting the balance fails", async () => {
     const db = await seedInterest(8);
-    const failingClient = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "transaction") {
-          return (callback: Parameters<typeof db.transaction>[0]) =>
-            target.transaction((tx) =>
-              callback(
-                new Proxy(tx, {
-                  get(transaction, property, txReceiver) {
-                    if (property === "update") {
-                      return (table: Parameters<typeof tx.update>[0]) => {
-                        if (table === userData)
-                          throw new Error("Simulated credit failure");
-                        return transaction.update(table);
-                      };
-                    }
-                    return Reflect.get(transaction, property, txReceiver);
-                  },
-                }),
-              ),
-            );
-        }
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const failingClient = inTransactions(db, (tx) =>
+      failStatements(tx, userData, 1, { operations: ["update"] }),
+    );
     await expect(claimBankInterest(failingClient, "interest-user")).rejects.toThrow(
-      "Simulated credit failure",
+      "Statement failed on purpose",
     );
     expect(
       (await db.select().from(dailyBankInterest)).every((row) => !row.claimed),

@@ -29,6 +29,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { beforeTransaction, inTransactions, failStatements, overrideQuery } from "../../../setup/statements";
 
 describeWithDatabase("item purchase quotas", () => {
   beforeEach(async () => {
@@ -198,23 +199,15 @@ describeWithDatabase("item purchase quotas", () => {
     const db = await getTestDatabase();
     // Inject a competing committed quota claim after the endpoint's reads, before
     // its real transaction; all purchase writes still execute against MySQL.
-    const raced = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "transaction") return Reflect.get(target, key, receiver);
-        return async (callback: Parameters<typeof db.transaction>[0]) => {
-          await db
-            .insert(itemPurchaseCounter)
-            .values({
-              userId: "buyer",
-              itemId: "limited",
-              period: "DAILY",
-              periodStart: getItemPurchasePeriodStart("DAILY")!,
-              quantity: 5,
-            });
-          return db.transaction(callback);
-        };
-      },
-    });
+    const raced = beforeTransaction(db, () =>
+      db.insert(itemPurchaseCounter).values({
+        userId: "buyer",
+        itemId: "limited",
+        period: "DAILY",
+        periodStart: getItemPurchasePeriodStart("DAILY")!,
+        quantity: 5,
+      }),
+    );
     const before = await snapshot();
     const api = callerForDatabase(itemRouter, "buyer", raced);
     expect(
@@ -232,30 +225,14 @@ describeWithDatabase("item purchase quotas", () => {
 
   it("rolls back quota, payment, and quest changes if item delivery fails", async () => {
     const db = await getTestDatabase();
-    const failing = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "transaction") return Reflect.get(target, key, receiver);
-        return (callback: Parameters<typeof db.transaction>[0]) =>
-          db.transaction((tx) =>
-            callback(
-              new Proxy(tx, {
-                get(transaction, key, receiver) {
-                  if (key !== "insert") return Reflect.get(transaction, key, receiver);
-                  return (table: Parameters<typeof tx.insert>[0]) => {
-                    if (table === userItem) throw new Error("Delivery failed");
-                    return tx.insert(table);
-                  };
-                },
-              }),
-            ),
-          );
-      },
-    });
+    const failing = inTransactions(db, (tx) =>
+      failStatements(tx, userItem, 1, { operations: ["insert"] }),
+    );
     const before = await snapshot();
     const api = callerForDatabase(itemRouter, "buyer", failing);
     await expect(
       api.buy({ itemId: "limited", villageId: "home", stack: 1 }),
-    ).rejects.toThrow("Delivery failed");
+    ).rejects.toThrow("Statement failed on purpose");
     expect(await snapshot()).toEqual(before);
   });
 
@@ -380,29 +357,18 @@ describeWithDatabase("auction item price bounds", () => {
     async ({ currentQuantity, quantity, startingPrice, buyoutPrice, succeeds }) => {
       const db = await getTestDatabase();
       let firstRead = true;
-      const raced = new Proxy(db, {
-        get(target, key, receiver) {
-          if (key !== "query") return Reflect.get(target, key, receiver);
-          return {
-            ...db.query,
-            userItem: {
-              ...db.query.userItem,
-              findFirst: async (
-                ...args: Parameters<typeof db.query.userItem.findFirst>
-              ) => {
-                const row = await db.query.userItem.findFirst(...args);
-                if (firstRead) {
-                  firstRead = false;
-                  // Another inventory operation commits after the auction's first read.
-                  await db
-                    .update(userItem)
-                    .set({ quantity: currentQuantity })
-                    .where(eq(userItem.id, "owned"));
-                }
-                return row;
-              },
-            },
-          };
+      const raced = overrideQuery(db, "userItem", {
+        findFirst: async (read, ...args) => {
+          const row = await read(...args);
+          if (firstRead) {
+            firstRead = false;
+            // Another inventory operation commits after the auction's first read.
+            await db
+              .update(userItem)
+              .set({ quantity: currentQuantity })
+              .where(eq(userItem.id, "owned"));
+          }
+          return row;
         },
       });
       const api = callerForDatabase(auctionRouter, "seller", raced);

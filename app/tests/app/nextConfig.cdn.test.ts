@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { snapshotEnv } from "../setup/env";
 
 /**
  * The zone origin is resolved once in next.config.mjs. This asserts the property its
@@ -12,15 +13,10 @@ describe("next.config with a pull zone configured", () => {
     CDN_URL,
     VERCEL_ENV: "production",
   };
-  const previous: Record<string, string | undefined> = {};
   let assetPrefix: string | undefined;
   let rules: { source: string; headers: { key: string; value: string }[] }[];
 
   beforeAll(async () => {
-    // The whole suite shares one process, so these are restored below.
-    for (const name of Object.keys(overrides)) {
-      previous[name] = process.env[name];
-    }
     Object.assign(process.env, overrides);
     const config = (await import("../../next.config.mjs")).default as {
       assetPrefix?: string;
@@ -30,12 +26,8 @@ describe("next.config with a pull zone configured", () => {
     rules = await config.headers();
   });
 
-  afterAll(() => {
-    for (const [name, value] of Object.entries(previous)) {
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
-    }
-  });
+  // The whole suite shares one process.
+  afterAll(snapshotEnv(...Object.keys(overrides)));
 
   const headerValue = (source: string, key: string) =>
     rules.find((rule) => rule.source === source)?.headers.find((h) => h.key === key)

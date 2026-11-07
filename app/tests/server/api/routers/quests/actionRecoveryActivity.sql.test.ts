@@ -10,7 +10,15 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { IncreaseMaxPoolsTag } from "@/validators/combat";
 import { DialogObjective, InstantNewQuestObjective, InstantStartBattleObjective, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUserItems,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertUserVotes,
+} from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -61,8 +69,8 @@ describeWithDatabase("quest recovery committed activity", () => {
         content: { isolated: true, entryItems: [], objectives: [fight], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] },
       }]);
       if (!start) await insertQuestHistory([{ userId: playerId, questId, questType: "story", startedAt: now }]);
-      await database.insert(aiProfile).values({ id: "Default", userId: "quest-recovery-foe", rules: [] });
-      await database.insert(userVote).values({ id: "quest-recovery-vote", userId: playerId, secret: "questrec", lastVoteAt: now });
+      await insertDefaultAiProfile({ userId: "quest-recovery-foe" });
+      await insertUserVotes([{ userId: playerId, lastVoteAt: now }]);
       if (combat) {
         await insertItems([{ id: "recovery-ticket", itemType: "ARMOR", slot: "CHEST", maxDurability: 100,
           effects: [IncreaseMaxPoolsTag.parse({ power: 100, calculation: "static", poolsAffected: ["Energy"] })] }]);

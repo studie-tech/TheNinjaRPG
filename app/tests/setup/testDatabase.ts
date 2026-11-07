@@ -12,12 +12,14 @@
  */
 import { execFileSync } from "node:child_process";
 import { describe } from "bun:test";
+import type { AnyProcedure, inferProcedureInput, inferProcedureOutput } from "@trpc/server";
 import { getTableName, type Table } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import type { DrizzleClient } from "@/server/db";
 import * as schema from "@/drizzle/schema";
 import { withAfterTasks } from "./after";
+import { pollUntil } from "./statements";
 
 const url = process.env.TEST_MYSQL_URL;
 const allowDestructive = process.env.TEST_MYSQL_ALLOW_DESTRUCTIVE === "1";
@@ -220,6 +222,43 @@ export const indexColumns = async (table: string, keyName: string) => {
   return { columns: rows.map((row) => row.col), unique: rows.every((row) => !row.nonUnique) };
 };
 
+/**
+ * Whether a session comes to wait on a lock held in `table`, optionally narrowed to the held
+ * row's LOCK_DATA or the requested LOCK_MODE. Returning false lets a caller settle its in-flight
+ * work before asserting.
+ */
+export const lockWaitObserved = async ({ table, heldLockData, requestedMode }: {
+  table: string;
+  heldLockData?: string;
+  requestedMode?: "S" | "X";
+}) => {
+  await getTestDatabase();
+  const filters = [
+    ...(heldLockData ? ["AND blocking.LOCK_DATA LIKE ?"] : []),
+    ...(requestedMode ? ["AND requested.LOCK_MODE LIKE ?"] : []),
+  ];
+  const params = [
+    table,
+    table,
+    ...(heldLockData ? [`%${heldLockData}%`] : []),
+    ...(requestedMode ? [`${requestedMode}%`] : []),
+  ];
+  return pollUntil(async () => {
+    const [rows] = (await pool?.query(
+      `SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits AS waits
+       INNER JOIN performance_schema.data_locks AS requested
+         ON requested.ENGINE_LOCK_ID = waits.REQUESTING_ENGINE_LOCK_ID
+       INNER JOIN performance_schema.data_locks AS blocking
+         ON blocking.ENGINE_LOCK_ID = waits.BLOCKING_ENGINE_LOCK_ID
+       WHERE requested.OBJECT_SCHEMA = DATABASE() AND requested.OBJECT_NAME = ?
+         AND blocking.OBJECT_SCHEMA = DATABASE() AND blocking.OBJECT_NAME = ?
+         ${filters.join(" ")}`,
+      params,
+    )) as [{ waiting: number }[], unknown];
+    return Number(rows[0]?.waiting) > 0;
+  }, { attempts: 200, intervalMs: 10 });
+};
+
 type QueryRecorder = { statements: string[]; roundTrips: number; inFlight: number };
 let recorder: QueryRecorder | undefined;
 
@@ -278,6 +317,22 @@ export const closeTestDatabase = async () => {
   pool = undefined;
   client = undefined;
 };
+
+/**
+ * A procedure's resolver without its middleware or input parsing, for suites that exercise
+ * the handler itself on an explicit context.
+ */
+export const resolverOf = <Procedure extends AnyProcedure>(procedure: Procedure) =>
+  (
+    procedure._def as unknown as {
+      resolver: (options: {
+        ctx: object;
+        input: inferProcedureInput<Procedure>;
+        type?: string;
+        path?: string;
+      }) => Promise<inferProcedureOutput<Procedure>>;
+    }
+  ).resolver;
 
 /**
  * Build a tRPC caller for `router`, backed by the throwaway database and acting as `userId`.

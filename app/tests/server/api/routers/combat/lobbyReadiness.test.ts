@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { inferProcedureOutput } from "@trpc/server";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import type { Battle } from "@/drizzle/schema";
@@ -8,20 +7,13 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { makeCompleteBattle, makeUser } from "../../../../libs/combat/helpers/battleScenario";
+import { resolverOf } from "../../../../setup/testDatabase";
 
 const userId = "ready-player";
 const battleId = "ready-battle";
-type ReadyResolver = (options: {
-  ctx: { drizzle: DrizzleClient; userId: string };
-  input: { battleId: string };
-  type: "mutation";
-  path: string;
-}) => Promise<inferProcedureOutput<typeof combatRouter.iAmHere>>;
 
 // Exercise the resolver's retry contract without replacing shared server modules.
-const readyResolver = (combatRouter.iAmHere._def as unknown as {
-  resolver: ReadyResolver;
-}).resolver;
+const readyResolver = resolverOf(combatRouter.iAmHere);
 
 describe("combat lobby readiness retries", () => {
   beforeEach(() => {

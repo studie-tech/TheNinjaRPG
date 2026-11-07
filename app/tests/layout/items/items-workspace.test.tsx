@@ -16,16 +16,14 @@ import { ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import * as itemLib from "@/libs/item";
 import * as mastery from "@/libs/mastery";
 import * as skills from "@/libs/skillRequirements";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
-const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 let equip: ReturnType<typeof vi.fn>;
 let settle: () => void;
 let inspectorEquip: ReturnType<typeof vi.fn>;
 let isEquipping = false;
 let containerWidth = 1000;
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
-const originalResizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
 
 const setFinePointer = (fine: boolean) =>
   Object.defineProperty(window, "matchMedia", {
@@ -34,9 +32,6 @@ const setFinePointer = (fine: boolean) =>
   });
 
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
-  }
   window.localStorage.clear();
   equip = vi.fn();
   inspectorEquip = vi.fn();
@@ -50,9 +45,8 @@ beforeEach(() => {
   setFinePointer(true);
   containerWidth = 1000;
   // The workspace measures its own width to choose inline panels or a bottom sheet.
-  Object.defineProperty(globalThis, "ResizeObserver", {
-    configurable: true,
-    value: class {
+  installBrowserGlobals({
+    resizeObserver: class {
       constructor(private readonly callback: (entries: { contentRect: { width: number } }[]) => void) {}
       observe() {
         this.callback([{ contentRect: { width: containerWidth } }]);
@@ -84,13 +78,7 @@ afterEach(() => {
   window.localStorage.clear();
   if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
   else Reflect.deleteProperty(window, "matchMedia");
-  if (originalResizeObserver) Object.defineProperty(globalThis, "ResizeObserver", originalResizeObserver);
-  else Reflect.deleteProperty(globalThis, "ResizeObserver");
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 const gear = (id: string, slot: string, equipped: ItemSlot = "NONE") =>

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { JutsuLoadoutSharingDialog } from "@/layout/JutsuLoadoutSharing";
 import { exportJutsuLoadout } from "@/libs/loadout";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 type Props = ComponentProps<typeof JutsuLoadoutSharingDialog>;
 const preview = {
@@ -32,20 +33,14 @@ const setup = (overrides: Partial<Props> = {}) => {
   return { view, props, pasteAndPreview };
 };
 
-const originalEvent = globalThis.Event;
-const originalCustomEvent = globalThis.CustomEvent;
 beforeEach(() => {
-  // Radix dispatches DOM events; Bun's native Event belongs to another realm.
-  globalThis.Event = window.Event;
-  globalThis.CustomEvent = window.CustomEvent;
+  installBrowserGlobals();
 });
 afterEach(async () => {
   cleanup();
-  // FocusScope restores focus on a timer during unmount.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flushRadixFocus();
   vi.restoreAllMocks();
-  globalThis.Event = originalEvent;
-  globalThis.CustomEvent = originalCustomEvent;
+  restoreBrowserGlobals();
 });
 
 describe("jutsu loadout sharing dialogs", () => {

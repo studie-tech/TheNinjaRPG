@@ -10,13 +10,9 @@ import {
   stubDatabase,
 } from "../../../setup/serverModules";
 
-const cronRequest = () =>
-  new Request("https://example.com/api/daily-emails-sync", {
-    headers: { authorization: "Bearer test-cron" },
-  });
+const cronRequest = () => new Request("https://example.com/api/daily-emails-sync");
 
 describe("daily-emails-sync cron", () => {
-  const spies: { mockRestore: () => void }[] = [];
   const execute = vi.fn();
   const insert = vi.fn();
   const release = vi.fn();
@@ -32,30 +28,24 @@ describe("daily-emails-sync cron", () => {
       insert,
       execute,
     });
-    spies.push(
-      vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({
-        ...timerClaimFixture(),
-        release,
-        isNewDay: true,
-        prevTime: new Date(0),
-        prevValue: 0,
-        response: Response.json("Ready"),
-      }),
-    );
-    spies.push(
-      vi.spyOn(gamesettings, "handleEndpointError").mockImplementation(async (cause) => {
-        handleError(cause);
-        return new Response("error", { status: 500 });
-      }),
-    );
+    vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({
+      ...timerClaimFixture(),
+      release,
+      isNewDay: true,
+      prevTime: new Date(0),
+      prevValue: 0,
+      response: Response.json("Ready"),
+    });
+    vi.spyOn(gamesettings, "handleEndpointError").mockImplementation(async (cause) => {
+      handleError(cause);
+      return new Response("error", { status: 500 });
+    });
     // Clerk has no users that are not already known, so nothing is inserted.
-    spies.push(
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json([]) as never),
-    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json([]) as never);
   });
 
   afterEach(() => {
-    for (const spy of spies.splice(0)) spy.mockRestore();
+    vi.restoreAllMocks();
     resetServerModuleStubs();
   });
 

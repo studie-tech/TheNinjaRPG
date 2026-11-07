@@ -28,32 +28,26 @@ import {
 } from "../../../setup/testDatabase";
 
 describeWithDatabase("shrine boost template reserve locks", () => {
-  const spies: { mockRestore: () => void }[] = [];
-
   beforeEach(async () => {
     await resetTables(mpvpBattleUser, mpvpBattleQueue, warCamp, war, sector, village);
     stubCronAuth(() => null);
-    spies.push(
-      vi.spyOn(gamesettings, "lockWithMinuteTimer").mockImplementation(async () => ({
-        ...timerClaimFixture(),
-        isNewMinute: true,
-        prevTime: new Date(getCurrentSlotBoundary(new Date()).getTime() - 60_000),
-        response: Response.json("Ready"),
-      })),
-    );
-    spies.push(
-      vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({
-        ...timerClaimFixture(),
-        isNewDay: false,
-        prevTime: new Date(),
-        prevValue: 0,
-        response: Response.json("Already maintained"),
-      }),
-    );
+    vi.spyOn(gamesettings, "lockWithMinuteTimer").mockImplementation(async () => ({
+      ...timerClaimFixture(),
+      isNewMinute: true,
+      prevTime: new Date(getCurrentSlotBoundary(new Date()).getTime() - 60_000),
+      response: Response.json("Ready"),
+    }));
+    vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({
+      ...timerClaimFixture(),
+      isNewDay: false,
+      prevTime: new Date(),
+      prevValue: 0,
+      response: Response.json("Already maintained"),
+    });
   });
 
   afterEach(() => {
-    for (const spy of spies.splice(0)) spy.mockRestore();
+    vi.restoreAllMocks();
     resetServerModuleStubs();
   });
 

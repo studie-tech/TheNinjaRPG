@@ -7,11 +7,10 @@ import { getCookingSeconds } from "@/libs/cooking";
 import { getTerritoryCompetitor, getTerritoryWarBoost, getTerritoryWarPeriodBoost } from "@/libs/territoryWar";
 import { calcJutsuTrainTime, trainingBoost } from "@/libs/train";
 import { territoryWarAwards } from "@/server/utils/territoryWar";
-import { guardianVictory } from "../setup/territoryWar";
+import { competitor, guardianVictory } from "../setup/territoryWar";
 
 const start = new Date("2026-10-24T12:00:00Z");
 const until = new Date("2026-10-24T13:00:00Z");
-const competitor = { id: "village:home", name: "Home", villageId: "home", clanId: null };
 const citizen = { isOutlaw: false, villageId: "home", clanId: null, village: { id: "home", name: "Home", territoryWarBoostUntil: until } };
 
 

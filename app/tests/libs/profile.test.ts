@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, test } from "bun:test";
 import {
+  CombatStatNames,
   getUserCaps,
   MAX_MASTERY_CAP,
   RANKED_PVP_STATS,
@@ -327,7 +328,7 @@ test("scaleUserStats keeps every seeded AI row at its pre-#1277 values", () => {
     const budget = calcLevelRequirements(row.level) - 500;
     const stored = { ...row };
     scaleUserStats(row, "ai");
-    for (const stat of COMBAT_STATS) {
+    for (const stat of CombatStatNames) {
       if (stored.experience === budget) {
         // Saved at its level: a fixed point, up to the 2-decimal rounding of stat / multiplier.
         expect(Math.abs(row[stat] - stored[stat])).toBeLessThanOrEqual(
@@ -356,7 +357,7 @@ test("scaleUserStats puts a new uneven AI on the AI budget and then keeps it", (
     speed: 10,
   });
   scaleUserStats(created, "ai");
-  const earned = COMBAT_STATS.reduce((sum, stat) => sum + created[stat] - 10, 0);
+  const earned = CombatStatNames.reduce((sum, stat) => sum + created[stat] - 10, 0);
   const budget = calcLevelRequirements(50) - 500;
   expect(earned).toBeCloseTo(budget * SCALED_AI_STAT_BUDGET_SHARE, 1);
   const firstSave = { ...created };
@@ -404,70 +405,6 @@ test("scaleUserStats scales a migrated veteran to at most their own stats", () =
   const factor = veteran.offence / stored.offence;
   expect(veteran.ninjutsuMastery / stored.ninjutsuMastery).toBeCloseTo(factor, 3);
 });
-
-const COMBAT_STATS = [
-  "offence",
-  "defence",
-  "strength",
-  "intelligence",
-  "willpower",
-  "speed",
-] as const;
-
-/** A scaleUserStats input with every stat and pool at zero unless overridden. */
-const makeScalableUser = (overrides: Partial<Parameters<typeof scaleUserStats>[0]>) => ({
-  level: 1,
-  poolsMultiplier: 1,
-  statsMultiplier: 1,
-  curHealth: 0,
-  maxHealth: 0,
-  curStamina: 0,
-  maxStamina: 0,
-  curChakra: 0,
-  maxChakra: 0,
-  experience: 0,
-  ...uniformCombatStats(0),
-  ninjutsuMastery: 0,
-  genjutsuMastery: 0,
-  taijutsuMastery: 0,
-  bukijutsuMastery: 0,
-  bloodlineMastery: 0,
-  sageMastery: 0,
-  ...overrides,
-});
-
-const uniformCombatStats = (value: number) => ({
-  offence: value,
-  defence: value,
-  strength: value,
-  intelligence: value,
-  willpower: value,
-  speed: value,
-});
-
-/** The UserData rows seeded by data/ai.sql, as scaleUserStats inputs. */
-const readSeededAiRows = () => {
-  const sql = readFileSync(join(import.meta.dirname, "../../data/ai.sql"), "utf8");
-  const rows: ReturnType<typeof makeScalableUser>[] = [];
-  let columns: string[] | null = null;
-  for (const line of sql.split("\n")) {
-    if (line.startsWith("INSERT INTO `UserData`")) {
-      columns = [...line.matchAll(/`(\w+)`/g)].slice(1).map((match) => match[1] ?? "");
-    } else if (columns && line.startsWith("\t(")) {
-      const values = [...line.matchAll(/NULL|'(?:[^'\\]|\\.)*'/g)].map((match) =>
-        match[0] === "NULL" ? null : match[0].slice(1, -1),
-      );
-      const row = Object.fromEntries(columns.map((column, i) => [column, values[i]]));
-      const numeric = Object.fromEntries(
-        Object.keys(makeScalableUser({})).map((key) => [key, Number(row[key] ?? 0)]),
-      );
-      rows.push(makeScalableUser({ ...numeric, statsMultiplier: numeric.statsMultiplier || 1 }));
-    } else if (columns && line.trim() === "") {
-      columns = null;
-    }
-  }
-  return rows;
-};
 
 test("capUserStats caps every stat at the given rank, the user's own by default", () => {
   const { stats_cap, gens_cap } = getUserCaps("GENIN");
@@ -642,3 +579,58 @@ describe("PvP win rate", () => {
     expect(formatPvpWinRate(0, 5)).toBe("0.0");
   });
 });
+
+/** A scaleUserStats input with every stat and pool at zero unless overridden. */
+const makeScalableUser = (overrides: Partial<Parameters<typeof scaleUserStats>[0]>) => ({
+  level: 1,
+  poolsMultiplier: 1,
+  statsMultiplier: 1,
+  curHealth: 0,
+  maxHealth: 0,
+  curStamina: 0,
+  maxStamina: 0,
+  curChakra: 0,
+  maxChakra: 0,
+  experience: 0,
+  ...uniformCombatStats(0),
+  ninjutsuMastery: 0,
+  genjutsuMastery: 0,
+  taijutsuMastery: 0,
+  bukijutsuMastery: 0,
+  bloodlineMastery: 0,
+  sageMastery: 0,
+  ...overrides,
+});
+
+const uniformCombatStats = (value: number) => ({
+  offence: value,
+  defence: value,
+  strength: value,
+  intelligence: value,
+  willpower: value,
+  speed: value,
+});
+
+/** The UserData rows seeded by data/ai.sql, as scaleUserStats inputs. */
+const readSeededAiRows = () => {
+  const sql = readFileSync(join(import.meta.dirname, "../../data/ai.sql"), "utf8");
+  const rows: ReturnType<typeof makeScalableUser>[] = [];
+  let columns: string[] | null = null;
+  for (const line of sql.split("\n")) {
+    if (line.startsWith("INSERT INTO `UserData`")) {
+      columns = [...line.matchAll(/`(\w+)`/g)].slice(1).map((match) => match[1] ?? "");
+    } else if (columns && line.startsWith("\t(")) {
+      const values = [...line.matchAll(/NULL|'(?:[^'\\]|\\.)*'/g)].map((match) =>
+        match[0] === "NULL" ? null : match[0].slice(1, -1),
+      );
+      const row = Object.fromEntries(columns.map((column, i) => [column, values[i]]));
+      const numeric = Object.fromEntries(
+        Object.keys(makeScalableUser({})).map((key) => [key, Number(row[key] ?? 0)]),
+      );
+      rows.push(makeScalableUser({ ...numeric, statsMultiplier: numeric.statsMultiplier || 1 }));
+    } else if (columns && line.trim() === "") {
+      columns = null;
+    }
+  }
+  return rows;
+};

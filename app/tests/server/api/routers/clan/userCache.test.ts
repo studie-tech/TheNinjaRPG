@@ -12,7 +12,12 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertQuests,
+  insertUsers,
+  insertUserVotes,
+  insertClans,
+} from "../../../../setup/factories";
 import { comparableTrackers } from "../../../../setup/quest";
 import { countUserReads } from "../../../../setup/userReads";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
@@ -31,12 +36,18 @@ describeWithDatabase("clan village membership progression", () => {
       { id: strongholdId, name: "Membership Stronghold", sector: 1, kageId: "leader", type: "STRONGHOLD" },
       { id: VILLAGE_SYNDICATE_ID, name: "Syndicate", sector: 2, kageId: "leader", type: "OUTLAW" },
     ]);
-    await db.insert(clan).values({ id: clanId, name: "Membership Faction", image: "", leaderOrderId: "order", villageId: strongholdId, founderId: "leader", leaderId: "leader", bank: HIDEOUT_COST });
+    await insertClans([{
+      id: clanId,
+      name: "Membership Faction",
+      villageId: strongholdId,
+      leaderId: "leader",
+      bank: HIDEOUT_COST,
+    }]);
     await insertUsers([
       { userId, username: "MembershipActor", role: "OWNER", rank: "JONIN", level: 50, villageId: strongholdId, clanId, isOutlaw: true, status: "AWAKE", primaryElement: "Fire", secondaryElement: "Water", regeneration: 0, updatedAt: new Date(), regenAt: new Date() },
       { userId: "leader", username: "MembershipLeader", rank: "JONIN", villageId: strongholdId, clanId, isOutlaw: true },
     ]);
-    await db.insert(userVote).values({ id: "membership-vote", userId, secret: "member1", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId }]);
   });
   afterEach(() => vi.restoreAllMocks());
 

@@ -8,9 +8,15 @@ import { petsRouter } from "@/server/api/routers/pets";
 import type { DrizzleClient } from "@/server/db";
 import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
 import { petJutsuFixture } from "../../../../libs/pets/helpers/abilities";
-import { insertPetSpecies, insertUsers } from "../../../../setup/factories";
-import { beforeStatements } from "../../../../setup/statements";
+import {
+  insertPetSpecies,
+  insertUsers,
+  insertDefaultAiProfile,
+  insertUserPets,
+} from "../../../../setup/factories";
+import { beforeStatements, overrideQuery } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
 
 const ownerId = "defender";
 
@@ -27,11 +33,16 @@ describeWithDatabase("companion battle preload consistency", () => {
       { userId: ownerId, username: "Defender", rank: "GENIN", level: 5, status: "AWAKE", activePetId: "first", petSlots: 3, sector: MAP_WAKE_ISLAND_SECTOR },
     ]);
     const database = await getTestDatabase();
-    await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
-    await database.insert(userPet).values(["first", "second"].map((id) => ({
-      id, userId: ownerId, name: id, speciesId: "pet-species-0", paletteIndex: 0,
-      characteristicIndex: 0, auraIndex: 0, generationStatus: "READY" as const,
-      artRank: 1, avatar: "/pet.png", battleEnabled: true, jutsuIds: [`${id}-strike`],
+    await insertDefaultAiProfile();
+    await insertUserPets(["first", "second"].map((id) => ({
+      id,
+      userId: ownerId,
+      name: id,
+      generationStatus: "READY" as const,
+      artRank: 1,
+      avatar: "/pet.png",
+      battleEnabled: true,
+      jutsuIds: [`${id}-strike`],
     })));
     await database.insert(jutsu).values(["first", "second"].map((id) => petJutsuFixture({ id: `${id}-strike`, name: `${id} strike` })));
   });
@@ -154,28 +165,21 @@ const adoptionInput = async (database: DrizzleClient) => {
 /** Complete real companion reads before a successful account mutation and the participant read. */
 const beforeParticipantRead = (database: DrizzleClient, change: () => Promise<void>): DrizzleClient => {
   let completed = 0;
-  let release = () => {};
-  const preloaded = new Promise<void>((resolve) => { release = resolve; });
+  const { promise: preloaded, resolve: release } = deferred<void>();
   const afterRead = async <T>(read: PromiseLike<T>) => {
     const result = await read;
     if (++completed === 2) release();
     return result;
   };
-  const pets = new Proxy(database.query.userPet, { get(target, property, receiver) {
-    return property === "findMany" ? (...args: Parameters<typeof target.findMany>) => afterRead(target.findMany(...args)) : Reflect.get(target, property, receiver);
-  } });
-  const jutsus = new Proxy(database.query.jutsu, { get(target, property, receiver) {
-    return property === "findMany" ? (...args: Parameters<typeof target.findMany>) => typeof args[0]?.where === "function" ? afterRead(target.findMany(...args)) : target.findMany(...args) : Reflect.get(target, property, receiver);
-  } });
-  const users = new Proxy(database.query.userData, { get(target, property, receiver) {
-    if (property !== "findMany") return Reflect.get(target, property, receiver);
-    return async (...args: Parameters<typeof target.findMany>) => {
+  const pets = overrideQuery(database, "userPet", { findMany: (read, ...args) => afterRead(read(...args)) });
+  const jutsus = overrideQuery(pets, "jutsu", {
+    findMany: (read, ...args) => typeof args[0]?.where === "function" ? afterRead(read(...args)) : read(...args),
+  });
+  return overrideQuery(jutsus, "userData", {
+    findMany: async (read, ...args) => {
       await preloaded;
       await change();
-      return target.findMany(...args);
-    };
-  } });
-  return new Proxy(database, { get(target, property, receiver) {
-    return property === "query" ? { ...target.query, userPet: pets, jutsu: jutsus, userData: users } : Reflect.get(target, property, receiver);
-  } });
+      return read(...args);
+    },
+  });
 };

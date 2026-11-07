@@ -12,7 +12,7 @@ import {
 import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -36,18 +36,9 @@ describeWithDatabase("getBattle settlement of a clan challenge", () => {
       village,
     );
     const db = await getTestDatabase();
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.insert(village).values({ id: "v", name: "V", sector: 1, kageId: "kage" });
-    await db.insert(clan).values({
-      id: "c",
-      name: "C",
-      image: "",
-      villageId: "v",
-      founderId: LEADER,
-      leaderId: LEADER,
-      leaderOrderId: LEADER,
-      coLeader1: CHALLENGER,
-    });
+    await insertClans([{ id: "c", name: "C", villageId: "v", leaderId: LEADER, coLeader1: CHALLENGER }]);
     await insertUsers(
       [CHALLENGER, LEADER].map((userId) => ({
         userId,

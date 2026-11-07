@@ -24,12 +24,15 @@ import { fetchUpdatedUser } from "@/routers/profile";
 import { combatRouter } from "@/routers/combat";
 import { questPartyRouter, startQuestPartyEncounter } from "@/routers/questParty";
 import { travelRouter } from "@/routers/travel";
-import type { DrizzleClient } from "@/server/db";
 import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import { AllObjectives } from "@/validators/objectives";
 import { getTagSchema } from "@/validators/combat";
-import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
+} from "../../../../setup/factories";
+import { formQuestTeam, insertQuestTeamWorld, insertTeamQuest, questTeamMember } from "../../../../setup/questParty";
 import {
   callerFor,
   callerForDatabase,
@@ -37,6 +40,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { aroundStatements } from "../../../../setup/statements";
 
 describeWithDatabase("quest team encounter location claims", () => {
   beforeEach(async () => {
@@ -60,16 +64,6 @@ describeWithDatabase("quest team encounter location claims", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     stubRateLimitTransport();
     const client = await getTestDatabase();
-    await client
-      .insert(village)
-      .values({ id: "home", name: "Home", kageId: "leader", sector: 50 });
-    await client.insert(villageStructure).values({
-      id: "admin",
-      villageId: "home",
-      name: "Administrative Building",
-      route: "/adminbuilding",
-      image: "",
-    });
     await client.insert(sectorMap).values({
       id: "walkable",
       sector: 50,
@@ -99,32 +93,18 @@ describeWithDatabase("quest team encounter location claims", () => {
         metadata: { importedAt: new Date().toISOString(), source: "tiled" },
       },
     });
-    await insertUsers(
-      ["leader", "helper"].map((userId) => ({
-        userId,
-        username: userId,
-        status: "AWAKE",
-        rank: "JONIN",
-        level: 50,
-        experience: 20_000_000,
-        villageId: "home",
-        sector: 50,
-        longitude: 12,
-        latitude: 13,
-        regenAt: new Date(),
-        updatedAt: new Date(),
-        // Stealth avoids Next's deferred map broadcast in direct callers; movement guards stay real.
-        stealthActive: true,
-        stealthActivatedAt: new Date(),
-        stealth: 100,
-      })),
-    );
+    await insertQuestTeamWorld({
+      longitude: 12,
+      latitude: 13,
+      // Stealth avoids Next's deferred map broadcast in direct callers; movement guards stay real.
+      stealthActive: true,
+      stealthActivatedAt: new Date(),
+      stealth: 100,
+    });
     await insertUsers([
       { userId: "enemy", username: "enemy", isAi: true, level: 10, rank: "GENIN" },
     ]);
-    await client
-      .insert(aiProfile)
-      .values({ id: "Default", userId: "enemy", rules: [] });
+    await insertDefaultAiProfile({ userId: "enemy" });
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -133,21 +113,12 @@ describeWithDatabase("quest team encounter location claims", () => {
 
   it("preloads authored starting pools and effects for every quest teammate", async () => {
     const client = await getTestDatabase();
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, retryDelay: "none", content: {
-      objectives: [AllObjectives.parse({ id: "encounter", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }], givePools: 25, applyBuffs: [getTagSchema("shield").parse({ power: 100, health: 500, rounds: 3 })] })],
-      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
-    } }]);
-    await client.insert(jutsu).values(["PVE", "BOTH", "PVP"].map((usage) => ({
-      id: `jutsu-${usage}`, name: `Jutsu ${usage}`, description: "Quest combat fixture", effects: [], target: "SELF" as const,
-      range: 0, requiredRank: "STUDENT" as const, jutsuType: "NORMAL" as const, image: "", battleDescription: "Uses a jutsu", battleUsageType: usage as "PVE" | "PVP" | "BOTH",
-    })));
+    await insertTeamQuest([AllObjectives.parse({ id: "encounter", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }], givePools: 25, applyBuffs: [getTagSchema("shield").parse({ power: 100, health: 500, rounds: 3 })] })], { maxAttempts: 3 });
+    await insertJutsus(["PVE", "BOTH", "PVP"].map((usage) => ({ id: `jutsu-${usage}`, name: `Jutsu ${usage}`, battleUsageType: usage as "PVE" | "PVP" | "BOTH" })));
     await client.insert(userJutsu).values(["leader", "helper"].flatMap((userId) => ["PVE", "BOTH", "PVP"].map((usage) => ({ id: `${userId}-${usage}`, userId, jutsuId: `jutsu-${usage}`, equipped: true }))));
     // A bloodline must not make general jutsu (null bloodlineId) disappear.
     await client.update(userData).set({ bloodlineId: "player-bloodline" }).where(eq(userData.userId, "helper"));
-    const leader = await callerFor(questPartyRouter, "leader");
-    expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
-    const party = (await client.query.questParty.findFirst())!;
-    expect((await (await callerFor(questPartyRouter, "helper")).join({ partyId: party.id })).success).toBe(true);
+    const { leader, party } = await formQuestTeam();
     expect((await leader.overview()).current).toMatchObject({
       hasEncounter: true,
       members: expect.arrayContaining([expect.objectContaining({ userId: "helper", longitude: 12, latitude: 13 })]),
@@ -168,14 +139,8 @@ describeWithDatabase("quest team encounter location claims", () => {
   });
   it("releases a settled team encounter when a member enters unrelated PvP", async () => {
     const client = await getTestDatabase();
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, retryDelay: "none", content: {
-      objectives: [AllObjectives.parse({ id: "goal", task: "stats_trained", value: 100 })],
-      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
-    } }]);
-    const leader = await callerFor(questPartyRouter, "leader");
-    expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
-    const party = (await client.query.questParty.findFirst())!;
-    expect((await (await callerFor(questPartyRouter, "helper")).join({ partyId: party.id })).success).toBe(true);
+    await insertTeamQuest([AllObjectives.parse({ id: "goal", task: "stats_trained", value: 100 })], { maxAttempts: 3 });
+    const { leader, party } = await formQuestTeam();
     expect((await leader.overview()).current?.hasEncounter).toBe(false);
     // Settlement releases the users and deletes the battle before the next team sync.
     await client.update(questParty).set({ battleId: "settled-team-battle" }).where(eq(questParty.id, party.id));
@@ -193,30 +158,12 @@ describeWithDatabase("quest team encounter location claims", () => {
 
   it.each([false, true])("retains the active battle reservation when publication fails (committed=%p)", async (committed) => {
     const client = await getTestDatabase();
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, retryDelay: "none", content: {
-      objectives: [AllObjectives.parse({ id: "encounter", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }] })],
-      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
-    } }]);
-    const leader = await callerFor(questPartyRouter, "leader");
-    expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
-    const party = (await client.query.questParty.findFirst())!;
-    expect((await (await callerFor(questPartyRouter, "helper")).join({ partyId: party.id })).success).toBe(true);
-    const failing = new Proxy(client, {
-      get(target, key, receiver) {
-        if (key === "update") return (table: Parameters<typeof client.update>[0]) => {
-          if (table !== questParty) return target.update(table);
-          return { set: (values: Partial<typeof questParty.$inferInsert>) => {
-            const next = target.update(questParty).set(values);
-            if (typeof values.battleId !== "string" || values.battleId.startsWith("claiming:")) return next;
-            return { where: async (guard: Parameters<typeof next.where>[0]) => {
-              if (committed) await next.where(guard);
-              throw new Error("Publication unavailable");
-            } };
-          } };
-        };
-        return Reflect.get(target, key, receiver);
-      },
-    }) as DrizzleClient;
+    await insertTeamQuest([AllObjectives.parse({ id: "encounter", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }] })], { maxAttempts: 3 });
+    const { leader, party } = await formQuestTeam();
+    const failing = aroundStatements(client, questParty, async (run) => {
+      if (committed) await run();
+      throw new Error("Publication unavailable");
+    }, { when: (set) => typeof set.battleId === "string" && !set.battleId.startsWith("claiming:") });
     await expect(callerForDatabase(questPartyRouter, "leader", failing).startEncounter({ partyId: party.id })).rejects.toThrow("Publication unavailable");
     const [saved, fight, members] = await Promise.all([
       client.query.questParty.findFirst(), client.query.battle.findFirst(), client.query.userData.findMany(),
@@ -228,7 +175,7 @@ describeWithDatabase("quest team encounter location claims", () => {
     const refreshed = await fetchUpdatedUser({ client, userId: "leader" });
     expect(refreshed.user?.questParty?.battleId).toBe(fight!.id);
     expect((await client.query.questParty.findFirst())?.battleId).toBe(fight!.id);
-    await insertUsers([{ userId: "replacement", username: "replacement", status: "AWAKE", rank: "JONIN", level: 50, experience: 20_000_000, villageId: "home", sector: 50, longitude: 12, latitude: 13, regenAt: new Date(), updatedAt: new Date() }]);
+    await insertUsers([questTeamMember("replacement", { longitude: 12, latitude: 13 })]);
     expect((await (await callerFor(questPartyRouter, "replacement")).join({ partyId: party.id })).success).toBe(false);
   });
 
@@ -242,16 +189,7 @@ describeWithDatabase("quest team encounter location claims", () => {
     ] as const) {
       it(`${battleType} keeps the original launch tile (${timing})`, async () => {
         const client = await getTestDatabase();
-        await insertQuests([
-          {
-            id: "team-quest",
-            questType: "event",
-            teamEnabled: true,
-            hidden: false,
-            maxAttempts: 3,
-            retryDelay: "none",
-            content: {
-              objectives: [
+        await insertTeamQuest([
                 AllObjectives.parse(
                   battleType === "QUEST"
                     ? {
@@ -266,26 +204,8 @@ describeWithDatabase("quest team encounter location claims", () => {
                         attackers: [{ ids: ["enemy"], number: 100 }],
                       },
                 ),
-              ],
-              reward: ObjectiveReward.parse({}),
-              sceneBackground: "",
-              sceneCharacters: [],
-            },
-          },
-        ]);
-        const leader = await callerFor(questPartyRouter, "leader");
-        expect(
-          (await leader.create({ questId: "team-quest", isPublic: true })).success,
-        ).toBe(true);
-        const party = await client.query.questParty.findFirst();
-        if (!party) throw new Error("Missing encounter team fixture");
-        expect(
-          (
-            await (
-              await callerFor(questPartyRouter, "helper")
-            ).join({ partyId: party.id })
-          ).success,
-        ).toBe(true);
+              ], { maxAttempts: 3 });
+        const { leader, party } = await formQuestTeam();
         const move = async (userId: string) => {
           const moved = await (await callerFor(travelRouter, userId)).moveInSector({
             curLongitude: 12,
@@ -307,44 +227,28 @@ describeWithDatabase("quest team encounter location claims", () => {
         const { user } = await fetchUpdatedUser({ client, userId: "leader" });
         let interposed = false;
         // Execute legal travel at a real SQL boundary without changing the production predicate.
-        const interleaved = new Proxy(client, {
-          get(target, property, receiver) {
-            if (property === "update")
-              return (table: unknown) => {
-                const builder = target.update(table as typeof userData);
-                return {
-                  set: (values: Record<string, unknown>) => {
-                    const next = builder.set(values);
-                    const beforePreload =
-                      table === questParty &&
-                      String(values.battleId).startsWith("claiming:") &&
-                      (timing === "before combat preload" ||
-                        timing === "all before combat preload");
-                    const beforeClaim =
-                      table === userData &&
-                      values.status === "BATTLE" &&
-                      timing === "before participant claim";
-                    if (!beforePreload && !beforeClaim) return next;
-                    return {
-                      where: async (predicate: Parameters<typeof next.where>[0]) => {
-                        if (beforeClaim) await move("helper");
-                        const result = await next.where(predicate);
-                        if (beforePreload) {
-                          expect(result.rowsAffected).toBe(1);
-                          await move("helper");
-                          if (timing === "all before combat preload")
-                            await move("leader");
-                        }
-                        interposed = true;
-                        return result;
-                      },
-                    };
-                  },
-                };
-              };
-            return Reflect.get(target, property, receiver);
+        const interleaved = aroundStatements(
+          aroundStatements(client, questParty, async (run) => {
+            const result = (await run()) as { rowsAffected: number };
+            expect(result.rowsAffected).toBe(1);
+            await move("helper");
+            if (timing === "all before combat preload") await move("leader");
+            interposed = true;
+            return result;
+          }, {
+            when: (set) =>
+              String(set.battleId).startsWith("claiming:") &&
+              (timing === "before combat preload" || timing === "all before combat preload"),
+          }),
+          userData,
+          async (run) => {
+            await move("helper");
+            const result = await run();
+            interposed = true;
+            return result;
           },
-        }) as DrizzleClient;
+          { when: (set) => set.status === "BATTLE" && timing === "before participant claim" },
+        );
         const ambush =
           battleType === "RANDOM_ENCOUNTER" && user?.questParty
             ? rollObjectiveAttackers(

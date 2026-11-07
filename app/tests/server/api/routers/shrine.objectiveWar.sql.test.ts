@@ -25,7 +25,8 @@ import { Pusher } from "@/libs/pusher";
 import * as combatRouter from "@/server/api/routers/combat";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { startDeclaredWar } from "@/server/utils/war";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -43,9 +44,7 @@ describeWithDatabase("shrine lobby objective war eligibility", () => {
       notification, warAlly, war, sector, questHistory, userData, villageAlliance, village,
     );
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "a", name: "a", sector: 100, kageId: "hero", tokens: 1000000 },
@@ -66,7 +65,7 @@ describeWithDatabase("shrine lobby objective war eligibility", () => {
       curHealth: 100, maxHealth: 100, curStamina: 100, maxStamina: 100,
       curChakra: 100, maxChakra: 100, sector: 101,
     })));
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
 
     // An enemy shrine lobby can already exist when elder approval selects its sector.
     const hero = callerForDatabase(shrineRouter, "hero", db);

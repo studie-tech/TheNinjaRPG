@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { useEffect, useState } from "react";
 import superjson from "superjson";
@@ -14,9 +14,9 @@ import { useCombatUpdates } from "@/hooks/combat";
 import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
+import { testApi, TrpcTestProviders } from "../setup/trpc";
 
 // Keep the real tRPC observer and mutation lifecycle; control network ordering.
-const testApi = createTRPCReact<AppRouter>();
 type ActionResponse = RouterOutputs["combat"]["performAction"];
 let queryClient: QueryClient;
 let onEvent: (data: BattleUpdate) => Promise<void>;
@@ -95,7 +95,7 @@ const mount = (initial = stateAt(1)) => {
     };
     return null;
   }
-  return render(<testApi.Provider client={trpcClient} queryClient={queryClient}><QueryClientProvider client={queryClient}><Hook /></QueryClientProvider></testApi.Provider>);
+  return render(<TrpcTestProviders client={trpcClient} queryClient={queryClient}><Hook /></TrpcTestProviders>);
 };
 
 const actionResponse = (version: number) => ({ updateClient: true, battleUpdate: stateAt(version).battle!, result: null, logEntries: [], updatedQuestIds: [] });
@@ -109,6 +109,27 @@ const respond = async (version = 2) => {
   await act(async () => finishAction(actionResponse(version)));
   await waitFor(() => expect(queryClient.isMutating()).toBe(0));
 };
+
+it("settles an automatic tick after taking control without another battle read", async () => {
+  const autoBattle = {
+    ...stateAt(1).battle!,
+    usersState: [{ userId: "viewer", isAutoCombat: true }],
+  } as BattleState["battle"];
+  mount(stateAt(1, { battle: autoBattle }));
+  await beginAction();
+  const manualBattle = {
+    ...autoBattle!,
+    version: 2,
+    usersState: [{ userId: "viewer", isAutoCombat: false }],
+  } as NonNullable<BattleState["battle"]>;
+  await act(async () => finishAction({ ...actionResponse(2), battleUpdate: manualBattle }));
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  expect(latestState.isPending).toBe(false);
+  expect(latestState.battle?.usersState[0]?.isAutoCombat).toBe(false);
+  const key = getQueryKey(testApi.combat.getBattle, { battleId: "battle" }, "query");
+  await waitFor(() => expect(queryClient.getQueryData<BattleState>(key)?.battle?.usersState[0]?.isAutoCombat).toBe(false));
+  expect(reads).toHaveLength(1);
+});
 
 it("avoids the extra getBattle request when the actor broadcast precedes the same response version", async () => {
   mount();

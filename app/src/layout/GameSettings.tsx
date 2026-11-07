@@ -737,7 +737,7 @@ export const VisualEffectsSettings = () => {
         />
         <SettingsToggle
           label="Weather"
-          description="Rain, snow, storms and other weather effects"
+          description="Rain, snow, storms, cloud shadows and other weather effects"
           checked={visualEffects.weather}
           onCheckedChange={(enabled) => setVisualEffect("weather", enabled)}
         />

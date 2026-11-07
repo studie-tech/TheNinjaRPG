@@ -17,18 +17,25 @@ import { type LoadedQuestParty, synchronizeQuestParty } from "@/server/utils/que
 import { questPartyRelations } from "@/queries/questParty";
 import { AllObjectives, QuestTracker, QuestValidator } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertItems, insertQuestHistory, insertQuests, insertUsers, insertUserItems } from "../../../../setup/factories";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+  insertUserItems,
+  insertDefaultAiProfile,
+} from "../../../../setup/factories";
+import { insertQuestTeamWorld, insertTeamQuest, questTeamMember, teamQuest } from "../../../../setup/questParty";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { deferred } from "../../../../setup/deferred";
+import { aroundStatements, beforeStatements, failStatements } from "../../../../setup/statements";
 
 describeWithDatabase("quest team eligibility and terminal failure", () => {
   beforeEach(async () => {
     await resetTables(questParty, quest, questHistory, userData, user2conversation, village, villageStructure, aiProfile, battle, battleHistory, overworldAiPlacement, item, userItem);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     stubRateLimitTransport();
-    const client = await getTestDatabase();
-    await client.insert(village).values({ id: "home", name: "Home", kageId: "leader", sector: 50 });
-    await client.insert(villageStructure).values({ id: "admin", villageId: "home", name: "Administrative Building", route: "/adminbuilding", image: "" });
-    await insertUsers(["leader", "helper"].map((userId) => ({ userId, username: userId, status: "AWAKE", rank: "JONIN", level: 50, experience: 20_000_000, villageId: "home", sector: 50, longitude: 10, latitude: 10, money: 100, regenAt: new Date(), updatedAt: new Date() })));
+    await insertQuestTeamWorld({ money: 100 });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -39,26 +46,12 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     await client.update(userData).set({ status: "HOSPITALIZED", curHealth: 1, maxHealth: 100, regenAt: new Date(0) })
       .where(eq(userData.userId, "helper"));
     let interleaved = false;
-    const joiningClient = new Proxy(client, {
-      get(target, key, receiver) {
-        if (key === "update") return (table: unknown) => {
-          if (table !== questParty) return target.update(table as typeof userData);
-          const write = target.update(questParty);
-          return { set: (...values: Parameters<typeof write.set>) => {
-            const pending = write.set(...values);
-            return { where: async (...conditions: Parameters<typeof pending.where>) => {
-              // Interleave at the roster claim, after the account recovery has committed.
-              if (conflict && Array.isArray(values[0].memberIds) && values[0].memberIds.includes("helper") && values[0].battleId) {
-                interleaved = true;
-                await client.update(questParty).set({ version: sql`${questParty.version} + 1` }).where(eq(questParty.id, party.id));
-              }
-              return pending.where(...conditions);
-            } };
-          } };
-        };
-        return Reflect.get(target, key, receiver);
-      },
-    }) as DrizzleClient;
+    // Interleave at the roster claim, after the account recovery has committed.
+    const joiningClient = aroundStatements(client, questParty, async (run) => {
+      interleaved = true;
+      await client.update(questParty).set({ version: sql`${questParty.version} + 1` }).where(eq(questParty.id, party.id));
+      return run();
+    }, { when: (set) => conflict && Array.isArray(set.memberIds) && set.memberIds.includes("helper") && !!set.battleId });
     const result = await callerForDatabase(questPartyRouter, "helper", joiningClient).join({ partyId: party.id });
     expect(interleaved).toBe(conflict);
     expect(result.success).toBe(!conflict);
@@ -102,7 +95,6 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   });
 
   it("shows quest invitations in profile notifications until accepted", async () => {
-    const client = await getTestDatabase();
     const { leader, helper, party } = await lastMemberFixture();
     expect((await leader.invite({ partyId: party.id, username: "helper" })).success).toBe(true);
     const profile = await callerFor(profileRouter, "helper");
@@ -166,24 +158,15 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
       const { leader, party } = await lastMemberFixture();
       const receipt = await client.query.questHistory.findFirst({ where: eq(questHistory.userId, "leader") });
       let failedWrites = 0;
-      const failing = new Proxy(client, {
-        get(target, key, receiver) {
-          if (key === "update") return (table: unknown) => table === userData && failure.startsWith("personal") ? {
-            set: () => ({ where: async () => {
-              failedWrites++;
-              if (failure === "personal contention") return { rowsAffected: 0 };
-              throw new Error("Injected departure failure");
-            } }),
-          } : target.update(table as typeof questParty);
-          if (key === "delete") return (table: unknown) =>
-            (table === user2conversation && failure === "chat removal") || (table === questParty && failure === "party deletion")
-              ? { where: async () => { throw new Error("Injected departure failure"); } }
-              : target.delete(table as typeof questParty);
-          return Reflect.get(target, key, receiver);
-        },
-      }) as DrizzleClient;
+      const failing = failure.startsWith("personal")
+        ? aroundStatements(client, userData, async () => {
+            failedWrites++;
+            if (failure === "personal contention") return { rowsAffected: 0 };
+            throw new Error("Statement failed on purpose");
+          }, { operations: ["update"] })
+        : failStatements(client, failure === "chat removal" ? user2conversation : questParty, Infinity, { operations: ["delete"] });
       await expect(callerForDatabase(questPartyRouter, "leader", failing).leave({ partyId: party.id })).rejects.toThrow(
-        failure === "personal contention" ? "Character changed repeatedly" : "Injected departure failure",
+        failure === "personal contention" ? "Character changed repeatedly" : "Statement failed on purpose",
       );
       if (failure.startsWith("personal")) expect(failedWrites).toBe(failure === "personal contention" ? 5 : 1);
       const retained = await client.query.questParty.findFirst();
@@ -208,28 +191,13 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     const client = await getTestDatabase();
     const { leader, helper, party } = await lastMemberFixture();
     let checked = false;
-    const paused = new Proxy(client, {
-      get(target, key, receiver) {
-        if (key === "update") return (table: unknown) => {
-          if (table !== userData) return target.update(table as typeof questParty);
-          const write = target.update(userData);
-          return { set: (...values: Parameters<typeof write.set>) => {
-            const pending = write.set(...values);
-            return { where: async (...conditions: Parameters<typeof pending.where>) => {
-              if (!checked) {
-                checked = true;
-                expect((await client.query.questParty.findFirst())?.battleId).toMatch(/^claiming:/);
-                expect((await helper.join({ partyId: party.id })).success).toBe(false);
-                expect((await leader.startEncounter({ partyId: party.id })).success).toBe(false);
-                expect((await leader.disband({ partyId: party.id })).success).toBe(false);
-              }
-              return pending.where(...conditions);
-            } };
-          } };
-        };
-        return Reflect.get(target, key, receiver);
-      },
-    }) as DrizzleClient;
+    const paused = beforeStatements(client, userData, [async () => {
+      checked = true;
+      expect((await client.query.questParty.findFirst())?.battleId).toMatch(/^claiming:/);
+      expect((await helper.join({ partyId: party.id })).success).toBe(false);
+      expect((await leader.startEncounter({ partyId: party.id })).success).toBe(false);
+      expect((await leader.disband({ partyId: party.id })).success).toBe(false);
+    }], { operations: ["update"] });
     expect((await callerForDatabase(questPartyRouter, "leader", paused).leave({ partyId: party.id })).success).toBe(true);
     expect(checked).toBe(true);
     expect(await client.query.questParty.findFirst()).toBeUndefined();
@@ -245,18 +213,11 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     tracker.goals[0]!.value += 10;
     tracker.party!.contributions = [{ ...tracker.goals[0]!, value: 10 }];
     let concurrentSnapshot: LoadedQuestParty | undefined;
-    const failing = new Proxy(client, {
-      get(target, key, receiver) {
-        if (key === "update") return (table: unknown) => table === userData ? {
-          set: () => ({ where: async () => {
-            await client.update(userData).set({ questData: trackers, updatedAt: new Date() }).where(eq(userData.userId, "leader"));
-            concurrentSnapshot = await client.query.questParty.findFirst({ where: eq(questParty.id, party.id), with: questPartyRelations });
-            throw new Error("Injected departure failure");
-          } }),
-        } : target.update(table as typeof questParty);
-        return Reflect.get(target, key, receiver);
-      },
-    }) as DrizzleClient;
+    const failing = aroundStatements(client, userData, async () => {
+      await client.update(userData).set({ questData: trackers, updatedAt: new Date() }).where(eq(userData.userId, "leader"));
+      concurrentSnapshot = await client.query.questParty.findFirst({ where: eq(questParty.id, party.id), with: questPartyRelations });
+      throw new Error("Injected departure failure");
+    }, { operations: ["update"] });
     await expect(callerForDatabase(questPartyRouter, "leader", failing).leave({ partyId: party.id })).rejects.toThrow("Injected departure failure");
     expect(concurrentSnapshot?.battleId).toMatch(/^claiming:/);
     expect((await client.query.questParty.findFirst())?.battleId).toBeNull();
@@ -272,22 +233,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     const client = await getTestDatabase();
     const { leader, party } = await claimReleaseFixture();
     let concurrentSnapshot: LoadedQuestParty | undefined;
-    const paused = new Proxy(client, {
-      get(target, key, receiver) {
-        if (key === "update") return (table: unknown) => {
-          if (table !== questParty) return target.update(table as typeof userData);
-          const write = target.update(questParty);
-          return { set: (...values: Parameters<typeof write.set>) => {
-            const pending = write.set(...values);
-            return { where: async (...conditions: Parameters<typeof pending.where>) => {
-              if (values[0].battleId === null) concurrentSnapshot = await client.query.questParty.findFirst({ where: eq(questParty.id, party.id), with: questPartyRelations });
-              return pending.where(...conditions);
-            } };
-          } };
-        };
-        return Reflect.get(target, key, receiver);
-      },
-    }) as DrizzleClient;
+    const paused = aroundStatements(client, questParty, async (run) => {
+      concurrentSnapshot = await client.query.questParty.findFirst({ where: eq(questParty.id, party.id), with: questPartyRelations });
+      return run();
+    }, { when: (set) => set.battleId === null });
     expect((await callerForDatabase(questPartyRouter, "helper", paused).join({ partyId: party.id })).success).toBe(true);
     expect((await client.query.questParty.findFirst())?.battleId).toBeNull();
     expect(concurrentSnapshot?.battleId).toMatch(/^claiming:/);
@@ -306,8 +255,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     const { leader, helper, party } = await claimReleaseFixture();
     expect((await helper.join({ partyId: party.id })).success).toBe(true);
     let concurrentSnapshot: LoadedQuestParty | undefined;
-    let helperDetached!: () => void;
-    const detached = new Promise<void>((resolve) => { helperDetached = resolve; });
+    const { promise: detached, resolve: helperDetached } = deferred<void>();
     const failing = new Proxy(client, {
       get(target, key, receiver) {
         if (key === "update") return (table: unknown) => {
@@ -350,21 +298,11 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   it("recovers an abandoned departure claim after the personal save and roster reconciliation", async () => {
     const client = await getTestDatabase();
     const { leader, party } = await lastMemberFixture();
-    const interrupted = new Proxy(client, {
-      get(target, key, receiver) {
-        if (key === "update") return (table: unknown) => {
-          if (table !== questParty) return target.update(table as typeof userData);
-          const write = target.update(questParty);
-          return { set: (...values: Parameters<typeof write.set>) => values[0].battleId === null
-            ? { where: async () => { throw new Error("Injected claim recovery failure"); } }
-            : write.set(...values) };
-        };
-        if (key === "delete") return (table: unknown) => table === questParty
-          ? { where: async () => { throw new Error("Injected party deletion failure"); } }
-          : target.delete(table as typeof user2conversation);
-        return Reflect.get(target, key, receiver);
-      },
-    }) as DrizzleClient;
+    const failWith = (message: string) => async () => { throw new Error(message); };
+    const interrupted = aroundStatements(
+      aroundStatements(client, questParty, failWith("Injected claim recovery failure"), { when: (set) => set.battleId === null }),
+      questParty, failWith("Injected party deletion failure"), { operations: ["delete"] },
+    );
     await expect(callerForDatabase(questPartyRouter, "leader", interrupted).leave({ partyId: party.id })).rejects.toThrow("Injected claim recovery failure");
     expect((await client.query.userData.findFirst({ where: eq(userData.userId, "leader") }))?.questPartyId).toBeNull();
     // A retry during the claim grace reconciles the detached roster but keeps its live lock.
@@ -383,10 +321,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
 
   it.each([false, true])("retries personal detachment after roster removal fails to save the member (completed helper=%p)", async (completed) => {
     const client = await getTestDatabase();
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+    await insertTeamQuest([
       AllObjectives.parse({ id: "paid", task: "stats_trained", value: 10, reward_money: 25 }),
       AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-    ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    ], { maxAttempts: 3, maxCompletes: 3 });
     if (completed) await insertQuestHistory([{ id: "helper-receipt", userId: "helper", questId: "team-quest", questType: "event", completed: 1, previousCompletes: 1, endAt: new Date() }]);
     const leader = await callerFor(questPartyRouter, "leader");
     const helper = await callerFor(questPartyRouter, "helper");
@@ -399,15 +337,8 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     personal.goals = personal.goals.map((goal) => ({ ...goal, collected: goal.id === "paid" }));
     await client.update(userData).set({ questData: [personal] }).where(eq(userData.userId, "helper"));
     const receipt = await client.query.questHistory.findFirst({ where: eq(questHistory.userId, "helper") });
-    const failing = new Proxy(client, {
-      get(target, key, receiver) {
-        if (key === "update") return (table: unknown) => table === userData ? {
-          set: () => ({ where: async () => { throw new Error("Temporary detach failure"); } }),
-        } : target.update(table as typeof questParty);
-        return Reflect.get(target, key, receiver);
-      },
-    }) as DrizzleClient;
-    await expect(callerForDatabase(questPartyRouter, "helper", failing).leave({ partyId: party.id })).rejects.toThrow("Temporary detach failure");
+    const failing = failStatements(client, userData, Infinity, { operations: ["update"] });
+    await expect(callerForDatabase(questPartyRouter, "helper", failing).leave({ partyId: party.id })).rejects.toThrow("Statement failed on purpose");
     expect((await client.query.questParty.findFirst())?.memberIds).toEqual(["leader"]);
     expect((await client.query.userData.findFirst({ where: eq(userData.userId, "helper") }))?.questPartyId).toBe(party.id);
     if (completed) await client.update(userData).set({ updatedAt: new Date(Date.now() - 120_000) }).where(eq(userData.userId, "helper"));
@@ -490,10 +421,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
         it(`preserves personal inventory effects when joining ${advanced ? "a completed" : "an unfinished"} team goal (${task}, ${departure ?? "attached"})`, async () => {
           const client = await getTestDatabase();
           await insertItems([{ id: "scroll" }]);
-          await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+          await insertTeamQuest([
             AllObjectives.parse({ id: "inventory", task, ...(task === "collect_item" ? { collectItemIds: ["scroll"] } : { deliverItemIds: ["scroll"] }), item_name: "Scroll", sector: 50, longitude: 11, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "wait" }),
             AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-          ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+          ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
           const leader = await callerFor(questPartyRouter, "leader");
           expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
           if (advanced) {
@@ -535,7 +466,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           }
           expect((await client.query.questParty.findFirst())?.tracker.goals.find((goal) => goal.id === "inventory")?.done).toBe(true);
           for (const userId of ["fresh", "replacement"]) {
-            await insertUsers([{ userId, username: userId, status: "AWAKE", rank: "JONIN", level: 50, experience: 20_000_000, villageId: "home", sector: 50, longitude: 10, latitude: 10, regenAt: new Date(), updatedAt: new Date() }]);
+            await insertUsers([questTeamMember(userId)]);
             if (task === "deliver_item") await insertUserItems([{ id: `${userId}-copy`, userId, itemId: "scroll" }]);
             const newcomer = await callerFor(questPartyRouter, userId);
             expect((await newcomer.join({ partyId: party.id })).success).toBe(true);
@@ -554,10 +485,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   it("retires finished crafted delivery copies while preserving unfinished crafts", async () => {
     const client = await getTestDatabase();
     await insertItems([{ id: "scroll", canBeCrafted: true }]);
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+    await insertTeamQuest([
       AllObjectives.parse({ id: "delivery", task: "deliver_item", deliverItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 11, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "wait" }),
       AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-    ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
     expect((await (await callerFor(questPartyRouter, "leader")).create({ questId: "team-quest", isPublic: true })).success).toBe(true);
     const party = (await client.query.questParty.findFirst())!;
     expect((await (await callerFor(questPartyRouter, "helper")).join({ partyId: party.id })).success).toBe(true);
@@ -596,7 +527,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           AllObjectives.parse({ id: "deliver1", task: "deliver_item", deliverItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 12, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "choice" }),
         ];
         expect(verifyQuestContentForSave(objectives, true).check).toBe(true);
-        await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+        await insertTeamQuest(objectives, { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
         expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
         const leader = await callerFor(questPartyRouter, "leader");
         const helper = await callerFor(questPartyRouter, "helper");
@@ -636,7 +567,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
         expect((await client.query.questParty.findFirst())?.tracker.goals.find((goal) => goal.id === "deliver2")?.done).toBe(true);
         expect(await client.query.userItem.findMany({ where: eq(userItem.userId, "helper") })).toHaveLength(0);
         // A replacement after both deliveries inherits receipts without receiving retired copies.
-        await insertUsers([{ userId: "late", username: "late", status: "AWAKE", rank: "JONIN", level: 50, experience: 20_000_000, villageId: "home", sector: 50, longitude: 10, latitude: 10, regenAt: new Date(), updatedAt: new Date() }]);
+        await insertUsers([questTeamMember("late")]);
         expect((await (await callerFor(questPartyRouter, "late")).join({ partyId: party.id })).success).toBe(true);
         for (let read = 0; read < 2; read++) {
           await fetchUpdatedUser({ client, userId: "late" });
@@ -660,7 +591,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
         ];
         expect(verifyQuestContentForSave(objectives, consecutiveObjectives).check).toBe(true);
-        await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+        await insertTeamQuest(objectives, { consecutiveObjectives, maxAttempts: 3, maxCompletes: 3 });
         expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
         const leader = await callerFor(questPartyRouter, "leader");
         expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
@@ -707,7 +638,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
         ];
         expect(verifyQuestContentForSave(objectives, consecutiveObjectives).check).toBe(true);
-        await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+        await insertTeamQuest(objectives, { consecutiveObjectives, maxAttempts: 3, maxCompletes: 3 });
         expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
         const leader = await callerFor(questPartyRouter, "leader");
         expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
@@ -756,7 +687,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
           await insertUserItems([{ id: "leader-delivery", userId: "leader", itemId: "scroll" }]);
         }
         expect(verifyQuestContentForSave(objectives, consecutiveObjectives).check).toBe(true);
-        await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+        await insertTeamQuest(objectives, { consecutiveObjectives, maxAttempts: 3, maxCompletes: 3 });
         expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
         const leader = await callerFor(questPartyRouter, "leader");
         const helper = await callerFor(questPartyRouter, "helper");
@@ -799,7 +730,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
       AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
     ];
     expect(verifyQuestContentForSave(objectives, false).check).toBe(true);
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives, reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    await insertTeamQuest(objectives, { consecutiveObjectives: false, maxAttempts: 3, maxCompletes: 3 });
     expect(QuestValidator.safeParse(await client.query.quest.findFirst()).success).toBe(true);
     const leader = await callerFor(questPartyRouter, "leader");
     expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
@@ -856,10 +787,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     it(`preserves collection deliveries when entering a team (${mode})`, async () => {
       const client = await getTestDatabase();
       await insertItems([{ id: "scroll" }]);
-      await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+      await insertTeamQuest([
         AllObjectives.parse({ id: "collect", task: "collect_item", collectItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 11, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "wait" }),
         AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-      ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+      ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
       const leader = await callerFor(questPartyRouter, "leader");
       if (mode !== "form") {
         expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
@@ -909,7 +840,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   it("explains rank rejection to completed helpers and releases membership for a later retry", async () => {
     const client = await getTestDatabase();
     await client.update(userData).set({ rank: "GENIN" }).where(eq(userData.userId, "helper"));
-    await insertQuests([{ id: "team-quest", questType: "event", questRank: "C", teamEnabled: true, hidden: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [AllObjectives.parse({ id: "goal", task: "stats_trained", value: 100 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    await insertTeamQuest([AllObjectives.parse({ id: "goal", task: "stats_trained", value: 100 })], { questRank: "C", maxAttempts: 3, maxCompletes: 3 });
     const endAt = new Date("2026-10-01T00:00:00Z");
     await insertQuestHistory([{ id: "receipt", userId: "helper", questId: "team-quest", questType: "event", completed: 1, previousCompletes: 1, previousAttempts: 1, endAt }]);
     const receipt = await client.query.questHistory.findFirst({ where: eq(questHistory.id, "receipt") });
@@ -933,7 +864,7 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   it("keeps lifetime-completed helpers active across profile reads and encounter preload without reopening or paying their receipt", async () => {
     const client = await getTestDatabase();
     await insertUsers([{ userId: "enemy", username: "enemy", isAi: true, level: 10, rank: "GENIN" }]);
-    await client.insert(aiProfile).values({ id: "Default", userId: "enemy", rules: [] });
+    await insertDefaultAiProfile({ userId: "enemy" });
     await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 2, maxCompletes: 2, retryDelay: "none", content: { objectives: [AllObjectives.parse({ id: "goal", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }] })], reward: ObjectiveReward.parse({ reward_money: 100 }), sceneBackground: "", sceneCharacters: [] } }]);
     const endAt = new Date("2026-10-01T00:00:00Z");
     await insertQuestHistory([{ id: "receipt", userId: "helper", questId: "team-quest", questType: "event", completed: 0, previousCompletes: 1, previousAttempts: 1, endAt }]);
@@ -1004,14 +935,14 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     it(`starts the selected eligible combat objective (${mode})`, async () => {
       const client = await getTestDatabase();
       await insertUsers(["enemy-first", "enemy-selected"].map((userId) => ({ userId, username: userId, isAi: true, level: 10, rank: "GENIN" })));
-      await client.insert(aiProfile).values({ id: "Default", userId: "enemy-selected", rules: [] });
+      await insertDefaultAiProfile({ userId: "enemy-selected" });
       if (mode !== "generic") {
         await client.insert(overworldAiPlacement).values({ id: "selected-npc", aiTemplateUserId: "enemy-selected", interactionType: "HOSTILE", sectorList: [], sector: 50, longitude: 10, latitude: 10, positionVersion: 0 });
       }
-      await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: false, maxAttempts: 2, retryDelay: "none", content: { objectives: [
+      await insertTeamQuest([
         AllObjectives.parse({ id: "first", task: "defeat_opponents", opponentAIs: [{ ids: ["enemy-first"], number: 1 }], sector: 50, longitude: mode === "bound-same-tile" ? 10 : 5, latitude: 10 }),
         AllObjectives.parse({ id: "selected", task: "defeat_opponents", overworldPlacementId: mode === "generic" ? undefined : "selected-npc", opponentAIs: [{ ids: ["enemy-selected"], number: 1 }], sector: 50, longitude: 10, latitude: 10 }),
-      ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+      ], { consecutiveObjectives: false, maxAttempts: 2 });
       const leader = await callerFor(questPartyRouter, "leader");
       expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
       const party = await client.query.questParty.findFirst();
@@ -1030,10 +961,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     const client = await getTestDatabase();
     await insertUsers([{ userId: "guide", username: "guide", isAi: true }]);
     await client.insert(overworldAiPlacement).values({ id: "guide-npc", aiTemplateUserId: "guide", interactionType: "FRIENDLY", sectorList: [], sector: 50, longitude: 10, latitude: 10, positionVersion: 0 });
-    await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, retryDelay: "none", content: { objectives: [
+    await insertTeamQuest([
       AllObjectives.parse({ id: "choice", task: "dialog", overworldPlacementId: "guide-npc", nextObjectiveId: [{ text: "Continue", nextObjectiveId: "goal" }] }),
       AllObjectives.parse({ id: "goal", task: "stats_trained", value: 10 }),
-    ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    ]);
     expect((await (await callerFor(questPartyRouter, "leader")).create({ questId: "team-quest", isPublic: true })).success).toBe(true);
     const party = (await client.query.questParty.findFirst())!;
     expect((await (await callerFor(questPartyRouter, "helper")).join({ partyId: party.id })).success).toBe(true);
@@ -1063,24 +994,11 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
       const reward = getReward(user, "team-quest");
       expect(reward.resolved).toBe(true);
       reward.consequences.push({ type: "reset_quest", ids: ["team-quest"], info: "pending" });
-      let failedWrites = 0;
-      // Fail only shared publication; personal receipt and reward writes still use real SQL.
-      const injected = new Proxy(client, {
-        get(target, property, receiver) {
-          if (property === "update") return (table: unknown) => table === questParty ? {
-            set: () => ({ where: async () => {
-              failedWrites++;
-              if (failure === "database error") throw new Error("Injected reset failure");
-              return { rowsAffected: 0 };
-            } }),
-          } : target.update(table as typeof userData);
-          return Reflect.get(target, property, receiver);
-        },
-      }) as DrizzleClient;
-      const result = await commitQuestObjectiveRewards({ client: injected, userId: "leader", user, ...reward });
+      const injected = failPartyWrites(client, failure);
+      const result = await commitQuestObjectiveRewards({ client: injected.client, userId: "leader", user, ...reward });
       expect(result.outcome).toBe("claimed");
       expect(result).toMatchObject({ postNotifications: expect.arrayContaining(["Quest team progress will update on your next request."]) });
-      expect(failedWrites).toBe(failure === "CAS misses" ? 5 : 1);
+      expect(injected.failedWrites()).toBe(failure === "CAS misses" ? 5 : 1);
       expect(reported).toHaveBeenCalledTimes(1);
       expect((await client.query.userData.findFirst({ where: eq(userData.userId, "leader") }))?.money).toBe(200);
       expect((await client.query.questHistory.findFirst({ where: eq(questHistory.questId, "team-quest") }))?.completed).toBe(1);
@@ -1107,22 +1025,10 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
       const reward = getReward(user, "team-quest");
       expect(reward.resolved).toBe(true);
       reward.consequences.push({ type: "start_quest", ids: ["next-quest"] });
-      let failedWrites = 0;
-      const injected = new Proxy(client, {
-        get(target, property, receiver) {
-          if (property === "update") return (table: unknown) => table === questParty ? {
-            set: () => ({ where: async () => {
-              failedWrites++;
-              if (failure === "database error") throw new Error("Injected party write failure");
-              return { rowsAffected: 0 };
-            } }),
-          } : target.update(table as typeof userData);
-          return Reflect.get(target, property, receiver);
-        },
-      }) as DrizzleClient;
-      const result = await commitQuestObjectiveRewards({ client: injected, userId: "leader", user, ...reward });
+      const injected = failPartyWrites(client, failure);
+      const result = await commitQuestObjectiveRewards({ client: injected.client, userId: "leader", user, ...reward });
       expect(result.outcome).toBe("claimed");
-      expect(failedWrites).toBe(failure === "CAS misses" ? 5 : 1);
+      expect(injected.failedWrites()).toBe(failure === "CAS misses" ? 5 : 1);
       expect(reported).toHaveBeenCalledTimes(1);
       const receipt = await client.query.questHistory.findFirst({ where: eq(questHistory.questId, "team-quest") });
       expect(receipt).toMatchObject({ completed: 1, previousCompletes: 1 });
@@ -1152,16 +1058,29 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
   }
 });
 
+/** Fail or miss every shared party write; personal receipt and reward writes still use real SQL. */
+const failPartyWrites = (client: DrizzleClient, failure: "database error" | "CAS misses") => {
+  let failedWrites = 0;
+  return {
+    client: aroundStatements(client, questParty, async () => {
+      failedWrites++;
+      if (failure === "database error") throw new Error("Injected party write failure");
+      return { rowsAffected: 0 };
+    }, { operations: ["update"] }),
+    failedWrites: () => failedWrites,
+  };
+};
+
 const collectionChainFixture = async () => {
   const client = await getTestDatabase();
   await insertItems([{ id: "scroll" }]);
   await insertQuests([
-    { id: "team-quest", questType: "event", teamEnabled: true, hidden: false, consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+    teamQuest([
       AllObjectives.parse({ id: "collect", task: "collect_item", collectItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 11, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "next" }),
       AllObjectives.parse({ id: "next", task: "new_quest", newQuestIds: ["next-quest"], nextObjectiveId: "deliver" }),
       AllObjectives.parse({ id: "deliver", task: "deliver_item", deliverItemIds: ["scroll"], item_name: "Scroll", sector: 50, longitude: 12, latitude: 10, sectorType: "specific", locationType: "specific", nextObjectiveId: "wait" }),
       AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-    ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } },
+    ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 }),
     { id: "next-quest", questType: "event", hidden: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
       AllObjectives.parse({ id: "finish", task: "win_quest" }),
     ], reward: ObjectiveReward.parse({ reward_money: 25 }), sceneBackground: "", sceneCharacters: [] } },
@@ -1210,9 +1129,9 @@ const continueCollectionChainSolo = async (collected?: UserItem[]) => {
 
 const claimReleaseFixture = async () => {
   const client = await getTestDatabase();
-  await insertQuests([{ id: "team-quest", questType: "event", teamEnabled: true, hidden: false, maxAttempts: 3, maxCompletes: 3, retryDelay: "none", content: { objectives: [
+  await insertTeamQuest([
     AllObjectives.parse({ id: "goal", task: "stats_trained", value: 100 }),
-  ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+  ], { maxAttempts: 3, maxCompletes: 3 });
   const leader = await callerFor(questPartyRouter, "leader");
   const helper = await callerFor(questPartyRouter, "helper");
   expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);

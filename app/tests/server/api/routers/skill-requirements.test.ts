@@ -8,7 +8,7 @@ import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { HealTag, RepairTag } from "@/validators/combat";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import { insertItems, insertUserItems, insertUsers, insertJutsus } from "../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const USER = "skill-requirement-player";
@@ -30,7 +30,7 @@ describeWithDatabase("skill requirements against MySQL", () => {
       { id: "owned-potion", userId: USER, itemId: "potion", quantity: 3 },
       { id: "owned-kit", userId: USER, itemId: "kit", quantity: 3 },
     ]);
-    await db.insert(jutsu).values({ id: "jutsu", name: "Skill jutsu", description: "Skill jutsu", battleDescription: "Uses skill jutsu", image: "jutsu.webp", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuType: "NORMAL", requiredSkillId: "skill" });
+    await insertJutsus([{ id: "jutsu", name: "Skill jutsu", requiredSkillId: "skill" }]);
   });
 
   it("rejects equip and consumptions without spending stacks, then allows activation", async () => {
@@ -73,7 +73,7 @@ describeWithDatabase("skill requirements against MySQL", () => {
 
   it("allows evolving into a skill-gated jutsu but keeps it unequipped", async () => {
     const db = await getTestDatabase();
-    await db.insert(jutsu).values({ id: "parent", name: "Parent", description: "Parent", battleDescription: "Uses parent", image: "parent.webp", effects: [], target: "SELF", range: 0, requiredRank: "STUDENT", jutsuType: "NORMAL" });
+    await insertJutsus([{ id: "parent", name: "Parent" }]);
     await db.update(jutsu).set({ parentJutsuId: "parent" }).where(eq(jutsu.id, "jutsu"));
     await db.insert(userJutsu).values({ id: "owned-parent", userId: USER, jutsuId: "parent", level: JUTSU_TRAIN_LEVEL_CAP, equipped: true });
     const { user } = await fetchUpdatedUser({ client: db, userId: USER });

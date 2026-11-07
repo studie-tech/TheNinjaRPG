@@ -1,12 +1,10 @@
 import { expect, it, mock } from "bun:test";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { deferred } from "../../../../setup/deferred";
 
 it("starts collection reads before the initial profile read settles", async () => {
-  let resolveUser: (user: undefined) => void = () => {};
-  const pendingUser = new Promise<undefined>((resolve) => {
-    resolveUser = resolve;
-  });
+  const { promise: pendingUser, resolve: resolveUser } = deferred<undefined>();
   const findCatalogue = mock(async () => []);
   const findRolls = mock(async () => []);
   // The other opening-wave catalogue queries return no content in this fixture.

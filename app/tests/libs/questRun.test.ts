@@ -3,6 +3,7 @@ import type { UserQuest } from "@/drizzle/schema";
 import { findConsecutiveQuestId, getIsolatedPyramid, getQuestEntryRequirements, getQuestEntryStock, hasQuestContentChanged, isBetweenPyramidBattles, isPyramidRestrictedProcedure, isQuestAttemptPaused, nameQuestEntryStock } from "@/libs/questRun";
 import { getTagSchema } from "@/validators/combat";
 import { DefeatOpponents, InstantStartBattleObjective, questEntryItemsSchema } from "@/validators/objectives";
+import { trackerQuest, trackerUser } from "../setup/quest";
 
 describe("quest run configuration", () => {
   it("preserves missing starting pools and defaults effects/tickets to empty", () => {
@@ -65,13 +66,15 @@ describe("quest run configuration", () => {
 it("cannot advance a ticketed floor by defeating its enemy in an unrelated battle", async () => {
   const { getNewTrackers } = await import("@/libs/quest");
   const objective = InstantStartBattleObjective.parse({ id: "floor", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }] });
-  const user = {
-    userId: "hero", status: "BATTLE", role: "USER", level: 50, rank: "JONIN", sector: 0, items: [], completedQuests: [],
-    questData: [{ id: "pyramid", startAt: new Date().toISOString(), goals: [] }],
-    userQuests: [{ questId: "pyramid", endAt: null, completed: 0, entryPaid: false, previousAttempts: 1, previousCompletes: 0,
-      quest: { id: "pyramid", name: "Pyramid", questType: "battlepyramid", hidden: false, requiredLevel: 0, maxLevel: 100, maxAttempts: 100, maxCompletes: 100, content: { entryItems: [{ ids: ["ticket"], number: 1 }], objectives: [objective] } },
-    }],
-  } as unknown as Parameters<typeof getNewTrackers>[0];
+  const quest = trackerQuest("pyramid", [objective], "battlepyramid", {
+    name: "Pyramid", requiredLevel: 0, maxLevel: 100,
+    content: { entryItems: [{ ids: ["ticket"], number: 1 }] },
+  });
+  const user = trackerUser(
+    [{ quest, endAt: null, entryPaid: false, previousAttempts: 1 }],
+    [{ id: "pyramid", startAt: new Date().toISOString(), goals: [] }],
+    { userId: "hero", status: "BATTLE", sector: 0, items: [] },
+  );
   const task = [{ task: "start_battle" as const, contentId: "enemy", text: "Won" }];
   expect(getNewTrackers(user, task).trackers[0]?.goals[0]?.done).toBe(false);
   expect(getNewTrackers(user, task, { inWarTornSector: false, isWarParticipant: false, questBattleSource: { questId: "pyramid", objectiveId: "another-floor" } }).trackers[0]?.goals[0]?.done).toBe(false);

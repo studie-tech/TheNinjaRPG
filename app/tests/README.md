@@ -31,9 +31,11 @@ the root: the content-audit worker validates proposals without installing the ap
 
 Keep shared fixtures and service adapters in `setup/`. Reuse `factories.ts` for
 SQL rows, `quest.ts` for in-memory tracker scenarios, `rateLimit.ts` for the Redis
-rate-limit transport, and `localRedis.ts` for disposable Redis processes. Combat
-builders are in `libs/combat/helpers/`. Keep scenario-specific objectives, rules,
-expected results and failure injections visible in the suite.
+rate-limit transport, and `localRedis.ts` for disposable Redis processes. Use
+`statements.ts` to force interleavings and inject faults, `deferred.ts` for latches,
+`env.ts` for environment changes, and `browserGlobals.ts` with `trpc.tsx` for
+rendered suites. Combat builders are in `libs/combat/helpers/`. Keep scenario-specific
+objectives, rules, expected results and failure injections visible in the suite.
 
 ## Running a subset
 

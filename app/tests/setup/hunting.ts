@@ -1,4 +1,8 @@
+import { expect } from "bun:test";
+import { huntingHabitat, huntingSession, sectorMap } from "@/drizzle/schema";
+import { huntingRouter } from "@/routers/hunting";
 import { huntingContractSchema, type HuntingBattleState, type HuntingHabitatContent } from "@/validators/hunting";
+import { callerForDatabase, getTestDatabase } from "./testDatabase";
 
 /** Valid contract fixture with one guaranteed material and one optional bonus drop. */
 export const huntingContract = () => huntingContractSchema.parse({
@@ -16,3 +20,20 @@ export const huntingMap = (): import("@/libs/sector-map/types").NormalizedSector
   tiles: [{ x: 0, y: 0, terrain: "ground", walkCost: 1, blocked: false, zone: "wilderness", battleBiome: "ground" }],
   objects: [], anchors: [{ key: "spawn.default", x: 0, y: 0 }], exits: [], metadata: { importedAt: "2026-01-01T00:00:00Z", source: "tiled" },
 });
+
+/** The `forest` habitat and the published map of its sector. */
+export const insertHuntingWorld = async (content = huntingHabitatContent()) => {
+  const db = await getTestDatabase();
+  await db.insert(huntingHabitat).values({ id: "forest", content, updatedAt: new Date() });
+  await db.insert(sectorMap).values({ id: "map", sector: 1, name: "Forest", width: 1, height: 1, status: "PUBLISHED", normalizedJson: huntingMap() });
+};
+
+/** `hunter` accepts `contract`, and its preparation time has already passed. */
+export const acceptReadySession = async () => {
+  const db = await getTestDatabase();
+  const hunter = callerForDatabase(huntingRouter, "hunter", db);
+  expect((await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).success).toBe(true);
+  await db.update(huntingSession).set({ readyAt: new Date(0) });
+  const session = (await db.query.huntingSession.findFirst())!;
+  return { db, hunter, id: session.id, version: session.version };
+};

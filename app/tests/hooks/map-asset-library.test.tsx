@@ -1,14 +1,12 @@
-import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
+import { QueryClient, focusManager, onlineManager } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
-import { observable } from "@trpc/server/observable";
+import { getQueryKey } from "@trpc/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { PropsWithChildren } from "react";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import { useMapAssetLibrary } from "@/hooks/useMapAssetLibrary";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const artwork = { id: "tower", key: "tower", category: "structure", licenseDetails: "", name: "Tower", randomRotation: false, renderScale: 1, small: false, windAffected: false };
 const clients: QueryClient[] = [];
 let now = 0;
@@ -51,12 +49,8 @@ const setup = (enabled = true) => {
     if (fail) throw new Error("Artwork unavailable");
     return [{ ...artwork, imageUrl, createdAt: new Date(0), updatedAt: new Date(now) }];
   });
-  const trpc = testApi.createClient({ links: [() => () => observable((observer) => {
-    void Promise.resolve().then(read).then((data) => {
-      observer.next({ result: { data } }); observer.complete();
-    }, (error) => observer.error(error));
-  })] });
-  const wrapper = ({ children }: PropsWithChildren) => <testApi.Provider client={trpc} queryClient={queryClient}><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></testApi.Provider>;
+  const trpc = fakeTrpcClient(() => read());
+  const wrapper = ({ children }: PropsWithChildren) => <TrpcTestProviders client={trpc} queryClient={queryClient}>{children}</TrpcTestProviders>;
   const view = renderHook(({ enabled }) => useMapAssetLibrary(enabled), { initialProps: { enabled }, wrapper });
   const key = getQueryKey(testApi.mapAsset.getAll, undefined, "query");
   return { view, read, queryClient, key, wrapper, setImage: (next: string) => { imageUrl = next; }, fail: (value: boolean) => { fail = value; } };

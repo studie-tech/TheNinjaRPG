@@ -14,11 +14,13 @@ import {
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { IncreaseGatheringYield } from "@/validators/combat";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
+import { trackerQuest } from "../../../../setup/quest";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { aroundStatements } from "../../../../setup/statements";
 
 const rewards = () => PostProcessedRewardSchema.parse({});
 
@@ -26,33 +28,16 @@ afterEach(() => vi.restoreAllMocks());
 
 /** Builds the minimum hydrated user shape exercised by the shared reward commit path. */
 const makeUser = (retryDelay: "none" | "daily" = "none") => {
-  const mission = {
-    id: "mission-1",
+  const mission = trackerQuest("mission-1", [], "mission", {
     name: "Mission",
-    questType: "mission",
     questRank: "D",
     retryDelay,
-    hidden: false,
-    consecutiveObjectives: false,
     maxAttempts: 10,
     maxCompletes: 1,
-    requiredVillage: null,
-    requiredBloodlineId: null,
-    prerequisiteQuestId: null,
     requiredLevel: 1,
     maxLevel: 100,
-    medicalRank: null,
-    huntingRank: null,
-    gatheringRank: null,
     startsAt: null,
-    endsAt: null,
-    content: {
-      objectives: [],
-      reward: {},
-      sceneBackground: "",
-      sceneCharacters: [],
-    },
-  };
+  });
   const tier = { ...mission, id: "tier-1", questType: "tier", name: "Tier" };
   const missionHistory = {
     id: "history-1",
@@ -891,31 +876,12 @@ describeWithDatabase("quest reward claims", () => {
     // The hydrated capacity may be newer than its throttled persisted value.
     user.maxEnergy = 250;
     let stale: typeof userData.$inferSelect | undefined;
-    const client = new Proxy(database, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof database.update>[0]) => {
-          if (table !== userData) return database.update(table);
-          return {
-            set: (
-              values: Parameters<ReturnType<typeof database.update>["set"]>[0],
-            ) => ({
-              where: async (
-                condition: Parameters<
-                  ReturnType<ReturnType<typeof database.update>["set"]>["where"]
-                >[0],
-              ) => {
-                if ("curEnergy" in values)
-                  stale = await database.query.userData.findFirst({
-                    where: eq(userData.userId, user.userId),
-                  });
-                return database.update(userData).set(values).where(condition);
-              },
-            }),
-          };
-        };
-      },
-    });
+    const client = aroundStatements(database, userData, async (run) => {
+      stale = await database.query.userData.findFirst({
+        where: eq(userData.userId, user.userId),
+      });
+      return run();
+    }, { when: (set) => "curEnergy" in set });
     const claim = await commitQuestObjectiveRewards({
       client,
       userId: user.userId,

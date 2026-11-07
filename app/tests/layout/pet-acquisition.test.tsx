@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
+import type { RenderResult } from "@testing-library/react";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
-import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
 import * as Confirm from "@/layout/Confirm";
@@ -16,21 +16,17 @@ import { getDailyPetOptions } from "@/libs/pets/catalogue";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { initialPetSpecies } from "../libs/pets/helpers/species";
+import { deferred } from "../setup/deferred";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
-const testApi = createTRPCReact<AppRouter>();
 const dayKey = "2026-10-16";
 const options = getDailyPetOptions("owner", "NONE", initialPetSpecies, dayKey);
 let owner: { status: string; reputationPoints: number; seichiSilver: number };
 
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true });
   owner = { status: "AWAKE", reputationPoints: 1000, seichiSilver: 100 };
   Object.assign(vi.spyOn(client, "api" as never), {
     pets: testApi.pets,
@@ -46,18 +42,13 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 it("keeps a successful adoption intact while its claimed species leaves the daily offers and artwork is pending", async () => {
   let claimed: (RouterInputs["pets"]["acquirePet"] & { id: string; rank: number; avatar: string | null; artRank: number; generationStatus: string }) | null = null;
   let remainingGenerations = 3;
-  let finishGeneration: () => void = () => undefined;
-  const generation = new Promise<void>((resolve) => { finishGeneration = resolve; });
+  const { promise: generation, resolve: finishGeneration } = deferred<void>();
   const acquire = vi.fn((input: RouterInputs["pets"]["acquirePet"]) => {
     claimed = { ...input, id: "new-companion", rank: 1, avatar: null, artRank: 0, generationStatus: "PENDING" };
     return { success: true, message: "Companion adopted", petId: claimed.id };
@@ -70,33 +61,25 @@ it("keeps a successful adoption intact while its claimed species leaves the dail
     return { success: true, message: "Appearance ready" };
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    const respond = async () => {
-      if (op.path === "pets.acquirePet") return acquire(op.input as RouterInputs["pets"]["acquirePet"]);
-      if (op.path === "pets.generateAppearance") return generate(op.input as RouterInputs["pets"]["generateAppearance"]);
-      if (op.path !== "pets.getPet") throw new Error(`Unexpected procedure ${op.path}`);
-      return {
-        pet: claimed, pets: claimed ? [claimed] : [], activePetId: claimed?.id ?? null,
-        slots: 4, maxSlots: 6, dayKey,
-        options: getDailyPetOptions("owner", "NONE", initialPetSpecies, dayKey, claimed ? { dayKey, speciesIds: [claimed.speciesId] } : undefined),
-        optionCount: 3, replacementCost: 0, replacementSilverCost: 0, canAcquire: true,
-        generationLimit: 3, remainingGenerations, generationRetryAt: null,
-      };
+  const trpcClient = fakeTrpcClient(async (path, input) => {
+    if (path === "pets.acquirePet") return acquire(input as RouterInputs["pets"]["acquirePet"]);
+    if (path === "pets.generateAppearance") return generate(input as RouterInputs["pets"]["generateAppearance"]);
+    if (path !== "pets.getPet") throw new Error(`Unexpected procedure ${path}`);
+    return {
+      pet: claimed, pets: claimed ? [claimed] : [], activePetId: claimed?.id ?? null,
+      slots: 4, maxSlots: 6, dayKey,
+      options: getDailyPetOptions("owner", "NONE", initialPetSpecies, dayKey, claimed ? { dayKey, speciesIds: [claimed.speciesId] } : undefined),
+      optionCount: 3, replacementCost: 0, replacementSilverCost: 0, canAcquire: true,
+      generationLimit: 3, remainingGenerations, generationRetryAt: null,
     };
-    void respond().then((data) => { observer.next({ result: { data } }); observer.complete(); }, (error) => observer.error(error));
-  })] });
+  });
   try {
     const view = render(
-      <testApi.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}><PetAcquisition /></QueryClientProvider>
-      </testApi.Provider>,
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}><PetAcquisition /></TrpcTestProviders>,
     );
     await view.findByRole("group", { name: "Species" });
     expect(view.container.querySelector("#tutorial-pet-acquisition")).not.toBeNull();
-    for (const field of ["speciesId", "paletteIndex", "characteristicIndex", "auraIndex"]) {
-      fireEvent.click(view.container.querySelector(`input[name="pet-${field}"]`)!);
-      fireEvent.click(view.getByRole("button", { name: "Continue" }));
-    }
+    chooseFirstTraits(view);
     fireEvent.change(view.getByLabelText("Companion name"), { target: { value: "Miso" } });
     fireEvent.click(view.getByRole("radio", { name: "Male" }));
     fireEvent.click(view.getByRole("button", { name: "Meet my first companion" }));
@@ -152,32 +135,24 @@ for (const collectionUnavailable of [false, true]) {
     const getUser = vi.fn(async () => ({ userData: owner }));
     const profileObserver = new QueryObserver(queryClient, { queryKey: profileKey, queryFn: getUser, staleTime: Infinity });
     const unsubscribeProfile = profileObserver.subscribe(() => {});
-    const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-      const respond = async () => {
-        if (op.path === "pets.acquirePet") return acquire(op.input as RouterInputs["pets"]["acquirePet"]);
-        if (op.path === "pets.generateAppearance") return generate(op.input as RouterInputs["pets"]["generateAppearance"]);
-        if (op.path !== "pets.getPet") throw new Error(`Unexpected procedure ${op.path}`);
-        if (claimed && !allowCollectionRead) throw new Error("Collection unavailable");
-        const selected = claimed && (op.input as RouterInputs["pets"]["getPet"])?.petId === claimed.id ? claimed : active;
-        return {
-          pet: selected, pets: [active, ...(claimed ? [claimed] : [])], activePetId: active.id,
-          slots: 4, maxSlots: 6, dayKey, options, optionCount: 3, replacementCost: 30, replacementSilverCost: 50, canAcquire: true,
-          generationLimit: 3, remainingGenerations: selected === active ? 0 : 3, generationRetryAt: null,
-        };
+    const trpcClient = fakeTrpcClient(async (path, input) => {
+      if (path === "pets.acquirePet") return acquire(input as RouterInputs["pets"]["acquirePet"]);
+      if (path === "pets.generateAppearance") return generate(input as RouterInputs["pets"]["generateAppearance"]);
+      if (path !== "pets.getPet") throw new Error(`Unexpected procedure ${path}`);
+      if (claimed && !allowCollectionRead) throw new Error("Collection unavailable");
+      const selected = claimed && (input as RouterInputs["pets"]["getPet"])?.petId === claimed.id ? claimed : active;
+      return {
+        pet: selected, pets: [active, ...(claimed ? [claimed] : [])], activePetId: active.id,
+        slots: 4, maxSlots: 6, dayKey, options, optionCount: 3, replacementCost: 30, replacementSilverCost: 50, canAcquire: true,
+        generationLimit: 3, remainingGenerations: selected === active ? 0 : 3, generationRetryAt: null,
       };
-      void respond().then((data) => { observer.next({ result: { data } }); observer.complete(); }, (error) => observer.error(error));
-    })] });
+    });
     try {
       const view = render(
-        <testApi.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}><PetAcquisition /></QueryClientProvider>
-        </testApi.Provider>,
+        <TrpcTestProviders client={trpcClient} queryClient={queryClient}><PetAcquisition /></TrpcTestProviders>,
       );
       await view.findByRole("group", { name: "Species" });
-      for (const field of ["speciesId", "paletteIndex", "characteristicIndex", "auraIndex"]) {
-        fireEvent.click(view.container.querySelector(`input[name="pet-${field}"]`)!);
-        fireEvent.click(view.getByRole("button", { name: "Continue" }));
-      }
+      chooseFirstTraits(view);
       fireEvent.change(view.getByLabelText("Companion name"), { target: { value: "Miso" } });
       fireEvent.click(view.getByRole("radio", { name: "Male" }));
       if (collectionUnavailable) fireEvent.click(view.getByRole("radio", { name: "50 Seichi Silver" }));
@@ -306,10 +281,7 @@ it("preserves the current draft when a claimed species is removed from the offer
   const { view, queryClient, updateData } = renderAcquisition({});
   try {
     await view.findByRole("group", { name: "Species" });
-    for (const field of ["speciesId", "paletteIndex", "characteristicIndex", "auraIndex"]) {
-      fireEvent.click(view.container.querySelector(`input[name="pet-${field}"]`)!);
-      fireEvent.click(view.getByRole("button", { name: "Continue" }));
-    }
+    chooseFirstTraits(view);
     fireEvent.change(view.getByLabelText("Companion name"), { target: { value: "Miso" } });
     fireEvent.click(view.getByRole("radio", { name: "Male" }));
     await updateData({ options: { ...options, species: options.species.slice(1) } });
@@ -572,6 +544,14 @@ for (const isFull of [false, true]) {
   });
 }
 
+/** Take the first option through the species, palette, characteristic and aura steps. */
+function chooseFirstTraits(view: RenderResult) {
+  for (const field of ["speciesId", "paletteIndex", "characteristicIndex", "auraIndex"]) {
+    fireEvent.click(view.container.querySelector(`input[name="pet-${field}"]`)!);
+    fireEvent.click(view.getByRole("button", { name: "Continue" }));
+  }
+}
+
 function renderAcquisition(initialData: Record<string, unknown>, mutate?: (procedure: string, input: unknown) => unknown) {
   let data = {
     pet: null, pets: [], activePetId: null, slots: 1, maxSlots: 6,
@@ -599,9 +579,7 @@ function renderAcquisition(initialData: Record<string, unknown>, mutate?: (proce
     observer.complete();
   })] });
   const view = render(
-    <testApi.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}><PetAcquisition /></QueryClientProvider>
-    </testApi.Provider>,
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}><PetAcquisition /></TrpcTestProviders>,
   );
   return {
     view,

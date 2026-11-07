@@ -21,8 +21,9 @@ import { clanRouter } from "@/server/api/routers/clan";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { deleteClanBattle, rewardClanBattleVictory } from "@/server/utils/clanBattle";
 import { clanPointConversionSchema } from "@/validators/clan";
-import { insertUsers } from "../../../../setup/factories";
-import { beforeStatements, failStatements } from "../../../../setup/statements";
+import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
+import { beforeStatements, failStatements, pollUntil } from "../../../../setup/statements";
+import { readUser } from "../../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
@@ -64,20 +65,15 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
       { userId: "outsider", clanId: "c" },
     ]);
     const db = await getTestDatabase();
-    await db.insert(clan).values(
-      ["a", "b", "c"].map((id) => ({
-        id,
-        name: id,
-        image: "/clan.png",
-        villageId: "v",
-        founderId: id === "a" ? "leader" : id === "b" ? "enemy" : "outsider",
-        leaderId: id === "a" ? "leader" : id === "b" ? "enemy" : "outsider",
-        leaderOrderId: id,
-        coLeader1: id === "a" ? "co" : null,
-        points: 100,
-        bank: 50,
-      })),
-    );
+    await insertClans(["a", "b", "c"].map((id) => ({
+      id,
+      villageId: "v",
+      leaderId: id === "a" ? "leader" : id === "b" ? "enemy" : "outsider",
+      leaderOrderId: id,
+      coLeader1: id === "a" ? "co" : null,
+      points: 100,
+      bank: 50,
+    })));
     await db.insert(mpvpBattleQueue).values({
       id: "q",
       attackerEntityId: "a",
@@ -95,10 +91,6 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
 
   const storedClan = async () =>
     (await getTestDatabase()).query.clan.findFirst({ where: eq(clan.id, "a") });
-  const storedUser = async (id: string) =>
-    (await getTestDatabase()).query.userData.findFirst({
-      where: eq(userData.userId, id),
-    });
 
   it.each([
     ["an opposing member", "leader", "enemy", "a", "Not in your clan"],
@@ -110,7 +102,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
     const caller = await callerFor(clanRouter, actorId);
     expect(await caller.kickFromClanBattle({ clanBattleId: "q", targetId, clanId })).toMatchObject({ success: false, message });
     expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(2);
-    expect((await storedUser(targetId))?.status).toBe("QUEUED");
+    expect((await readUser(targetId))?.status).toBe("QUEUED");
   });
 
   it("credits only the clan bank and preserves activity points", async () => {
@@ -123,7 +115,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
       bank: 4050,
       activityPoints: 0,
     });
-    expect((await storedUser("co"))?.money).toBe(1000);
+    expect((await readUser("co"))?.money).toBe(1000);
   });
 
   for (const id of ["member", "enemy", "staff", "outsider"]) {
@@ -298,7 +290,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
           ).deleteClanBattle({ clanBattleId: "q" })
         ).success,
       ).toBe(true);
-      expect(await storedUser("leader")).toMatchObject({
+      expect(await readUser("leader")).toMatchObject({
         status: "AWAKE",
         battleId: null,
       });
@@ -355,11 +347,11 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
       .set({ battleId: "newer", status: "BATTLE" })
       .where(eq(userData.userId, "enemy"));
     expect(await deleteClanBattle(db, { id: "q", battleId: "combat" })).toBe(true);
-    expect(await storedUser("leader")).toMatchObject({
+    expect(await readUser("leader")).toMatchObject({
       status: "AWAKE",
       battleId: null,
     });
-    expect(await storedUser("enemy")).toMatchObject({
+    expect(await readUser("enemy")).toMatchObject({
       status: "BATTLE",
       battleId: "newer",
     });
@@ -429,7 +421,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
           .success,
       ).toBe(true);
       if (deletionTime === "after joining") await removeHistory();
-      expect(await storedUser("leader")).toMatchObject({
+      expect(await readUser("leader")).toMatchObject({
         status: "QUEUED",
         battleId: null,
       });
@@ -456,7 +448,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
         })
       ).success,
     ).toBe(false);
-    expect(await storedUser("member")).toMatchObject({
+    expect(await readUser("member")).toMatchObject({
       status: "AWAKE",
       battleId: null,
     });
@@ -467,11 +459,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
     beforeEach(async () => {
       const db = await getTestDatabase();
       await resetTables(aiProfile);
-      await db.insert(aiProfile).values({
-        id: "Default",
-        userId: "default-ai",
-        rules: [],
-      });
+      await insertDefaultAiProfile();
       await db.update(userData).set({ rank: "JONIN", isOutlaw: true });
       await db
         .update(userData)
@@ -530,7 +518,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
           expect(await db.query.mpvpBattleUser.findMany()).toEqual([
             expect.objectContaining({ userId: "enemy", clanBattleId: "q" }),
           ]);
-          expect(await storedUser("enemy")).toMatchObject({
+          expect(await readUser("enemy")).toMatchObject({
             status: hasStarted ? "BATTLE" : "QUEUED",
             battleId: combatId ?? null,
           });
@@ -560,7 +548,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
               })
             ).success,
           ).toBe(true);
-          expect(await storedUser("enemy")).toMatchObject({
+          expect(await readUser("enemy")).toMatchObject({
             status: "AWAKE",
             battleId: null,
           });
@@ -581,18 +569,16 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
               async () => {
                 const hasFinished = async () =>
                   membershipFirst
-                    ? (await storedUser("leader"))?.status === "AWAKE"
+                    ? (await readUser("leader"))?.status === "AWAKE"
                     : !(await db.query.mpvpBattleQueue.findFirst());
-                for (let attempts = 0; !(await hasFinished()) && attempts < 100; attempts++) {
-                  await new Promise((resolve) => setTimeout(resolve, 1));
-                }
+                await pollUntil(hasFinished);
                 expect(await hasFinished()).toBe(true);
                 if (membershipFirst) throw new Error("Deadlock found when trying to get lock");
               },
             ],
           );
           expect((await remove(client)).success).toBe(true);
-          expect(await storedUser("leader")).toMatchObject({
+          expect(await readUser("leader")).toMatchObject({
             status: "AWAKE",
             battleId: null,
           });
@@ -629,7 +615,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
           expect.objectContaining({ userId: "leader", clanBattleId: "q" }),
         ]);
         expect(members[0]?.id).not.toBe("u");
-        expect(await storedUser("leader")).toMatchObject({
+        expect(await readUser("leader")).toMatchObject({
           status: "QUEUED",
           battleId: null,
         });
@@ -644,11 +630,8 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
     const guarded = beforeStatements(db, mpvpBattleUser, [
       async () => {
         // Hold the member insert until the parallel lobby insert becomes visible.
-        let lobby = await db.query.mpvpBattleQueue.findFirst();
-        for (let attempts = 0; !lobby && attempts < 100; attempts++) {
-          await new Promise((resolve) => setTimeout(resolve, 1));
-          lobby = await db.query.mpvpBattleQueue.findFirst();
-        }
+        await pollUntil(async () => Boolean(await db.query.mpvpBattleQueue.findFirst()));
+        const lobby = await db.query.mpvpBattleQueue.findFirst();
         expect(lobby).toBeDefined();
         if (!lobby) throw new Error("Challenge lobby was not published");
         expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
@@ -661,7 +644,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
       { challengerClanId: "a", targetClanId: "b" },
     );
     const [user, lobbies, members] = await Promise.all([
-      storedUser("leader"),
+      readUser("leader"),
       db.query.mpvpBattleQueue.findMany(),
       db.query.mpvpBattleUser.findMany(),
     ]);
@@ -716,7 +699,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
     const guarded = beforeStatements(db, mpvpBattleUser, [
       async () => {
         expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(0);
-        expect(await storedUser("leader")).toMatchObject({
+        expect(await readUser("leader")).toMatchObject({
           status: "AWAKE",
           battleId: null,
         });
@@ -740,7 +723,7 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
     ).rejects.toThrow("Statement failed on purpose");
     expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(0);
     expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(1);
-    expect(await storedUser("leader")).toMatchObject({
+    expect(await readUser("leader")).toMatchObject({
       status: "QUEUED",
       battleId: null,
     });

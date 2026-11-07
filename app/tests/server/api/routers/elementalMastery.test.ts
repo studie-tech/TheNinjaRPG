@@ -8,7 +8,7 @@ import { getMasteryQueue } from "@/libs/queue";
 import { trainRouter } from "@/server/api/routers/train";
 import { IncreaseDamageGivenTag } from "@/validators/combat";
 import { getUserElements } from "@/validators/user";
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers, insertUserVotes } from "../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const ID = "elemental-trainee";
@@ -23,7 +23,7 @@ describeWithDatabase("elemental mastery guarded progression", () => {
   beforeEach(async () => {
     await resetTables(userData, userQueue, userVote, trainingLog, bloodline, gameSetting, captcha);
     await insertUsers([{ userId: ID, username: ID, rank: "JONIN", status: "AWAKE", isOutlaw: true, primaryElement: "Fire", secondaryElement: "Water", earnedExperience: 600_000, trainingSpeed: "1hr", elementalTrainingSpeed: "1hr" }]);
-    await (await getTestDatabase()).insert(userVote).values({ id: "vote-elemental", userId: ID, secret: "secret01", lastVoteAt: new Date() });
+    await insertUserVotes([{ userId: ID }]);
   });
 
   it("rejects innate, bloodline-provided and capped elements without spending XP", async () => {

@@ -1,6 +1,7 @@
 import {
   trackerQuest,
   trackerUser as makeUser,
+  trackerGoal,
   trackerGoalValue as goalValue,
 } from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
@@ -33,14 +34,6 @@ const defeatOpponentsObjective = (id: string, aiId: string) => ({
   sectorList: [],
   hideLocation: false,
 });
-
-const goalDone = (
-  result: ReturnType<typeof getNewTrackers>,
-  questId: string,
-  objectiveId: string,
-) =>
-  result.trackers.find((t) => t.id === questId)?.goals.find((g) => g.id === objectiveId)
-    ?.done;
 
 // ---------------------------------------------------------------------------
 // killObjectiveCountsForQuest — the pure gating decision
@@ -209,7 +202,7 @@ describe("getNewTrackers defeat_opponents gating", () => {
         isWarParticipant: false,
       },
     );
-    expect(goalDone(result, "pvp-1", "p-obj")).toBe(true);
+    expect(trackerGoal(result, "pvp-1", "p-obj")?.done).toBe(true);
   });
   it("a war quest completes defeat_opponents only against a per-opponent war foe", () => {
     const war = makeQuest("war-1", "war", [defeatOpponentsObjective("w-obj", "ai-1")]);
@@ -219,14 +212,14 @@ describe("getNewTrackers defeat_opponents gating", () => {
       [{ task: "defeat_opponents", contentId: "ai-1", text: "Won", warFoe: true }],
       { inWarTornSector: false, isWarParticipant: true },
     );
-    expect(goalDone(counted, "war-1", "w-obj")).toBe(true);
+    expect(trackerGoal(counted, "war-1", "w-obj")?.done).toBe(true);
 
     const notCounted = getNewTrackers(
       makeUser([war]),
       [{ task: "defeat_opponents", contentId: "ai-1", text: "Won", warFoe: false }],
       { inWarTornSector: false, isWarParticipant: true },
     );
-    expect(goalDone(notCounted, "war-1", "w-obj")).toBe(false);
+    expect(trackerGoal(notCounted, "war-1", "w-obj")?.done).toBe(false);
   });
 
   it("a war quest does not complete defeat_opponents from a missing warFoe in a mixed war battle", () => {
@@ -240,7 +233,7 @@ describe("getNewTrackers defeat_opponents gating", () => {
       { inWarTornSector: false, isWarParticipant: true },
     );
 
-    expect(goalDone(result, "war-1", "w-obj")).toBe(false);
+    expect(trackerGoal(result, "war-1", "w-obj")?.done).toBe(false);
   });
 
   it("a daily quest does not leak defeat_opponents into a pvp quest outside the war-torn sector", () => {
@@ -256,7 +249,7 @@ describe("getNewTrackers defeat_opponents gating", () => {
       { inWarTornSector: false, isWarParticipant: false },
     );
 
-    expect(goalDone(result, "daily-1", "d-obj")).toBe(true);
-    expect(goalDone(result, "pvp-1", "p-obj")).toBe(false);
+    expect(trackerGoal(result, "daily-1", "d-obj")?.done).toBe(true);
+    expect(trackerGoal(result, "pvp-1", "p-obj")?.done).toBe(false);
   });
 });

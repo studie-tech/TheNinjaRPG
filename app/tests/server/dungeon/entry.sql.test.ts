@@ -11,8 +11,9 @@ import { rollbackDungeonStart, expireDungeonRun } from "@/server/utils/dungeon";
 import { commitDungeonEntryBattle, dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
 import { makeCompleteBattle } from "../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../setup/dungeon";
-import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
+import { insertItems, insertUserItems, insertUsers, insertUserPets } from "../../setup/factories";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
+import { withoutTransactions } from "../../setup/statements";
 
 describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   beforeEach(async () => {
@@ -95,17 +96,12 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   it("expires an offline lobby and releases only its own queued members", async () => {
     const info = await admission();
     // A battle-free expiry must not acquire a transaction session, even through a wrapper.
-    const withoutTransactions = new Proxy(info.client, {
-      get(target, key, receiver) {
-        if (key === "transaction") return () => { throw new Error("Unexpected expiry transaction"); };
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const noTransactions = withoutTransactions(info.client);
     await info.client.update(dungeonRun).set({status: "LOBBY", battleId: null, expiresAt: new Date(Date.now()-1)});
     await info.client.update(userData).set({status: "BATTLE", battleId: "other"}).where(eq(userData.userId,"c"));
     const expired = await listExpiredDungeonRuns(info.client);
     expect(expired).toHaveLength(1);
-    const { statements } = await recordQueries(() => Promise.all(expired.map((run) => expireDungeonRun(withoutTransactions,run))));
+    const { statements } = await recordQueries(() => Promise.all(expired.map((run) => expireDungeonRun(noTransactions,run))));
     expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"a")}))?.status).toBe("AWAKE");
     expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"c")}))?.battleId).toBe("other");
     expect((await info.client.query.dungeonMember.findMany()).every((row) => row.activeUserId === null)).toBe(true);
@@ -185,7 +181,7 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   });
   it("guards parked companion XP against stale activation while mirroring selected active XP", async () => {
     const db = await getTestDatabase();
-    await db.insert(userPet).values(["one","two"].map((id) => ({ id, userId: "a", name: id, speciesId: "species", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0 })));
+    await insertUserPets(["one","two"].map((id) => ({ id, userId: "a", name: id, speciesId: "species" })));
     await db.update(userData).set({activePetId: "one", petExperience: 0}).where(eq(userData.userId,"a"));
     for (const id of ["one","two"]) await grantDungeonPetExperience(db,"a",[id],10);
     expect((await db.query.userData.findFirst({where: eq(userData.userId,"a")}))?.petExperience).toBe(10);

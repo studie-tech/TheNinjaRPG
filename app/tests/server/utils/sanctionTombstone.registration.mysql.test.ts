@@ -1,8 +1,6 @@
 import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as clerk from "@clerk/nextjs/server";
 import { eq, sql } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
 import {
   accountDeletion,
   actionLog,
@@ -25,7 +23,6 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { commentsRouter } from "@/server/api/routers/comments";
-import { registerRouter } from "@/server/api/routers/register";
 import { profileRouter } from "@/server/api/routers/profile";
 import { reportsRouter } from "@/server/api/routers/reports";
 import type { DrizzleClient } from "@/server/db";
@@ -36,6 +33,8 @@ import { processAccountDeletions } from "@/server/utils/accountDeletion/process"
 import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
 
 import { insertUsers } from "../../setup/factories";
+import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
+import { insertSanctionReports, sanctionIdentity, stubClerkUsers } from "../../setup/sanctions";
 import {
   callerFor,
   callerForDatabase,
@@ -44,16 +43,11 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { deferred } from "../../setup/deferred";
+import { interceptExecute, sqlText, overrideQuery } from "../../setup/statements";
 
 const DAY = 86_400_000;
 const EMAIL = "registration-appeal@example.com";
-const identity = (email: string): SanctionIdentity => ({
-  primaryEmailAddressId: "primary",
-  emailAddresses: [
-    { id: "primary", emailAddress: email, verification: { status: "verified" } },
-  ],
-  externalAccounts: [],
-});
 let owners: Map<string, SanctionIdentity>;
 let gatedId: string | undefined;
 let enterLookup: (() => void) | undefined;
@@ -65,28 +59,15 @@ const claimIdentity = (userId: string, email = EMAIL) => {
       owner.emailAddresses.some((address) => address.emailAddress === email),
     ),
   ).toBe(false);
-  owners.set(userId, identity(email));
+  owners.set(userId, sanctionIdentity(email));
 };
 
-const register = async (userId: string, database?: DrizzleClient, userIp?: string) =>
-  registerRouter.createCaller({
-    drizzle: database ?? (await getTestDatabase()),
+const register = (userId: string, database?: DrizzleClient, userIp?: string) =>
+  registerCharacter(
     userId,
-    userIp,
-  } as never).createCharacter({
-    username: userId,
-    gender: "Male",
-    hair_color: "Black",
-    eye_color: "Blue",
-    skin_color: "Light",
-    attribute_1: "Soft features",
-    attribute_2: "Glasses",
-    attribute_3: "Short Hair",
-    read_tos: true,
-    read_privacy: true,
-    read_earlyaccess: true,
-    bloodlineId: "registration-bloodline",
-  });
+    { username: userId, bloodlineId: "registration-bloodline" },
+    { database, userIp },
+  );
 
 const reportsOf = async (userId: string) =>
   (await getTestDatabase()).query.userReport.findMany({
@@ -117,13 +98,10 @@ const deleteAccount = async (userId: string) => {
 const startRegistration = async () => {
   claimIdentity("Concurrent");
   gatedId = "Concurrent";
-  const entered = new Promise<void>((resolve) => {
-    enterLookup = resolve;
-  });
-  let release!: () => void;
-  lookupGate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise: entered, resolve: enter } = deferred<void>();
+  enterLookup = enter;
+  const { promise: paused, resolve: release } = deferred<void>();
+  lookupGate = paused;
   const pending = register("Concurrent");
   await entered;
   expect(
@@ -156,14 +134,8 @@ const expectUnpublished = async (
 
 /** Pause after durable cases, before the character is published. */
 const prepareAndPause = () => {
-  let enter!: () => void;
-  const entered = new Promise<void>((resolve) => {
-    enter = resolve;
-  });
-  let release!: () => void;
-  const paused = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise: entered, resolve: enter } = deferred<void>();
+  const { promise: paused, resolve: release } = deferred<void>();
   const reapply = sanctions.reapplySanctions;
   let first = true;
   vi.spyOn(sanctions, "reapplySanctions").mockImplementation(async (...args) => {
@@ -215,51 +187,32 @@ describeWithDatabase("registration claims current sanction sources", () => {
     gatedId = undefined;
     enterLookup = undefined;
     lookupGate = undefined;
-    vi.spyOn(clerk, "clerkClient").mockResolvedValue({
-      users: {
-        getUser: vi.fn(async (userId: string) => {
-          if (userId === gatedId) {
-            enterLookup?.();
-            await lookupGate;
-          }
-          const owner = owners.get(userId);
-          if (!owner) throw Object.assign(new Error("not found"), { status: 404 });
-          return owner;
-        }),
-        deleteUser: vi.fn(async (userId: string) => {
-          owners.delete(userId);
-        }),
+    stubClerkUsers(
+      async (userId) => {
+        if (userId === gatedId) {
+          enterLookup?.();
+          await lookupGate;
+        }
+        return owners.get(userId);
       },
-    } as never);
+      {
+        deleteUser: async (userId) => {
+          owners.delete(userId);
+        },
+      },
+    );
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue();
-    const database = await getTestDatabase();
     await Promise.all([
       insertUsers([{ userId: "staff", role: "OWNER" }, { userId: "Original" }]),
-      database.insert(village).values({
-        id: "registration-horizon",
-        name: "Horizon",
-        sector: 1,
-        kageId: "kage",
-      }),
-      database.insert(bloodline).values({
-        id: "registration-bloodline",
-        name: "Test bloodline",
-        image: "/bloodline.png",
-        description: "test",
-        effects: [],
-        rank: "D",
-      }),
-      database.insert(userReport).values({
-        id: "original-case",
-        reporterUserId: "staff",
-        reportedUserId: "Original",
-        system: "tavern_comment",
-        infraction: {},
-        reason: "Spam",
-        aiInterpretation: "",
-        status: "BAN_ACTIVATED",
-        banEnd: new Date(Date.now() + 10 * DAY),
-      }),
+      insertRegistrationContent("registration"),
+      insertSanctionReports([
+        {
+          id: "original-case",
+          reportedUserId: "Original",
+          status: "BAN_ACTIVATED",
+          banEnd: new Date(Date.now() + 10 * DAY),
+        },
+      ]),
     ]);
     await deleteAccount("Original");
   });
@@ -309,7 +262,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
       claimIdentity("Concurrent");
       expect(await register("Concurrent")).toMatchObject({ success: true });
       const inherited = (await reportsOf("Concurrent"))[0]!;
-      await database.insert(userReport).values(
+      await insertSanctionReports(
         [
           {
             id: "expired-case",
@@ -322,15 +275,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
             status: "REPORT_CLEARED" as const,
             banEnd: new Date(Date.now() + DAY),
           },
-        ].map((report) => ({
-          ...report,
-          reporterUserId: "staff",
-          reportedUserId: "Concurrent",
-          system: "tavern_comment",
-          infraction: {},
-          reason: "Spam",
-          aiInterpretation: "",
-        })),
+        ].map((report) => ({ ...report, reportedUserId: "Concurrent" })),
       );
       expect(
         await (await callerFor(reportsRouter, "staff")).clear({
@@ -358,16 +303,9 @@ describeWithDatabase("registration claims current sanction sources", () => {
       claimIdentity("Concurrent", "unrelated@example.com");
       expect(await register("Concurrent")).toMatchObject({ success: true });
       expect(await reportsOf("Concurrent")).toHaveLength(0);
-      await database.insert(userReport).values({
-        id: "current-case",
-        reporterUserId: "staff",
-        reportedUserId: "Concurrent",
-        system: "tavern_comment",
-        infraction: {},
-        reason: "Spam",
-        aiInterpretation: "",
-        status: "UNVIEWED",
-      });
+      await insertSanctionReports([
+        { id: "current-case", reportedUserId: "Concurrent", status: "UNVIEWED" },
+      ]);
       const input = {
         object_id: "current-case",
         comment: "Resolve the current character's case",
@@ -378,43 +316,22 @@ describeWithDatabase("registration claims current sanction sources", () => {
         await (await callerFor(reportsRouter, "staff"))[decision](input),
       ).toMatchObject({ success: true });
       // The previous Clerk owner released this verified address during deletion.
-      owners.set("Concurrent", identity(EMAIL));
+      owners.set("Concurrent", sanctionIdentity(EMAIL));
       await database
         .update(userData)
         .set({ deletionAt: new Date(Date.now() - DAY) })
         .where(eq(userData.userId, "Concurrent"));
 
-      let enter!: () => void;
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const paused = new Promise<void>((resolve) => {
-        release = resolve;
-      });
+      const { promise: entered, resolve: enter } = deferred<void>();
+      const { promise: paused, resolve: release } = deferred<void>();
       let reads = 0;
-      const delayed = new Proxy(database, {
-        get(target, property, receiver) {
-          if (property === "query")
-            return {
-              ...target.query,
-              userReport: {
-                ...target.query.userReport,
-                findFirst: target.query.userReport.findFirst.bind(
-                  target.query.userReport,
-                ),
-                findMany: async (
-                  ...args: Parameters<typeof database.query.userReport.findMany>
-                ) => {
-                  const reports = await target.query.userReport.findMany(...args);
-                  expect(reports).toHaveLength(0);
-                  if (++reads === 3) enter();
-                  await paused;
-                  return reports;
-                },
-              },
-            };
-          return Reflect.get(target, property, receiver);
+      const delayed = overrideQuery(database, "userReport", {
+        findMany: async (read, ...args) => {
+          const reports = await read(...args);
+          expect(reports).toHaveLength(0);
+          if (++reads === 3) enter();
+          await paused;
+          return reports;
         },
       });
       const clearing = callerForDatabase(reportsRouter, "staff", delayed).clear(input);
@@ -487,56 +404,35 @@ describeWithDatabase("registration claims current sanction sources", () => {
           deletionAt: new Date(Date.now() - DAY),
         },
       ]);
-      await database.insert(userReport).values({
-        id: "late-case",
-        reporterUserId: "staff",
-        reportedUserId: "LateOriginal",
-        system: "tavern_comment",
-        infraction: {},
-        reason: "Spam",
-        aiInterpretation: "",
-        status: "BAN_ACTIVATED",
-        banEnd: new Date(Date.now() + DAY),
-      });
+      await insertSanctionReports([
+        {
+          id: "late-case",
+          reportedUserId: "LateOriginal",
+          status: "BAN_ACTIVATED",
+          banEnd: new Date(Date.now() + DAY),
+        },
+      ]);
       const userId = mode === "web" ? "LateOriginal" : "Concurrent";
       if (mode === "native") claimIdentity(userId, "unrelated@example.com");
-      let enter!: () => void;
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      const delayed = new Proxy(database, {
-        get(target, property, receiver) {
-          if (property === "query")
-            return {
-              ...target.query,
-              userData: {
-                ...target.query.userData,
-                findFirst: async (
-                  ...args: Parameters<typeof target.query.userData.findFirst>
-                ) => {
-                  await gate;
-                  return target.query.userData.findFirst(...args);
-                },
-              },
-              sanctionTombstone: {
-                ...target.query.sanctionTombstone,
-                findMany: async (
-                  ...args: Parameters<typeof target.query.sanctionTombstone.findMany>
-                ) => {
-                  const result = await target.query.sanctionTombstone.findMany(...args);
-                  expect(result).toHaveLength(0);
-                  enter();
-                  return result;
-                },
-              },
-            };
-          return Reflect.get(target, property, receiver);
+      const { promise: entered, resolve: enter } = deferred<void>();
+      const { promise: gate, resolve: release } = deferred<void>();
+      const delayed = overrideQuery(
+        overrideQuery(database, "userData", {
+          findFirst: async (read, ...args) => {
+            await gate;
+            return read(...args);
+          },
+        }),
+        "sanctionTombstone",
+        {
+          findMany: async (read, ...args) => {
+            const result = await read(...args);
+            expect(result).toHaveLength(0);
+            enter();
+            return result;
+          },
         },
-      });
+      );
       const pending = register(userId, delayed);
       await entered;
       try {
@@ -661,7 +557,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
       claimIdentity("Replacement");
       expect(await register("Replacement")).toMatchObject({ success: true });
       const inherited = (await reportsOf("Replacement"))[0]!;
-      owners.set("Replacement", identity("changed-appeal@example.com"));
+      owners.set("Replacement", sanctionIdentity("changed-appeal@example.com"));
       // A retry must retain the store ledger's deletion marker until a character exists.
       const alias = {
         oldUserId: "Concurrent",
@@ -963,25 +859,16 @@ describeWithDatabase("registration claims current sanction sources", () => {
     claimIdentity("Replacement");
     expect(await register("Replacement")).toMatchObject({ success: true });
     const inherited = (await reportsOf("Replacement"))[0]!;
-    owners.set("Replacement", identity("different-owner@example.com"));
+    owners.set("Replacement", sanctionIdentity("different-owner@example.com"));
     claimIdentity("Concurrent");
-    const failingDatabase = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "execute")
-          return async (query: Parameters<DrizzleClient["execute"]>[0]) => {
-            const statement =
-              typeof query === "string"
-                ? query
-                : new MySqlDialect().sqlToQuery(query.getSQL()).sql;
-            if (
-              statement.includes("INSERT INTO `UserData`") ||
-              statement.includes("DELETE `UserReport`")
-            )
-              throw new Error("Database unavailable");
-            return target.execute(query);
-          };
-        return Reflect.get(target, property, receiver);
-      },
+    const failingDatabase = interceptExecute(database, async (query, run) => {
+      const statement = sqlText(query);
+      if (
+        statement.includes("INSERT INTO `UserData`") ||
+        statement.includes("DELETE `UserReport`")
+      )
+        throw new Error("Database unavailable");
+      return run();
     });
     await expect(register("Concurrent", failingDatabase)).rejects.toThrow(
       "Database unavailable",
@@ -1029,42 +916,24 @@ describeWithDatabase("registration claims current sanction sources", () => {
       const preparation = records === "prepared" ? prepareAndPause() : null;
       const registration = preparation ? register("Concurrent") : null;
       if (preparation) await preparation.entered;
-      let enter!: () => void;
-      const readReports = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let release!: () => void;
-      const paused = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      const getBanDatabase = new Proxy(database, {
-        get(target, property, receiver) {
-          if (property === "query")
-            return {
-              ...target.query,
-              userData: {
-                ...target.query.userData,
-                findFirst: async (
-                  ...args: Parameters<typeof database.query.userData.findFirst>
-                ) => {
-                  await paused;
-                  return target.query.userData.findFirst(...args);
-                },
-              },
-              userReport: {
-                ...target.query.userReport,
-                findMany: async (
-                  ...args: Parameters<typeof database.query.userReport.findMany>
-                ) => {
-                  const reports = await target.query.userReport.findMany(...args);
-                  enter();
-                  return reports;
-                },
-              },
-            };
-          return Reflect.get(target, property, receiver);
+      const { promise: readReports, resolve: enter } = deferred<void>();
+      const { promise: paused, resolve: release } = deferred<void>();
+      const getBanDatabase = overrideQuery(
+        overrideQuery(database, "userData", {
+          findFirst: async (read, ...args) => {
+            await paused;
+            return read(...args);
+          },
+        }),
+        "userReport",
+        {
+          findMany: async (read, ...args) => {
+            const reports = await read(...args);
+            enter();
+            return reports;
+          },
         },
-      });
+      );
       const lookup = callerForDatabase(
         reportsRouter,
         "Concurrent",
@@ -1178,31 +1047,15 @@ describeWithDatabase("registration claims current sanction sources", () => {
     const database = await getTestDatabase();
     await addSilenceSource();
     claimIdentity("Concurrent");
-    let enter!: () => void;
-    const reachedInsert = new Promise<void>((resolve) => {
-      enter = resolve;
-    });
-    let release!: () => void;
-    const paused = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const failingDatabase = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "execute")
-          return async (query: Parameters<DrizzleClient["execute"]>[0]) => {
-            const statement =
-              typeof query === "string"
-                ? query
-                : new MySqlDialect().sqlToQuery(query.getSQL()).sql;
-            if (statement.includes("INSERT INTO `UserData`")) {
-              enter();
-              await paused;
-              throw new Error("Character insert failed");
-            }
-            return target.execute(query);
-          };
-        return Reflect.get(target, property, receiver);
-      },
+    const { promise: reachedInsert, resolve: enter } = deferred<void>();
+    const { promise: paused, resolve: release } = deferred<void>();
+    const failingDatabase = interceptExecute(database, async (query, run) => {
+      if (sqlText(query).includes("INSERT INTO `UserData`")) {
+        enter();
+        await paused;
+        throw new Error("Character insert failed");
+      }
+      return run();
     });
     const failing = register("Concurrent", failingDatabase);
     await reachedInsert;

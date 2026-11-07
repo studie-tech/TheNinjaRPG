@@ -28,6 +28,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { failCommits } from "../../../../setup/statements";
 
 describeWithDatabase("Pyramid entry recovery", () => {
   beforeEach(async () => {
@@ -347,19 +348,7 @@ describeWithDatabase("Pyramid entry recovery", () => {
         client.query.quest.findFirst({ where: eq(quest.id, "pool-pyramid") }),
       ]);
       if (!user || !pyramid) throw new Error("Missing fixture");
-      let attempts = 0;
-      const retryingClient = new Proxy(client, {
-        get(target, property, receiver) {
-          if (property === "transaction" && scenario === "deadlock retry")
-            return (callback: Parameters<typeof client.transaction>[0]) =>
-              target.transaction(async (tx) => {
-                const result = await callback(tx);
-                if (++attempts === 1) throw new Error("Deadlock found when trying to get lock");
-                return result;
-              });
-          return Reflect.get(target, property, receiver);
-        },
-      });
+      const retrying = failCommits(client, scenario === "deadlock retry" ? 1 : 0, "Deadlock found when trying to get lock");
       if (scenario !== "deadlock retry")
         await client
           .update(userData)
@@ -371,7 +360,7 @@ describeWithDatabase("Pyramid entry recovery", () => {
               : {}),
           })
           .where(eq(userData.userId, user.userId));
-      await upsertQuestEntry(retryingClient, user, pyramid, "quest_objective", null);
+      await upsertQuestEntry(retrying.client, user, pyramid, "quest_objective", null);
       expect(await client.query.questHistory.findMany()).toHaveLength(1);
       expect(
         await client.query.userData.findFirst({ where: eq(userData.userId, user.userId) }),
@@ -382,7 +371,7 @@ describeWithDatabase("Pyramid entry recovery", () => {
       expect(user.userQuests).toHaveLength(1);
       expect(typeof user.curHealth).toBe("number");
       expect(user.regenAt).toBeInstanceOf(Date);
-      if (scenario === "deadlock retry") expect(attempts).toBe(2);
+      if (scenario === "deadlock retry") expect(retrying.attempts()).toBe(2);
     });
   }
 });

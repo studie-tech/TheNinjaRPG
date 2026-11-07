@@ -13,7 +13,7 @@ import {
 import * as actualModerator from "@/libs/moderator";
 import { profileRouter } from "@/server/api/routers/profile";
 import { type UpdateUserInput, updateUserSchema } from "@/validators/user";
-import { insertItems, insertUsers } from "../../../../setup/factories";
+import { insertItems, insertUsers, insertJutsus } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -65,18 +65,7 @@ describeWithDatabase("profile updates preserve ownership lists", () => {
       },
     ]);
     await insertItems([{ id: "inventory-item" }]);
-    await database.insert(jutsu).values({
-      id: "inventory-jutsu",
-      name: "Inventory Jutsu",
-      description: "Test jutsu",
-      battleDescription: "Test jutsu",
-      image: "/jutsu.png",
-      effects: [],
-      target: "SELF",
-      range: 0,
-      requiredRank: "GENIN",
-      jutsuType: "NORMAL",
-    });
+    await insertJutsus([{ id: "inventory-jutsu", name: "Inventory Jutsu", requiredRank: "GENIN" }]);
     await database.insert(userItem).values({
       id: "owned-item",
       userId: OWNER,

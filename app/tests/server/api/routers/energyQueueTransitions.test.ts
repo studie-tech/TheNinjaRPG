@@ -34,8 +34,15 @@ import {
   invalidatePublishedMapCache,
   getSectorNeighborIds,
 } from "@/server/utils/sectorMap";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
-import { beforeStatements } from "../../../setup/statements";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertJutsus,
+  insertDefaultAiProfile,
+  insertUserVotes,
+} from "../../../setup/factories";
+import { beforeStatements, aroundStatements } from "../../../setup/statements";
 import {
   queueEnergy,
   queueMasteries,
@@ -50,6 +57,7 @@ import {
 } from "../../../setup/testDatabase";
 
 import { makeEffect } from "../../../libs/combat/helpers/battleScenario";
+import { deferred } from "../../../setup/deferred";
 
 const HOME = 30;
 const AWAY = getSectorNeighborIds(HOME).east;
@@ -113,14 +121,7 @@ const prepare = async (queue = entries) => {
     },
   ]);
   await queueEnergy(USER, queue);
-  await db
-    .insert(userVote)
-    .values({
-      id: "vote-queued",
-      userId: USER,
-      secret: "secret01",
-      lastVoteAt: new Date(),
-    });
+  await insertUserVotes([{ userId: USER }]);
   await db
     .insert(sectorMap)
     .values(
@@ -328,24 +329,11 @@ describeWithDatabase("Energy queue state transitions", () => {
     const regenAt = new Date(Date.now() - 195_000);
     await patch({ status: "TRAVEL", travelFinishAt: new Date(Date.now() - 1000), regenAt });
     let attempts = 0;
-    const racingDb = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof db.update>[0]) => {
-          const builder = db.update(table);
-          return { set(values: Parameters<typeof builder.set>[0]) {
-            const update = builder.set(values);
-            return { async where(condition: Parameters<typeof update.where>[0]) {
-              if (table === userData && ("regenAt" in values) === (mode === "queued")) {
-                attempts++;
-                if (attempts === 1) throw new Error("Deadlock found when trying to get lock; try restarting transaction");
-              }
-              return update.where(condition);
-            } };
-          } };
-        };
-      },
-    });
+    const racingDb = aroundStatements(db, userData, async (run) => {
+      attempts++;
+      if (attempts === 1) throw new Error("Deadlock found when trying to get lock; try restarting transaction");
+      return run();
+    }, { when: (set) => ("regenAt" in set) === (mode === "queued") });
     await completeExpiredGlobalTravel(racingDb);
     expect(attempts).toBe(2);
     const arrived = (await read())!;
@@ -393,24 +381,10 @@ describeWithDatabase("Energy queue state transitions", () => {
     await patch({ status: "TRAVEL", travelFinishAt: new Date(Date.now() - 1000), regenAt });
     const changedAt = new Date(Date.now() + 60_000);
     let raced = false;
-    const racingDb = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "update") return Reflect.get(target, key, receiver);
-        return (table: Parameters<typeof db.update>[0]) => {
-          const builder = db.update(table);
-          return { set(values: Parameters<typeof builder.set>[0]) {
-            const update = builder.set(values);
-            return { async where(condition: Parameters<typeof update.where>[0]) {
-              if (table === userData && "regenAt" in values && !raced) {
-                raced = true;
-                await patch({ updatedAt: changedAt, curEnergy: 1 });
-              }
-              return update.where(condition);
-            } };
-          } };
-        };
-      },
-    });
+    const racingDb = beforeStatements(db, userData, [async () => {
+      raced = true;
+      await patch({ updatedAt: changedAt, curEnergy: 1 });
+    }], { when: (set) => "regenAt" in set });
     await completeExpiredGlobalTravel(racingDb);
     expect(raced).toBe(true);
     expect(await read()).toEqual(expect.objectContaining({ status: "TRAVEL", regenAt, updatedAt: changedAt, curEnergy: 1, offence: 10, defence: 10 }));
@@ -527,27 +501,10 @@ describeWithDatabase("Energy queue state transitions", () => {
     const before = (await read())!;
     const changedAt = new Date(before.updatedAt.getTime() + 1);
     const db = await getTestDatabase();
-    const racingDb = new Proxy(db, {
-      get(target, property, receiver) {
-        const value = Reflect.get(target, property, receiver);
-        if (property !== "update") return value;
-        return (table: typeof userData) => {
-          const update = value.call(target, table);
-          if (table !== userData) return update;
-          return {
-            set: (values: Record<string, unknown>) => {
-              const builder = update.set(values);
-              return {
-                where: async (...conditions: unknown[]) => {
-                  await patch({ updatedAt: changedAt, curHealth: 42 });
-                  return builder.where(...conditions);
-                },
-              };
-            },
-          };
-        };
-      },
-    });
+    const racingDb = aroundStatements(db, userData, async (run) => {
+      await patch({ updatedAt: changedAt, curHealth: 42 });
+      return run();
+    }, { operations: ["update"] });
     const result = await travelRouter
       .createCaller({ drizzle: racingDb, userId: USER } as never)
       .finishGlobalMove();
@@ -571,7 +528,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
     await insertItems([{ id: "energy-armor", itemType: "ARMOR", effects: [makeEffect("increasemaxpools", { power: 200, powerPerLevel: 0, calculation: "static", rounds: 1, poolsAffected: ["Energy"] })] }]);
     await insertUserItems([{ userId: USER, itemId: "energy-armor", equipped: "ITEM_1", durability: 100 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await db.insert(gameSetting).values({ id: "regen-gain", name: "regenGainMultiplier", value: 2, time: new Date(Date.now() + 86_400_000) });
     const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
     try {
@@ -606,7 +563,7 @@ describeWithDatabase("Energy queue state transitions", () => {
       }),
     });
     await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await insertDefaultAiProfile();
     await insertItems([{ id: "mastery-energy-armor", itemType: "ARMOR", requiredNinjutsuMastery: 100, effects: [makeEffect("increasemaxpools", { power: 200, powerPerLevel: 0, calculation: "static", rounds: 1, poolsAffected: ["Energy"] })] }]);
     await insertUserItems([{ userId: USER, itemId: "mastery-energy-armor", equipped: "ITEM_1", durability: 100 }]);
     const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
@@ -647,11 +604,8 @@ describeWithDatabase("Energy queue state transitions", () => {
       }),
     });
     await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
-    await db.insert(jutsu).values({
-      id: "queued-jutsu", name: "Queued", description: "q", battleDescription: "q", effects: [],
-      target: "SELF", range: 0, requiredRank: "STUDENT", jutsuRank: "D", jutsuType: "NORMAL", image: "/q.png",
-    });
+    await insertDefaultAiProfile();
+    await insertJutsus([{ id: "queued-jutsu", name: "Queued" }]);
     await db.insert(userJutsu).values({ id: "uj-queued", userId: USER, jutsuId: "queued-jutsu", level: 2, equipped: true, finishTraining: finished });
     await db.insert(userQueue).values({
       id: "q-jutsu", userId: USER, kind: "JUTSU", position: 1, jutsuId: "queued-jutsu", reservedRyo: 0,
@@ -690,10 +644,8 @@ describeWithDatabase("Energy queue state transitions", () => {
   it("preserves a concurrent discipline speed change when combat advances only the element queue", async () => {
     const now = new Date();
     setSystemTime(now);
-    let speedWriteReady!: () => void;
-    const ready = new Promise<void>((resolve) => { speedWriteReady = resolve; });
-    let releaseSpeedWrite!: () => void;
-    const release = new Promise<void>((resolve) => { releaseSpeedWrite = resolve; });
+    const { promise: ready, resolve: speedWriteReady } = deferred<void>();
+    const { promise: release, resolve: releaseSpeedWrite } = deferred<void>();
     const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
     try {
       await prepare([]);
@@ -710,7 +662,7 @@ describeWithDatabase("Energy queue state transitions", () => {
       });
       await queueMasteries(USER, [{ stat: "Earth", speed: "1hr" }], "ELEMENT");
       await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
-      await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+      await insertDefaultAiProfile();
       const speedDb = beforeStatements(db, userData, [async () => {
         speedWriteReady();
         await release;
@@ -789,9 +741,7 @@ describeWithDatabase("Energy queue state transitions", () => {
           latitude: 10,
         },
       ]);
-      await db
-        .insert(aiProfile)
-        .values({ id: "Default", userId: "default-ai", rules: [] });
+      await insertDefaultAiProfile();
       await db
         .insert(gameSetting)
         .values({
@@ -804,32 +754,9 @@ describeWithDatabase("Energy queue state transitions", () => {
         .spyOn(getServerPusher(), "trigger")
         .mockResolvedValue({} as never);
       try {
-        let injectFailure = mode === "partial failure";
-        const racingDb = new Proxy(db, {
-          get(target, property, receiver) {
-            const value = Reflect.get(target, property, receiver);
-            if (property !== "update") return value;
-            return (table: typeof userData) => {
-              const update = value.call(target, table);
-              if (table !== userData || !injectFailure) return update;
-              injectFailure = false;
-              return {
-                set: (values: Record<string, unknown>) => {
-                  const builder = update.set(values);
-                  return {
-                    where: async (...conditions: unknown[]) => {
-                      await db
-                        .update(userData)
-                        .set({ status: "HOSPITALIZED" })
-                        .where(eq(userData.userId, "attacker"));
-                      return builder.where(...conditions);
-                    },
-                  };
-                },
-              };
-            };
-          },
-        });
+        const hospitalize = () =>
+          db.update(userData).set({ status: "HOSPITALIZED" }).where(eq(userData.userId, "attacker"));
+        const racingDb = beforeStatements(db, userData, mode === "partial failure" ? [hospitalize] : [], { operations: ["update"] });
         const start = () =>
           initiateBattle(
             {

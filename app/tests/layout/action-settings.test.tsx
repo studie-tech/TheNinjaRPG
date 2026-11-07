@@ -10,6 +10,7 @@ import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { deferred } from "../setup/deferred";
 
 type Input = RouterInputs["profile"]["updatePreferences"];
 type Result = RouterOutputs["profile"]["updatePreferences"];
@@ -27,12 +28,6 @@ const profile = (patch: Record<string, unknown> = {}): UserCache => ({
   userData: { userId: "actor", status: "ASLEEP", autoWakeUp: false, money: 10, rank: "NONE", ...patch } as NonNullable<UserCache["userData"]>,
   notifications: [],
 });
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: Error) => void;
-  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
-  return { promise, resolve, reject };
-};
 let cache: QueryClient;
 let actor = "actor";
 let controller: Controller;

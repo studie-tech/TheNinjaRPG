@@ -1,20 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import { availableUserActions } from "@/libs/combat/actions";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { ElementalSealTag } from "@/validators/combat";
-import { makeBattleUser, makeBattleUserItem, makeBattleWithWeapon, makeEffect, makeInjectBattle, makeTag } from "./helpers/battleScenario";
+import { makeBattleUser, makeBattleUserItem, makeEffect, makeInjectBattle, makeJutsu, makeTag, makeWeapon } from "./helpers/battleScenario";
 
 const fixture = () => {
   const jutsus = [
-    { ...SAGE_MODE_ACTIVATION_JUTSU, id: "fire60", name: "Fire 60", actionCostPerc: 60, elementClassification: "Fire" as const, effects: [makeTag("heal")] },
-    { ...SAGE_MODE_ACTIVATION_JUTSU, id: "water60", name: "Water 60", actionCostPerc: 60, elementClassification: "None" as const, effects: [makeTag("damage", { elements: ["Water"] })] },
-    { ...SAGE_MODE_ACTIVATION_JUTSU, id: "fire40", name: "Fire 40", actionCostPerc: 40, elementClassification: "Fire" as const, effects: [makeTag("damage", { elements: ["Fire"] })] },
-    { ...SAGE_MODE_ACTIVATION_JUTSU, id: "none60", name: "Support 60", actionCostPerc: 60, elementClassification: "None" as const, effects: [makeTag("heal")] },
-    { ...SAGE_MODE_ACTIVATION_JUTSU, id: "noneTag60", name: "None 60", actionCostPerc: 60, elementClassification: null, effects: [makeTag("damage", { elements: ["None"] })] },
-    { ...SAGE_MODE_ACTIVATION_JUTSU, id: "fire80", name: "Fire 80", actionCostPerc: 80, elementClassification: "Fire" as const, effects: [makeTag("damage")] },
+    makeJutsu({ id: "fire60", name: "Fire 60", actionCostPerc: 60, elementClassification: "Fire", effects: [makeTag("heal")] }),
+    makeJutsu({ id: "water60", name: "Water 60", actionCostPerc: 60, elementClassification: "None", effects: [makeTag("damage", { elements: ["Water"] })] }),
+    makeJutsu({ id: "fire40", name: "Fire 40", actionCostPerc: 40, elementClassification: "Fire", effects: [makeTag("damage", { elements: ["Fire"] })] }),
+    makeJutsu({ id: "none60", name: "Support 60", actionCostPerc: 60, elementClassification: "None", effects: [makeTag("heal")] }),
+    makeJutsu({ id: "noneTag60", name: "None 60", actionCostPerc: 60, elementClassification: null, effects: [makeTag("damage", { elements: ["None"] })] }),
+    makeJutsu({ id: "fire80", name: "Fire 80", actionCostPerc: 80, elementClassification: "Fire", effects: [makeTag("damage")] }),
   ];
-  const weapon = makeBattleWithWeapon().extraState.items!["weapon-1"]!;
-  const consumable = { ...weapon, id: "pill", name: "Pill", itemType: "CONSUMABLE" as const, effects: [makeTag("heal")] };
+  const weapon = makeWeapon();
+  const consumable = makeWeapon({ id: "pill", name: "Pill", itemType: "CONSUMABLE", effects: [makeTag("heal")] });
   const user = makeBattleUser("caster", {
     jutsus: jutsus.map((jutsu) => ({ id: jutsu.id, jutsuId: jutsu.id, equipped: true, level: 1, experience: 0, lastUsedRound: -10, originalCooldown: 0, origin: "user" as const })),
     items: [makeBattleUserItem({ lastUsedRound: -10 }), makeBattleUserItem({ id: "user-pill", itemId: "pill", equipped: "ITEM_1", quantity: 2, lastUsedRound: -10 })],

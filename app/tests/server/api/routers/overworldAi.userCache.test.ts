@@ -11,7 +11,8 @@ import { updateUserDataForGET } from "@/queries/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuests, insertUsers } from "../../../setup/factories";
+import { insertQuests, insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
@@ -50,8 +51,8 @@ describeWithDatabase("overworld interaction profile updates", () => {
 
   it.each(["safe", "upfront", "progression", "queue", "cooking"] as const)("preserves admission recovery after upfront hydration (%s)", async (settlement) => {
     const db = await getTestDatabase();
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json([{ result: [59, 60] }]));
-    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    stubRateLimitTransport({ answerOtherRequests: true });
+    await insertDefaultAiProfile();
     await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0 }).where(eq(userData.userId, "npc-cache-actor"));
     await db.update(overworldAiPlacement).set({ interactionType: "HOSTILE" }).where(eq(overworldAiPlacement.id, "cache-giver"));
     const { caller, snapshot } = await prepared();

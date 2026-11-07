@@ -4,7 +4,7 @@ import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { actionLog, clan, mpvpBattleUser, userData, userRequest, village } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
-import { insertUsers } from "../../../../setup/factories";
+import { insertUsers, insertClans } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -20,7 +20,7 @@ describeWithDatabase("village expulsion clan cleanup", () => {
       { userId: "expelled", villageId: "old-village", villagePrestige: -100, clanId: "old-clan", rank: "JONIN", status: "BATTLE", battleId: "expulsion-battle", joinedVillageAt: new Date(0) },
       { userId: "remaining", villageId: "old-village", clanId: "old-clan", rank: "JONIN" },
     ]);
-    await db.insert(clan).values({ id: "old-clan", name: "Old clan", image: "", villageId: "old-village", founderId: "expelled", leaderId: "expelled", leaderOrderId: "" });
+    await insertClans([{ id: "old-clan", name: "Old clan", villageId: "old-village", leaderId: "expelled" }]);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());

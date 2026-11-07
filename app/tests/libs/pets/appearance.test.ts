@@ -4,8 +4,9 @@ import sharp from "sharp";
 import { Moderations } from "openai/resources/moderations";
 import * as moderator from "@/libs/moderator";
 import { PIXEL_ART_RENDERING } from "@/libs/imagePrompts";
-import { downloadPetImage, generatePetAppearance } from "@/libs/pets/appearance";
-import { PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES } from "@/libs/pets/catalogue";
+import { PET_RANKS } from "@/drizzle/constants";
+import { downloadPetImage, generatePetAppearance, getPetAppearancePrompt } from "@/libs/pets/appearance";
+import { PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES, PET_RANK_APPEARANCES } from "@/libs/pets/catalogue";
 import * as quality from "@/libs/pets/quality";
 import * as replicate from "@/libs/replicate";
 import { initialPetSpecies } from "./helpers/species";
@@ -409,3 +410,101 @@ const cutout = async (red = 180, size = 128, hazeAlpha = 0) => {
   const image = sharp(data, { raw: { width: size, height: size, channels: 4 } });
   return size === 128 && !hazeAlpha ? image.webp({ lossless: true }).toBuffer() : image.png().toBuffer();
 };
+
+describe("companion appearance prompts", () => {
+  it("uses authored rank-specific growth and reference preservation prompts", () => {
+    const base = { userId: "player", speciesId: "pet-species-0", species: initialPetSpecies[0]!, paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 1, artRank: 0, avatar: null };
+    const founder = getPetAppearancePrompt(base, "GPT");
+    expect(founder.startsWith(`Full-body ${base.species.name} companion`)).toBe(true);
+    expect(founder).toContain("natural adult proportions");
+    const rankedPrompts = PET_RANKS.map(({ rank, name }) => {
+      const prompt = getPetAppearancePrompt({ ...base, rank, artRank: rank - 1, avatar: "/previous.webp" }, "GPT");
+      expect(prompt).toContain(`Evolution rank ${rank} of 10 (${name})`);
+      expect(prompt).toContain(base.species.description);
+      return prompt;
+    });
+    expect(new Set(rankedPrompts).size).toBe(10);
+    const evolution = getPetAppearancePrompt({ ...base, rank: 2, artRank: 1, avatar: "/previous.webp" }, "GPT");
+    expect(evolution).toContain("next evolution");
+    expect(evolution).toContain("SAME individual animal");
+    // Later ranks impress through refinement and may replace earlier features instead of stacking layers.
+    expect(evolution).toContain("never through extra bulk");
+    expect(evolution).toContain("you may simplify or remove clutter");
+    expect(evolution).toMatch(/spiky or porcupine-like masses.*tails merged into the body.*wings, horns, extra limbs.*a smaller animal/);
+    expect(founder).toContain("Growth phase");
+    expect(rankedPrompts[3]).toContain("Seasoned fighter phase");
+    expect(rankedPrompts[6]).toContain("Ascended phase");
+    expect(rankedPrompts[9]).toContain("Legendary apex");
+    expect(rankedPrompts[9]).toContain("never bulkier, spikier or fluffier");
+    const restyle = getPetAppearancePrompt({ ...base, rank: 2, artRank: 2, avatar: "/previous.webp" }, "GPT");
+    expect(restyle).toContain("Do not evolve it, rank it up or age it");
+    expect(restyle).toContain("Evolution rank 2 of 10");
+    expect(restyle).not.toContain("next evolution");
+    expect(() => getPetAppearancePrompt({ ...base, species: null }, "GPT")).toThrow("Invalid pet appearance");
+    const retiredSpecies = { ...initialPetSpecies[0]!, name: "Spirit fox", description: "A fox with translucent ears", isActive: false };
+    expect(getPetAppearancePrompt({ ...base, species: retiredSpecies }, "GPT")).toContain(retiredSpecies.description);
+  });
+
+  it("applies staff species art direction and rank concepts, falling back to built-in milestones", () => {
+    const kitsune = { ...initialPetSpecies[65]!, artDirection: "A white fox with flowing red-tipped flame tails.", rankConcepts: ["A slim white kit with two short flame-tipped tails", "", "  "] };
+    const base = { userId: "player", speciesId: kitsune.id, species: kitsune, paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 1, artRank: 0, avatar: null };
+    const founder = getPetAppearancePrompt(base, "GPT");
+    expect(founder).toContain(`${kitsune.description}. Species art direction: A white fox with flowing red-tipped flame tails. Colour palette:`);
+    expect(founder).toContain("(Companion): A slim white kit with two short flame-tipped tails. Tail stage:");
+    expect(founder).not.toContain(PET_RANK_APPEARANCES[0]);
+    expect(founder).toContain("Keep all limbs inside the frame");
+    // Blank, whitespace-only and missing entries keep the generic milestone for that rank.
+    for (const rank of [2, 3, 4]) {
+      const prompt = getPetAppearancePrompt({ ...base, rank, artRank: rank - 1, avatar: "/previous.webp" }, "GPT");
+      expect(prompt).toContain(`: ${PET_RANK_APPEARANCES[rank - 1]}. Tail stage:`);
+      expect(prompt).toContain("Species art direction: A white fox");
+    }
+    const plain = getPetAppearancePrompt({ ...base, species: { ...kitsune, artDirection: null, rankConcepts: [] } }, "GPT");
+    expect(plain).not.toContain("Species art direction");
+    expect(plain).toContain(PET_RANK_APPEARANCES[0]);
+  });
+
+  it("starts signature features small, grows tails to the full count by rank 7 and gates the aura glow", () => {
+    const kitsune = { ...initialPetSpecies.find((entry) => entry.name === "Kitsune")!, artDirection: null, rankConcepts: [] };
+    const base = { userId: "player", speciesId: kitsune.id, species: kitsune, paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 1, artRank: 0, avatar: null };
+    const prompts = PET_RANKS.map(({ rank }) => getPetAppearancePrompt({ ...base, rank, artRank: rank - 1, avatar: rank > 1 ? "/previous.webp" : null }, "GPT"));
+    const tails = ["exactly ONE tail", "exactly TWO tails", "exactly THREE tails", "exactly FOUR tails", "exactly FIVE tails", "exactly SIX tails", "full number of tails", "full number of tails", "full number of tails", "full number of tails"];
+    tails.forEach((count, index) => expect(prompts[index]).toContain(`Tail stage: ${index < 6 ? "this multi-tailed species has " : "it now shows its "}${count}`));
+    expect(prompts[0]).toContain("this overrides any tail count in its description");
+    expect(prompts[1]).toContain("more tails than this rank's tail stage allows");
+    expect(prompts[0]).toContain("only small, short beginnings");
+    // Single-tailed species never see tail-count wording, which models otherwise apply to them.
+    const wolfSpecies = { ...initialPetSpecies.find((entry) => entry.name === "Wolf")!, artDirection: null, rankConcepts: [] };
+    const wolf = { ...base, speciesId: wolfSpecies.id, species: wolfSpecies };
+    for (const { rank } of PET_RANKS) {
+      const prompt = getPetAppearancePrompt({ ...wolf, rank, artRank: rank - 1, avatar: "/previous.webp" }, "GPT");
+      expect(prompt).not.toContain("Tail stage");
+      expect(prompt).not.toMatch(/\b(ONE|TWO|THREE|FOUR|FIVE|SIX) tails?\b/);
+      expect(prompt).toContain("additional tails");
+    }
+    for (const concept of PET_RANK_APPEARANCES) expect(concept).not.toMatch(/multiple tails/i);
+    for (const prompt of prompts.slice(0, 3)) {
+      expect(prompt).toContain("Aura stage: no aura effects yet, only plain natural colouring with no glowing, luminous or emissive markings");
+      expect(prompt).not.toContain("crisp luminous markings");
+    }
+    for (const prompt of prompts.slice(3, 6)) {
+      expect(prompt).toContain("Aura stage: flat painted markings");
+      expect(prompt).not.toContain("crisp luminous markings");
+    }
+    for (const prompt of prompts.slice(6)) expect(prompt).toContain("Aura stage: crisp luminous markings");
+    for (const concept of PET_RANK_APPEARANCES.slice(0, 6)) expect(concept).not.toMatch(/glow|luminous/i);
+    // Staff concepts replace the milestone but still follow the aura stage.
+    const staff = getPetAppearancePrompt({ ...base, species: { ...kitsune, rankConcepts: ["A kit with one ember-tipped tail"] } }, "GPT");
+    expect(staff).toContain("A kit with one ember-tipped tail. Tail stage: this multi-tailed species has exactly ONE tail");
+    expect(staff).toContain("Aura stage: no aura effects yet");
+  });
+
+  it("asks GPT for native transparency and Nano Banana for the neutral cutout backdrop", () => {
+    const base = { userId: "player", speciesId: "pet-species-0", species: initialPetSpecies[0]!, paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 1, artRank: 0, avatar: null };
+    const gpt = getPetAppearancePrompt(base, "GPT");
+    const nano = getPetAppearancePrompt(base, "NANO_BANANA");
+    expect(gpt).toContain("fully transparent background");
+    expect(gpt).not.toContain("#f0f0f0");
+    expect(nano).toContain("uniform light gray (#f0f0f0) background");
+  });
+});

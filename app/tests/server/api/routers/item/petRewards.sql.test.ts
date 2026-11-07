@@ -7,8 +7,13 @@ import type { DrizzleClient } from "@/server/db";
 import { AiRule } from "@/validators/ai";
 import { ItemValidator, NonCombatConsumeRewardTag } from "@/validators/combat";
 import { petJutsuFixture } from "../../../../libs/pets/helpers/abilities";
-import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { beforeStatements } from "../../../../setup/statements";
+import {
+  insertItems,
+  insertUserItems,
+  insertUsers,
+  insertUserPets,
+} from "../../../../setup/factories";
+import { beforeStatements, inTransactions, failStatements } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const USER = "pet-item-owner";
@@ -16,35 +21,15 @@ const input = { userItemId: "pet-gift-stack", requestId: "pet-gift-request" };
 const rewardEffect = () => NonCombatConsumeRewardTag.parse({ reward_pets: ["gift-species"], reward_money: 7 });
 
 /** Force a catalog/account change after preload, immediately before the joined claim. */
-const beforeClaim = (client: DrizzleClient, hook: () => Promise<unknown>): DrizzleClient => new Proxy(client, {
-  get(target, property, receiver) {
-    if (property === "transaction") return (callback: (tx: DrizzleClient) => Promise<unknown>) =>
-      target.transaction((tx) => callback(beforeStatements(tx as unknown as DrizzleClient, userData, [hook])));
-    return Reflect.get(target, property, receiver);
-  },
-}) as DrizzleClient;
+const beforeClaim = (client: DrizzleClient, hook: () => Promise<unknown>) =>
+  inTransactions(client, (tx) => beforeStatements(tx, userData, [hook]));
 
 /** Fail the new collection row after the account and item debit, inside their transaction. */
-const failPetInsert = (client: DrizzleClient): DrizzleClient => new Proxy(client, {
-  get(target, property, receiver) {
-    if (property === "transaction") return (callback: (tx: DrizzleClient) => Promise<unknown>) =>
-      target.transaction((tx) => callback(new Proxy(tx, {
-        get(transaction, key, txReceiver) {
-          if (key === "insert") return (table: typeof userPet) => {
-            if (table === userPet) throw new Error("Pet insert failed");
-            return transaction.insert(table);
-          };
-          return Reflect.get(transaction, key, txReceiver);
-        },
-      }) as unknown as DrizzleClient));
-    return Reflect.get(target, property, receiver);
-  },
-}) as DrizzleClient;
+const failPetInsert = (client: DrizzleClient) =>
+  inTransactions(client, (tx) => failStatements(tx, userPet, 1, { operations: ["insert"] }));
 
 const insertExistingPet = async (id = "existing-pet") => {
-  const db = await getTestDatabase();
-  await db.insert(userPet).values({ id, userId: USER, speciesId: "gift-species", name: "Existing",
-    paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, storedExperience: 99 });
+  await insertUserPets([{ id, userId: USER, speciesId: "gift-species", name: "Existing", storedExperience: 99 }]);
 };
 
 describeWithDatabase("consumable companion rewards", () => {
@@ -121,7 +106,7 @@ describeWithDatabase("consumable companion rewards", () => {
 
   it("rolls back the debit, bundled rewards, counter and receipt if inserting the pet fails", async () => {
     const db = await getTestDatabase();
-    await expect(callerForDatabase(itemRouter, USER, failPetInsert(db)).consume(input)).rejects.toThrow("Pet insert failed");
+    await expect(callerForDatabase(itemRouter, USER, failPetInsert(db)).consume(input)).rejects.toThrow("Statement failed on purpose");
     expect((await db.query.userItem.findFirst())?.quantity).toBe(2);
     expect(await db.query.userData.findFirst()).toMatchObject({ money: 100, petAcquisitions: 0, activePetId: null });
     expect(await db.query.userPet.findMany()).toHaveLength(0);

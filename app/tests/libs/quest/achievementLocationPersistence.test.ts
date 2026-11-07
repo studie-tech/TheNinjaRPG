@@ -10,48 +10,31 @@ import {
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { DefeatOpponents, QuestTracker } from "@/validators/objectives";
 import type { QuestTrackerType } from "@/validators/objectives";
+import { trackerQuest, trackerUser } from "../../setup/quest";
 
 const makeUser = (questData: QuestTrackerType[] = [], randomLocation = false) => {
-  const achievement = {
-    id: "creator",
+  const defeatCreator = DefeatOpponents.parse({
+    id: "defeat-creator",
+    task: "defeat_opponents",
+    sectorType: randomLocation ? "random" : "specific",
+    sector: 0,
+    locationType: randomLocation ? "random" : "specific",
+    longitude: 0,
+    latitude: 0,
+    opponentAIs: [{ ids: ["creator-ai"], number: 1 }],
+  });
+  const achievement = trackerQuest("creator", [defeatCreator], "achievement", {
     name: "Kill the Creator",
-    questType: "achievement",
-    hidden: false,
-    consecutiveObjectives: false,
     maxAttempts: 0,
     maxCompletes: 1,
-    content: {
-      objectives: [
-        DefeatOpponents.parse({
-          id: "defeat-creator",
-          task: "defeat_opponents",
-          sectorType: randomLocation ? "random" : "specific",
-          sector: 0,
-          locationType: randomLocation ? "random" : "specific",
-          longitude: 0,
-          latitude: 0,
-          opponentAIs: [{ ids: ["creator-ai"], number: 1 }],
-        }),
-      ],
-      reward: {},
-    },
-  } as Quest;
-  const user = {
+  }) as unknown as Quest;
+  const user = trackerUser([], structuredClone(questData), {
     userId: "player",
-    level: 50,
-    rank: "JONIN",
-    role: "USER",
     villageId: "village",
-    sector: 1,
     longitude: 1,
     latitude: 1,
     village: { id: "village", sector: 1 },
-    activeWars: [],
-    bloodlineId: null,
-    completedQuests: [],
-    questData: structuredClone(questData),
-    userQuests: [],
-  } as unknown as Parameters<typeof getNewTrackers>[0];
+  });
   user.userQuests.push(...mockAchievementHistoryEntries([achievement], user));
   return user;
 };

@@ -8,10 +8,9 @@ import { BloodlineStatistics } from "@/layout/BloodlineStatistics";
 import { GraphsTab } from "@/layout/StrengthWeaknesses";
 import type { UserWithRelations } from "@/routers/profile";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const chartDefaults = chartLibrary.Chart.defaults;
-const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
-const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 let charts: { destroy: ReturnType<typeof vi.fn> }[];
 let attempts: number;
 let failAt: number | undefined;
@@ -26,11 +25,7 @@ const user = {
 } as NonNullable<UserWithRelations>;
 
 beforeEach(() => {
-  Object.defineProperties(globalThis, {
-    Event: { configurable: true, value: window.Event },
-    CustomEvent: { configurable: true, value: window.CustomEvent },
-    ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
-  });
+  installBrowserGlobals({ resizeObserver: true });
   charts = [];
   attempts = 0;
   failAt = undefined;
@@ -54,11 +49,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 describe("profile chart lifetime", () => {
