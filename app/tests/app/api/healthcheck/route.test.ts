@@ -30,6 +30,7 @@ it("answers 404 with the shell's CORS header when no user exists", async () => {
   const response = await GET();
   expect(response.status).toBe(404);
   expect(response.ok).toBe(false);
+  expect(await response.json()).toBe("User not found");
   expect(response.headers.get("Access-Control-Allow-Origin")).toBe(shellOrigin);
 });
 
