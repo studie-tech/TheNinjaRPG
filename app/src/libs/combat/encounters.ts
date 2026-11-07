@@ -8,7 +8,7 @@ import type {
   UserEffect,
 } from "@/libs/combat/types";
 import { applyPoolAdjustmentsToBase, mergeExtraState } from "@/libs/combat/util";
-import type { EncounterWave } from "@/validators/coop";
+import type { BossArrival, EncounterWave } from "@/validators/coop";
 
 /**
  * Advance battle state in place once the preceding enemies and authored round delay are done.
@@ -24,7 +24,7 @@ export const advanceEncounterWave = (battle: CompleteBattle, ended = false) => {
   // Defeated enemies remain as effect sources until the floor settles.
   const occupied = battle.usersState.filter((u) => stillInBattle(u));
   // A transforming enemy leaves no remains: its next form takes over its tile.
-  const fallen = state.transformInPlace
+  const fallen = next.arrival
     ? battle.usersState.find(
         (u) => u.direction === "right" && !u.isSummon && !u.leftBattle,
       )
@@ -72,12 +72,12 @@ export const advanceEncounterWave = (battle: CompleteBattle, ended = false) => {
   state.wave += 1;
   state.waveStartedRound = battle.round;
   const [form] = arrivals;
-  if (fallen && form) {
+  if (fallen && form && next.arrival) {
     fallen.leftBattle = true;
     form.transformation = {
+      ...next.arrival,
       id: nanoid(),
       fromUserId: fallen.userId,
-      stage: state.wave,
     };
   }
   return true;
@@ -87,12 +87,11 @@ export const advanceEncounterWave = (battle: CompleteBattle, ended = false) => {
 export type EncounterWaveState = {
   wave: number;
   waveStartedRound: number;
-  /** Each wave is the same enemy's next form, arriving on the tile the last one fell on. */
-  transformInPlace?: boolean;
   pendingWaves: {
     users: BattleUserState[];
     effects: UserEffect[];
     delayRounds: number;
+    arrival?: BossArrival;
   }[];
 };
 
@@ -108,8 +107,15 @@ export const prepareEncounterWaves = async (
 ): Promise<EncounterWaveState> => {
   captureEncounterSummonTemplates(opening.usersState, opening.userEffects);
   const pendingWaves: EncounterWaveState["pendingWaves"] = [];
+  let standing = opening.usersState;
   for (const wave of waves.slice(1)) {
     const prepared = await prepare(wave);
+    if (wave.arrival) {
+      for (const user of standing)
+        if (user.isAi && !user.isSummon && user.direction === "right")
+          user.risesAgain = true;
+    }
+    standing = prepared.usersState;
     captureEncounterSummonTemplates(prepared.usersState, prepared.userEffects);
     mergeExtraState(opening.extraState, prepared.extraState);
     // Gear modifiers belong to each combatant, outside the static catalog merge.
@@ -125,6 +131,7 @@ export const prepareEncounterWaves = async (
       users: prepared.usersState,
       effects: prepared.userEffects,
       delayRounds: wave.delayRounds,
+      ...(wave.arrival ? { arrival: wave.arrival } : {}),
     });
   }
   return { wave: 1, waveStartedRound: 0, pendingWaves };

@@ -81,7 +81,14 @@ describeWithDatabase("creator trial admission", () => {
         wave.users.filter((user) => !user.isSummon).map((user) => user.controllerId),
       ),
     ).toEqual(IDS.slice(1));
-    expect(created.extraState.encounter?.transformInPlace).toBe(true);
+    expect(
+      created.extraState.encounter?.pendingWaves.map((wave) => wave.arrival?.announce),
+    ).toEqual(
+      CREATOR_TRIAL_FORMS.flatMap((form) =>
+        "arrival" in form ? [form.arrival.announce] : [],
+      ),
+    );
+    expect(enemies[0]?.risesAgain).toBe(true);
     expect(created.extraState.creatorTrial).toEqual({
       creatorId: CREATOR,
       username: CREATOR_USERNAME,

@@ -88,6 +88,7 @@ export const publicState = [
   "spriteAnimations",
   "spriteAnimationEvent",
   "transformation",
+  "risesAgain",
   "bloodlineId",
   "keystoneName",
   "keystoneItemId",

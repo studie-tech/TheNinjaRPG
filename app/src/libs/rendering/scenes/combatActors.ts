@@ -2,7 +2,6 @@ import type { Grid } from "honeycomb-grid";
 import type { RenderLayer } from "pixi.js";
 import { Container, Graphics, Sprite } from "pixi.js";
 import {
-  CREATOR_TRIAL_FORMS,
   IMG_AVATAR_DEFAULT,
   IMG_BATTLEFIELD_TOMBSTONE,
   IMG_SECTOR_USER_MARKER,
@@ -362,7 +361,7 @@ export const createCombatActors = (
       !user.hidden && (!user.leftBattle || heldForms.has(user.userId));
     const displayed = alive && record.root.visible;
     // A form that transforms next stays standing, with no tombstone, until it does.
-    const standing = alive || isTransformingForm(user, snapshot.battle);
+    const standing = alive || (!!user.risesAgain && user.isOriginal);
     record.shadow.visible = displayed;
     // Clone identity uses the same rings as selection, without another ground marker.
     record.selection.tint = isClone(user) ? 0xd1d5db : 0xf0c56b;
@@ -707,13 +706,6 @@ export const createCombatActors = (
     },
   };
 };
-
-/** The trial's AI forms below the last, which rise again instead of falling. */
-const isTransformingForm = (user: ReturnedUserState, battle: ReturnedBattle) =>
-  !!battle.extraState.creatorTrial &&
-  user.isAi &&
-  user.isOriginal &&
-  (user.transformation?.stage ?? 1) < CREATOR_TRIAL_FORMS.length;
 
 /** Fighter artwork in tile-local Y-up units; vector UI is owned separately by the actor. */
 export const combatActorParts = (

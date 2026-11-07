@@ -3,7 +3,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { inArray } from "drizzle-orm";
 import {
   CREATOR_TRIAL_FORMS,
-  CREATOR_TRIAL_TRANSFORM_ACTION,
+  TRANSFORMATION_ACTION,
   USER_CAPS,
   getCombatStatCap,
   getUserCaps,
@@ -111,7 +111,7 @@ describeWithDatabase("creator trial seed", () => {
     for (const [index, id] of IDS.entries()) {
       const keys = bindings.filter((row) => row.userId === id).map((row) => row.actionKey);
       expect(keys).toEqual(expect.arrayContaining(["idle", "move", "basic:basicAttack"]));
-      expect(keys.includes(CREATOR_TRIAL_TRANSFORM_ACTION)).toBe(index > 0);
+      expect(keys.includes(TRANSFORMATION_ACTION)).toBe(index > 0);
     }
     for (const binding of bindings)
       expect(sheets.some((sheet) => sheet.id === binding.animationId)).toBe(true);

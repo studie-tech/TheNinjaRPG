@@ -79,17 +79,13 @@ import {
   stillInBattle,
 } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
+import { bossFightEncounter } from "@/libs/combat/bossFight";
 import { compactBattleCatalogs } from "@/libs/combat/catalog";
 import {
   COMBAT_LOBBY_SECONDS,
   RANKED_BLOODLINE_DAMAGE_TAG,
 } from "@/libs/combat/constants";
-import {
-  type CreatorTrialState,
-  creatorTrialTransformationLog,
-  creatorTrialWaves,
-  isCreator,
-} from "@/libs/combat/creatorTrial";
+import { type CreatorTrialState, isCreator } from "@/libs/combat/creatorTrial";
 import { createAction, settlementWrites, updateBattle } from "@/libs/combat/database";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
@@ -326,6 +322,7 @@ import {
   statSchema,
   type ZodAllTags,
 } from "@/validators/combat";
+import type { EncounterWave } from "@/validators/coop";
 import type { HuntingBattleState } from "@/validators/hunting";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 import {
@@ -864,7 +861,7 @@ export const combatRouter = createTRPCRouter({
             history.push({
               battleRound: actionRound,
               appliedEffects: [],
-              description: creatorTrialTransformationLog(newBattle, transformedForm),
+              description: transformedForm.transformation?.log ?? "",
               battleVersion: newBattle.version + nActions,
               actionId: "unknown",
               userId: transformedForm.userId,
@@ -1935,7 +1932,9 @@ export const initiateBattle = async (
     startingEffects?: ZodAllTags[];
     /** Open run whose version, receipt and inventory are guarded at battle creation. */
     questAttempt?: UserQuest;
-    /** The attacked creator; `targetIds` are the trial's forms, fought one after another. */
+    /** Forms fought one after another, with `targetIds` matching them. See `bossFightEncounter`. */
+    encounterWaves?: EncounterWave[];
+    /** The attacked creator, whom a win credits and whose name the first form takes. */
     creatorTrial?: CreatorTrialState;
     /** Attribute battle progress to its owning objective instead of unrelated matching kills. */
     questBattleSource?: { questId: string; objectiveId: string };
@@ -1982,8 +1981,7 @@ export const initiateBattle = async (
   const { longitude, latitude, sector, userIds, targetIds, client } = info;
   const dungeonEncounter = info.coop?.kind === "dungeon" ? info.coop : undefined;
   const questEncounter = info.coop?.kind === "quest" ? info.coop : undefined;
-  const encounterWaves =
-    dungeonEncounter?.waves ?? (info.creatorTrial ? creatorTrialWaves() : undefined);
+  const encounterWaves = dungeonEncounter?.waves ?? info.encounterWaves;
   if (
     dungeonEncounter &&
     userIds.length !== (dungeonEncounter.runState.pets ? 1 : DUNGEON_PARTY_SIZE)
@@ -2128,7 +2126,7 @@ export const initiateBattle = async (
     return await initiateBattle(
       {
         ...info,
-        targetIds: CREATOR_TRIAL_FORMS.map((form) => form.aiId),
+        ...bossFightEncounter(CREATOR_TRIAL_FORMS),
         creatorTrial: { creatorId: creator.userId, username: creator.username },
       },
       "OVERWORLD",
@@ -2652,9 +2650,9 @@ export const initiateBattle = async (
   )
     return {
       success: false,
-      message: info.creatorTrial
-        ? "The trial is unavailable"
-        : "A dungeon enemy is unavailable",
+      message: dungeonEncounter
+        ? "A dungeon enemy is unavailable"
+        : "The trial is unavailable",
     };
 
   // The trial opens against the creator themself; only later forms carry a machine's name.
@@ -3160,10 +3158,7 @@ export const initiateBattle = async (
     if (encounter instanceof Error) return errorResponse(encounter.message);
     extraState.encounter = encounter;
   }
-  if (info.creatorTrial && extraState.encounter) {
-    extraState.encounter.transformInPlace = true;
-    extraState.creatorTrial = info.creatorTrial;
-  }
+  if (info.creatorTrial) extraState.creatorTrial = info.creatorTrial;
   if (dungeonEncounter) {
     extraState.dungeon = {
       runId: dungeonEncounter.runId,

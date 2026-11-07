@@ -1,10 +1,9 @@
 import { Container, Graphics, Sprite, Text, TextStyle, Texture } from "pixi.js";
 import {
-  CREATOR_TRIAL_FORMS,
-  CREATOR_TRIAL_TRANSFORM_ACTION,
-  ID_SFX_CREATOR_TRIAL_BURST,
-  ID_SFX_CREATOR_TRIAL_SURGE,
   ID_SFX_HIT,
+  ID_SFX_TRANSFORMATION_BURST,
+  ID_SFX_TRANSFORMATION_SURGE,
+  TRANSFORMATION_ACTION,
 } from "@/drizzle/constants";
 import type { ReturnedBattle, ReturnedUserState } from "@/libs/combat/types";
 
@@ -19,41 +18,12 @@ const ARC_REFRESH_MS = 70;
 const BOLT_REFRESH_MS = 130;
 const GLITCH_REFRESH_MS = 60;
 
-/** Every form is a bigger event than the last; the final one breaks the field open. */
-const STAGES: Record<number, TransformationStage> = {
-  2: {
-    color: 0x4de8ff,
-    glow: 0xb8f6ff,
-    rings: 1,
-    arcs: 5,
-    sparks: 36,
-    hold: 1300,
-    dim: 0.5,
-    shake: 0.05,
-  },
-  3: {
-    color: 0xb46bff,
-    glow: 0xff9dff,
-    rings: 2,
-    arcs: 8,
-    sparks: 54,
-    hold: 1450,
-    dim: 0.6,
-    shake: 0.09,
-  },
+/** Every tier is a bigger event than the last; the top one breaks the field open. */
+const TIERS: Record<number, TransformationTier> = {
+  1: { rings: 1, arcs: 5, sparks: 36, hold: 1300, dim: 0.5, shake: 0.05 },
+  2: { rings: 2, arcs: 8, sparks: 54, hold: 1450, dim: 0.6, shake: 0.09 },
+  3: { rings: 3, arcs: 11, sparks: 76, hold: 1600, dim: 0.7, shake: 0.14 },
   4: {
-    color: 0xff6a1f,
-    glow: 0xffc15e,
-    rings: 3,
-    arcs: 11,
-    sparks: 76,
-    hold: 1600,
-    dim: 0.7,
-    shake: 0.14,
-  },
-  5: {
-    color: 0xffd76a,
-    glow: 0xff2a4d,
     rings: 5,
     arcs: 18,
     sparks: 120,
@@ -74,7 +44,7 @@ export const findTransformation = (
     : next.usersState.find(
         (user) =>
           user.transformation &&
-          STAGES[user.transformation.stage] &&
+          TIERS[user.transformation.tier] &&
           !previous.usersState.some((row) => row.userId === user.userId),
       );
 
@@ -321,16 +291,13 @@ export const createCombatTransformation = (
     /** Start a form's arrival on the field, which already holds its fighter. */
     start: (form: ReturnedUserState) => {
       const { transformation } = form;
-      const stage = transformation && STAGES[transformation.stage];
-      if (!transformation || !stage) return;
+      const tier = transformation && TIERS[transformation.tier];
+      if (!transformation || !tier) return;
+      const stage = { ...tier, color: transformation.color, glow: transformation.glow };
       const origin = actors.groundPosition(form.userId);
       if (!origin) return;
-      const clip = form.spriteAnimations?.[CREATOR_TRIAL_TRANSFORM_ACTION];
-      actors.transform(
-        form.userId,
-        transformation.fromUserId,
-        CREATOR_TRIAL_TRANSFORM_ACTION,
-      );
+      const clip = form.spriteAnimations?.[TRANSFORMATION_ACTION];
+      actors.transform(form.userId, transformation.fromUserId, TRANSFORMATION_ACTION);
       active = {
         startedAt: now,
         clipMs: clip ? (clip.frameCount * 1000) / clip.fps : FALLBACK_CLIP_MS,
@@ -341,7 +308,7 @@ export const createCombatTransformation = (
       };
       behind.visible = true;
       container.visible = true;
-      sounds(ID_SFX_CREATOR_TRIAL_SURGE, 1);
+      sounds(ID_SFX_TRANSFORMATION_SURGE, 1);
       for (const spark of sparks) {
         spark.angle = Math.random() * Math.PI * 2;
         spark.reach = tile.height * (2.5 + Math.random() * 4);
@@ -349,8 +316,7 @@ export const createCombatTransformation = (
         spark.size = tile.height * (0.05 + Math.random() * 0.1);
         spark.sprite.tint = Math.random() < 0.5 ? stage.color : stage.glow;
       }
-      const title = CREATOR_TRIAL_FORMS[transformation.stage - 1]?.announce ?? "";
-      banner.text = title;
+      banner.text = transformation.announce;
       banner.style = new TextStyle({
         fontFamily: 'Impact, "Arial Black", "Arial Narrow", Arial, sans-serif',
         fontSize: FONT_SIZE,
@@ -380,11 +346,11 @@ export const createCombatTransformation = (
       }
       if (!active.surgePlayed && elapsed > clipMs * 0.55) {
         active.surgePlayed = true;
-        sounds(ID_SFX_CREATOR_TRIAL_SURGE, 1);
+        sounds(ID_SFX_TRANSFORMATION_SURGE, 1);
       }
       if (state.burst && !active.burstPlayed) {
         active.burstPlayed = true;
-        sounds(ID_SFX_CREATOR_TRIAL_BURST, 1);
+        sounds(ID_SFX_TRANSFORMATION_BURST, 1);
         sounds(ID_SFX_HIT, 1);
       }
       dim.alpha = state.dim;
@@ -498,9 +464,8 @@ const createGlowTexture = () => {
   return Texture.from(canvas, true);
 };
 
-type TransformationStage = {
-  color: number;
-  glow: number;
+type TransformationStage = TransformationTier & { color: number; glow: number };
+type TransformationTier = {
   rings: number;
   arcs: number;
   sparks: number;

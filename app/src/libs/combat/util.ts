@@ -19,12 +19,12 @@ import {
   ID_ANIMATION_SMOKE,
   ID_SFX_CLEANSE,
   ID_SFX_CLEAR,
-  ID_SFX_CREATOR_TRIAL_BURST,
-  ID_SFX_CREATOR_TRIAL_SURGE,
   ID_SFX_HEAL,
   ID_SFX_HIT,
   ID_SFX_MOVE,
   ID_SFX_SMOKE,
+  ID_SFX_TRANSFORMATION_BURST,
+  ID_SFX_TRANSFORMATION_SURGE,
   isPreBattleGearFromType,
   KAGE_CHALLENGE_WIN_PRESTIGE,
   KAGE_PRESTIGE_COST,
@@ -1948,8 +1948,8 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
         ID_SFX_MOVE,
         ID_SFX_CLEANSE,
         ID_SFX_CLEAR,
-        ...(state?.creatorTrial
-          ? [ID_SFX_CREATOR_TRIAL_SURGE, ID_SFX_CREATOR_TRIAL_BURST]
+        ...(battle.usersState.some((u) => u.risesAgain || u.transformation)
+          ? [ID_SFX_TRANSFORMATION_SURGE, ID_SFX_TRANSFORMATION_BURST]
           : []),
         ...effects
           .flatMap((e) => [e.appearSfx, e.disappearSfx])

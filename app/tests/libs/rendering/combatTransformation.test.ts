@@ -6,9 +6,9 @@ import {
 } from "@/libs/rendering/scenes/combatTransformation";
 
 const STAGE = { hold: 1000, dim: 0.5, shake: 0.1 };
-const fighter = (userId: string, stage?: number) => ({
+const fighter = (userId: string, tier?: number) => ({
   userId,
-  ...(stage ? { transformation: { id: "cue", fromUserId: "old", stage } } : {}),
+  ...(tier ? { transformation: { id: "cue", fromUserId: "old", tier } } : {}),
 });
 const battle = (users: object[], id = "battle") =>
   ({ id, usersState: users }) as unknown as ReturnedBattle;
@@ -28,9 +28,9 @@ describe("combat transformation", () => {
     ).toBeUndefined();
   });
 
-  it("ignores stages without a staged arrival", () => {
+  it("ignores a tier with no staged arrival", () => {
     expect(
-      findTransformation(battle([]), battle([fighter("new", 1)])),
+      findTransformation(battle([]), battle([fighter("new", 9)])),
     ).toBeUndefined();
   });
 
