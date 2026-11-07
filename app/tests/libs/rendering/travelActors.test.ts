@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { IMG_SECTOR_VS_ICON } from "@/drizzle/constants";
-import { travelActorRecipes, travelActionAvailability, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
+import { CREATOR_USERNAME, IMG_SECTOR_VS_ICON } from "@/drizzle/constants";
+import { isAloneOnTile, travelActorRecipes, travelActionAvailability, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -34,6 +34,24 @@ describe("travel actor snapshots", () => {
     expect(solo[0]?.battleId).toBe("battle");
     expect(solo[0]?.parts.some((part) => part.image === IMG_SECTOR_VS_ICON)).toBe(true);
     expect(pair[0]?.parts.length).toBe((solo[0]?.parts.length ?? 0) + 1);
+  });
+  it("keeps the creator's tile clear of battle pins so challengers can always reach them", () => {
+    const creator = player({ userId: "creator", username: CREATOR_USERNAME, rank: "STUDENT" });
+    const challenger = player({ userId: "challenger", status: "BATTLE", battleId: "trial" });
+    const result = recipes([creator, challenger]);
+    expect(result.map((recipe) => recipe.key)).toEqual(["user:creator"]);
+    expect(result[0]?.parts.some((part) => part.kind === "attack")).toBe(true);
+  });
+  it("still pins a battle beside an ordinary player, and once the creator has left the tile", () => {
+    const challenger = player({ userId: "challenger", status: "BATTLE", battleId: "fight" });
+    expect(recipes([player(), challenger]).some((recipe) => recipe.battleId === "fight")).toBe(true);
+    const fighting = player({ userId: "creator", username: CREATOR_USERNAME, status: "BATTLE", battleId: "own" });
+    expect(recipes([fighting, challenger]).filter((recipe) => recipe.battleId).length).toBe(2);
+  });
+  it("counts only awake players, not fighters or NPCs, when judging a tile alone", () => {
+    const target = player();
+    expect(isAloneOnTile([target, player({ userId: "fighter", status: "BATTLE" }), player({ userId: "npc", isNpc: true }), player({ userId: "self" })], target, "self")).toBe(true);
+    expect(isAloneOnTile([target, player({ userId: "two" })], target, "self")).toBe(false);
   });
   it("keeps the viewer and NPC placements while representing crowded players with a count", () => {
     const result = recipes([player(), player({ userId: "two" }), player({ userId: "self" }), player({ isNpc: true, npcPlacementId: "guide" })]);
