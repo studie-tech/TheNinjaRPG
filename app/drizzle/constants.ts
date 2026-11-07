@@ -2056,6 +2056,22 @@ export const ONLINE_WINDOW_MINUTES = 30;
 export const BATTLE_ARENA_HEAL_COST = 500;
 export const BATTLE_TAG_STACKING = true;
 export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
+
+/**
+ * The game's creator. Attacking them on the map opens a PvE trial instead of a PvP
+ * battle, so their account never enters combat, while the map still offers the attack.
+ */
+export const CREATOR_USERNAME = "Terriator";
+/** The trial's AI templates, weakest first; each rises where the previous form fell. */
+export const CREATOR_TRIAL_FORMS = [
+  { aiId: "creator-trial-student", title: "Academy Student", announce: "" },
+  { aiId: "creator-trial-genin", title: "the Genin Frame", announce: "GENIN FRAME" },
+  { aiId: "creator-trial-chunin", title: "the Chunin Battle Frame", announce: "CHUNIN BATTLE FRAME" },
+  { aiId: "creator-trial-jonin", title: "the Jonin Siege Engine", announce: "JONIN SIEGE ENGINE" },
+  { aiId: "creator-trial-elite", title: "the Elite Jonin God Machine", announce: "ELITE JONIN GOD MACHINE" },
+] as const;
+/** Sheet each form plays on arrival, from the previous form to its own. */
+export const CREATOR_TRIAL_TRANSFORM_ACTION = "transform";
 export const STREAK_LEVEL_DIFF = 10;
 
 /**
@@ -2598,6 +2614,9 @@ export const ID_SFX_HEAL = "4iG_WpgEmPGUzHn8z129r";
 export const ID_SFX_MOVE = "Tze4i8gvgSHNZ-D4ffcAu";
 export const ID_SFX_CLEANSE = "mOSkDnYv4hchkPbhdpTDd";
 export const ID_SFX_CLEAR = "mOSkDnYv4hchkPbhdpTDd";
+/** Library sounds behind a trial form's arrival: its power surging, then bursting out. */
+export const ID_SFX_CREATOR_TRIAL_SURGE = "kEtVeccUUea888kBAMLiR";
+export const ID_SFX_CREATOR_TRIAL_BURST = "vJNaizZBpHEKyccPE1wem";
 
 // Discord invite link
 export const DISCORD_INVITE_URL = "https://discord.gg/eNtgPdAh7j";

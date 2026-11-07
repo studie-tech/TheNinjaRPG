@@ -196,6 +196,8 @@ export type CombatUserFields = {
   spriteAnimations?: CharacterAnimations;
   /** Latest delivered action ID/key; clients deduplicate it and queue assigned one-shots. */
   spriteAnimationEvent?: SpriteAnimationEvent;
+  /** Public cue: this fighter rose in place of a defeated form at this encounter stage. */
+  transformation?: { id: string; fromUserId: string; stage: number };
   /** Damage already deferred by Diffuse; survives the granting effect's expiry. */
   diffuseDamage?: {
     attackerId: string;
@@ -451,6 +453,8 @@ export type ExtraState = {
   tournamentAiOnly?: boolean;
   /** Preloaded enemy waves shared by authored co-op encounters. */
   encounter?: import("@/libs/combat/encounters").EncounterWaveState;
+  /** The attacked creator's identity for the trial's achievement credit and log. */
+  creatorTrial?: import("@/libs/combat/creatorTrial").CreatorTrialState;
   /** Private run/wave snapshot used by combat actions and atomic party settlement. */
   dungeon?: import("@/libs/dungeon").DungeonBattleState;
   /** Encounter snapshot for strategic settlement without an intermediate combat read. */

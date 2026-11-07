@@ -1,6 +1,7 @@
 import type { Grid } from "honeycomb-grid";
 import { Container, Graphics, Rectangle, type RenderLayer, Text } from "pixi.js";
 import {
+  CREATOR_USERNAME,
   IMG_AVATAR_DEFAULT,
   IMG_ICON_HEAL,
   IMG_MAP_QUEST_ICON,
@@ -937,7 +938,10 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
       ),
     );
   else {
-    if (!RANKS_RESTRICTED_FROM_PVP.includes(user.rank))
+    if (
+      user.username === CREATOR_USERNAME ||
+      !RANKS_RESTRICTED_FROM_PVP.includes(user.rank)
+    )
       parts.push(part(tile, "attack", IMG_SECTOR_ATTACK, 0.8, 0.9, 1.4));
     parts.push(
       part(tile, "heal", IMG_ICON_HEAL, 0.7, 1, 0.5),

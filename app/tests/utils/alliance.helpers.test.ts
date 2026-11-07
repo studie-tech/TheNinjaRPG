@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { CREATOR_USERNAME } from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
 import { getWarRelationship } from "@/libs/objectiveWar";
 import {
@@ -95,6 +96,13 @@ describe("canShowMapAttack", () => {
     expect(canShowMapAttack(viewer, ally, true, null)).toBe(true);
   });
 
+  it("offers everyone but the creator an attack on the creator, whatever their rank or village", () => {
+    const creator = { ...player, username: CREATOR_USERNAME, villageId: "a", rank: "STUDENT" } as const;
+    expect(canShowMapAttack(viewer, creator, false, null)).toBe(true);
+    expect(canShowMapAttack({ ...viewer, userId: creator.userId }, creator, false, null)).toBe(false);
+    expect(canShowMapAttack(viewer, { ...creator, status: "ASLEEP" }, false, null)).toBe(false);
+  });
+
   it("never offers an attack on a PvP-restricted rank", () => {
     const student = { ...player, villageId: "b", rank: "STUDENT" } as const;
     expect(canShowMapAttack(viewer, student, true, null)).toBe(false);
@@ -123,6 +131,20 @@ describe("canShowMapAttack", () => {
 
 describe("isAutoAttackTarget", () => {
   const viewer = { userId: "viewer", villageId: "a" };
+
+  it("never engages the creator on its own", () => {
+    const creator = {
+      userId: "creator",
+      username: CREATOR_USERNAME,
+      villageId: "b",
+      allianceStatus: "ENEMY",
+      status: "AWAKE",
+      rank: "JONIN",
+      level: 100,
+    } as const;
+    expect(isAutoAttackTarget(viewer, creator, null, 1)).toBe(false);
+  });
+
   const wars = [
     { id: "war", attackerVillageId: "a", defenderVillageId: "d", warAllies: [{ villageId: "c", supportVillageId: "a" }, { villageId: "b", supportVillageId: "d" }] },
   ] as never;

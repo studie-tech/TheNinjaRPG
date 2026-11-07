@@ -23,6 +23,12 @@ export const advanceEncounterWave = (battle: CompleteBattle, ended = false) => {
   if (battle.round < state.waveStartedRound + next.delayRounds) return false;
   // Defeated enemies remain as effect sources until the floor settles.
   const occupied = battle.usersState.filter((u) => stillInBattle(u));
+  // A transforming enemy leaves no remains: its next form takes over its tile.
+  const fallen = state.transformInPlace
+    ? battle.usersState.find(
+        (u) => u.direction === "right" && !u.isSummon && !u.leftBattle,
+      )
+    : undefined;
   const locations = getBattleSpawnLocations(
     battle.width,
     battle.height,
@@ -37,20 +43,26 @@ export const advanceEncounterWave = (battle: CompleteBattle, ended = false) => {
       )
         locations.push({ x, y });
     }
-  next.users
-    .filter((u) => !u.isSummonTemplate)
-    .forEach((u) => {
-      const p = locations.shift();
-      if (!p) throw new Error("No encounter wave spawn cell");
-      u.longitude = p.x;
-      u.latitude = p.y;
-      u.round = battle.round;
-      u.updatedAt = new Date();
-      // Barriers cannot occupy spawn cells; other effects persist through the floor.
-      battle.groundEffects = battle.groundEffects.filter(
-        (e) => e.type !== "barrier" || e.longitude !== p.x || e.latitude !== p.y,
-      );
-    });
+  if (
+    fallen &&
+    !occupied.some(
+      (u) => u.longitude === fallen.longitude && u.latitude === fallen.latitude,
+    )
+  )
+    locations.unshift({ x: fallen.longitude, y: fallen.latitude });
+  const arrivals = next.users.filter((u) => !u.isSummonTemplate);
+  arrivals.forEach((u) => {
+    const p = locations.shift();
+    if (!p) throw new Error("No encounter wave spawn cell");
+    u.longitude = p.x;
+    u.latitude = p.y;
+    u.round = battle.round;
+    u.updatedAt = new Date();
+    // Barriers cannot occupy spawn cells; other effects persist through the floor.
+    battle.groundEffects = battle.groundEffects.filter(
+      (e) => e.type !== "barrier" || e.longitude !== p.x || e.latitude !== p.y,
+    );
+  });
   battle.usersEffects = [...battle.usersEffects, ...next.effects];
   // Turn scheduling walks usersState in descending initiative order.
   battle.usersState = [...battle.usersState, ...next.users].sort(
@@ -59,6 +71,15 @@ export const advanceEncounterWave = (battle: CompleteBattle, ended = false) => {
   state.pendingWaves.shift();
   state.wave += 1;
   state.waveStartedRound = battle.round;
+  const [form] = arrivals;
+  if (fallen && form) {
+    fallen.leftBattle = true;
+    form.transformation = {
+      id: nanoid(),
+      fromUserId: fallen.userId,
+      stage: state.wave,
+    };
+  }
   return true;
 };
 
@@ -66,6 +87,8 @@ export const advanceEncounterWave = (battle: CompleteBattle, ended = false) => {
 export type EncounterWaveState = {
   wave: number;
   waveStartedRound: number;
+  /** Each wave is the same enemy's next form, arriving on the tile the last one fell on. */
+  transformInPlace?: boolean;
   pendingWaves: {
     users: BattleUserState[];
     effects: UserEffect[];

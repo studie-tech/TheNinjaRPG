@@ -1,5 +1,6 @@
 import {
   type AllianceState,
+  CREATOR_USERNAME,
   RANKS_RESTRICTED_FROM_PVP,
   type UserRank,
   type UserStatus,
@@ -109,21 +110,28 @@ export const mapAttackRelation = (
   return getAllyStatus(viewer?.village, target.villageId);
 };
 
-/** Whether map controls offer an attack: an awake, unbanned, PvP-eligible target, and no ally unless opted in. */
+/**
+ * Whether map controls offer an attack: an awake, unbanned, PvP-eligible target, and no ally
+ * unless opted in. Anyone but the creator themself can challenge the creator, whose attack
+ * opens a PvE trial rather than PvP.
+ */
 export const canShowMapAttack = (
   viewer: Parameters<typeof mapAttackRelation>[0],
   target: Parameters<typeof mapAttackRelation>[1] & {
     rank: UserRank;
     status: UserStatus;
     isBanned?: boolean;
+    username?: string;
   },
   allyAttack: boolean,
   wars: Parameters<typeof mapAttackRelation>[2],
 ) =>
   target.status === "AWAKE" &&
   !target.isBanned &&
-  !RANKS_RESTRICTED_FROM_PVP.includes(target.rank) &&
-  (allyAttack || mapAttackRelation(viewer, target, wars) !== "ALLY");
+  (target.username === CREATOR_USERNAME
+    ? viewer?.userId !== target.userId
+    : !RANKS_RESTRICTED_FROM_PVP.includes(target.rank) &&
+      (allyAttack || mapAttackRelation(viewer, target, wars) !== "ALLY"));
 
 /**
  * Whether ANBU auto-attack engages a player. It takes the map's attack rule without the
@@ -139,6 +147,7 @@ export const isAutoAttackTarget = (
   !!target.userId &&
   target.userId !== viewer.userId &&
   !target.isNpc &&
+  target.username !== CREATOR_USERNAME &&
   target.allianceStatus !== "ALLY" &&
   target.level >= minLevel &&
   canShowMapAttack(viewer, target, false, wars);
