@@ -3,6 +3,8 @@ import type { SpriteGenerationStatus } from "@/drizzle/constants";
 /** Every 4n+1 clip keeps half its frames: 16 fills an 8x2 sheet, 24 an 8x3 one. */
 const SHORT_CLIP_FRAMES = 33;
 const LONG_CLIP_FRAMES = 49;
+/** Playback speed of a finished sheet. */
+export const SPRITE_SHEET_FPS = 12.5;
 const KEEP_CHARACTER =
   "Keep the same character, outline, colours, proportions, size and facing direction, keep hold of anything it carries, and end exactly in the starting pose. Add no effects, shadow, floor or background.";
 
@@ -151,6 +153,9 @@ export const SpriteMotionPresets = [
 ] as const;
 export type SpriteMotionPreset = (typeof SpriteMotionPresets)[number];
 export type SpriteMotionPresetId = SpriteMotionPreset["id"];
+
+/** How many frames a clip of this length leaves on the finished sheet. */
+export const spriteSheetFrames = (clipFrames: number) => Math.floor(clipFrames / 2);
 
 /** Compose the editable motion prompt for a preset and body plan. */
 export const spriteMotionPrompt = (preset: SpriteMotionPreset, body: SpriteBodyPlan) =>

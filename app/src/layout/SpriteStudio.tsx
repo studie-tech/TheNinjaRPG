@@ -40,12 +40,14 @@ import { SpriteAnimationPreview } from "@/layout/SpriteSheetPreview";
 import {
   isSpriteGenerationActive,
   presetForAction,
+  SPRITE_SHEET_FPS,
   type SpriteBodyPlan,
   SpriteBodyPlans,
   SpriteCharacterStyles,
   type SpriteMotionPresetId,
   SpriteMotionPresets,
   spriteMotionPrompt,
+  spriteSheetFrames,
 } from "@/libs/spriteStudio";
 import { showMutationToast } from "@/libs/toast";
 import { groupBy } from "@/utils/grouping";
@@ -386,8 +388,8 @@ const Composer = ({ studio }: { studio: Studio }) => {
           </Button>
         </div>
         <p className="mt-2 text-muted-foreground text-xs">
-          Creates a {preset.frames === 49 ? "24" : "16"}-frame sheet at 12.5 fps.
-          Credits are held now and returned if generation fails.
+          Creates a {spriteSheetFrames(preset.frames)}-frame sheet at {SPRITE_SHEET_FPS}{" "}
+          fps. Credits are held now and returned if generation fails.
         </p>
         {studio.generate.error && (
           <p role="alert" className="mt-2 text-destructive text-sm">

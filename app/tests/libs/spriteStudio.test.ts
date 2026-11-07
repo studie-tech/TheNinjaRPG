@@ -4,9 +4,16 @@ import {
   SpriteBodyPlans,
   SpriteMotionPresets,
   spriteMotionPrompt,
+  spriteSheetFrames,
 } from "@/libs/spriteStudio";
 
 describe("sprite studio presets", () => {
+  it("fills whole rows of an 8-column sheet from every clip length", () => {
+    expect(spriteSheetFrames(33)).toBe(16);
+    expect(spriteSheetFrames(49)).toBe(24);
+    for (const preset of SpriteMotionPresets) expect(spriteSheetFrames(preset.frames) % 8).toBe(0);
+  });
+
   it("offers a prompt for every body plan and keeps the wording that breaks clips out", () => {
     for (const preset of SpriteMotionPresets) {
       if (!preset.prompts) continue;
