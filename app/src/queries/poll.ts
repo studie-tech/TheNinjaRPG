@@ -294,9 +294,6 @@ export const findPollOptionForDeletePollOption = (
 ) =>
   client.query.pollOption.findFirst({
     where: and(eq(pollOption.id, input.optionId), eq(pollOption.pollId, input.pollId)),
-    with: {
-      votes: true,
-    },
   });
 
 /** Build the `userPollVote` deletion for `deletePollOption`, using predicates on `optionId`. */

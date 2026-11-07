@@ -212,12 +212,7 @@ export const findUserItemImbuementForRemoveImbuement = (
 ) =>
   client.query.userItemImbuement.findFirst({
     where: eq(userItemImbuement.id, input.userItemImbuementId),
-    with: {
-      userItem: {
-        with: { item: true },
-      },
-      item: true,
-    },
+    with: { item: true },
   });
 
 /** Build the `userItemImbuement` deletion for `removeImbuement`, using predicates on `id` and `userItemId`. */
