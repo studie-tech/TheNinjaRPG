@@ -10,13 +10,10 @@ import {
   COST_SKILL_RESET,
   IMG_AVATAR_DEFAULT,
   SKILL_RESET_STAFF_RELATED_MSG,
-  SKILL_TREE_RESET_FREE_GOLD,
-  SKILL_TREE_RESET_FREE_NORMAL,
-  SKILL_TREE_RESET_FREE_SILVER,
 } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
 import { skillTree } from "@/drizzle/schema";
-
+import { getResetAllowance } from "@/libs/skillReset";
+import { isSkillVisible } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchViewerRole } from "@/queries/profile";
 import {
@@ -74,9 +71,7 @@ import {
   canAccessHiddenSkillTree,
   canChangeContent,
   canUnequipAllUsers,
-  isStaffMember,
 } from "@/utils/permissions";
-import { getUtcMonthKey } from "@/utils/time";
 import { SkillTreeValidator } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
 import {
@@ -936,54 +931,4 @@ export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
   }
 
   return filters;
-};
-
-/**
- * Get the free reset amount for a user
- * @param user - The user
- * @returns The free reset amount
- */
-export const getFreeResetAmount = (user: UserData) => {
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return SKILL_TREE_RESET_FREE_NORMAL;
-    case "SILVER":
-      return SKILL_TREE_RESET_FREE_SILVER;
-    case "GOLD":
-      return SKILL_TREE_RESET_FREE_GOLD;
-    default:
-      return SKILL_TREE_RESET_FREE_NORMAL;
-  }
-};
-
-export const isSkillVisible = (
-  skill: { hidden: boolean; folder: { hidden: boolean } | null },
-  includeHidden: boolean,
-) => includeHidden || (!skill.hidden && !skill.folder?.hidden);
-
-/**
- * The monthly allowance skill and Bloodright resets share. Staff reset for free without
- * drawing on it; `next` is the state a reset persists.
- */
-export const getResetAllowance = (user: UserData) => {
-  const state = getMonthlyResetState(user);
-  const isStaff = isStaffMember(user);
-  const remaining = Math.max(0, getFreeResetAmount(user) - state.count);
-  return {
-    isStaff,
-    isFree: remaining > 0 || isStaff,
-    used: state.count,
-    remaining,
-    next: { ...state, count: state.count + (isStaff ? 0 : 1) },
-  };
-};
-
-/** Free resets claimed this UTC month, persisted by the guarded reset UPDATE. */
-export const getMonthlyResetState = (user: UserData) => {
-  const month = getUtcMonthKey();
-  return {
-    month,
-    count: user.monthlySkillResets?.month === month ? user.monthlySkillResets.count : 0,
-  };
 };
