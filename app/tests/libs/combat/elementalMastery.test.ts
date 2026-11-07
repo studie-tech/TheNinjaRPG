@@ -4,9 +4,8 @@ import { applyEffects, computeDamagePacket, emptyPreBattleGearModifiers } from "
 import { clear, copy } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
-import { activeTrainedElement, elementalGainRoom } from "@/libs/elementalMastery";
+import { activeTrainedElement, elementalGainRoom, getUserElements } from "@/libs/elementalMastery";
 import { DamageTag, IncreaseDamageGivenTag } from "@/validators/combat";
-import { getUserElements } from "@/validators/user";
 import { flatCombatStats, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 

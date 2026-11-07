@@ -29,7 +29,11 @@ import ElementImage from "@/layout/ElementImage";
 import NavTabs from "@/layout/NavTabs";
 import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
 import SkillTreeFolderModal from "@/layout/SkillTreeFolderModal";
-import { activeTrainedElement, providedElements } from "@/libs/elementalMastery";
+import {
+  activeTrainedElement,
+  getUserElements,
+  providedElements,
+} from "@/libs/elementalMastery";
 import { getMasteryRank, masteryTotal } from "@/libs/masteryProgression";
 import { withCappedStats } from "@/libs/profile";
 import { hasRequiredRank } from "@/libs/rank";
@@ -42,7 +46,6 @@ import { useActiveLayout } from "@/utils/LayoutContext";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { getUserElements } from "@/validators/user";
 
 // Main StrengthWeaknesses Component
 const StrengthWeaknesses: React.FC = () => {

@@ -28,6 +28,7 @@ import {
   filterQuestTrackersForDbPersist,
   getActiveObjectives,
   getNewTrackers,
+  getQuestCounterFieldName,
   type QuestConsequence,
   rollObjectiveAttackers,
 } from "@/libs/quest";
@@ -96,7 +97,6 @@ import {
   type PendingRewardChoice,
   PostProcessedRewardSchema,
 } from "@/validators/rewards";
-import { getQuestCounterFieldName } from "@/validators/user";
 import type { UserDelta, UserDeltaResponse } from "@/validators/userCache";
 
 /**

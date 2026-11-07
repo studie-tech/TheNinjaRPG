@@ -12,7 +12,11 @@ import { getEffectiveStackSize, splitIntoStacks } from "@/libs/item";
 import { getWarSide } from "@/libs/objectiveWar";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { boostPvpGain, boostPvpRewards, getPvpBoost } from "@/libs/pvpExperience";
-import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import {
+  filterQuestTrackersForDbPersist,
+  getNewTrackers,
+  type QuestCounterFieldName,
+} from "@/libs/quest";
 import type { GetRewardResult } from "@/libs/quest/rewards";
 import { incrementAnbuPoints } from "@/queries/anbu";
 import { incrementUserVillagePrestige } from "@/queries/profile";
@@ -55,7 +59,6 @@ import { grantTitles } from "@/server/utils/titleGrants";
 import { getRandomElement } from "@/utils/array";
 import type { QuestTrackerType } from "@/validators/objectives";
 import { hasMasteryPromotion, MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
-import type { QuestCounterFieldName } from "@/validators/user";
 
 /**
  * Callers must win an endpoint-specific idempotency / CAS claim before invoking

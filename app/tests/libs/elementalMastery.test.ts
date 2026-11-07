@@ -5,9 +5,9 @@ import {
   elementalGainRoom,
   type ElementalMasterySource,
   providedElements,
+  getUserElements,
 } from "@/libs/elementalMastery";
 import { AllTags } from "@/validators/combat";
-import { getUserElements } from "@/validators/user";
 
 // A mastered innate element becomes active only when a bloodline replaces its slot.
 const trainee = {
