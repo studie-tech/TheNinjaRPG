@@ -34,30 +34,21 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FARM_GOLD_FED_TIME_REDUCTION_PERCENT,
-  FED_COOKING_GOLD_SLOTS,
-  FED_COOKING_NORMAL_SLOTS,
-  FED_COOKING_SILVER_SLOTS,
-  FED_EVENT_ITEMS_DEFAULT,
-  FED_EVENT_ITEMS_GOLD,
-  FED_EVENT_ITEMS_NORMAL,
-  FED_EVENT_ITEMS_SILVER,
+  FED_COOKING_SLOTS,
+  FED_EVENT_ITEMS,
   FED_GOLD_BANK_INTEREST,
-  FED_GOLD_INVENTORY_SLOTS,
   FED_GOLD_ITEM_LOADOUTS,
   FED_GOLD_JUTSU_LOADOUTS,
-  FED_GOLD_JUTSU_SLOTS,
+  FED_INVENTORY_SLOTS,
   FED_ITEM_LOADOUTS_BASE,
   FED_JUTSU_LOADOUTS_BASE,
+  FED_JUTSU_SLOTS,
   FED_NORMAL_BANK_INTEREST,
-  FED_NORMAL_INVENTORY_SLOTS,
   FED_NORMAL_ITEM_LOADOUTS,
   FED_NORMAL_JUTSU_LOADOUTS,
-  FED_NORMAL_JUTSU_SLOTS,
   FED_SILVER_BANK_INTEREST,
-  FED_SILVER_INVENTORY_SLOTS,
   FED_SILVER_ITEM_LOADOUTS,
   FED_SILVER_JUTSU_LOADOUTS,
-  FED_SILVER_JUTSU_SLOTS,
   FEDERAL_MONTHLY_USD_CENTS,
   type FederalStatus,
   FederalStatuses,
@@ -140,10 +131,10 @@ const FEDERAL_TIER_BENEFITS = {
   NORMAL: {
     title: "Normal",
     usernameColor: "Blue",
-    inventorySlots: FED_NORMAL_INVENTORY_SLOTS,
-    eventItems: FED_EVENT_ITEMS_NORMAL,
-    cookingSlots: FED_COOKING_NORMAL_SLOTS,
-    jutsuSlots: FED_NORMAL_JUTSU_SLOTS,
+    inventorySlots: FED_INVENTORY_SLOTS.NORMAL,
+    eventItems: FED_EVENT_ITEMS.NORMAL,
+    cookingSlots: FED_COOKING_SLOTS.NORMAL,
+    jutsuSlots: FED_JUTSU_SLOTS.NORMAL,
     bankInterest: FED_NORMAL_BANK_INTEREST,
     jutsuLoadouts: FED_NORMAL_JUTSU_LOADOUTS,
     itemLoadouts: FED_NORMAL_ITEM_LOADOUTS,
@@ -153,10 +144,10 @@ const FEDERAL_TIER_BENEFITS = {
   SILVER: {
     title: "Silver",
     usernameColor: "Silver",
-    inventorySlots: FED_SILVER_INVENTORY_SLOTS,
-    eventItems: FED_EVENT_ITEMS_SILVER,
-    cookingSlots: FED_COOKING_SILVER_SLOTS,
-    jutsuSlots: FED_SILVER_JUTSU_SLOTS,
+    inventorySlots: FED_INVENTORY_SLOTS.SILVER,
+    eventItems: FED_EVENT_ITEMS.SILVER,
+    cookingSlots: FED_COOKING_SLOTS.SILVER,
+    jutsuSlots: FED_JUTSU_SLOTS.SILVER,
     bankInterest: FED_SILVER_BANK_INTEREST,
     jutsuLoadouts: FED_SILVER_JUTSU_LOADOUTS,
     itemLoadouts: FED_SILVER_ITEM_LOADOUTS,
@@ -166,10 +157,10 @@ const FEDERAL_TIER_BENEFITS = {
   GOLD: {
     title: "Gold",
     usernameColor: "Gold",
-    inventorySlots: FED_GOLD_INVENTORY_SLOTS,
-    eventItems: FED_EVENT_ITEMS_GOLD,
-    cookingSlots: FED_COOKING_GOLD_SLOTS,
-    jutsuSlots: FED_GOLD_JUTSU_SLOTS,
+    inventorySlots: FED_INVENTORY_SLOTS.GOLD,
+    eventItems: FED_EVENT_ITEMS.GOLD,
+    cookingSlots: FED_COOKING_SLOTS.GOLD,
+    jutsuSlots: FED_JUTSU_SLOTS.GOLD,
     bankInterest: FED_GOLD_BANK_INTEREST,
     jutsuLoadouts: FED_GOLD_JUTSU_LOADOUTS,
     itemLoadouts: FED_GOLD_ITEM_LOADOUTS,
@@ -707,7 +698,7 @@ const FederalTierBenefits = ({ status }: { status: FederalTier }) => {
       <ul className="mx-2 mb-2 ml-6 list-disc text-xs">
         <li>{benefits.usernameColor} username in tavern</li>
         <li>+{benefits.inventorySlots} Normal Inventory space</li>
-        <li>+{benefits.eventItems - FED_EVENT_ITEMS_DEFAULT} Event inventory space</li>
+        <li>+{benefits.eventItems - FED_EVENT_ITEMS.NONE} Event inventory space</li>
         <li>+{benefits.cookingSlots} Cooking inventory space</li>
         <li>
           +{collectionSlots} companion collection{" "}

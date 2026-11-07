@@ -12,9 +12,7 @@ import {
   BasicElementName,
   CombatStatNames,
   ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER,
-  FED_GOLD_JUTSU_SLOTS,
-  FED_NORMAL_JUTSU_SLOTS,
-  FED_SILVER_JUTSU_SLOTS,
+  FED_JUTSU_SLOTS,
   getCombatStatCap,
   getUserCaps,
   ITEM_XP_BATTLE_TYPES,
@@ -628,22 +626,15 @@ export const calcJutsuEquipLimit = (userdata: JutsuEquipLimitUser) => {
     }
     return 4 + 2;
   };
-  const fedContrib = (userdata: JutsuEquipLimitUser) => {
-    const status = getUserFederalStatus(userdata);
-    switch (status) {
-      case "NORMAL":
-        return FED_NORMAL_JUTSU_SLOTS;
-      case "SILVER":
-        return FED_SILVER_JUTSU_SLOTS;
-      case "GOLD":
-        return FED_GOLD_JUTSU_SLOTS;
-    }
-    return 0;
-  };
   const extraSlots = !userdata.staffAccount
     ? userdata.extraJutsuSlots
     : MAX_EXTRA_JUTSU_SLOTS;
-  return 1 + rankContrib(userdata.rank) + fedContrib(userdata) + extraSlots;
+  return (
+    1 +
+    rankContrib(userdata.rank) +
+    FED_JUTSU_SLOTS[getUserFederalStatus(userdata)] +
+    extraSlots
+  );
 };
 
 // For categorizing jutsu
