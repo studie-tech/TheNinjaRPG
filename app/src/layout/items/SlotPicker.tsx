@@ -7,7 +7,7 @@ import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/sche
 import ContentImage from "@/layout/ContentImage";
 import { EQUIPMENT_LAYOUT } from "@/layout/items/EquipmentFigure";
 import { rarityLabel, rarityTextClass } from "@/layout/items/ItemCard";
-import { applyActiveVariant } from "@/libs/combat/util";
+import { applyActiveVariant } from "@/libs/item";
 import { rankSlotCandidates, slotName } from "@/libs/itemsPage";
 import { cn } from "@/libs/shadui";
 

@@ -39,9 +39,9 @@ import {
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
 import Loader from "@/layout/Loader";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
-import { applyActiveVariant } from "@/libs/combat/util";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
+  applyActiveVariant,
   calcItemSellingPrice,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,

@@ -8,8 +8,7 @@ import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/sche
 import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
 import { USER_ITEM_DRAG_TYPE } from "@/layout/items/ItemCard";
-import { applyActiveVariant } from "@/libs/combat/util";
-import { showsItemLevelBadge } from "@/libs/item";
+import { applyActiveVariant, showsItemLevelBadge } from "@/libs/item";
 import { cn } from "@/libs/shadui";
 
 /**
