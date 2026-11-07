@@ -37,25 +37,7 @@ it.each(["success", "error"])("keeps the saved draft selected until a pending sa
   }));
   const refetch = vi.fn(async () => undefined);
   const invalidate = vi.fn(async () => undefined);
-  Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ coop: { dungeon: { getAvailable: { invalidate } } } }),
-    coop: { dungeon: {
-      getAll: { useQuery: () => ({ data: definitions, refetch }) },
-      save: { useMutation: (options: UseMutationOptions<SaveResult, Error, SaveInput>) => useMutation({ ...options, mutationFn: save }) },
-    },
-    },
-    mapAsset: { getAll: { useQuery: () => ({ data: [] }) } },
-    profile: { getAllAiNames: { useQuery: () => ({ data: [{ userId: "enemy", username: "Enemy" }] }) } },
-    quests: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    item: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    jutsu: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    rewardPackages: { getCatalog: { useQuery: () => ({ data: { packages: [], nodes: [] } }) } },
-  });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
-  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-  const view = render(<QueryClientProvider client={queryClient}><DungeonEditor /></QueryClientProvider>);
+  const { view, queryClient } = mountEditor({ save, definitions, refetch, invalidate });
   const select = view.getByRole("combobox", { name: "Edit existing dungeon" }) as HTMLSelectElement;
   const newButton = view.getByRole("button", { name: "New dungeon" }) as HTMLButtonElement;
   fireEvent.change(select, { target: { value: "A" } });
@@ -104,24 +86,7 @@ it.each(["success", "error"])("keeps the saved draft selected until a pending sa
 
 it.each(["", "11", "1.5"])("resets invalid enemy quantity %s for a new dungeon and saves the fresh draft", async (value) => {
   const save = vi.fn(async (_input: SaveInput): Promise<SaveResult> => ({ success: true, message: "Dungeon saved.", id: "A" }));
-  Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ coop: { dungeon: { getAvailable: { invalidate: async () => undefined } } } }),
-    coop: { dungeon: {
-      getAll: { useQuery: () => ({ data: [], refetch: async () => undefined }) },
-      save: { useMutation: (options: UseMutationOptions<SaveResult, Error, SaveInput>) => useMutation({ ...options, mutationFn: save }) },
-    } },
-    mapAsset: { getAll: { useQuery: () => ({ data: [] }) } },
-    profile: { getAllAiNames: { useQuery: () => ({ data: [{ userId: "enemy", username: "Enemy" }] }) } },
-    quests: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    item: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    jutsu: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    rewardPackages: { getCatalog: { useQuery: () => ({ data: { packages: [], nodes: [] } }) } },
-  });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
-  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-  const view = render(<QueryClientProvider client={queryClient}><DungeonEditor /></QueryClientProvider>);
+  const { view, queryClient } = mountEditor({ save });
   fireEvent.click(view.getByRole("tab", { name: "Encounters" }));
   fireEvent.input(view.getByLabelText("Wave 1 enemy 1 quantity"), { target: { value } });
   fireEvent.change(view.getByLabelText("Name"), { target: { value: "Discard me" } });
@@ -159,24 +124,14 @@ it("searches enemies and rewards, preserves invalid quantity drafts, and saves g
   content.tiers[0]!.at(-1)!.kind = "mini-boss";
   content.tiers[0]![0]!.waves.push({aiIds: ["enemy"], delayRounds: 1});
   const save = vi.fn(async (_input: SaveInput): Promise<SaveResult> => ({success: true, message: "Dungeon saved.", id: "A"}));
-  Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({coop: {dungeon: {getAvailable: {invalidate: async () => undefined}}}}),
-    coop: {dungeon: {
-      getAll: {useQuery: () => ({data: [{id: "A", content}], refetch: async () => undefined})},
-      save: {useMutation: (options: UseMutationOptions<SaveResult, Error, SaveInput>) => useMutation({...options, mutationFn: save})},
-    }},
-    mapAsset: {getAll: {useQuery: () => ({data: []})}},
-    profile: {getAllAiNames: {useQuery: () => ({data: [{userId: "enemy", username: "Enemy"}, {userId: "wolf", username: "Snow Wolf"}]})}},
-    quests: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    item: {getAllNames: {useQuery: () => ({data: [{id: "cache", name: "Forest Cache", isCache: true}, {id: "herb", name: "Herb", isCache: false}]})}},
-    jutsu: {getAllNames: {useQuery: () => ({data: [{id: "jutsu", name: "Fireball"}]})}},
-    rewardPackages: {getCatalog: {useQuery: () => ({data: {packages: [{id: "bundle", name: "Starter Bundle"}], nodes: []}})}},
+  const { view, queryClient } = mountEditor({
+    save,
+    definitions: [{ id: "A", content }],
+    aiNames: [{ userId: "enemy", username: "Enemy" }, { userId: "wolf", username: "Snow Wolf" }],
+    items: [{ id: "cache", name: "Forest Cache", isCache: true }, { id: "herb", name: "Herb", isCache: false }],
+    jutsus: [{ id: "jutsu", name: "Fireball" }],
+    packages: [{ id: "bundle", name: "Starter Bundle" }],
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
-  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  const queryClient = new QueryClient({ defaultOptions: {mutations: {retry: false}} });
-  const view = render(<QueryClientProvider client={queryClient}><DungeonEditor /></QueryClientProvider>);
   const selectReward = async (label: string, option: string) => {
     const selectedOption = await view.findByRole("option", {name: option});
     await act(async () => fireEvent.click(selectedOption));
@@ -259,24 +214,11 @@ it("saves displayed enemy quantities after making room in a full wave", async ()
   const content = dungeonContent();
   content.tiers[0]![0]!.waves[0]!.aiIds = [...Array<string>(7).fill("enemy"), ...Array<string>(3).fill("wolf")];
   const save = vi.fn(async (_input: SaveInput): Promise<SaveResult> => ({ success: true, message: "Dungeon saved.", id: "A" }));
-  Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ coop: { dungeon: { getAvailable: { invalidate: async () => undefined } } } }),
-    coop: { dungeon: {
-      getAll: { useQuery: () => ({ data: [{ id: "A", content }], refetch: async () => undefined }) },
-      save: { useMutation: (options: UseMutationOptions<SaveResult, Error, SaveInput>) => useMutation({ ...options, mutationFn: save }) },
-    } },
-    mapAsset: { getAll: { useQuery: () => ({ data: [] }) } },
-    profile: { getAllAiNames: { useQuery: () => ({ data: [{ userId: "enemy", username: "Enemy" }, { userId: "wolf", username: "Snow Wolf" }] }) } },
-    quests: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    item: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    jutsu: { getAllNames: { useQuery: () => ({ data: [] }) } },
-    rewardPackages: { getCatalog: { useQuery: () => ({ data: { packages: [], nodes: [] } }) } },
+  const { view, queryClient } = mountEditor({
+    save,
+    definitions: [{ id: "A", content }],
+    aiNames: [{ userId: "enemy", username: "Enemy" }, { userId: "wolf", username: "Snow Wolf" }],
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
-  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-  const view = render(<QueryClientProvider client={queryClient}><DungeonEditor /></QueryClientProvider>);
   fireEvent.change(view.getByRole("combobox", { name: "Edit existing dungeon" }), { target: { value: "A" } });
   fireEvent.click(view.getByRole("tab", { name: "Encounters" }));
   const quantity = view.getByLabelText("Wave 1 enemy 1 quantity") as HTMLInputElement;
@@ -294,3 +236,44 @@ it("saves displayed enemy quantities after making room in a full wave", async ()
   expect(save.mock.calls[0]![0].content.tiers[0]![0]!.waves[0]!.aiIds).toEqual([...Array<string>(9).fill("enemy"), "wolf"]);
   queryClient.clear();
 });
+
+/** Mount the editor over stubbed catalogs; each test passes the data it is about. */
+function mountEditor({
+  save,
+  definitions = [],
+  aiNames = [{ userId: "enemy", username: "Enemy" }],
+  items = [],
+  jutsus = [],
+  packages = [],
+  refetch = async () => undefined,
+  invalidate = async () => undefined,
+}: {
+  save: (input: SaveInput) => Promise<SaveResult>;
+  definitions?: { id: string; content: unknown }[];
+  aiNames?: { userId: string; username: string }[];
+  items?: { id: string; name: string; isCache: boolean }[];
+  jutsus?: { id: string; name: string }[];
+  packages?: { id: string; name: string }[];
+  refetch?: () => Promise<undefined>;
+  invalidate?: () => Promise<undefined>;
+}) {
+  Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({ coop: { dungeon: { getAvailable: { invalidate } } } }),
+    coop: { dungeon: {
+      getAll: { useQuery: () => ({ data: definitions, refetch }) },
+      save: { useMutation: (options: UseMutationOptions<SaveResult, Error, SaveInput>) => useMutation({ ...options, mutationFn: save }) },
+    } },
+    mapAsset: { getAll: { useQuery: () => ({ data: [] }) } },
+    profile: { getAllAiNames: { useQuery: () => ({ data: aiNames }) } },
+    quests: { getAllNames: { useQuery: () => ({ data: [] }) } },
+    item: { getAllNames: { useQuery: () => ({ data: items }) } },
+    jutsu: { getAllNames: { useQuery: () => ({ data: jutsus }) } },
+    rewardPackages: { getCatalog: { useQuery: () => ({ data: { packages, nodes: [] } }) } },
+  });
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
+  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  const view = render(<QueryClientProvider client={queryClient}><DungeonEditor /></QueryClientProvider>);
+  return { view, queryClient };
+}
