@@ -129,27 +129,30 @@ export default function AdministrationBuilding() {
                     <ItemWithEffects
                       item={quest}
                       showEdit="quest"
-                      imageExtra={
-                        <div className="mt-2 space-y-2">
-                          <QuestTeams
-                            questId={quest.id}
-                            teamEnabled={quest.teamEnabled}
-                          />
+                      footer={
+                        <div className="space-y-2">
                           <QuestEntryStock stock={entryStock} />
-                          <TakeQuestButton
-                            quest={quest}
-                            entryCost={entryStock}
-                            disabled={entryStock.some(
-                              (required) => required.owned < required.quantity,
-                            )}
-                            onStart={() =>
-                              startQuest({
-                                questId: quest.id,
-                                userSector: userData.sector,
-                                supportsAnnouncements: true,
-                              })
-                            }
-                          />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <TakeQuestButton
+                              quest={quest}
+                              entryCost={entryStock}
+                              disabled={entryStock.some(
+                                (required) => required.owned < required.quantity,
+                              )}
+                              onStart={() =>
+                                startQuest({
+                                  questId: quest.id,
+                                  userSector: userData.sector,
+                                  supportsAnnouncements: true,
+                                })
+                              }
+                            />
+                            <QuestTeams
+                              questId={quest.id}
+                              teamEnabled={quest.teamEnabled}
+                              asAction
+                            />
+                          </div>
                         </div>
                       }
                       hideTitle

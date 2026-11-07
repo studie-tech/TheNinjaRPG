@@ -29,10 +29,13 @@ export const QuestTeams = ({
   questId,
   teamEnabled = true,
   compact = false,
+  asAction = false,
 }: {
   questId?: string;
   teamEnabled?: boolean;
   compact?: boolean;
+  /** Keep optional team setup behind an action in available quest cards. */
+  asAction?: boolean;
 }) => {
   const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
@@ -155,12 +158,15 @@ export const QuestTeams = ({
       member.longitude !== location.longitude ||
       member.latitude !== location.latitude,
   );
-  return (
+  const isTeamChooser = asAction && !!questId && !current;
+  const content = (
     <section
       className={
-        questId
-          ? "bg-popover text-popover-foreground space-y-3 rounded-lg border p-3"
-          : "text-foreground space-y-4 p-3 sm:p-4"
+        isTeamChooser
+          ? "space-y-3"
+          : questId
+            ? "bg-popover text-popover-foreground space-y-3 rounded-lg border p-3"
+            : "text-foreground space-y-4 p-3 sm:p-4"
       }
       aria-label="Quest teams"
     >
@@ -178,12 +184,7 @@ export const QuestTeams = ({
         <div className="flex shrink-0 items-center gap-1">
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="How quest teams work"
-                hoverText="How quest teams work"
-              >
+              <Button size="icon" variant="ghost" aria-label="How quest teams work">
                 <CircleHelp className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
@@ -262,11 +263,15 @@ export const QuestTeams = ({
       )}
       {!current && questId && (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <label htmlFor={publicId} className="flex items-center gap-2 text-sm">
+          <label
+            htmlFor={publicId}
+            className="flex min-h-[44px] items-center gap-2 text-sm sm:min-h-9"
+          >
             <Switch id={publicId} checked={isPublic} onCheckedChange={setIsPublic} />
             Public team
           </label>
           <Button
+            className="min-h-[44px] sm:min-h-9"
             disabled={busy || isPending}
             onClick={() => create.mutate({ questId, isPublic })}
           >
@@ -477,5 +482,24 @@ export const QuestTeams = ({
         </p>
       )}
     </section>
+  );
+  return isTeamChooser ? (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="min-h-[44px] sm:min-h-9">
+          <Users className="mr-2 h-4 w-4" aria-hidden="true" />
+          Play with a team
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        collisionPadding={8}
+        className="max-h-[70dvh] w-[320px] max-w-[calc(100vw-2rem)] overflow-y-auto"
+      >
+        {content}
+      </PopoverContent>
+    </Popover>
+  ) : (
+    content
   );
 };

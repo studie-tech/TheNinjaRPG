@@ -116,19 +116,22 @@ export default function Kitchen({ image }: { image?: string }) {
   const cookingReductionPercent = user
     ? getActivityBonuses(user).cookingReductionPercent
     : 0;
+  // The server requires at least one ingredient before a recipe can be cooked.
   const blocked = !canAttemptAwakeAction(user)
     ? "You must be awake to cook"
     : isFull
       ? "Your shared Crafting and Cooking queue is full"
       : !selected
         ? "Select a recipe"
-        : level < selected.cookingMinLevel
-          ? `Cooking level ${selected.cookingMinLevel} required`
-          : !validQuantity
-            ? `Choose 1–${MAX_COOKING_BATCHES} batches`
-            : !hasIngredients
-              ? "Missing ingredients"
-              : null;
+        : selected.craftingRequirements.length === 0
+          ? "Recipe unavailable"
+          : level < selected.cookingMinLevel
+            ? `Cooking level ${selected.cookingMinLevel} required`
+            : !validQuantity
+              ? `Choose 1–${MAX_COOKING_BATCHES} batches`
+              : !hasIngredients
+                ? "Missing ingredients"
+                : null;
   const filtered =
     recipes.data?.filter((recipe) =>
       recipe.name.toLowerCase().includes(search.toLowerCase()),
@@ -280,11 +283,13 @@ export default function Kitchen({ image }: { image?: string }) {
                   XP (current bonuses)
                 </p>
                 <p className="mt-1 text-xs">
-                  {locked
-                    ? `Locked: requires Cooking level ${recipe.cookingMinLevel}`
-                    : missing
-                      ? "Missing ingredients"
-                      : "Ready to cook"}
+                  {recipe.craftingRequirements.length === 0
+                    ? "Recipe unavailable"
+                    : locked
+                      ? `Locked: requires Cooking level ${recipe.cookingMinLevel}`
+                      : missing
+                        ? "Missing ingredients"
+                        : "Ready to cook"}
                 </p>
               </button>
             );

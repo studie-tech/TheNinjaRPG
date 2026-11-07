@@ -27,6 +27,7 @@ export const TakeQuestButton: React.FC<TakeQuestButtonProps> = ({
   const button = (
     <Button
       id={`tutorial-take-quest-${quest.id}`}
+      className="min-h-[44px] sm:min-h-9"
       disabled={disabled}
       onClick={needsConfirmation ? undefined : onStart}
     >
