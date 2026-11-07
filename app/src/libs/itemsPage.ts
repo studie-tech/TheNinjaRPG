@@ -327,7 +327,8 @@ export const homeStorageBlockReason = (user: {
   if (!user.village || user.sector !== user.village.sector) {
     return "Return to your own village to use your home storage";
   }
-  if (user.status !== "AWAKE" && user.status !== "ASLEEP") {
+  // Sleeping at home is allowed, so this is not an awake-only action.
+  if (!["AWAKE", "ASLEEP"].includes(user.status)) {
     return "You cannot use your home storage right now";
   }
   return null;
