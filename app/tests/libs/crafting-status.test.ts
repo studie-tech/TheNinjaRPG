@@ -45,14 +45,13 @@ describe("usable crafting stacks", () => {
 
   it("consumes those stacks smallest first", () => {
     expect(calculateItemConsumption(stacks, "ore", 6)).toEqual({
-      hasEnough: true,
       consumptions: [
         { userItemId: "small", consumeQuantity: 2, newQuantity: 0 },
         { userItemId: "finished", consumeQuantity: 3, newQuantity: 0 },
         { userItemId: "big", consumeQuantity: 1, newQuantity: 4 },
       ],
     });
-    expect(calculateItemConsumption(stacks, "ore", 11).hasEnough).toBe(false);
+    expect(calculateItemConsumption(stacks, "ore", 11).consumptions.map((row) => row.newQuantity)).toEqual([0, 0, 0]);
   });
 });
 

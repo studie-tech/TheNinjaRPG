@@ -14,6 +14,7 @@ import type {
   UserRank,
 } from "@/drizzle/schema";
 import type { CombatQueryUser } from "@/libs/combat/types";
+import { getUserElements } from "@/libs/elementalMastery";
 import { isEvolution } from "@/libs/evolution";
 import type { MasterySources, MasteryStatSource } from "@/libs/mastery";
 import {
@@ -30,7 +31,6 @@ import {
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { getUserElements } from "@/validators/user";
 
 export const checkJutsuRank = (rank: JutsuRank | undefined, userrank: UserRank) => {
   if (!rank) return false;
