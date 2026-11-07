@@ -84,6 +84,15 @@ describeWithDatabase("web store payments", () => {
     await insertUsers([{userId:"buyer",username:"Buyer",role:"OWNER", reputationPoints:0, money:0}, {userId:"recipient",username:"Recipient",reputationPoints:0,reputationPointsTotal:0,money:0}]);
     await insertItems([{id:"store-item",name:"Supplies",canStack:true,stackSize:3}]);
   });
+  it("does not count a checkout against its own reputation allowance at capture", async () => {
+    const db = await getTestDatabase();
+    const buyer = await db.query.userData.findFirst({ where: eq(userData.userId, "buyer") });
+    const reputationPoints = dynamicMonthlyRepCap(buyer);
+    const full = { ...offer, priceCents: reputationPoints * 100, contents: { reputationPoints, money: 0, items: [] } };
+    const reserved = await reserveStoreOrder(db, "buyer", "recipient", full);
+    if (!reserved.success) throw new Error(reserved.message);
+    expect(await authorizeStoreCapture(db, reserved.order.id, "buyer")).toBeNull();
+  });
   it("reconciles completed orders without capturing payment and grants each snapshot once", async () => {
     const db = await getTestDatabase();
     const snapshot = await reserve();
