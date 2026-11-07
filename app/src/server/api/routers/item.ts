@@ -340,6 +340,7 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
 import { assignQuestToUser } from "@/server/utils/questAssignment";
 import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
+import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { calculateContentDiff } from "@/utils/diff";
 import { groupBy } from "@/utils/grouping";
@@ -353,7 +354,6 @@ import {
   canOnlyEditSelf,
 } from "@/utils/permissions";
 import { sanitizeVariantText } from "@/utils/sanitize";
-import { validateUrlForSsrf } from "@/utils/ssrf";
 import { getNextUserSnapshotAt, getUtcDayKey } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import {

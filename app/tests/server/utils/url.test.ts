@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { isUrlAccessible } from "@/utils/url";
+import { isUrlAccessible } from "@/server/utils/url";
 
 // A public IP literal keeps the real SSRF checks independent of external DNS.
 const url = "https://203.0.113.10/image.webp";

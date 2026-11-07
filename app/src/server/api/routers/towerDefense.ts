@@ -65,6 +65,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { constantTimeEquals } from "@/server/utils/constantTime";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import {
   areTowerDefenseClaimsEnabled,
   fetchSpacetimeCompletedRun,
@@ -78,7 +79,6 @@ import {
 } from "@/server/utils/towerDefenseCrypto";
 import { chunkArray, getRandomElement } from "@/utils/array";
 import { canChangeContent } from "@/utils/permissions";
-import { validateUrlForSsrf } from "@/utils/ssrf";
 import { idSchema } from "@/validators/misc";
 import type {
   CharacterAnimationState,
