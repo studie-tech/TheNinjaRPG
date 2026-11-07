@@ -1553,9 +1553,14 @@ export const findQuestHistoryForUpsertQuestEntry = (
 /** Build the `questHistory` update for `upsertQuestEntry`, using predicates on `id`. */
 export const updateQuestHistoryForUpsertQuestEntry = (
   client: Pick<DrizzleClient, "update">,
-  startedAt: Date,
-  isOpenAttempt: false | true,
-  quest: { content: { isolated?: undefined | false | true }; updatedAt: Date },
+  reopened: {
+    startedAt: Date;
+    endAt: null;
+    completed: number;
+    entryPaid?: boolean;
+    isolated?: boolean;
+    questVersion?: Date;
+  },
   entry: { id: string },
   professionContract: false | true,
   noDelegatedAttempt: SQL<unknown>,
@@ -1563,19 +1568,10 @@ export const updateQuestHistoryForUpsertQuestEntry = (
   client
     .update(questHistory)
     .set({
-      startedAt,
-      endAt: null,
-      completed: 0,
+      ...reopened,
       // Atomic increment so a concurrent restart of the same row can't lose a count to a
       // stale JS-side base; matches the insert branch's onDuplicateKeyUpdate below.
       previousAttempts: sql`${questHistory.previousAttempts} + 1`,
-      ...(!isOpenAttempt
-        ? {
-            entryPaid: false,
-            isolated: quest.content.isolated ?? false,
-            questVersion: quest.updatedAt,
-          }
-        : {}),
     })
     .where(
       and(
