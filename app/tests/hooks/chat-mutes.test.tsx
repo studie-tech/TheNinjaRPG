@@ -12,6 +12,7 @@ import * as clientModule from "@/app/_trpc/client";
 import { MAX_MUTED_CONVERSATIONS } from "@/drizzle/constants";
 import { useChatMutes } from "@/hooks/useChatMutes";
 import * as toast from "@/libs/toast";
+import { mergeQueryChanges } from "@/utils/queryCache";
 import * as userContext from "@/utils/UserContext";
 
 type PreferenceResponse = { success: boolean; message: string; userPatch?: { chatMuted?: boolean; mutedConversationIds?: string[]; unmutedTavernIds?: string[] } };
@@ -135,6 +136,13 @@ it("unmutes a tavern for a profile without the unmute list", async () => {
   await waitFor(() => expect(hook.fetch).toHaveBeenCalledTimes(1));
   const request = hook.fetch.mock.calls[0] as unknown as [string, { body: string }];
   expect(JSON.parse(request[1].body)).toEqual({ 0: { json: { unmutedTavernIds: ["global"] } } });
+  act(() => hook.respond({ success: true, message: "Saved", userPatch: { unmutedTavernIds: ["global"] } }));
+  await waitFor(() => expect(hook.updateUser).toHaveBeenCalledTimes(1));
+  hook.rerender();
+  expect(hook.result.current.isTavernSilenced("global")).toBe(false);
+  const patch = hook.updateUser.mock.calls[0]?.[0] as unknown as (user: { userId: string }) => { unmutedTavernIds: string[] };
+  const cached: { userId: string; unmutedTavernIds?: string[] } = { userId: "actor" };
+  expect(mergeQueryChanges(cached, patch(cached))?.unmutedTavernIds).toEqual(["global"]);
 });
 
 it("starts taverns muted and saves the ones the player unmutes", async () => {
