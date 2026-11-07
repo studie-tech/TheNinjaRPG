@@ -1029,64 +1029,62 @@ const executeClaimedQuestConsequences = async ({
       : []),
     // The deletion guard leaves rows held by an active merge untouched.
     itemRemoval,
-    ...[
-      opponent
-        ? (async () => {
-            if (user.questParty && opponent.questId === user.questParty.questId) {
-              const result = await startQuestPartyEncounter({
-                client,
-                user,
-                userId: user.userId,
-                partyId: user.questParty.id,
-                ambush: opponent,
-              });
-              if (!result.success) notifications.push(result.message);
-              else if (result.battleId)
-                battleActivity = { status: "BATTLE", battleId: result.battleId };
-              return;
-            }
-            const result = await initiateBattle(
-              {
-                longitude: user.longitude,
-                latitude: user.latitude,
-                sector: user.sector,
-                userIds: [user.userId],
-                cacheUserId: user.userId,
-                targetIds: opponent.ids,
-                allyAiIds: opponent.allyAiIds,
-                client: client,
-                scaleTarget: !!opponent.scaleStats,
-                biome: "default",
-                forceKeepPools: opponent.forceKeepPools ?? false,
-                questBattleSource:
-                  opponent.questId && opponent.objectiveId
-                    ? { questId: opponent.questId, objectiveId: opponent.objectiveId }
-                    : undefined,
-                givePools: opponent.givePools,
-                startingEffects: opponent.startingEffects,
-                questAttempt: opponent.questId
-                  ? findManagedQuestAttempt(user.userQuests, opponent.questId)
-                  : undefined,
-                // Honour the player's stored preference for quest fights and random
-                // encounters (including hunting) alike; initiateBattle gates on
-                // AutoCombatBattleTypes, which admits every non-PvP battle type.
-                autoCombatUserIds: user.defaultAutoCombat ? [user.userId] : undefined,
-              },
-              opponent.type === "random_encounter" ? "RANDOM_ENCOUNTER" : "QUEST",
-              opponent.scaleGains ?? 1,
-            );
+    opponent
+      ? (async () => {
+          if (user.questParty && opponent.questId === user.questParty.questId) {
+            const result = await startQuestPartyEncounter({
+              client,
+              user,
+              userId: user.userId,
+              partyId: user.questParty.id,
+              ambush: opponent,
+            });
             if (!result.success) notifications.push(result.message);
-            else {
+            else if (result.battleId)
               battleActivity = { status: "BATTLE", battleId: result.battleId };
-              if (result.userPatch && !result.requiresUserRefresh)
-                battleUserUpdate = {
-                  userPatch: result.userPatch,
-                  userDelta: result.userDelta,
-                };
-            }
-          })()
-        : Promise.resolve(),
-    ],
+            return;
+          }
+          const result = await initiateBattle(
+            {
+              longitude: user.longitude,
+              latitude: user.latitude,
+              sector: user.sector,
+              userIds: [user.userId],
+              cacheUserId: user.userId,
+              targetIds: opponent.ids,
+              allyAiIds: opponent.allyAiIds,
+              client: client,
+              scaleTarget: !!opponent.scaleStats,
+              biome: "default",
+              forceKeepPools: opponent.forceKeepPools ?? false,
+              questBattleSource:
+                opponent.questId && opponent.objectiveId
+                  ? { questId: opponent.questId, objectiveId: opponent.objectiveId }
+                  : undefined,
+              givePools: opponent.givePools,
+              startingEffects: opponent.startingEffects,
+              questAttempt: opponent.questId
+                ? findManagedQuestAttempt(user.userQuests, opponent.questId)
+                : undefined,
+              // Honour the player's stored preference for quest fights and random
+              // encounters (including hunting) alike; initiateBattle gates on
+              // AutoCombatBattleTypes, which admits every non-PvP battle type.
+              autoCombatUserIds: user.defaultAutoCombat ? [user.userId] : undefined,
+            },
+            opponent.type === "random_encounter" ? "RANDOM_ENCOUNTER" : "QUEST",
+            opponent.scaleGains ?? 1,
+          );
+          if (!result.success) notifications.push(result.message);
+          else {
+            battleActivity = { status: "BATTLE", battleId: result.battleId };
+            if (result.userPatch && !result.requiresUserRefresh)
+              battleUserUpdate = {
+                userPatch: result.userPatch,
+                userDelta: result.userDelta,
+              };
+          }
+        })()
+      : Promise.resolve(),
   ]);
   return {
     battleUserUpdate,

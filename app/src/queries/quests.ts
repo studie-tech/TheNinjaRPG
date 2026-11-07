@@ -374,8 +374,8 @@ export const listQuestForGetAll = (
   client.query.quest.findMany({
     with: { village: true },
     where: and(
-      ...(input?.name ? [like(quest.name, `%${input.name}%`)] : []),
-      ...(input?.objectives && input.objectives.length > 0
+      ...(input.name ? [like(quest.name, `%${input.name}%`)] : []),
+      ...(input.objectives && input.objectives.length > 0
         ? [
             or(
               ...input.objectives.map(
@@ -384,17 +384,17 @@ export const listQuestForGetAll = (
             ),
           ]
         : []),
-      ...(input?.questType ? [eq(quest.questType, input.questType)] : []),
-      ...(input?.rank ? [eq(quest.questRank, input.rank)] : []),
-      ...(input?.village ? [eq(quest.requiredVillage, input.village)] : []),
-      ...(input?.bloodline ? [eq(quest.requiredBloodlineId, input.bloodline)] : []),
-      ...(input?.sageMode ? [eq(quest.requiredSageModeId, input.sageMode)] : []),
-      ...(input?.userLevel ? [...questLevelFilters(input.userLevel)] : []),
-      ...(input?.hidden !== undefined ? [eq(quest.hidden, !!input.hidden)] : []),
+      ...(input.questType ? [eq(quest.questType, input.questType)] : []),
+      ...(input.rank ? [eq(quest.questRank, input.rank)] : []),
+      ...(input.village ? [eq(quest.requiredVillage, input.village)] : []),
+      ...(input.bloodline ? [eq(quest.requiredBloodlineId, input.bloodline)] : []),
+      ...(input.sageMode ? [eq(quest.requiredSageModeId, input.sageMode)] : []),
+      ...(input.userLevel ? [...questLevelFilters(input.userLevel)] : []),
+      ...(input.hidden !== undefined ? [eq(quest.hidden, !!input.hidden)] : []),
     ),
     offset: skip,
     limit: input.limit,
-    ...(input?.questType === "tier" ? { orderBy: asc(quest.tierLevel) } : {}),
+    ...(input.questType === "tier" ? { orderBy: asc(quest.tierLevel) } : {}),
   });
 
 /** Build the `userData` lookup for `get`, using predicates on `userId`. */
