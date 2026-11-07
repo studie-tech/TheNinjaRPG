@@ -69,3 +69,55 @@ describe("switching users on a live connection", () => {
     expect([subscriptions, unsubscriptions]).toEqual([2, 1]);
   });
 });
+
+describe("a connection still opening", () => {
+  it("waits for it and then follows the new user", async () => {
+    let subscriptions = 0;
+    const builder = { onApplied: () => builder, onError: () => builder, subscribe: () => { subscriptions++; return { unsubscribe: () => {} }; } };
+    const client = new SpacetimeDBConnection({ host: "ws://localhost", moduleName: "test" });
+    Object.assign(client, { connectionState: "connecting", currentUserId: "guest", connection: { subscriptionBuilder: () => builder } });
+    const connecting = client.connect("user-a");
+    Object.assign(client, { connectionState: "connected" });
+    await connecting;
+    expect(subscriptions).toBe(1);
+  });
+
+  it("rejects when it fails", async () => {
+    const client = new SpacetimeDBConnection({ host: "ws://localhost", moduleName: "test" });
+    Object.assign(client, { connectionState: "connecting" });
+    const connecting = client.connect("user-a");
+    Object.assign(client, { connectionState: "error" });
+    await expect(connecting).rejects.toThrow("Connection failed");
+  });
+});
+
+describe("reducer calls", () => {
+  const calls = (client: SpacetimeDBConnection) => [
+    () => client.createSession({} as Parameters<SpacetimeDBConnection["createSession"]>[0]),
+    () => client.startWave(1n),
+    () => client.throwShuriken(1n, 2, 3),
+    () => client.purchaseUpgrade(1n, "upgrade"),
+    () => client.deleteCompletedRun(1n),
+    () => client.abandonSession(1n),
+  ];
+
+  it("refuse without a live connection", async () => {
+    const closed = new SpacetimeDBConnection({ host: "ws://localhost", moduleName: "test" });
+    const opening = new SpacetimeDBConnection({ host: "ws://localhost", moduleName: "test" });
+    Object.assign(opening, { connectionState: "connecting", connection: {} });
+    for (const client of [closed, opening]) {
+      for (const call of calls(client)) {
+        await expect(call()).rejects.toThrow("Not connected to SpacetimeDB");
+      }
+    }
+  });
+
+  it("reach the connection once it is live", async () => {
+    const sent: string[] = [];
+    const reducers = new Proxy({}, { get: (_target, name) => async () => { sent.push(String(name)); } });
+    const client = new SpacetimeDBConnection({ host: "ws://localhost", moduleName: "test" });
+    Object.assign(client, { connectionState: "connected", connection: { reducers } });
+    for (const call of calls(client)) await call();
+    expect(sent).toEqual(["createSession", "startWave", "throwShuriken", "purchaseUpgrade", "deleteCompletedRun", "abandonSession"]);
+  });
+});
