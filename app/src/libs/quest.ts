@@ -51,7 +51,6 @@ import {
   QuestTracker,
   type QuestTrackerType,
 } from "@/validators/objectives";
-import { getQuestCounterFieldName } from "@/validators/user";
 
 /** Select playable definitions; raw history remains available for isolation and recovery controls. */
 export const getUserQuests = (
@@ -1545,6 +1544,23 @@ const matchesContentObjective = (
   );
 };
 
+export const getQuestCounterFieldName = (
+  type: QuestType | undefined,
+  rank: LetterRank | undefined,
+) => {
+  if (type === undefined || rank === undefined) return undefined;
+  switch (type) {
+    case "errand":
+      return "errands";
+    case "mission":
+      return `missions${rank}` as const;
+    case "crime":
+      return `crimes${rank}` as const;
+    default:
+      return undefined;
+  }
+};
+export type QuestCounterFieldName = ReturnType<typeof getQuestCounterFieldName>;
 export type QuestConsequence = {
   type:
     | "add_item"

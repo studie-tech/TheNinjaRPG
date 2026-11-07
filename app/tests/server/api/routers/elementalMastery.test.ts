@@ -7,7 +7,7 @@ import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { getMasteryQueue } from "@/libs/queue";
 import { trainRouter } from "@/server/api/routers/train";
 import { IncreaseDamageGivenTag } from "@/validators/combat";
-import { getUserElements } from "@/validators/user";
+import { getUserElements } from "@/libs/elementalMastery";
 import { insertUsers, insertUserVotes } from "../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
