@@ -1,9 +1,4 @@
 import { type GameLayoutId, toGameLayoutId } from "@/libs/gameLayouts";
-import { LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
-import {
-  parseWallpaperVariant,
-  WALLPAPER_EXPERIMENT,
-} from "@/libs/wallpaperExperiment";
 export const LAYOUT_PREFERENCE_COOKIE = "tnr_layout_preference";
 
 /**
@@ -48,29 +43,6 @@ export const toFontScale = (value?: unknown): FontScaleValue | undefined => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return undefined;
   return FONT_SCALE_VALUES.find((scale) => scale === parsed);
-};
-
-export interface LayoutExperimentAssignment {
-  experiment: string;
-  variant: string;
-}
-
-export const getLayoutExperimentAssignments = (variants: {
-  abLemuReplacementVariant?: string | null;
-  wallpaperVariant?: string | null;
-}): LayoutExperimentAssignment[] => {
-  const assignments: LayoutExperimentAssignment[] = [];
-  const variant = normalizeLemuVariant(variants.abLemuReplacementVariant);
-  if (variant) {
-    assignments.push({
-      experiment: LEMU_EXPERIMENT,
-      variant,
-    });
-  }
-  const wallpaper = parseWallpaperVariant(variants.wallpaperVariant);
-  if (wallpaper)
-    assignments.push({ experiment: WALLPAPER_EXPERIMENT, variant: wallpaper });
-  return assignments;
 };
 
 /** Persist the validated layout synchronously so the next document selects its shell. */
