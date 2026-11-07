@@ -59,7 +59,7 @@ import {
 } from "@/libs/quest";
 import { isAvailableUserQuests, listUpcomingQuests } from "@/libs/quest/availability";
 import {
-  fallbackQuestsFilter,
+  filterMissionHallQuests,
   getMissionHallSettings,
   isQuestRankAllowed,
   isWarMissionAvailable,
@@ -504,8 +504,7 @@ export const questsRouter = createTRPCRouter({
       const readiness = prepareActionReadiness(initialUser, updatedUser.settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      // For certain quest types, we fallback to lower ranks if the user does not have the required rank
-      const { rankInfo } = fallbackQuestsFilter(results, user, input.type);
+      const { rankInfo } = filterMissionHallQuests(results, user, input.type);
 
       // Additional guards
       if (user.sector !== input.userSector) return errorResponse("Sector mismatch");

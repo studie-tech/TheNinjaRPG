@@ -34,7 +34,7 @@ import { LogbookEntry } from "@/layout/Logbook";
 import MissionPicker from "@/layout/MissionPicker";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
-  fallbackQuestsFilter,
+  filterMissionHallQuests,
   getMissionHallSettings,
   getMissionHallTileQuests,
   missionHallStartBlockedMessage,
@@ -258,7 +258,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
       {!currentQuest && !isPending && (
         <div className="grid grid-cols-3 gap-4 p-3 text-center italic">
           {getMissionHallSettings(userData.isOutlaw).map((setting) => {
-            const { filtered, rankInfo } = fallbackQuestsFilter(
+            const { filtered, rankInfo } = filterMissionHallQuests(
               regularMissions,
               userData,
               setting.type,
