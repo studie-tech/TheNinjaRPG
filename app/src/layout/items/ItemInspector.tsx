@@ -6,6 +6,7 @@ import {
   CircleFadingArrowUp,
   Cookie,
   Gem,
+  House,
   Merge,
   Shirt,
   Split,
@@ -61,6 +62,7 @@ import { parseHtml } from "@/utils/parse";
  * Everything about one carried item and every action on it: effects and level, equip or
  * unequip, stacks, meals and consumables, repair, variants, evolution, imbuements and
  * selling. Each action keeps its confirmation; a finished action closes the inspector.
+ * A stack in home storage shows its details and can only be taken out.
  */
 export function ItemInspector({
   userItem: useritem,
@@ -73,6 +75,7 @@ export function ItemInspector({
   isEquipping,
   onSetHotkey,
   masteryWarning,
+  homeMove,
 }: ItemInspectorProps) {
   const [isSplitDialogOpen, setIsSplitDialogOpen] = useState<boolean>(false);
   const [quantityToKeep, setQuantityToKeep] = useState<number>(Number.NaN);
@@ -114,6 +117,7 @@ export function ItemInspector({
   );
 
   const isLoading = isPending || isEquipping;
+  const isStored = useritem.storedAtHome;
 
   // Derived
   const structures = userData?.village?.structures;
@@ -217,6 +221,9 @@ export function ItemInspector({
               Equipped in {slotName(equippedIn)}
             </p>
           )}
+          {isStored && (
+            <p className="text-muted-foreground text-sm">In your home storage</p>
+          )}
           {masteryWarning && (
             <p className="text-destructive text-sm">{masteryWarning}</p>
           )}
@@ -235,7 +242,7 @@ export function ItemInspector({
           </p>
         )}
       </div>
-      {!isLoading && (
+      {!isLoading && !isStored && (
         <>
           <div className="flex flex-row flex-wrap items-center gap-2">
             {canEquip && (
@@ -465,7 +472,8 @@ export function ItemInspector({
           )}
         </>
       )}
-      {!useritem.item.canBeImbued &&
+      {!isStored &&
+        !useritem.item.canBeImbued &&
         useritem.equipped === "NONE" &&
         useritem.imbuements.length > 0 && (
           <div className="mb-2 space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
@@ -502,6 +510,29 @@ export function ItemInspector({
             ))}
           </div>
         )}
+      {homeMove && !isLoading && (
+        <div className="flex flex-col gap-1">
+          <Button
+            variant="outline"
+            className="self-start"
+            disabled={!!homeMove.blockedReason || homeMove.isMoving}
+            aria-busy={homeMove.isMoving}
+            onClick={homeMove.onMove}
+          >
+            <House className="mr-2 h-5 w-5" aria-hidden />
+            {homeMove.isMoving
+              ? isStored
+                ? "Taking out"
+                : "Storing"
+              : isStored
+                ? "Take out"
+                : "Store at home"}
+          </Button>
+          {homeMove.blockedReason && (
+            <p className="text-muted-foreground text-sm">{homeMove.blockedReason}</p>
+          )}
+        </div>
+      )}
       {isMerging && <Loader explanation="Merging" />}
       {isConsuming && <Loader explanation="Using" />}
       {isSelling && <Loader explanation="Selling" />}
@@ -527,7 +558,7 @@ export function ItemInspector({
           />
         </div>
       </section>
-      {!isLoading && (
+      {!isLoading && !isStored && (
         <div className="flex items-center gap-2 border-t pt-3">
           <span className="flex-1 text-muted-foreground text-xs">
             Asks for a security confirmation
@@ -654,4 +685,11 @@ interface ItemInspectorProps {
   onSetHotkey?: (userItem: UserItemWithRelations) => void;
   /** Why the item does not work in battle while equipped, if it does not. */
   masteryWarning?: string;
+  /** Storing in or taking out of home storage, offered while the player can reach it. */
+  homeMove?: {
+    /** Why the stack cannot move now, such as a full bucket. */
+    blockedReason: string | null;
+    isMoving: boolean;
+    onMove: () => void;
+  };
 }

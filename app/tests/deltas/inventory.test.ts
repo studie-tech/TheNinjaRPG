@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getConsumedRaidBuffs, getEquippedInventory, getInventoryEquipmentChanges, getInventoryQuantities, getInventoryQuantityChanges, getSoldInventory, getBulkSellUserUpdate, getBulkSoldInventory } from "@/deltas/item";
+import { getConsumedRaidBuffs, getEquippedInventory, getInventoryEquipmentChanges, getInventoryQuantities, getInventoryQuantityChanges, getSoldInventory, getBulkSellUserUpdate, getBulkSoldInventory, getHomeStorageMovedInventory } from "@/deltas/item";
 import { getEquippedJutsus } from "@/deltas/jutsu";
 
 const rows = [
@@ -33,6 +33,20 @@ describe("inventory reconciliation", () => {
 
   it("asks for reconciliation when a bulk-sold stack is not loaded", () => {
     expect(getBulkSoldInventory(rows, ["one", "missing"])).toBeUndefined();
+  });
+
+  it("moves confirmed stacks into home storage and keeps their row data", () => {
+    const carried = rows.map((row) => ({ ...row, storedAtHome: false }));
+    const moved = getHomeStorageMovedInventory(carried, ["one"], true);
+    expect(moved?.map((row) => [row.id, row.storedAtHome, row.variants])).toEqual([
+      ["one", true, ["red"]],
+      ["two", false, ["blue"]],
+    ]);
+  });
+
+  it("asks for reconciliation when a moved stack is not loaded", () => {
+    const carried = rows.map((row) => ({ ...row, storedAtHome: false }));
+    expect(getHomeStorageMovedInventory(carried, ["missing"], true)).toBeUndefined();
   });
 
   it("credits a bulk sell's summed ryo", () => {

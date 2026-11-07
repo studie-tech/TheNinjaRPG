@@ -10,6 +10,7 @@ import type { ItemSlot } from "@/drizzle/constants";
 import { MAX_BULK_SELL_ITEMS } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { useBulkSellItems } from "@/hooks/useBulkSellItems";
+import { useHomeStorageMove } from "@/hooks/useHomeStorageMove";
 import { useItemActions } from "@/hooks/useItemActions";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { EquipmentPreview } from "@/layout/EquipmentPreview";
@@ -40,6 +41,8 @@ import { canChangeContent } from "@/utils/permissions";
  * inspector. Wide containers show them side by side; narrow ones use Equipment and
  * Backpack tabs with panels in a bottom sheet. With a mouse or trackpad, backpack items can
  * be dragged onto fitting slots; every item opens a menu by right-click or long-press.
+ * While the player can reach their home, the backpack column also switches to home storage,
+ * where stacks are taken out one at a time or in Select mode.
  */
 export function ItemsWorkspace({
   userData,
@@ -48,6 +51,7 @@ export function ItemsWorkspace({
   bag,
   backpackStatus,
   bagTabs,
+  home,
 }: ItemsWorkspaceProps) {
   const [opened, setOpened] = useState<{ bag: string; view: ItemsView }>({
     bag,
@@ -104,8 +108,22 @@ export function ItemsWorkspace({
     },
     onSettled: () => setReviewIds(null),
   });
+  const isHome = home?.place === "home";
+  const { moveItems, isMoving } = useHomeStorageMove({
+    onMoved: (result) => {
+      // Stacks that stayed remain selected so the player can see why and retry.
+      const stayed = result.refused.map((entry) => entry.userItemId);
+      setTickedIds((ids) => ids.filter((id) => stayed.includes(id)));
+      if (result.success && stayed.length === 0) setIsSelecting(false);
+    },
+  });
+  // The backpack column lists the open bag or, at home, the open storage bucket.
+  const listItems = isHome ? home.items : bagItems;
+  // Any stored stack can be ticked; the server names those that do not fit.
+  const selectBlockReason = (ui: UserItemWithRelations) =>
+    isHome ? null : bulkSellBlockReason(ui, userData.farmCurrency);
   // Stacks sold elsewhere or in another bag leave the selection.
-  const selectedItems = bagItems.filter((ui) => tickedIds.includes(ui.id));
+  const selectedItems = listItems.filter((ui) => tickedIds.includes(ui.id));
   const selectedIds = selectedItems.map((ui) => ui.id);
   // One request takes a limited number of stacks; a larger selection is trimmed first.
   const isOverLimit = selectedItems.length > MAX_BULK_SELL_ITEMS;
@@ -119,19 +137,25 @@ export function ItemsWorkspace({
     setIsSelecting(false);
     setTickedIds([]);
   };
+  const switchPlace = (place: ItemsPlace) => {
+    stopSelecting();
+    home?.onPlaceChange(place);
+  };
 
-  // A panel belongs to the bag it was opened in, and an item panel to an item still carried.
+  // A panel belongs to the bag it was opened in, and an item panel to an item still carried
+  // or stored. A stack moved between backpack and home closes its panel.
+  const inspectable = isHome ? home.items : userItems;
   const view: ItemsView =
     opened.bag !== bag ||
     (opened.view.kind === "item" &&
-      !userItems.some(
+      !inspectable.some(
         (ui) => opened.view.kind === "item" && ui.id === opened.view.userItemId,
       ))
       ? { kind: "backpack" }
       : opened.view;
   const inspected =
     view.kind === "item"
-      ? userItems.find((ui) => ui.id === view.userItemId)
+      ? inspectable.find((ui) => ui.id === view.userItemId)
       : undefined;
   const hasPanel = view.kind !== "backpack";
   // Hidden items show only to content staff, as everywhere else items are listed.
@@ -267,6 +291,20 @@ export function ItemsWorkspace({
           isEquipping={isEquipping}
           onSetHotkey={setHotkey}
           masteryWarning={masteryWarning(inspected)}
+          homeMove={
+            home &&
+            inspected.equipped === "NONE" &&
+            inspected.item.itemType !== "FURNITURE"
+              ? {
+                  blockedReason: home.blockReason(
+                    inspected.id,
+                    !inspected.storedAtHome,
+                  ),
+                  isMoving,
+                  onMove: () => moveItems([inspected.id], !inspected.storedAtHome),
+                }
+              : undefined
+          }
         />
       )}
     </>
@@ -334,7 +372,27 @@ export function ItemsWorkspace({
           )}
         >
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-bold text-2xl text-foreground">Backpack</h2>
+            {home ? (
+              <>
+                <h2 className="sr-only">{isHome ? "Home storage" : "Backpack"}</h2>
+                <fieldset
+                  aria-label="Show items in"
+                  className="flex min-w-0 gap-0.5 rounded-lg bg-muted p-0.5"
+                >
+                  <PlaceButton
+                    isPressed={!isHome}
+                    onClick={() => switchPlace("backpack")}
+                  >
+                    Backpack
+                  </PlaceButton>
+                  <PlaceButton isPressed={isHome} onClick={() => switchPlace("home")}>
+                    Home · {home.count}
+                  </PlaceButton>
+                </fieldset>
+              </>
+            ) : (
+              <h2 className="font-bold text-2xl text-foreground">Backpack</h2>
+            )}
             <div className="flex items-center gap-1">
               <Button
                 ref={selectRef}
@@ -346,17 +404,22 @@ export function ItemsWorkspace({
                 <ListChecks className="mr-1 h-4 w-4" aria-hidden />
                 Select
               </Button>
-              {backpackStatus}
+              {isHome ? home.status : backpackStatus}
             </div>
           </div>
-          {bagTabs && <div className="mt-1 mb-3">{bagTabs}</div>}
+          {isHome ? (
+            <div className="mt-1 mb-3">{home.bagTabs}</div>
+          ) : (
+            bagTabs && <div className="mt-1 mb-3">{bagTabs}</div>
+          )}
           <BackpackList
-            items={bagItems}
+            items={listItems}
             userData={userData}
             selectedId={inspected?.id}
             onSelect={(userItemId) => openView({ kind: "item", userItemId })}
-            onDragItem={hasFinePointer ? setDragging : undefined}
-            wrapCard={withMenu}
+            // Stored stacks are not worn from home storage.
+            onDragItem={hasFinePointer && !isHome ? setDragging : undefined}
+            wrapCard={isHome ? undefined : withMenu}
             selection={
               isSelecting
                 ? {
@@ -364,14 +427,9 @@ export function ItemsWorkspace({
                     onToggle: toggleTicked,
                     onPickRarity: (rarity, shown) =>
                       setTickedIds(
-                        toggleRarityPick(
-                          shown,
-                          rarity,
-                          selectedIds,
-                          userData.farmCurrency,
-                        ),
+                        toggleRarityPick(shown, rarity, selectedIds, selectBlockReason),
                       ),
-                    blockReason: (ui) => bulkSellBlockReason(ui, userData.farmCurrency),
+                    blockReason: selectBlockReason,
                   }
                 : undefined
             }
@@ -388,7 +446,7 @@ export function ItemsWorkspace({
                     Select up to {MAX_BULK_SELL_ITEMS} at a time
                   </span>
                 )}
-                {selectedItems.length > 0 && (
+                {!isHome && selectedItems.length > 0 && (
                   <span className="block text-muted-foreground text-xs">
                     {bulkSellSummary(
                       bulkSellTotals(
@@ -403,15 +461,28 @@ export function ItemsWorkspace({
               <Button variant="outline" size="sm" onClick={stopSelecting}>
                 Cancel
               </Button>
-              <Button
-                ref={sellTriggerRef}
-                variant="destructive"
-                size="sm"
-                disabled={selectedItems.length === 0 || isOverLimit}
-                onClick={() => setReviewIds(selectedIds)}
-              >
-                Sell / drop…
-              </Button>
+              {home && (
+                <Button
+                  variant={isHome ? "default" : "outline"}
+                  size="sm"
+                  disabled={selectedItems.length === 0 || isOverLimit || isMoving}
+                  aria-busy={isMoving}
+                  onClick={() => moveItems(selectedIds, !isHome)}
+                >
+                  {isHome ? "Take out" : "Store at home"}
+                </Button>
+              )}
+              {!isHome && (
+                <Button
+                  ref={sellTriggerRef}
+                  variant="destructive"
+                  size="sm"
+                  disabled={selectedItems.length === 0 || isOverLimit}
+                  onClick={() => setReviewIds(selectedIds)}
+                >
+                  Sell / drop…
+                </Button>
+              )}
             </section>
           )}
           {reviewIds && (
@@ -478,6 +549,33 @@ export function ItemsWorkspace({
   );
 }
 
+/** One side of the Backpack | Home switch heading the backpack column. */
+function PlaceButton({
+  isPressed,
+  onClick,
+  children,
+}: {
+  isPressed: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={isPressed}
+      onClick={onClick}
+      className={cn(
+        "h-9 shrink-0 rounded-md px-3 font-bold text-base",
+        isPressed
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 /** Uses shared tab semantics and focus handling for the compact inventory view switcher. */
 function PhoneTab({ value, children }: { value: string; children: React.ReactNode }) {
   return (
@@ -508,4 +606,23 @@ interface ItemsWorkspaceProps {
   backpackStatus?: React.ReactNode;
   /** Shown under the Backpack heading: the bag switcher. */
   bagTabs?: React.ReactNode;
+  /** Home storage, offered while the player can reach their home. */
+  home?: {
+    /** Which list the backpack column shows. */
+    place: ItemsPlace;
+    onPlaceChange: (place: ItemsPlace) => void;
+    /** Stored stacks of the open storage bucket. */
+    items: UserItemWithRelations[];
+    /** Every stored stack shown on the Items page. */
+    count: number;
+    /** Shown beside the switch at home: the bucket's capacity. */
+    status?: React.ReactNode;
+    /** Shown under the switch at home: the storage bucket switcher. */
+    bagTabs: React.ReactNode;
+    /** Why a stack cannot be stored (`toHome`) or taken out now, if it cannot. */
+    blockReason: (userItemId: string, toHome: boolean) => string | null;
+  };
 }
+
+/** Where the backpack column looks: the carried bags or home storage. */
+export type ItemsPlace = "backpack" | "home";

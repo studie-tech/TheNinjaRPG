@@ -246,20 +246,17 @@ export const bulkSellBlockReason = (
 };
 
 /**
- * Select every sellable shown stack of one rarity, or deselect them when all are already
- * selected. Stacks outside `shown` keep their selection.
+ * Select every shown stack of one rarity that `blockReason` allows, or deselect them when
+ * all are already selected. Stacks outside `shown` keep their selection.
  */
 export const toggleRarityPick = (
   shown: UserItemWithRelations[],
   rarity: ItemRarity,
   selected: string[],
-  farmCurrency: number,
+  blockReason: (userItem: UserItemWithRelations) => string | null,
 ): string[] => {
   const ids = shown
-    .filter(
-      (ui) =>
-        ui.item.rarity === rarity && bulkSellBlockReason(ui, farmCurrency) === null,
-    )
+    .filter((ui) => ui.item.rarity === rarity && blockReason(ui) === null)
     .map((ui) => ui.id);
   const allPicked = ids.length > 0 && ids.every((id) => selected.includes(id));
   return allPicked
@@ -325,7 +322,7 @@ export const bulkSellMessage = (
 export const homeStorageBlockReason = (user: {
   sector: number;
   status: UserStatus;
-  village: { sector: number } | null;
+  village?: { sector: number } | null;
 }): string | null => {
   if (!user.village || user.sector !== user.village.sector) {
     return "Return to your own village to use your home storage";

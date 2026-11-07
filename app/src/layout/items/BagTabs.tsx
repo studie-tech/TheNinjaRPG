@@ -5,10 +5,15 @@ import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/locals
 import { cn } from "@/libs/shadui";
 
 /** The inventory's bags with their item counts; the chosen bag is remembered. */
-export function BagTabs({ bags, active, onChange }: BagTabsProps) {
+export function BagTabs({
+  bags,
+  active,
+  onChange,
+  storageKey = BAG_STORAGE_KEY,
+}: BagTabsProps) {
   // Read after mount so server and client render the same first tab.
   const restore = useEffectEvent(() => {
-    const stored = safeLocalStorageGetItem(BAG_STORAGE_KEY);
+    const stored = safeLocalStorageGetItem(storageKey);
     if (stored && stored !== active && bags.some((bag) => bag.value === stored)) {
       onChange(stored);
     }
@@ -31,7 +36,7 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
             aria-pressed={selected}
             data-over={bag.over ? "true" : undefined}
             onClick={() => {
-              safeLocalStorageSetItem(BAG_STORAGE_KEY, bag.value);
+              safeLocalStorageSetItem(storageKey, bag.value);
               onChange(bag.value);
             }}
             className={cn(
@@ -98,4 +103,6 @@ interface BagTabsProps {
   bags: { value: string; count: number; over?: boolean }[];
   active: string;
   onChange: (bag: string) => void;
+  /** Where the chosen bag is remembered; home storage keeps its own. */
+  storageKey?: string;
 }

@@ -62,9 +62,13 @@ describe("toggleRarityPick", () => {
       row("blocked", { isInAuction: true }),
       row("r1", {}, { rarity: "RARE" }),
     ];
-    const first = toggleRarityPick(shown, "COMMON", ["r1", "elsewhere"], 0);
+    const sellable = (ui: UserItemWithRelations) => bulkSellBlockReason(ui, 0, NOW);
+    const first = toggleRarityPick(shown, "COMMON", ["r1", "elsewhere"], sellable);
     expect(first.sort()).toEqual(["c1", "c2", "elsewhere", "r1"]);
-    expect(toggleRarityPick(shown, "COMMON", first, 0).sort()).toEqual(["elsewhere", "r1"]);
+    expect(toggleRarityPick(shown, "COMMON", first, sellable).sort()).toEqual([
+      "elsewhere",
+      "r1",
+    ]);
   });
 });
 

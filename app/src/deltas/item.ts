@@ -461,6 +461,21 @@ export const getBulkSoldInventory = <T extends { id: string }>(
     ? rows.filter((row) => !soldIds.includes(row.id))
     : undefined;
 
+/**
+ * Place the stacks a home storage move confirmed on their new side, preserving each view's
+ * row data; a moved stack missing from the loaded rows asks for reconciliation instead.
+ */
+export const getHomeStorageMovedInventory = <
+  T extends { id: string; storedAtHome: boolean },
+>(
+  rows: T[],
+  movedIds: string[],
+  storedAtHome: boolean,
+): T[] | undefined =>
+  movedIds.every((id) => rows.some((row) => row.id === id))
+    ? rows.map((row) => (movedIds.includes(row.id) ? { ...row, storedAtHome } : row))
+    : undefined;
+
 /** Credit the ryo a bulk sell paid for the stacks it removed. */
 export const getBulkSellUserUpdate = (ryo: number) => ({ userDelta: { money: ryo } });
 

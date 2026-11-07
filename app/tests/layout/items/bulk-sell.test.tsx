@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { MAX_BULK_SELL_ITEMS } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as bulkSell from "@/hooks/useBulkSellItems";
+import * as homeMove from "@/hooks/useHomeStorageMove";
 import * as itemActions from "@/hooks/useItemActions";
 import * as contentImage from "@/layout/ContentImage";
 import * as equipmentPreview from "@/layout/EquipmentPreview";
@@ -35,6 +36,7 @@ beforeEach(() => {
     return { sellMany, isSelling };
   }) as typeof bulkSell.useBulkSellItems);
   vi.spyOn(itemActions, "useItemActions").mockReturnValue({ equip: vi.fn(), merge: vi.fn(), isEquipping: false, isPending: false } as never);
+  vi.spyOn(homeMove, "useHomeStorageMove").mockReturnValue({ moveItems: vi.fn(), isMoving: false });
   installBrowserGlobals({
     resizeObserver: class {
       constructor(private readonly callback: (entries: { contentRect: { width: number } }[]) => void) {}

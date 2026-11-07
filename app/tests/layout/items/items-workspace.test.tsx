@@ -4,6 +4,7 @@ import * as client from "@/app/_trpc/client";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as bulkSell from "@/hooks/useBulkSellItems";
+import * as homeMove from "@/hooks/useHomeStorageMove";
 import * as itemActions from "@/hooks/useItemActions";
 import * as contentImage from "@/layout/ContentImage";
 import * as equipmentPreview from "@/layout/EquipmentPreview";
@@ -42,6 +43,7 @@ beforeEach(() => {
     return { equip: options.useritem ? inspectorEquip : equip, merge: vi.fn(), isEquipping: options.useritem ? false : isEquipping, isPending: false };
   }) as never);
   vi.spyOn(bulkSell, "useBulkSellItems").mockReturnValue({ sellMany: vi.fn(), isSelling: false });
+  vi.spyOn(homeMove, "useHomeStorageMove").mockReturnValue({ moveItems: vi.fn(), isMoving: false });
   setFinePointer(true);
   containerWidth = 1000;
   // The workspace measures its own width to choose inline panels or a bottom sheet.
