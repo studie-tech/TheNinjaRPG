@@ -15,7 +15,7 @@ import { skillTree } from "@/drizzle/schema";
 import { isSkillVisible } from "@/libs/skillRequirements";
 import { getResetAllowance } from "@/libs/skillReset";
 import { callDiscordContent } from "@/libs/socials";
-import { fetchViewerRole } from "@/queries/profile";
+import { fetchViewerRole, findUserById } from "@/queries/profile";
 import {
   deleteSkillTreeFolderForDeleteFolder,
   deleteSkillTreeForDelete,
@@ -291,8 +291,8 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions
-      const [{ user }, line] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+      const [user, line] = await Promise.all([
+        findUserById(ctx.drizzle, ctx.userId),
         input?.bloodlineId
           ? findBloodlineIdentityById(ctx.drizzle, input.bloodlineId)
           : Promise.resolve(null),
@@ -324,7 +324,7 @@ export const skillTreeRouter = createTRPCRouter({
       // Check permissions
       const requestedFolderId = input.data.folderId || null;
       const [
-        { user },
+        user,
         skill,
         skillWithName,
         targetFolder,
@@ -333,10 +333,7 @@ export const skillTreeRouter = createTRPCRouter({
         purchased,
         dependents,
       ] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+        findUserById(ctx.drizzle, ctx.userId),
         findSkillWithFolderById(ctx.drizzle, input.id),
         findSkillTreeForUpdate(ctx.drizzle, input),
         requestedFolderId
@@ -476,7 +473,7 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [
-        { user },
+        user,
         skill,
         usersWithSkill,
         bloodrightOwner,
@@ -484,7 +481,7 @@ export const skillTreeRouter = createTRPCRouter({
         requiredItems,
         requiredJutsus,
       ] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        findUserById(ctx.drizzle, ctx.userId),
         findSkillTreeForDelete(ctx.drizzle, input),
         listUserSkillForDelete(ctx.drizzle, input),
         findUserDataForUpdate(ctx.drizzle, input),
@@ -615,10 +612,7 @@ export const skillTreeRouter = createTRPCRouter({
     })
     .query(async ({ ctx }) => {
       // Query
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const user = await findUserById(ctx.drizzle, ctx.userId);
       // Guard
       if (!user) return { isFree: false, freeResetsUsed: 0, freeResetsRemaining: 0 };
       // Derived
@@ -632,10 +626,7 @@ export const skillTreeRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user data to check permissions
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const user = await findUserById(ctx.drizzle, ctx.userId);
       if (!user) return errorResponse("User not found");
 
       // Check if user has permission to unequip all users
@@ -782,10 +773,7 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const user = await findUserById(ctx.drizzle, ctx.userId);
       if (!user || !canChangeContent(user.role)) {
         throw serverError("UNAUTHORIZED", "You are not authorized to create folders");
       }
@@ -805,11 +793,8 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions and fetch folder in parallel
-      const [{ user }, folder] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [user, folder] = await Promise.all([
+        findUserById(ctx.drizzle, ctx.userId),
         findSkillTreeFolderForUpdateFolder(ctx.drizzle, input),
       ]);
       if (!user || !canChangeContent(user.role)) {
@@ -831,11 +816,8 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions, fetch folder, and fetch skills in folder in parallel
-      const [{ user }, folder, skillsInFolder] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [user, folder, skillsInFolder] = await Promise.all([
+        findUserById(ctx.drizzle, ctx.userId),
         findSkillTreeFolderForDeleteFolder(ctx.drizzle, input),
         listSkillTreeForDeleteFolder(ctx.drizzle, input),
       ]);
@@ -866,10 +848,7 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const user = await findUserById(ctx.drizzle, ctx.userId);
       if (!user || !canChangeContent(user.role)) {
         throw serverError("UNAUTHORIZED", "You are not authorized to reorder folders");
       }

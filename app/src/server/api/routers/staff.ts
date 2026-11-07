@@ -264,7 +264,6 @@ import {
   fetchVillages,
   insertSectorReleaseLog,
 } from "@/queries/village";
-import { fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -726,9 +725,9 @@ export const staffRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
-      const [sectorData, { user }, villages] = await Promise.all([
+      const [sectorData, user, villages] = await Promise.all([
         fetchSector(ctx.drizzle, input.sector),
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        findUserById(ctx.drizzle, ctx.userId),
         fetchVillages(ctx.drizzle),
       ]);
 
