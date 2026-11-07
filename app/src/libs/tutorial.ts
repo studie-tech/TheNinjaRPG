@@ -409,6 +409,12 @@ export const hasOutgrownTutorial = (
  * an older tutorial) would otherwise be pointed at a marker that no longer
  * exists. The skip runs through every consecutive satisfied step, so it lands
  * on the first lesson that still has something to do.
+ *
+ * A player still on the opening lessons has done none of them, so the lessons
+ * in front of an objective that is behind them are skipped as well: someone who
+ * played on with the panel hidden is not sent back to accept the trials and
+ * fight the dummy again. Everyone else keeps those lessons, since they can teach
+ * something the quest doesn't check.
  */
 export const getTutorialCatchUpStepIndex = (
   steps: readonly {
@@ -420,21 +426,37 @@ export const getTutorialCatchUpStepIndex = (
 ) => {
   if (!user?.userQuests) return undefined;
   const starter = getStarterQuestProgress(user);
-  let index = stepIndex;
-  while (index < steps.length) {
-    const objectiveId = steps[index]?.objectiveId;
-    if (!objectiveId) break;
-    const requireCollected = steps[index]?.advanceOn === "questReward";
+  const isSatisfied = (
+    objectiveId: TutorialObjectiveRef,
+    requireCollected: boolean,
+  ) => {
     const isGeninStep = toObjectiveIds(objectiveId).some((id) =>
       GENIN_QUEST_IDS.has(id),
     );
-    const satisfied = isGeninStep
+    return isGeninStep
       ? isGeninObjectiveSatisfied(objectiveId, user, requireCollected)
       : !!starter &&
-        toObjectiveIds(objectiveId).some((id) =>
-          isStarterObjectiveSatisfied(id, starter, requireCollected),
-        );
-    if (!satisfied) break;
+          toObjectiveIds(objectiveId).some((id) =>
+            isStarterObjectiveSatisfied(id, starter, requireCollected),
+          );
+  };
+  const isOnOpeningLessons = !steps
+    .slice(0, stepIndex)
+    .some((step) => step.objectiveId);
+  let index = stepIndex;
+  while (index < steps.length) {
+    const objectiveId = steps[index]?.objectiveId;
+    if (!objectiveId) {
+      if (!isOnOpeningLessons) break;
+      const next = steps.findIndex(
+        (step, position) => position > index && step.objectiveId,
+      );
+      const nextObjectiveId = steps[next]?.objectiveId;
+      if (!nextObjectiveId || !isSatisfied(nextObjectiveId, false)) break;
+      index = next;
+      continue;
+    }
+    if (!isSatisfied(objectiveId, steps[index]?.advanceOn === "questReward")) break;
     index += 1;
   }
   return index !== stepIndex ? index : undefined;

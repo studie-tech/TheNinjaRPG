@@ -641,6 +641,68 @@ describe("getTutorialCatchUpStepIndex", () => {
     const user = { userQuests: [], questData: [] };
     expect(getTutorialCatchUpStepIndex(steps, 3, user)).toBe(6);
   });
+
+  describe("from the opening lessons", () => {
+    // Same shape as TUTORIAL_STEPS: lessons without an objective lead up to each one.
+    const lessons = [
+      {}, // 0: welcome
+      {}, // 1: open the village
+      { objectiveId: O.accept, advanceOn: "questDialog" as const }, // 2
+      {}, // 3: enter the arena
+      {}, // 4: fight
+      { objectiveId: O.arena, advanceOn: "questReward" as const }, // 5
+      {}, // 6: assign experience
+      { objectiveId: O.jutsu, advanceOn: "trainJutsu" as const }, // 7
+      { objectiveId: O.jutsu, advanceOn: "questReward" as const }, // 8
+      {}, // 9: buy a tool
+    ];
+    const withGoals = (goals: { id: string; done?: boolean; collected?: boolean }[]) => ({
+      userQuests: [activeQuest],
+      questData: [{ id: TUTORIAL_STARTER_QUEST_ID, goals }],
+    });
+    const accepted = { id: O.accept, done: true, collected: true };
+
+    it("keeps a new player at the welcome until the trials are accepted", () => {
+      const user = withGoals([{ id: O.accept }, { id: O.arena }]);
+      expect(getTutorialCatchUpStepIndex(lessons, 0, user)).toBeUndefined();
+    });
+
+    it("moves a player who accepted the trials on to the arena lesson", () => {
+      const user = withGoals([accepted, { id: O.arena }]);
+      expect(getTutorialCatchUpStepIndex(lessons, 0, user)).toBe(3);
+    });
+
+    it("lands on the claim step when the fight was won but not claimed", () => {
+      const user = withGoals([accepted, { id: O.arena, done: true }, { id: O.jutsu }]);
+      expect(getTutorialCatchUpStepIndex(lessons, 0, user)).toBe(5);
+    });
+
+    it("lands on the lesson after the last objective they finished", () => {
+      const user = withGoals([
+        accepted,
+        { id: O.arena, done: true, collected: true },
+        { id: O.jutsu },
+      ]);
+      expect(getTutorialCatchUpStepIndex(lessons, 0, user)).toBe(6);
+      expect(getTutorialCatchUpStepIndex(lessons, 1, user)).toBe(6);
+    });
+
+    it("does not skip lessons for a player who is already past the opening", () => {
+      const user = withGoals([
+        accepted,
+        { id: O.arena, done: true, collected: true },
+        { id: O.jutsu, done: true, collected: true },
+      ]);
+      expect(getTutorialCatchUpStepIndex(lessons, 3, user)).toBeUndefined();
+      expect(getTutorialCatchUpStepIndex(lessons, 6, user)).toBeUndefined();
+      expect(getTutorialCatchUpStepIndex(lessons, 9, user)).toBeUndefined();
+    });
+
+    it("runs to the last lesson once the quest is finished", () => {
+      const user = { userQuests: [], questData: [] };
+      expect(getTutorialCatchUpStepIndex(lessons, 0, user)).toBe(9);
+    });
+  });
 });
 
 describe("getTutorialCombatGuidance", () => {
