@@ -34,15 +34,6 @@ export const getBiomeFromTileType = (tileType: number): CombatBiome => {
 };
 
 /**
- * Gets the biome of a tile from a global tile
- * @param tile - The tile to get the biome from
- * @returns The biome of the tile
- */
-export const getBiomeFromGlobalTile = (tile: GlobalTile): CombatBiome => {
-  return getBiomeFromTileType(tile.t);
-};
-
-/**
  * Resolve the visible biome at a named authored-map anchor. The local tile is
  * authoritative for structures standing on it; the globe's sector-center
  * biome is only a fallback for incomplete legacy maps.

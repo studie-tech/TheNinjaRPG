@@ -24,6 +24,11 @@ describe("procedural terrain bands", () => {
     }
   });
 
+  it("renders a missing biome as the default", () => {
+    const missing = undefined as unknown as ReturnedBattle["background"];
+    expect(getProceduralTerrain({ level: 0.3 }, missing)).toEqual(getProceduralTerrain({ level: 0.3 }, "default"));
+  });
+
   it.each(COMBAT_BIOMES)("gives %s its top band for a level that compares to nothing", (biome) => {
     const top = bands[biomes[biome]]!.at(-1)!;
     expect(getProceduralTerrain({ level: Number.NaN }, biome)).toMatchObject({ spec: { key: top[1] }, variant: top[2] });
