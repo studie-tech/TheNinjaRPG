@@ -37,10 +37,10 @@ import {
   fallbackQuestsFilter,
   getMissionHallSettings,
   getMissionHallTileQuests,
-  isReducedMissionReward,
   missionHallStartBlockedMessage,
   questDailyQuota,
-} from "@/libs/quest";
+} from "@/libs/quest/missionHall";
+import { isReducedMissionReward } from "@/libs/quest/rewards";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";

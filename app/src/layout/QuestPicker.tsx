@@ -18,7 +18,7 @@ import { PetTaskDispatch } from "@/layout/PetTasks";
 import { QuestTeams } from "@/layout/QuestTeams";
 import { QuestEntryStock, TakeQuestButton } from "@/layout/TakeQuestButton";
 import { isPetTaskContract } from "@/libs/pets/tasks";
-import { questTypeConcurrentBlockMessage } from "@/libs/quest";
+import { questTypeConcurrentBlockMessage } from "@/libs/quest/missionHall";
 import { nameQuestEntryStock } from "@/libs/questRun";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialHighlightedQuestId } from "@/libs/tutorial";

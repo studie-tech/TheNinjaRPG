@@ -2,7 +2,7 @@ import {
   DUNGEON_MAX_GRANTED_ITEMS,
   DUNGEON_MAX_REWARD_AMOUNT,
 } from "@/drizzle/constants";
-import { postProcessRewards } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
 import { collapseRewards } from "@/libs/rewards";
 import type { DungeonContent } from "@/validators/dungeon";
 import { ObjectiveReward, REWARD_CHOICE_AMOUNT_FIELDS } from "@/validators/rewards";

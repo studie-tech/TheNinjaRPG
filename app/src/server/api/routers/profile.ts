@@ -112,13 +112,15 @@ import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
 import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
-  getPublicQuestUser,
   getQuestTargetSectorsToCheck,
-  isAvailableUserQuests,
-  mockAchievementHistoryEntries,
-  publishedAchievementsOf,
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
+import {
+  getPublicQuestUser,
+  mockAchievementHistoryEntries,
+  publishedAchievementsOf,
+} from "@/libs/quest/projection";
 import { isQuestPartyHelperAttempt } from "@/libs/questParty";
 import { getIsolatedPyramid } from "@/libs/questRun";
 import {

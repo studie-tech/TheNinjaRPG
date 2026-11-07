@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getUpcomingQuestBlock, listUpcomingQuests } from "@/libs/quest";
+import { getUpcomingQuestBlock, listUpcomingQuests } from "@/libs/quest/availability";
 
 const tower = (overrides: Record<string, unknown> = {}) =>
   ({

@@ -64,7 +64,7 @@ import {
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { isFarmMarketSeed } from "@/libs/farming";
 import { getJutsuSlotIncreaseLimit } from "@/libs/jutsuSlots";
-import { collapseRewards } from "@/libs/quest";
+import { collapseRewards } from "@/libs/rewards";
 import { cacheItemIds, isRestrictedCacheReward } from "@/libs/weightedCache";
 import { insertValuesWhere, nextSnapshotSql } from "@/queries/concurrency";
 import { lpcDesignAssignmentGuard } from "@/queries/lpc";

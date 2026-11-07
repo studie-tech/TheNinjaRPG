@@ -2,7 +2,7 @@ import { and, eq, gte, or, sql } from "drizzle-orm";
 import { type UserRank, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { questHistory, userData } from "@/drizzle/schema";
 import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
-import { getQuestMaxLevel } from "@/libs/quest";
+import { getQuestMaxLevel } from "@/libs/quest/availability";
 import { availableQuestLetterRanks } from "@/libs/train";
 import {
   listQuestForGET,

@@ -3,12 +3,9 @@ import { getInventoryQuantityChanges } from "@/deltas/item";
 import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import type { Quest, QuestHistory, UserItem } from "@/drizzle/schema";
-import type { GetRewardResult, postProcessRewards } from "@/libs/quest";
-import {
-  getQuestTargetSectorsToCheck,
-  isAvailableUserQuests,
-  type QuestConsequence,
-} from "@/libs/quest";
+import { getQuestTargetSectorsToCheck, type QuestConsequence } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
+import type { GetRewardResult, postProcessRewards } from "@/libs/quest/rewards";
 import { hasEnergyQueue } from "@/libs/queue";
 import { getNextUserSnapshotAt, periodStart } from "@/utils/time";
 import type { InventoryQuantityChange } from "@/validators/inventory";

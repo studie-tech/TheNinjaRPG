@@ -26,13 +26,12 @@ import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
 import {
   applyQuestResets,
   filterQuestTrackersForDbPersist,
-  type GetRewardResult,
   getActiveObjectives,
   getNewTrackers,
-  type getReward,
   type QuestConsequence,
   rollObjectiveAttackers,
 } from "@/libs/quest";
+import type { GetRewardResult, getReward } from "@/libs/quest/rewards";
 import { isQuestPartyHelperAttempt } from "@/libs/questParty";
 import {
   findManagedQuestAttempt,

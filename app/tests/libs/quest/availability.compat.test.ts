@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { isAvailableUserQuests } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 
 const user = {
   role: "USER",

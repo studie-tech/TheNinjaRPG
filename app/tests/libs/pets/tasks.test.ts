@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { PET_TASK_MAX_MINUTES } from "@/drizzle/constants";
 import { isPetTaskAttempt, isPetTaskContract, petTaskDispatchBlockMessage } from "@/libs/pets/tasks";
-import { getNewTrackers, getReward, getUserQuests } from "@/libs/quest";
+import { getNewTrackers, getUserQuests } from "@/libs/quest";
+import { getReward } from "@/libs/quest/rewards";
 import { DialogObjective, QuestTracker } from "@/validators/objectives";
 import { petTaskMinutesSchema, type PetTask } from "@/validators/petTasks";
 import { QuestReward } from "@/validators/rewardPackages";

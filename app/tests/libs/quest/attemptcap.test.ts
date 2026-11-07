@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { attemptCapReached } from "@/libs/quest";
+import { attemptCapReached } from "@/libs/quest/availability";
 
 const NOW = new Date("2026-06-24T12:00:00Z");
 const HOUR = 3_600_000;

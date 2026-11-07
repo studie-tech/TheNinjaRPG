@@ -184,12 +184,11 @@ import {
 } from "@/libs/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { getPvpBoost } from "@/libs/pvpExperience";
+import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
   controlShownQuestLocationInformation,
-  filterQuestTrackersForDbPersist,
-  getNewTrackers,
   mockAchievementHistoryEntries,
-} from "@/libs/quest";
+} from "@/libs/quest/projection";
 import { projectPartyTracker, questPartyHelperAttemptId } from "@/libs/questParty";
 import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
 import { hasTrainingInProgress } from "@/libs/queue";

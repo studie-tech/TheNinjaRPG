@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { buildCombatTrackerTasks } from "@/libs/combat/util";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
-import { filterQuestTrackersForDbPersist, getNewTrackers, getReward } from "@/libs/quest";
+import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getReward } from "@/libs/quest/rewards";
 import { CombatActivityTasks, getObjectiveSchema, objectiveImageMap, QuestCompletionTasks, QuestTracker } from "@/validators/objectives";
 import type { AllObjectiveTask } from "@/validators/objectives";
 import { trackerQuest, trackerUser } from "../setup/quest";

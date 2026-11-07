@@ -11,7 +11,7 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import { getExpBracket, getPvpWinRate } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
-import { postProcessRewards } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
 import {
   advanceEvent,
   beginEventRound,

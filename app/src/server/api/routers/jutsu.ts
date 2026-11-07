@@ -75,8 +75,8 @@ import {
   filterQuestTrackersForDbPersist,
   getJutsuLearnedTrackerTasks,
   getNewTrackers,
-  getPublicQuestUser,
 } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import { liveQueueRows } from "@/libs/queue";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";

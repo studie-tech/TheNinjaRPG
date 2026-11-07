@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getExperienceTrackerTasks, getReward } from "@/libs/quest";
+import { getExperienceTrackerTasks, getReward } from "@/libs/quest/rewards";
 import {
   buildRewardChoiceCards,
   getFixedChoiceRewards,

@@ -1,6 +1,6 @@
 // app/tests/libs/quest.periodcap.test.ts
 import { describe, it, expect } from "bun:test";
-import { isAvailableUserQuests, periodCapReached } from "@/libs/quest";
+import { isAvailableUserQuests, periodCapReached } from "@/libs/quest/availability";
 
 const NOW = new Date("2026-06-19T12:00:00Z"); // Fri; week start Mon 2026-06-15
 

@@ -18,8 +18,8 @@ import {
   levelExperienceProgress,
   levelUpBlock,
 } from "@/libs/profile";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 import {
-  isAvailableUserQuests,
   isQuestRankAllowed,
   isWarMissionAvailable,
   questAlreadyActiveBlockMessage,
@@ -27,7 +27,7 @@ import {
   questRequiresTravel,
   questStructureRoute,
   questTypeConcurrentBlockMessage,
-} from "@/libs/quest";
+} from "@/libs/quest/missionHall";
 import { canStartStatTraining, statTrainingBlockMessage } from "@/libs/train";
 import type { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 import type { UserWithRelations } from "@/server/api/routers/profile";

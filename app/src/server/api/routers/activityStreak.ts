@@ -18,7 +18,7 @@ import {
   resolveStreakClaim,
 } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
-import { postProcessRewards } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
 
 import {
   createRewardsForConfig,

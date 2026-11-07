@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { splitAchievementProgress } from "@/deltas/profile";
 import { quest } from "@/drizzle/schema";
-import { questHasOverworldObjectives } from "@/libs/quest";
+import { questHasOverworldObjectives } from "@/libs/quest/projection";
 import type { UserWithRelations } from "../../../../../src/server/api/routers/profile";
 import { fetchPublishedAchievements } from "../../../../../src/server/api/routers/profile";
 import { insertQuests } from "../../../../setup/factories";

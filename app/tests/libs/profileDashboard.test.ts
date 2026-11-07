@@ -1,6 +1,6 @@
 import { dashboardContentGroups, dashboardContentPrioritySchema } from "@/validators/dashboard";
 import { canStartStatTraining } from "@/libs/train";
-import { isWarMissionAvailable } from "@/libs/quest";
+import { isWarMissionAvailable } from "@/libs/quest/missionHall";
 import { describe, expect, it } from "bun:test";
 import {
   MAP_WAKE_ISLAND_SECTOR,

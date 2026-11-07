@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { getNewTrackers, getUserQuests, isAvailableUserQuests } from "@/libs/quest";
+import { getNewTrackers, getUserQuests } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { trackerGoal, trackerQuest, trackerUser } from "../../setup/quest";
 
 const objective = (id: string, value = 5) => ({

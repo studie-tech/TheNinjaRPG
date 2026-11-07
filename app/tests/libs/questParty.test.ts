@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import type { Quest, QuestParty } from "@/drizzle/schema";
-import { getNewTrackers, getReward, verifyQuestContentForSave } from "@/libs/quest";
+import { getNewTrackers } from "@/libs/quest";
+import { getReward } from "@/libs/quest/rewards";
+import { verifyQuestContentForSave } from "@/libs/quest/validation";
 import { mergePartyProgress, projectPartyTracker, recordPartyContributions } from "@/libs/questParty";
 import { AllObjectives, ObjectiveTracker, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";

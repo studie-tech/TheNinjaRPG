@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isAvailableUserQuests } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 
 // ---------------------------------------------------------------------------
 // Fixtures: minimal quest + user objects accepted by isAvailableUserQuests.

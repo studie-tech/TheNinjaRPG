@@ -122,18 +122,18 @@ import {
 import { createPetFromSpecies } from "@/libs/pets/creation";
 import { getMaxPetRank, getPetCollectionCapacity } from "@/libs/pets/progression";
 import {
-  collapseRewards,
   filterQuestTrackersForDbPersist,
   getNewTrackers,
   objectiveContentIds,
-  postProcessRewards,
 } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
 import {
   calcRepairAllCost,
   calculateKitsToUse,
   getRepairKits,
   needsInventoryRepair,
 } from "@/libs/repair";
+import { collapseRewards } from "@/libs/rewards";
 import { filterRollableSageModes } from "@/libs/sageMode";
 import {
   getShopDiscounts,

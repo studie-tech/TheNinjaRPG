@@ -40,10 +40,10 @@ import {
   getNewTrackers,
   getQuestTargetSectorsToCheck,
   getUserQuests,
-  isAvailableUserQuests,
-  questHasOverworldObjectives,
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
+import { questHasOverworldObjectives } from "@/libs/quest/projection";
 import { ISOLATED_PYRAMID_MESSAGE } from "@/libs/questRun";
 import { hasEnergyQueue } from "@/libs/queue";
 import {

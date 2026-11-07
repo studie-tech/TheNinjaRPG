@@ -16,7 +16,7 @@ import { shrineRouter } from "@/server/api/routers/shrine";
 import { travelRouter } from "@/server/api/routers/travel";
 import { fetchUpdatedUser, type UserWithRelations } from "@/server/api/routers/profile";
 import { updateRewards } from "@/server/utils/questRewards";
-import { isWarMissionAvailable } from "@/libs/quest";
+import { isWarMissionAvailable } from "@/libs/quest/missionHall";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { fetchActiveWars, warRouter } from "@/server/api/routers/war";
 import type { DrizzleClient } from "@/server/db";

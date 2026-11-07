@@ -7,11 +7,8 @@ import {
   buildBloodlineCollectionProgress,
   getBloodlineSwapAllowance,
 } from "@/libs/bloodline";
-import {
-  filterQuestTrackersForDbPersist,
-  getNewTrackers,
-  getReward,
-} from "@/libs/quest";
+import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getReward } from "@/libs/quest/rewards";
 import { hydrateQuestCollections } from "@/server/utils/questCollections";
 import {
   BloodlineCollection,

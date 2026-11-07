@@ -4,7 +4,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { type UserItem, aiProfile, battle, battleHistory, quest, questHistory, questParty, overworldAiPlacement, item, userItem, userData, user2conversation, village, villageStructure } from "@/drizzle/schema";
 
 import * as Sentry from "@sentry/nextjs";
-import { getNewTrackers, getReward, verifyQuestContentForSave } from "@/libs/quest";
+import { getNewTrackers } from "@/libs/quest";
+import { getReward } from "@/libs/quest/rewards";
+import { verifyQuestContentForSave } from "@/libs/quest/validation";
 import { projectPartyTracker } from "@/libs/questParty";
 import { Pusher } from "@/libs/pusher";
 import { fetchUpdatedUser, profileRouter } from "@/routers/profile";

@@ -53,28 +53,33 @@ import {
 } from "@/libs/pets/tasks";
 import { eliteJoninExamBlockMessage } from "@/libs/profile";
 import {
-  controlShownQuestLocationInformation,
-  fallbackQuestsFilter,
   filterQuestTrackersForDbPersist,
-  type GetRewardResult,
-  getExperienceTrackerTasks,
-  getMissionHallSettings,
   getNewTrackers,
-  getPublicQuestUser,
   getQuestTargetSectorsToCheck,
-  getReward,
-  isAvailableUserQuests,
+} from "@/libs/quest";
+import { isAvailableUserQuests, listUpcomingQuests } from "@/libs/quest/availability";
+import {
+  fallbackQuestsFilter,
+  getMissionHallSettings,
   isQuestRankAllowed,
   isWarMissionAvailable,
-  listUpcomingQuests,
   missionHallStartBlockedMessage,
-  postProcessRewards,
   questDailyLimitMessage,
   questDailyQuota,
   questTypeConcurrentBlockMessage,
   questUiAccessBlockMessage,
-  verifyQuestContentForSave,
-} from "@/libs/quest";
+} from "@/libs/quest/missionHall";
+import {
+  controlShownQuestLocationInformation,
+  getPublicQuestUser,
+} from "@/libs/quest/projection";
+import {
+  type GetRewardResult,
+  getExperienceTrackerTasks,
+  getReward,
+  postProcessRewards,
+} from "@/libs/quest/rewards";
+import { verifyQuestContentForSave } from "@/libs/quest/validation";
 import {
   getIsolatedPyramid,
   getQuestEntryStock,
