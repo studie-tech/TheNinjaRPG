@@ -14,18 +14,22 @@ import {
 import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
 import { env } from "@/env/server.mjs";
 import {
+  reconcileFederalStatuses,
+  setFederalStatusWithStoreFloor,
+} from "@/server/utils/purchases/federalStatus";
+import {
   extendStoreSubscription,
   grantStorePurchase,
-  migrateStoreEntitlementStates,
-  migrateStorePurchaseTransfers,
   reconcileStorePurchaseOwner,
-  reconcileFederalStatuses,
   type RevocationScope,
   revokeFederalStatus as persistRevocation,
-  setFederalStatusWithStoreFloor,
   type StoreTransfer,
   transferStorePurchases as persistStoreTransfer,
 } from "@/server/utils/purchases/grant";
+import {
+  migrateStoreEntitlementStates,
+  migrateStorePurchaseTransfers,
+} from "@/server/utils/purchases/storeIdentity";
 import { insertUsers } from "../../setup/factories";
 import { beforeStatements, failStatements } from "../../setup/statements";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";

@@ -30,7 +30,7 @@ import * as sanctions from "@/server/utils/sanctionTombstone";
 import { hashSanctionIdentifier, type SanctionIdentity } from "@/server/utils/sanctionTombstone";
 import * as sanctionQueries from "@/queries/reports";
 import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
-import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
+import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
 
 import { insertUsers } from "../../setup/factories";
 import { insertRegistrationContent, registerCharacter } from "../../setup/registration";

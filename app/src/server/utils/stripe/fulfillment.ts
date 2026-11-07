@@ -25,11 +25,11 @@ import {
   fetchPurchaseUserCacheInputs,
   getKnownPurchaseUserUpdate,
 } from "@/server/utils/purchases/cache";
+import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/federalStatus";
 import {
   canonicalStoreUserId,
   isRetiredStoreUserId,
-  setFederalStatusWithStoreFloor,
-} from "@/server/utils/purchases/grant";
+} from "@/server/utils/purchases/storeIdentity";
 import { logError } from "@/server/utils/sentry";
 import { calcFedUgradeCost, dynamicMonthlyRepCap } from "@/utils/paypal";
 import { getStripe, stripeIsLive } from "./client";

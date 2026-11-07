@@ -23,7 +23,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { reputationAllowanceUsed } from "@/server/utils/purchases/allowance";
-import { isDeletedStoreUserId } from "@/server/utils/purchases/grant";
+import { isDeletedStoreUserId } from "@/server/utils/purchases/storeIdentity";
 import { dynamicMonthlyRepCap, getStoreBundleMinimumPriceCents } from "@/utils/paypal";
 import { type StoreContents, storeContentsSchema } from "@/validators/points";
 

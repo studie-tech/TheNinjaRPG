@@ -91,7 +91,7 @@ import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { removeDiscordLink } from "@/server/utils/discord/linking";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { retireStoreUserId } from "@/server/utils/purchases/grant";
+import { retireStoreUserId } from "@/server/utils/purchases/storeIdentity";
 import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { recordSanctionTombstone } from "@/server/utils/sanctionTombstone";
 

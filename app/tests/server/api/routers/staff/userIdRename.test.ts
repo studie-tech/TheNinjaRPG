@@ -39,14 +39,14 @@ import { staffRouter } from "@/server/api/routers/staff";
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import { pushRouter } from "@/server/api/routers/push";
 import { petsRouter } from "@/server/api/routers/pets";
+import { reconcileFederalStatuses } from "@/server/utils/purchases/federalStatus";
 import {
-  canonicalStoreUserId,
   extendStoreSubscription,
   grantStorePurchase,
-  reconcileFederalStatuses,
   revokeFederalStatus,
   transferStorePurchases,
 } from "@/server/utils/purchases/grant";
+import { canonicalStoreUserId } from "@/server/utils/purchases/storeIdentity";
 import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
 import { insertPetSpecies, insertUsers, insertUserPets } from "../../../../setup/factories";
 import { characterInput, insertRegistrationContent } from "../../../../setup/registration";

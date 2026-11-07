@@ -23,7 +23,7 @@ import * as contentReviewCleanup from "@/libs/contentReview/cleanup";
 import * as gamesettings from "@/libs/gamesettings";
 import * as travel from "@/routers/travel";
 import * as raids from "@/routers/raids";
-import * as grant from "@/server/utils/purchases/grant";
+import * as federalStatus from "@/server/utils/purchases/federalStatus";
 import * as processor from "@/server/utils/accountDeletion/process";
 import { stubDatabase, resetServerModuleStubs } from "../../../setup/serverModules";
 import { actualGameSettings } from "../../../setup/preload";
@@ -89,7 +89,7 @@ const expireRequests = async (db: DrizzleClient) => {
   vi.spyOn(travel, "completeExpiredGlobalTravel").mockResolvedValue(undefined);
   vi.spyOn(raids, "cleanupExpiredExclusiveRaids").mockResolvedValue(undefined);
   vi.spyOn(contentReviewCleanup, "cleanupContentProposals").mockResolvedValue({ removed: 0, filesDeleted: 0 });
-  vi.spyOn(grant, "reconcileFederalStatuses").mockImplementation(vi.fn());
+  vi.spyOn(federalStatus, "reconcileFederalStatuses").mockImplementation(vi.fn());
   vi.spyOn(processor, "processAccountDeletions").mockResolvedValue({ processed: 0, failed: 0 });
   process.env["CRON_SECRET"] = "test-cron";
   expect((await GET(request())).status).toBe(200);
@@ -182,7 +182,7 @@ describe("account deletion in the existing cleaner", () => {
     vi.spyOn(travel, "completeExpiredGlobalTravel").mockResolvedValue(undefined);
     vi.spyOn(raids, "cleanupExpiredExclusiveRaids").mockImplementation(vi.fn());
     vi.spyOn(contentReviewCleanup, "cleanupContentProposals").mockResolvedValue({ removed: 0, filesDeleted: 0 });
-    vi.spyOn(grant, "reconcileFederalStatuses").mockImplementation(vi.fn());
+    vi.spyOn(federalStatus, "reconcileFederalStatuses").mockImplementation(vi.fn());
     vi.spyOn(processor, "processAccountDeletions").mockImplementation(mocks.process);
     process.env["CRON_SECRET"] = "test-cron";
     mocks.execute.mockResolvedValue([]);

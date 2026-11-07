@@ -60,10 +60,11 @@ import {
   fetchPurchaseUserCacheInputs,
   getKnownPurchaseUserUpdate,
 } from "@/server/utils/purchases/cache";
+import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/federalStatus";
 import {
   canonicalStoreUserId,
   isDeletedStoreUserId,
-} from "@/server/utils/purchases/grant";
+} from "@/server/utils/purchases/storeIdentity";
 import { upgradeStripeFederalWithReps } from "@/server/utils/stripe/fulfillment";
 import {
   authorizeStoreCapture,
