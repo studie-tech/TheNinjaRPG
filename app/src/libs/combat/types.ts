@@ -49,6 +49,7 @@ import type {
 } from "@/libs/spriteAnimations";
 import type { ActivityCompletions } from "@/server/utils/achievementObjectives";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
+import type { BossArrival } from "@/validators/coop";
 import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
 import type { MethodSize } from "@/validators/methodSize";
 import type { QuestTrackerType } from "@/validators/objectives";
@@ -196,6 +197,10 @@ export type CombatUserFields = {
   spriteAnimations?: CharacterAnimations;
   /** Latest delivered action ID/key; clients deduplicate it and queue assigned one-shots. */
   spriteAnimationEvent?: SpriteAnimationEvent;
+  /** Public cue: this fighter rose in place of a defeated form. */
+  transformation?: BossArrival & { id: string; fromUserId: string };
+  /** Public: another form follows this one, so it stands until replaced instead of falling. */
+  risesAgain?: boolean;
   /** Damage already deferred by Diffuse; survives the granting effect's expiry. */
   diffuseDamage?: {
     attackerId: string;
@@ -451,6 +456,8 @@ export type ExtraState = {
   tournamentAiOnly?: boolean;
   /** Preloaded enemy waves shared by authored co-op encounters. */
   encounter?: import("@/libs/combat/encounters").EncounterWaveState;
+  /** The attacked creator's identity for the trial's achievement credit and log. */
+  creatorTrial?: import("@/libs/combat/creatorTrial").CreatorTrialState;
   /** Private run/wave snapshot used by combat actions and atomic party settlement. */
   dungeon?: import("@/libs/dungeon").DungeonBattleState;
   /** Encounter snapshot for strategic settlement without an intermediate combat read. */
@@ -545,7 +552,7 @@ export type ReturnedUserState = Pick<BattleUserState, (typeof publicState)[numbe
  */
 export type ReturnedExtraState = Omit<
   ExtraState,
-  "villages" | "clans" | "dungeon" | "encounter"
+  "villages" | "clans" | "dungeon" | "encounter" | "creatorTrial"
 > & {
   encounter?: Pick<import("@/libs/combat/encounters").EncounterWaveState, "wave">;
   /** Public progress only; authored future enemies and their loadouts stay server-side. */

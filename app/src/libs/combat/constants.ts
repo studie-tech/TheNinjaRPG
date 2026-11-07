@@ -87,6 +87,8 @@ export const publicState = [
   "avatarFacing",
   "spriteAnimations",
   "spriteAnimationEvent",
+  "transformation",
+  "risesAgain",
   "bloodlineId",
   "keystoneName",
   "keystoneItemId",

@@ -2056,6 +2056,58 @@ export const ONLINE_WINDOW_MINUTES = 30;
 export const BATTLE_ARENA_HEAL_COST = 500;
 export const BATTLE_TAG_STACKING = true;
 export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
+
+/**
+ * The game's creator. Attacking them on the map opens a PvE trial instead of a PvP
+ * battle, so their account never enters combat, while the map still offers the attack.
+ */
+export const CREATOR_USERNAME = "Terriator";
+/** Sheet an AI plays as it arrives by transformation, from its previous form to its own. */
+export const TRANSFORMATION_ACTION = "transform";
+/** The creator's boss fight, weakest form first. */
+export const CREATOR_TRIAL_FORMS = [
+  { aiId: "creator-trial-student" },
+  {
+    aiId: "creator-trial-genin",
+    arrival: {
+      announce: "TURBO-MODE",
+      log: "Terriator refuses to fall and reassembles in Turbo-mode!",
+      tier: 1,
+      color: 0x4de8ff,
+      glow: 0xb8f6ff,
+    },
+  },
+  {
+    aiId: "creator-trial-chunin",
+    arrival: {
+      announce: "BLADE-MODE",
+      log: "Terriator refuses to fall and reassembles in Blade-mode!",
+      tier: 2,
+      color: 0xb46bff,
+      glow: 0xff9dff,
+    },
+  },
+  {
+    aiId: "creator-trial-jonin",
+    arrival: {
+      announce: "SIEGE-MODE",
+      log: "Terriator refuses to fall and reassembles in Siege-mode!",
+      tier: 3,
+      color: 0xff6a1f,
+      glow: 0xffc15e,
+    },
+  },
+  {
+    aiId: "creator-trial-elite",
+    arrival: {
+      announce: "GOD-MODE",
+      log: "Terriator refuses to fall and reassembles in God-mode!",
+      tier: 4,
+      color: 0xffd76a,
+      glow: 0xff2a4d,
+    },
+  },
+] as const;
 export const STREAK_LEVEL_DIFF = 10;
 
 /**
@@ -2598,6 +2650,9 @@ export const ID_SFX_HEAL = "4iG_WpgEmPGUzHn8z129r";
 export const ID_SFX_MOVE = "Tze4i8gvgSHNZ-D4ffcAu";
 export const ID_SFX_CLEANSE = "mOSkDnYv4hchkPbhdpTDd";
 export const ID_SFX_CLEAR = "mOSkDnYv4hchkPbhdpTDd";
+/** Library sounds behind a boss form's arrival: its power surging, then bursting out. */
+export const ID_SFX_TRANSFORMATION_SURGE = "kEtVeccUUea888kBAMLiR";
+export const ID_SFX_TRANSFORMATION_BURST = "vJNaizZBpHEKyccPE1wem";
 
 // Discord invite link
 export const DISCORD_INVITE_URL = "https://discord.gg/eNtgPdAh7j";

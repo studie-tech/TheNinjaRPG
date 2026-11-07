@@ -78,7 +78,7 @@ Next.js 15 App Router / React 19 / strict TypeScript; Tailwind, Shadcn/Radix; Dr
 | `app/src/utils/permissions.ts` | Centralized permissions |
 | `app/src/utils/time.ts` | All new time utilities; check for existing helpers first |
 
-Combat logic lives in `app/src/libs/combat/`: `actions.ts` (actions), `process.ts` (rounds/effects), `tags.ts` (effects), `types.ts` (battle state), `util.ts`, `database.ts`, `ai_v2.ts` (rules), `drawing.ts` (rendering). Tag schemas: `validators/combat.ts`; `initiateBattle` / `performAction`: `server/api/routers/combat.ts` (both under `app/src/`).
+Combat logic lives in `app/src/libs/combat/`: `actions.ts` (actions), `bossFight.ts` (multi-form bosses as data: `bossFightEncounter`; see `CREATOR_TRIAL_FORMS`), `process.ts` (rounds/effects), `tags.ts` (effects), `types.ts` (battle state), `util.ts`, `database.ts`, `ai_v2.ts` (rules), `drawing.ts` (rendering). Tag schemas: `validators/combat.ts`; `initiateBattle` / `performAction`: `server/api/routers/combat.ts` (both under `app/src/`).
 
 ## Database and tRPC
 

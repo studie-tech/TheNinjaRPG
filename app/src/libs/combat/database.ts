@@ -1291,6 +1291,17 @@ export const updateUser = async (
             text: result.outcome,
           },
         ]),
+      // Finishing the creator's last form counts as defeating the creator's own account.
+      ...(curBattle.extraState.creatorTrial
+        ? [
+            {
+              task: "defeat_opponents" as const,
+              contentId: curBattle.extraState.creatorTrial.creatorId,
+              text: result.outcome,
+              warFoe: false,
+            },
+          ]
+        : []),
       // Winning random encounter
       ...(curBattle.battleType === "RANDOM_ENCOUNTER"
         ? [

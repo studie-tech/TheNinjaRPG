@@ -46,6 +46,8 @@ const HIT_REACTIONS = {
   crushing: { ms: 500, reach: 0.48 },
 };
 const HIT_FLASH_TINT = 0xff4a3a;
+/** A slow atlas must not leave a transforming fighter's tile empty for long. */
+const ARRIVAL_WAIT_MS = 1500;
 /** Fallback lengths for cues whose outfit has no authored clip. */
 const CUE_DURATIONS: Record<LpcAnimation, number> = {
   stand: 0,
@@ -70,6 +72,8 @@ export const createCombatActors = (
   const container = new Container(),
     records = new Map<string, Fighter>();
   const pending = new Set<Promise<unknown>>();
+  /** Fallen forms kept on the field until the form replacing them starts to play. */
+  const heldForms = new Set<string>();
   const getMaxPools = createCombatMaxPoolCache(),
     paths = new PathCalculator(grid);
   let snapshot: CombatActorSnapshot | null = null;
@@ -239,6 +243,7 @@ export const createCombatActors = (
           actionAt: previous?.actionAt,
           facing: previous?.facing,
           deathAt: previous?.deathAt,
+          arrival: previous?.arrival,
         };
         root.position.set(
           previousPosition?.x ?? -tile.center.x,
@@ -270,6 +275,8 @@ export const createCombatActors = (
                   },
                 );
                 scope.own(current.spriteAnimation.dispose);
+                if (current.arrival)
+                  current.spriteAnimation.play(current.arrival.actionKey);
               }
               art.setLighting(brightness);
               artRoot.addChild(art.container);
@@ -350,15 +357,20 @@ export const createCombatActors = (
     const { user } = record;
     const alive = stillInBattle(user);
     record.alive = alive;
-    record.root.visible = !user.hidden && !user.leftBattle;
+    record.root.visible =
+      !user.hidden && (!user.leftBattle || heldForms.has(user.userId));
     const displayed = alive && record.root.visible;
+    // A form that transforms next stays standing, with no tombstone, until it does.
+    const standing = alive || (!!user.risesAgain && user.isOriginal);
     record.shadow.visible = displayed;
     // Clone identity uses the same rings as selection, without another ground marker.
     record.selection.tint = isClone(user) ? 0xd1d5db : 0xf0c56b;
     record.hover.tint = isClone(user) ? 0xd1d5db : 0x9ae0e9;
     for (const entry of record.art?.entries ?? []) {
       entry.sprite.visible =
-        entry.description.kind === "tombstone" ? !alive && user.isOriginal : alive;
+        entry.description.kind === "tombstone"
+          ? !standing && user.isOriginal
+          : standing;
       if (entry.shadow) entry.shadow.visible = entry.sprite.visible;
       if (entry.light) entry.light.visible = displayed && entry.sprite.visible;
       if (entry.description.kind === "aiAvatar") {
@@ -448,6 +460,19 @@ export const createCombatActors = (
       if (!record.alive && user.curHealth <= 0 && record.deathAt === undefined)
         record.deathAt = frame.now;
       if (record.alive) record.deathAt = undefined;
+      if (record.arrival) {
+        const { arrival } = record;
+        arrival.at ??= frame.now;
+        const started = record.spriteAnimation?.isPlaying(arrival.actionKey);
+        record.artRoot.alpha = started ? 1 : 0;
+        if (started || frame.now - arrival.at >= ARRIVAL_WAIT_MS) {
+          record.artRoot.alpha = 1;
+          record.arrival = undefined;
+          heldForms.delete(arrival.fromId);
+          const fallen = records.get(arrival.fromId);
+          if (fallen) updateVisual(fallen);
+        }
+      }
       for (const entry of record.art?.entries ?? []) {
         if (entry.description.kind === "aiAvatar" && entry.sprite instanceof Sprite) {
           record.spriteAnimation?.render({
@@ -631,6 +656,25 @@ export const createCombatActors = (
       needsSort = true;
     },
     position: (id: string) => records.get(id)?.root.position,
+    /** Where a fighter's feet stand on the field, for effects rooted to the ground. */
+    groundPosition: (id: string) => {
+      const record = records.get(id);
+      if (!record) return undefined;
+      return {
+        x: record.root.x + record.tile.width / 2,
+        y: record.root.y + record.groundY,
+      };
+    },
+    /** Replace a fallen form on the field with `id`, opening on its arrival clip. */
+    transform: (id: string, fromId: string, actionKey: string) => {
+      const record = records.get(id);
+      if (!record) return;
+      record.arrival = { fromId, actionKey };
+      record.spriteAnimation?.play(actionKey);
+      heldForms.add(fromId);
+      const fallen = records.get(fromId);
+      if (fallen) updateVisual(fallen);
+    },
     /** Where feedback sits above a fighter on the field; nothing while it is not shown. */
     headPosition: (id: string) => {
       const record = records.get(id);
@@ -825,6 +869,8 @@ type Fighter = {
   action?: SpriteAction;
   actionAt?: number;
   deathAt?: number;
+  /** Arriving by transformation: art stays hidden until its clip has started. */
+  arrival?: { fromId: string; actionKey: string; at?: number };
   facing?: LpcDirection;
   scope: GameRenderer;
   root: Container;

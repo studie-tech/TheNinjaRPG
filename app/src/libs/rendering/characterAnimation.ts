@@ -79,6 +79,13 @@ export const createCharacterAnimation = (
   };
   return {
     dispose,
+    /** Play an action next, regardless of the battle's event stream. */
+    play: (actionKey: string) => {
+      if (animations[actionKey]) events.unshift({ id: actionKey, actionKey });
+    },
+    /** Whether this action's clip is on the sprite, past loading its sheet. */
+    isPlaying: (actionKey: string) =>
+      actionAt !== undefined && events[0]?.actionKey === actionKey,
     /** Length of an action's clip, or 0 when it has none. */
     actionDuration: (key?: string) => {
       const action = key ? animations[key] : undefined;

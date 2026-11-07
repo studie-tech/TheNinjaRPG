@@ -12,6 +12,10 @@ const migration = await readFile(
   new URL("../../drizzle/migrations/0144_seed_ai_action_animations.sql", import.meta.url),
   "utf8",
 );
+const smallSheetBackfill = await readFile(
+  new URL("../../drizzle/migrations/0143_backfill_sprite_small_urls.sql", import.meta.url),
+  "utf8",
+);
 const expectedRows = [...migration.matchAll(/FROM \(\n([\s\S]*?)\n\) AS `expected`/g)].map(
   (match) => match[1]!,
 );
@@ -35,7 +39,9 @@ it("registers after the small sheet backfill without statement markers", () => {
     migrationsFolder: fileURLToPath(new URL("../../drizzle/migrations", import.meta.url)),
   });
   const index = migrations.findIndex(({ sql }) => sql.join("\n").includes(migration));
-  expect(migrations[index - 1]?.sql.join("\n")).toContain("smallUrl");
+  const backfill = migrations.findIndex(({ sql }) => sql.join("\n").includes(smallSheetBackfill));
+  expect(backfill).toBeGreaterThan(-1);
+  expect(index).toBe(backfill + 1);
   expect(migration).not.toContain("--> statement-breakpoint");
 });
 

@@ -30,6 +30,7 @@ import {
   COMBAT_BIOMES,
   type CombatBiome,
   CombatStatNames,
+  CREATOR_TRIAL_FORMS,
   DUNGEON_PARTY_SIZE,
   DUNGEON_SOLO_PETS,
   ELEMENTAL_MASTERY_BOOST,
@@ -78,11 +79,13 @@ import {
   stillInBattle,
 } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
+import { bossFightEncounter } from "@/libs/combat/bossFight";
 import { compactBattleCatalogs } from "@/libs/combat/catalog";
 import {
   COMBAT_LOBBY_SECONDS,
   RANKED_BLOODLINE_DAMAGE_TAG,
 } from "@/libs/combat/constants";
+import { type CreatorTrialState, isCreator } from "@/libs/combat/creatorTrial";
 import { createAction, settlementWrites, updateBattle } from "@/libs/combat/database";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
@@ -319,6 +322,7 @@ import {
   statSchema,
   type ZodAllTags,
 } from "@/validators/combat";
+import type { EncounterWave } from "@/validators/coop";
 import type { HuntingBattleState } from "@/validators/hunting";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 import {
@@ -842,7 +846,33 @@ export const combatRouter = createTRPCRouter({
             nActions += 1;
           }
 
-          advanceEncounterWave(newBattle, !!dungeonBattleOutcome(newBattle));
+          const spawnedWave = advanceEncounterWave(
+            newBattle,
+            !!dungeonBattleOutcome(newBattle),
+          );
+          // A transformation is its own beat on the field: it gets a replay step, and the
+          // new form's first action waits for the next request, after the field has caught up.
+          const transformedForm = spawnedWave
+            ? newBattle.usersState.find(
+                (u) => u.transformation && !u.leftBattle && stillInBattle(u),
+              )
+            : undefined;
+          if (transformedForm) {
+            history.push({
+              battleRound: actionRound,
+              appliedEffects: [],
+              description: transformedForm.transformation?.log ?? "",
+              battleVersion: newBattle.version + nActions,
+              actionId: "unknown",
+              userId: transformedForm.userId,
+            });
+            playback.record(
+              newBattle,
+              newBattle.version + nActions,
+              transformedForm.userId,
+            );
+            nActions += 1;
+          }
           // Calculate if the battle is over for this user, and if so update user DB
           const result = calcBattleResult(
             newBattle,
@@ -875,6 +905,7 @@ export const combatRouter = createTRPCRouter({
               : 5;
           if (
             newIsAITurn && // Continue new loop if the next actor acts autonomously
+            !transformedForm && // and no new form is arriving on the field
             nActions < maxActions && // and we haven't reached the playback cap
             !result && // and the battle is not over for the user
             (newActor.userId !== actor.userId || description) // and new actor, or successful attack
@@ -1901,6 +1932,10 @@ export const initiateBattle = async (
     startingEffects?: ZodAllTags[];
     /** Open run whose version, receipt and inventory are guarded at battle creation. */
     questAttempt?: UserQuest;
+    /** Forms fought one after another, with `targetIds` matching them. See `bossFightEncounter`. */
+    encounterWaves?: EncounterWave[];
+    /** The attacked creator, whom a win credits and whose name the first form takes. */
+    creatorTrial?: CreatorTrialState;
     /** Attribute battle progress to its owning objective instead of unrelated matching kills. */
     questBattleSource?: { questId: string; objectiveId: string };
     /** Camp identity and guardian snapshot used by combat's final strategic mutation phase. */
@@ -1946,6 +1981,7 @@ export const initiateBattle = async (
   const { longitude, latitude, sector, userIds, targetIds, client } = info;
   const dungeonEncounter = info.coop?.kind === "dungeon" ? info.coop : undefined;
   const questEncounter = info.coop?.kind === "quest" ? info.coop : undefined;
+  const encounterWaves = dungeonEncounter?.waves ?? info.encounterWaves;
   if (
     dungeonEncounter &&
     userIds.length !== (dungeonEncounter.runState.pets ? 1 : DUNGEON_PARTY_SIZE)
@@ -2068,6 +2104,34 @@ export const initiateBattle = async (
       ? fetchDungeonEntryData(client, userIds)
       : null,
   ]);
+
+  // An open-world attack on the creator never reaches their account. It stays bound to
+  // their position, as any attack is, and opens the trial against their stand-in forms.
+  const creator =
+    battleType === "COMBAT"
+      ? preloadedUsers.find(
+          (user) =>
+            targetIds.includes(user.userId) &&
+            !userIds.includes(user.userId) &&
+            isCreator(user),
+        )
+      : undefined;
+  if (creator) {
+    if (
+      creator.sector !== sector ||
+      creator.longitude !== longitude ||
+      creator.latitude !== latitude
+    )
+      return { success: false, message: "Attack failed, did the target move?" };
+    return await initiateBattle(
+      {
+        ...info,
+        ...bossFightEncounter(CREATOR_TRIAL_FORMS),
+        creatorTrial: { creatorId: creator.userId, username: creator.username },
+      },
+      "OVERWORLD",
+    );
+  }
 
   // Start due jutsu levels and crafts before the participants are read for the fight,
   // e.g. an offline opponent's queued jutsu level. Rare, so the participants are read
@@ -2580,11 +2644,21 @@ export const initiateBattle = async (
     .filter((u): u is NonNullable<typeof u> => u !== undefined);
 
   if (
-    dungeonEncounter &&
+    encounterWaves &&
     (users.length !== userIds.length + targetIds.length ||
       users.slice(userIds.length).some((u) => !u.isAi))
   )
-    return { success: false, message: "A dungeon enemy is unavailable" };
+    return {
+      success: false,
+      message: dungeonEncounter
+        ? "A dungeon enemy is unavailable"
+        : "The trial is unavailable",
+    };
+
+  // The trial opens against the creator themself; only later forms carry a machine's name.
+  const openingForm = info.creatorTrial && users[userIds.length];
+  if (openingForm && info.creatorTrial)
+    openingForm.username = info.creatorTrial.username;
 
   // Recheck pre-existing shrine parties too: approval may have selected their sector later.
   if (battleType === "SHRINE_WAR" && !info.warCamp) {
@@ -2730,8 +2804,8 @@ export const initiateBattle = async (
     ).length;
     if (
       leftSideUserCount > leftCapacity ||
-      (dungeonEncounter
-        ? Math.max(...dungeonEncounter.waves.map((w) => w.aiIds.length))
+      (encounterWaves
+        ? Math.max(...encounterWaves.map((w) => w.aiIds.length))
         : users.length - leftSideUserCount) > rightCapacity
     ) {
       return { success: false, message: "Too many NPCs for this battlefield" };
@@ -3000,8 +3074,8 @@ export const initiateBattle = async (
 
   // Create the users array to be inserted into the battle
   const processed = await processUsersForBattle(client, {
-    users: dungeonEncounter
-      ? users.slice(0, userIds.length + (dungeonEncounter.waves[0]?.aiIds.length ?? 0))
+    users: encounterWaves
+      ? users.slice(0, userIds.length + (encounterWaves[0]?.aiIds.length ?? 0))
       : users,
     settings,
     relations,
@@ -3056,10 +3130,10 @@ export const initiateBattle = async (
     return errorResponse(
       "Both selected dungeon companions must be able to join the battlefield.",
     );
-  if (dungeonEncounter) {
-    let offset = userIds.length + (dungeonEncounter.waves[0]?.aiIds.length ?? 0);
+  if (encounterWaves) {
+    let offset = userIds.length + (encounterWaves[0]?.aiIds.length ?? 0);
     const encounter = await prepareEncounterWaves(
-      dungeonEncounter.waves,
+      encounterWaves,
       { usersState, userEffects, extraState },
       async (wave) => {
         const prepared = await processUsersForBattle(client, {
@@ -3083,6 +3157,9 @@ export const initiateBattle = async (
     ).catch(handleSummonPreloadError);
     if (encounter instanceof Error) return errorResponse(encounter.message);
     extraState.encounter = encounter;
+  }
+  if (info.creatorTrial) extraState.creatorTrial = info.creatorTrial;
+  if (dungeonEncounter) {
     extraState.dungeon = {
       runId: dungeonEncounter.runId,
       runVersion: dungeonEncounter.runVersion,

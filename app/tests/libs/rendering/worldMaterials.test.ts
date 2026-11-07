@@ -92,6 +92,29 @@ describe("packed character shadow volumes", () => {
       expect(rowTops).toEqual([expect.closeTo(0), expect.closeTo(1 / 3)]);
     } finally { source.texture.destroy(true); texture.destroy(true); }
   });
+  it("keeps a frilly silhouette inside the 16-bit vertex range, covering its full height with taller rows", () => {
+    const source = material(256, 256); source.isBillboard = true;
+    for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x += 2) paint(source, x, y, 0, 1);
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(256 * 256 * 4), width: 256, height: 256 }) });
+    try {
+      const frame = createCharacterMaterialFrame(source, texture, 256);
+      expect(frame.vertices.length / 6).toBeLessThanOrEqual(65535);
+      const rows = frame.volumes!.map(volume => volume.vertices[1]!);
+      expect(Math.min(...rows)).toBeCloseTo(0);
+      expect(Math.max(...rows)).toBeGreaterThan(0.95);
+    } finally { source.texture.destroy(true); texture.destroy(true); }
+  });
+  it("stays inside the vertex range when a silhouette's spans bunch on the rows it keeps", () => {
+    const source = material(256, 256); source.isBillboard = true;
+    // Dense rows alternate with empty ones, so an even-spread step of 2 would keep every span.
+    for (let y = 0; y < 140; y += 2) for (let x = 0; x < 256; x += 2) paint(source, x, y, 0, 1);
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(256 * 256 * 4), width: 256, height: 256 }) });
+    try {
+      const frame = createCharacterMaterialFrame(source, texture, 256);
+      expect(frame.vertices.length / 6).toBeLessThanOrEqual(65535);
+      expect(frame.volumes!.length).toBeGreaterThan(0);
+    } finally { source.texture.destroy(true); texture.destroy(true); }
+  });
   it("simplifies small elevated canopy volumes without expanding their physical bounds or changing trunks and receiver data", () => {
     const source = material(100, 100);
     const leaf = Array.from({ length: 8 }, (_, i) => [50 + Math.cos(i * Math.PI / 4) * 3, 20 + Math.sin(i * Math.PI / 4) * 3, 64, 65] as const);

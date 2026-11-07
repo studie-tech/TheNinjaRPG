@@ -8,17 +8,23 @@ import { BattleUserTraits } from "@/layout/BattleUserTraits";
 import Link from "@/layout/Link";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
-import { userBattleAtom, useUserData } from "@/utils/UserContext";
+import { findSidebarOpponent } from "@/libs/combat/actions";
+import {
+  combatPresentedBattleAtom,
+  userBattleAtom,
+  useUserData,
+} from "@/utils/UserContext";
 
 const MenuBoxCombat: React.FC = () => {
   // State
   const { data: userData, timeDiff } = useUserData();
-  const battle = useAtomValue(userBattleAtom);
+  const liveBattle = useAtomValue(userBattleAtom);
+  const presentedBattle = useAtomValue(combatPresentedBattleAtom);
+  // Follows the field, so a form never appears here before it has risen.
+  const battle = presentedBattle ?? liveBattle;
 
   // Battle user state (enemy)
-  const battleUser = battle?.usersState.find(
-    (u) => u.userId !== userData?.userId && !u.isSummon,
-  );
+  const battleUser = battle && findSidebarOpponent(battle.usersState, userData?.userId);
 
   // Calculate effective pool values with fallbacks
   const pools = useEffectivePools({
