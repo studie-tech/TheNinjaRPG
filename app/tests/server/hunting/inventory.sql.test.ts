@@ -31,6 +31,7 @@ import type { DrizzleClient } from "@/server/db";
 import { getTagSchema, IncreaseReskinSlots, ItemValidator, RepairTag, UnlockItemVariantTag } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import { huntingHabitatContent, huntingMap } from "../../setup/hunting";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements } from "../../setup/statements";
 import {
   callerForDatabase,
@@ -144,9 +145,7 @@ const pauseMergePublish = (db: DrizzleClient) => {
 describeWithDatabase("Hunting inventory admission", () => {
   const pusher = { trigger: async () => {} } as unknown as PusherClient;
   beforeEach(async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-      Response.json([{ result: [59, 60] }]),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
       aiProfile, auctionBid, auctionListing, battle, battleHistory, farmPlot, huntingHabitat, huntingProgress,

@@ -14,6 +14,7 @@ import { ObjectiveReward } from "@/validators/rewards";
 import { makeBattleUser, makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
 import { huntingBattleState, huntingHabitatContent } from "../../../../setup/hunting";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../../../../setup/testDatabase";
 
 describeWithDatabase("staff Pyramid recovery", () => {
@@ -23,9 +24,7 @@ describeWithDatabase("staff Pyramid recovery", () => {
     await resetTables(huntingHabitat, huntingSession, huntingProgress, huntingReceipt, userItem, questHistory, quest, userData, actionLog, mpvpBattleUser, rankedPvpQueue, battle);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     // Recovery checks exercise combat callers without depending on an external rate limiter.
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
     await insertUsers([
       { userId: "hero", status: "BATTLE", battleId: null, regeneration: 10, curHealth: 100, maxHealth: 1000, updatedAt: new Date(Date.now() - 350_000), regenAt: new Date(Date.now() - 125_000) },
       { userId: "staff", role: "OWNER" },

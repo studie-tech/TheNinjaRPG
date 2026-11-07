@@ -12,6 +12,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { countUserReads } from "../../../../setup/userReads";
 
@@ -35,9 +36,7 @@ const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
 
 describeWithDatabase("ranked reward progression recovery", () => {
   beforeEach(async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
     await resetTables(raidDamageThreshold, raidParticipation, rankedUserRewards, rankedSeason, questHistory, quest, userVote, userData, gameSetting, anbuSquad, clan, village, war);
     await insertUsers([{ userId, username: "RewardProgress", role: "USER", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,

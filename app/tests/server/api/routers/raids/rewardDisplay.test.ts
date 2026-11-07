@@ -20,6 +20,7 @@ import {
 import { raidsRouter } from "@/server/api/routers/raids";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuests, insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,
@@ -29,13 +30,7 @@ import {
 
 describeWithDatabase("raid reward display from confirmed grants", () => {
   beforeEach(async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     await resetTables(
       userItem,
       userJutsu,

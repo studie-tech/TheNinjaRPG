@@ -12,12 +12,13 @@ import { staffRouter } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
 import { insertItems, insertUsers, insertUserItems } from "../../setup/factories";
 import { huntingContract, huntingHabitatContent, huntingMap } from "../../setup/hunting";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements } from "../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("staff changes during hunting admission", () => {
   beforeEach(async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json([{ result: [59, 60] }]));
+    stubRateLimitTransport({ answerOtherRequests: true });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingReceipt, huntingSession, item, mpvpBattleUser, questHistory, rankedPvpQueue, sectorMap, storeUserIdAlias, userData, userItem);
     await insertUsers([

@@ -11,13 +11,14 @@ import { huntingRouter } from "@/routers/hunting";
 import { IncreaseHuntingYield } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import { huntingContract, huntingHabitatContent, huntingMap } from "../../setup/hunting";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
 import type { DrizzleClient } from "@/server/db";
 import { beforeStatements, failStatements } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("Hunting lifecycle", () => {
   beforeEach(async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json([{ result: [59, 60] }]));
+    stubRateLimitTransport({ answerOtherRequests: true });
     await resetTables(actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, quest, questHistory, trainingLog, userCookingJob, userData, userItem, userQueue);
     await insertUsers([{ userId: "hunter", occupation: "HUNTER", status: "AWAKE", huntingExperience: 123, sector: 1 }, { userId: "staff", role: "CODING-ADMIN" }, { userId: "enemy", isAi: true }]);
     await insertItems([{ id: "hide", canBeHunted: true }, { id: "tusk", canBeHunted: true }]);

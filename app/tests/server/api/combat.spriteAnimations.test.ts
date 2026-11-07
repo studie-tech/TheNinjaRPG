@@ -18,6 +18,7 @@ import { spriteAnimationRouter } from "@/server/api/routers/spriteAnimation";
 import { ActionEndTurn, ActionUseSpecificJutsu } from "@/validators/ai";
 import { makeTag } from "../../libs/combat/helpers/battleScenario";
 import { insertUsers } from "../../setup/factories";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -29,13 +30,7 @@ describeWithDatabase("combat sprite animation delivery", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(nextServer, "after").mockImplementation(() => {});
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     await resetTables(
       aiSpriteAnimation, spriteAnimation, battleAction, battle, actionLog,
       userJutsu, jutsu, aiProfile, userData,

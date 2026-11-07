@@ -12,6 +12,7 @@ import {
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { defaultWarRules } from "@/validators/war";
 import { insertUsers } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -57,13 +58,7 @@ describeWithDatabase("challengeShrine on reserved sectors", () => {
       village,
       userData,
     );
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "a", name: "a", sector: 100, kageId: "kage-a" },

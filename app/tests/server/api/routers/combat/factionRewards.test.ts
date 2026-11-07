@@ -14,6 +14,7 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables,
 } from "../../../../setup/testDatabase";
@@ -39,9 +40,7 @@ describeWithDatabase("combat team faction rewards", () => {
       aiProfile, raidParticipation, quest, userData, clan, anbuSquad, villageAlliance, village);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(nextServer, "after").mockImplementation(() => {});
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
     const db = await getTestDatabase();
     await db.insert(village).values(participants.map((id, index) => ({
       id, name: id, sector: index + 1, kageId: id, tokens: 1000,

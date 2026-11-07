@@ -33,6 +33,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { getTagSchema } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../setup/queues";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements } from "../../setup/statements";
 import {
   callerFor,
@@ -149,13 +150,7 @@ describeWithDatabase("CAS combat settlement", () => {
     });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     // Rate limiting is external to settlement; SQL tests must not contact Redis.
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     vi.spyOn(nextServer, "after").mockImplementation(() => {});
     await insertUsers(
       ["winner", "loser"].map((userId) => ({

@@ -10,6 +10,7 @@ import { maskBattle } from "@/libs/combat/util";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { makeEffect } from "../../../../libs/combat/helpers/battleScenario";
 import { insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("lethal combat history", () => {
@@ -18,9 +19,7 @@ describeWithDatabase("lethal combat history", () => {
     await resetTables(battleAction, battleHistory, battle, aiProfile, userData);
     trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(nextServer, "after").mockImplementation(() => {});
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
   });
   afterEach(() => vi.restoreAllMocks());
 

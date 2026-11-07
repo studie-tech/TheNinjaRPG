@@ -26,6 +26,7 @@ import * as combatRouter from "@/server/api/routers/combat";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { startDeclaredWar } from "@/server/utils/war";
 import { insertUsers } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -43,9 +44,7 @@ describeWithDatabase("shrine lobby objective war eligibility", () => {
       notification, warAlly, war, sector, questHistory, userData, villageAlliance, village,
     );
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "a", name: "a", sector: 100, kageId: "hero", tokens: 1000000 },

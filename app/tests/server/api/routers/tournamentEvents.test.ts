@@ -51,6 +51,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { withAfterTasks } from "../../../setup/after";
 import { insertItems, insertUsers } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeStatements } from "../../../setup/statements";
 import {
   callerFor,
@@ -67,13 +68,7 @@ describeWithDatabase("event tournament persistence", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(pusherModule, "getServerPusher").mockReturnValue(new Pusher("", "", "", ""));
     // Rate limiting is external to settlement; SQL tests must not contact Redis.
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     await resetTables(
       tournamentRewardClaim,
       tournamentMatch,

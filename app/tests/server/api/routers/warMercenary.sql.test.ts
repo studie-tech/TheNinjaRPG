@@ -22,6 +22,7 @@ import { fetchActiveWars, warRouter } from "@/server/api/routers/war";
 import { canEnterWarCampSector } from "@/server/utils/warMercenary";
 import { defaultWarRules } from "@/validators/war";
 import { insertUsers } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 const seed = async () => {
@@ -387,9 +388,7 @@ describeWithDatabase("mercenary strategic participation", () => {
     const db = await getTestDatabase();
     await resetTables(battleHistory, battle, mpvpBattleUser, mpvpBattleQueue, aiProfile, sector, villageAlliance);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
-      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
-    ));
+    stubRateLimitTransport({ answerOtherRequests: true });
     const kage = callerForDatabase(warRouter, "kage", db);
     expect((await kage.inviteMercenary({ warId: "w", userId: "merc", tokens: 1 })).success).toBe(true);
     const offer = (await db.query.warMercenary.findFirst())!;

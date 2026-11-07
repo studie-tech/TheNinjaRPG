@@ -15,6 +15,7 @@ import {
 import { Pusher } from "@/libs/pusher";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { insertUsers } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeStatements } from "../../../setup/statements";
 import {
   callerForDatabase,
@@ -56,13 +57,7 @@ describeWithDatabase("shrine AI defenders", () => {
       village,
     );
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-      Response.json(
-        String(url).endsWith("/pipeline")
-          ? [{ result: [59, 60] }]
-          : { result: [59, 60] },
-      ),
-    );
+    stubRateLimitTransport({ answerOtherRequests: true });
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "a", name: "a", sector: 100, kageId: "kage", tokens: 1000000 },
