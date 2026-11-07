@@ -1,5 +1,11 @@
 import { beforeEach, expect, it } from "bun:test";
-import { paypalTransaction, userData } from "@/drizzle/schema";
+import {
+  paypalTransaction,
+  stripeCheckout,
+  stripePayment,
+  userData,
+  webStoreOrder,
+} from "@/drizzle/schema";
 import { reputationAllowanceUsed } from "@/server/utils/purchases/allowance";
 import { insertUsers } from "../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
@@ -19,7 +25,7 @@ const receipt = (id: string, reputationPoints: number) => ({
 
 describeWithDatabase("reputation allowance", () => {
   beforeEach(async () => {
-    await resetTables(paypalTransaction, userData);
+    await resetTables(paypalTransaction, stripePayment, stripeCheckout, webStoreOrder, userData);
     await insertUsers([{ userId: "buyer", username: "Buyer" }]);
     const db = await getTestDatabase();
     await db.insert(paypalTransaction).values([receipt("kept", 20), receipt("retried", 5)]);
