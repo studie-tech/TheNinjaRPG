@@ -17,6 +17,7 @@ import { listActiveWarsWithRules } from "@/queries/war";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { syncWarCamps } from "@/server/utils/objectiveWar";
+import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
 import {
   computeTemplateActivations,
   runStaleShrineLobbyCleanup,
