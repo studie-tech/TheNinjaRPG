@@ -38,7 +38,6 @@ import {
   SKILL_POINT_MAX_LEVEL,
   SKILL_POINT_MIN_LEVEL,
   SKILL_TREE_REQUIRED_RANK,
-  shrineLobbyFreshAfter,
   TERRITORY_WAR_BOOST_PERCENT,
   TUTORIAL_STEPS_COUNT,
   UserRanks,
@@ -325,6 +324,7 @@ import {
 } from "@/server/utils/regeneration";
 import { retainSanctionIps } from "@/server/utils/sanctionTombstone";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
+import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
 import {
   hasDueTimedJob,
   settleDueTimedQueues,
