@@ -177,9 +177,6 @@ export const executeClaimedForApplyObjectiveWarAction = (
   hp: SQL<unknown>,
   activeWar: { id: string },
   rules: { durationDays: number },
-
-  destroyed: SQL<unknown>,
-  spyPath: "$.attackerEspionage" | "$.defenderEspionage",
 ) =>
   client.execute(sql`
       UPDATE ${war} INNER JOIN ${warActionReceipt} ON ${warActionReceipt.id} = ${action.id}
@@ -198,7 +195,7 @@ export const executeClaimedForApplyObjectiveWarAction = (
             OR EXISTS (SELECT 1 FROM WarMercenary merc WHERE merc.warId = ${war.id} AND merc.userId = actor.userId AND merc.sideVillageId = ${action.sideVillageId} AND merc.acceptedAt IS NOT NULL AND merc.endedAt IS NULL)))
         AND ${warActionReceipt.applied} = FALSE
         AND ${objectiveWarCombatGuard()}
-        ${objective && action.damage === undefined ? sql`AND ${sector.sector} IS NOT NULL AND NOT (${destroyed}) AND ${hp} > 0 AND CAST(JSON_EXTRACT(${war.objectiveState}, ${spyPath}) AS UNSIGNED) >= ${WAR_ESPIONAGE_TARGET}` : sql``}
+        ${objective && action.damage === undefined ? sql`AND ${canDamageShrine}` : sql``}
         ${action.camp ? sql`AND ${warCamp.resolvedAt} IS NULL AND ${warCamp.startsAt} <= SYSDATE(3) AND ${warCamp.endsAt} > SYSDATE(3)` : sql``}
     `);
 
@@ -354,14 +351,17 @@ export const expireWarPoints = (client: DrizzleClient) =>
 export const executeRowsForResolveDueWarCamps = (
   client: Pick<DrizzleClient, "execute">,
   camp: { id: string },
-) =>
-  client.execute(sql`
+) => {
+  const warLive = sql`${war.endedAt} IS NULL AND ${war.attackerWarHealth} > 0 AND ${war.defenderWarHealth} > 0 AND ${war.rules} IS NOT NULL AND ${warCamp.endsAt} <= DATE_ADD(${war.combatStartedAt}, INTERVAL CAST(JSON_EXTRACT(${war.rules}, '$.durationDays') AS UNSIGNED) DAY)`;
+  const campDamage = sql`CAST(JSON_EXTRACT(${war.rules}, '$.campDamage') AS UNSIGNED)`;
+  return client.execute(sql`
     UPDATE ${warCamp} INNER JOIN ${war} ON ${war.id} = ${warCamp.warId}
-    SET ${war.attackerWarHealth} = GREATEST(${war.attackerWarHealth} - CASE WHEN ${war.endedAt} IS NULL AND ${war.attackerWarHealth} > 0 AND ${war.defenderWarHealth} > 0 AND ${war.rules} IS NOT NULL AND ${warCamp.endsAt} <= DATE_ADD(${war.combatStartedAt}, INTERVAL CAST(JSON_EXTRACT(${war.rules}, '$.durationDays') AS UNSIGNED) DAY) AND ${warCamp.defenderScore} > ${warCamp.attackerScore} THEN CAST(JSON_EXTRACT(${war.rules}, '$.campDamage') AS UNSIGNED) ELSE 0 END, 0),
-        ${war.defenderWarHealth} = GREATEST(${war.defenderWarHealth} - CASE WHEN ${war.endedAt} IS NULL AND ${war.attackerWarHealth} > 0 AND ${war.defenderWarHealth} > 0 AND ${war.rules} IS NOT NULL AND ${warCamp.endsAt} <= DATE_ADD(${war.combatStartedAt}, INTERVAL CAST(JSON_EXTRACT(${war.rules}, '$.durationDays') AS UNSIGNED) DAY) AND ${warCamp.attackerScore} > ${warCamp.defenderScore} THEN CAST(JSON_EXTRACT(${war.rules}, '$.campDamage') AS UNSIGNED) ELSE 0 END, 0),
+    SET ${war.attackerWarHealth} = GREATEST(${war.attackerWarHealth} - CASE WHEN ${warLive} AND ${warCamp.defenderScore} > ${warCamp.attackerScore} THEN ${campDamage} ELSE 0 END, 0),
+        ${war.defenderWarHealth} = GREATEST(${war.defenderWarHealth} - CASE WHEN ${warLive} AND ${warCamp.attackerScore} > ${warCamp.defenderScore} THEN ${campDamage} ELSE 0 END, 0),
         ${warCamp.resolvedAt} = SYSDATE(3)
     WHERE ${warCamp.id} = ${camp.id} AND ${warCamp.resolvedAt} IS NULL AND ${warCamp.endsAt} <= SYSDATE(3)
   `);
+};
 
 /** Table alias for membership joins, keeping its columns distinct from other participants. */
 const membership = alias(warAlly, "wa");
