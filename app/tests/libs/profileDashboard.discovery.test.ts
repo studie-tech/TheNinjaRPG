@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { MAP_WAKE_ISLAND_SECTOR, MISSIONS_PER_DAY } from "@/drizzle/constants";
-import { dashboardContentHref, resolveDashboardContent } from "@/libs/profileDashboard";
+import {
+  buildDashboardCatalogue,
+  dashboardContentHref,
+  resolveDashboardContent,
+} from "@/libs/profileDashboard";
 import { ObjectiveReward } from "@/validators/rewards";
 
 type Candidate = Parameters<typeof resolveDashboardContent>[0][number];
@@ -207,3 +211,22 @@ for (const [status, autoWakeUp, expected] of [["AWAKE", true, true], ["ASLEEP", 
     expect(dashboardContentHref(entry!)).toBe(`/travel?sector=${MAP_WAKE_ISLAND_SECTOR}`);
   });
 }
+
+describe("buildDashboardCatalogue", () => {
+  it("orders the mission groups and keeps ungrouped missions behind them", () => {
+    const activeWars = [
+      { status: "ACTIVE", attackerVillageId: "village", defenderVillageId: "enemy", warAllies: [] },
+    ] as unknown as User["activeWars"];
+    const missions = ["war", "pvp", "medical", "errand", "mission"].map((questType) =>
+      candidate({ id: questType, name: questType, questType: questType as Candidate["questType"] }),
+    );
+    const catalogue = buildDashboardCatalogue(missions, user({ activeWars, medicalExperience: 1 }));
+    expect(catalogue.map((entry) => entry.questType)).toEqual([
+      "mission",
+      "errand",
+      "medical",
+      "pvp",
+      "war",
+    ]);
+  });
+});

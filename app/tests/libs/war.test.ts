@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { BattleWar } from "@/libs/combat/types";
 import { getWarRelationship } from "@/libs/objectiveWar";
+import { canJoinWar } from "@/libs/war";
 import { defaultWarRules } from "@/validators/war";
 
 const wars = [
@@ -99,4 +100,85 @@ describe("isWarAllies", () => {
       ).toBe(false);
     });
   });
+});
+
+describe("canJoinWar", () => {
+  type War = Parameters<typeof canJoinWar>[0];
+  type Relationships = Parameters<typeof canJoinWar>[1];
+  type Village = Parameters<typeof canJoinWar>[2];
+  const war = (overrides: Partial<War> = {}) =>
+    ({
+      type: "VILLAGE_WAR",
+      attackerVillageId: "attacker",
+      defenderVillageId: "warring",
+      warAllies: [],
+      ...overrides,
+    }) as War;
+  const joining = (overrides: Partial<Village> = {}) =>
+    ({ id: "joining", type: "VILLAGE", allianceSystem: true, ...overrides }) as Village;
+  const warring = { id: "warring" } as Village;
+  const relation = (status: string) =>
+    [{ villageIdA: "joining", villageIdB: "warring", status }] as Relationships;
+
+  it("admits a neutral or allied village into a war its partner fights", () => {
+    expect(canJoinWar(war(), [], joining(), warring)).toEqual({ check: true, message: "" });
+    expect(canJoinWar(war(), relation("ALLY"), joining(), warring).check).toBe(true);
+    expect(
+      canJoinWar(war(), [], joining({ type: "HIDEOUT", allianceSystem: false }), warring)
+        .check,
+    ).toBe(true);
+  });
+
+  it.each([
+    [
+      "Raids do not accept war allies",
+      war({ type: "WAR_RAID" }),
+      [],
+      joining(),
+    ],
+    [
+      "Cannot join war, already in it",
+      war({ type: "WAR_RAID", attackerVillageId: "joining" }),
+      [],
+      joining(),
+    ],
+    [
+      "Cannot join war, warring village is not in it",
+      war({ attackerVillageId: "joining", defenderVillageId: "other" }),
+      [],
+      joining(),
+    ],
+    [
+      "Cannot join war, faction already in war",
+      war({ defenderVillageId: "other", warAllies: [{ villageId: "joining" }] as War["warAllies"] }),
+      [],
+      joining(),
+    ],
+    [
+      "Cannot join war, not a village/hideout/stronghold",
+      war({ warAllies: [{ villageId: "joining" }] as War["warAllies"] }),
+      [],
+      joining({ type: "SAFEZONE" }),
+    ],
+    [
+      "Cannot join war with your enemy",
+      war(),
+      relation("ENEMY"),
+      joining({ type: "SAFEZONE" }),
+    ],
+    [
+      "Cannot join war, not a joinable village/hideout/stronghold",
+      war(),
+      relation("ENEMY"),
+      joining({ allianceSystem: false }),
+    ],
+  ] as [string, War, Relationships, Village][])(
+    "reports %s over every lesser failure",
+    (message, activeWar, relationships, village) => {
+      expect(canJoinWar(activeWar, relationships, village, warring)).toEqual({
+        check: false,
+        message,
+      });
+    },
+  );
 });
