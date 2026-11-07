@@ -3,13 +3,13 @@
 import { use } from "react";
 import { api } from "@/app/_trpc/client";
 import type { Badge } from "@/drizzle/schema";
+import { useBadgeEditForm } from "@/hooks/badge";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
 import Loader from "@/layout/Loader";
 import { SuggestChange } from "@/layout/SuggestChange";
-import { useBadgeEditForm } from "@/libs/badge";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { BadgeValidator } from "@/validators/badge";
 

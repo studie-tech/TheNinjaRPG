@@ -137,7 +137,7 @@ export const pick = (source: Record<string, unknown>, keys: readonly string[]) =
 const keysOf = (schema: { shape: Record<string, unknown> }) =>
   Object.keys(schema.shape);
 
-/** AI fields shown by the manual AI editor (libs/ais.ts), plus its effect list. */
+/** AI fields shown by the manual AI editor (hooks/ai.ts), plus its effect list. */
 const AI_EDITABLE_KEYS = [
   "username",
   "npcTitle",

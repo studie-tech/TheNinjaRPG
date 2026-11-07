@@ -16,7 +16,7 @@ import * as EditContent from "@/layout/EditContent";
 import * as NindoChange from "@/layout/NindoChange";
 import * as StatusBar from "@/layout/StatusBar";
 import * as SuggestChange from "@/layout/SuggestChange";
-import * as ais from "@/libs/ais";
+import * as ais from "@/hooks/ai";
 import * as toast from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
 import * as UserContext from "@/utils/UserContext";
