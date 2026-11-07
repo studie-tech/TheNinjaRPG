@@ -878,7 +878,6 @@ export const travelRouter = createTRPCRouter({
       // Convenience
       const { longitude, latitude, sector, villageId } = input;
       const userId = ctx.userId;
-      const userVillage = villageId ?? "syndicate";
       // When the destination looks like a default-sized border crossing, load
       // that neighbour in the same query so the walk does not wait on a
       // second sequential published-map read. A failed read answers like a
@@ -1053,12 +1052,12 @@ export const travelRouter = createTRPCRouter({
       // Check if move was successful
       if (result.rowsAffected === 1) {
         // Check for encounters / village defence
-        if (isVillage && sectorVillage && sectorVillage.id !== userVillage) {
+        if (isVillage && sectorVillage && sectorVillage.id !== villageId) {
           const relations = [
             ...sectorVillage.relationshipA,
             ...sectorVillage.relationshipB,
           ];
-          const relation = findRelationship(relations, userVillage, sectorVillage.id);
+          const relation = findRelationship(relations, villageId, sectorVillage.id);
           if (relation?.status === "ENEMY") {
             // Chance of getting attacked by village protector
             const chance = getStrucBoost("patrolsPerLvl", sectorVillage.structures);
