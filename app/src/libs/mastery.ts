@@ -24,17 +24,18 @@ export const MASTERY_TYPE_TO_STAT: Record<MasteryType, MasteryName> = {
 };
 
 /**
- * Requirement column on Jutsu/Item, the user stat it gates against, and its display name.
+ * Requirement column on Jutsu/Item, the user stat it gates against, its display name and its
+ * discipline.
  * Single source of truth: the gating check, the content editors and every requirement list
  * in the UI derive from this, so adding a mastery is a one-line change.
  */
 export const MASTERY_REQUIREMENT_FIELDS = [
-  ["requiredNinjutsuMastery", "ninjutsuMastery", "Ninjutsu Mastery"],
-  ["requiredGenjutsuMastery", "genjutsuMastery", "Genjutsu Mastery"],
-  ["requiredTaijutsuMastery", "taijutsuMastery", "Taijutsu Mastery"],
-  ["requiredBukijutsuMastery", "bukijutsuMastery", "Bukijutsu Mastery"],
-  ["requiredBloodlineMastery", "bloodlineMastery", "Bloodline Mastery"],
-  ["requiredSageMastery", "sageMastery", "Sage Mastery"],
+  ["requiredNinjutsuMastery", "ninjutsuMastery", "Ninjutsu Mastery", "Ninjutsu"],
+  ["requiredGenjutsuMastery", "genjutsuMastery", "Genjutsu Mastery", "Genjutsu"],
+  ["requiredTaijutsuMastery", "taijutsuMastery", "Taijutsu Mastery", "Taijutsu"],
+  ["requiredBukijutsuMastery", "bukijutsuMastery", "Bukijutsu Mastery", "Bukijutsu"],
+  ["requiredBloodlineMastery", "bloodlineMastery", "Bloodline Mastery", "Bloodline"],
+  ["requiredSageMastery", "sageMastery", "Sage Mastery", "Sage"],
 ] as const;
 
 export type MasteryRequirementField = (typeof MASTERY_REQUIREMENT_FIELDS)[number][0];
