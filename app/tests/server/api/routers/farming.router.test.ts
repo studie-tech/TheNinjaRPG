@@ -80,6 +80,23 @@ const giveItem = async (id: string, itemId: string, quantity: number) => {
   await database.insert(userItem).values({ id, userId: "farm-user", itemId, quantity, equipped: "NONE" } as never);
 };
 
+const insertFinishedExtraction = async (patch: Record<string, unknown> = {}) => {
+  const database = await getTestDatabase();
+  await database.insert(farmExtraction).values({
+    id: "extraction-g",
+    userId: "farm-user",
+    extractorSlot: 0,
+    cropItemId: "crop-1",
+    seedItemId: "seed-1",
+    cropQuantity: 1,
+    seedQuantity: 3,
+    startedAt: new Date(Date.now() - 120_000),
+    finishAt: new Date(Date.now() - 60_000),
+    ...patch,
+  } as never);
+  return database;
+};
+
 const activateFarmQuest = async (task: string, value = 10) => {
   const database = await getTestDatabase();
   await database.insert(quest).values({
@@ -1391,6 +1408,61 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       .where(eq(userItem.itemId, "seed-1"));
     expect(stacks).toHaveLength(1);
     expect(stacks[0]?.quantity).toBe(3);
+    expect(await database.select().from(farmExtraction)).toHaveLength(0);
+  });
+
+  it("pays once when a second settlement runs while the first holds its claim", async () => {
+    await farmer();
+    const database = await insertFinishedExtraction();
+
+    let competed = false;
+    const holdingClaim = beforeStatements(database, userItem, [async () => {
+      await (await caller("farm-user")).getFarmState();
+      competed = true;
+    }]);
+    await farmingRouter
+      .createCaller({ drizzle: holdingClaim, userId: "farm-user" } as never)
+      .getFarmState();
+
+    expect(competed).toBe(true);
+    const stacks = await database.select().from(userItem);
+    expect(stacks).toHaveLength(1);
+    expect(stacks[0]?.quantity).toBe(3);
+    expect(await database.select().from(farmExtraction)).toHaveLength(0);
+  });
+
+  it("takes over a stale claim left by a request that died before paying", async () => {
+    await farmer();
+    const database = await insertFinishedExtraction({ claimedAt: new Date(Date.now() - 3_600_000) });
+
+    await (await caller("farm-user")).getFarmState();
+
+    const stacks = await database.select().from(userItem);
+    expect(stacks).toHaveLength(1);
+    expect(stacks[0]?.quantity).toBe(3);
+    expect(await database.select().from(farmExtraction)).toHaveLength(0);
+  });
+
+  it("does not take over a stale claim that settled after the read", async () => {
+    await farmer();
+    const database = await insertFinishedExtraction({ claimedAt: new Date(Date.now() - 3_600_000) });
+
+    // The slow request's seeds land and its settledAt commits just before this claim runs.
+    let settled = false;
+    const racing = beforeStatements(database, farmExtraction, [async () => {
+      await database.update(farmExtraction).set({ settledAt: new Date() });
+      settled = true;
+    }]);
+    await farmingRouter
+      .createCaller({ drizzle: racing, userId: "farm-user" } as never)
+      .getFarmState();
+
+    expect(settled).toBe(true);
+    expect(await database.select().from(userItem)).toHaveLength(0);
+
+    // The next settlement sees the settled row and only cleans it up.
+    await (await caller("farm-user")).getFarmState();
+    expect(await database.select().from(userItem)).toHaveLength(0);
     expect(await database.select().from(farmExtraction)).toHaveLength(0);
   });
 
