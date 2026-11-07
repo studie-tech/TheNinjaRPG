@@ -89,7 +89,9 @@ export const spriteAnimationRouter = createTRPCRouter({
         }),
         countSpriteAnimations(ctx.drizzle, filter),
       ]);
-      return { data, nextCursor: cursorAfter(data), total: counted?.total ?? 0 };
+      const total = counted?.total ?? 0;
+      const hasMore = skip + data.length < total;
+      return { data, nextCursor: hasMore ? cursorAfter(data) : null, total };
     }),
   /** Create a shared library entry without assigning it to an AI. */
   create: protectedProcedure

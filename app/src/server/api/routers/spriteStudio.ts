@@ -2,10 +2,12 @@ import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import sharp from "sharp";
 import { z } from "zod";
+import { SpriteGenerationMotions } from "@/drizzle/constants";
 import type { SpriteGeneration } from "@/drizzle/schema";
 import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate";
 import { animationActions } from "@/libs/spriteAnimationActions";
 import { finishSpriteSheet } from "@/libs/spriteSheetFinish";
+import { SpriteCharacterStyles } from "@/libs/spriteStudio";
 import { fetchUser } from "@/queries/profile";
 import {
   fetchAnimationAi,
@@ -38,7 +40,7 @@ import {
 import { removeFromStorage, uploadToStorage } from "@/server/utils/spriteSheets";
 import { canChangeContent } from "@/utils/permissions";
 import { spriteAnimationSchema } from "@/validators/spriteAnimation";
-import { generateSpriteSchema, spriteCharacterSchema } from "@/validators/spriteStudio";
+import { spriteSourceSchema } from "@/validators/spriteStudio";
 
 const EDITOR_ONLY = "Content editor access required";
 /** Longer than preparing a sheet can take, so a live function is never overtaken. */
@@ -85,7 +87,12 @@ export const spriteStudioRouter = createTRPCRouter({
     }),
   /** Draw four candidates for a character that has no art yet. */
   drawCharacters: protectedProcedure
-    .input(spriteCharacterSchema)
+    .input(
+      z.object({
+        prompt: z.string().trim().min(3).max(1000),
+        style: z.enum(SpriteCharacterStyles),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const editor = await fetchUser(ctx.drizzle, ctx.userId);
       if (editor.isBanned || !canChangeContent(editor.role))
@@ -102,7 +109,16 @@ export const spriteStudioRouter = createTRPCRouter({
     }),
   /** Queue an animation; credits are held until gameasset.dev finishes or refunds it. */
   generate: protectedProcedure
-    .input(generateSpriteSchema)
+    .input(
+      z.object({
+        source: spriteSourceSchema,
+        name: z.string().trim().min(1).max(191),
+        prompt: z.string().trim().min(3).max(2000),
+        motion: z.enum(SpriteGenerationMotions),
+        // gameasset.dev accepts 4n+1 clips; these give 8x2 and 8x3 sheets.
+        frames: z.union([z.literal(33), z.literal(49)]),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const { source } = input;
       const [editor, ai] = await Promise.all([
@@ -307,11 +323,16 @@ export const spriteStudioRouter = createTRPCRouter({
       ]);
       if (editor.isBanned || !canChangeContent(editor.role))
         return errorResponse(EDITOR_ONLY);
-      if (!row || row.status === "ACCEPTED" || row.status === "DISCARDED")
+      if (
+        !row ||
+        row.status === "ACCEPTED" ||
+        row.status === "DISCARDED" ||
+        row.status === "PREPARING"
+      )
         return errorResponse("This sprite can no longer be discarded");
-      if (row.status === "QUEUED" || row.status === "PROCESSING")
-        // A job that finished in the meantime answers 409 and simply stays charged.
-        await cancelSpriteAsset(row.remoteAssetId).catch(() => undefined);
+      const isRemote = row.status === "QUEUED" || row.status === "PROCESSING";
+      if (isRemote && !(await stopRemoteJob(row.remoteAssetId)))
+        return errorResponse("gameasset.dev could not cancel this sprite. Try again.");
       const discarded = await transitionSpriteGeneration(ctx.drizzle, row, {
         status: "DISCARDED",
         updatedAt: new Date(),
@@ -350,6 +371,20 @@ const uploadArt = async (url: string, title: string) => {
       throw new GameAssetError("This art could not be read as an image");
     });
   return uploadCharacterImage(png, title.slice(0, 120));
+};
+
+/**
+ * Cancel a running job. One that finished in the meantime refuses and stays charged;
+ * one that may still be running keeps its row, so its result is not lost.
+ */
+const stopRemoteJob = async (id: string) => {
+  try {
+    await cancelSpriteAsset(id);
+    return true;
+  } catch {
+    const asset = await getSpriteAsset(id).catch(() => null);
+    return asset?.status === "succeeded" || asset?.status === "failed";
+  }
 };
 
 /** Apply one remote status; returns whether the row changed. */
@@ -393,6 +428,7 @@ const prepareSheet = async (
   });
   if (claim.rowsAffected === 0) return false;
   const claimed = { ...row, status: "PREPARING" as const, updatedAt: claimedAt };
+  const stored: string[] = [];
   try {
     if (!asset.files || !asset.sprite)
       throw new Error("The finished asset has no sheet");
@@ -406,7 +442,8 @@ const prepareSheet = async (
       uploadToStorage(large, `sprite-sheet-${nanoid()}-256.webp`),
       uploadToStorage(small, `sprite-sheet-${nanoid()}-128.webp`),
     ]);
-    await transitionSpriteGeneration(client, claimed, {
+    stored.push(url, smallUrl);
+    const finished = await transitionSpriteGeneration(client, claimed, {
       status: "READY",
       stage: null,
       url,
@@ -417,8 +454,9 @@ const prepareSheet = async (
       fps: grid.fps,
       updatedAt: new Date(),
     });
+    if (finished.rowsAffected === 0) await removeFromStorage(stored);
   } catch (error) {
-    await transitionSpriteGeneration(client, claimed, {
+    const failed = await transitionSpriteGeneration(client, claimed, {
       status: "FAILED",
       stage: null,
       error: (error instanceof Error ? error.message : "Preparation failed").slice(
@@ -427,6 +465,7 @@ const prepareSheet = async (
       ),
       updatedAt: new Date(),
     });
+    if (failed.rowsAffected > 0 && stored.length > 0) await removeFromStorage(stored);
   }
   return true;
 };

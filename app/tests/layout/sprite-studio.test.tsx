@@ -62,6 +62,19 @@ it("shows the balance and keeps creation disabled until a character is chosen", 
   expect((view.getByRole("button", { name: "Create sprite" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
+it("keeps creation disabled for an AI with no art", () => {
+  const source = { userId: "ai", username: "Bandit", facing: "left", assignedKeys: [], actions: [{ key: "idle", name: "Idle", group: "Stances" }] };
+  const button = (avatar: string | null) => {
+    client.api.spriteStudio.getAiSource.useQuery = (() => ({ data: { ...source, avatar } })) as never;
+    const view = show(studio([]));
+    const { disabled } = view.getByRole("button", { name: "Create sprite" }) as HTMLButtonElement;
+    view.unmount();
+    return disabled;
+  };
+  expect(button(null)).toBe(true);
+  expect(button("https://uploadthing.b-cdn.net/f/art")).toBe(false);
+});
+
 it("offers assignment for an AI sprite that is ready", () => {
   const view = show(studio([base]));
   fireEvent.click(view.getByRole("button", { name: "Assign to AI" }));

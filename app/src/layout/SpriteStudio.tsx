@@ -158,6 +158,7 @@ const Composer = ({ studio }: { studio: Studio }) => {
   const artUrl = tab === "ai" ? ai.data?.avatar : art?.url;
   const canGenerate =
     !!source &&
+    !!artUrl &&
     !!name.trim() &&
     prompt.trim().length >= 3 &&
     !studio.generate.isPending;

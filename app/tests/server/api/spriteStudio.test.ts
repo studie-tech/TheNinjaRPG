@@ -162,6 +162,39 @@ describeWithDatabase("sprite studio", () => {
     expect(await api.getGenerations()).toHaveLength(0);
   });
 
+  it("keeps a request whose job may still be running when the cancel call fails", async () => {
+    vi.spyOn(gameAsset, "cancelSpriteAsset").mockRejectedValue(new gameAsset.GameAssetError("gameasset.dev could not be reached"));
+    const lookup = vi.spyOn(gameAsset, "getSpriteAsset").mockResolvedValue(remote({ status: "processing" }));
+    const id = await queued();
+    const api = await caller();
+    expect((await api.discard({ id })).success).toBe(false);
+    lookup.mockRejectedValue(new gameAsset.GameAssetError("gameasset.dev could not be reached"));
+    expect((await api.discard({ id })).success).toBe(false);
+    expect((await row(id))?.status).toBe("QUEUED");
+    lookup.mockResolvedValue(finished);
+    expect((await api.discard({ id })).success).toBe(true);
+    expect((await row(id))?.status).toBe("DISCARDED");
+  });
+
+  it("leaves a sheet in preparation to finish instead of discarding it", async () => {
+    const id = await queued();
+    await (await getTestDatabase()).update(spriteGeneration).set({ status: "PREPARING" }).where(eq(spriteGeneration.id, id));
+    expect((await (await caller()).discard({ id })).success).toBe(false);
+    expect((await row(id))?.status).toBe("PREPARING");
+  });
+
+  it("removes stored sheets when the request moved on during preparation", async () => {
+    const id = await queued();
+    vi.spyOn(gameAsset, "getSpriteAsset").mockResolvedValue(finished);
+    vi.spyOn(finish, "finishSpriteSheet").mockImplementation(async () => {
+      await (await getTestDatabase()).update(spriteGeneration).set({ updatedAt: new Date(0) }).where(eq(spriteGeneration.id, id));
+      return { large: Buffer.from("l"), small: Buffer.from("s") };
+    });
+    await (await caller()).sync();
+    expect(spriteSheets.removeFromStorage).toHaveBeenCalledWith(["https://uploadthing.b-cdn.net/f/out-1", "https://uploadthing.b-cdn.net/f/out-2"]);
+    expect((await row(id))?.url).toBeNull();
+  });
+
   it("takes a new shot from the stored image without uploading again", async () => {
     const id = await ready();
     vi.spyOn(gameAsset, "createSpriteAsset").mockResolvedValue(remote({ id: "asset-2" }));

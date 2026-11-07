@@ -57,6 +57,8 @@ describeWithDatabase("sprite animation administration and battle snapshots", () 
     const second = await api.search({ ...search, scope: "ai", cursor: first.nextCursor });
     expect(names(second)).toEqual(["move"]);
     expect(second.nextCursor).toBeNull();
+    const exact = await api.search({ ...search, scope: "ai", limit: 3 });
+    expect(exact).toMatchObject({ total: 3, nextCursor: null });
 
     expect((await api.search({ ...search, scope: "all" })).total).toBe(5);
     expect(names(await api.search({ ...search, scope: "all", search: "strike other" }))).toEqual(["Other — Strike"]);
