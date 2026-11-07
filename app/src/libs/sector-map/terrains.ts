@@ -135,12 +135,11 @@ export const mergeTerrainSpecs = (
       Array.isArray(row.colors) &&
       row.colors.length === 3 &&
       row.colors.every(isHexColor);
-    if (!hasValidColors && !builtin) {
+    const colors = hasValidColors ? row.colors : builtin?.colors;
+    if (!colors) {
       console.warn(`mapTerrain "${row.key}" has an invalid palette and was not merged`);
       return;
     }
-    const colors = hasValidColors ? row.colors : builtin?.colors;
-    if (!colors) return;
     const textureUrl =
       typeof row.textureUrl === "string" && row.textureUrl.trim() !== ""
         ? row.textureUrl
