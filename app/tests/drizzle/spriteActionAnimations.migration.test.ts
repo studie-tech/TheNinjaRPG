@@ -64,9 +64,9 @@ describeWithDatabase("AI action animation migration", () => {
     const bindings = await db.query.aiSpriteAnimation.findMany({
       orderBy: [aiSpriteAnimation.userId, aiSpriteAnimation.actionKey],
     });
-    expect(sheets).toHaveLength(1833);
-    expect(bindings).toHaveLength(4574);
-    expect(new Set(bindings.map((row) => row.userId)).size).toBe(659);
+    expect(sheets).toHaveLength(1842);
+    expect(bindings).toHaveLength(4599);
+    expect(new Set(bindings.map((row) => row.userId)).size).toBe(660);
     for (const sheet of sheets) {
       expect(spriteAnimationSchema.safeParse(sheet).success).toBe(true);
       expect(sheet.smallUrl).toStartWith("https://uploadthing.b-cdn.net/f/");

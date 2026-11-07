@@ -151,6 +151,7 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-11113ce5ee251b82-blast', 'DawnSever — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZ2AxFjaYQrBIUTu69nkMxWmS4ah0O7LVCp8b', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3vzkpU8pYHJX5rdkUTfOKtvu2eGIELmSWqBx', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-11113ce5ee251b82-guard', 'DawnSever — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJR56FcX0udmODoNtpa0FMcwI4k2Eq7nJhyvjl', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqzB5gwdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-11113ce5ee251b82-heal', 'DawnSever — Heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcP7jArSnxBpQqGNDcTHbLmYz8uXAl3oa54ti', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCM9ty626OYrIJuNP1pvSyz29edFtKbngjRcA', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-11113ce5ee251b82-hex', 'DawnSever — Curse or debuff', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqjhg4adkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPAgrON8pKeUGyX2kj6u45AOQiSa1zYH0mqZo', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-11113ce5ee251b82-ranged', 'DawnSever — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCPar3U26OYrIJuNP1pvSyz29edFtKbngjRcA', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtsmTsuUYJDfpFXWm3nrcPluEtIZqyLkaSV1j', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-11113ce5ee251b82-strike', 'DawnSever — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqS4ocGdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDRFSMezEwoh0WXMnscL279N8ayVQUCbRzS3p', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-115cb6ce9b69270a-blast', 'Totem of Tsukuyomi — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxBVXJfWZsq9k0Von5rUfP6OgQ2TyptCKHS4u', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJUYEtQJILCIhwPniJ69VxpvAbTDWkOyGzS8rM', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -399,11 +400,11 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-303af5b8097d545c-strike', 'Varkesh the Emberfang — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVmBjQ2F2veAXohUuE59nTQHRJIYjtiG18aF4', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVLRmArF2veAXohUuE59nTQHRJIYjtiG18aF4', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3097094628ede65b-ranged', 'Ashen Wisp — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3wuZow8pYHJX5rdkUTfOKtvu2eGIELmSWqBx', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzNIPxCemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3097094628ede65b-strike', 'Ashen Wisp — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrsBsR8huJPmdY8zI2ptZXAoEj1c6BMKvrQOx', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOBXSkJVHevxIThUauQkGJEBY3D2cPqy8f5sp', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-31024a39832e9c35-blast', 'IronClawS2 — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCjQI0e26OYrIJuNP1pvSyz29edFtKbngjRcA', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWd4dOhvszvj71yaSYC0MDOmbko5q9JAGuLHf', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-31024a39832e9c35-guard', 'IronClawS2 — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQ24cvKjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgEWUnrcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery')
+  ('sprite-20261107-31024a39832e9c35-blast', 'IronClawS2 — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCjQI0e26OYrIJuNP1pvSyz29edFtKbngjRcA', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWd4dOhvszvj71yaSYC0MDOmbko5q9JAGuLHf', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery')
 ON DUPLICATE KEY UPDATE `id` = `SpriteAnimation`.`id`;
 
 INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows`, `frameCount`, `fps`, `facing`, `createdByUserId`) VALUES
+  ('sprite-20261107-31024a39832e9c35-guard', 'IronClawS2 — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQ24cvKjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgEWUnrcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-31024a39832e9c35-ranged', 'IronClawS2 — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy5eCbeukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJm7aPEsHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-31024a39832e9c35-strike', 'IronClawS2 — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbGXo17AtYUndMi56GkX19q0A4PzyeIloBrEa', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJH9RqucQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3166516890378a33-hex', 'Summoning: Komodo Dragon — Curse or debuff', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEe6QA2LfKL5D7TAFe29bymSaPCIQ846MdzGg', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQLydlxjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -483,11 +484,13 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-3939d3f91c418568-ranged', 'Colossus* — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrdA2kkhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxRn0MTWZsq9k0Von5rUfP6OgQ2TyptCKHS4u', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3939d3f91c418568-strike', 'Colossus* — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJydxWtAukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4w3MtElYIif5CL8BKvMsOh2ZnmS7yHt0jTD3', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-394fda74ebd16aea-strike', 'New AI - 4BtEg_Y_S6feRX2t0Hk5p — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0ANHqtgrYldRWJcD6vE10SjNsXHeA9pVMfQi', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJutEzg1CyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-3982d371bca90c17-blast', 'Vaultshade Guard II — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dbClHdXKPBOUWGyFuM4DlL1v5HNTZhkte0z', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhSpR0XMfUBdnwAX5LTajlNc4mrgzi0RJtqpM', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3982d371bca90c17-guard', 'Vaultshade Guard II — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJd1t6nTP62PI3ciLaYzgVX8FopBADxSrGmvQl', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJr3ucJhuJPmdY8zI2ptZXAoEj1c6BMKvrQOxS', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3982d371bca90c17-hex', 'Vaultshade Guard II — Curse or debuff', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlooSSUrWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4MkZnylYIif5CL8BKvMsOh2ZnmS7yHt0jTD3', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3982d371bca90c17-powerup', 'Vaultshade Guard II — Power up', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWM5TS2vszvj71yaSYC0MDOmbko5q9JAGuLHf', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQgV0yTjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3982d371bca90c17-ranged', 'Vaultshade Guard II — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmWjnVn26OYrIJuNP1pvSyz29edFtKbngjRc', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJT8aRGq5IU29dZYJPoOKSh5vmlqatMub3EigH', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3982d371bca90c17-strike', 'Vaultshade Guard II — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFrXw0G2iOewJtjGzvNcmEX3TBnoSfMDZPH4a', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMITV0WRtsO4cexqW2RDgkE3zZbNXSFGitmna', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-3982d371bca90c17-summon', 'Vaultshade Guard II — Summon', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnMwsIxmojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJunQFVFaCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3997e33aff7ff5c9-ranged', 'Riptide Adept — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWMCxuyvszvj71yaSYC0MDOmbko5q9JAGuLHf', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1hAC9j6bo95WClq4K0wxZUmJcvThgdVenO3P', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3997e33aff7ff5c9-strike', 'Riptide Adept — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSkm82bu3jWrEB7TyZlmpoAxMK5Qi16kNPVJu', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HUPiaJnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-39b0180f742e88f2-strike', 'Byakko - Fury of the White Tiger — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7izccVXKPBOUWGyFuM4DlL1v5HNTZhkte0z6', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhqoB5iMfUBdnwAX5LTajlNc4mrgzi0RJtqpM', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -532,6 +535,7 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-3eec111081f276e7-strike', 'Subaku Demon Priest — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMIsenrOtsO4cexqW2RDgkE3zZbNXSFGitmna', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIa1jb6xfOewksxBoS1HQCihpL7c42Ky9uUFv', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3f65e304a05a599c-blast', 'Crown Armsmaster — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbH9u9CAtYUndMi56GkX19q0A4PzyeIloBrEa', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuUW0aYCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3f65e304a05a599c-guard', 'Crown Armsmaster — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCMBzHv26OYrIJuNP1pvSyz29edFtKbngjRcA', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmra6ScHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-3f65e304a05a599c-hex', 'Crown Armsmaster — Curse or debuff', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgfuAGrcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyeCYYzukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3f65e304a05a599c-ranged', 'Crown Armsmaster — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dZ4ngJXKPBOUWGyFuM4DlL1v5HNTZhkte0z', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCccoc026OYrIJuNP1pvSyz29edFtKbngjRcA', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3f65e304a05a599c-strike', 'Crown Armsmaster — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJa8GJXsYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1Sv0HG6bo95WClq4K0wxZUmJcvThgdVenO3P', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-3ffecc1cd49b09e7-blast', 'Kuzenbo — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJl97VWTrWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFPadNJG2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -799,14 +803,14 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-5fd78e10674fd1a5-heal', 'Goodius Boyicus — Heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1HsLwx6bo95WClq4K0wxZUmJcvThgdVenO3P', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dPHuU1XKPBOUWGyFuM4DlL1v5HNTZhkte0z', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-5fd78e10674fd1a5-hex', 'Goodius Boyicus — Curse or debuff', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCvH7Q126OYrIJuNP1pvSyz29edFtKbngjRcA', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXLHe8fqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-5fd78e10674fd1a5-strike', 'Goodius Boyicus — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJngtFNLmojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaVZa0NYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-610815970f5bc9a8-strike', 'Yuki Threadbinder — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu95dGSCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYI8uhuOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-614cb8aa9f28ea81-guard', 'Current Sentinel — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ6SGSUtDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlCRWOF2veAXohUuE59nTQHRJIYjtiG18aF4', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-614cb8aa9f28ea81-ranged', 'Current Sentinel — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmXKmKOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYgH6NnOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-614cb8aa9f28ea81-strike', 'Current Sentinel — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXPowpaYqIOpAoLKbZ4nW9Rsil2V67yuFwQhq', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxJ7myFWZsq9k0Von5rUfP6OgQ2TyptCKHS4u', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-61ce17347ae12dd1-blast', 'Zerakael Seven Tails — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYDI4L0OMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJb3gE1DAtYUndMi56GkX19q0A4PzyeIloBrEa', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery')
+  ('sprite-20261107-610815970f5bc9a8-strike', 'Yuki Threadbinder — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu95dGSCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYI8uhuOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery')
 ON DUPLICATE KEY UPDATE `id` = `SpriteAnimation`.`id`;
 
 INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows`, `frameCount`, `fps`, `facing`, `createdByUserId`) VALUES
+  ('sprite-20261107-614cb8aa9f28ea81-guard', 'Current Sentinel — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ6SGSUtDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlCRWOF2veAXohUuE59nTQHRJIYjtiG18aF4', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-614cb8aa9f28ea81-ranged', 'Current Sentinel — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmXKmKOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYgH6NnOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-614cb8aa9f28ea81-strike', 'Current Sentinel — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXPowpaYqIOpAoLKbZ4nW9Rsil2V67yuFwQhq', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxJ7myFWZsq9k0Von5rUfP6OgQ2TyptCKHS4u', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-61ce17347ae12dd1-blast', 'Zerakael Seven Tails — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYDI4L0OMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJb3gE1DAtYUndMi56GkX19q0A4PzyeIloBrEa', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-61ce17347ae12dd1-strike', 'Zerakael Seven Tails — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaNrvLlYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtxsIM3BUYJDfpFXWm3nrcPluEtIZqyLkaSV1', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-61f99b5b901f4067-blast', 'Saurus Guard — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTk9NX35IU29dZYJPoOKSh5vmlqatMub3EigH', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeZSFNXyV3OvUJQExAi0bGoIZDF74LqSnHRdp', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-61f99b5b901f4067-guard', 'Saurus Guard — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgZOiWEcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0Oeqx2grYldRWJcD6vE10SjNsXHeA9pVMfQi', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -914,6 +918,7 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-71ea816f34269176-strike', 'Werewolf — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpPS124bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbOYdo5AtYUndMi56GkX19q0A4PzyeIloBrEa', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-7230d9174a95ba94-blast', 'Vaultshade Guard — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOwa4AJVHevxIThUauQkGJEBY3D2cPqy8f5sp', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1PHFFw6bo95WClq4K0wxZUmJcvThgdVenO3P', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-7230d9174a95ba94-guard', 'Vaultshade Guard — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXJ6XXvqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoKqD0WZ9MPZpHJ7VliuEWDfATdxhv62SXnm4', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-7230d9174a95ba94-hex', 'Vaultshade Guard — Curse or debuff', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLvjugrYldRWJcD6vE10SjNsXHeA9pVMfQi', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZaVKzdAtYUndMi56GkX19q0A4PzyeIloBrE', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-7230d9174a95ba94-powerup', 'Vaultshade Guard — Power up', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHB8YzOQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOsSkoBVHevxIThUauQkGJEBY3D2cPqy8f5sp', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-7230d9174a95ba94-ranged', 'Vaultshade Guard — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwnv1rUT2j854CWbaITZyegfXimvd7s16cO0h', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ02dv9CgrYldRWJcD6vE10SjNsXHeA9pVMfQi', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-7230d9174a95ba94-strike', 'Vaultshade Guard — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHZ0WRVQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWCuBQavszvj71yaSYC0MDOmbko5q9JAGuLHf', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -1045,6 +1050,7 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-83402847fb9e9624-blast', 'Stray Catcher — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpIs57KbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJziXbDXemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-83402847fb9e9624-ranged', 'Stray Catcher — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcIvHFwSnxBpQqGNDcTHbLmYz8uXAl3oa54ti', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrtx1yvDhuJPmdY8zI2ptZXAoEj1c6BMKvrQO', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-83402847fb9e9624-strike', 'Stray Catcher — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcOxo6VSnxBpQqGNDcTHbLmYz8uXAl3oa54ti', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeFWz5VyV3OvUJQExAi0bGoIZDF74LqSnHRdp', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-8341b05e9ebccdc6-strike', 'Glasshade — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEk0g6OLfKL5D7TAFe29bymSaPCIQ846MdzGg', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVR9ummNF2veAXohUuE59nTQHRJIYjtiG18aF', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-838287d444b2ffdc-blast', 'Death''s Maw — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtx5OEh7UYJDfpFXWm3nrcPluEtIZqyLkaSV1', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJunHVYOaCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-838287d444b2ffdc-guard', 'Death''s Maw — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtCIX09UYJDfpFXWm3nrcPluEtIZqyLkaSV1j', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJalK9liYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-838287d444b2ffdc-powerup', 'Death''s Maw — Power up', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwmhMGJT2j854CWbaITZyegfXimvd7s16cO0h', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQsyHGtjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -1200,16 +1206,16 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-9e21093beb3184dd-ranged', 'Waddle Jr. — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJom30bwZ9MPZpHJ7VliuEWDfATdxhv62SXnm4', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJr4xOUOhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-9e21093beb3184dd-strike', 'Waddle Jr. — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgyhpGRcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HWYIbqnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-9e4c79f0d41647a1-strike', 'Riku Boltcarver — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOpmS7KVHevxIThUauQkGJEBY3D2cPqy8f5sp', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqpAoeUXdkOZgJQ8mGRcdx3SsWvPelyYFTt5V', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-9e5e80ff05112f5c-blast', 'Veteran Captain — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMySPJbtsO4cexqW2RDgkE3zZbNXSFGitmnar', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhpQt91MfUBdnwAX5LTajlNc4mrgzi0RJtqpM', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-9e5e80ff05112f5c-blast', 'Veteran Captain — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMySPJbtsO4cexqW2RDgkE3zZbNXSFGitmnar', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhpQt91MfUBdnwAX5LTajlNc4mrgzi0RJtqpM', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery')
+ON DUPLICATE KEY UPDATE `id` = `SpriteAnimation`.`id`;
+
+INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows`, `frameCount`, `fps`, `facing`, `createdByUserId`) VALUES
   ('sprite-20261107-9e5e80ff05112f5c-guard', 'Veteran Captain — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4jgJMilYIif5CL8BKvMsOh2ZnmS7yHt0jTD3', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5qHBMS797jl4ubX8xrRqTZasyMp2WA5eLGUP', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-9e5e80ff05112f5c-heal', 'Veteran Captain — Heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMNI4wmtsO4cexqW2RDgkE3zZbNXSFGitmnar', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ394mYG8pYHJX5rdkUTfOKtvu2eGIELmSWqBx', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-9e5e80ff05112f5c-hex', 'Veteran Captain — Curse or debuff', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuZAnIBCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmlG4YO26OYrIJuNP1pvSyz29edFtKbngjRc', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-9e5e80ff05112f5c-powerup', 'Veteran Captain — Power up', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ51SjNm797jl4ubX8xrRqTZasyMp2WA5eLGUP', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAI2RIWoZUC4muiGcQNzjfEndY5y1w20B8hTW', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-9e5e80ff05112f5c-ranged', 'Veteran Captain — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJP74uEapKeUGyX2kj6u45AOQiSa1zYH0mqZoc', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAewutaoZUC4muiGcQNzjfEndY5y1w20B8hTW', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-9e5e80ff05112f5c-strike', 'Veteran Captain — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxAt927WZsq9k0Von5rUfP6OgQ2TyptCKHS4u', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGngPyGRfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery')
-ON DUPLICATE KEY UPDATE `id` = `SpriteAnimation`.`id`;
-
-INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows`, `frameCount`, `fps`, `facing`, `createdByUserId`) VALUES
+  ('sprite-20261107-9e5e80ff05112f5c-strike', 'Veteran Captain — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxAt927WZsq9k0Von5rUfP6OgQ2TyptCKHS4u', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGngPyGRfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-9eb898bac8f0079f-guard', 'Akaibako — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtepdZnUYJDfpFXWm3nrcPluEtIZqyLkaSV1j', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ39ypQOu8pYHJX5rdkUTfOKtvu2eGIELmSWqB', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-9eb898bac8f0079f-ranged', 'Akaibako — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhUfGOeNMfUBdnwAX5LTajlNc4mrgzi0RJtqp', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTjm6v25IU29dZYJPoOKSh5vmlqatMub3EigH', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-9eb898bac8f0079f-strike', 'Akaibako — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu0UED8CyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2ac0UwnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -1251,6 +1257,7 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-a5ef5392a0710ced-strike', 'Living Steam — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5kkwO4797jl4ubX8xrRqTZasyMp2WA5eLGUP', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaVG9XVGYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQ', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-a719aba7a485694e-strike', 'Frost grunt #2 — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu3cg1jCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIDaCgaxfOewksxBoS1HQCihpL7c42Ky9uUFv', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-a71d8c7fb5f23014-guard', 'Repair Golem — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXPZ3QgoqIOpAoLKbZ4nW9Rsil2V67yuFwQhq', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJd3TOApP62PI3ciLaYzgVX8FopBADxSrGmvQl', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-a71d8c7fb5f23014-heal', 'Repair Golem — Heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJH08yZjQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpIeiz2bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-a71d8c7fb5f23014-ranged', 'Repair Golem — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJavbv73YYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJD0OMvZzEwoh0WXMnscL279N8ayVQUCbRzS3p', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-a71d8c7fb5f23014-strike', 'Repair Golem — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HI6fSDnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmtrpqN26OYrIJuNP1pvSyz29edFtKbngjRc', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-a747c6c12274dd38-ranged', 'Wandering Samurai — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmm6Y87HE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJH2KONuQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -1353,6 +1360,7 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-b533101d08415999-strike', 'Corrupted Fist — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAwdAXeoZUC4muiGcQNzjfEndY5y1w20B8hTW', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCly4Ru26OYrIJuNP1pvSyz29edFtKbngjRcA', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-b5b28212e9c73780-blast', 'Sandstalker — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrCv3vRhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqo5LGTdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-b5b28212e9c73780-hex', 'Sandstalker — Curse or debuff', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZV8hBIAtYUndMi56GkX19q0A4PzyeIloBrE', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtFOJ5TUYJDfpFXWm3nrcPluEtIZqyLkaSV1j', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-b5b28212e9c73780-powerup', 'Sandstalker — Power up', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFOxoCiG2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeDTaNfyV3OvUJQExAi0bGoIZDF74LqSnHRdp', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-b5b28212e9c73780-strike', 'Sandstalker — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXPrH8QqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz1rijuemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-b5ccf6f2c23f44f0-blast', 'AI Loadout: Default Rotation — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5TsqsF797jl4ubX8xrRqTZasyMp2WA5eLGUP', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqTqlwPdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-b5ccf6f2c23f44f0-powerup', 'AI Loadout: Default Rotation — Power up', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyHOsUnzEwoh0WXMnscL279N8ayVQUCbRzS3', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrcwHTehuJPmdY8zI2ptZXAoEj1c6BMKvrQOx', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -1505,6 +1513,7 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-d134a4fdd21bba03-guard', 'Okami — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn9upG7mojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1FU2JR6bo95WClq4K0wxZUmJcvThgdVenO3P', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-d134a4fdd21bba03-heal', 'Okami — Heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCrwuZJ26OYrIJuNP1pvSyz29edFtKbngjRcA', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeEJ2otyV3OvUJQExAi0bGoIZDF74LqSnHRdp', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-d134a4fdd21bba03-hex', 'Okami — Curse or debuff', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxyq6p3WZsq9k0Von5rUfP6OgQ2TyptCKHS4u', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDQch31zEwoh0WXMnscL279N8ayVQUCbRzS3p', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-d134a4fdd21bba03-powerup', 'Okami — Power up', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxEihjHTWZsq9k0Von5rUfP6OgQ2TyptCKHS4', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJV28jrHF2veAXohUuE59nTQHRJIYjtiG18aF4', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-d134a4fdd21bba03-ranged', 'Okami — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dZR645XKPBOUWGyFuM4DlL1v5HNTZhkte0z', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMUN7aArWYxAsuC7ofQn9pM45OD0ERqkdBXJ', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-d134a4fdd21bba03-strike', 'Okami — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaUpiVeYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqppUQ8ZdkOZgJQ8mGRcdx3SsWvPelyYFTt5V', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-d1fb757ea19998a4-ranged', 'Water Grunt #3 — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJUQAxLILCIhwPniJ69VxpvAbTDWkOyGzS8rMR', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWyy1pmvszvj71yaSYC0MDOmbko5q9JAGuLHf', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -1600,7 +1609,10 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-e00798e696561abe-strike', 'WindLaugh — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPA0QzaGpKeUGyX2kj6u45AOQiSa1zYH0mqZo', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGIviEdRfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-e0bd4066d0d460d1-ranged', 'GENIN 01 — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHpUzrvQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1zlQDb76bo95WClq4K0wxZUmJcvThgdVenO3', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-e0bd4066d0d460d1-strike', 'GENIN 01 — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJH7smxMQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgMGtdMcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-e2a68cf1a5aa1395-ranged', 'KX: Hollow Reaver — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQwiIddjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMqbREAtsO4cexqW2RDgkE3zZbNXSFGitmnar', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
+  ('sprite-20261107-e2a68cf1a5aa1395-ranged', 'KX: Hollow Reaver — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQwiIddjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMqbREAtsO4cexqW2RDgkE3zZbNXSFGitmnar', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery')
+ON DUPLICATE KEY UPDATE `id` = `SpriteAnimation`.`id`;
+
+INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows`, `frameCount`, `fps`, `facing`, `createdByUserId`) VALUES
   ('sprite-20261107-e2a68cf1a5aa1395-strike', 'KX: Hollow Reaver — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIYdNmRxfOewksxBoS1HQCihpL7c42Ky9uUFv', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJg3KCspFcU9cpECTimBdjaqbNn7vQsxGR1wLk', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-e30cb42cf7789e7c-ranged', 'Lost Shinobi — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDG67HwzEwoh0WXMnscL279N8ayVQUCbRzS3p', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpvDxtfbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-e30cb42cf7789e7c-strike', 'Lost Shinobi — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ39uOAJE8pYHJX5rdkUTfOKtvu2eGIELmSWqB', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8BjeHZbkkp45TvAnoIBa0rtCf1lbyXYjVKQ2', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -1609,10 +1621,7 @@ INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows
   ('sprite-20261107-e49be001245e15fa-ranged', 'The Suture Priest — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGxUlDERfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcQWiweSnxBpQqGNDcTHbLmYz8uXAl3oa54ti', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-e49be001245e15fa-strike', 'The Suture Priest — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYnsMGHOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyytxArzEwoh0WXMnscL279N8ayVQUCbRzS3', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-e51c48daa12f1089-ranged', 'Water Grunt #4 — Ranged attack', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQEyN67jhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3nQzEx8pYHJX5rdkUTfOKtvu2eGIELmSWqBx', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
-  ('sprite-20261107-e51c48daa12f1089-strike', 'Water Grunt #4 — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJosoU4yZ9MPZpHJ7VliuEWDfATdxhv62SXnm4', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHoyn9oQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery')
-ON DUPLICATE KEY UPDATE `id` = `SpriteAnimation`.`id`;
-
-INSERT INTO `SpriteAnimation` (`id`, `name`, `url`, `smallUrl`, `columns`, `rows`, `frameCount`, `fps`, `facing`, `createdByUserId`) VALUES
+  ('sprite-20261107-e51c48daa12f1089-strike', 'Water Grunt #4 — Melee strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJosoU4yZ9MPZpHJ7VliuEWDfATdxhv62SXnm4', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHoyn9oQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-e51f92a0b89056a6-blast', 'Vanguard Soldier — Area blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF09iqfgG2iOewJtjGzvNcmEX3TBnoSfMDZPH', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTKlsJ5IU29dZYJPoOKSh5vmlqatMub3EigHe', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-e51f92a0b89056a6-guard', 'Vanguard Soldier — Guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7Pqef5XKPBOUWGyFuM4DlL1v5HNTZhkte0z6', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRyQqbj0udmODoNtpa0FMcwI4k2Eq7nJhyvjl', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
   ('sprite-20261107-e51f92a0b89056a6-powerup', 'Vanguard Soldier — Power up', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpZqDKAbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQlIUE1bjhzBPya1rwfCIqOTU0cV5xgsMeo3u', 8, 2, 16, 12.5, 'left', 'system:sprite-delivery'),
@@ -1880,11 +1889,17 @@ FROM (
   UNION ALL
   SELECT '-GKFYAZUg1eF-3VnZhDjx', 'basic:defensiveStance', 'sprite-20261107-3f65e304a05a599c-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCMBzHv26OYrIJuNP1pvSyz29edFtKbngjRcA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
   UNION ALL
+  SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:-IbSdvavSQFqQmGduEi-J', 'sprite-20261107-3f65e304a05a599c-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgfuAGrcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
+  UNION ALL
   SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:8RIXlsWIbsMtIh7sCwHSE', 'sprite-20261107-3f65e304a05a599c-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbH9u9CAtYUndMi56GkX19q0A4PzyeIloBrEa', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
   UNION ALL
   SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:BwlbHwTN4EVYXYJsE18rl', 'sprite-20261107-3f65e304a05a599c-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbH9u9CAtYUndMi56GkX19q0A4PzyeIloBrEa', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
   UNION ALL
   SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:ElSK-RCrLjddEUm76FZrs', 'sprite-20261107-3f65e304a05a599c-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dZ4ngJXKPBOUWGyFuM4DlL1v5HNTZhkte0z', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
+  UNION ALL
+  SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:Fq4fAf-UjORQkkFzzGXhN', 'sprite-20261107-3f65e304a05a599c-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgfuAGrcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
+  UNION ALL
+  SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:JWZYiHKPNwYziWEFjw4Fn', 'sprite-20261107-3f65e304a05a599c-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgfuAGrcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
   UNION ALL
   SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:Nrxc8m9utE9qaD_gWpLgf', 'sprite-20261107-3f65e304a05a599c-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dZ4ngJXKPBOUWGyFuM4DlL1v5HNTZhkte0z', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
   UNION ALL
@@ -1895,6 +1910,10 @@ FROM (
   SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:RPdeeWhFI5AIUUpJXwUlf', 'sprite-20261107-3f65e304a05a599c-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dZ4ngJXKPBOUWGyFuM4DlL1v5HNTZhkte0z', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
   UNION ALL
   SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:Ul83iTziN__Z0i_UOzZTK', 'sprite-20261107-3f65e304a05a599c-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbH9u9CAtYUndMi56GkX19q0A4PzyeIloBrEa', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
+  UNION ALL
+  SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:Z9B3wJGA12Zlb5s8-MNUh', 'sprite-20261107-3f65e304a05a599c-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgfuAGrcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
+  UNION ALL
+  SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:ecRoSDPCDjO7zH-VBaFyY', 'sprite-20261107-3f65e304a05a599c-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgfuAGrcU9cpECTimBdjaqbNn7vQsxGR1wLk4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
   UNION ALL
   SELECT '-GKFYAZUg1eF-3VnZhDjx', 'jutsu:o-4SCAhJ4LHdCwcBDgJrV', 'sprite-20261107-3f65e304a05a599c-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dZ4ngJXKPBOUWGyFuM4DlL1v5HNTZhkte0z', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/5hcApRbCUCx63H_o_sec8.webp', 'left'
   UNION ALL
@@ -2312,6 +2331,10 @@ FROM (
   UNION ALL
   SELECT '27wsf0Vneqm2NY0n13uDe', 'jutsu:bI455U11ENlfUD4VFusiM', 'sprite-20261107-11113ce5ee251b82-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZ2AxFjaYQrBIUTu69nkMxWmS4ah0O7LVCp8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-27wsf0Vneqm2NY0n13uDe-main-162367f19b87.webp', 'left'
   UNION ALL
+  SELECT '27wsf0Vneqm2NY0n13uDe', 'jutsu:bkMpT0FwpDf2X5k4m92mW', 'sprite-20261107-11113ce5ee251b82-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqjhg4adkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-27wsf0Vneqm2NY0n13uDe-main-162367f19b87.webp', 'left'
+  UNION ALL
+  SELECT '27wsf0Vneqm2NY0n13uDe', 'jutsu:ocbiG8o_KWdMs-4rWKVX5', 'sprite-20261107-11113ce5ee251b82-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqjhg4adkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-27wsf0Vneqm2NY0n13uDe-main-162367f19b87.webp', 'left'
+  UNION ALL
   SELECT '27wsf0Vneqm2NY0n13uDe', 'jutsu:yxuT2X6jqwnTFNOLT8QLL', 'sprite-20261107-11113ce5ee251b82-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZ2AxFjaYQrBIUTu69nkMxWmS4ah0O7LVCp8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-27wsf0Vneqm2NY0n13uDe-main-162367f19b87.webp', 'left'
   UNION ALL
   SELECT '2OXJEXoktxJcjqMkE851g', 'basic:basicAttack', 'sprite-20261107-2d0d13ed64e2a062-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuaPi1wCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-2OXJEXoktxJcjqMkE851g-main-e5ee91c495de.webp', 'left'
@@ -2639,20 +2662,6 @@ FROM (
   SELECT '3XMsIV6Yv4jy-uaJAe52f', 'basic:defensiveStance', 'sprite-20261107-ef68fd8dd5637ecd-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz5rOMxemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
   UNION ALL
   SELECT '3XMsIV6Yv4jy-uaJAe52f', 'basic:offensiveStance', 'sprite-20261107-ef68fd8dd5637ecd-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8BCn9jkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
-  UNION ALL
-  SELECT '3XMsIV6Yv4jy-uaJAe52f', 'item:HLycjzUcVwKZenBWpd0V-', 'sprite-20261107-ef68fd8dd5637ecd-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8BCn9jkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
-  UNION ALL
-  SELECT '3XMsIV6Yv4jy-uaJAe52f', 'jutsu:3v9c1SHlD2GLPF2HW1_Sc', 'sprite-20261107-ef68fd8dd5637ecd-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlBkmR9rWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
-  UNION ALL
-  SELECT '3XMsIV6Yv4jy-uaJAe52f', 'jutsu:Cw51Wm_Uy0GiIkiEjlQtn', 'sprite-20261107-ef68fd8dd5637ecd-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlBkmR9rWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
-  UNION ALL
-  SELECT '3XMsIV6Yv4jy-uaJAe52f', 'jutsu:cZrZDI-A4fL324nX1CGss', 'sprite-20261107-ef68fd8dd5637ecd-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz5rOMxemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
-  UNION ALL
-  SELECT '3XMsIV6Yv4jy-uaJAe52f', 'jutsu:o-4SCAhJ4LHdCwcBDgJrV', 'sprite-20261107-ef68fd8dd5637ecd-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlBkmR9rWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
-  UNION ALL
-  SELECT '3_REzav8wh6sUuSm-2cCo', 'basic:basicAttack', 'sprite-20261107-a719aba7a485694e-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu3cg1jCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-3_REzav8wh6sUuSm-2cCo-main-9e9b113b14b6.webp', 'left'
-  UNION ALL
-  SELECT '3b13psNi3Tneaxoy37xdy', 'basic:basicAttack', 'sprite-20261107-048ab9054be7737b-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2m4hpKukVH2MI5Lo4ehEfAXvZdcmtWqPg7r', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-AQi-bHJ-5tHXtxrnc0P9E-main-c26f9dc4befc.webp', 'left'
 ) AS `expected`
 INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
 INNER JOIN `SpriteAnimation` AS `animation`
@@ -2670,7 +2679,21 @@ ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
 INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
 SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
 FROM (
-  SELECT '3b13psNi3Tneaxoy37xdy' AS `userId`, 'basic:basicHeal' AS `actionKey`, 'sprite-20261107-048ab9054be7737b-heal' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeIbmMdyV3OvUJQExAi0bGoIZDF74LqSnHRdp' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-AQi-bHJ-5tHXtxrnc0P9E-main-c26f9dc4befc.webp' AS `avatar`, 'left' AS `avatarFacing`
+  SELECT '3XMsIV6Yv4jy-uaJAe52f' AS `userId`, 'item:HLycjzUcVwKZenBWpd0V-' AS `actionKey`, 'sprite-20261107-ef68fd8dd5637ecd-powerup' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8BCn9jkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT '3XMsIV6Yv4jy-uaJAe52f', 'jutsu:3v9c1SHlD2GLPF2HW1_Sc', 'sprite-20261107-ef68fd8dd5637ecd-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlBkmR9rWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
+  UNION ALL
+  SELECT '3XMsIV6Yv4jy-uaJAe52f', 'jutsu:Cw51Wm_Uy0GiIkiEjlQtn', 'sprite-20261107-ef68fd8dd5637ecd-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlBkmR9rWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
+  UNION ALL
+  SELECT '3XMsIV6Yv4jy-uaJAe52f', 'jutsu:cZrZDI-A4fL324nX1CGss', 'sprite-20261107-ef68fd8dd5637ecd-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz5rOMxemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
+  UNION ALL
+  SELECT '3XMsIV6Yv4jy-uaJAe52f', 'jutsu:o-4SCAhJ4LHdCwcBDgJrV', 'sprite-20261107-ef68fd8dd5637ecd-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlBkmR9rWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-3XMsIV6Yv4jy-uaJAe52f-main-35a087c90062.webp', 'left'
+  UNION ALL
+  SELECT '3_REzav8wh6sUuSm-2cCo', 'basic:basicAttack', 'sprite-20261107-a719aba7a485694e-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu3cg1jCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-3_REzav8wh6sUuSm-2cCo-main-9e9b113b14b6.webp', 'left'
+  UNION ALL
+  SELECT '3b13psNi3Tneaxoy37xdy', 'basic:basicAttack', 'sprite-20261107-048ab9054be7737b-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2m4hpKukVH2MI5Lo4ehEfAXvZdcmtWqPg7r', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-AQi-bHJ-5tHXtxrnc0P9E-main-c26f9dc4befc.webp', 'left'
+  UNION ALL
+  SELECT '3b13psNi3Tneaxoy37xdy', 'basic:basicHeal', 'sprite-20261107-048ab9054be7737b-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeIbmMdyV3OvUJQExAi0bGoIZDF74LqSnHRdp', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-AQi-bHJ-5tHXtxrnc0P9E-main-c26f9dc4befc.webp', 'left'
   UNION ALL
   SELECT '3b13psNi3Tneaxoy37xdy', 'basic:meditate', 'sprite-20261107-048ab9054be7737b-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeIbmMdyV3OvUJQExAi0bGoIZDF74LqSnHRdp', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-AQi-bHJ-5tHXtxrnc0P9E-main-c26f9dc4befc.webp', 'left'
   UNION ALL
@@ -3455,20 +3478,6 @@ FROM (
   SELECT '8KnFxOna86ig2ierNDRvN', 'jutsu:OWAm8o12bkZUMAAHLoGLz', 'sprite-20261107-a81dcf38f4980a8d-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJok08TsZ9MPZpHJ7VliuEWDfATdxhv62SXnm4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8KnFxOna86ig2ierNDRvN-main-fe8e96c7eaa3.webp', 'left'
   UNION ALL
   SELECT '8Xs6SP6GKfOdm588B9biE', 'basic:basicAttack', 'sprite-20261107-6e8aa83d5673a8b2-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmIkl6z26OYrIJuNP1pvSyz29edFtKbngjRc', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
-  UNION ALL
-  SELECT '8Xs6SP6GKfOdm588B9biE', 'basic:cleanse', 'sprite-20261107-6e8aa83d5673a8b2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7CTnbnXKPBOUWGyFuM4DlL1v5HNTZhkte0z6', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
-  UNION ALL
-  SELECT '8Xs6SP6GKfOdm588B9biE', 'basic:clear', 'sprite-20261107-6e8aa83d5673a8b2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7CTnbnXKPBOUWGyFuM4DlL1v5HNTZhkte0z6', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
-  UNION ALL
-  SELECT '8Xs6SP6GKfOdm588B9biE', 'basic:defensiveStance', 'sprite-20261107-6e8aa83d5673a8b2-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuPwQDRCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
-  UNION ALL
-  SELECT '8Xs6SP6GKfOdm588B9biE', 'basic:offensiveStance', 'sprite-20261107-6e8aa83d5673a8b2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7CTnbnXKPBOUWGyFuM4DlL1v5HNTZhkte0z6', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
-  UNION ALL
-  SELECT '8Xs6SP6GKfOdm588B9biE', 'jutsu:AicYoMMpZmHAykb_5hYtY', 'sprite-20261107-6e8aa83d5673a8b2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7CTnbnXKPBOUWGyFuM4DlL1v5HNTZhkte0z6', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
-  UNION ALL
-  SELECT '8Xs6SP6GKfOdm588B9biE', 'jutsu:I66lzvVHf8v4thxR6tEJn', 'sprite-20261107-6e8aa83d5673a8b2-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF05pW3G2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
-  UNION ALL
-  SELECT '8Xs6SP6GKfOdm588B9biE', 'jutsu:Ji-Bdyu5KCxJ1qIdQk57x', 'sprite-20261107-6e8aa83d5673a8b2-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF05pW3G2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
 ) AS `expected`
 INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
 INNER JOIN `SpriteAnimation` AS `animation`
@@ -3486,7 +3495,21 @@ ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
 INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
 SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
 FROM (
-  SELECT '8Xs6SP6GKfOdm588B9biE' AS `userId`, 'jutsu:OyswJoalfNpmz7FsA8Hd8' AS `actionKey`, 'sprite-20261107-6e8aa83d5673a8b2-ranged' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF05pW3G2iOewJtjGzvNcmEX3TBnoSfMDZPH4' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp' AS `avatar`, 'left' AS `avatarFacing`
+  SELECT '8Xs6SP6GKfOdm588B9biE' AS `userId`, 'basic:cleanse' AS `actionKey`, 'sprite-20261107-6e8aa83d5673a8b2-powerup' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7CTnbnXKPBOUWGyFuM4DlL1v5HNTZhkte0z6' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT '8Xs6SP6GKfOdm588B9biE', 'basic:clear', 'sprite-20261107-6e8aa83d5673a8b2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7CTnbnXKPBOUWGyFuM4DlL1v5HNTZhkte0z6', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
+  UNION ALL
+  SELECT '8Xs6SP6GKfOdm588B9biE', 'basic:defensiveStance', 'sprite-20261107-6e8aa83d5673a8b2-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuPwQDRCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
+  UNION ALL
+  SELECT '8Xs6SP6GKfOdm588B9biE', 'basic:offensiveStance', 'sprite-20261107-6e8aa83d5673a8b2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7CTnbnXKPBOUWGyFuM4DlL1v5HNTZhkte0z6', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
+  UNION ALL
+  SELECT '8Xs6SP6GKfOdm588B9biE', 'jutsu:AicYoMMpZmHAykb_5hYtY', 'sprite-20261107-6e8aa83d5673a8b2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7CTnbnXKPBOUWGyFuM4DlL1v5HNTZhkte0z6', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
+  UNION ALL
+  SELECT '8Xs6SP6GKfOdm588B9biE', 'jutsu:I66lzvVHf8v4thxR6tEJn', 'sprite-20261107-6e8aa83d5673a8b2-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF05pW3G2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
+  UNION ALL
+  SELECT '8Xs6SP6GKfOdm588B9biE', 'jutsu:Ji-Bdyu5KCxJ1qIdQk57x', 'sprite-20261107-6e8aa83d5673a8b2-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF05pW3G2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
+  UNION ALL
+  SELECT '8Xs6SP6GKfOdm588B9biE', 'jutsu:OyswJoalfNpmz7FsA8Hd8', 'sprite-20261107-6e8aa83d5673a8b2-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF05pW3G2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
   UNION ALL
   SELECT '8Xs6SP6GKfOdm588B9biE', 'jutsu:WvLCyGsPCKSDYl6-e_D9o', 'sprite-20261107-6e8aa83d5673a8b2-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF05pW3G2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8Xs6SP6GKfOdm588B9biE-main-7bb460973d78.webp', 'left'
   UNION ALL
@@ -3519,6 +3542,8 @@ FROM (
   SELECT '8jH9KrbXQsckLCtzt2dYB', 'jutsu:lft52q7DE_JjhR7PKXimB', 'sprite-20261107-921ea02e8477d911-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmjIh0Q0HE4IMO5Goa7cgLxPJ0VC6lU8vbt1A', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8jH9KrbXQsckLCtzt2dYB-main-a367b8933701.webp', 'left'
   UNION ALL
   SELECT '8jH9KrbXQsckLCtzt2dYB', 'jutsu:taxbZNdm1Q7YL5AxaRssW', 'sprite-20261107-921ea02e8477d911-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXXoEUgqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8jH9KrbXQsckLCtzt2dYB-main-a367b8933701.webp', 'left'
+  UNION ALL
+  SELECT '8q6pd_yZyYVcVPHUHVkoF', 'basic:basicAttack', 'sprite-20261107-8341b05e9ebccdc6-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEk0g6OLfKL5D7TAFe29bymSaPCIQ846MdzGg', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8q6pd_yZyYVcVPHUHVkoF-main-014a341b5ebd.webp', 'right'
   UNION ALL
   SELECT '8qER-JhOO0qVwLt6h_4YC', 'basic:basicAttack', 'sprite-20261107-5b0a386caa410f4e-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaBqT9NYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-8qER-JhOO0qVwLt6h_4YC-main-4f2d3c2b1cf7.webp', 'left'
   UNION ALL
@@ -4269,22 +4294,6 @@ FROM (
   SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:RPdeeWhFI5AIUUpJXwUlf', 'sprite-20261107-5263938c171848bf-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HI0TdwnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
   UNION ALL
   SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:T3glZGcSd-jS8G-NB43GR', 'sprite-20261107-5263938c171848bf-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz6HCoMemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
-  UNION ALL
-  SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:UnQKfwq_JoRVu10aTX6Uv', 'sprite-20261107-5263938c171848bf-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HI0TdwnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
-  UNION ALL
-  SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:YiRdVytsdxFzZtqkEDs5Q', 'sprite-20261107-5263938c171848bf-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HI0TdwnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
-  UNION ALL
-  SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:cZrZDI-A4fL324nX1CGss', 'sprite-20261107-5263938c171848bf-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz6HCoMemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
-  UNION ALL
-  SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:i1KbE0NbN1SWIwHuJgdoT', 'sprite-20261107-5263938c171848bf-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz6HCoMemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
-  UNION ALL
-  SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:jBRyl7F4UjTyxG5nnzLqj', 'sprite-20261107-5263938c171848bf-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ19simm6bo95WClq4K0wxZUmJcvThgdVenO3P', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
-  UNION ALL
-  SELECT 'EvdnHl3slI3osBfXSKRzP', 'basic:basicAttack', 'sprite-20261107-c3e503c5afc66c31-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ10YNxa6bo95WClq4K0wxZUmJcvThgdVenO3P', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-EvdnHl3slI3osBfXSKRzP-main-bdeff97d1f00.webp', 'left'
-  UNION ALL
-  SELECT 'F2O9Oh8E19aHCzbvg-5jy', 'basic:basicAttack', 'sprite-20261107-4e3666339bc4dea8-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYE7rA8OMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-3V_gdHYaclMB1gTyOPAbV-main-782112d1afca.webp', 'left'
-  UNION ALL
-  SELECT 'F2O9Oh8E19aHCzbvg-5jy', 'basic:cleanse', 'sprite-20261107-4e3666339bc4dea8-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIYbTsnxfOewksxBoS1HQCihpL7c42Ky9uUFv', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-3V_gdHYaclMB1gTyOPAbV-main-782112d1afca.webp', 'left'
 ) AS `expected`
 INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
 INNER JOIN `SpriteAnimation` AS `animation`
@@ -4302,7 +4311,23 @@ ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
 INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
 SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
 FROM (
-  SELECT 'F2O9Oh8E19aHCzbvg-5jy' AS `userId`, 'basic:clear' AS `actionKey`, 'sprite-20261107-4e3666339bc4dea8-powerup' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIYbTsnxfOewksxBoS1HQCihpL7c42Ky9uUFv' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-3V_gdHYaclMB1gTyOPAbV-main-782112d1afca.webp' AS `avatar`, 'left' AS `avatarFacing`
+  SELECT 'Eu67fptoGJR96GmV4ciG8' AS `userId`, 'jutsu:UnQKfwq_JoRVu10aTX6Uv' AS `actionKey`, 'sprite-20261107-5263938c171848bf-ranged' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HI0TdwnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:YiRdVytsdxFzZtqkEDs5Q', 'sprite-20261107-5263938c171848bf-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HI0TdwnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
+  UNION ALL
+  SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:cZrZDI-A4fL324nX1CGss', 'sprite-20261107-5263938c171848bf-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz6HCoMemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
+  UNION ALL
+  SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:i1KbE0NbN1SWIwHuJgdoT', 'sprite-20261107-5263938c171848bf-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz6HCoMemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
+  UNION ALL
+  SELECT 'Eu67fptoGJR96GmV4ciG8', 'jutsu:jBRyl7F4UjTyxG5nnzLqj', 'sprite-20261107-5263938c171848bf-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ19simm6bo95WClq4K0wxZUmJcvThgdVenO3P', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Eu67fptoGJR96GmV4ciG8-main-991e0b56279b.webp', 'left'
+  UNION ALL
+  SELECT 'EvdnHl3slI3osBfXSKRzP', 'basic:basicAttack', 'sprite-20261107-c3e503c5afc66c31-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ10YNxa6bo95WClq4K0wxZUmJcvThgdVenO3P', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-EvdnHl3slI3osBfXSKRzP-main-bdeff97d1f00.webp', 'left'
+  UNION ALL
+  SELECT 'F2O9Oh8E19aHCzbvg-5jy', 'basic:basicAttack', 'sprite-20261107-4e3666339bc4dea8-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYE7rA8OMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-3V_gdHYaclMB1gTyOPAbV-main-782112d1afca.webp', 'left'
+  UNION ALL
+  SELECT 'F2O9Oh8E19aHCzbvg-5jy', 'basic:cleanse', 'sprite-20261107-4e3666339bc4dea8-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIYbTsnxfOewksxBoS1HQCihpL7c42Ky9uUFv', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-3V_gdHYaclMB1gTyOPAbV-main-782112d1afca.webp', 'left'
+  UNION ALL
+  SELECT 'F2O9Oh8E19aHCzbvg-5jy', 'basic:clear', 'sprite-20261107-4e3666339bc4dea8-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIYbTsnxfOewksxBoS1HQCihpL7c42Ky9uUFv', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-3V_gdHYaclMB1gTyOPAbV-main-782112d1afca.webp', 'left'
   UNION ALL
   SELECT 'F2O9Oh8E19aHCzbvg-5jy', 'basic:defensiveStance', 'sprite-20261107-4e3666339bc4dea8-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTXG2EKa5IU29dZYJPoOKSh5vmlqatMub3Eig', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-3V_gdHYaclMB1gTyOPAbV-main-782112d1afca.webp', 'left'
   UNION ALL
@@ -5070,6 +5095,14 @@ FROM (
   UNION ALL
   SELECT 'LIRaoHHoP0huRdr0vpsPm', 'basic:basicAttack', 'sprite-20261107-b5b28212e9c73780-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXPrH8QqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LIRaoHHoP0huRdr0vpsPm-main-bbad7f074162.webp', 'left'
   UNION ALL
+  SELECT 'LIRaoHHoP0huRdr0vpsPm', 'basic:cleanse', 'sprite-20261107-b5b28212e9c73780-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFOxoCiG2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LIRaoHHoP0huRdr0vpsPm-main-bbad7f074162.webp', 'left'
+  UNION ALL
+  SELECT 'LIRaoHHoP0huRdr0vpsPm', 'basic:clear', 'sprite-20261107-b5b28212e9c73780-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFOxoCiG2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LIRaoHHoP0huRdr0vpsPm-main-bbad7f074162.webp', 'left'
+  UNION ALL
+  SELECT 'LIRaoHHoP0huRdr0vpsPm', 'basic:offensiveStance', 'sprite-20261107-b5b28212e9c73780-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFOxoCiG2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LIRaoHHoP0huRdr0vpsPm-main-bbad7f074162.webp', 'left'
+  UNION ALL
+  SELECT 'LIRaoHHoP0huRdr0vpsPm', 'jutsu:AicYoMMpZmHAykb_5hYtY', 'sprite-20261107-b5b28212e9c73780-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFOxoCiG2iOewJtjGzvNcmEX3TBnoSfMDZPH4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LIRaoHHoP0huRdr0vpsPm-main-bbad7f074162.webp', 'left'
+  UNION ALL
   SELECT 'LIRaoHHoP0huRdr0vpsPm', 'jutsu:brzGw6WgHsrFPkL9JWGir', 'sprite-20261107-b5b28212e9c73780-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrCv3vRhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LIRaoHHoP0huRdr0vpsPm-main-bbad7f074162.webp', 'left'
   UNION ALL
   SELECT 'LIRaoHHoP0huRdr0vpsPm', 'jutsu:jBRyl7F4UjTyxG5nnzLqj', 'sprite-20261107-b5b28212e9c73780-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrCv3vRhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LIRaoHHoP0huRdr0vpsPm-main-bbad7f074162.webp', 'left'
@@ -5077,8 +5110,24 @@ FROM (
   SELECT 'LIRaoHHoP0huRdr0vpsPm', 'jutsu:qrNPubRuMC2PgRro46-3z', 'sprite-20261107-b5b28212e9c73780-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZV8hBIAtYUndMi56GkX19q0A4PzyeIloBrE', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LIRaoHHoP0huRdr0vpsPm-main-bbad7f074162.webp', 'left'
   UNION ALL
   SELECT 'LIbrBQ9KR3AeHiIwZnGId', 'basic:basicAttack', 'sprite-20261107-9628cc694aa5b45c-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmkJe7eHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-LIbrBQ9KR3AeHiIwZnGId-main-a025fce1a38b.webp', 'left'
-  UNION ALL
-  SELECT 'LIbrBQ9KR3AeHiIwZnGId', 'jutsu:8BekPhAsvfELqlhBCu7TJ', 'sprite-20261107-9628cc694aa5b45c-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3rt3iX8pYHJX5rdkUTfOKtvu2eGIELmSWqBx', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-LIbrBQ9KR3AeHiIwZnGId-main-a025fce1a38b.webp', 'left'
+) AS `expected`
+INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
+INNER JOIN `SpriteAnimation` AS `animation`
+  ON `animation`.`id` = `expected`.`animationId`
+  AND BINARY `animation`.`url` = BINARY `expected`.`url`
+  AND `animation`.`columns` = `expected`.`columns`
+  AND `animation`.`rows` = `expected`.`rows`
+  AND `animation`.`frameCount` = `expected`.`frameCount`
+  AND `animation`.`fps` = `expected`.`fps`
+  AND `animation`.`facing` = `expected`.`facing`
+WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
+  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
+ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
+
+INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
+SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
+FROM (
+  SELECT 'LIbrBQ9KR3AeHiIwZnGId' AS `userId`, 'jutsu:8BekPhAsvfELqlhBCu7TJ' AS `actionKey`, 'sprite-20261107-9628cc694aa5b45c-blast' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3rt3iX8pYHJX5rdkUTfOKtvu2eGIELmSWqBx' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-LIbrBQ9KR3AeHiIwZnGId-main-a025fce1a38b.webp' AS `avatar`, 'left' AS `avatarFacing`
   UNION ALL
   SELECT 'LIbrBQ9KR3AeHiIwZnGId', 'jutsu:9Fw7GZ8vYfkKHXlF0LJhL', 'sprite-20261107-9628cc694aa5b45c-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3rt3iX8pYHJX5rdkUTfOKtvu2eGIELmSWqBx', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-LIbrBQ9KR3AeHiIwZnGId-main-a025fce1a38b.webp', 'left'
   UNION ALL
@@ -5101,24 +5150,8 @@ FROM (
   SELECT 'LLy5QUFtasGU_Elp8RpEz', 'item:nK5tVwfev0Z5-Vjq4n1lD', 'sprite-20261107-7891b42b9be69726-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTz0Diz5IU29dZYJPoOKSh5vmlqatMub3EigH', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LLy5QUFtasGU_Elp8RpEz-main-2ca76f0cdd46.webp', 'left'
   UNION ALL
   SELECT 'LLy5QUFtasGU_Elp8RpEz', 'item:oOdkdJixCLy2bW0Gxo5e0', 'sprite-20261107-7891b42b9be69726-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTz0Diz5IU29dZYJPoOKSh5vmlqatMub3EigH', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LLy5QUFtasGU_Elp8RpEz-main-2ca76f0cdd46.webp', 'left'
-) AS `expected`
-INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
-INNER JOIN `SpriteAnimation` AS `animation`
-  ON `animation`.`id` = `expected`.`animationId`
-  AND BINARY `animation`.`url` = BINARY `expected`.`url`
-  AND `animation`.`columns` = `expected`.`columns`
-  AND `animation`.`rows` = `expected`.`rows`
-  AND `animation`.`frameCount` = `expected`.`frameCount`
-  AND `animation`.`fps` = `expected`.`fps`
-  AND `animation`.`facing` = `expected`.`facing`
-WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
-  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
-ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
-
-INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
-SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
-FROM (
-  SELECT 'LLy5QUFtasGU_Elp8RpEz' AS `userId`, 'item:rsc2uO5QuffXzejfhwF_F' AS `actionKey`, 'sprite-20261107-7891b42b9be69726-guard' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJphQrWcbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LLy5QUFtasGU_Elp8RpEz-main-2ca76f0cdd46.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT 'LLy5QUFtasGU_Elp8RpEz', 'item:rsc2uO5QuffXzejfhwF_F', 'sprite-20261107-7891b42b9be69726-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJphQrWcbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LLy5QUFtasGU_Elp8RpEz-main-2ca76f0cdd46.webp', 'left'
   UNION ALL
   SELECT 'LLy5QUFtasGU_Elp8RpEz', 'jutsu:0n6H8m8NNCGgVp9aEVIXq', 'sprite-20261107-7891b42b9be69726-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJphQrWcbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-LLy5QUFtasGU_Elp8RpEz-main-2ca76f0cdd46.webp', 'left'
   UNION ALL
@@ -5532,11 +5565,17 @@ FROM (
   UNION ALL
   SELECT 'OcS9D9dku4tM7s_JvbgLH', 'basic:basicHeal', 'sprite-20261107-d134a4fdd21bba03-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCrwuZJ26OYrIJuNP1pvSyz29edFtKbngjRcA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
   UNION ALL
+  SELECT 'OcS9D9dku4tM7s_JvbgLH', 'basic:cleanse', 'sprite-20261107-d134a4fdd21bba03-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxEihjHTWZsq9k0Von5rUfP6OgQ2TyptCKHS4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
+  UNION ALL
+  SELECT 'OcS9D9dku4tM7s_JvbgLH', 'basic:clear', 'sprite-20261107-d134a4fdd21bba03-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxEihjHTWZsq9k0Von5rUfP6OgQ2TyptCKHS4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
+  UNION ALL
   SELECT 'OcS9D9dku4tM7s_JvbgLH', 'basic:defensiveStance', 'sprite-20261107-d134a4fdd21bba03-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn9upG7mojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
   UNION ALL
   SELECT 'OcS9D9dku4tM7s_JvbgLH', 'basic:flee', 'sprite-20261107-d134a4fdd21bba03-dash', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuc8d9QCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
   UNION ALL
   SELECT 'OcS9D9dku4tM7s_JvbgLH', 'basic:meditate', 'sprite-20261107-d134a4fdd21bba03-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCrwuZJ26OYrIJuNP1pvSyz29edFtKbngjRcA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
+  UNION ALL
+  SELECT 'OcS9D9dku4tM7s_JvbgLH', 'basic:offensiveStance', 'sprite-20261107-d134a4fdd21bba03-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxEihjHTWZsq9k0Von5rUfP6OgQ2TyptCKHS4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
   UNION ALL
   SELECT 'OcS9D9dku4tM7s_JvbgLH', 'basic:replacementTechnique', 'sprite-20261107-d134a4fdd21bba03-dash', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuc8d9QCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
   UNION ALL
@@ -5547,6 +5586,8 @@ FROM (
   SELECT 'OcS9D9dku4tM7s_JvbgLH', 'item:rsc2uO5QuffXzejfhwF_F', 'sprite-20261107-d134a4fdd21bba03-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn9upG7mojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
   UNION ALL
   SELECT 'OcS9D9dku4tM7s_JvbgLH', 'jutsu:-45phqE2baTGC--lNSEx9', 'sprite-20261107-d134a4fdd21bba03-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dZR645XKPBOUWGyFuM4DlL1v5HNTZhkte0z', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
+  UNION ALL
+  SELECT 'OcS9D9dku4tM7s_JvbgLH', 'jutsu:KIMeKemnXttwOv1Cf-IPS', 'sprite-20261107-d134a4fdd21bba03-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxEihjHTWZsq9k0Von5rUfP6OgQ2TyptCKHS4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
   UNION ALL
   SELECT 'OcS9D9dku4tM7s_JvbgLH', 'jutsu:OWAm8o12bkZUMAAHLoGLz', 'sprite-20261107-d134a4fdd21bba03-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dZR645XKPBOUWGyFuM4DlL1v5HNTZhkte0z', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-OcS9D9dku4tM7s_JvbgLH-main-5d32c223c13e.webp', 'left'
   UNION ALL
@@ -5720,9 +5761,15 @@ FROM (
   UNION ALL
   SELECT 'PrAldiWIbJ9WVty_Gpq-y', 'basic:basicAttack', 'sprite-20261107-a71d8c7fb5f23014-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HI6fSDnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-PrAldiWIbJ9WVty_Gpq-y-main-2da0e6e4eff2.webp', 'left'
   UNION ALL
+  SELECT 'PrAldiWIbJ9WVty_Gpq-y', 'basic:basicHeal', 'sprite-20261107-a71d8c7fb5f23014-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJH08yZjQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-PrAldiWIbJ9WVty_Gpq-y-main-2da0e6e4eff2.webp', 'left'
+  UNION ALL
   SELECT 'PrAldiWIbJ9WVty_Gpq-y', 'basic:defensiveStance', 'sprite-20261107-a71d8c7fb5f23014-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXPZ3QgoqIOpAoLKbZ4nW9Rsil2V67yuFwQhq', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-PrAldiWIbJ9WVty_Gpq-y-main-2da0e6e4eff2.webp', 'left'
   UNION ALL
+  SELECT 'PrAldiWIbJ9WVty_Gpq-y', 'basic:meditate', 'sprite-20261107-a71d8c7fb5f23014-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJH08yZjQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-PrAldiWIbJ9WVty_Gpq-y-main-2da0e6e4eff2.webp', 'left'
+  UNION ALL
   SELECT 'PrAldiWIbJ9WVty_Gpq-y', 'jutsu:EMBAVnByHVfka6CDB55N3', 'sprite-20261107-a71d8c7fb5f23014-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXPZ3QgoqIOpAoLKbZ4nW9Rsil2V67yuFwQhq', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-PrAldiWIbJ9WVty_Gpq-y-main-2da0e6e4eff2.webp', 'left'
+  UNION ALL
+  SELECT 'PrAldiWIbJ9WVty_Gpq-y', 'jutsu:STu1VHNcfgeC3x-UiQDgt', 'sprite-20261107-a71d8c7fb5f23014-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJH08yZjQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-PrAldiWIbJ9WVty_Gpq-y-main-2da0e6e4eff2.webp', 'left'
   UNION ALL
   SELECT 'PrAldiWIbJ9WVty_Gpq-y', 'jutsu:Vo8N1luCT0p48y7JzKe84', 'sprite-20261107-a71d8c7fb5f23014-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJavbv73YYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-PrAldiWIbJ9WVty_Gpq-y-main-2da0e6e4eff2.webp', 'left'
   UNION ALL
@@ -5879,8 +5926,24 @@ FROM (
   SELECT 'QV1PwoQR9JImZL2_fcOsk', 'jutsu:6UE5jC71Y6nRjobkJ-UTV', 'sprite-20261107-556e2c14d82151ea-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGgDHgOZRfoVrha0LP4mAS5KM7wtiZbUNXJxd', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-QV1PwoQR9JImZL2_fcOsk-main-e6a899bb5680.webp', 'left'
   UNION ALL
   SELECT 'QV1PwoQR9JImZL2_fcOsk', 'jutsu:o-4SCAhJ4LHdCwcBDgJrV', 'sprite-20261107-556e2c14d82151ea-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJh0jxPJMfUBdnwAX5LTajlNc4mrgzi0RJtqpM', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-QV1PwoQR9JImZL2_fcOsk-main-e6a899bb5680.webp', 'left'
-  UNION ALL
-  SELECT 'QY69h271Nx9uHrBeR6jwW', 'basic:basicAttack', 'sprite-20261107-9e5e80ff05112f5c-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxAt927WZsq9k0Von5rUfP6OgQ2TyptCKHS4u', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-QY69h271Nx9uHrBeR6jwW-main-b2d624ff6f62.webp', 'left'
+) AS `expected`
+INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
+INNER JOIN `SpriteAnimation` AS `animation`
+  ON `animation`.`id` = `expected`.`animationId`
+  AND BINARY `animation`.`url` = BINARY `expected`.`url`
+  AND `animation`.`columns` = `expected`.`columns`
+  AND `animation`.`rows` = `expected`.`rows`
+  AND `animation`.`frameCount` = `expected`.`frameCount`
+  AND `animation`.`fps` = `expected`.`fps`
+  AND `animation`.`facing` = `expected`.`facing`
+WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
+  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
+ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
+
+INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
+SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
+FROM (
+  SELECT 'QY69h271Nx9uHrBeR6jwW' AS `userId`, 'basic:basicAttack' AS `actionKey`, 'sprite-20261107-9e5e80ff05112f5c-strike' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxAt927WZsq9k0Von5rUfP6OgQ2TyptCKHS4u' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-QY69h271Nx9uHrBeR6jwW-main-b2d624ff6f62.webp' AS `avatar`, 'left' AS `avatarFacing`
   UNION ALL
   SELECT 'QY69h271Nx9uHrBeR6jwW', 'basic:basicHeal', 'sprite-20261107-9e5e80ff05112f5c-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMNI4wmtsO4cexqW2RDgkE3zZbNXSFGitmnar', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-QY69h271Nx9uHrBeR6jwW-main-b2d624ff6f62.webp', 'left'
   UNION ALL
@@ -5917,24 +5980,8 @@ FROM (
   SELECT 'QY69h271Nx9uHrBeR6jwW', 'jutsu:STu1VHNcfgeC3x-UiQDgt', 'sprite-20261107-9e5e80ff05112f5c-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMNI4wmtsO4cexqW2RDgkE3zZbNXSFGitmnar', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-QY69h271Nx9uHrBeR6jwW-main-b2d624ff6f62.webp', 'left'
   UNION ALL
   SELECT 'QY69h271Nx9uHrBeR6jwW', 'jutsu:T3glZGcSd-jS8G-NB43GR', 'sprite-20261107-9e5e80ff05112f5c-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4jgJMilYIif5CL8BKvMsOh2ZnmS7yHt0jTD3', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-QY69h271Nx9uHrBeR6jwW-main-b2d624ff6f62.webp', 'left'
-) AS `expected`
-INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
-INNER JOIN `SpriteAnimation` AS `animation`
-  ON `animation`.`id` = `expected`.`animationId`
-  AND BINARY `animation`.`url` = BINARY `expected`.`url`
-  AND `animation`.`columns` = `expected`.`columns`
-  AND `animation`.`rows` = `expected`.`rows`
-  AND `animation`.`frameCount` = `expected`.`frameCount`
-  AND `animation`.`fps` = `expected`.`fps`
-  AND `animation`.`facing` = `expected`.`facing`
-WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
-  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
-ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
-
-INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
-SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
-FROM (
-  SELECT 'QY69h271Nx9uHrBeR6jwW' AS `userId`, 'jutsu:VuFuBtE7h5B1nnA2J1lFZ' AS `actionKey`, 'sprite-20261107-9e5e80ff05112f5c-hex' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuZAnIBCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-QY69h271Nx9uHrBeR6jwW-main-b2d624ff6f62.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT 'QY69h271Nx9uHrBeR6jwW', 'jutsu:VuFuBtE7h5B1nnA2J1lFZ', 'sprite-20261107-9e5e80ff05112f5c-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuZAnIBCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-QY69h271Nx9uHrBeR6jwW-main-b2d624ff6f62.webp', 'left'
   UNION ALL
   SELECT 'QY69h271Nx9uHrBeR6jwW', 'jutsu:X2P22h8ApDmTZHjWpNO87', 'sprite-20261107-9e5e80ff05112f5c-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJP74uEapKeUGyX2kj6u45AOQiSa1zYH0mqZoc', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-QY69h271Nx9uHrBeR6jwW-main-b2d624ff6f62.webp', 'left'
   UNION ALL
@@ -6695,8 +6742,24 @@ FROM (
   SELECT 'Vg5Tqp6mBvOJsm5zPMpdv', 'basic:defensiveStance', 'sprite-20261107-05f1668373190611-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJg31YieGcU9cpECTimBdjaqbNn7vQsxGR1wLk', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Vg5Tqp6mBvOJsm5zPMpdv-main-6727156fd8c8.webp', 'left'
   UNION ALL
   SELECT 'Vg5Tqp6mBvOJsm5zPMpdv', 'basic:meditate', 'sprite-20261107-05f1668373190611-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ83t13kkp45TvAnoIBa0rtCf1lbyXYjVKQ2qW', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Vg5Tqp6mBvOJsm5zPMpdv-main-6727156fd8c8.webp', 'left'
-  UNION ALL
-  SELECT 'Vg5Tqp6mBvOJsm5zPMpdv', 'jutsu:1DNVrUzBubIMiZXvDNijr', 'sprite-20261107-05f1668373190611-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ83t13kkp45TvAnoIBa0rtCf1lbyXYjVKQ2qW', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Vg5Tqp6mBvOJsm5zPMpdv-main-6727156fd8c8.webp', 'left'
+) AS `expected`
+INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
+INNER JOIN `SpriteAnimation` AS `animation`
+  ON `animation`.`id` = `expected`.`animationId`
+  AND BINARY `animation`.`url` = BINARY `expected`.`url`
+  AND `animation`.`columns` = `expected`.`columns`
+  AND `animation`.`rows` = `expected`.`rows`
+  AND `animation`.`frameCount` = `expected`.`frameCount`
+  AND `animation`.`fps` = `expected`.`fps`
+  AND `animation`.`facing` = `expected`.`facing`
+WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
+  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
+ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
+
+INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
+SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
+FROM (
+  SELECT 'Vg5Tqp6mBvOJsm5zPMpdv' AS `userId`, 'jutsu:1DNVrUzBubIMiZXvDNijr' AS `actionKey`, 'sprite-20261107-05f1668373190611-heal' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ83t13kkp45TvAnoIBa0rtCf1lbyXYjVKQ2qW' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Vg5Tqp6mBvOJsm5zPMpdv-main-6727156fd8c8.webp' AS `avatar`, 'left' AS `avatarFacing`
   UNION ALL
   SELECT 'Vg5Tqp6mBvOJsm5zPMpdv', 'jutsu:OMEb2dZpnK1oH5a6EBG5u', 'sprite-20261107-05f1668373190611-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJg31YieGcU9cpECTimBdjaqbNn7vQsxGR1wLk', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-Vg5Tqp6mBvOJsm5zPMpdv-main-6727156fd8c8.webp', 'left'
   UNION ALL
@@ -6733,24 +6796,8 @@ FROM (
   SELECT 'VvStGchROaGF7RBpdhIKP', 'basic:offensiveStance', 'sprite-20261107-e59d75325522256f-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIMK50hxfOewksxBoS1HQCihpL7c42Ky9uUFv', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-VvStGchROaGF7RBpdhIKP-main-65f52c97494c.webp', 'left'
   UNION ALL
   SELECT 'VvStGchROaGF7RBpdhIKP', 'jutsu:-fUfqhwoCBzgsWgwAhrFy', 'sprite-20261107-e59d75325522256f-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzZLcFHemvaQu94EYJs8HpxVzofny6iPtbgCZ', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-VvStGchROaGF7RBpdhIKP-main-65f52c97494c.webp', 'left'
-) AS `expected`
-INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
-INNER JOIN `SpriteAnimation` AS `animation`
-  ON `animation`.`id` = `expected`.`animationId`
-  AND BINARY `animation`.`url` = BINARY `expected`.`url`
-  AND `animation`.`columns` = `expected`.`columns`
-  AND `animation`.`rows` = `expected`.`rows`
-  AND `animation`.`frameCount` = `expected`.`frameCount`
-  AND `animation`.`fps` = `expected`.`fps`
-  AND `animation`.`facing` = `expected`.`facing`
-WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
-  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
-ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
-
-INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
-SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
-FROM (
-  SELECT 'VvStGchROaGF7RBpdhIKP' AS `userId`, 'jutsu:AicYoMMpZmHAykb_5hYtY' AS `actionKey`, 'sprite-20261107-e59d75325522256f-powerup' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIMK50hxfOewksxBoS1HQCihpL7c42Ky9uUFv' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-VvStGchROaGF7RBpdhIKP-main-65f52c97494c.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT 'VvStGchROaGF7RBpdhIKP', 'jutsu:AicYoMMpZmHAykb_5hYtY', 'sprite-20261107-e59d75325522256f-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIMK50hxfOewksxBoS1HQCihpL7c42Ky9uUFv', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-VvStGchROaGF7RBpdhIKP-main-65f52c97494c.webp', 'left'
   UNION ALL
   SELECT 'VvStGchROaGF7RBpdhIKP', 'jutsu:OWAm8o12bkZUMAAHLoGLz', 'sprite-20261107-e59d75325522256f-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWL5T4jNvszvj71yaSYC0MDOmbko5q9JAGuLH', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-VvStGchROaGF7RBpdhIKP-main-65f52c97494c.webp', 'left'
   UNION ALL
@@ -7511,8 +7558,24 @@ FROM (
   SELECT 'aniNtcy6g3tjrhTKneEVW', 'jutsu:Cw51Wm_Uy0GiIkiEjlQtn', 'sprite-20261107-e51f92a0b89056a6-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlcNT9WrWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-aniNtcy6g3tjrhTKneEVW-main-9283dae1b548.webp', 'right'
   UNION ALL
   SELECT 'aniNtcy6g3tjrhTKneEVW', 'jutsu:LisNuMJ2gncEByAxG6QPI', 'sprite-20261107-e51f92a0b89056a6-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF09iqfgG2iOewJtjGzvNcmEX3TBnoSfMDZPH', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-aniNtcy6g3tjrhTKneEVW-main-9283dae1b548.webp', 'right'
-  UNION ALL
-  SELECT 'aniNtcy6g3tjrhTKneEVW', 'jutsu:Vo8N1luCT0p48y7JzKe84', 'sprite-20261107-e51f92a0b89056a6-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlcNT9WrWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-aniNtcy6g3tjrhTKneEVW-main-9283dae1b548.webp', 'right'
+) AS `expected`
+INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
+INNER JOIN `SpriteAnimation` AS `animation`
+  ON `animation`.`id` = `expected`.`animationId`
+  AND BINARY `animation`.`url` = BINARY `expected`.`url`
+  AND `animation`.`columns` = `expected`.`columns`
+  AND `animation`.`rows` = `expected`.`rows`
+  AND `animation`.`frameCount` = `expected`.`frameCount`
+  AND `animation`.`fps` = `expected`.`fps`
+  AND `animation`.`facing` = `expected`.`facing`
+WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
+  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
+ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
+
+INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
+SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
+FROM (
+  SELECT 'aniNtcy6g3tjrhTKneEVW' AS `userId`, 'jutsu:Vo8N1luCT0p48y7JzKe84' AS `actionKey`, 'sprite-20261107-e51f92a0b89056a6-ranged' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlcNT9WrWYxAsuC7ofQn9pM45OD0ERqkdBXJU' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-aniNtcy6g3tjrhTKneEVW-main-9283dae1b548.webp' AS `avatar`, 'right' AS `avatarFacing`
   UNION ALL
   SELECT 'aniNtcy6g3tjrhTKneEVW', 'jutsu:oQo27NtvRS29CABHGXP94', 'sprite-20261107-e51f92a0b89056a6-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpZqDKAbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-aniNtcy6g3tjrhTKneEVW-main-9283dae1b548.webp', 'right'
   UNION ALL
@@ -7549,24 +7612,8 @@ FROM (
   SELECT 'axTRSadaZbUepfT40-7cM', 'jutsu:6UE5jC71Y6nRjobkJ-UTV', 'sprite-20261107-afb5ef87d471dcd4-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HU7ocxnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-axTRSadaZbUepfT40-7cM-main-4edd0cba5c5c.webp', 'left'
   UNION ALL
   SELECT 'axTRSadaZbUepfT40-7cM', 'jutsu:Cw51Wm_Uy0GiIkiEjlQtn', 'sprite-20261107-afb5ef87d471dcd4-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQHVAURmojJ0EqeDCvBrNmZaXVdY97gSpOWi', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-axTRSadaZbUepfT40-7cM-main-4edd0cba5c5c.webp', 'left'
-) AS `expected`
-INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
-INNER JOIN `SpriteAnimation` AS `animation`
-  ON `animation`.`id` = `expected`.`animationId`
-  AND BINARY `animation`.`url` = BINARY `expected`.`url`
-  AND `animation`.`columns` = `expected`.`columns`
-  AND `animation`.`rows` = `expected`.`rows`
-  AND `animation`.`frameCount` = `expected`.`frameCount`
-  AND `animation`.`fps` = `expected`.`fps`
-  AND `animation`.`facing` = `expected`.`facing`
-WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
-  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
-ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
-
-INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
-SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
-FROM (
-  SELECT 'axTRSadaZbUepfT40-7cM' AS `userId`, 'jutsu:o-4SCAhJ4LHdCwcBDgJrV' AS `actionKey`, 'sprite-20261107-afb5ef87d471dcd4-ranged' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQHVAURmojJ0EqeDCvBrNmZaXVdY97gSpOWi' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-axTRSadaZbUepfT40-7cM-main-4edd0cba5c5c.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT 'axTRSadaZbUepfT40-7cM', 'jutsu:o-4SCAhJ4LHdCwcBDgJrV', 'sprite-20261107-afb5ef87d471dcd4-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQHVAURmojJ0EqeDCvBrNmZaXVdY97gSpOWi', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-axTRSadaZbUepfT40-7cM-main-4edd0cba5c5c.webp', 'left'
   UNION ALL
   SELECT 'b8PGgZl8zNNr6UdWH9dBv', 'basic:basicAttack', 'sprite-20261107-62cc0974acb39298-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuuOty1emvaQu94EYJs8HpxVzofny6iPtbgC', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-b8PGgZl8zNNr6UdWH9dBv-main-cf92ba267d7e.webp', 'left'
   UNION ALL
@@ -8122,6 +8169,10 @@ FROM (
   UNION ALL
   SELECT 'fsOWJLJC_ZYA_UTN3vpwh', 'jutsu:lMCQjYuHtvGsyic4lLx8U', 'sprite-20261107-7230d9174a95ba94-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwnv1rUT2j854CWbaITZyegfXimvd7s16cO0h', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/Y9Fl-qUUSb6HJWuOlHDUx.png', 'left'
   UNION ALL
+  SELECT 'fsOWJLJC_ZYA_UTN3vpwh', 'jutsu:q_w1k-EDLbE5O1SUEE0ZL', 'sprite-20261107-7230d9174a95ba94-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLvjugrYldRWJcD6vE10SjNsXHeA9pVMfQi', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/Y9Fl-qUUSb6HJWuOlHDUx.png', 'left'
+  UNION ALL
+  SELECT 'fsOWJLJC_ZYA_UTN3vpwh', 'jutsu:qrNPubRuMC2PgRro46-3z', 'sprite-20261107-7230d9174a95ba94-hex', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLvjugrYldRWJcD6vE10SjNsXHeA9pVMfQi', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/Y9Fl-qUUSb6HJWuOlHDUx.png', 'left'
+  UNION ALL
   SELECT 'fslOtR2l_ndK1F5oFQH1D', 'basic:basicAttack', 'sprite-20261107-5c822c7d2060bc46-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbl9yQtAtYUndMi56GkX19q0A4PzyeIloBrEa', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-0PZU_FvlbM3ErYGlD5r56-main-e3de85db0334.webp', 'left'
   UNION ALL
   SELECT 'fslOtR2l_ndK1F5oFQH1D', 'jutsu:BwlbHwTN4EVYXYJsE18rl', 'sprite-20261107-5c822c7d2060bc46-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQ5cUvJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-0PZU_FvlbM3ErYGlD5r56-main-e3de85db0334.webp', 'left'
@@ -8323,8 +8374,24 @@ FROM (
   SELECT 'gd41Je7jTbQXjpHks1x7J', 'basic:defensiveStance', 'sprite-20261107-2d0d13ed64e2a062-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2A8s1bnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-2OXJEXoktxJcjqMkE851g-main-e5ee91c495de.webp', 'left'
   UNION ALL
   SELECT 'gd41Je7jTbQXjpHks1x7J', 'basic:offensiveStance', 'sprite-20261107-2d0d13ed64e2a062-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJUQJmSSILCIhwPniJ69VxpvAbTDWkOyGzS8rM', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-2OXJEXoktxJcjqMkE851g-main-e5ee91c495de.webp', 'left'
-  UNION ALL
-  SELECT 'gd41Je7jTbQXjpHks1x7J', 'jutsu:3v9c1SHlD2GLPF2HW1_Sc', 'sprite-20261107-2d0d13ed64e2a062-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ20Ux16nMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-2OXJEXoktxJcjqMkE851g-main-e5ee91c495de.webp', 'left'
+) AS `expected`
+INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
+INNER JOIN `SpriteAnimation` AS `animation`
+  ON `animation`.`id` = `expected`.`animationId`
+  AND BINARY `animation`.`url` = BINARY `expected`.`url`
+  AND `animation`.`columns` = `expected`.`columns`
+  AND `animation`.`rows` = `expected`.`rows`
+  AND `animation`.`frameCount` = `expected`.`frameCount`
+  AND `animation`.`fps` = `expected`.`fps`
+  AND `animation`.`facing` = `expected`.`facing`
+WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
+  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
+ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
+
+INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
+SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
+FROM (
+  SELECT 'gd41Je7jTbQXjpHks1x7J' AS `userId`, 'jutsu:3v9c1SHlD2GLPF2HW1_Sc' AS `actionKey`, 'sprite-20261107-2d0d13ed64e2a062-ranged' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ20Ux16nMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-2OXJEXoktxJcjqMkE851g-main-e5ee91c495de.webp' AS `avatar`, 'left' AS `avatarFacing`
   UNION ALL
   SELECT 'gd41Je7jTbQXjpHks1x7J', 'jutsu:V3WrfQ3pB-eCq2hojsxWe', 'sprite-20261107-2d0d13ed64e2a062-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2A8s1bnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-2OXJEXoktxJcjqMkE851g-main-e5ee91c495de.webp', 'left'
   UNION ALL
@@ -8365,24 +8432,8 @@ FROM (
   SELECT 'gqOxWqXElRszsLksj83zx', 'jutsu:1Ds-JuqAFyZ0UivUev2Xe', 'sprite-20261107-f96b6ff98beef2e6-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnTRpWXmojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-gqOxWqXElRszsLksj83zx-main-1a4dff6e6bd2.webp', 'left'
   UNION ALL
   SELECT 'gqOxWqXElRszsLksj83zx', 'jutsu:1cN_HSfk-YC0PB5lSixB_', 'sprite-20261107-f96b6ff98beef2e6-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcItTa6SnxBpQqGNDcTHbLmYz8uXAl3oa54ti', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-gqOxWqXElRszsLksj83zx-main-1a4dff6e6bd2.webp', 'left'
-) AS `expected`
-INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
-INNER JOIN `SpriteAnimation` AS `animation`
-  ON `animation`.`id` = `expected`.`animationId`
-  AND BINARY `animation`.`url` = BINARY `expected`.`url`
-  AND `animation`.`columns` = `expected`.`columns`
-  AND `animation`.`rows` = `expected`.`rows`
-  AND `animation`.`frameCount` = `expected`.`frameCount`
-  AND `animation`.`fps` = `expected`.`fps`
-  AND `animation`.`facing` = `expected`.`facing`
-WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
-  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
-ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
-
-INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
-SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
-FROM (
-  SELECT 'gqOxWqXElRszsLksj83zx' AS `userId`, 'jutsu:RES8ajxppnF3bngpohMkK' AS `actionKey`, 'sprite-20261107-f96b6ff98beef2e6-blast' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnTRpWXmojJ0EqeDCvBrNmZaXVdY97gSpOWiA' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-gqOxWqXElRszsLksj83zx-main-1a4dff6e6bd2.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT 'gqOxWqXElRszsLksj83zx', 'jutsu:RES8ajxppnF3bngpohMkK', 'sprite-20261107-f96b6ff98beef2e6-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnTRpWXmojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-gqOxWqXElRszsLksj83zx-main-1a4dff6e6bd2.webp', 'left'
   UNION ALL
   SELECT 'gqOxWqXElRszsLksj83zx', 'jutsu:Y_P_cjtzD-ppxgW16SWY0', 'sprite-20261107-f96b6ff98beef2e6-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcItTa6SnxBpQqGNDcTHbLmYz8uXAl3oa54ti', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-gqOxWqXElRszsLksj83zx-main-1a4dff6e6bd2.webp', 'left'
   UNION ALL
@@ -9139,8 +9190,24 @@ FROM (
   SELECT 'mqFCGJIysT8N5fqPP8e28', 'jutsu:YNz9GIr3YLJqB6Klvt4yv', 'sprite-20261107-a5ef5392a0710ced-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpCvhLrbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-mqFCGJIysT8N5fqPP8e28-main-a208fc65ce3d.webp', 'left'
   UNION ALL
   SELECT 'mqFCGJIysT8N5fqPP8e28', 'jutsu:o-4SCAhJ4LHdCwcBDgJrV', 'sprite-20261107-a5ef5392a0710ced-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOsAiKNVHevxIThUauQkGJEBY3D2cPqy8f5sp', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-mqFCGJIysT8N5fqPP8e28-main-a208fc65ce3d.webp', 'left'
-  UNION ALL
-  SELECT 'mrcbhrcXi6N0Tk2D9Bi9q', 'basic:basicAttack', 'sprite-20261107-d0460ab535b78dac-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmjvLfSDHE4IMO5Goa7cgLxPJ0VC6lU8vbt1A', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/K7pkwuJFEyiJYUCG-pD_B.webp', 'left'
+) AS `expected`
+INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
+INNER JOIN `SpriteAnimation` AS `animation`
+  ON `animation`.`id` = `expected`.`animationId`
+  AND BINARY `animation`.`url` = BINARY `expected`.`url`
+  AND `animation`.`columns` = `expected`.`columns`
+  AND `animation`.`rows` = `expected`.`rows`
+  AND `animation`.`frameCount` = `expected`.`frameCount`
+  AND `animation`.`fps` = `expected`.`fps`
+  AND `animation`.`facing` = `expected`.`facing`
+WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
+  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
+ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
+
+INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
+SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
+FROM (
+  SELECT 'mrcbhrcXi6N0Tk2D9Bi9q' AS `userId`, 'basic:basicAttack' AS `actionKey`, 'sprite-20261107-d0460ab535b78dac-strike' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmjvLfSDHE4IMO5Goa7cgLxPJ0VC6lU8vbt1A' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/K7pkwuJFEyiJYUCG-pD_B.webp' AS `avatar`, 'left' AS `avatarFacing`
   UNION ALL
   SELECT 'mrcbhrcXi6N0Tk2D9Bi9q', 'basic:cleanse', 'sprite-20261107-d0460ab535b78dac-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJba8OK3AtYUndMi56GkX19q0A4PzyeIloBrEa', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/K7pkwuJFEyiJYUCG-pD_B.webp', 'left'
   UNION ALL
@@ -9181,24 +9248,8 @@ FROM (
   SELECT 'mt3fylpp3DSvKamRuYvJo', 'basic:basicAttack', 'sprite-20261107-47d8ef8551193cd2-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSkk1udv3jWrEB7TyZlmpoAxMK5Qi16kNPVJu', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-mt3fylpp3DSvKamRuYvJo-main-18502289d430.webp', 'left'
   UNION ALL
   SELECT 'mt3fylpp3DSvKamRuYvJo', 'basic:cleanse', 'sprite-20261107-47d8ef8551193cd2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJG7iSU1RfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-mt3fylpp3DSvKamRuYvJo-main-18502289d430.webp', 'left'
-) AS `expected`
-INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
-INNER JOIN `SpriteAnimation` AS `animation`
-  ON `animation`.`id` = `expected`.`animationId`
-  AND BINARY `animation`.`url` = BINARY `expected`.`url`
-  AND `animation`.`columns` = `expected`.`columns`
-  AND `animation`.`rows` = `expected`.`rows`
-  AND `animation`.`frameCount` = `expected`.`frameCount`
-  AND `animation`.`fps` = `expected`.`fps`
-  AND `animation`.`facing` = `expected`.`facing`
-WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
-  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
-ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
-
-INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
-SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
-FROM (
-  SELECT 'mt3fylpp3DSvKamRuYvJo' AS `userId`, 'basic:clear' AS `actionKey`, 'sprite-20261107-47d8ef8551193cd2-powerup' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJG7iSU1RfoVrha0LP4mAS5KM7wtiZbUNXJxdC' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-mt3fylpp3DSvKamRuYvJo-main-18502289d430.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT 'mt3fylpp3DSvKamRuYvJo', 'basic:clear', 'sprite-20261107-47d8ef8551193cd2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJG7iSU1RfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-mt3fylpp3DSvKamRuYvJo-main-18502289d430.webp', 'left'
   UNION ALL
   SELECT 'mt3fylpp3DSvKamRuYvJo', 'basic:offensiveStance', 'sprite-20261107-47d8ef8551193cd2-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJG7iSU1RfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261019-v3-mt3fylpp3DSvKamRuYvJo-main-18502289d430.webp', 'left'
   UNION ALL
@@ -9955,8 +10006,24 @@ FROM (
   SELECT 'rXGmJtLdQM1ufK0j6MKhL', 'jutsu:LQ26G2ANWkbTRL7Ry__F0', 'sprite-20261107-b4ba6317abe2dffe-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCZfdGN26OYrIJuNP1pvSyz29edFtKbngjRcA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-v7T9_XdGMfP46em0dPuBc-main-84598d9f5e8a.webp', 'right'
   UNION ALL
   SELECT 'rXGmJtLdQM1ufK0j6MKhL', 'jutsu:PdD44PGaNv4MN5fOALhAF', 'sprite-20261107-b4ba6317abe2dffe-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJETx94FLfKL5D7TAFe29bymSaPCIQ846MdzGg', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-v7T9_XdGMfP46em0dPuBc-main-84598d9f5e8a.webp', 'right'
-  UNION ALL
-  SELECT 'rXGmJtLdQM1ufK0j6MKhL', 'jutsu:_O62ht0B7XNYzlISG1Gp5', 'sprite-20261107-b4ba6317abe2dffe-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxE5DO9JWZsq9k0Von5rUfP6OgQ2TyptCKHS4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-v7T9_XdGMfP46em0dPuBc-main-84598d9f5e8a.webp', 'right'
+) AS `expected`
+INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
+INNER JOIN `SpriteAnimation` AS `animation`
+  ON `animation`.`id` = `expected`.`animationId`
+  AND BINARY `animation`.`url` = BINARY `expected`.`url`
+  AND `animation`.`columns` = `expected`.`columns`
+  AND `animation`.`rows` = `expected`.`rows`
+  AND `animation`.`frameCount` = `expected`.`frameCount`
+  AND `animation`.`fps` = `expected`.`fps`
+  AND `animation`.`facing` = `expected`.`facing`
+WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
+  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
+ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
+
+INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
+SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
+FROM (
+  SELECT 'rXGmJtLdQM1ufK0j6MKhL' AS `userId`, 'jutsu:_O62ht0B7XNYzlISG1Gp5' AS `actionKey`, 'sprite-20261107-b4ba6317abe2dffe-blast' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxE5DO9JWZsq9k0Von5rUfP6OgQ2TyptCKHS4' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-v7T9_XdGMfP46em0dPuBc-main-84598d9f5e8a.webp' AS `avatar`, 'right' AS `avatarFacing`
   UNION ALL
   SELECT 'rXGmJtLdQM1ufK0j6MKhL', 'jutsu:gLsou07qLtM34zyepQRcS', 'sprite-20261107-b4ba6317abe2dffe-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxE5DO9JWZsq9k0Von5rUfP6OgQ2TyptCKHS4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-v7T9_XdGMfP46em0dPuBc-main-84598d9f5e8a.webp', 'right'
   UNION ALL
@@ -9997,24 +10064,8 @@ FROM (
   SELECT 'rwh7txta9l7y9baz48olnaao', 'item:oOdkdJixCLy2bW0Gxo5e0', 'sprite-20261107-682002efa41d514a-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmV8A00HE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-rwh7txta9l7y9baz48olnaao-main-944739a9a2ae.webp', 'left'
   UNION ALL
   SELECT 'rwh7txta9l7y9baz48olnaao', 'item:rsc2uO5QuffXzejfhwF_F', 'sprite-20261107-682002efa41d514a-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJou9jseZ9MPZpHJ7VliuEWDfATdxhv62SXnm4', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-rwh7txta9l7y9baz48olnaao-main-944739a9a2ae.webp', 'left'
-) AS `expected`
-INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
-INNER JOIN `SpriteAnimation` AS `animation`
-  ON `animation`.`id` = `expected`.`animationId`
-  AND BINARY `animation`.`url` = BINARY `expected`.`url`
-  AND `animation`.`columns` = `expected`.`columns`
-  AND `animation`.`rows` = `expected`.`rows`
-  AND `animation`.`frameCount` = `expected`.`frameCount`
-  AND `animation`.`fps` = `expected`.`fps`
-  AND `animation`.`facing` = `expected`.`facing`
-WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
-  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
-ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
-
-INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
-SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
-FROM (
-  SELECT 'rwh7txta9l7y9baz48olnaao' AS `userId`, 'jutsu:-45phqE2baTGC--lNSEx9' AS `actionKey`, 'sprite-20261107-682002efa41d514a-ranged' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJr2UJ1GhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-rwh7txta9l7y9baz48olnaao-main-944739a9a2ae.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT 'rwh7txta9l7y9baz48olnaao', 'jutsu:-45phqE2baTGC--lNSEx9', 'sprite-20261107-682002efa41d514a-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJr2UJ1GhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-rwh7txta9l7y9baz48olnaao-main-944739a9a2ae.webp', 'left'
   UNION ALL
   SELECT 'rwh7txta9l7y9baz48olnaao', 'jutsu:KIMeKemnXttwOv1Cf-IPS', 'sprite-20261107-682002efa41d514a-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoYkqL3CZ9MPZpHJ7VliuEWDfATdxhv62SXnm', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-rwh7txta9l7y9baz48olnaao-main-944739a9a2ae.webp', 'left'
   UNION ALL
@@ -10771,8 +10822,24 @@ FROM (
   SELECT 'xGwIYBJ_qB6iidL3GAhy8', 'basic:basicHeal', 'sprite-20261107-0618b362fc48a05e-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQQOjvUmojJ0EqeDCvBrNmZaXVdY97gSpOWi', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-xGwIYBJ_qB6iidL3GAhy8-main-2d9d7402c73f.webp', 'left'
   UNION ALL
   SELECT 'xGwIYBJ_qB6iidL3GAhy8', 'basic:meditate', 'sprite-20261107-0618b362fc48a05e-heal', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQQOjvUmojJ0EqeDCvBrNmZaXVdY97gSpOWi', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-xGwIYBJ_qB6iidL3GAhy8-main-2d9d7402c73f.webp', 'left'
-  UNION ALL
-  SELECT 'xGwIYBJ_qB6iidL3GAhy8', 'item:X1D7lrqZz31_kNGXs6MK4', 'sprite-20261107-0618b362fc48a05e-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn38OwDmojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-xGwIYBJ_qB6iidL3GAhy8-main-2d9d7402c73f.webp', 'left'
+) AS `expected`
+INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
+INNER JOIN `SpriteAnimation` AS `animation`
+  ON `animation`.`id` = `expected`.`animationId`
+  AND BINARY `animation`.`url` = BINARY `expected`.`url`
+  AND `animation`.`columns` = `expected`.`columns`
+  AND `animation`.`rows` = `expected`.`rows`
+  AND `animation`.`frameCount` = `expected`.`frameCount`
+  AND `animation`.`fps` = `expected`.`fps`
+  AND `animation`.`facing` = `expected`.`facing`
+WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
+  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
+ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
+
+INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
+SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
+FROM (
+  SELECT 'xGwIYBJ_qB6iidL3GAhy8' AS `userId`, 'item:X1D7lrqZz31_kNGXs6MK4' AS `actionKey`, 'sprite-20261107-0618b362fc48a05e-strike' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn38OwDmojJ0EqeDCvBrNmZaXVdY97gSpOWiA' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-xGwIYBJ_qB6iidL3GAhy8-main-2d9d7402c73f.webp' AS `avatar`, 'left' AS `avatarFacing`
   UNION ALL
   SELECT 'xGwIYBJ_qB6iidL3GAhy8', 'item:oOdkdJixCLy2bW0Gxo5e0', 'sprite-20261107-0618b362fc48a05e-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn38OwDmojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-xGwIYBJ_qB6iidL3GAhy8-main-2d9d7402c73f.webp', 'left'
   UNION ALL
@@ -10813,24 +10880,8 @@ FROM (
   SELECT 'y07BRyFf73zFzoEJIWwNY', 'basic:basicAttack', 'sprite-20261107-387b437b08f1412a-strike', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJT866sx5IU29dZYJPoOKSh5vmlqatMub3EigH', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-y07BRyFf73zFzoEJIWwNY-main-7837a8ef1bf5.webp', 'left'
   UNION ALL
   SELECT 'y07BRyFf73zFzoEJIWwNY', 'basic:defensiveStance', 'sprite-20261107-387b437b08f1412a-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4x95dblYIif5CL8BKvMsOh2ZnmS7yHt0jTD3', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-y07BRyFf73zFzoEJIWwNY-main-7837a8ef1bf5.webp', 'left'
-) AS `expected`
-INNER JOIN `UserData` AS `ai` ON `ai`.`userId` = `expected`.`userId` AND `ai`.`isAi` = 1
-INNER JOIN `SpriteAnimation` AS `animation`
-  ON `animation`.`id` = `expected`.`animationId`
-  AND BINARY `animation`.`url` = BINARY `expected`.`url`
-  AND `animation`.`columns` = `expected`.`columns`
-  AND `animation`.`rows` = `expected`.`rows`
-  AND `animation`.`frameCount` = `expected`.`frameCount`
-  AND `animation`.`fps` = `expected`.`fps`
-  AND `animation`.`facing` = `expected`.`facing`
-WHERE BINARY REPLACE(REPLACE(`ai`.`avatar`, 'https://utfs.io/f/', 'https://ui0arpl8sm.ufs.sh/f/'), 'https://uploadthing.b-cdn.net/f/', 'https://ui0arpl8sm.ufs.sh/f/') <=> BINARY `expected`.`avatar`
-  AND `ai`.`avatarFacing` = `expected`.`avatarFacing`
-ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
-
-INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`)
-SELECT `expected`.`userId`, `expected`.`actionKey`, `expected`.`animationId`
-FROM (
-  SELECT 'y07BRyFf73zFzoEJIWwNY' AS `userId`, 'jutsu:1Jtd6To2iyRK4ODNlhCHO' AS `actionKey`, 'sprite-20261107-387b437b08f1412a-guard' AS `animationId`, 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4x95dblYIif5CL8BKvMsOh2ZnmS7yHt0jTD3' AS `url`, 8 AS `columns`, 2 AS `rows`, 16 AS `frameCount`, 12.5 AS `fps`, 'left' AS `facing`, 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-y07BRyFf73zFzoEJIWwNY-main-7837a8ef1bf5.webp' AS `avatar`, 'left' AS `avatarFacing`
+  UNION ALL
+  SELECT 'y07BRyFf73zFzoEJIWwNY', 'jutsu:1Jtd6To2iyRK4ODNlhCHO', 'sprite-20261107-387b437b08f1412a-guard', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4x95dblYIif5CL8BKvMsOh2ZnmS7yHt0jTD3', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-y07BRyFf73zFzoEJIWwNY-main-7837a8ef1bf5.webp', 'left'
   UNION ALL
   SELECT 'y07BRyFf73zFzoEJIWwNY', 'jutsu:VnLuKCX1hXm1Hqf0k__XB', 'sprite-20261107-387b437b08f1412a-summon', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8g1yl7kkp45TvAnoIBa0rtCf1lbyXYjVKQ2q', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/ai-sprite-20261018-y07BRyFf73zFzoEJIWwNY-main-7837a8ef1bf5.webp', 'left'
   UNION ALL
@@ -11044,7 +11095,15 @@ FROM (
   UNION ALL
   SELECT 'zGGtRNO4-Yw8RdQBOvRAG', 'jutsu:L0HUU7fpI3qczxek8O3cm', 'sprite-20261107-3982d371bca90c17-powerup', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWM5TS2vszvj71yaSYC0MDOmbko5q9JAGuLHf', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/content-Mze5A3srtyycdxFC-sMwp.webp', 'left'
   UNION ALL
+  SELECT 'zGGtRNO4-Yw8RdQBOvRAG', 'jutsu:MOzMOvSfuYOUXhtffYAI-', 'sprite-20261107-3982d371bca90c17-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dbClHdXKPBOUWGyFuM4DlL1v5HNTZhkte0z', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/content-Mze5A3srtyycdxFC-sMwp.webp', 'left'
+  UNION ALL
+  SELECT 'zGGtRNO4-Yw8RdQBOvRAG', 'jutsu:NI3oJP_N3P1LIcKY8EMOd', 'sprite-20261107-3982d371bca90c17-summon', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnMwsIxmojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/content-Mze5A3srtyycdxFC-sMwp.webp', 'left'
+  UNION ALL
+  SELECT 'zGGtRNO4-Yw8RdQBOvRAG', 'jutsu:U991-vsgChE1BFV6CNGwn', 'sprite-20261107-3982d371bca90c17-summon', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnMwsIxmojJ0EqeDCvBrNmZaXVdY97gSpOWiA', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/content-Mze5A3srtyycdxFC-sMwp.webp', 'left'
+  UNION ALL
   SELECT 'zGGtRNO4-Yw8RdQBOvRAG', 'jutsu:YakG6hxIEbk-iKLRKDe6K', 'sprite-20261107-3982d371bca90c17-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmWjnVn26OYrIJuNP1pvSyz29edFtKbngjRc', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/content-Mze5A3srtyycdxFC-sMwp.webp', 'left'
+  UNION ALL
+  SELECT 'zGGtRNO4-Yw8RdQBOvRAG', 'jutsu:ZOZbN9FR60FaLSbfyMrtZ', 'sprite-20261107-3982d371bca90c17-blast', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7dbClHdXKPBOUWGyFuM4DlL1v5HNTZhkte0z', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/content-Mze5A3srtyycdxFC-sMwp.webp', 'left'
   UNION ALL
   SELECT 'zGGtRNO4-Yw8RdQBOvRAG', 'jutsu:ai3trthWSPOSnYESWx6UT', 'sprite-20261107-3982d371bca90c17-ranged', 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmWjnVn26OYrIJuNP1pvSyz29edFtKbngjRc', 8, 2, 16, 12.5, 'left', 'https://ui0arpl8sm.ufs.sh/f/content-Mze5A3srtyycdxFC-sMwp.webp', 'left'
   UNION ALL
