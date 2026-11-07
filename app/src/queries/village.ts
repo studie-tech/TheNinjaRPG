@@ -197,9 +197,10 @@ export const fetchSectorVillage = async (
     where: !isOutlaw
       ? eq(village.sector, sector)
       : or(
-          and(eq(village.sector, sector), eq(village.type, "SAFEZONE")),
-          and(eq(village.sector, sector), eq(village.type, "HIDEOUT")),
-          and(eq(village.sector, sector), eq(village.type, "STRONGHOLD")),
+          and(
+            eq(village.sector, sector),
+            inArray(village.type, ["SAFEZONE", "HIDEOUT", "STRONGHOLD"]),
+          ),
           eq(village.type, "OUTLAW"),
         ),
     orderBy: (villages) =>
