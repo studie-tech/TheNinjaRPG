@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { calcActiveUser } from "@/libs/combat/actions";
-import type { Battle } from "@/drizzle/schema";
 import type { BattleUserState } from "@/libs/combat/types";
+import { makeCompleteBattle } from "./helpers/battleScenario";
 
 const mk = (over: Partial<BattleUserState>): BattleUserState =>
   ({
@@ -29,31 +29,11 @@ describe("calcActiveUser never selects a curHealth:0 template", () => {
       isSummonTemplate: true,
       curHealth: 0,
     });
-    const battle = {
+    const battle = makeCompleteBattle({
       usersState: [player, enemy, template],
-      usersEffects: [],
       activeUserId: "p1",
       roundStartAt: new Date(0),
-      round: 1,
-      extraState: {
-        jutsus: {},
-        jutsuReskins: {},
-        items: {},
-        bloodlines: {},
-        villages: {},
-        anbuSquads: {},
-        keystoneItems: {},
-        wars: {},
-        aiProfiles: {},
-        relations: {},
-        clans: {},
-        userQuests: {},
-        completedQuests: {},
-        questData: {},
-        bounties: {},
-        bountySignups: {},
-      },
-    } as unknown as Battle;
+    });
 
     const { actor } = calcActiveUser(battle, "p1");
     expect(actor.userId).not.toBe("tmpl");

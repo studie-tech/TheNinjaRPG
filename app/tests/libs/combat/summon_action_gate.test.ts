@@ -1,7 +1,14 @@
 import { describe, it, expect } from "bun:test";
 import { summonActionBlockedReason } from "@/libs/combat/summon";
 import { makeBattleUser } from "./helpers/battleScenario";
-import type { BattleUserState, CombatAction } from "@/libs/combat/types";
+import {
+  DEMON,
+  TIGER,
+  SUMMON_OWNER,
+  makeSpawnedSummon as spawned,
+  makeSummonTemplate as template,
+} from "./helpers/summon";
+import type { CombatAction } from "@/libs/combat/types";
 
 /**
  * The router calls this before performBattleAction, which spends pools inside
@@ -10,23 +17,9 @@ import type { BattleUserState, CombatAction } from "@/libs/combat/types";
  * be refused), and a capped summon must be refused with a player-facing reason.
  */
 
-const DEMON = "ai-demon";
-const TIGER = "ai-tiger";
-const P = "p1";
+const P = SUMMON_OWNER;
 
 const player = () => makeBattleUser(P, { curHealth: 100, isAi: false });
-
-const template = (aiId: string, username: string) =>
-  makeBattleUser(`tmpl-${aiId}`, {
-    controllerId: aiId, username, isAi: true, isSummon: true,
-    isSummonTemplate: true, curHealth: 0,
-  });
-
-const spawned = (id: string, aiId: string, over: Partial<BattleUserState> = {}) =>
-  makeBattleUser(id, {
-    controllerId: P, username: "Demon", isAi: true, isSummon: true,
-    isOriginal: true, summonSourceId: aiId, curHealth: 500, ...over,
-  });
 
 // Minimal action shapes: only `effects` is read.
 const action = (...effects: unknown[]) =>
