@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq, inArray, like, or, sql } from "drizzle-orm";
 import {
   actionLog,
   aiSpriteAnimation,
@@ -12,13 +12,51 @@ export const fetchAnimationAi = (client: DrizzleClient, id: string) =>
   client.query.userData.findFirst({
     where: and(eq(userData.userId, id), eq(userData.isAi, true)),
     with: {
-      spriteAnimationBindings: true,
+      spriteAnimationBindings: { with: { animation: true } },
       jutsus: { with: { jutsu: true } },
       items: { with: { item: true } },
     },
   });
-export const listSpriteAnimations = (client: DrizzleClient) =>
-  client.query.spriteAnimation.findMany({ orderBy: asc(spriteAnimation.name) });
+/** One AI's own sheets are named after it or already bound to it. */
+const spriteSheetFilter = (client: DrizzleClient, input: SpriteSheetSearch) =>
+  and(
+    input.ai
+      ? or(
+          like(spriteAnimation.name, `%${input.ai.username}%`),
+          inArray(
+            spriteAnimation.id,
+            client
+              .select({ id: aiSpriteAnimation.animationId })
+              .from(aiSpriteAnimation)
+              .where(eq(aiSpriteAnimation.userId, input.ai.userId)),
+          ),
+        )
+      : undefined,
+    ...input.tokens.map((token) => like(spriteAnimation.name, `%${token}%`)),
+  );
+export const searchSpriteAnimations = (
+  client: DrizzleClient,
+  input: SpriteSheetSearch & { limit: number; offset: number },
+) =>
+  client.query.spriteAnimation.findMany({
+    where: spriteSheetFilter(client, input),
+    // Retired "[Held]" sheets stay findable but never lead the results.
+    orderBy: [
+      asc(sql`${spriteAnimation.name} LIKE '[Held]%'`),
+      asc(spriteAnimation.name),
+      asc(spriteAnimation.id),
+    ],
+    limit: input.limit,
+    offset: input.offset,
+  });
+export const countSpriteAnimations = (
+  client: DrizzleClient,
+  input: SpriteSheetSearch,
+) =>
+  client
+    .select({ total: count() })
+    .from(spriteAnimation)
+    .where(spriteSheetFilter(client, input));
 export const findSpriteAnimation = (client: DrizzleClient, id: string) =>
   client.query.spriteAnimation.findFirst({ where: eq(spriteAnimation.id, id) });
 export const insertSpriteAnimation = (
@@ -55,6 +93,11 @@ export const listAiSpriteAnimationBindings = (client: DrizzleClient, userId: str
   client.query.aiSpriteAnimation.findMany({
     where: eq(aiSpriteAnimation.userId, userId),
   });
+export const fetchAnimationAiName = (client: DrizzleClient, id: string) =>
+  client.query.userData.findFirst({
+    where: and(eq(userData.userId, id), eq(userData.isAi, true)),
+    columns: { userId: true, username: true },
+  });
 export const copyAiSpriteAnimationBindings = (
   client: DrizzleClient,
   bindings: (typeof aiSpriteAnimation.$inferInsert)[],
@@ -64,3 +107,8 @@ export const deleteAiSpriteAnimationBindings = (
   client: DrizzleClient,
   userId: string,
 ) => client.delete(aiSpriteAnimation).where(eq(aiSpriteAnimation.userId, userId));
+
+type SpriteSheetSearch = {
+  ai?: { userId: string; username: string };
+  tokens: string[];
+};

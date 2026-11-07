@@ -32,11 +32,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { type AvatarFacing, AvatarFacings } from "@/drizzle/constants";
 import { useSpriteStudio } from "@/hooks/useSpriteStudio";
-import { SpriteAnimationPreview } from "@/layout/AiSpriteAnimations";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import { Modal } from "@/layout/Modal";
 import { SearchSelect } from "@/layout/SearchSelect";
+import { SpriteAnimationPreview } from "@/layout/SpriteSheetPreview";
 import {
   isSpriteGenerationActive,
   presetForAction,

@@ -43,6 +43,33 @@ describeWithDatabase("sprite animation administration and battle snapshots", () 
     expect((await (await caller()).assign({ userId: "player", actionKey: "idle", animationId: "idle" })).success).toBe(false);
     expect((await (await caller()).assign({ userId: "ai", actionKey: "idle", animationId: "missing" })).success).toBe(false);
   });
+  it("returns only this AI's own sheets with its config, and searches the library in pages", async () => {
+    const db = await getTestDatabase(); const api = await caller();
+    await db.insert(spriteAnimation).values(["AI — Strike", "AI — Walk", "Other — Strike"].map((name) => ({ id: name, name, url: "https://example.com/sheet.png", columns: 8, rows: 2, frameCount: 16, fps: 12.5, facing: "left" as const, createdByUserId: "editor" })));
+    await api.assign({ userId: "ai", actionKey: "idle", animationId: "move" });
+    expect((await api.getAiConfig({ userId: "ai" })).animations.map((sheet) => sheet.id)).toEqual(["move"]);
+
+    const search = { userId: "ai", search: "", limit: 2 };
+    const names = (page: { data: { id: string }[] }) => page.data.map((sheet) => sheet.id);
+    const first = await api.search({ ...search, scope: "ai" });
+    expect(names(first)).toEqual(["AI — Strike", "AI — Walk"]);
+    expect(first).toMatchObject({ total: 3, nextCursor: 1 });
+    const second = await api.search({ ...search, scope: "ai", cursor: first.nextCursor });
+    expect(names(second)).toEqual(["move"]);
+    expect(second.nextCursor).toBeNull();
+
+    expect((await api.search({ ...search, scope: "all" })).total).toBe(5);
+    expect(names(await api.search({ ...search, scope: "all", search: "strike other" }))).toEqual(["Other — Strike"]);
+    expect((await api.search({ ...search, scope: "ai", search: "other" })).total).toBe(0);
+
+    await db.insert(spriteAnimation).values({ id: "held", name: "[Held] AI — Old", url: "https://example.com/held.png", columns: 8, rows: 2, frameCount: 16, fps: 12.5, facing: "left", createdByUserId: "editor" });
+    const everything = await api.search({ ...search, scope: "all", limit: 10 });
+    expect(names(everything).at(-1)).toBe("held");
+  });
+  it("keeps library search behind content permissions", async () => {
+    await expect((await caller("player")).search({ userId: "ai", scope: "all", search: "", limit: 2 })).rejects.toThrow("Content editor access required");
+    await expect((await caller()).search({ userId: "player", scope: "ai", search: "", limit: 2 })).rejects.toThrow("AI not found");
+  });
   it("upserts and clears assignments while retaining reusable sheets and changing review basis", async () => {
     const db = await getTestDatabase(); const api = await caller();
     const original = (await loadEntities(db, [{ entityType: "AI", entityId: "ai" }])).get("AI:ai")!;

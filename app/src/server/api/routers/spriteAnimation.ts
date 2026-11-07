@@ -1,18 +1,22 @@
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate";
 import { animationActions } from "@/libs/spriteAnimationActions";
 import { fetchUser } from "@/queries/profile";
 import {
+  countSpriteAnimations,
   fetchAnimationAi,
+  fetchAnimationAiName,
   findSpriteAnimation,
   insertSpriteAnimation,
   insertSpriteAnimationLog,
-  listSpriteAnimations,
   saveSpriteAnimationBinding,
+  searchSpriteAnimations,
   touchAnimationAi,
 } from "@/queries/spriteAnimation";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import { offsetPage } from "@/server/utils/pagination";
 import { prepareSpriteSheetUrls } from "@/server/utils/spriteSheets";
 import { canChangeContent } from "@/utils/permissions";
 import {
@@ -23,14 +27,13 @@ import {
 
 /** Staff-managed immutable sheets and reversible AI bindings, used by new battles. */
 export const spriteAnimationRouter = createTRPCRouter({
-  /** Load the AI's available actions, saved bindings and reusable library together. */
+  /** Load the AI's available actions with its bindings and the sheets they point at. */
   getAiConfig: protectedProcedure
     .input(aiSpriteAnimationInput)
     .query(async ({ ctx, input }) => {
-      const [editor, ai, animations] = await Promise.all([
+      const [editor, ai] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchAnimationAi(ctx.drizzle, input.userId),
-        listSpriteAnimations(ctx.drizzle),
       ]);
       if (editor.isBanned || !canChangeContent(editor.role)) {
         throw new TRPCError({
@@ -40,10 +43,53 @@ export const spriteAnimationRouter = createTRPCRouter({
       }
       if (!ai) throw new TRPCError({ code: "NOT_FOUND", message: "AI not found" });
       return {
+        username: ai.username,
         actions: animationActions(ai),
-        assignments: ai.spriteAnimationBindings,
-        animations,
+        assignments: ai.spriteAnimationBindings.map(({ actionKey, animationId }) => ({
+          actionKey,
+          animationId,
+        })),
+        animations: ai.spriteAnimationBindings.flatMap(({ animation }) =>
+          animation ? [animation] : [],
+        ),
       };
+    }),
+  /** Page through the library, either one AI's sheets or everything. */
+  search: protectedProcedure
+    .input(
+      aiSpriteAnimationInput.extend({
+        scope: z.enum(["ai", "all"]),
+        search: z.string().trim().max(100),
+        limit: z.number().int().min(1).max(60),
+        cursor: z.number().int().min(0).nullish(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const [editor, ai] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        input.scope === "ai"
+          ? fetchAnimationAiName(ctx.drizzle, input.userId)
+          : undefined,
+      ]);
+      if (editor.isBanned || !canChangeContent(editor.role)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Content editor access required",
+        });
+      }
+      if (input.scope === "ai" && !ai)
+        throw new TRPCError({ code: "NOT_FOUND", message: "AI not found" });
+      const filter = { ai, tokens: input.search.split(/\s+/).filter(Boolean) };
+      const { skip, cursorAfter } = offsetPage(input);
+      const [data, [counted]] = await Promise.all([
+        searchSpriteAnimations(ctx.drizzle, {
+          ...filter,
+          limit: input.limit,
+          offset: skip,
+        }),
+        countSpriteAnimations(ctx.drizzle, filter),
+      ]);
+      return { data, nextCursor: cursorAfter(data), total: counted?.total ?? 0 };
     }),
   /** Create a shared library entry without assigning it to an AI. */
   create: protectedProcedure
@@ -55,12 +101,10 @@ export const spriteAnimationRouter = createTRPCRouter({
       const sheet = await prepareSpriteSheetUrls(input);
       if (!sheet.success) return errorResponse(sheet.message);
       const id = nanoid();
+      const animation = { ...input, url: sheet.url, smallUrl: sheet.smallUrl, id };
       await Promise.all([
         insertSpriteAnimation(ctx.drizzle, {
-          ...input,
-          url: sheet.url,
-          smallUrl: sheet.smallUrl,
-          id,
+          ...animation,
           createdByUserId: ctx.userId,
         }),
         insertSpriteAnimationLog(ctx.drizzle, {
@@ -72,7 +116,7 @@ export const spriteAnimationRouter = createTRPCRouter({
           changes: [`Created sprite animation: ${input.name}`],
         }),
       ]);
-      return { success: true, message: "Sprite animation created", id };
+      return { success: true, message: "Sprite animation created", animation };
     }),
   /** Save or clear one action override, then invalidate suggestions based on old bindings. */
   assign: protectedProcedure

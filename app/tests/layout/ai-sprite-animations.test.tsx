@@ -12,19 +12,27 @@ const animation = {
   id: "idle-sheet", name: "Idle sheet", url: "https://example.com/idle.png",
   columns: 6, rows: 4, frameCount: 24, fps: 12.5, facing: "left",
 };
+const sheets = [animation, { ...animation, id: "move-sheet", name: "Move sheet", url: "https://example.com/move.png" }];
+const search = vi.fn();
+const results = (overrides = {}) => ({
+  data: { pages: [{ data: sheets, nextCursor: null, total: 2 }] },
+  isPending: false, error: null, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(),
+  ...overrides,
+});
 const config = {
+  username: "Bandit",
   actions: [
     { key: "idle", name: "Idle", group: "Default" },
     { key: "basic:basicAttack", name: "Basic Attack", group: "Basic" },
   ],
   assignments: [{ actionKey: "idle", animationId: animation.id }],
-  animations: [animation, { ...animation, id: "move-sheet", name: "Move sheet", url: "https://example.com/move.png" }],
+  animations: [animation],
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ spriteAnimation: { getAiConfig: { invalidate: vi.fn() } } }),
+    useUtils: () => ({ spriteAnimation: { getAiConfig: { invalidate: vi.fn() }, search: { invalidate: vi.fn() } } }),
     spriteAnimation: {
       getAiConfig: {
         useQuery: () => ({
@@ -32,6 +40,7 @@ beforeEach(() => {
           isPending: false,
         }),
       },
+      search: { useInfiniteQuery: search.mockImplementation(() => results()) },
       create: { useMutation: () => ({ mutate: create, reset: vi.fn(), isPending: false }) },
       assign: { useMutation: () => ({ mutate: assign, reset: vi.fn(), isPending: false }) },
     },
@@ -79,15 +88,14 @@ it("shows invalid sheet feedback and permits correction without losing the draft
 
 it("previews library candidates and resets without saving until Apply", () => {
   const view = render(<AiSpriteAnimations userId="ai" />);
-  const selection = view.getByLabelText("Animation");
-  fireEvent.change(selection, { target: { value: "move-sheet" } });
+  fireEvent.click(view.getByRole("button", { name: "Move sheet" }));
   expect(view.getByRole("img", { name: "Move sheet" })).toBeTruthy();
   expect(assign).not.toHaveBeenCalled();
   fireEvent.click(view.getByRole("button", { name: "Reset" }));
   expect(view.getByRole("img", { name: "Idle sheet" })).toBeTruthy();
   expect(assign).not.toHaveBeenCalled();
 
-  fireEvent.change(selection, { target: { value: "move-sheet" } });
+  fireEvent.click(view.getByRole("button", { name: "Move sheet" }));
   fireEvent.click(view.getByRole("button", { name: "Apply" }));
   expect(assign).toHaveBeenCalledTimes(1);
   expect(assign).toHaveBeenCalledWith({ userId: "ai", actionKey: "idle", animationId: "move-sheet" });
@@ -95,19 +103,47 @@ it("previews library candidates and resets without saving until Apply", () => {
 
 it("previews inherited idle and clears only the selected action after Apply", () => {
   const view = render(<AiSpriteAnimations userId="ai" />);
-  fireEvent.change(view.getByLabelText("Animation"), { target: { value: "move-sheet" } });
-  fireEvent.change(view.getByLabelText("Action"), { target: { value: "basic:basicAttack" } });
-  expect((view.getByLabelText("Animation") as HTMLSelectElement).value).toBe("");
+  fireEvent.click(view.getByRole("button", { name: "Move sheet" }));
+  fireEvent.click(view.getByRole("button", { name: /^Basic Attack/ }));
   expect(view.getByRole("img", { name: "Idle sheet" })).toBeTruthy();
-  expect(view.getByText(/uses Idle/)).toBeTruthy();
+  expect(view.getByText(/· uses Idle/)).toBeTruthy();
   expect(assign).not.toHaveBeenCalled();
 
-  fireEvent.change(view.getByLabelText("Action"), { target: { value: "idle" } });
-  fireEvent.change(view.getByLabelText("Animation"), { target: { value: "" } });
+  fireEvent.click(view.getByRole("button", { name: /^Idle(?! sheet)/ }));
+  fireEvent.click(view.getByRole("button", { name: "Remove sheet" }));
   expect(view.getByText("Uses the current character image.")).toBeTruthy();
   expect(assign).not.toHaveBeenCalled();
   fireEvent.click(view.getByRole("button", { name: "Apply" }));
   expect(assign).toHaveBeenCalledWith({ userId: "ai", actionKey: "idle", animationId: null });
+});
+
+it("starts from this AI's sheets and can widen to the whole library", () => {
+  const view = render(<AiSpriteAnimations userId="ai" />);
+  expect(search.mock.calls.at(-1)?.[0]).toEqual({ userId: "ai", scope: "ai", search: "", limit: 24 });
+  expect(view.getByText("2 sheets")).toBeTruthy();
+});
+
+it("offers the whole library and the studio when an AI has no sheets", () => {
+  search.mockImplementation(() => results({ data: { pages: [{ data: [], nextCursor: null, total: 0 }] } }));
+  const view = render(<AiSpriteAnimations userId="ai" />);
+  expect(view.getByText("No sheets carry Bandit's name yet.")).toBeTruthy();
+  expect(view.getByRole("button", { name: "Search all sheets" })).toBeTruthy();
+  expect(view.getByRole("link", { name: "Create one" }).getAttribute("href")).toContain("sprite_studio");
+});
+
+it("reveals further pages on request and reports search failures with a retry", () => {
+  const fetchNextPage = vi.fn();
+  search.mockImplementation(() => results({ hasNextPage: true, fetchNextPage, data: { pages: [{ data: sheets, nextCursor: 1, total: 3478 }] } }));
+  const view = render(<AiSpriteAnimations userId="ai" />);
+  fireEvent.click(view.getByRole("button", { name: "Show more (2 of 3,478)" }));
+  expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  cleanup();
+  const refetch = vi.fn();
+  search.mockImplementation(() => results({ error: { message: "Search failed" }, data: undefined, refetch }));
+  const failed = render(<AiSpriteAnimations userId="ai" />);
+  expect(failed.getByRole("alert").textContent).toContain("Search failed");
+  fireEvent.click(failed.getByRole("button", { name: "Retry" }));
+  expect(refetch).toHaveBeenCalledTimes(1);
 });
 
 it("previews valid draft metadata before library creation and recovers from an image error", () => {
