@@ -9,12 +9,12 @@ import {
   FEDERAL_MONTHLY_USD_CENTS,
   FederalStatuses,
   PAYPAL_PAID_PERIOD_DAYS,
-  type TransactionType,
 } from "@/drizzle/constants";
 
 import type { FederalStatus } from "@/drizzle/schema";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 import {
+  creditPaypalReputation,
   executeResultForUpgradeSubscription,
   findPaypalSubscriptionForCancelPaypalSubscription,
   findPaypalSubscriptionForUpgradeSubscription,
@@ -26,8 +26,6 @@ import {
   insertPaypalSubscriptionForSubscribeWithReps,
   insertPaypalSubscriptionForUpdateSubscription,
   insertPaypalTransactionForDeliverPaypalReputation,
-  insertPaypalTransactionForUpdateReps,
-  insertRecruitmentRewardsForUpdateReps,
   insertWebStoreBundleForSaveStoreBundle,
   listCheckoutUserIdAliases,
   listItemForGetStoreBundles,
@@ -43,7 +41,6 @@ import {
   updatePaypalTransactionForDeliverPaypalReputation,
   updateUserDataForSubscribeWithReps,
   updateUserDataForSubscribeWithReps2,
-  updateUserDataForUpdateReps,
   updateWebStoreBundleForSaveStoreBundle,
   updateWebStoreOrderForCreateStoreOrder,
 } from "@/queries/paypal";
@@ -724,48 +721,6 @@ export const updateSubscription = async (input: {
 };
 
 /**
- * Updates reputation points for a user
- */
-export const updateReps = async (input: {
-  client: DrizzleClient;
-  createdById: string;
-  transactionId: string;
-  transactionUpdatedDate: string;
-  orderId?: string;
-  affectedUserId: string;
-  invoiceId?: string | null;
-  value: number;
-  currency: string;
-  status: string;
-  reps: number;
-  type: TransactionType;
-  raw: JsonData;
-}) => {
-  if (input.type === "REP_PURCHASE") return deliverPaypalReputation(input);
-  // First see if we can insert transaction.
-  await insertPaypalTransactionForUpdateReps(input.client, {
-    createdById: input.createdById,
-    transactionId: input.transactionId,
-    transactionUpdatedDate: input.transactionUpdatedDate,
-    orderId: input.orderId,
-    affectedUserId: input.affectedUserId,
-    invoiceId: input.invoiceId,
-    value: input.value,
-    reps: input.reps,
-    currency: input.currency,
-    status: input.status,
-    type: input.type,
-    raw: input.raw,
-  });
-  if (input.type === "REFERRAL") {
-    await insertRecruitmentRewardsForUpdateReps(input.client, input);
-  }
-  // If we succeed, that means the transaction was not already in the database.
-  // We can then update the user
-  return await updateUserDataForUpdateReps(input.client, input);
-};
-
-/**
  * Fetch a subscrioption from paypal
  */
 export const getPaypalTransactions = async (
@@ -901,7 +856,7 @@ export const syncTransactions = async (
               message: `Transaction ID ${info.transaction_id} already processed`,
             };
           } else {
-            const result = await updateReps({
+            const result = await deliverPaypalReputation({
               client: client,
               createdById: createdByUserId,
               transactionId: info.transaction_id,
@@ -916,12 +871,12 @@ export const syncTransactions = async (
               type: "REP_PURCHASE",
               raw: t,
             });
-            return result && "success" in result && !result.success
-              ? result
-              : {
+            return result.success
+              ? {
                   success: true,
                   message: `Transaction ID ${info.transaction_id} synced!`,
-                };
+                }
+              : result;
           }
         }
       }),
@@ -1068,7 +1023,7 @@ const deliverPaypalOrder = async (
 };
 
 /** Verify legacy terms and serialize allowance, receipt conversion and credit for safe replay. */
-const deliverPaypalReputation = async (input: Parameters<typeof updateReps>[0]) => {
+export const deliverPaypalReputation = async (input: PaypalReputationPayment) => {
   const [createdById, affectedUserId] = await Promise.all([
     canonicalStoreUserId(input.client, input.createdById),
     canonicalStoreUserId(input.client, input.affectedUserId),
@@ -1154,7 +1109,7 @@ const deliverPaypalReputation = async (input: Parameters<typeof updateReps>[0]) 
         return errorResponse(
           "Payment received but exceeds your monthly allowance. Contact support with your PayPal transaction ID for review or refund; no points were delivered.",
         );
-      const granted = await updateUserDataForUpdateReps(tx, input);
+      const granted = await creditPaypalReputation(tx, input);
       if (granted.rowsAffected !== 1)
         throw new Error("PayPal recipient not found; delivery will retry");
       return { success: true, message: "Reputation points purchased" };
@@ -1424,6 +1379,22 @@ const requestStorePaypalOrder = async (
     );
   }
   return (await response.json()) as PaypalOrder;
+};
+
+type PaypalReputationPayment = {
+  client: DrizzleClient;
+  createdById: string;
+  transactionId: string;
+  transactionUpdatedDate: string;
+  orderId?: string;
+  affectedUserId: string;
+  invoiceId?: string | null;
+  value: number;
+  currency: string;
+  status: string;
+  reps: number;
+  type: "REP_PURCHASE";
+  raw: JsonData;
 };
 
 type PaypalAmount = {
