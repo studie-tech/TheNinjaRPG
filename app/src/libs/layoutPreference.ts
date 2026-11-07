@@ -1,4 +1,5 @@
 import { type GameLayoutId, toGameLayoutId } from "@/libs/gameLayouts";
+import { readDocumentCookie } from "@/utils/cookies";
 export const LAYOUT_PREFERENCE_COOKIE = "tnr_layout_preference";
 
 /**
@@ -68,10 +69,7 @@ export const persistFontScaleCookie = (scale: FontScaleValue) => {
  */
 export const applyFontScaleCookie = () => {
   if (typeof document === "undefined") return;
-  const match = document.cookie.match(
-    new RegExp(`(?:^|; )${FONT_SCALE_COOKIE}=([^;]*)`),
-  );
-  const scale = toFontScale(match ? decodeURIComponent(match[1] ?? "") : undefined);
+  const scale = toFontScale(readDocumentCookie(FONT_SCALE_COOKIE));
   if (scale === undefined || scale === DEFAULT_FONT_SCALE) {
     document.documentElement.style.removeProperty("--font-scale");
   } else {

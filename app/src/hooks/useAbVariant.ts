@@ -3,30 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { type LemuVariant, normalizeLemuVariant } from "@/libs/lemuExperiment";
+import { readDocumentCookie } from "@/utils/cookies";
 
 export type AbVariant = LemuVariant;
 
 type Options = {
   defaultVariant?: AbVariant;
   parse?: (raw: string) => AbVariant | undefined;
-};
-
-/**
- * readCookie
- * - Reads a cookie from the document
- * @param name - The name of the cookie to read
- * @returns The value of the cookie
- */
-const readCookie = (name: string): string | undefined => {
-  if (typeof document === "undefined") return undefined;
-  const target = `${encodeURIComponent(name)}=`;
-  const parts = document.cookie.split("; ");
-  for (const part of parts) {
-    if (part.startsWith(target)) {
-      return decodeURIComponent(part.slice(target.length));
-    }
-  }
-  return undefined;
 };
 
 /**
@@ -56,7 +39,7 @@ export const useAbVariant = (cookieName: string, options?: Options) => {
   const [rawValue, setRawValue] = useState<string | undefined>(undefined);
 
   const refresh = useCallback(() => {
-    setRawValue(readCookie(cookieName));
+    setRawValue(readDocumentCookie(cookieName));
   }, [cookieName]);
 
   useEffect(() => {
