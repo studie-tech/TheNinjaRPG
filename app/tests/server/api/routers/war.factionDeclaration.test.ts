@@ -292,6 +292,23 @@ describeWithDatabase("faction war declarations", () => {
     expect((await readFaction())?.tokens).toBe(TOKENS);
   });
 
+  it("charges a village declaration the configured objective-war cost", async () => {
+    await seedWorld("VILLAGE");
+    const database = await getTestDatabase();
+    await seedElderVote();
+    const declarationCost = TOKENS + 1;
+    await database.insert(gameSetting).values([
+      { id: "OBJECTIVE_WAR_enabled", name: "OBJECTIVE_WAR_enabled", time: new Date(), value: 1 },
+      { id: "OBJECTIVE_WAR_declarationCost", name: "OBJECTIVE_WAR_declarationCost", time: new Date(), value: declarationCost },
+    ]);
+    const result = await declare(LEADER, FACTION);
+    expect(result).toMatchObject({
+      success: false,
+      message: `Your village needs ${declarationCost.toLocaleString()} tokens to declare war`,
+    });
+    expect(await database.select().from(villageElderVote)).toHaveLength(0);
+  });
+
   it("preserves the Town Hall through a village declaration and elder approval", async () => {
     await seedWorld("VILLAGE");
     const database = await getTestDatabase();
