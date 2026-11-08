@@ -45,7 +45,7 @@ const battle = () => ({
 }) as ReturnedBattle;
 
 it("lists the battle's actions oldest first and opens their applied effects", () => {
-  const view = render(<CombatTimeline battleId="battle" battle={battle()} battleVersion={8} showBasicActions={false} />);
+  const view = render(<CombatTimeline battle={battle()} showBasicActions={false} />);
   expect(query).toHaveBeenCalledWith(
     { battleId: "battle", limit: 5, offset: 0, refreshKey: 8, userFilter: "all", showBasicActions: false },
     expect.objectContaining({ enabled: true }),
@@ -71,7 +71,7 @@ it("lists the battle's actions oldest first and opens their applied effects", ()
 
 it("holds the next slot for the player's pending action", () => {
   getDefaultStore().set(combatPendingActionAtom, { battleId: "battle", version: 9, userId: "player", name: "Sonic Slash", image: "slash.png", cost: 30 });
-  const view = render(<CombatTimeline battleId="battle" battle={battle()} battleVersion={8} />);
+  const view = render(<CombatTimeline battle={battle()} />);
   expect(query).toHaveBeenCalledWith(expect.objectContaining({ showBasicActions: true }), expect.anything());
   expect(view.getByRole("status", { name: "Performing Sonic Slash" }).textContent).toContain("Round 4");
 });

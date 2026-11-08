@@ -765,12 +765,7 @@ export default function CombatPage() {
     (focus = false) => {
       if ((!focus && !config.showTimeline) || !battle) return null;
       return (
-        <CombatTimeline
-          battleId={battle.id}
-          battle={battle}
-          battleVersion={battle.version}
-          showBasicActions={config.showBasicActions}
-        />
+        <CombatTimeline battle={battle} showBasicActions={config.showBasicActions} />
       );
     },
     [config.showTimeline, config.showBasicActions, battle],
