@@ -29,13 +29,8 @@ export default function SageModeEdit(props: {
 
   const normalizedData = useMemo(() => {
     if (!data) return null;
-    const copy: SageMode = {
-      ...data,
-      effects: [...data.effects],
-      afterEffects: [...data.afterEffects],
-      level2Effects: [...data.level2Effects],
-    };
-    setNullsToEmptyStrings(copy as unknown as Record<string, unknown>);
+    const copy = { ...data };
+    setNullsToEmptyStrings(copy);
     return copy;
   }, [data]);
 
