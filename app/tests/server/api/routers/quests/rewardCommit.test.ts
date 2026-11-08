@@ -22,6 +22,23 @@ import { aroundStatements } from "../../../../setup/statements";
 
 const rewards = () => PostProcessedRewardSchema.parse({});
 
+type CommitInput = Parameters<typeof commitQuestObjectiveRewards>[0];
+/** Commit a resolved claim of `history` for `user` with the shared defaults; pass what a test varies. */
+const commit = <User extends { userId: string }>(client: CommitInput["client"], user: User, history: object, overrides: Partial<CommitInput> = {}) =>
+  commitQuestObjectiveRewards({
+    client,
+    userId: user.userId,
+    user: user as never,
+    rewards: rewards(),
+    trackers: [],
+    userQuest: history as never,
+    resolved: true,
+    notifications: [],
+    consequences: [],
+    existingHistory: history as never,
+    ...overrides,
+  });
+
 afterEach(() => vi.restoreAllMocks());
 
 /** Builds the minimum hydrated user shape exercised by the shared reward commit path. */
@@ -248,9 +265,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
     const { client, sets } = makeClient([
       { rowsAffected: 1 }, { rowsAffected: wins ? 1 : 0 }, { rowsAffected: 1 }
     ]);
-    const result = await commitQuestObjectiveRewards({ client, userId: user.userId, user: user as never,
-      rewards: { ...rewards(), reward_level: 101, reward_stats: 20_000 }, trackers: [], userQuest: history as never,
-      resolved: true, notifications: [], consequences: [], existingHistory: history });
+    const result = await commit(client, user, history, { rewards: { ...rewards(), reward_level: 101, reward_stats: 20_000 } });
     expect(result.outcome).toBe(wins ? "claimed" : "state_changed");
     expect(sets[1]).toMatchObject({ level: 101, offence: 1_320_000, strength: 420_000, maxHealth: calcHP(101) });
     expect(user.level).toBe(wins ? 101 : 100);
@@ -260,10 +275,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
   it("rejects a stale milestone before consuming history or delivering any rewards", async () => {
     const { user, missionHistory } = makeUser();
     const { client, update } = makeClient([]);
-    const result = await commitQuestObjectiveRewards({ client, userId: user.userId,
-      user: { ...user, rank: "ELITE JONIN", level: 101 } as never,
-      rewards: { ...rewards(), reward_level: 101, reward_stats: 20_000 }, trackers: [], userQuest: missionHistory as never,
-      resolved: true, notifications: [], consequences: [], existingHistory: missionHistory });
+    const result = await commit(client, { ...user, rank: "ELITE JONIN", level: 101 }, missionHistory, { rewards: { ...rewards(), reward_level: 101, reward_stats: 20_000 } });
     expect(result.outcome).toBe("state_changed");
     expect(update).not.toHaveBeenCalled();
   });
@@ -290,11 +302,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
     const { client } = makeClient([
       { rowsAffected: 1 }, { rowsAffected: 1 }, { rowsAffected: 1 }, { rowsAffected: 0 },
     ]);
-    const result = await commitQuestObjectiveRewards({
-      client, userId: user.userId, user: hydrated as never, rewards: rewards(),
-      trackers: [], userQuest: history as never, resolved: true,
-      notifications: [], consequences: [], existingHistory: history,
-    });
+    const result = await commit(client, hydrated, history);
     expect(result).toMatchObject({ outcome: "claimed", userCacheEligible: true });
     expect(hydrated.userQuests.some((entry) => entry.questId === history.questId)).toBe(false);
     expect(getNewTrackers(hydrated as never, [{ task: "any" }]).trackers.some((tracker) => tracker.id === history.questId)).toBe(false);
@@ -309,11 +317,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       { rowsAffected: farmRows },
     ]);
     const claimRewards = PostProcessedRewardSchema.parse({ reward_money: 50, reward_exp: 10 });
-    const result = await commitQuestObjectiveRewards({
-      client, userId: user.userId, user: user as never,
-      rewards: claimRewards, trackers: [], userQuest: missionHistory as never,
-      resolved: true, notifications: [], consequences: [], existingHistory: missionHistory,
-    });
+    const result = await commit(client, user, missionHistory, { rewards: claimRewards });
     expect(result).toMatchObject({ outcome: "claimed", userCacheEligible: farmRows === 0,
       userDelta: { money: 50, earnedExperience: 10 } });
     expect(user).toMatchObject({ money: 150, earnedExperience: 30, curEnergy: 50,
@@ -343,18 +347,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       const { client, sets } = makeClient(
         Array.from({ length: 4 }, () => ({ rowsAffected: 1 })),
       );
-      const result = await commitQuestObjectiveRewards({
-        client,
-        userId: user.userId,
-        user: { ...user, userQuests: [history, ...user.userQuests.slice(1)] } as never,
-        rewards: rewards(),
-        trackers: [],
-        userQuest: history as never,
-        resolved,
-        notifications: [],
-        consequences: [],
-        existingHistory: history,
-      });
+      const result = await commit(client, { ...user, userQuests: [history, ...user.userQuests.slice(1)] }, history, { resolved });
       expect(result.outcome).toBe("claimed");
       const payout = sets.find((set) => "money" in set)!;
       if (amount) {
@@ -372,11 +365,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       const { user, missionHistory } = makeUser();
       const history = { ...missionHistory, quest: { ...missionHistory.quest, questType } };
       const { client, sets, update } = makeClient([{ rowsAffected: 0 }], { completed: 0 });
-      const result = await commitQuestObjectiveRewards({
-        client, userId: user.userId, user: { ...user, userQuests: [history] } as never,
-        rewards: rewards(), trackers: [], userQuest: history as never, resolved: true,
-        notifications: [], consequences: [], existingHistory: history,
-      });
+      const result = await commit(client, { ...user, userQuests: [history] }, history);
       expect(result.outcome).toBe("state_changed");
       expect(sets).toEqual([{ joinedCompletion: true }]);
       expect(update).not.toHaveBeenCalled();
@@ -393,18 +382,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       { rowsAffected: 1 },
     ]);
 
-    const result = await commitQuestObjectiveRewards({
-      client,
-      userId: user.userId,
-      user: user as never,
-      rewards: rewards(),
-      trackers: [],
-      userQuest: missionHistory as never,
-      resolved: true,
-      notifications: [],
-      consequences: [],
-      existingHistory: missionHistory,
-    });
+    const result = await commit(client, user, missionHistory);
 
     expect(result.outcome).toBe("claimed");
     expect(sets[0]).toMatchObject({ completed: 1, endAt: expect.any(Date) });
@@ -428,18 +406,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       completed: 1,
     });
 
-    const result = await commitQuestObjectiveRewards({
-      client,
-      userId: user.userId,
-      user: user as never,
-      rewards: rewards(),
-      trackers: [],
-      userQuest: missionHistory as never,
-      resolved: true,
-      notifications: [],
-      consequences: [],
-      existingHistory: missionHistory,
-    });
+    const result = await commit(client, user, missionHistory);
 
     expect(result).toEqual({ outcome: "already_completed" });
     expect(update).toHaveBeenCalledTimes(1);
@@ -454,18 +421,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       { rowsAffected: 1 },
     ]);
 
-    const result = await commitQuestObjectiveRewards({
-      client,
-      userId: user.userId,
-      user: user as never,
-      rewards: rewards(),
-      trackers: [],
-      userQuest: missionHistory as never,
-      resolved: true,
-      notifications: [],
-      consequences: [],
-      existingHistory: missionHistory,
-    });
+    const result = await commit(client, user, missionHistory);
 
     expect(result).toEqual({ outcome: "state_changed" });
     expect(sets).toHaveLength(3);
@@ -488,18 +444,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       { rowsAffected: 1 },
     ]);
 
-    const result = await commitQuestObjectiveRewards({
-      client,
-      userId: hydratedUser.userId,
-      user: hydratedUser as never,
-      rewards: rewards(),
-      trackers: [],
-      userQuest: missionHistory as never,
-      resolved: false,
-      notifications: [],
-      consequences: [{ type: "remove_item", ids: ["item-1"] }],
-      existingHistory: missionHistory,
-    });
+    const result = await commit(client, hydratedUser, missionHistory, { resolved: false, consequences: [{ type: "remove_item", ids: ["item-1"] }] });
 
     expect(result.outcome).toBe("claimed");
     expect(deleteFrom).toHaveBeenCalledTimes(1);
@@ -521,18 +466,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       startAt: new Date().toISOString(),
     };
 
-    const result = await commitQuestObjectiveRewards({
-      client,
-      userId: user.userId,
-      user: user as never,
-      rewards: rewards(),
-      trackers: [trackerForResolvedQuest] as never,
-      userQuest: missionHistory as never,
-      resolved: true,
-      notifications: [],
-      consequences: [],
-      existingHistory: missionHistory,
-    });
+    const result = await commit(client, user, missionHistory, { trackers: [trackerForResolvedQuest] as never });
 
     expect(result.outcome).toBe("claimed");
     expect(sets[1]).toMatchObject({ questData: [] });
@@ -547,10 +481,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
     const { user, missionHistory } = makeUser();
     const { client, sets } = makeGatheringClient();
 
-    const result = await commitQuestObjectiveRewards({
-      client,
-      userId: user.userId,
-      user: { ...user, occupation: "GATHERING" } as never,
+    const result = await commit(client, { ...user, occupation: "GATHERING" }, missionHistory, {
       rewards: PostProcessedRewardSchema.parse({
         reward_gathering_items: true,
       }),
@@ -560,11 +491,6 @@ describe("commitQuestObjectiveRewards compatibility", () => {
           goals: [{ id: "obj-1", done: true, value: 1 }],
         },
       ] as never,
-      userQuest: missionHistory as never,
-      resolved: true,
-      notifications: [],
-      consequences: [],
-      existingHistory: missionHistory,
     });
 
     expect(result.outcome).toBe("claimed");
@@ -596,19 +522,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
         { rowsAffected: 1 },
       ]);
 
-      const result = await commitQuestObjectiveRewards({
-        client,
-        userId: user.userId,
-        user: user as never,
-        rewards: rewards(),
-        trackers: [],
-        userQuest: missionHistory as never,
-        resolved: true,
-        notifications: [],
-        consequences: [],
-        existingHistory: missionHistory,
-        rewardChoice,
-      });
+      const result = await commit(client, user, missionHistory, { rewardChoice });
 
       expect(result).toMatchObject({ outcome: "claimed", rewardChoicePending: true });
       expect(sets[0]).toMatchObject({ completed: 1, pendingRewardChoice: rewardChoice });
@@ -618,19 +532,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       const { user, missionHistory } = makeUser();
       const { client, sets } = makeClient([{ rowsAffected: 1 }, { rowsAffected: 1 }]);
 
-      const result = await commitQuestObjectiveRewards({
-        client,
-        userId: user.userId,
-        user: user as never,
-        rewards: rewards(),
-        trackers: [],
-        userQuest: missionHistory as never,
-        resolved: false,
-        notifications: [],
-        consequences: [],
-        existingHistory: missionHistory,
-        rewardChoice,
-      });
+      const result = await commit(client, user, missionHistory, { resolved: false, rewardChoice });
 
       expect(result).toMatchObject({ outcome: "claimed", rewardChoicePending: false });
       expect(sets.some((set) => "pendingRewardChoice" in set)).toBe(false);
@@ -643,19 +545,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
         pendingRewardChoice: { ...rewardChoice, id: "older-offer" },
       } as never);
 
-      const result = await commitQuestObjectiveRewards({
-        client,
-        userId: user.userId,
-        user: user as never,
-        rewards: rewards(),
-        trackers: [],
-        userQuest: missionHistory as never,
-        resolved: true,
-        notifications: [],
-        consequences: [],
-        existingHistory: missionHistory,
-        rewardChoice,
-      });
+      const result = await commit(client, user, missionHistory, { rewardChoice });
 
       expect(result).toEqual({ outcome: "choice_pending" });
       expect(sets).toHaveLength(1);
@@ -669,19 +559,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
         { rowsAffected: 1 },
       ]);
 
-      const result = await commitQuestObjectiveRewards({
-        client,
-        userId: user.userId,
-        user: user as never,
-        rewards: rewards(),
-        trackers: [],
-        userQuest: missionHistory as never,
-        resolved: true,
-        notifications: [],
-        consequences: [],
-        existingHistory: missionHistory,
-        rewardChoice,
-      });
+      const result = await commit(client, user, missionHistory, { rewardChoice });
 
       expect(result).toEqual({ outcome: "state_changed" });
       expect(sets[2]).toMatchObject({ completed: 0, pendingRewardChoice: null });
@@ -832,10 +710,7 @@ describeWithDatabase("quest reward claims", () => {
       with: { userQuests: { with: { quest: true } }, completedQuests: true, items: { with: { item: true } } },
     }))!;
     const history = user.userQuests.find(q => q.questId === "sensei-mission")!;
-    const claim = () => commitQuestObjectiveRewards({
-      client, userId: user.userId, user: user as never, rewards: rewards(), trackers: [],
-      userQuest: history as never, resolved: true, notifications: [], consequences: [], existingHistory: history,
-    });
+    const claim = () => commit(client, user, history);
     expect((await claim()).outcome).toBe("claimed");
     expect(await client.query.userData.findFirst({ where: eq(userData.userId, "mission-sensei") })).toMatchObject({ money: 500 + bonus });
     expect(await client.query.userData.findFirst({ where: eq(userData.userId, "mission-student") })).toMatchObject({ money: 500 });
@@ -880,18 +755,7 @@ describeWithDatabase("quest reward claims", () => {
       });
       return run();
     }, { when: (set) => "curEnergy" in set });
-    const claim = await commitQuestObjectiveRewards({
-      client,
-      userId: user.userId,
-      user: user as never,
-      rewards: rewards(),
-      trackers: [],
-      userQuest: history as never,
-      resolved: true,
-      notifications: [],
-      consequences: [],
-      existingHistory: history,
-    });
+    const claim = await commit(client, user, history);
     expect(claim.outcome).toBe("claimed");
     if (claim.outcome === "claimed") {
       expect(claim.postNotifications).toContain("Energy reward: 100 (restored up to capacity).");
