@@ -32,7 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { type BountyStatus, IMG_BUILDING_MISSIONHALL } from "@/drizzle/constants";
+import {
+  BOUNTY_MAX_HUNTERS,
+  BOUNTY_STATUSES,
+  type BountyStatus,
+  IMG_BUILDING_MISSIONHALL,
+} from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import type { ColumnDefinitionType } from "@/layout/Table";
@@ -44,6 +49,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { canSeeHiddenBountyInfo } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { createBountySchema } from "@/validators/bounty";
 
@@ -297,10 +303,11 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="OPEN">Open</SelectItem>
-              <SelectItem value="CLAIMED">Claimed</SelectItem>
-              <SelectItem value="EXPIRED">Expired</SelectItem>
-              <SelectItem value="CANCELLED">Cancelled</SelectItem>
+              {BOUNTY_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {capitalizeFirstLetter(status)}
+                </SelectItem>
+              ))}
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
           </Select>
@@ -404,7 +411,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               )}
             </div>
           ),
-          hunters: `${b.huntersCount} / 3`,
+          hunters: `${b.huntersCount} / ${BOUNTY_MAX_HUNTERS}`,
           creatorInfo: b.creatorUser ? (
             <div>
               <p className="font-bold">{b.creatorUser.username}</p>
@@ -491,7 +498,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             // User can track if not signed up, not the creator, and bounty is open with space
             if (
               !b.youSignedUp &&
-              b.huntersCount < 3 &&
+              b.huntersCount < BOUNTY_MAX_HUNTERS &&
               b.status === "OPEN" &&
               !b.isCreator
             ) {
