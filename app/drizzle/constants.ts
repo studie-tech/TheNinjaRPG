@@ -2158,7 +2158,8 @@ export const OVERWORLD_QUEST_ROLLS_PER_DAY = MISSIONS_PER_DAY;
  */
 export const TERMINAL_DIALOG_PREFIX = "__terminal__:";
 
-export const OverworldInteractionTypes = ["FRIENDLY", "HOSTILE"] as const;
+/** AMBIENT placements are scenery: they roam the map and offer no interaction. */
+export const OverworldInteractionTypes = ["FRIENDLY", "HOSTILE", "AMBIENT"] as const;
 export type OverworldInteractionType = (typeof OverworldInteractionTypes)[number];
 
 export const OverworldSectorTypes = ["specific", "random", "from_list"] as const;
@@ -2166,6 +2167,18 @@ export type OverworldSectorType = (typeof OverworldSectorTypes)[number];
 
 export const OverworldLocationTypes = ["specific", "random"] as const;
 export type OverworldLocationType = (typeof OverworldLocationTypes)[number];
+
+/** Globe regions a randomly placed overworld AI may be restricted to; ocean hosts none. */
+export const OverworldHabitats = ["grassland", "desert", "snow"] as const;
+export type OverworldHabitat = (typeof OverworldHabitats)[number];
+/** Hexes an overworld AI roams from its tile unless staff configure otherwise. */
+export const OVERWORLD_DEFAULT_WANDER_RADIUS = 5;
+export const OVERWORLD_MAX_WANDER_RADIUS = 10;
+/** Copies of one placement across the world; each copy rolls its own tile every day. */
+export const OVERWORLD_MAX_SPAWN_COUNT = 500;
+export const OVERWORLD_MAX_GROUP_SIZE = 8;
+/** Map size range in percent of the default NPC height. */
+export const OVERWORLD_MAP_SCALE_RANGE = [30, 250] as const;
 
 export const MEDICAL_MISSIONS_PER_DAY = 9;
 export const PVP_MISSIONS_PER_DAY = 12;

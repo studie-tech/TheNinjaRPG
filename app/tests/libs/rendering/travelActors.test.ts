@@ -21,9 +21,26 @@ describe("travel actor snapshots", () => {
   });
   it.each(["FRIENDLY", "HOSTILE"] as const)("keeps independent placement identities for %s NPCs", (npcInteractionType) => {
     const result = recipes([player({ isNpc: true, npcPlacementId: "one", npcInteractionType }), player({ isNpc: true, npcPlacementId: "two", npcInteractionType })], { minBracket: 8 });
-    expect(result.map((recipe) => recipe.key)).toEqual(["npc:one", "npc:two"]);
+    expect(result.map((recipe) => recipe.key)).toEqual(["npc:one:0:0", "npc:two:0:0"]);
     expect(result[0]?.parts.map((part) => part.kind)).toEqual(["avatar", npcInteractionType === "HOSTILE" ? "attack" : "talk"]);
     expect(result[0]?.parts[0]).toMatchObject({ image: "avatar.webp", rendition: 256 });
+  });
+  it("animates ambient NPC sheets with shadows, never orbits roaming members and follows the Wildlife setting", () => {
+    const sheet = (id: string) => ({ id, name: id, url: `https://uploadthing.b-cdn.net/f/${id}`, smallUrl: `https://uploadthing.b-cdn.net/f/${id}-small`, columns: 8, rows: 2, frameCount: 16, fps: 12.5, facing: "left" as const });
+    const deer = (member: number) => player({
+      userId: "deer", isNpc: true, npcPlacementId: "herd", npcCopy: 2, npcMember: member, npcInteractionType: "AMBIENT", npcScale: 0.5,
+      npcWander: { seed: "herd:0:2", anchor: { x: 5, y: 5 }, radius: 5, wildOnly: true },
+      npcSheets: { idle: sheet("idle"), move: sheet("move") },
+    });
+    const result = recipes([deer(0), deer(1), deer(2)]);
+    expect(result.map((recipe) => recipe.key)).toEqual(["npc:herd:2:0", "npc:herd:2:1", "npc:herd:2:2"]);
+    expect(result.every((recipe) => !recipe.spread)).toBe(true);
+    const parts = result[0]!.parts;
+    expect(parts.map((part) => part.kind)).toEqual(["avatar"]);
+    expect(parts[0]).toMatchObject({ shadow: expect.any(Number), light: expect.any(Number), size: 10 * 1.3 * 0.5 });
+    expect(parts[0]?.loop).toMatchObject({ facing: "left", clip: { images: ["https://uploadthing.b-cdn.net/f/idle"] } });
+    expect(parts[0]?.walk).toMatchObject({ facing: "left", clip: { images: ["https://uploadthing.b-cdn.net/f/move"] } });
+    expect(recipes([deer(0), player()], { showAmbient: false }).map((recipe) => recipe.key)).toEqual(["user:other"]);
   });
   it("omits restricted attack actions while preserving healing and profile details", () => {
     expect(recipes([player({ rank: "STUDENT" })])[0]?.parts.map((part) => part.kind)).toEqual(["marker", "marker", "avatar", "heal", "info"]);
@@ -89,7 +106,7 @@ describe("travel actor snapshots", () => {
   it("keeps the viewer and NPC placements while representing crowded players with a count", () => {
     const result = recipes([player(), player({ userId: "two" }), player({ userId: "self" }), player({ isNpc: true, npcPlacementId: "guide" })]);
     expect(result.filter((recipe) => recipe.counter).map((recipe) => recipe.counter)).toEqual([4]);
-    expect(result.filter((recipe) => recipe.user).map((recipe) => recipe.key)).toEqual(["user:other", "user:two", "user:self", "npc:guide"]);
+    expect(result.filter((recipe) => recipe.user).map((recipe) => recipe.key)).toEqual(["user:other", "user:two", "user:self", "npc:guide:0:0"]);
     expect(result.filter((recipe) => recipe.user).every((recipe) => recipe.spread)).toBe(true);
   });
   it("never exposes self actions or a masked profile", () => {

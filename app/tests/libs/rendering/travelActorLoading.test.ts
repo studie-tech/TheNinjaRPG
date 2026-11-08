@@ -65,9 +65,9 @@ describe("travel actor artwork loading", () => {
     users.push(player(99,{isNpc:true,npcPlacementId:"guide",npcInteractionType,longitude:4,latitude:4,updatedAt:new Date(0)}));
     actors.sync(snapshot(users));
     const roots=actors.container.children.filter(root=>root.label.startsWith("user:")||root.label.startsWith("npc:"));
-    expect(roots).toHaveLength(20); expect(roots.some(root=>root.label==="npc:guide")).toBe(true);
+    expect(roots).toHaveLength(20); expect(roots.some(root=>root.label==="npc:guide:0:0")).toBe(true);
     const recipes=travelActorRecipes({...snapshot(users),characterKeys:new Set(roots.map(root=>root.label))});
-    expect(recipes.find(recipe=>recipe.key==="npc:guide")?.parts.some(part=>part.kind===(npcInteractionType==="HOSTILE"?"attack":"talk"))).toBe(true);
+    expect(recipes.find(recipe=>recipe.key==="npc:guide:0:0")?.parts.some(part=>part.kind===(npcInteractionType==="HOSTILE"?"attack":"talk"))).toBe(true);
     expect(recipes.find(recipe=>recipe.counter)?.counter).toBe(31);
   });
 

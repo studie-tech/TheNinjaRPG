@@ -15,6 +15,41 @@ describe("OverworldPlacementSchema", () => {
     isActive: true,
   };
 
+  it("defaults to a five-hex roam, one copy on its own and standard size", () => {
+    const parsed = OverworldPlacementSchema.parse(base);
+    expect(parsed).toMatchObject({ wanderRadius: 5, spawnCount: 1, groupMin: 1, groupMax: 1, habitats: [], wildOnly: false, mapScale: 100 });
+  });
+
+  it("accepts ambient wildlife herds spread over random habitat sectors", () => {
+    expect(
+      OverworldPlacementSchema.safeParse({
+        ...base,
+        interactionType: "AMBIENT",
+        sectorType: "random",
+        locationType: "random",
+        spawnCount: 240,
+        groupMin: 3,
+        groupMax: 5,
+        habitats: ["grassland"],
+        wildOnly: true,
+        mapScale: 75,
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    [{ groupMin: 4, groupMax: 2 }, "groupMin"],
+    [{ spawnCount: 3 }, "spawnCount"],
+    [{ habitats: ["snow"] }, "habitats"],
+    [{ interactionType: "AMBIENT", quests: [{ questId: "q1", chance: 10 }] }, "quests"],
+    [{ wanderRadius: 11 }, "wanderRadius"],
+    [{ mapScale: 10 }, "mapScale"],
+  ])("rejects %p", (patch, path) => {
+    const result = OverworldPlacementSchema.safeParse({ ...base, ...patch });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.path[0] === path)).toBe(true);
+  });
+
   it("accepts per-quest chances summing to <= 100", () => {
     expect(
       OverworldPlacementSchema.safeParse({

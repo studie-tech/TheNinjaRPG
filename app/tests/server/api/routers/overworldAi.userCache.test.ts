@@ -70,6 +70,21 @@ describeWithDatabase("overworld interaction profile updates", () => {
       expect(response.userDelta).toBeUndefined();
     }
   });
+  it("refuses ambient placements, which are scenery, without touching the player", async () => {
+    const db = await getTestDatabase();
+    await db.update(overworldAiPlacement).set({ interactionType: "AMBIENT" }).where(eq(overworldAiPlacement.id, "cache-giver"));
+    const { caller } = await prepared();
+    expect(await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 })).toEqual({ success: false, message: "It pays you no attention" });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") })).toHaveProperty("status", "AWAKE");
+  });
+
+  it("finds a roaming NPC's first copy on its stored tile when its sector has no map", async () => {
+    const { caller } = await prepared();
+    // The fixture placement keeps the default five-hex roam; the test database publishes no maps.
+    expect(await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 })).toMatchObject({ success: true });
+    expect(await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0, copy: 1 })).toEqual({ success: false, message: "You are not standing on the NPC's tile" });
+  });
+
   it("acknowledges a friendly NPC with no available work without changing the profile", async () => {
     const { caller } = await prepared();
     expect(await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 })).toMatchObject({ success: true, userPatch: {} });

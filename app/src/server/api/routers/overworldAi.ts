@@ -10,14 +10,17 @@ import {
 } from "@/deltas/overworldAi";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import { getQuestRewardProjectionUpdate } from "@/deltas/quests";
+import { type OverworldHabitat, OverworldHabitats } from "@/drizzle/constants";
 import { overworldAiPlacement, type UserQuest } from "@/drizzle/schema";
 import {
   findActionableBoundObjective,
   hasFriendlyBindingToPlacement,
+  isOverworldCopyInReach,
   pickWeightedQuest,
   resolveOverworldPosition,
   snapOverworldPositionToWalkable,
 } from "@/libs/overworldAi";
+import { snapToWanderTile } from "@/libs/overworldWander";
 import {
   expandAiCopies,
   getBoundObjectiveCandidates,
@@ -82,7 +85,7 @@ import {
   OVERWORLD_ASSIGNABLE_QUEST_TYPES,
 } from "@/server/utils/questAssignment";
 import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
-import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
+import { fetchPublishedSectorMap, habitatSectorPool } from "@/server/utils/sectorMap";
 import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
@@ -105,6 +108,20 @@ export const overworldAiRouter = createTRPCRouter({
       }
       return listOverworldAiPlacementForGetPlacementsForAi(ctx.drizzle, input);
     }),
+
+  /** Placeable sectors per habitat, so the editor can show how dense a spawn count is. */
+  getHabitatSectorCounts: protectedProcedure.query(async ({ ctx }) => {
+    const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (!canChangeContent(user.role)) {
+      throw serverError("UNAUTHORIZED", "Not allowed");
+    }
+    return Object.fromEntries(
+      OverworldHabitats.map((habitat) => [
+        habitat,
+        habitatSectorPool([habitat]).length,
+      ]),
+    ) as Record<OverworldHabitat, number>;
+  }),
 
   getAllPlacementNames: protectedProcedure.query(async ({ ctx }) => {
     // Guard: placement config is staff-only, same as the sibling endpoints below.
@@ -184,7 +201,11 @@ export const overworldAiRouter = createTRPCRouter({
       // Position-map loading is independent of the binding checks below. Start it now so the
       // successful edit path pays for both DB reads in parallel; normalize failure to null so an
       // early binding return cannot leave a rejected promise unobserved.
-      const rawPosition = resolveOverworldPosition(cfg);
+      const rawPosition = resolveOverworldPosition(
+        cfg,
+        Math.random,
+        habitatSectorPool(cfg.habitats),
+      );
       const sectorMapPromise = fetchPublishedSectorMap(
         ctx.drizzle,
         rawPosition.sector,
@@ -193,9 +214,12 @@ export const overworldAiRouter = createTRPCRouter({
       // Referential-safety guards: a bound placement cannot be deactivated, repointed at a
       // different AI, made roaming while carrying structure art, or changed to HOSTILE
       // while it carries a friendly interaction objective.
-      const makingHostile = input.data.interactionType === "HOSTILE";
+      const makingHostile = input.data.interactionType !== "FRIENDLY";
       const makingRoaming =
-        cfg.sectorType !== "specific" || cfg.locationType !== "specific";
+        cfg.sectorType !== "specific" ||
+        cfg.locationType !== "specific" ||
+        cfg.wanderRadius > 0 ||
+        cfg.spawnCount > 1;
       const changingAi =
         !!existingPlacement &&
         existingPlacement.aiTemplateUserId !== cfg.aiTemplateUserId;
@@ -206,6 +230,11 @@ export const overworldAiRouter = createTRPCRouter({
         if (!input.data.isActive && binding.length > 0) {
           return errorResponse(
             `Cannot deactivate: bound to quest(s): ${binding.map((q) => q.name).join(", ")}.`,
+          );
+        }
+        if (cfg.interactionType === "AMBIENT" && binding.length > 0) {
+          return errorResponse(
+            `Cannot make ambient: bound to quest(s): ${binding.map((q) => q.name).join(", ")}. Ambient NPCs offer no interaction.`,
           );
         }
         if (changingAi && binding.length > 0) {
@@ -224,7 +253,7 @@ export const overworldAiRouter = createTRPCRouter({
           : [];
         if (structureBound.length > 0) {
           return errorResponse(
-            `Cannot make roaming: structure objectives in quest(s) ${structureBound.map((q) => q.name).join(", ")} require a fixed NPC placement. Unbind them first.`,
+            `Cannot make roaming: structure objectives in quest(s) ${structureBound.map((q) => q.name).join(", ")} require a fixed NPC placement. Set the roaming radius to 0 and keep one copy, or unbind them first.`,
           );
         }
         const friendlyBound = makingHostile
@@ -253,7 +282,20 @@ export const overworldAiRouter = createTRPCRouter({
       if (!sectorMap) {
         return errorResponse(`Sector ${rawPosition.sector} has no published map`);
       }
-      const pos = snapOverworldPositionToWalkable(rawPosition, sectorMap);
+      const wanderTile = cfg.wildOnly
+        ? snapToWanderTile(
+            sectorMap,
+            { x: rawPosition.longitude, y: rawPosition.latitude },
+            true,
+          )
+        : null;
+      const pos = wanderTile
+        ? {
+            sector: rawPosition.sector,
+            longitude: wanderTile.x,
+            latitude: wanderTile.y,
+          }
+        : snapOverworldPositionToWalkable(rawPosition, sectorMap);
       if (!pos)
         return errorResponse(`Sector ${rawPosition.sector} has no walkable tile`);
       if (
@@ -275,6 +317,13 @@ export const overworldAiRouter = createTRPCRouter({
         sectorType: cfg.sectorType,
         locationType: cfg.locationType,
         sectorList: cfg.sectorList,
+        wanderRadius: cfg.wanderRadius,
+        spawnCount: cfg.spawnCount,
+        groupMin: cfg.groupMin,
+        groupMax: cfg.groupMax,
+        habitats: cfg.habitats,
+        wildOnly: cfg.wildOnly,
+        mapScale: cfg.mapScale,
         sector: pos.sector,
         longitude: pos.longitude,
         latitude: pos.latitude,
@@ -341,6 +390,8 @@ export const overworldAiRouter = createTRPCRouter({
       z.object({
         placementId: z.string(),
         positionVersion: z.number(),
+        /** Which copy of a multi-spawn placement the player approached. */
+        copy: z.number().int().min(0).default(0),
         dialogContentId: z.string().optional(),
       }),
     )
@@ -375,7 +426,7 @@ export const overworldAiRouter = createTRPCRouter({
       // initiateBattle, reward paths use atomic SQL increments, and isolated quest
       // assignment settles pending pools in its guarded entry write.
       const [
-        placement,
+        storedPlacement,
         {
           user: initialUser,
           settings,
@@ -397,10 +448,13 @@ export const overworldAiRouter = createTRPCRouter({
 
       // Validate placement: must exist, be active, bind a still-AI template, and the
       // client's position version must match the authoritative server placement.
-      if (!placement?.isActive || !placement.aiTemplate?.isAi) {
+      if (!storedPlacement?.isActive || !storedPlacement.aiTemplate?.isAi) {
         return errorResponse("This NPC is no longer here");
       }
-      if (placement.positionVersion !== input.positionVersion) {
+      if (storedPlacement.interactionType === "AMBIENT") {
+        return errorResponse("It pays you no attention");
+      }
+      if (storedPlacement.positionVersion !== input.positionVersion) {
         return errorResponse("The NPC has moved - refresh the map");
       }
       if (!initialUser) return errorResponse("User does not exist");
@@ -408,20 +462,44 @@ export const overworldAiRouter = createTRPCRouter({
       if (readiness.error) return errorResponse(readiness.error);
       const activeUser = readiness.user;
 
-      // Validate actor state. Server placement coordinates are authoritative; the
-      // client-supplied position is only a hint, so we compare the actor against the
-      // placement's stored tile rather than trusting any client coordinates.
+      // Validate actor state. The server derives where the NPC copy stands from its seed and the
+      // clock; client coordinates are never trusted.
       if (activeUser.isBanned) return errorResponse("You are banned");
       if (activeUser.travelFinishAt && activeUser.travelFinishAt > new Date()) {
         return errorResponse("You are travelling");
       }
-      if (
-        activeUser.sector !== placement.sector ||
-        activeUser.longitude !== placement.longitude ||
-        activeUser.latitude !== placement.latitude
-      ) {
-        return errorResponse("You are not standing on the NPC's tile");
-      }
+      const onStoredTile =
+        input.copy === 0 &&
+        activeUser.sector === storedPlacement.sector &&
+        activeUser.longitude === storedPlacement.longitude &&
+        activeUser.latitude === storedPlacement.latitude;
+      const stationary =
+        storedPlacement.wanderRadius < 1 && storedPlacement.spawnCount <= 1;
+      // Without the sector map, only the stored first copy can be located (as on the map).
+      const inReach = stationary
+        ? onStoredTile
+        : await fetchPublishedSectorMap(ctx.drizzle, activeUser.sector)
+            .catch(() => null)
+            .then((map) =>
+              map
+                ? isOverworldCopyInReach({
+                    placement: storedPlacement,
+                    copy: input.copy,
+                    map,
+                    pool: habitatSectorPool(storedPlacement.habitats),
+                    player: activeUser,
+                    timeMs: Date.now(),
+                  })
+                : onStoredTile,
+            );
+      if (!inReach) return errorResponse("You are not standing on the NPC's tile");
+      // Encounters happen where the player stands, wherever the NPC has roamed.
+      const placement = {
+        ...storedPlacement,
+        sector: activeUser.sector,
+        longitude: activeUser.longitude,
+        latitude: activeUser.latitude,
+      };
 
       // getNewTrackers reads `useritems` for delivery possession checks, while the shared
       // consequence handler resolves the concrete row to delete through `items`.

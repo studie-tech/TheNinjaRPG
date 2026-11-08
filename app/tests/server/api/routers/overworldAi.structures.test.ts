@@ -58,8 +58,15 @@ describeWithDatabase("NPC placement structure bindings", () => {
     expect((await caller.upsertPlacement({ id: "placement", data: { ...data, locationType: "random" } })).success).toBe(true);
   });
 
-  it("allows a structure-bound NPC to keep a fixed placement", async () => {
+  it("allows a structure-bound NPC to keep a fixed, stationary placement", async () => {
     const caller = await callerFor(overworldAiRouter, "staff");
-    expect((await caller.upsertPlacement({ id: "placement", data })).success).toBe(true);
+    expect((await caller.upsertPlacement({ id: "placement", data: { ...data, wanderRadius: 0 } })).success).toBe(true);
+  });
+
+  it("keeps a structure-bound NPC from roaming away from its building", async () => {
+    const caller = await callerFor(overworldAiRouter, "staff");
+    const result = await caller.upsertPlacement({ id: "placement", data: { ...data, wanderRadius: 3 } });
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Set the roaming radius to 0");
   });
 });

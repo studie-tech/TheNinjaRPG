@@ -108,10 +108,14 @@ export const fetchSectorWindowData = (
     }),
     fetchSector(client, sector),
     client.query.overworldAiPlacement.findMany({
+      // Copies of a multi-spawn placement can land anywhere, so those are always read.
       where: and(
-        inArray(
-          overworldAiPlacement.sector,
-          buildSectorWindowLayout(sector).map((entry) => entry.sector),
+        or(
+          inArray(
+            overworldAiPlacement.sector,
+            buildSectorWindowLayout(sector).map((entry) => entry.sector),
+          ),
+          gt(overworldAiPlacement.spawnCount, 1),
         ),
         eq(overworldAiPlacement.isActive, true),
       ),
@@ -127,7 +131,15 @@ export const fetchSectorWindowData = (
         sector: true,
         longitude: true,
         latitude: true,
+        sectorList: true,
         positionVersion: true,
+        wanderRadius: true,
+        spawnCount: true,
+        groupMin: true,
+        groupMax: true,
+        habitats: true,
+        wildOnly: true,
+        mapScale: true,
       },
       with: {
         aiTemplate: {
@@ -141,6 +153,12 @@ export const fetchSectorWindowData = (
             level: true,
             rank: true,
             isAi: true,
+          },
+          with: {
+            spriteAnimationBindings: {
+              where: (binding) => inArray(binding.actionKey, ["idle", "move"]),
+              with: { animation: true },
+            },
           },
         },
       },

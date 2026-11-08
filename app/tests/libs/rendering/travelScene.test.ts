@@ -410,7 +410,7 @@ describe("travel scene ground depth", () => {
     const actors = createTravelActors(game, { depth, overlay }); world.addChild(actors.container);
     const users = ["first", "second"].map((userId) => player({ userId, isNpc: true, npcPlacementId: userId, npcInteractionType: "FRIENDLY" }));
     actors.sync({ ...snapshotFixture(), grid, users }); await settle();
-    const roots = users.map((user) => actors.container.children.find((child) => child.label === `npc:${user.npcPlacementId}`)!);
+    const roots = users.map((user) => actors.container.children.find((child) => child.label === `npc:${user.npcPlacementId}:0:0`)!);
     const controls = roots.map((root) => root.children.at(-1)!.children.find((child) => child.label === "talk")!);
     const canvas = game.canvas;
     let initialBodyOrder: Container[] = [];
@@ -451,7 +451,7 @@ describe("travel scene ground depth", () => {
     actors.sync({ ...snapshotFixture(), grid, viewer: kind === "quest" ? questViewer : viewer, users: kind === "battle" ? [npc, player({ userId: "fighter", status: "BATTLE", battleId: "battle" })] : [npc] });
     actors.animate(frame()); await settle();
     const root = actors.container.children.find((child) => child.label === (kind === "battle" ? "battle:battle" : "quest:goal"))!;
-    const npcRoot = actors.container.children.find((child) => child.label === "npc:npc")!;
+    const npcRoot = actors.container.children.find((child) => child.label === "npc:npc:0:0")!;
     const body = npcRoot.children.at(-1)!.children.find((child) => child.label === "avatar")!;
     const talk = npcRoot.children.at(-1)!.children.find((child) => child.label === "talk")!;
     const tile = grid.getHex({ col: 4, row: 4 })!;
@@ -486,7 +486,7 @@ describe("travel scene ground depth", () => {
     expect(control.parent?.parent).toBe(other);
     expect(actors.container.children.find((child) => child.label === "battle:battle")!.parentRenderLayer).toBe(overlay);
     expect(actors.container.children.find((child) => child.label === "quest:goal")!.parentRenderLayer).toBe(overlay);
-    const talk = actors.container.children.find((child) => child.label === "npc:npc")!.children.at(-1)!.children.find((child) => child.label === "talk")!;
+    const talk = actors.container.children.find((child) => child.label === "npc:npc:0:0")!.children.at(-1)!.children.find((child) => child.label === "talk")!;
     expect(talk.parentRenderLayer).toBe(overlay);
     const point = control.getGlobalPosition();
     point.y += control.getBounds().height * 0.4;

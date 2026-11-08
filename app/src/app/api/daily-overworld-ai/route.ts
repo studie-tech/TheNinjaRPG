@@ -3,13 +3,14 @@ import {
   resolveOverworldPosition,
   snapOverworldPositionToWalkable,
 } from "@/libs/overworldAi";
+import { snapToWanderTile } from "@/libs/overworldWander";
 import {
   listOverworldAiPlacementForGET,
   updateOverworldAiPlacementForGET,
 } from "@/queries/overworldAi";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
-import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
+import { fetchPublishedSectorMaps, habitatSectorPool } from "@/server/utils/sectorMap";
 
 const ENDPOINT_NAME = "daily-overworld-ai";
 
@@ -34,7 +35,11 @@ export const GET = async (request: Request) => {
 
     const resolved = placements.map((placement) => ({
       placement,
-      position: resolveOverworldPosition(placement),
+      position: resolveOverworldPosition(
+        placement,
+        Math.random,
+        habitatSectorPool(placement.habitats),
+      ),
     }));
     // One batched map read (plus the shared short-lived cache) avoids a map query per NPC while
     // ensuring every daily roll lands on a tile the movement/pathfinding code can reach.
@@ -48,7 +53,13 @@ export const GET = async (request: Request) => {
     const snapped = resolved.map(({ placement, position }) => {
       const map = maps.get(position.sector);
       if (!map) throw new Error(`Sector ${position.sector} has no published map`);
-      const pos = snapOverworldPositionToWalkable(position, map);
+      // Wildlife keeps to the wild; later copies roll from the bumped version on read.
+      const wild = placement.wildOnly
+        ? snapToWanderTile(map, { x: position.longitude, y: position.latitude }, true)
+        : null;
+      const pos = wild
+        ? { sector: position.sector, longitude: wild.x, latitude: wild.y }
+        : snapOverworldPositionToWalkable(position, map);
       if (!pos) throw new Error(`Sector ${position.sector} has no walkable tile`);
       return { placement, pos };
     });

@@ -1,5 +1,13 @@
 import type { Grid } from "honeycomb-grid";
-import { Container, Graphics, Rectangle, type RenderLayer, Text } from "pixi.js";
+import {
+  Container,
+  Graphics,
+  Matrix,
+  Rectangle,
+  type RenderLayer,
+  Sprite,
+  Text,
+} from "pixi.js";
 import {
   type AvatarFacing,
   CREATOR_USERNAME,
@@ -62,13 +70,16 @@ export const createTravelActors = (
   >();
   const signatures = new WeakMap<WorldSpriteDescription[], string>();
   const partsFor = (user: SectorUser, tile: TerrainHex) => {
-    const id = userActorKey(user);
+    const id = travelActorKey(user);
     // Position and health updates retain artwork; every input used by userParts belongs in this key.
     const key = JSON.stringify([
       user.spriteAppearance,
       user.bodyArt,
       user.bodyIdle?.id,
       user.bodyMove?.id,
+      user.npcSheets?.idle?.id,
+      user.npcSheets?.move?.id,
+      user.npcScale,
       user.avatar,
       user.avatarLight,
       user.isNpc,
@@ -135,7 +146,9 @@ export const createTravelActors = (
       { visible: boolean; onScreen: boolean } | undefined
     >();
     const tileFor = (user: SectorUser) => {
-      const key = `${user.longitude},${user.latitude}`;
+      // A roaming NPC can be anywhere within its radius of the anchor tile it reports.
+      const reach = user.npcWander?.radius ?? 0;
+      const key = `${user.longitude},${user.latitude},${reach}`;
       if (tiles.has(key)) return tiles.get(key);
       const tile = snapshot.grid.getHex({ col: user.longitude, row: user.latitude });
       if (!tile) {
@@ -144,8 +157,8 @@ export const createTravelActors = (
       }
       const x = -tile.center.x,
         y = -tile.center.y,
-        width = tile.width,
-        height = tile.height;
+        width = tile.width * (1 + reach),
+        height = tile.height * (1 + reach);
       boundary("minX", x + width * 3);
       boundary("minX", x + width * 2);
       boundary("maxX", x - width * 3);
@@ -180,7 +193,7 @@ export const createTravelActors = (
     const candidates = visibleUsers.flatMap((user) => {
       if (!canShowUser(snapshot, user) || user.status !== "AWAKE") return [];
       const tile = tileFor(user);
-      return tile ? [{ user, key: userActorKey(user), onScreen: tile.onScreen }] : [];
+      return tile ? [{ user, key: travelActorKey(user), onScreen: tile.onScreen }] : [];
     });
     const key = candidates
       .map((entry) => `${entry.key}:${Number(entry.onScreen)}`)
@@ -198,7 +211,9 @@ export const createTravelActors = (
             Number(b.user.username === CREATOR_USERNAME) -
               Number(a.user.username === CREATOR_USERNAME) ||
             Number(b.onScreen) - Number(a.onScreen) ||
-            // Visible quest/hostile NPCs retain their controls within the same body budget.
+            // Visible quest/hostile NPCs retain their controls within the same body budget;
+            // ambient wildlife yields to every player.
+            ambientRank(a.user) - ambientRank(b.user) ||
             Number(Boolean(b.user.isNpc)) - Number(Boolean(a.user.isNpc)) ||
             (orderB?.order ?? 0) - (orderA?.order ?? 0) ||
             (orderB?.initialTime ?? 0) - (orderA?.initialTime ?? 0) ||
@@ -214,9 +229,9 @@ export const createTravelActors = (
   };
   /** Camera movement only reconciles resources when visible actor membership changes. */
   const userKey = (snapshot: TravelActorsSnapshot) =>
-    snapshot.users
-      .map((user) => `${user.userId}:${user.npcPlacementId ?? ""}`)
-      .join("|") + `/${[...(snapshot.characterKeys ?? [])].join("|")}`;
+    `${snapshot.users
+      .map((user) => travelActorKey(user))
+      .join("|")}/${[...(snapshot.characterKeys ?? [])].join("|")}`;
   /** Retire departed scopes while retaining movement state for unchanged actor identities. */
   const reconcile = (snapshot: TravelActorsSnapshot) => {
     if (pathGrid !== snapshot.grid || actorSector !== snapshot.sector) {
@@ -308,6 +323,8 @@ export const createTravelActors = (
         facing: previous?.facing ?? 2,
         heading: previous?.heading,
         depth: 0,
+        cast: null,
+        castKey: "",
         contactY:
           recipe.tile.height *
           (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5),
@@ -369,6 +386,17 @@ export const createTravelActors = (
           );
           if (avatar?.description.shadowCaster === "character")
             record.contactY = avatar.groundY;
+          // NPC art casts a sun silhouette on the ground, as fighters do in combat.
+          if (recipe.user?.isNpc && avatar?.sprite instanceof Sprite) {
+            const cast = new Sprite(avatar.sprite.texture);
+            cast.label = "cast-shadow";
+            cast.tint = CAST_SHADOW_TINT;
+            cast.visible = false;
+            root.addChildAt(cast, 0);
+            layers?.ground?.attach(cast);
+            record.cast = cast;
+            record.castBody = { sprite: avatar.sprite, groundY: avatar.groundY };
+          }
           art.setLighting(brightness);
           root.addChild(art.container);
           if (layers?.ground) art.attachGroundEffects(layers.ground);
@@ -420,6 +448,36 @@ export const createTravelActors = (
       }
     }
   };
+  let sun: CastLight | null = null;
+  const castMatrix = new Matrix();
+  /**
+   * Pose an NPC's ground silhouette like projected scenery: the current frame sheared away from
+   * the sun from its feet. Recomputed only when the frame, facing, foot or sun changes.
+   */
+  const paintCast = (record: ActorRecord) => {
+    const cast = record.cast,
+      body = record.castBody;
+    if (!cast || !body) return;
+    const visible = !!sun && sun.day > 0 && body.sprite.visible;
+    cast.visible = visible;
+    if (!visible || !sun) return;
+    const sprite = body.sprite,
+      texture = sprite.texture;
+    const key = `${texture.uid}:${sprite.scale.x}:${sprite.x}:${body.groundY}:${sun.x}:${sun.y}:${sun.z}:${sun.day}`;
+    if (key === record.castKey) return;
+    record.castKey = key;
+    cast.texture = texture;
+    const height = Math.abs(sprite.height);
+    const top = sprite.y + height * (1 - sprite.anchor.y);
+    cast.anchor.set(0.5, height ? (top - body.groundY) / height : 1);
+    const rise = height / Math.max(1, texture.orig.height);
+    // Clamp grazing sun so long copies never cover distant scenery (as projected scenery does).
+    const slopeX = Math.max(-1.4, Math.min(1.4, sun.x / Math.max(0.3, sun.z))) * rise;
+    const slopeY = Math.min(-0.12, sun.y / (2 * Math.max(0.3, sun.z))) * rise;
+    castMatrix.set(sprite.scale.x, 0, slopeX, slopeY, sprite.x, body.groundY);
+    cast.setFromMatrix(castMatrix);
+    cast.alpha = CAST_SHADOW_ALPHA * sun.day;
+  };
   const hit = (x: number, y: number): TravelActorHit | null => {
     // Overlay markers and controls take priority over overlapping actor bodies.
     for (const controlsOnly of [true, false]) {
@@ -462,6 +520,7 @@ export const createTravelActors = (
                 : kind,
             userId: recipe.user?.userId,
             npcPlacementId: recipe.user?.npcPlacementId,
+            npcCopy: recipe.user?.npcCopy,
             battleId: recipe.battleId,
             longitude: recipe.tile.col,
             latitude: recipe.tile.row,
@@ -557,7 +616,10 @@ export const createTravelActors = (
       const dx = -waypoint.center.x - record.x,
         dy = -waypoint.center.y - record.y;
       const distance = Math.hypot(dx, dy);
-      const movement = movements?.get(recipe.user?.userId ?? "");
+      // Roaming NPC copies share a template userId, so their movement is keyed per actor.
+      const movement = movements?.get(
+        recipe.user?.isNpc ? recipe.key : (recipe.user?.userId ?? ""),
+      );
       const moving = movement ? movement.direction !== null : distance > 0.01;
       if (movement) {
         // The published edge owns interpolation; its destination consumes any queued snapshot path.
@@ -595,6 +657,7 @@ export const createTravelActors = (
           record.facing,
         );
       record.art?.animateLoops(frame, { moving, heading: record.heading });
+      if (record.cast) paintCast(record);
       const phi = angle + recipe.orbit;
       root.position.set(
         record.x +
@@ -627,7 +690,7 @@ export const createTravelActors = (
     if (sourceSnapshot?.viewer?.userId !== snapshot.viewer?.userId) selectionKey = null;
     const present = new Set<string>();
     for (const user of snapshot.users) {
-      const key = userActorKey(user),
+      const key = travelActorKey(user),
         previous = movementOrder.get(key);
       const step = snapshot.motionSteps?.get(user.userId)?.startedAt;
       present.add(key);
@@ -685,6 +748,10 @@ export const createTravelActors = (
     },
     hit,
     animate,
+    /** Sun direction for NPC silhouettes; null hides them (night, or shadows switched off). */
+    setSun: (light: CastLight | null) => {
+      sun = light;
+    },
     feet: (userId: string) => {
       const record = records.get(`user:${userId}`);
       if (!record) return undefined;
@@ -722,7 +789,10 @@ export const travelActorRecipes = (
   const grouped = new Map<string, SectorUser[]>();
   for (const user of snapshot.users) {
     if (!canShowUser(snapshot, user)) continue;
-    const key = `${user.longitude},${user.latitude}`;
+    // Roaming NPCs only start on their anchor; they never orbit tile mates.
+    const key = user.npcWander
+      ? travelActorKey(user)
+      : `${user.longitude},${user.latitude}`;
     const group = grouped.get(key) ?? [];
     group.push(user);
     grouped.set(key, group);
@@ -735,7 +805,7 @@ export const travelActorRecipes = (
     const awake = tileUsers.filter((user) => user.status === "AWAKE");
     const selected = snapshot.characterKeys;
     const shown = selected
-      ? awake.filter((user) => selected.has(userActorKey(user)))
+      ? awake.filter((user) => selected.has(travelActorKey(user)))
       : awake;
     shown.forEach((user, index) => {
       const appearanceUser = user.bodyArt
@@ -744,7 +814,7 @@ export const travelActorRecipes = (
           ? { ...user, spriteAppearance: resolveSpriteAppearance(snapshot.viewer) }
           : user;
       recipes.push({
-        key: userActorKey(user),
+        key: travelActorKey(user),
         user: appearanceUser,
         tile,
         parts: partsFor(appearanceUser, tile),
@@ -905,11 +975,16 @@ const SPRITE_CONTROLS = {
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
 /** Repeated NPC appearances remain distinct through placement identity; players use account identity. */
-const userActorKey = (user: SectorUser) =>
-  user.isNpc ? `npc:${user.npcPlacementId ?? user.userId}` : `user:${user.userId}`;
+/** Actor identity: one per player, and one per member of each NPC copy. */
+export const travelActorKey = (user: SectorUser) =>
+  user.isNpc
+    ? `npc:${user.npcPlacementId ?? user.userId}:${user.npcCopy ?? 0}:${user.npcMember ?? 0}`
+    : `user:${user.userId}`;
+const ambientRank = (user: SectorUser) => Number(user.npcInteractionType === "AMBIENT");
 /** Apply the same visibility policy before body selection and full-roster encounter/count recipes. */
 const canShowUser = (snapshot: TravelActorsSnapshot, user: SectorUser) =>
   (snapshot.showUsers || user.userId === snapshot.viewer?.userId) &&
+  (snapshot.showAmbient !== false || user.npcInteractionType !== "AMBIENT") &&
   (user.isNpc ||
     user.userId === snapshot.viewer?.userId ||
     passesBracketFilter(user, snapshot.minBracket));
@@ -967,7 +1042,7 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
         : user.bodyArt
           ? NPC_TRAVEL_HEIGHT * 2
           : user.isNpc
-            ? NPC_TRAVEL_HEIGHT
+            ? NPC_TRAVEL_HEIGHT * (user.npcScale ?? 1)
             : 0.8,
       0.5,
       user.spriteAppearance ? LPC_TRAVEL_FOOT_Y + LPC_TRAVEL_HEIGHT / 2 : 1,
@@ -987,31 +1062,38 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
               preserveAspect: true,
               nearest: !user.bodyArt,
               shadowCaster: "character",
-              // Body art stands in for a player, so it is grounded and lit as players are.
+              // Body art and NPCs stand on the ground like players: grounded, lit and animated.
+              shadow: PLAYER_TRAVEL_SHADOW,
+              light: PLAYER_TRAVEL_LIGHT,
               ...(user.bodyArt
                 ? {
-                    shadow: PLAYER_TRAVEL_SHADOW,
-                    light: PLAYER_TRAVEL_LIGHT,
                     loop: user.bodyIdle && sheetLoop(user.bodyIdle),
                     walk: user.bodyMove && sheetLoop(user.bodyMove),
                   }
-                : {}),
+                : {
+                    loop: user.npcSheets?.idle && sheetLoop(user.npcSheets.idle),
+                    walk: user.npcSheets?.move && sheetLoop(user.npcSheets.move),
+                  }),
             }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },
     ),
   );
-  if (user.isNpc)
-    parts.push(
-      part(
-        tile,
-        user.npcInteractionType === "HOSTILE" ? "attack" : "talk",
-        user.npcInteractionType === "HOSTILE" ? IMG_SECTOR_ATTACK : IMG_MAP_QUEST_ICON,
-        0.8,
-        0.9,
-        1.4,
-      ),
-    );
-  else {
+  if (user.isNpc) {
+    // Ambient NPCs are scenery and offer no control.
+    if (user.npcInteractionType !== "AMBIENT")
+      parts.push(
+        part(
+          tile,
+          user.npcInteractionType === "HOSTILE" ? "attack" : "talk",
+          user.npcInteractionType === "HOSTILE"
+            ? IMG_SECTOR_ATTACK
+            : IMG_MAP_QUEST_ICON,
+          0.8,
+          0.9,
+          1.4,
+        ),
+      );
+  } else {
     // Character sprites are narrower than portraits, so their controls tuck in around the body.
     const at = user.spriteAppearance ? SPRITE_CONTROLS : PORTRAIT_CONTROLS;
     if (
@@ -1061,12 +1143,15 @@ export type TravelActorsSnapshot = {
   characterKeys?: ReadonlySet<string>;
   /** Published movement edges already supply interpolation; they need no second path search. */
   motionSteps?: ReadonlyMap<string, TravelMotionStep>;
+  /** Ambient overworld AIs (wildlife) follow the Wildlife visual effect. */
+  showAmbient?: boolean;
 };
 export type TravelActorHit = {
   key: string;
   type: string;
   userId?: string;
   npcPlacementId?: string;
+  npcCopy?: number;
   battleId?: string;
   longitude: number;
   latitude: number;
@@ -1082,8 +1167,16 @@ type ActorRecipe = {
   orbit: number;
   spread: boolean;
 };
+type CastLight = { x: number; y: number; z: number; day: number };
+/** Matches projected scenery silhouettes, so NPC and tree shadows read as one light. */
+const CAST_SHADOW_TINT = 0x202932;
+const CAST_SHADOW_ALPHA = 0.22;
 type ActorRecord = {
   depth: number;
+  cast: Sprite | null;
+  castBody?: { sprite: Sprite; groundY: number };
+  /** Inputs the cast silhouette was last posed from. */
+  castKey: string;
   /** Actor-local foot Y, updated when the visible avatar cutout finishes loading. */
   contactY: number;
   tile: TerrainHex;

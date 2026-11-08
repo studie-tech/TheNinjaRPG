@@ -3,10 +3,12 @@ import * as globalMapData from "@/data/hexasphere.json";
 import {
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
+  type OverworldHabitat,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
 } from "@/drizzle/constants";
 import { sectorMap } from "@/drizzle/schema";
+import { isPlaceableSector } from "@/libs/overworldAi";
 import {
   type EdgeIndex,
   resolveSectorMapEdgeCrossing,
@@ -128,6 +130,33 @@ export const getSectorDiagonalIds = (
 /** Globe terrain type for a sector (0=ocean, 1=land, 2=desert, 3=ice) */
 export const getSectorTileType = (sector: number): number => {
   return globalMap.tiles[sector]?.t ?? 1;
+};
+
+/** Globe terrain type of each habitat an overworld AI can be restricted to. */
+const HABITAT_TILE_TYPES: Record<OverworldHabitat, number> = {
+  grassland: 1,
+  desert: 2,
+  snow: 3,
+};
+const habitatPools = new Map<string, number[]>();
+
+/**
+ * Placeable sectors in any of the given habitats, in sector order. An empty list returns an
+ * empty pool, which callers treat as "anywhere".
+ */
+export const habitatSectorPool = (habitats: readonly OverworldHabitat[]): number[] => {
+  const key = [...habitats].sort().join(",");
+  let pool = habitatPools.get(key);
+  if (!pool) {
+    const types = new Set(habitats.map((habitat) => HABITAT_TILE_TYPES[habitat]));
+    pool = types.size
+      ? globalMap.tiles.flatMap((tile, sector) =>
+          types.has(tile.t) && isPlaceableSector(sector) ? [sector] : [],
+        )
+      : [];
+    habitatPools.set(key, pool);
+  }
+  return pool;
 };
 
 /**

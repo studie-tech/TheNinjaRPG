@@ -10,6 +10,8 @@ describe("placementToSectorUser", () => {
     longitude: 3,
     latitude: 4,
     positionVersion: 7,
+    wanderRadius: 0,
+    wildOnly: false,
   };
   const template = {
     userId: "ai-1",
