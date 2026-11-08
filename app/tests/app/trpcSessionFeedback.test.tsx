@@ -32,7 +32,7 @@ const pageOnError = (source: (typeof callbacks)[number]) => {
   )(
     uiToast,
     clientModule.onError,
-    Reflect.get(sessionModule, "getSessionErrorToastId"),
+    sessionModule.getSessionErrorToastId,
     toast.showMutationToast,
   ) as (error: { message: string }) => void;
 };
