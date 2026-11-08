@@ -62,6 +62,16 @@ const stripeApi = { checkout: { sessions: {
   retrieve: vi.fn(async (id: string) => stripeSessions.get(id)),
 } } } as unknown as Stripe;
 const paid = async (points = 20, overrides: Partial<Parameters<typeof deliverPaypalReputation>[0]> = {}) => { const value = reps2dollars(points); return deliverPaypalReputation({ client: await getTestDatabase(), createdById: BUYER, affectedUserId: TARGET, transactionId: "legacy_capture", transactionUpdatedDate: new Date().toISOString(), value, currency: "USD", status: "COMPLETED", reps: dollars2reps(value), type: "REP_PURCHASE", raw: {}, ...overrides }); };
+/** A PayPal subscription as the provider reports it: BUYER's active gold gift to TARGET, last paid `paidAt`. */
+const providerSubscription = ({ paidAt = new Date(), amount = "15.00", ...overrides }: { paidAt?: Date; amount?: string } & Record<string, unknown> = {}) => ({
+  id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`,
+  billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: amount, currency_code: "USD" } } },
+  ...overrides,
+});
+/** A completed PayPal reporting transaction from BUYER for TARGET, updated now. */
+const transactionInfo = (overrides: Record<string, unknown>) => ({
+  transaction_status: "S", custom_field: `${BUYER}-${TARGET}`, transaction_updated_date: new Date().toISOString(), ...overrides,
+});
 const target = async () => (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, TARGET) });
 
 describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
@@ -76,9 +86,9 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     vi.spyOn(stripeClient, "getStripe").mockReturnValue(stripeApi);
   });
   afterEach(() => { vi.restoreAllMocks(); });
-  const completeStripe = (input: ReturnType<typeof stripeRequest>, created = Date.now()) => {
+  const completeStripe = (input: ReturnType<typeof stripeRequest>, created = Date.now(), overrides: Record<string, unknown> = {}) => {
     const session = stripeSessions.get(`cs_test_${input.requestId}`);
-    Object.assign(session ?? {}, { status: "complete", payment_status: "paid", mode: "payment", payment_intent: `pi_${input.requestId}`, livemode: false, currency: "usd", amount_total: Math.round(reps2dollars(input.purchase.reputationPoints) * 100), client_reference_id: input.requestId, managed_payments: { enabled: true }, automatic_tax: { enabled: true, status: "complete" }, created: Math.floor(created / 1000) });
+    Object.assign(session ?? {}, { status: "complete", payment_status: "paid", mode: "payment", payment_intent: `pi_${input.requestId}`, livemode: false, currency: "usd", amount_total: Math.round(reps2dollars(input.purchase.reputationPoints) * 100), client_reference_id: input.requestId, managed_payments: { enabled: true }, automatic_tax: { enabled: true, status: "complete" }, created: Math.floor(created / 1000), ...overrides });
     return `cs_test_${input.requestId}`;
   };
   it("does not charge the buyer's allowance for recruiter rewards recorded against that buyer", async () => {
@@ -295,26 +305,26 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     expect(await caller.resolveTransaction({ transactionId: "MISSING_CAPTURE", transactionDate: new Date() })).toMatchObject({ success: false, message: expect.stringContaining("No completed PayPal transaction was found") });
   });
   it.each([{ custom_field: "", transaction_amount: { value: "10", currency_code: "USD" } }, { transaction_amount: undefined }, { transaction_amount: { value: "NaN", currency_code: "USD" } }, { transaction_amount: { value: "1invalid", currency_code: "USD" } }, { transaction_amount: { value: "0", currency_code: "USD" } }, { transaction_amount: { value: "-1", currency_code: "USD" } }, { transaction_amount: { value: "10", currency_code: "DKK" } }])("malformed or invalid reporting data is a failed recovery: %j", async (overrides) => {
-    const info = { transaction_id: "INVALID_CAPTURE", transaction_status: "S", custom_field: `${BUYER}-${TARGET}`, transaction_updated_date: new Date().toISOString(), ...overrides };
+    const info = transactionInfo({ transaction_id: "INVALID_CAPTURE", ...overrides });
     const outcome = await syncTransactions(await getTestDatabase(), [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token");
     expect(outcome[0]?.success).toBe(false); expect(outcome[0]?.message).toContain("invalid");
     expect((await target())?.reputationPoints).toBe(0);
     expect(await (await getTestDatabase()).query.paypalTransaction.findMany()).toHaveLength(0);
   });
   it("missing subscription details return failure without granting coverage", async () => {
-    const info = { transaction_id: "SUB_CAPTURE", transaction_status: "S", custom_field: `${BUYER}-${TARGET}`, transaction_amount: { value: "10", currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "MISSING_SUBSCRIPTION", transaction_updated_date: new Date().toISOString() };
+    const info = transactionInfo({ transaction_id: "SUB_CAPTURE", transaction_amount: { value: "10", currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "MISSING_SUBSCRIPTION" });
     expect(await syncTransactions(await getTestDatabase(), [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject([{ success: false, message: expect.stringContaining("not found") }]);
   });
   it.each([{ plan_id: "plan_unknown" }, { custom_id: `${OTHER}-${TARGET}` }, { custom_id: `${BUYER}-${OTHER}` }, { custom_id: undefined }, { custom_id: `${BUYER}-${TARGET}-extra` }, { billing_info: { last_payment: { time: new Date(Date.now() + 86400000).toISOString(), amount: { value: "15.00", currency_code: "USD" } } } }, { billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "DKK" } } } }])("subscription recovery rejects unknown or inconsistent paid terms: %j", async (overrides) => {
-    const subscription = { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } }, ...overrides };
+    const subscription = providerSubscription(overrides);
     subscriptions.set("SUB_TEST", subscription);
-    const info = { transaction_id: "SUB_CAPTURE", transaction_status: "S", transaction_updated_date: new Date().toISOString(), custom_field: `${BUYER}-${TARGET}`, transaction_amount: { value: "15", currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "SUB_TEST" };
+    const info = transactionInfo({ transaction_id: "SUB_CAPTURE", transaction_amount: { value: "15", currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "SUB_TEST" });
     expect(await syncTransactions(await getTestDatabase(), [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject([{ success: false }]);
     expect((await target())?.federalStatus).toBe("NONE");
     expect(await (await getTestDatabase()).query.paypalSubscription.findMany()).toHaveLength(0);
   });
   it("a configured, owned paid subscription grants the gift once and sync retries succeed", async () => {
-    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    subscriptions.set("SUB_TEST", providerSubscription());
     const caller = await callerFor(paypalRouter, BUYER);
     const giftResult = await caller.resolveSubscription({ subscriptionId: "SUB_TEST" });
     expect(giftResult.success).toBe(true);
@@ -335,7 +345,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     await db.insert(storeUserIdAlias).values(renamed === "recipient"
       ? { oldUserId: TARGET, newUserId: BUYER }
       : { oldUserId: BUYER, newUserId: OTHER });
-    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    subscriptions.set("SUB_TEST", providerSubscription());
     const callerId = renamed === "recipient" ? BUYER : OTHER;
     const affectedUserId = renamed === "recipient" ? BUYER : TARGET;
     const result = await (await callerFor(paypalRouter, callerId)).resolveSubscription({ subscriptionId: "SUB_TEST" });
@@ -376,27 +386,27 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
   });
   it("direct subscription recovery rejects an unknown paid plan without downgrading coverage", async () => {
     const db = await getTestDatabase(); await db.update(userData).set({ federalStatus: "GOLD" }).where(eq(userData.userId, TARGET));
-    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_unknown", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    subscriptions.set("SUB_TEST", providerSubscription({ plan_id: "plan_unknown" }));
     expect((await (await callerFor(paypalRouter, BUYER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
     expect((await target())?.federalStatus).toBe("GOLD");
   });
   it.each([0.01, 14.99, 15.01, 30])("neither recovery path grants GOLD for the wrong paid total: %s", async (amount) => {
-    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: amount.toFixed(2), currency_code: "USD" } } } });
+    subscriptions.set("SUB_TEST", providerSubscription({ amount: amount.toFixed(2) }));
     const caller = await callerFor(paypalRouter, BUYER);
     expect((await caller.resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
-    const info = { transaction_id: "SUB_CAPTURE", transaction_status: "S", transaction_updated_date: new Date().toISOString(), custom_field: `${BUYER}-${TARGET}`, transaction_amount: { value: amount.toFixed(2), currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "SUB_TEST" };
+    const info = transactionInfo({ transaction_id: "SUB_CAPTURE", transaction_amount: { value: amount.toFixed(2), currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "SUB_TEST" });
     expect(await syncTransactions(await getTestDatabase(), [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject([{ success: false }]);
     expect((await target())?.federalStatus).toBe("NONE");
     expect(await (await getTestDatabase()).query.paypalSubscription.findMany()).toHaveLength(0);
   });
   it.each([{ tier: "NORMAL", price: 5 }, { tier: "SILVER", price: 10 }])("accepts the configured USD amount for %s", async ({ tier, price }) => {
-    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: `plan_test_${tier.toLowerCase()}`, custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: price.toFixed(2), currency_code: "USD" } } } });
+    subscriptions.set("SUB_TEST", providerSubscription({ plan_id: `plan_test_${tier.toLowerCase()}`, amount: price.toFixed(2) }));
     expect((await (await callerFor(paypalRouter, BUYER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
     expect((await target())?.federalStatus).toBe(tier);
   });
   it("direct recovery retains a cancelled subscription's paid period through reconciliation, then expires it", async () => {
     const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 86400000);
-    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "CANCELLED", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    subscriptions.set("SUB_TEST", providerSubscription({ status: "CANCELLED", paidAt }));
     const caller = await callerFor(paypalRouter, BUYER);
     expect((await caller.resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
     expect((await target())?.federalStatus).toBe("GOLD");
@@ -409,14 +419,14 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     expect((await target())?.federalStatus).toBe("NONE");
   });
   it("a cancelled subscription with an expired paid period cannot restore coverage", async () => {
-    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "CANCELLED", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date(Date.now() - 32 * 86400000).toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    subscriptions.set("SUB_TEST", providerSubscription({ status: "CANCELLED", paidAt: new Date(Date.now() - 32 * 86400000) }));
     expect((await (await callerFor(paypalRouter, BUYER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
     expect((await target())?.federalStatus).toBe("NONE");
   });
   it("scheduled reconciliation never turns an old active payment into a fresh paid period", async () => {
     const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 40 * 86400000);
     await db.insert(paypalSubscription).values({ id: "expired-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, orderId: "ORDER_TEST", status: "ACTIVE", federalStatus: "GOLD", updatedAt: paidAt });
-    const subscription = { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "15.00", currency_code: "USD" } } } };
+    const subscription = providerSubscription({ paidAt });
     expect(await reconcilePaypalSubscription({ client: db, subscription, subscriptionId: "SUB_TEST", expected: { createdById: BUYER, affectedUserId: TARGET } })).toMatchObject({ success: true });
     expect(await db.query.paypalSubscription.findFirst()).toEqual(expect.objectContaining({ updatedAt: paidAt, federalStatus: "NONE" }));
     expect((await target())?.federalStatus).toBe("NONE");
@@ -424,7 +434,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
   it("scheduled reconciliation uses the provider payment date and rejects a wrong paid amount", async () => {
     const db = await getTestDatabase(); const oldPaidAt = new Date(Date.now() - 40 * 86400000); const paidAt = new Date(Date.now() - 2 * 86400000);
     await db.insert(paypalSubscription).values({ id: "renew-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, orderId: "ORDER_TEST", status: "ACTIVE", federalStatus: "GOLD", updatedAt: oldPaidAt });
-    const subscription = { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "0.01", currency_code: "USD" } } } };
+    const subscription = providerSubscription({ paidAt, amount: "0.01" });
     expect(await reconcilePaypalSubscription({ client: db, subscription, subscriptionId: "SUB_TEST", expected: { createdById: BUYER, affectedUserId: TARGET } })).toMatchObject({ success: false });
     expect(await db.query.paypalSubscription.findFirst()).toEqual(expect.objectContaining({ updatedAt: oldPaidAt }));
     subscription.billing_info.last_payment.amount.value = "15.00";
@@ -436,7 +446,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 10 * 86400000); const upgradeAt = new Date(Date.now() - 5 * 86400000);
     await db.insert(paypalSubscription).values({ id: "upgrade-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, status: "ACTIVE", federalStatus: "GOLD", updatedAt: upgradeAt });
     await db.update(userData).set({ federalStatus: "GOLD" }).where(eq(userData.userId, TARGET));
-    const subscription = { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_normal", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "5.00", currency_code: "USD" } } } };
+    const subscription = providerSubscription({ plan_id: "plan_test_normal", paidAt, amount: "5.00" });
     expect(await reconcilePaypalSubscription({ client: db, subscription, subscriptionId: "SUB_TEST" })).toMatchObject({ success: true });
     expect(await db.query.paypalSubscription.findFirst()).toEqual(expect.objectContaining({ orderId: "SUB_TEST", federalStatus: "GOLD", updatedAt: upgradeAt }));
     subscription.billing_info.last_payment.time = new Date().toISOString();
@@ -509,7 +519,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 86400000);
     await db.insert(paypalSubscription).values({ id: "suspended-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, orderId: "ORDER_TEST", status: "ACTIVE", federalStatus: "GOLD", updatedAt: paidAt });
     await db.update(userData).set({ federalStatus: "GOLD" }).where(eq(userData.userId, TARGET));
-    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "SUSPENDED", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    subscriptions.set("SUB_TEST", providerSubscription({ status: "SUSPENDED", paidAt }));
     expect((await (await callerFor(paypalRouter, BUYER)).cancelPaypalSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
     expect(fetchProvider.mock.calls.filter(([url]) => url.endsWith("/cancel"))).toHaveLength(1);
     expect(await db.query.paypalSubscription.findFirst()).toEqual(expect.objectContaining({ status: "CANCELLED", updatedAt: paidAt }));
@@ -542,7 +552,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
       await db.insert(storeUserIdAlias).values({ oldUserId: BUYER, newUserId: OTHER });
       await db.update(paypalTransaction).set({ createdById: OTHER }).where(eq(paypalTransaction.id, invoiceId));
     }
-    const info = { transaction_id: "legacy_capture", transaction_status: "S", custom_field: `${BUYER}-${TARGET}`, transaction_amount: amount, transaction_updated_date: new Date().toISOString(), invoice_id: invoiceId };
+    const info = transactionInfo({ transaction_id: "legacy_capture", transaction_amount: amount, invoice_id: invoiceId });
     expect(await syncTransactions(db, [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject([{ success: !refunded }]);
     const paypal = await callerFor(paypalRouter, migrated ? OTHER : BUYER);
     expect((await paypal.resolveOrder({ orderId })).success).toBe(!refunded);
@@ -565,8 +575,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     const caller = await callerFor(stripeRouter, BUYER); const input = stripeRequest(20); const result = await caller.createCheckout(input);
     expect(result.success).toBe(true);
     const sessionId = `cs_test_${input.requestId}`;
-    const session = stripeSessions.get(sessionId);
-    Object.assign(session ?? {}, { status: "complete", payment_status: "paid", mode: "payment", payment_intent: "pi_test_tax", livemode: false, currency: "usd", amount_total: Math.round(reps2dollars(20) * 100), client_reference_id: input.requestId, managed_payments: { enabled: true }, automatic_tax, created: Math.floor(Date.now()/1000) });
+    completeStripe(input, Date.now(), { payment_intent: "pi_test_tax", automatic_tax });
     await expect(fulfillStripeSession(await getTestDatabase(), sessionId)).rejects.toThrow("tax calculation is incomplete");
     expect((await target())?.reputationPoints).toBe(0);
     expect(await (await getTestDatabase()).query.stripePayment.findMany()).toHaveLength(0);
@@ -574,14 +583,14 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
   it.each([undefined, { enabled: false }])("rejects paid sessions outside Managed Payments: %j", async (managed_payments) => {
     const input = stripeRequest(20); const caller = await callerFor(stripeRouter, BUYER);
     await caller.createCheckout(input); const sessionId = `cs_test_${input.requestId}`;
-    Object.assign(stripeSessions.get(sessionId) ?? {}, { status: "complete", payment_status: "paid", mode: "payment", payment_intent: "pi_unmanaged", livemode: false, currency: "usd", amount_total: Math.round(reps2dollars(20) * 100), client_reference_id: input.requestId, managed_payments, automatic_tax: { enabled: true, status: "complete" }, created: Math.floor(Date.now()/1000) });
+    completeStripe(input, Date.now(), { payment_intent: "pi_unmanaged", managed_payments });
     await expect(fulfillStripeSession(await getTestDatabase(), sessionId)).rejects.toThrow("not managed by Stripe");
     expect((await target())?.reputationPoints).toBe(0);
   });
   it("uses the verified USD integration amount when Managed Payments offers local currency", async () => {
     const input = stripeRequest(20); await (await callerFor(stripeRouter, BUYER)).createCheckout(input);
     const sessionId = `cs_test_${input.requestId}`;
-    Object.assign(stripeSessions.get(sessionId) ?? {}, { status: "complete", payment_status: "paid", mode: "payment", payment_intent: "pi_local_presentment", livemode: false, currency: "usd", amount_total: Math.round(reps2dollars(20) * 100), presentment_details: { presentment_currency: "dkk", presentment_amount: 6500 }, client_reference_id: input.requestId, managed_payments: { enabled: true }, automatic_tax: { enabled: true, status: "complete" }, created: Math.floor(Date.now()/1000) });
+    completeStripe(input, Date.now(), { payment_intent: "pi_local_presentment", presentment_details: { presentment_currency: "dkk", presentment_amount: 6500 } });
     expect(await fulfillStripeSession(await getTestDatabase(), sessionId)).toBe("fulfilled");
     expect((await target())?.reputationPoints).toBe(dollars2reps(reps2dollars(20)));
   });
