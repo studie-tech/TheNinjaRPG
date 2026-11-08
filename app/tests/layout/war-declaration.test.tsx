@@ -38,7 +38,10 @@ vi.spyOn(dynamic, "default").mockImplementation(
       </>
     )) as never,
 );
-const { WarRoom, WarMap, SectorWar, VillageWar } = await import("@/layout/WarSystem");
+const { WarRoom } = await import("@/layout/WarSystem");
+const { WarMap } = await import("@/layout/WarMap");
+const { SectorWar } = await import("@/layout/SectorWar");
+const { VillageWar } = await import("@/layout/VillageWar");
 
 type MutationResult = { success: boolean; message: string };
 const mutation = () => controllableMutation<MutationResult>();
@@ -77,7 +80,7 @@ let ownsSector = false;
 let relationshipStatus: VillageAlliance["status"] = "ENEMY";
 
 beforeEach(() => {
-  // Isolate globe rendering when another page has already loaded WarSystem.
+  // Isolate globe rendering when another page has already loaded WarMap.
   vi.spyOn(GlobalMap, "default").mockImplementation((props) => (
     <>
       <button type="button" onClick={() => props.onTileClick?.(102)}>Target tile</button>
