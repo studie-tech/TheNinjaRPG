@@ -50,7 +50,6 @@ import {
  */
 export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   // Queries & mutations
-  const [showActive, setShowActive] = useState<string>("preferred");
   const { data: profile, isPending: isPendingProfile } =
     api.profile.getPublicUser.useQuery(
       { userId },
@@ -168,9 +167,8 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
     <div className="pb-3">
       <div className="m-2 mb-4 flex items-center space-x-2">
         <Tabs
-          defaultValue={showActive}
+          defaultValue="preferred"
           className="flex w-full flex-col items-center justify-center"
-          onValueChange={(value) => setShowActive(value)}
         >
           <TabsList className="text-center">
             <TabsTrigger value="preferred">Preferences</TabsTrigger>
