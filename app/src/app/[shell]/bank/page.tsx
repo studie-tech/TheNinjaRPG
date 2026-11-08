@@ -13,7 +13,7 @@ import {
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useForm } from "react-hook-form";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -88,9 +88,14 @@ export default function Bank() {
   });
 
   // Mutations
-  const { mutate: toBank, isPending: l1 } = api.bank.toBank.useMutation({
+  // Deposits and withdrawals return both balances and clear their own form
+  const moveMoneyOptions = (form: typeof toBankForm) => ({
     onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
+    onSuccess: async (
+      data: RouterOutputs["bank"]["toBank"],
+      _variables: unknown,
+      revision: number | undefined,
+    ) => {
       showMutationToast(data);
       if (data.success && data.data) {
         await updateUser(
@@ -100,27 +105,16 @@ export default function Bank() {
           },
           { revision },
         );
-        toBankForm.reset();
+        form.reset();
       }
     },
   });
-
-  const { mutate: toPocket, isPending: l2 } = api.bank.toPocket.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
-      showMutationToast(data);
-      if (data.success && data.data) {
-        await updateUser(
-          {
-            bank: data.data.bank,
-            money: data.data.money,
-          },
-          { revision },
-        );
-        toPocketForm.reset();
-      }
-    },
-  });
+  const { mutate: toBank, isPending: l1 } = api.bank.toBank.useMutation(
+    moveMoneyOptions(toBankForm),
+  );
+  const { mutate: toPocket, isPending: l2 } = api.bank.toPocket.useMutation(
+    moveMoneyOptions(toPocketForm),
+  );
 
   const { mutate: transfer, isPending: l3 } = api.bank.transfer.useMutation({
     onMutate: prepareUserUpdate,

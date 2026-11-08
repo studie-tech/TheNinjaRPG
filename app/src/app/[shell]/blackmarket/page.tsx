@@ -57,6 +57,7 @@ import {
   type BlackMarketOfferSchemaInput,
   blackMarketOfferSchema,
 } from "@/validators/blackmarket";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 export default function BlackMarket() {
   // Tab selection
@@ -305,48 +306,31 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   // Utility
   const utils = api.useUtils();
 
-  // Mutations
+  // Mutations: every offer change returns the viewer's balance delta
+  const offerMutationOptions = {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (
+      data: UserDeltaResponse,
+      _variables: unknown,
+      revision: number | undefined,
+    ) => {
+      showMutationToast(data);
+      if (data.success) {
+        await Promise.all([
+          updateUser(undefined, { revision, delta: data.userDelta }),
+          utils.blackmarket.getRyoOffers.invalidate(),
+        ]);
+      }
+    },
+  };
   const { mutate: create, isPending: isCreating } =
-    api.blackmarket.createOffer.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            updateUser(undefined, { revision, delta: data.userDelta }),
-            utils.blackmarket.getRyoOffers.invalidate(),
-          ]);
-        }
-      },
-    });
+    api.blackmarket.createOffer.useMutation(offerMutationOptions);
 
   const { mutate: delist, isPending: isDelisting } =
-    api.blackmarket.delistOffer.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            updateUser(undefined, { revision, delta: data.userDelta }),
-            utils.blackmarket.getRyoOffers.invalidate(),
-          ]);
-        }
-      },
-    });
+    api.blackmarket.delistOffer.useMutation(offerMutationOptions);
 
   const { mutate: accept, isPending: isAccepting } =
-    api.blackmarket.takeOffer.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            updateUser(undefined, { revision, delta: data.userDelta }),
-            utils.blackmarket.getRyoOffers.invalidate(),
-          ]);
-        }
-      },
-    });
+    api.blackmarket.takeOffer.useMutation(offerMutationOptions);
 
   const isLoading = isCreating || isDelisting || isAccepting;
   const belowRepTradeMinLevel = userData.level < REP_TRADE_MIN_LEVEL;
