@@ -293,7 +293,7 @@ const ElderHall: React.FC<{
   const lockExpiry = leaderUpdatedAt
     ? new Date(leaderUpdatedAt.getTime() + KAGE_ELDER_REMOVAL_LOCK_SECS * 1000)
     : null;
-  const kageIsProtected = lockExpiry ? new Date() < lockExpiry : true;
+  const kageIsProtected = lockExpiry ? syncedTime < lockExpiry.getTime() : true;
   const failedRemoval = removalHistory
     ?.filter((motion) => motion.status === "REJECTED")
     .sort((a, b) => (b.resolvedAt?.getTime() ?? 0) - (a.resolvedAt?.getTime() ?? 0))[0];
@@ -593,7 +593,7 @@ const ElderHall: React.FC<{
                     The kage is protected for{" "}
                     {lockExpiry
                       ? Math.ceil(
-                          (lockExpiry.getTime() - Date.now()) / (1000 * 3600 * 24),
+                          (lockExpiry.getTime() - syncedTime) / (1000 * 3600 * 24),
                         )
                       : KAGE_ELDER_REMOVAL_LOCK_SECS / (24 * 3600)}{" "}
                     more day(s). Elders cannot initiate a removal vote for{" "}
