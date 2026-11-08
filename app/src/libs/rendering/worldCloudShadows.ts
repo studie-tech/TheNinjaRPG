@@ -2,8 +2,16 @@ import alea from "alea";
 import { type Container, Geometry, Mesh, Shader, UniformGroup } from "pixi.js";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 
-/** World units; a cloud's reach decides how far it must leave the canvas before wrapping. */
-const CLOUD_REACH = 190;
+/** World units: the widest ellipse a cloud's lobes roughen. */
+const CLOUD_RADIUS = 190;
+const LOBE_DEPTH = 0.3;
+/**
+ * Lobes push the outline past its ellipse, by at most 1.5 lobe units where both peak together;
+ * quads reach that far so no cloud is clipped flat at a quad side.
+ */
+const CLOUD_EXTENT = Math.sqrt(1 + LOBE_DEPTH * 1.5);
+/** A cloud's reach decides how far it must leave the canvas before wrapping. */
+const CLOUD_REACH = CLOUD_RADIUS * CLOUD_EXTENT;
 const MIN_FIELD = 2048;
 const DRIFT = { x: 16, y: 6 };
 const PEAK_OPACITY = 0.26;
@@ -121,11 +129,11 @@ varying vec2 vPoint;
 varying vec2 vPhase;
 varying float vOpacity;
 void main() {
-  float reach = ${CLOUD_REACH.toFixed(1)} * uView.z;
-  vec2 radius = vec2(0.58 + aSeed.z * 0.42, 0.34 + aSeed.w * 0.26) * reach;
+  float reach = ${CLOUD_REACH.toFixed(3)} * uView.z;
+  vec2 radius = vec2(0.58 + aSeed.z * 0.42, 0.34 + aSeed.w * 0.26) * ${CLOUD_RADIUS.toFixed(1)} * uView.z;
   vec2 center = mod(aSeed.xy * uField.zw + uField.xy + reach, uField.zw) - reach;
-  vec2 point = center + (aPosition * 2.0 - 1.0) * radius;
-  vPoint = aPosition * 2.0 - 1.0;
+  vPoint = (aPosition * 2.0 - 1.0) * ${CLOUD_EXTENT.toFixed(4)};
+  vec2 point = center + vPoint * radius;
   vPhase = (aSeed.zw + aSeed.yx) * 6.283185307;
   vOpacity = uView.w;
   gl_Position = vec4(point / uView.xy * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);
@@ -139,7 +147,7 @@ varying float vOpacity;
 void main() {
   float lobes = sin(vPoint.x * 3.1 + vPhase.x) * sin(vPoint.y * 3.7 + vPhase.y)
     + 0.5 * sin(vPoint.x * 7.3 - vPhase.y) * sin(vPoint.y * 6.1 + vPhase.x);
-  float edge = 1.0 - dot(vPoint, vPoint) + lobes * 0.3;
+  float edge = 1.0 - dot(vPoint, vPoint) + lobes * ${LOBE_DEPTH.toFixed(2)};
   float alpha = vOpacity * clamp(edge * 3.0, 0.0, 1.0);
   gl_FragColor = vec4(vec3(0.03, 0.05, 0.11) * alpha, alpha);
 }`;
