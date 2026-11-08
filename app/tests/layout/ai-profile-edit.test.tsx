@@ -5,7 +5,7 @@ import * as client from "@/app/_trpc/client";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import * as ContentBox from "@/layout/ContentBox";
 import * as userContext from "@/utils/UserContext";
-import { ActionMoveTowardsOpponent, ActionEndTurn, ActionSpecificCombo, ActionUseSpecificJutsu, getBackupRules, type AiRuleType } from "@/validators/ai";
+import { ActionMoveTowardsOpponent, ActionEndTurn, ActionSpecificCombo, ActionUseSpecificJutsu, ConditionDistanceHigherThan, ConditionPlayerWithinRange, getBackupRules, type AiRuleType } from "@/validators/ai";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { spyOnToasts } from "../setup/toastMock";
 
@@ -280,5 +280,45 @@ describe("AI action pickers", () => {
     fireEvent.click(view.getByRole("option", { name: "Water Wall" }));
     fireEvent.click(view.getByRole("button", { name: "Save Profile" }));
     expect((controlled ? onSave : mocks.save).mock.lastCall?.[0].rules[0]?.action).toMatchObject({ comboIds: ["fire", "water"] });
+  });
+});
+
+describe("AI rule conditions and order", () => {
+  it("edits and removes a rule's conditions", () => {
+    mocks.profile.rules[0]!.conditions = [
+      ConditionDistanceHigherThan.parse({ value: 2 }),
+      ConditionPlayerWithinRange.parse({ minRange: 0, maxRange: 3 }),
+    ];
+    const view = mount();
+    fireEvent.click(headers(view)[0]!);
+    fireEvent.change(view.container.querySelector("#value")!, { target: { value: "5" } });
+    fireEvent.input(view.getByRole("spinbutton", { name: "Minimum range" }), { target: { value: "1" } });
+    expect(save(view).rules[0]?.conditions).toMatchObject([
+      { type: "distance_higher_than", value: 5 },
+      { type: "player_within_range", minRange: 1, maxRange: 3 },
+    ]);
+    mocks.save.mockClear();
+    fireEvent.click(view.container.querySelector(".absolute.top-2.right-2")!);
+    expect(save(view).rules[0]?.conditions).toMatchObject([
+      { type: "player_within_range", minRange: 1, maxRange: 3 },
+    ]);
+  });
+  it("swaps neighbouring custom rules and keeps the catch-alls last", () => {
+    mocks.profile.rules.splice(1, 0, { conditions: [], action: ActionMoveTowardsOpponent.parse({}) });
+    const view = mount();
+    const order = () => save(view).rules.slice(0, 2).map((rule) => rule.action.type);
+    expect(view.getAllByRole("button", { name: "Move rule up" })).toHaveLength(2);
+    expect(view.getAllByRole("button", { name: "Move rule down" })).toHaveLength(1);
+    fireEvent.click(view.getAllByRole("button", { name: "Move rule up" })[0]!);
+    expect(order()).toEqual(["end_turn", "move_towards_opponent"]);
+    mocks.save.mockClear();
+    fireEvent.click(view.getByRole("button", { name: "Move rule down" }));
+    expect(order()).toEqual(["move_towards_opponent", "end_turn"]);
+    mocks.save.mockClear();
+    fireEvent.click(view.getAllByRole("button", { name: "Move rule up" })[1]!);
+    expect(order()).toEqual(["end_turn", "move_towards_opponent"]);
+    expect(
+      save(view).rules.slice(-5).map(({ conditions, action }) => ({ conditions, action })),
+    ).toEqual(getBackupRules());
   });
 });
