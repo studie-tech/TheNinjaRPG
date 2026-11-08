@@ -23,7 +23,6 @@ describe("EditContent specific-X id-list pickers", () => {
       expect(field in schema.shape).toBe(true);
       const label = FORM_LABEL_MAP[field];
       expect(label).toBeTruthy();
-      expect((label ?? "").length).toBeGreaterThan(0);
     });
   }
 });

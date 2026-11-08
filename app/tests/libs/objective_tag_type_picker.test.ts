@@ -24,6 +24,5 @@ describe("EditContent tag_usage_win tagType picker", () => {
   it("the editor labels the tagType field", () => {
     const label = FORM_LABEL_MAP.tagType;
     expect(label).toBeTruthy();
-    expect((label ?? "").length).toBeGreaterThan(0);
   });
 });
