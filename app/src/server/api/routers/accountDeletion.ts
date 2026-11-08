@@ -1,4 +1,5 @@
 import { auth, reverificationError } from "@clerk/nextjs/server";
+import * as Sentry from "@sentry/nextjs";
 import { after } from "next/server";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 import {
@@ -64,7 +65,9 @@ export const accountDeletionRouter = createTRPCRouter({
           message:
             "Your permanent account deletion request has been accepted. You will be signed out. Cleanup runs in the background.",
         };
-      } catch {
+      } catch (error) {
+        // The player sees a retryable message; the cause goes to Sentry.
+        Sentry.captureException(error, { tags: { task: "account-deletion-request" } });
         return errorResponse(
           "We could not save your request. Nothing has been confirmed; please try again.",
         );

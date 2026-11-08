@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
+import * as Sentry from "@sentry/nextjs";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import * as nextServer from "next/server";
 import superjson from "superjson";
@@ -222,12 +223,17 @@ describe("native account deletion authorization", () => {
     expect(mocks.after).not.toHaveBeenCalled();
   });
   it("does not expose unexpected provider errors", async () => {
-    mocks.prepare.mockRejectedValueOnce(new Error("private provider details"));
+    const captured = vi.spyOn(Sentry, "captureException").mockReturnValue("test-event");
+    const failure = new Error("private provider details");
+    mocks.prepare.mockRejectedValueOnce(failure);
     expect(await request()).toEqual({
       success: false,
       message:
         "We could not save your request. Nothing has been confirmed; please try again.",
     });
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(captured).toHaveBeenCalledWith(failure, {
+      tags: { task: "account-deletion-request" },
+    });
   });
 });
