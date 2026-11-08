@@ -37,7 +37,7 @@ const config = {
     resolveExtensions: [".tsx", ".ts", ".jsx", ".js"],
   },
   generateBuildId: () => BUILD_ID,
-  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID, NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV },
   assetPrefix: CDN_ORIGIN,
   reactStrictMode: false,
   productionBrowserSourceMaps: true,

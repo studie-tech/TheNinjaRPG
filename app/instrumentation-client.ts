@@ -235,8 +235,9 @@ Sentry.init({
     return event;
   },
 
-  // Only enable Sentry in production
-  environment: process.env.NODE_ENV,
+  // NODE_ENV is "production" for every Vercel build, so VERCEL_ENV is what separates
+  // production from preview deployments.
+  environment: process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV,
 
   // Only on production URLs
   // Leave this off while a pull zone serves the bundle: app frames then come from
