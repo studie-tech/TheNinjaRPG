@@ -31,6 +31,7 @@ import {
   useState,
 } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
@@ -105,6 +106,7 @@ import {
   useRequiredUserDataSelector,
   useUserDataRef,
 } from "@/utils/UserContext";
+import type { detectedUserSchema } from "@/validators/stealth";
 import {
   parseTravelPins,
   type SectorForm,
@@ -163,12 +165,9 @@ function Travel() {
   const [revealedPlayers, setRevealedPlayers] = useState<RevealedPlayer[]>([]);
   const [showRevealedPlayersModal, setShowRevealedPlayersModal] =
     useState<boolean>(false);
-  const [pendingAttackTarget, setPendingAttackTarget] = useState<{
-    userId: string;
-    username: string;
-    longitude: number;
-    latitude: number;
-  } | null>(null);
+  const [pendingAttackTarget, setPendingAttackTarget] = useState<AttackTarget | null>(
+    null,
+  );
 
   const [activeTab, setActiveTab] = useState<string>("");
   const [focusSector, setFocusSector] = useState<number | null>(null);
@@ -1744,12 +1743,7 @@ const RevealedPlayerCard = ({
   userData: ReturnType<typeof useRequiredUserData>["data"];
   villageData: { id: string; name: string; hexColor: string }[] | undefined;
   isAttackingRevealed: boolean;
-  pendingAttackTarget: {
-    userId: string;
-    username: string;
-    longitude: number;
-    latitude: number;
-  } | null;
+  pendingAttackTarget: AttackTarget | null;
   originSocketId?: string;
   attackRevealedUser: (params: {
     originSocketId?: string;
@@ -1758,12 +1752,7 @@ const RevealedPlayerCard = ({
     latitude: number;
     sector: number;
   }) => void;
-  setPendingAttackTarget: (target: {
-    userId: string;
-    username: string;
-    longitude: number;
-    latitude: number;
-  }) => void;
+  setPendingAttackTarget: (target: AttackTarget) => void;
   setTargetPosition: (pos: { x: number; y: number }) => void;
   setShowRevealedPlayersModal: (show: boolean) => void;
 }) => {
@@ -1778,10 +1767,7 @@ const RevealedPlayerCard = ({
   const showAttack = player.canAttack;
 
   return (
-    <div
-      key={player.userId}
-      className="flex items-center justify-between rounded-lg bg-muted p-3"
-    >
+    <div className="flex items-center justify-between rounded-lg bg-muted p-3">
       <div>
         <p className="font-semibold">{player.username}</p>
         <p className="text-muted-foreground text-sm">
@@ -1846,13 +1832,10 @@ const RevealedPlayerCard = ({
 const activateSensory = api.stealth.useSensory;
 
 /** Public player fields shown by sensory reveals and their map markers. */
-type RevealedPlayer = {
-  userId: string;
-  username: string;
-  longitude: number;
-  latitude: number;
-  villageId: string | null;
-  level: number | null;
-  isMasked: boolean;
-  canAttack: boolean;
-};
+type RevealedPlayer = z.infer<typeof detectedUserSchema>;
+
+/** A revealed player the user is walking to attack on arrival. */
+type AttackTarget = Pick<
+  RevealedPlayer,
+  "userId" | "username" | "longitude" | "latitude"
+>;
