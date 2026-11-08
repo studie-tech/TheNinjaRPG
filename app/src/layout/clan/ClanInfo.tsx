@@ -914,94 +914,15 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             ))}
           </div>
           {/* Elder Nomination - only for non-outlaw clans */}
-          {!userData?.isOutlaw &&
-            leaderLike &&
-            (() => {
-              const now = new Date();
-              const dayOfMonth = now.getUTCDate();
-              const currentMonth = now.getUTCMonth() + 1;
-              const currentYear = now.getUTCFullYear();
-              const isWithinWindow =
-                dayOfMonth >= ELDER_NOMINATION_CUTOFF_DAY &&
-                dayOfMonth <= ELDER_NOMINATION_DEADLINE_DAY;
-              const isEligible =
-                clanData.elderCutoffMonth === currentMonth &&
-                clanData.elderCutoffYear === currentYear;
-              const canNominate = isWithinWindow && isEligible && selectedNomineeId;
-
-              return (
-                <div className="mt-4 rounded-lg border bg-muted p-3">
-                  <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-                    <UserRoundCog className="h-5 w-5" />
-                    <span className="font-bold">Village Elder Nomination</span>
-                  </div>
-                  <p className="mb-2 text-muted-foreground text-sm">
-                    Nominations are open from the {ELDER_NOMINATION_CUTOFF_DAY}th to the{" "}
-                    {ELDER_NOMINATION_DEADLINE_DAY}th of each month. Top{" "}
-                    {KAGE_MAX_ELDERS} clans by activity points (determined on the{" "}
-                    {ELDER_NOMINATION_CUTOFF_DAY}th) can nominate a member to become
-                    elder. Nominees must be at least Jonin rank and cannot be ANBU
-                    members.
-                  </p>
-                  {!isWithinWindow && (
-                    <p className="mb-2 text-amber-600 text-sm">
-                      Nomination window is closed. Opens on the{" "}
-                      {ELDER_NOMINATION_CUTOFF_DAY}th of the month.
-                    </p>
-                  )}
-                  {isWithinWindow && !isEligible && (
-                    <p className="mb-2 text-red-600 text-sm">
-                      Your clan is not eligible for elder nomination this month (not in
-                      top {KAGE_MAX_ELDERS} by activity points on the{" "}
-                      {ELDER_NOMINATION_CUTOFF_DAY}th).
-                    </p>
-                  )}
-                  {isWithinWindow && isEligible && clanData.elderCutoffRank && (
-                    <p className="mb-2 text-green-600 text-sm">
-                      Your clan ranked #{clanData.elderCutoffRank} in activity points
-                      and is eligible to nominate!
-                    </p>
-                  )}
-                  <div className="flex gap-2">
-                    <Select
-                      value={selectedNomineeId}
-                      onValueChange={setSelectedNomineeId}
-                      disabled={!isWithinWindow || !isEligible}
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Select a member to nominate" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {clanData.members
-                          .filter((m) => !m.anbuId && hasRequiredRank(m.rank, "JONIN"))
-                          .map((member) => (
-                            <SelectItem key={member.userId} value={member.userId}>
-                              {member.username} (Lvl. {member.level})
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      onClick={() =>
-                        nominateElder({ clanId, nomineeId: selectedNomineeId })
-                      }
-                      disabled={!canNominate || isNominating}
-                      loading={isNominating}
-                    >
-                      Nominate
-                    </Button>
-                  </div>
-                  {clanData.elderNominee && (
-                    <p className="mt-2 text-sm">
-                      Current nominee:{" "}
-                      <span className="font-bold">
-                        {clanData.elderNominee.username}
-                      </span>
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
+          {!userData?.isOutlaw && leaderLike && (
+            <ElderNomination
+              clanData={clanData}
+              selectedNomineeId={selectedNomineeId}
+              onSelectNominee={setSelectedNomineeId}
+              isNominating={isNominating}
+              onNominate={() => nominateElder({ clanId, nomineeId: selectedNomineeId })}
+            />
+          )}
           {leaderLike && canCreateStronghold && (
             <>
               <Button
@@ -1248,6 +1169,102 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
         </div>
       </div>
     </ContentBox>
+  );
+};
+
+interface ElderNominationProps {
+  clanData: NonNullable<ClanRouter["get"]>;
+  selectedNomineeId: string;
+  onSelectNominee: (userId: string) => void;
+  isNominating: boolean;
+  onNominate: () => void;
+}
+
+/** Monthly elder nomination for a top clan; the window is evaluated on each render. */
+const ElderNomination: React.FC<ElderNominationProps> = ({
+  clanData,
+  selectedNomineeId,
+  onSelectNominee,
+  isNominating,
+  onNominate,
+}) => {
+  const now = new Date();
+  const dayOfMonth = now.getUTCDate();
+  const currentMonth = now.getUTCMonth() + 1;
+  const currentYear = now.getUTCFullYear();
+  const isWithinWindow =
+    dayOfMonth >= ELDER_NOMINATION_CUTOFF_DAY &&
+    dayOfMonth <= ELDER_NOMINATION_DEADLINE_DAY;
+  const isEligible =
+    clanData.elderCutoffMonth === currentMonth &&
+    clanData.elderCutoffYear === currentYear;
+  const canNominate = isWithinWindow && isEligible && selectedNomineeId;
+
+  return (
+    <div className="mt-4 rounded-lg border bg-muted p-3">
+      <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+        <UserRoundCog className="h-5 w-5" />
+        <span className="font-bold">Village Elder Nomination</span>
+      </div>
+      <p className="mb-2 text-muted-foreground text-sm">
+        Nominations are open from the {ELDER_NOMINATION_CUTOFF_DAY}th to the{" "}
+        {ELDER_NOMINATION_DEADLINE_DAY}th of each month. Top {KAGE_MAX_ELDERS} clans by
+        activity points (determined on the {ELDER_NOMINATION_CUTOFF_DAY}th) can nominate
+        a member to become elder. Nominees must be at least Jonin rank and cannot be
+        ANBU members.
+      </p>
+      {!isWithinWindow && (
+        <p className="mb-2 text-amber-600 text-sm">
+          Nomination window is closed. Opens on the {ELDER_NOMINATION_CUTOFF_DAY}th of
+          the month.
+        </p>
+      )}
+      {isWithinWindow && !isEligible && (
+        <p className="mb-2 text-red-600 text-sm">
+          Your clan is not eligible for elder nomination this month (not in top{" "}
+          {KAGE_MAX_ELDERS} by activity points on the {ELDER_NOMINATION_CUTOFF_DAY}th).
+        </p>
+      )}
+      {isWithinWindow && isEligible && clanData.elderCutoffRank && (
+        <p className="mb-2 text-green-600 text-sm">
+          Your clan ranked #{clanData.elderCutoffRank} in activity points and is
+          eligible to nominate!
+        </p>
+      )}
+      <div className="flex gap-2">
+        <Select
+          value={selectedNomineeId}
+          onValueChange={onSelectNominee}
+          disabled={!isWithinWindow || !isEligible}
+        >
+          <SelectTrigger className="flex-1">
+            <SelectValue placeholder="Select a member to nominate" />
+          </SelectTrigger>
+          <SelectContent>
+            {clanData.members
+              .filter((m) => !m.anbuId && hasRequiredRank(m.rank, "JONIN"))
+              .map((member) => (
+                <SelectItem key={member.userId} value={member.userId}>
+                  {member.username} (Lvl. {member.level})
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+        <Button
+          onClick={onNominate}
+          disabled={!canNominate || isNominating}
+          loading={isNominating}
+        >
+          Nominate
+        </Button>
+      </div>
+      {clanData.elderNominee && (
+        <p className="mt-2 text-sm">
+          Current nominee:{" "}
+          <span className="font-bold">{clanData.elderNominee.username}</span>
+        </p>
+      )}
+    </div>
   );
 };
 
