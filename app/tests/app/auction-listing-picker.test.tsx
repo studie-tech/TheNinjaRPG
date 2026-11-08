@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
-import { NewAuctionListingDialog } from "@/app/[shell]/auctionhouse/page";
+import { NewAuctionListingDialog } from "@/app/[shell]/auctionhouse/NewListingDialog";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const row = (name: string, patch: object = {}) => ({

@@ -39,7 +39,7 @@ const staleTime = new Function(`return (${staleTimeExpression});`)() as number;
  */
 const inventoryQueries = [
   { file: "app/[shell]/items/page.tsx", procedure: "getUserItemsWithVariants" },
-  { file: "app/[shell]/auctionhouse/page.tsx", procedure: "getUserItems" },
+  { file: "app/[shell]/auctionhouse/NewListingDialog.tsx", procedure: "getUserItems" },
   { file: "app/[shell]/auctionhouse/Offers.tsx", procedure: "getUserItems" },
 ];
 

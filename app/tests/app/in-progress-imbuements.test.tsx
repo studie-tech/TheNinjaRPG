@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as client from "@/app/_trpc/client";
 import { CRAFTING_REQUIRED_EXP, CRAFTING_TIMES_MINS } from "@/drizzle/constants";
-import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/page";
+import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/ListingDetailsDialog";
 import { AuctionOffers } from "@/app/[shell]/auctionhouse/Offers";
 import * as CombatActions from "@/layout/CombatActions";
 import * as ItemDetails from "@/layout/ItemWithEffects";
