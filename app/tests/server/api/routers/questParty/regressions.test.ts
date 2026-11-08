@@ -33,7 +33,7 @@ import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, re
 import { deferred } from "../../../../setup/deferred";
 import { aroundStatements, beforeStatements, failStatements } from "../../../../setup/statements";
 
-describeWithDatabase("quest team eligibility and terminal failure", () => {
+describeWithDatabase("quest team membership, departures, shared deliveries and outcomes", () => {
   beforeEach(async () => {
     await resetTables(questParty, quest, questHistory, userData, user2conversation, village, villageStructure, aiProfile, battle, battleHistory, overworldAiPlacement, item, userItem);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
