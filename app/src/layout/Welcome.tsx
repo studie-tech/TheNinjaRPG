@@ -51,14 +51,11 @@ const Welcome: React.FC = () => {
   const isPixelLanding = useIsPixelLanding();
 
   // Snap container for full-height sections
-  const backgroundClass = cn(
-    "flex flex snap-start snap-always flex-col justify-center gap-4",
-  );
+  const backgroundClass = "flex snap-start snap-always flex-col justify-center gap-4";
 
   // Content wrapper with background styling
-  const contentClass = cn(
-    "mr-auto ml-auto flex w-[99%] max-w-[768px] flex-col items-center rounded-xl bg-popover/75",
-  );
+  const contentClass =
+    "mr-auto ml-auto flex w-[99%] max-w-[768px] flex-col items-center rounded-xl bg-popover/75";
 
   if (activeLayout === "pixel" && isPixelLanding) {
     return (
@@ -84,11 +81,7 @@ const Welcome: React.FC = () => {
 
   // Render
   return (
-    <div
-      className={cn(
-        "flex h-screen snap-y snap-mandatory flex-col gap-4 overflow-y-scroll",
-      )}
-    >
+    <div className="flex h-screen snap-y snap-mandatory flex-col gap-4 overflow-y-scroll">
       <div className={cn(backgroundClass, "justify-start")}>
         <div className={cn(contentClass, "mb-10")}>
           <Image
@@ -123,7 +116,7 @@ const Welcome: React.FC = () => {
             </Link>
           </div>
           <div className={"flex w-full flex-col items-center justify-center gap-4"}>
-            <div className={cn("mb-4 inline items-center gap-2 text-xl")}>
+            <div className="mb-4 inline items-center gap-2 text-xl">
               Already have an account?{" "}
               <Link href="/login" aria-label="Login" className="font-bold underline">
                 Log In
@@ -136,154 +129,32 @@ const Welcome: React.FC = () => {
         Game Features
       </div>
 
-      <div className={backgroundClass}>
-        <div className={contentClass}>
-          <div className="w-full p-3">
-            <div className="flex flex-col gap-2">
-              <h2 className="font-bold text-2xl">Jutsus</h2>
-              <p>
-                Jutsu are the cornerstone of strategic combat, blending skill,
-                creativity, and tactical planning to overcome your opponents. Players
-                can harness the power of chakra to unleash a variety of techniques,
-                including Ninjutsu, Genjutsu, and Taijutsu, each offering unique combat
-                advantages.
-              </p>
-              <p>
-                By mastering intricate hand seals and managing your chakra reserves, you
-                can develop devastating combos, counter enemy moves, and dominate the
-                battlefield. Explore thousands of potential jutsu combinations and
-                refine your strategy to suit your playstyle—whether you prefer brute
-                strength, deception, or finesse.
-              </p>
-              <Image
-                src={IMG_FRONTPAGE_SCREENSHOT_JUTSUS}
-                {...FEATURE_SHOT}
-                className="w-full rounded-xl"
-                alt="Screenshot from Jutsus"
-              />
+      {CLASSIC_FEATURES.map((feature, index) => (
+        <div key={feature.title} className={backgroundClass}>
+          <div className={contentClass}>
+            <div className="w-full p-3">
+              <div className="flex flex-col gap-2">
+                <h2
+                  className={
+                    index === 0 ? "font-bold text-2xl" : "pt-4 font-bold text-2xl"
+                  }
+                >
+                  {feature.title}
+                </h2>
+                {feature.paragraphs.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+                <Image
+                  src={feature.image}
+                  {...FEATURE_SHOT}
+                  className="w-full rounded-xl"
+                  alt={feature.alt}
+                />
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div className={backgroundClass}>
-        <div className={contentClass}>
-          <div className="w-full p-3">
-            <div className="flex flex-col gap-2">
-              <h2 className="pt-4 font-bold text-2xl">Combat</h2>
-              <p>
-                Experience the thrill of ninja combat in dynamic, round-based 2D
-                strategic battle system. Every encounter is a test of wit and skill,
-                requiring players to carefully plan their moves, manage resources, and
-                outthink their opponents.
-              </p>
-              <p>
-                Choose from a wide arsenal of techniques, including powerful jutsu,
-                precise attacks, and defensive maneuvers, to adapt to any situation.
-                Each round challenges you to anticipate your opponent&apos;s strategy
-                while leveraging your unique abilities and character build. Timing,
-                positioning, and strategy are key as you engage in battles that demand
-                both tactical decision-making and foresight.
-              </p>
-              <Image
-                src={IMG_FRONTPAGE_SCREENSHOT_COMBAT}
-                {...FEATURE_SHOT}
-                className="w-full rounded-xl"
-                alt="Screenshot from Combat"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className={backgroundClass}>
-        <div className={contentClass}>
-          <div className="w-full p-3">
-            <div className="flex flex-col gap-2">
-              <h2 className="pt-4 font-bold text-2xl">Village</h2>
-              <p>
-                The ninja village is your home, your sanctuary, and the center of your
-                growth as a shinobi. This bustling hub is where strategy meets daily
-                life, offering countless opportunities to sharpen your skills, manage
-                your resources, and engage with fellow ninjas.
-              </p>
-              <p>
-                From training grounds that push your abilities to the limit, to the
-                ramen shop where you replenish your stamina, every corner of the village
-                plays a vital role in your journey. The village bank ensures your
-                hard-earned wealth is protected, while the item shop equips you with
-                tools and scrolls to gain an edge in combat. In the clan hall,
-                you&apos;ll collaborate with allies to build your reputation and
-                influence, while the town hall connects you to vital missions and
-                village-wide initiatives. Even your home offers a place of rest and
-                recovery, preparing you for the challenges ahead.
-              </p>
-              <Image
-                src={IMG_FRONTPAGE_SCREENSHOT_VILLAGE}
-                {...FEATURE_SHOT}
-                className="w-full rounded-xl"
-                alt="Screenshot from Village"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className={backgroundClass}>
-        <div className={contentClass}>
-          <div className="w-full p-3">
-            <div className="flex flex-col gap-2">
-              <h2 className="pt-4 font-bold text-2xl">Sectors</h2>
-              <p>
-                The 2D travel system brings the ninja world to life, allowing you to
-                explore local sectors, navigate terrain, and engage with players and
-                enemies in real-time. Every move you make across the map opens new
-                opportunities for discovery, combat, and strategy.
-              </p>
-              <p>
-                Travel isn&apos;t just about getting from one place to another—it&apos;s
-                a core part of the game&apos;s experience. Whether you&apos;re scouting
-                enemy territories, setting up ambushes, or evading rival ninjas, the 2D
-                system gives you the freedom to plan your movements and adapt on the
-                fly. Players can launch surprise attacks, defend key locations, or
-                simply traverse the map to reach mission objectives and hidden rewards.
-              </p>
-              <Image
-                src={IMG_FRONTPAGE_SCREENSHOT_SECTOR}
-                {...FEATURE_SHOT}
-                className="w-full rounded-xl"
-                alt="Screenshot from Sector"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className={backgroundClass}>
-        <div className={contentClass}>
-          <div className="w-full p-3">
-            <div className="flex flex-col gap-2">
-              <h2 className="pt-4 font-bold text-2xl">Travel</h2>
-              <p>
-                The 3D global travel system expands your journey beyond your village,
-                opening the gates to a vast world filled with diverse regions and hidden
-                secrets. Travel between villages, explore distant lands, and immerse
-                yourself in the rich lore of the ninja universe.
-              </p>
-              <p>
-                Global travel isn&apos;t just about exploration—it&apos;s an opportunity
-                to engage with new challenges and alliances. Visit other villages to
-                trade, forge alliances, or test your strength against foreign rivals.
-                Each region offers unique environments, from dense forests and sprawling
-                deserts to snow-capped mountains, each presenting its own set of
-                opportunities and dangers.
-              </p>
-              <Image
-                src={IMG_FRONTPAGE_SCREENSHOT_GLOBAL}
-                {...FEATURE_SHOT}
-                className="w-full rounded-xl"
-                alt="Screenshot from the global map"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
+      ))}
 
       <div className={backgroundClass}>
         <div className={cn(contentClass, "p-3")}>{textSEO}</div>
@@ -831,6 +702,55 @@ const SetReferal = () => {
 /**
  * Texts
  */
+/** Screenshot sections of the classic welcome page, in display order. */
+const CLASSIC_FEATURES = [
+  {
+    title: "Jutsus",
+    paragraphs: [
+      "Jutsu are the cornerstone of strategic combat, blending skill, creativity, and tactical planning to overcome your opponents. Players can harness the power of chakra to unleash a variety of techniques, including Ninjutsu, Genjutsu, and Taijutsu, each offering unique combat advantages.",
+      "By mastering intricate hand seals and managing your chakra reserves, you can develop devastating combos, counter enemy moves, and dominate the battlefield. Explore thousands of potential jutsu combinations and refine your strategy to suit your playstyle—whether you prefer brute strength, deception, or finesse.",
+    ],
+    image: IMG_FRONTPAGE_SCREENSHOT_JUTSUS,
+    alt: "Screenshot from Jutsus",
+  },
+  {
+    title: "Combat",
+    paragraphs: [
+      "Experience the thrill of ninja combat in dynamic, round-based 2D strategic battle system. Every encounter is a test of wit and skill, requiring players to carefully plan their moves, manage resources, and outthink their opponents.",
+      "Choose from a wide arsenal of techniques, including powerful jutsu, precise attacks, and defensive maneuvers, to adapt to any situation. Each round challenges you to anticipate your opponent's strategy while leveraging your unique abilities and character build. Timing, positioning, and strategy are key as you engage in battles that demand both tactical decision-making and foresight.",
+    ],
+    image: IMG_FRONTPAGE_SCREENSHOT_COMBAT,
+    alt: "Screenshot from Combat",
+  },
+  {
+    title: "Village",
+    paragraphs: [
+      "The ninja village is your home, your sanctuary, and the center of your growth as a shinobi. This bustling hub is where strategy meets daily life, offering countless opportunities to sharpen your skills, manage your resources, and engage with fellow ninjas.",
+      "From training grounds that push your abilities to the limit, to the ramen shop where you replenish your stamina, every corner of the village plays a vital role in your journey. The village bank ensures your hard-earned wealth is protected, while the item shop equips you with tools and scrolls to gain an edge in combat. In the clan hall, you'll collaborate with allies to build your reputation and influence, while the town hall connects you to vital missions and village-wide initiatives. Even your home offers a place of rest and recovery, preparing you for the challenges ahead.",
+    ],
+    image: IMG_FRONTPAGE_SCREENSHOT_VILLAGE,
+    alt: "Screenshot from Village",
+  },
+  {
+    title: "Sectors",
+    paragraphs: [
+      "The 2D travel system brings the ninja world to life, allowing you to explore local sectors, navigate terrain, and engage with players and enemies in real-time. Every move you make across the map opens new opportunities for discovery, combat, and strategy.",
+      "Travel isn't just about getting from one place to another—it's a core part of the game's experience. Whether you're scouting enemy territories, setting up ambushes, or evading rival ninjas, the 2D system gives you the freedom to plan your movements and adapt on the fly. Players can launch surprise attacks, defend key locations, or simply traverse the map to reach mission objectives and hidden rewards.",
+    ],
+    image: IMG_FRONTPAGE_SCREENSHOT_SECTOR,
+    alt: "Screenshot from Sector",
+  },
+  {
+    title: "Travel",
+    paragraphs: [
+      "The 3D global travel system expands your journey beyond your village, opening the gates to a vast world filled with diverse regions and hidden secrets. Travel between villages, explore distant lands, and immerse yourself in the rich lore of the ninja universe.",
+      "Global travel isn't just about exploration—it's an opportunity to engage with new challenges and alliances. Visit other villages to trade, forge alliances, or test your strength against foreign rivals. Each region offers unique environments, from dense forests and sprawling deserts to snow-capped mountains, each presenting its own set of opportunities and dangers.",
+    ],
+    image: IMG_FRONTPAGE_SCREENSHOT_GLOBAL,
+    alt: "Screenshot from the global map",
+  },
+];
+
 const textSEO = (
   <div>
     <h1 className="px-2 text-left font-bold text-xl md:text-4xl">
