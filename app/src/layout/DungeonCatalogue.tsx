@@ -17,22 +17,14 @@ export const DungeonCatalogue = () => {
   const { timeDiff } = useUserData();
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
   const detailsTrigger = useRef<HTMLButtonElement | null>(null);
   const catalogue = api.coop.dungeon.getCatalogue.useQuery(undefined, {
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
   const deadlines = catalogue.data?.map((entry) => entry.expiresAt) ?? [];
-  useRefreshAt(
-    deadlines,
-    () => {
-      setNow(Date.now());
-      void catalogue.refetch();
-    },
-    timeDiff,
-  );
-  const serverNow = Math.max(now, Date.now()) - (timeDiff ?? 0);
+  useRefreshAt(deadlines, () => void catalogue.refetch(), timeDiff);
+  const serverNow = Date.now() - (timeDiff ?? 0);
   const entries =
     catalogue.data?.filter(
       (entry) => !entry.expiresAt || new Date(entry.expiresAt).getTime() > serverNow,
