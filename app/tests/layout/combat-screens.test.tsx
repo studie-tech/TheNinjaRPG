@@ -26,7 +26,7 @@ import type { BattleState, CombatResult, ReturnedBattle } from "@/libs/combat/ty
 import * as tutorialLib from "@/libs/tutorial";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { makeCompleteBattle, makeUser } from "../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../setup/combat";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 type Profile = {

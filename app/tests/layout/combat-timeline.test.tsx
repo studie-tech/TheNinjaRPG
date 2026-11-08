@@ -8,7 +8,7 @@ import * as itemWithEffects from "@/layout/ItemWithEffects";
 import { maskBattle } from "@/libs/combat/masking";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { combatPendingActionAtom } from "@/utils/UserContext";
-import { makeCompleteBattle, makeUser } from "../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../setup/combat";
 import { stubDialog } from "../setup/dialog";
 
 const spies: { mockRestore: () => void }[] = [];
