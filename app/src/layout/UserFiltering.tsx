@@ -56,7 +56,7 @@ const USER_FILTERING_SCHEMA = defineFilteringSchema({
       label: "Effects",
       type: "multi-select",
       defaultValue: [],
-      options: (tagTypes ?? []).map((ef) => ({ value: ef, label: ef })),
+      options: tagTypes.map((ef) => ({ value: ef, label: ef })),
       visibleIf: (ctx) =>
         Boolean((ctx as { showEffects?: boolean } | undefined)?.showEffects),
     },
@@ -147,7 +147,7 @@ const UserFiltering: React.FC<UserFilteringProps> = (props) => {
 
 export default UserFiltering;
 
-/** tRPC filter to be used on api.jutsu.getAll */
+/** tRPC filter for api.profile.getPublicUsers */
 export const getFilter = (state: UserFilteringState) =>
   buildFilter(state.cf, USER_FILTERING_SCHEMA);
 
