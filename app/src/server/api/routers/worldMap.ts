@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -42,6 +41,7 @@ import {
   fetchPublishedSectorMaps,
   fetchSectorWindowEntries,
   getSectorNeighborIds,
+  hashTiledJson,
   invalidatePublishedMapCache,
 } from "@/server/utils/sectorMap";
 import { canChangeContent } from "@/utils/permissions";
@@ -512,15 +512,6 @@ const buildWindowLayoutBundle = (sector: number) => {
   return [sector, cardinals.north, cardinals.east, cardinals.south, cardinals.west]
     .filter((center) => center >= 0)
     .map((center) => ({ center, entries: buildSectorWindowLayout(center) }));
-};
-
-/**
- * sha256 hex digest of the JSON.stringify'd upload, stored as the row's
- * sourceHash. Not canonicalized, so the same logical document with different
- * key ordering hashes differently.
- */
-const hashTiledJson = (json: unknown) => {
-  return createHash("sha256").update(JSON.stringify(json)).digest("hex");
 };
 
 /**

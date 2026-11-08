@@ -11,7 +11,6 @@
  *   bun run scripts/publish-sector-maps.ts --missing # preserve published maps
  *   bun run scripts/publish-sector-maps.ts --seed v2  # reroll layouts
  */
-import { createHash } from "node:crypto";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getFlagValue, parseIntList } from "./cli";
@@ -25,6 +24,7 @@ import { sectorMap, userData } from "@/drizzle/schema";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
 import { drizzleDB } from "@/server/db";
+import { hashTiledJson } from "@/server/utils/sectorMap";
 import { chunkArray } from "@/utils/array";
 import { buildTiledJson } from "./generate-sector-map";
 
@@ -162,7 +162,7 @@ const main = async () => {
     const result = normalizeTiledSectorMap({
       sector,
       name: `Sector ${sector}`,
-      sourceHash: createHash("sha256").update(JSON.stringify(tiledJson)).digest("hex"),
+      sourceHash: hashTiledJson(tiledJson),
       tiledJson,
       terrainRegistry: mergeTerrainSpecs([]),
     });
