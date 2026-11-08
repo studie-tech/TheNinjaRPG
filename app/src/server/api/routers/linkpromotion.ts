@@ -28,7 +28,6 @@ export const linkPromotionRouter = createTRPCRouter({
       z.object({
         cursor: z.number().nullish(),
         limit: z.number().min(1).max(500),
-        userId: z.string(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -39,7 +38,7 @@ export const linkPromotionRouter = createTRPCRouter({
       const results = await listLinkPromotionForGetLinkPromotions(
         ctx.drizzle,
         user,
-        input,
+        { userId: ctx.userId, limit: input.limit },
         skip,
       );
       const nextCursor = cursorAfter(results);

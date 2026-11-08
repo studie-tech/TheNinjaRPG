@@ -49,6 +49,20 @@ describeWithDatabase("Link promotion submissions and review rewards", () => {
     expect(saved).toMatchObject({ userId: "promoter", url, points: 0, reviewed: false });
   });
 
+  it("lists only the caller's own submissions to a player who cannot review", async () => {
+    await insertUsers([{ userId: "other", username: "other" }]);
+    const caller = await callerFor(linkPromotionRouter, "other");
+    // A client-sent user id names nobody; the listing is scoped to the caller.
+    const { data } = await caller.getLinkPromotions({ limit: 30, userId: "promoter" } as never);
+    expect(data).toEqual([]);
+  });
+
+  it("lists a player's own submissions", async () => {
+    const caller = await callerFor(linkPromotionRouter, "promoter");
+    const { data } = await caller.getLinkPromotions({ limit: 30 });
+    expect(data.map((row) => row.id)).toEqual(["link"]);
+  });
+
   it("grants the reward once when two reviewers submit at the same time", async () => {
     const db = await getTestDatabase();
     const results: boolean[] = [];

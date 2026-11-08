@@ -367,10 +367,7 @@ const RecruitGuideTab: React.FC = () => {
     fetchNextPage,
     hasNextPage,
   } = api.linkPromotion.getLinkPromotions.useInfiniteQuery(
-    {
-      limit: 30,
-      userId: userData?.userId || "placeholder",
-    },
+    { limit: 30 },
     {
       enabled: !!userData?.userId,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
