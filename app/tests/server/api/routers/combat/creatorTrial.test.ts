@@ -42,6 +42,21 @@ const attack = async (position = SPOT) =>
     "COMBAT",
   );
 
+/** The fight a quest objective naming the creator starts, as quest consequences do. */
+const questFight = async () =>
+  initiateBattle(
+    {
+      ...SPOT,
+      longitude: SPOT.longitude + 3,
+      userIds: [HERO],
+      targetIds: [CREATOR],
+      client: await getTestDatabase(),
+      biome: "default",
+      questBattleSource: { questId: "kill-the-creator", objectiveId: "objective" },
+    },
+    "QUEST",
+  );
+
 describeWithDatabase("creator trial admission", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
@@ -109,6 +124,24 @@ describeWithDatabase("creator trial admission", () => {
     ).toBe(created.id);
   });
 
+  it("turns a quest fight naming the creator into the trial, keeping it a quest fight", async () => {
+    const client = await getTestDatabase();
+    expect(await questFight()).toMatchObject({ success: true });
+
+    const created = (await client.query.battle.findFirst())!;
+    expect(created.battleType).toBe("QUEST");
+    expect(created.extraState.questBattleSource).toEqual({
+      questId: "kill-the-creator",
+      objectiveId: "objective",
+    });
+    const enemies = created.usersState.filter((user) => user.direction === "right" && !user.isSummon);
+    expect(enemies.map((user) => user.controllerId)).toEqual([IDS[0]!]);
+    expect(created.extraState.encounter?.pendingWaves).toHaveLength(IDS.length - 1);
+    expect(
+      await client.query.userData.findFirst({ where: eq(userData.userId, CREATOR) }),
+    ).toMatchObject({ status: "AWAKE", battleId: null });
+  });
+
   it("still requires standing with the creator", async () => {
     const client = await getTestDatabase();
     const result = await attack({ ...SPOT, longitude: SPOT.longitude + 1 });
@@ -129,7 +162,10 @@ describeWithDatabase("creator trial admission", () => {
     expect(await client.query.battle.findFirst()).toBeUndefined();
   });
 
-  it("credits the creator's achievement when the last form falls", async () => {
+  it.each([
+    ["an attack", attack],
+    ["the quest's own fight", questFight],
+  ])("credits the creator's achievement when the last form falls after %s", async (_, start) => {
     const client = await getTestDatabase();
     await client.insert(badge).values({
       id: "creator-badge",
@@ -164,7 +200,7 @@ describeWithDatabase("creator trial admission", () => {
         sceneCharacters: [],
       },
     } as never);
-    await attack();
+    await start();
     const created = (await client.query.battle.findFirst())!;
     const usersState = created.usersState.map((user) =>
       user.controllerId === IDS[0] ? { ...user, curHealth: 0 } : user,

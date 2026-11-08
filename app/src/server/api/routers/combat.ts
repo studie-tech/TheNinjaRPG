@@ -2126,10 +2126,13 @@ export const initiateBattle = async (
       : null,
   ]);
 
-  // An open-world attack on the creator never reaches their account. It stays bound to
-  // their position, as any attack is, and opens the trial against their stand-in forms.
+  // A fight with the creator never reaches their account: an open-world attack, or quest
+  // content naming them, opens the trial against their stand-in forms. An attack stays bound
+  // to their position, as any attack is; quest fights keep their type and objective credit.
   const creator =
-    battleType === "COMBAT"
+    battleType === "COMBAT" ||
+    battleType === "QUEST" ||
+    battleType === "RANDOM_ENCOUNTER"
       ? preloadedUsers.find(
           (user) =>
             targetIds.includes(user.userId) &&
@@ -2139,9 +2142,10 @@ export const initiateBattle = async (
       : undefined;
   if (creator) {
     if (
-      creator.sector !== sector ||
-      creator.longitude !== longitude ||
-      creator.latitude !== latitude
+      battleType === "COMBAT" &&
+      (creator.sector !== sector ||
+        creator.longitude !== longitude ||
+        creator.latitude !== latitude)
     )
       return { success: false, message: "Attack failed, did the target move?" };
     return await initiateBattle(
@@ -2151,7 +2155,8 @@ export const initiateBattle = async (
         creatorTrial: { creatorId: creator.userId, username: creator.username },
         aiTransformations: aiTransformations ?? undefined,
       },
-      "OVERWORLD",
+      battleType === "COMBAT" ? "OVERWORLD" : battleType,
+      scaleGains,
     );
   }
 

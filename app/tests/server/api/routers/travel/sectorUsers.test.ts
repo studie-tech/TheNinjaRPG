@@ -1,5 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
+import { CREATOR_TRIAL_FIRST_FORM, CREATOR_USERNAME } from "@/drizzle/constants";
 import {
   anbuSquad,
   battle,
@@ -96,6 +97,20 @@ describeWithDatabase("travel.getSectorData player visibility", () => {
       expect(result.users.find((u) => u.userId === VIEWER)?.username).toBe("Viewer");
     },
   );
+
+  it("draws the creator as their trial's opening form, for everyone and themselves", async () => {
+    await insertUsers([
+      { userId: "creator", username: CREATOR_USERNAME, status: "AWAKE", sector: SECTOR },
+      { userId: CREATOR_TRIAL_FIRST_FORM, isAi: true, avatar: "https://example.com/robot.webp" },
+    ]);
+    for (const callerId of [VIEWER, "creator"]) {
+      const result = await (await callerFor(travelRouter, callerId)).getSectorData({ sector: SECTOR });
+      expect(result.users.find((u) => u.userId === "creator")).toMatchObject({
+        bodyArt: "https://example.com/robot.webp",
+      });
+      expect(result.users.find((u) => u.userId === "active")).not.toHaveProperty("bodyArt");
+    }
+  });
 
   it.each(["TRAVEL", "QUEUED"] as const)("does not append a %s caller", async (status) => {
     await (await getTestDatabase()).update(userData).set({ status }).where(eq(userData.userId, VIEWER));
