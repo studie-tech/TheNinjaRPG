@@ -65,7 +65,7 @@ import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getQuestMapLocations, groupMapLocations } from "@/libs/mapLocations";
-import { dialogChoiceContentId, isQuestObjectiveAvailable } from "@/libs/objectives";
+import { dialogChoiceContentId } from "@/libs/objectives";
 import {
   arrivalPromptDecision,
   findActionableBoundObjective,
@@ -83,8 +83,8 @@ import {
 } from "@/libs/profile";
 import {
   GATHERING_CANCEL_PREFIX,
+  getArrivalQuestTriggers,
   getBoundObjectiveCandidates,
-  isLocationObjective,
 } from "@/libs/quest";
 import { findConsecutiveQuestId } from "@/libs/questRun";
 import { hasRequiredRank } from "@/libs/rank";
@@ -850,51 +850,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   ) => {
     const userData = userRef.current;
     if (!userData) return;
-    let shouldCheckQuest = false;
-    userData?.userQuests?.forEach((userquest) => {
-      const tracker = userData.questData?.find((q) => q.id === userquest.questId);
-      userquest.quest.content.objectives.forEach((objective, i) => {
-        const isOnLocation = isLocationObjective(
-          {
-            sector: data.sector,
-            longitude: data.longitude,
-            latitude: data.latitude,
-          },
-          objective,
-        );
-        if (
-          (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
-          (isOnLocation ||
-            // A masked target cannot be matched locally; the server owns its coordinates.
-            ("hideLocation" in objective && objective.hideLocation) ||
-            ("attackers" in objective &&
-              objective.attackers &&
-              objective.attackers.length > 0))
-        ) {
-          shouldCheckQuest = true;
-        }
-        const goal = tracker?.goals.find((g) => g.id === objective.id);
-        if (
-          (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
-          objective.task === "collect_item" &&
-          "collect_time_minutes" in objective &&
-          objective.collect_time_minutes &&
-          goal?.timestamp &&
-          !goal.done &&
-          !isOnLocation
-        ) {
-          shouldCheckQuest = true;
-        }
-        if (
-          objective.task === "dialog" &&
-          !objective.overworldPlacementId &&
-          isOnLocation &&
-          !isTutorialActive(userData)
-        ) {
-          setLogbookModalQuestId(userquest.questId);
-        }
-      });
-    });
+    const { shouldCheckQuest, dialogQuestIds } = getArrivalQuestTriggers(
+      userData,
+      data,
+    );
+    for (const questId of dialogQuestIds) setLogbookModalQuestId(questId);
     if (shouldCheckQuest || forceCheck) checkQuest();
   };
 
