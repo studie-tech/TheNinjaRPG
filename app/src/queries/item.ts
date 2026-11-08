@@ -74,8 +74,11 @@ import {
 } from "@/server/utils/concurrency";
 import { getItemPurchasePeriodStart, getNextUserSnapshotAt } from "@/utils/time";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
-import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/item";
-import type { FurnitureVariantData } from "@/validators/itemFurniture";
+import {
+  DEFAULT_FURNITURE_DATA,
+  FURNITURE_ITEM_DEFAULTS,
+  type FurnitureVariantData,
+} from "@/validators/itemFurniture";
 import type { cacheConsumptionResponseSchema } from "@/validators/weightedCache";
 
 /** Load an item definition by ID; a missing definition yields undefined. */

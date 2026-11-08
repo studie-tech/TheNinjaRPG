@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { ItemValidator } from "@/validators/combat";
-import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS, furnitureDataSchema, furnitureItemSchema, itemCreateSchema } from "@/validators/item";
-import { furnitureGeometrySchema, furnitureVariantDataSchema } from "@/validators/itemFurniture";
+import { itemCreateSchema } from "@/validators/item";
+import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS, furnitureDataSchema, furnitureGeometrySchema, furnitureItemSchema, furnitureVariantDataSchema } from "@/validators/itemFurniture";
 
 const furniture = {
   ...FURNITURE_ITEM_DEFAULTS,

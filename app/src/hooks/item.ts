@@ -23,7 +23,10 @@ import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import type { ZodAllTags, ZodItemInput, ZodItemType } from "@/validators/combat";
 import { IncreaseStatTag, ItemValidator } from "@/validators/combat";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
-import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/item";
+import {
+  DEFAULT_FURNITURE_DATA,
+  FURNITURE_ITEM_DEFAULTS,
+} from "@/validators/itemFurniture";
 
 /**
  * Hook used when creating frontend forms for editing items
