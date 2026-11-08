@@ -693,14 +693,6 @@ const GameHUD = memo(function GameHUD() {
  * Only re-renders when activeUpgrades or inRunCurrency change.
  * Wrapped in memo() to ensure parent re-renders don't affect this component.
  */
-interface InRunUpgradesWrapperProps {
-  upgradeDefinitions: Parameters<typeof TowerDefenseUpgrades>[0]["upgradeDefinitions"];
-  userUpgrades: Parameters<typeof TowerDefenseUpgrades>[0]["userUpgrades"];
-  activeTab: TowerDefenseUpgradeCategory | undefined;
-  onTabChange: (tab: TowerDefenseUpgradeCategory) => void;
-  onInRunPurchase: (upgradeId: string) => void;
-}
-
 const InRunUpgradesWrapper = memo(function InRunUpgradesWrapper({
   upgradeDefinitions,
   userUpgrades,
@@ -724,3 +716,11 @@ const InRunUpgradesWrapper = memo(function InRunUpgradesWrapper({
     />
   );
 });
+
+interface InRunUpgradesWrapperProps {
+  upgradeDefinitions: Parameters<typeof TowerDefenseUpgrades>[0]["upgradeDefinitions"];
+  userUpgrades: Parameters<typeof TowerDefenseUpgrades>[0]["userUpgrades"];
+  activeTab: TowerDefenseUpgradeCategory | undefined;
+  onTabChange: (tab: TowerDefenseUpgradeCategory) => void;
+  onInRunPurchase: (upgradeId: string) => void;
+}
