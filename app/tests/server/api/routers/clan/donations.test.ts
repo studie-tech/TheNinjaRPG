@@ -14,6 +14,7 @@ import {
 
 const MEMBER = "donation-member";
 const CLAN = "donation-clan";
+const OTHER_CLAN = "donation-other-clan";
 const MONEY = 1000;
 const REPS = 100;
 const BANK = 500;
@@ -61,6 +62,7 @@ describeWithDatabase("clan donations and deposits", () => {
     ]);
     await insertClans([
       { id: CLAN, name: "Donation Clan", leaderId: MEMBER, villageId: "donation-village", bank: BANK, repTreasury: TREASURY },
+      { id: OTHER_CLAN, name: "Other Clan", leaderId: MEMBER, villageId: "donation-village", bank: 0, repTreasury: 0 },
     ]);
   });
 
@@ -79,6 +81,7 @@ describeWithDatabase("clan donations and deposits", () => {
   const donationRaces: Array<[string, () => Promise<unknown>, Partial<Awaited<ReturnType<typeof balances>>>]> = [
     ["the donor's reputation drains", () => setMember({ reputationPoints: 20 }), { reputationPoints: 20 }],
     ["the donor leaves the faction", () => setMember({ clanId: null }), { clanId: null }],
+    ["the donor switches to another faction", () => setMember({ clanId: OTHER_CLAN }), { clanId: OTHER_CLAN }],
     ["the faction is deleted", deleteClan, { bank: undefined, repTreasury: undefined }],
   ];
   for (const [label, race, changed] of donationRaces) {
@@ -114,6 +117,7 @@ describeWithDatabase("clan donations and deposits", () => {
   const depositRaces: Array<[string, () => Promise<unknown>, Partial<Awaited<ReturnType<typeof balances>>>]> = [
     ["the member's pocket drains", () => setMember({ money: 100 }), { money: 100 }],
     ["the member leaves the clan", () => setMember({ clanId: null }), { clanId: null }],
+    ["the member switches to another clan", () => setMember({ clanId: OTHER_CLAN }), { clanId: OTHER_CLAN }],
     ["the clan is deleted", deleteClan, { bank: undefined, repTreasury: undefined }],
   ];
   for (const [label, race, changed] of depositRaces) {
