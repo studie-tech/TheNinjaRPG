@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render as renderInteractive } from "@testing-librar
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
-import { sceneAssetIds } from "@/libs/contentReview/paths";
+import { questSceneAssetIds } from "@/libs/contentReview/paths";
 import { createToastMock } from "../setup/toastMock";
 import type { ContentProposalStatus } from "@/drizzle/constants";
 import * as logbook from "@/layout/Logbook";
@@ -206,7 +206,7 @@ describe("proposal review detail", () => {
   });
 
   it("collects only nonempty scene references at any nesting level", () => {
-    expect(sceneAssetIds({
+    expect(questSceneAssetIds({
       content: {
         sceneBackground: "background",
         sceneCharacters: ["old", ""],
@@ -214,7 +214,7 @@ describe("proposal review detail", () => {
         image: "https://example.com/image.webp",
       },
     })).toEqual(["background", "old", "next"]);
-    expect(sceneAssetIds(null)).toEqual([]);
+    expect(questSceneAssetIds(null)).toEqual([]);
   });
 
   it("previews the chosen generated character and the current catalog cast", () => {

@@ -27,7 +27,7 @@ import {
 } from "./entities";
 import { isEpidemicConfigured } from "./epidemic";
 import { expireStaleEvidence } from "./outdate";
-import { sceneAssetIds } from "./paths";
+import { questSceneAssetIds } from "./paths";
 import { contentVersion } from "./version";
 
 /**
@@ -233,7 +233,7 @@ const countAssetUse = (entities: ContentEntity[]) => {
   const used = new Map<string, number>();
   for (const entity of entities) {
     if (entity.type === "QUEST") {
-      for (const id of sceneAssetIds(entity.editable.content)) {
+      for (const id of questSceneAssetIds(entity.editable.content)) {
         used.set(id, (used.get(id) ?? 0) + 1);
       }
     }

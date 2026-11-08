@@ -36,7 +36,7 @@ import {
 import {
   getAtPath,
   isSceneCharacterPath,
-  sceneAssetIds,
+  questSceneAssetIds,
   setAtPath,
   topLevelField,
 } from "@/libs/contentReview/paths";
@@ -265,7 +265,7 @@ export const contentReviewRouter = createTRPCRouter({
           change.after,
           change.applied,
         ]) {
-          for (const id of sceneAssetIds(fields)) assetIds.add(id);
+          for (const id of questSceneAssetIds(fields)) assetIds.add(id);
         }
       }
       assetIds.delete("");
