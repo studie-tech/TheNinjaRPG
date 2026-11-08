@@ -22,8 +22,7 @@ import { BloodlineValidator } from "@/validators/combat";
  * @param data
  */
 export const useBloodlineEditForm = (data: Bloodline, refetch: () => void) => {
-  // Case type
-  const bloodline = { ...data, effects: data.effects };
+  const bloodline = { ...data };
 
   // Form handling
   const submitContent = useContentSubmit();

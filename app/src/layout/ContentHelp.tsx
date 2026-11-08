@@ -20,7 +20,6 @@ import {
   MIN_CONTENT_DESCRIPTION_LENGTH,
   type QuestType,
 } from "@/drizzle/constants";
-import type { ZodCombinedQuest } from "@/hooks/quest";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { hasEffectGraphics, isNonBattleItem } from "@/libs/contentCompleteness";
 import { findPredecessor } from "@/libs/objectives";
@@ -38,10 +37,10 @@ import type {
   ZodJutsuType,
   ZodSkillTreeType,
 } from "@/validators/combat";
-import type { AllObjectivesType } from "@/validators/objectives";
+import type { AllObjectivesType, ZodQuestFormType } from "@/validators/objectives";
 
 export interface QuestHelperProps {
-  quest: DeepPartial<ZodCombinedQuest>;
+  quest: DeepPartial<ZodQuestFormType>;
 }
 
 export interface ItemHelperProps {
@@ -459,7 +458,7 @@ const renderWarnings = (warnings: { title: string; msg: string }[]) => {
  * @param quest - The quest to render the tips for
  * @returns The tips for hunting quests
  */
-const renderHuntingTips = (quest: DeepPartial<ZodCombinedQuest>) => {
+const renderHuntingTips = (quest: DeepPartial<ZodQuestFormType>) => {
   return (
     <div className="space-y-4">
       <Alert>
@@ -525,7 +524,7 @@ const renderHuntingTips = (quest: DeepPartial<ZodCombinedQuest>) => {
  * @param quest - The quest to render the tips for
  * @returns The tips for gathering quests
  */
-const renderGatheringTips = (quest: DeepPartial<ZodCombinedQuest>) => {
+const renderGatheringTips = (quest: DeepPartial<ZodQuestFormType>) => {
   return (
     <div className="space-y-4">
       <Alert>
@@ -592,7 +591,7 @@ const renderGatheringTips = (quest: DeepPartial<ZodCombinedQuest>) => {
  * @param quest - The quest to render the tips for
  * @returns The tips for battle pyramid quests
  */
-const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
+const renderBattlePyramidTips = (quest: DeepPartial<ZodQuestFormType>) => {
   // Find the first objective (the one with no predecessors)
   const objectives = (quest.content?.objectives || []) as AllObjectivesType[];
   const firstObjective = objectives.find((obj) => !findPredecessor(objectives, obj.id));
@@ -760,7 +759,7 @@ const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
  * @param quest - The quest to render the tips for
  * @returns The tips for starter quests
  */
-const renderStarterTips = (quest: DeepPartial<ZodCombinedQuest>) => {
+const renderStarterTips = (quest: DeepPartial<ZodQuestFormType>) => {
   const hasPrerequisite = !!quest.prerequisiteQuestId;
 
   return (
@@ -827,7 +826,7 @@ const renderStarterTips = (quest: DeepPartial<ZodCombinedQuest>) => {
  * @param quest - The quest to render the tips for
  * @returns The tips for raid quests
  */
-const renderRaidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
+const renderRaidTips = (quest: DeepPartial<ZodQuestFormType>) => {
   const objectives = (quest.content?.objectives || []) as AllObjectivesType[];
   const objective = objectives[0];
   const objectiveTask = objective?.task;
@@ -1363,7 +1362,7 @@ const renderItemRelations = (relations?: ItemRelations) => {
 };
 
 const QUEST_TIPS: Partial<
-  Record<QuestType, (quest: DeepPartial<ZodCombinedQuest>) => React.ReactNode>
+  Record<QuestType, (quest: DeepPartial<ZodQuestFormType>) => React.ReactNode>
 > = {
   hunting: renderHuntingTips,
   gathering: renderGatheringTips,

@@ -22,8 +22,6 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
   const sageMode = {
     ...data,
     battleDescription: data.battleDescription ?? "",
-    effects: data.effects,
-    afterEffects: data.afterEffects,
   };
 
   const submitContent = useContentSubmit();
