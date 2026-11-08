@@ -70,8 +70,12 @@ export default function ManualMain() {
     { name: "ai", img: IMG_MANUAL_AI },
     { name: "companions", img: IMG_MANUAL_PET_SPECIES },
     { name: "quest", img: IMG_MANUAL_QUEST },
-    { name: "dungeon", img: IMG_MANUAL_DUNGEON },
-    ...(canChangeContent(role) ? [{ name: "hunting", img: IMG_MANUAL_HUNTING }] : []),
+    ...(canChangeContent(role)
+      ? [
+          { name: "dungeon", img: IMG_MANUAL_DUNGEON },
+          { name: "hunting", img: IMG_MANUAL_HUNTING },
+        ]
+      : []),
     { name: "logs", img: IMG_MANUAL_LOGS },
     { name: "damage_calcs", img: IMG_MANUAL_DAM_CALCS },
     { name: "badge", img: IMG_MANUAL_BADGE },
