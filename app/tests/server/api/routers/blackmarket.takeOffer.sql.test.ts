@@ -69,15 +69,25 @@ describeWithDatabase("blackmarket.takeOffer", () => {
     expect(await purchaser()).toBeNull();
   });
 
+  it("rejects before writing when the seller's account is gone", async () => {
+    await (await getTestDatabase()).delete(userData).where(eq(userData.userId, SELLER));
+    const before = await balances();
+    const result = await takeOfferAfter();
+    expect(result).toEqual({ success: false, message: "Seller account no longer exists" });
+    expect(await balances()).toEqual(before);
+    expect(await purchaser()).toBeNull();
+  });
+
   it("moves nothing when another buyer claims the offer first", async () => {
     const database = await getTestDatabase();
     const before = await balances();
     const result = await takeOfferAfter(() =>
       database.update(ryoTrade).set({ purchaserUserId: RIVAL }).where(eq(ryoTrade.id, OFFER)),
     );
-    expect(result).toEqual({ success: false, message: "Offer no longer available" });
+    expect(result).toEqual({ success: false, message: "The offer was taken or a balance changed. Please try again" });
     expect(await balances()).toEqual(before);
     expect(await purchaser()).toBe(RIVAL);
+    expect(await logs()).toEqual([]);
   });
 
   it("moves nothing when the buyer's pocket drains before the trade", async () => {
@@ -87,9 +97,10 @@ describeWithDatabase("blackmarket.takeOffer", () => {
       database.update(userData).set({ money: RYO - 1 }).where(eq(userData.userId, BUYER)),
     );
     const after = await balances();
-    expect(result).toEqual({ success: false, message: "Failed to update buyer - transaction reverted" });
+    expect(result).toEqual({ success: false, message: "The offer was taken or a balance changed. Please try again" });
     expect(after).toEqual({ ...before, [BUYER]: { ...before[BUYER]!, money: RYO - 1 } });
     expect(await purchaser()).toBeNull();
+    expect(await logs()).toEqual([]);
   });
 
   it("moves nothing when the seller's bank fills before the trade", async () => {
@@ -99,8 +110,9 @@ describeWithDatabase("blackmarket.takeOffer", () => {
       database.update(userData).set({ bank: RYO_CAP - RYO + 1 }).where(eq(userData.userId, SELLER)),
     );
     const after = await balances();
-    expect(result).toEqual({ success: false, message: "Failed to update seller - transaction reverted" });
+    expect(result).toEqual({ success: false, message: "The offer was taken or a balance changed. Please try again" });
     expect(after).toEqual({ ...before, [SELLER]: { ...before[SELLER]!, bank: RYO_CAP - RYO + 1 } });
     expect(await purchaser()).toBeNull();
+    expect(await logs()).toEqual([]);
   });
 });
