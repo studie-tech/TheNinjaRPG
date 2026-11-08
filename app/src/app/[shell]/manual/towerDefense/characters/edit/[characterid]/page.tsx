@@ -68,18 +68,14 @@ export default function TowerDefenseCharacterEdit(props: {
     );
   }
 
-  return <SingleEditCharacter character={data} refetch={refetch} />;
+  return <SingleEditCharacter character={data} />;
 }
 
 interface SingleEditCharacterProps {
   character: TowerDefenseCharacterDb;
-  refetch: () => void;
 }
 
-const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
-  character,
-  refetch,
-}) => {
+const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({ character }) => {
   const {
     form,
     formData,
@@ -91,7 +87,7 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
     updateAnimationSettings,
     handleCharacterSubmit,
     characterAnimationStates,
-  } = useTowerDefenseCharacterEditForm(character, refetch);
+  } = useTowerDefenseCharacterEditForm(character);
 
   const typeLabel = isPlayer ? "Player" : "Enemy";
 

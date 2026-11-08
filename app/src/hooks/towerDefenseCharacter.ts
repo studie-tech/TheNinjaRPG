@@ -21,7 +21,6 @@ import {
  */
 export const useTowerDefenseCharacterEditForm = (
   character: TowerDefenseCharacterDb,
-  refetch: () => void,
 ) => {
   // Form handling
   const form = useForm<
@@ -46,7 +45,6 @@ export const useTowerDefenseCharacterEditForm = (
         showMutationToast(data);
         if (!data.success) return;
         await utils.towerDefense.getCharacter.invalidate({ id: character.id });
-        refetch();
       },
     });
 

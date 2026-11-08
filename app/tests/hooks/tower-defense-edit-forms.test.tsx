@@ -36,7 +36,6 @@ const upgrade = {
 } as unknown as TowerDefenseUpgrade;
 
 const save = vi.fn(async (_input: unknown): Promise<Result> => ({ success: true, message: "Saved" }));
-const refetch = vi.fn(() => undefined);
 let finishRefresh: () => void = () => undefined;
 const invalidate = vi.fn(
   (_input: unknown) => new Promise<void>((resolve) => { finishRefresh = resolve; }),
@@ -58,7 +57,7 @@ const stubMutation = (procedure: string) => ({
 beforeEach(() => {
   save.mockReset();
   save.mockResolvedValue({ success: true, message: "Saved" });
-  refetch.mockClear(); invalidate.mockClear();
+  invalidate.mockClear();
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ towerDefense: { getCharacter: { invalidate }, getUpgrade: { invalidate } } }),
     towerDefense: { ...stubMutation("updateCharacter"), ...stubMutation("updateUpgrade") },
@@ -72,7 +71,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("tower defense character editor", () => {
   it("patches one animation's state or timing and leaves the rest untouched", async () => {
-    const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character, refetch));
+    const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character));
     await act(async () => { result.current.updateAnimationState(1, "throw"); });
     expect<unknown>(result.current.assetConfig?.animations).toEqual([
       assetConfig.animations[0],
@@ -89,12 +88,12 @@ describe("tower defense character editor", () => {
   });
 
   it("ignores updates for a missing animation or an empty asset config", async () => {
-    const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character, refetch));
+    const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character));
     await act(async () => { result.current.updateAnimationState(5, "idle"); });
     await act(async () => { result.current.updateAnimationSettings(5, { loop: false }); });
     expect(result.current.assetConfig).toEqual(assetConfig);
     const empty = renderHook(() =>
-      useTowerDefenseCharacterEditForm({ ...character, assetConfig: null }, refetch),
+      useTowerDefenseCharacterEditForm({ ...character, assetConfig: null }),
     );
     await act(async () => { empty.result.current.updateAnimationState(0, "idle"); });
     await act(async () => { empty.result.current.updateAnimationSettings(0, { loop: false }); });
@@ -103,17 +102,18 @@ describe("tower defense character editor", () => {
 
   it("offers every animation state and hides enemy-only fields for players", () => {
     const { result } = renderHook(() =>
-      useTowerDefenseCharacterEditForm({ ...character, isPlayer: true }, refetch),
+      useTowerDefenseCharacterEditForm({ ...character, isPlayer: true }),
     );
     expect(result.current.characterAnimationStates).toEqual(["idle", "moving", "throw", "punch"]);
     expect(result.current.formData.map((entry) => entry.id)).toEqual(["name", "isPlayer", "scaleFactor"]);
   });
 
   it("stays pending until the edited character has been refreshed", async () => {
-    const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character, refetch));
+    const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character));
     await act(async () => { result.current.form.setValue("name", "Rogue"); });
     await act(async () => { await result.current.handleCharacterSubmit(); await flush(); });
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: "character" }));
+    expect(invalidate).toHaveBeenCalledTimes(1);
     expect(invalidate).toHaveBeenCalledWith({ id: "character" });
     expect(result.current.isUpdating).toBe(true);
     await act(async () => { finishRefresh(); await flush(); });
@@ -121,21 +121,22 @@ describe("tower defense character editor", () => {
   });
 
   it("refreshes nothing after a rejection", async () => {
-    const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character, refetch));
+    const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character));
     save.mockResolvedValueOnce({ success: false, message: "No access" });
     await act(async () => { result.current.form.setValue("name", "Rogue"); });
     await act(async () => { await result.current.handleCharacterSubmit(); await flush(); });
     expect(save).toHaveBeenCalledTimes(1);
-    expect(invalidate).not.toHaveBeenCalled(); expect(refetch).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
     expect(result.current.isUpdating).toBe(false);
   });
 });
 
 describe("tower defense upgrade editor", () => {
   it("stays pending until the edited upgrade has been refreshed", async () => {
-    const { result } = renderHook(() => useTowerDefenseUpgradeEditForm(upgrade, refetch));
+    const { result } = renderHook(() => useTowerDefenseUpgradeEditForm(upgrade));
     await act(async () => { result.current.form.setValue("name", "Sharpest kunai"); });
     await act(async () => { await result.current.handleUpgradeSubmit(); await flush(); });
+    expect(invalidate).toHaveBeenCalledTimes(1);
     expect(invalidate).toHaveBeenCalledWith({ id: "upgrade" });
     expect(result.current.isUpdating).toBe(true);
     await act(async () => { finishRefresh(); await flush(); });
@@ -144,10 +145,10 @@ describe("tower defense upgrade editor", () => {
 
   it("refreshes nothing after a rejection", async () => {
     save.mockResolvedValueOnce({ success: false, message: "No access" });
-    const { result } = renderHook(() => useTowerDefenseUpgradeEditForm(upgrade, refetch));
+    const { result } = renderHook(() => useTowerDefenseUpgradeEditForm(upgrade));
     await act(async () => { result.current.form.setValue("name", "Sharpest kunai"); });
     await act(async () => { await result.current.handleUpgradeSubmit(); await flush(); });
     expect(save).toHaveBeenCalledTimes(1);
-    expect(invalidate).not.toHaveBeenCalled(); expect(refetch).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });
