@@ -14,6 +14,7 @@ import {
   findBountyById,
   findBountyForCreate,
   findBountyForRemoveAllTrackers,
+  findBountyForSignup,
   findBountySignup,
   findBountySignupForSignup,
   insertActionLogForRemoveAllTrackers,
@@ -29,12 +30,7 @@ import {
   updateBountyForCollect,
   updateBountyForRetract,
 } from "@/queries/bounty";
-import {
-  debitUserMoney,
-  fetchUser,
-  findUserById,
-  incrementUserMoney,
-} from "@/queries/profile";
+import { debitUserMoney, fetchUser, incrementUserMoney } from "@/queries/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -47,7 +43,6 @@ import { addBountyMoneySchema, createBountySchema } from "@/validators/bounty";
 
 const signupBountySchema = z.object({
   bountyId: z.string().min(1),
-  targetUserId: z.string().min(1),
 });
 
 const retractBountySchema = z.object({
@@ -128,16 +123,17 @@ export const bountyRouter = createTRPCRouter({
     .input(createBountySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const { targetUserId, amountRyo } = input;
-      // Guards
-      if (targetUserId === ctx.userId) return errorResponse("Cannot bounty yourself");
+      const { amountRyo } = input;
       // Query
       const [creator, target, existingBounty] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, targetUserId),
-        findBountyForCreate(ctx.drizzle, targetUserId),
+        fetchUser(ctx.drizzle, input.targetUserId),
+        findBountyForCreate(ctx.drizzle, input.targetUserId),
       ]);
+      // Identity comes from the stored row: a lookup also matches other spellings of an id
+      const targetUserId = target.userId;
       // Guards
+      if (targetUserId === ctx.userId) return errorResponse("Cannot bounty yourself");
       if (RANKS_RESTRICTED_FROM_PVP.includes(target.rank))
         return errorResponse("Target too low rank for PvP");
       if (amountRyo < BOUNTY_MIN_AMOUNT)
@@ -171,11 +167,10 @@ export const bountyRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const { bountyId } = input;
-      const [curBounty, curSignups, userSignups, target, hunter] = await Promise.all([
-        findBountyById(ctx.drizzle, bountyId),
+      const [curBounty, curSignups, userSignups, hunter] = await Promise.all([
+        findBountyForSignup(ctx.drizzle, bountyId),
         listBountySignupForSignup(ctx.drizzle, bountyId),
         findBountySignupForSignup(ctx.drizzle, ctx),
-        findUserById(ctx.drizzle, input.targetUserId),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Guards
@@ -185,9 +180,8 @@ export const bountyRouter = createTRPCRouter({
         return errorResponse("Cannot track your own bounty");
       if (curBounty.targetUserId === ctx.userId)
         return errorResponse("Cannot track your own bounty");
+      const target = curBounty.target;
       if (!target) return errorResponse("Target user not found");
-      if (target.userId !== curBounty.targetUserId)
-        return errorResponse("Target user does not match bounty");
       if (RANKS_RESTRICTED_FROM_PVP.includes(hunter.rank))
         return errorResponse("Your rank cannot engage in PvP");
       if (curSignups?.find((c) => c.hunterUserId === ctx.userId))

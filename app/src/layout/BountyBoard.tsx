@@ -506,9 +506,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 <Button
                   key="track"
                   size="sm"
-                  onClick={() =>
-                    signup({ bountyId: b.id, targetUserId: b.targetUserId })
-                  }
+                  onClick={() => signup({ bountyId: b.id })}
                   disabled={isSigningup}
                 >
                   <Eye className="mr-2 h-4 w-4" />

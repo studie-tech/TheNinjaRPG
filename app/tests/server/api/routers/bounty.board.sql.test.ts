@@ -39,11 +39,9 @@ describeWithDatabase("bounty board", () => {
   it("tracks a bounty once and checks the target, rank and village", async () => {
     await placeBounty();
     const bountyId = (await (await getTestDatabase()).query.bounty.findFirst())!.id;
-    const signup = async (userId: string, targetUserId = "target") =>
-      (await callerFor(bountyRouter, userId)).signup({ bountyId, targetUserId });
+    const signup = async (userId: string) => (await callerFor(bountyRouter, userId)).signup({ bountyId });
 
     expect(await signup("creator")).toEqual({ success: false, message: "Cannot track your own bounty" });
-    expect(await signup("hunter", "other")).toEqual({ success: false, message: "Target user does not match bounty" });
     expect(await signup("genin")).toEqual({ success: false, message: "Your rank cannot engage in PvP" });
     expect(await signup("neighbour")).toEqual({
       success: false,
@@ -52,5 +50,33 @@ describeWithDatabase("bounty board", () => {
     expect(await (await getTestDatabase()).query.bountySignup.findMany()).toHaveLength(0);
     expect(await signup("hunter")).toEqual({ success: true, message: "Tracking this bounty" });
     expect(await signup("hunter")).toEqual({ success: false, message: "Already sign up" });
+  });
+
+  it("refuses a bounty on the creator under another spelling of their id", async () => {
+    const forged = await (await callerFor(bountyRouter, "creator")).create({
+      targetUserId: "CREATOR",
+      amountRyo: BOUNTY_MIN_AMOUNT,
+    });
+    expect(forged).toEqual({ success: false, message: "Cannot bounty yourself" });
+    expect(await moneyOf("creator")).toBe(2 * BOUNTY_MIN_AMOUNT);
+    expect(await (await getTestDatabase()).query.bounty.findMany()).toHaveLength(0);
+  });
+
+  it("places the bounty on the stored id of the named target", async () => {
+    await (await callerFor(bountyRouter, "creator")).create({ targetUserId: "TARGET", amountRyo: BOUNTY_MIN_AMOUNT });
+    const placed = await (await getTestDatabase()).query.bounty.findMany({ columns: { targetUserId: true } });
+    expect(placed).toEqual([{ targetUserId: "target" }]);
+  });
+
+  it("checks a signup against the bounty's own target, ignoring a client-sent target", async () => {
+    await placeBounty();
+    const bountyId = (await (await getTestDatabase()).query.bounty.findFirst())!.id;
+    // A hunter from the target's village names a target from another village
+    const forged = { bountyId, targetUserId: "hunter" } as { bountyId: string };
+    expect(await (await callerFor(bountyRouter, "neighbour")).signup(forged)).toEqual({
+      success: false,
+      message: "Cannot take bounties on players in the same village",
+    });
+    expect(await (await getTestDatabase()).query.bountySignup.findMany()).toHaveLength(0);
   });
 });

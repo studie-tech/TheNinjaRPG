@@ -129,6 +129,16 @@ export const findBountyById = (
     where: eq(bounty.id, bountyId),
   });
 
+/** Build the `bounty` lookup for `signup`, with the target's id and village. */
+export const findBountyForSignup = (
+  client: Pick<DrizzleClient, "query">,
+  bountyId: string,
+) =>
+  client.query.bounty.findFirst({
+    where: eq(bounty.id, bountyId),
+    with: { target: { columns: { userId: true, villageId: true } } },
+  });
+
 /** Build the `bountySignup` listing for `signup`, using predicates on `bountyId`. */
 export const listBountySignupForSignup = (
   client: Pick<DrizzleClient, "query">,
