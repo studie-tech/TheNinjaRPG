@@ -38,6 +38,13 @@ const DEADLOCK_BODY = JSON.stringify({
 
 const post = (query: string) => ({ method: "POST", body: JSON.stringify({ query }) });
 
+/** A database fetch that fails once with `fail`, then answers every retry with `ok`. */
+const failsOnce = (fail: () => Response, ok = '{"result":{"rows":[]}}') =>
+  vi
+    .fn()
+    .mockImplementationOnce(async () => fail())
+    .mockImplementation(async () => new Response(ok, { status: 200 }));
+
 // Shape the driver actually posts once a connection has a session. `inTransaction`
 // is present only between BEGIN and COMMIT; plain autocommit sessions omit it.
 const postInTransaction = (query: string) => ({
@@ -139,35 +146,23 @@ describe("isTransientDatabaseError", () => {
 
 describe("createRetryingFetch", () => {
   it("retries a read that hits a dropped connection and returns a readable body", async () => {
-    let calls = 0;
-    const baseFetch = vi.fn(async () => {
-      calls += 1;
-      return calls < 2
-        ? new Response(RESET_BODY, { status: 200 })
-        : new Response('{"result":{"rows":[]}}', { status: 200 });
-    });
+    const baseFetch = failsOnce(() => new Response(RESET_BODY, { status: 200 }));
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
     const response = await retrying("https://db.test", post("select 1"));
 
-    expect(calls).toBe(2);
+    expect(baseFetch).toHaveBeenCalledTimes(2);
     // Body must still be unconsumed for the PlanetScale driver
     expect(await response.json()).toEqual({ result: { rows: [] } });
   });
 
   it("retries a read that races a primary failover", async () => {
-    let calls = 0;
-    const baseFetch = vi.fn(async () => {
-      calls += 1;
-      return calls < 2
-        ? new Response(FAILOVER_BODY, { status: 400 })
-        : new Response('{"result":{"rows":[]}}', { status: 200 });
-    });
+    const baseFetch = failsOnce(() => new Response(FAILOVER_BODY, { status: 400 }));
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
     const response = await retrying("https://db.test", postWithSession("select 1"));
 
-    expect(calls).toBe(2);
+    expect(baseFetch).toHaveBeenCalledTimes(2);
     expect(await response.json()).toEqual({ result: { rows: [] } });
   });
 
@@ -219,31 +214,19 @@ describe("createRetryingFetch", () => {
   });
 
   it("still retries a read on an ordinary session outside a transaction", async () => {
-    let calls = 0;
-    const baseFetch = vi.fn(async () => {
-      calls += 1;
-      return calls < 2
-        ? new Response(RESET_BODY, { status: 200 })
-        : new Response('{"result":{"rows":[]}}', { status: 200 });
-    });
+    const baseFetch = failsOnce(() => new Response(RESET_BODY, { status: 200 }));
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
     const response = await retrying("https://db.test", postWithSession("select 1"));
 
-    expect(calls).toBe(2);
+    expect(baseFetch).toHaveBeenCalledTimes(2);
     expect(await response.json()).toEqual({ result: { rows: [] } });
   });
 
   it("retries a write that lost a deadlock", async () => {
     // Unambiguous, unlike a reset: InnoDB rolled the statement back in full, so
     // re-issuing cannot double-apply the increment.
-    let calls = 0;
-    const baseFetch = vi.fn(async () => {
-      calls += 1;
-      return calls < 2
-        ? new Response(DEADLOCK_BODY, { status: 200 })
-        : new Response('{"result":{"rowsAffected":"1"}}', { status: 200 });
-    });
+    const baseFetch = failsOnce(() => new Response(DEADLOCK_BODY, { status: 200 }), '{"result":{"rowsAffected":"1"}}');
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
     const response = await retrying(
@@ -251,23 +234,17 @@ describe("createRetryingFetch", () => {
       post("update `UserData` set `money` = `money` + 100"),
     );
 
-    expect(calls).toBe(2);
+    expect(baseFetch).toHaveBeenCalledTimes(2);
     expect(await response.text()).toContain("rowsAffected");
   });
 
   it("retries a read that lost a deadlock", async () => {
-    let calls = 0;
-    const baseFetch = vi.fn(async () => {
-      calls += 1;
-      return calls < 2
-        ? new Response(DEADLOCK_BODY, { status: 200 })
-        : new Response('{"result":{"rows":[]}}', { status: 200 });
-    });
+    const baseFetch = failsOnce(() => new Response(DEADLOCK_BODY, { status: 200 }));
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
     const response = await retrying("https://db.test", post("select 1"));
 
-    expect(calls).toBe(2);
+    expect(baseFetch).toHaveBeenCalledTimes(2);
     expect(await response.json()).toEqual({ result: { rows: [] } });
   });
 
@@ -301,17 +278,14 @@ describe("createRetryingFetch", () => {
   });
 
   it("retries a read whose fetch rejects", async () => {
-    let calls = 0;
-    const baseFetch = vi.fn(async () => {
-      calls += 1;
-      if (calls < 2) throw new TypeError("fetch failed");
-      return new Response('{"result":{"rows":[]}}', { status: 200 });
+    const baseFetch = failsOnce(() => {
+      throw new TypeError("fetch failed");
     });
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
     const response = await retrying("https://db.test", post("select 1"));
 
-    expect(calls).toBe(2);
+    expect(baseFetch).toHaveBeenCalledTimes(2);
     expect(await response.json()).toEqual({ result: { rows: [] } });
   });
 
