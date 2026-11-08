@@ -34,7 +34,7 @@ import { battleCalcText } from "@/layout/seoTexts";
 import { damageUser } from "@/libs/combat/tags";
 import type { BattleUserState, Consequence, UserEffect } from "@/libs/combat/types";
 import { calcHP, calcLevel } from "@/libs/profile";
-import { showMutationToast } from "@/libs/toast";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canModifyCombatSettings } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import {
@@ -137,7 +137,10 @@ export default function Simulator(props: {
   // Mutation for creating new entry
   const { mutate: saveEntry, isPending: isSaving } =
     api.simulator.createDamageSimulation.useMutation({
-      onSuccess: () => refetch(),
+      onSuccess: async (result) => {
+        showMutationToast(result);
+        if (result.success) await refetch();
+      },
     });
 
   // Mutation for editing entry
@@ -291,7 +294,7 @@ export default function Simulator(props: {
         attackerProgress: attProgress,
         defenderProgress: defProgress,
       }),
-    (errors) => console.error(errors),
+    showFormErrorsToast,
   );
 
   // Handle inserting historical entry into form
