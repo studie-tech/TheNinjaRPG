@@ -161,44 +161,21 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
     }
   }, [isAi, report, setValue]);
 
-  const handleSubmitComment = handleSubmit(
-    (data) => createComment.mutate(data),
-    (errors) => console.error(errors),
-  );
-
-  const handleSubmitBan = handleSubmit(
-    (data) => banUser.mutate(data),
-    (errors) => console.error(errors),
-  );
-
-  const handleSubmitTradeBan = handleSubmit(
-    (data) => tradebanUser.mutate(data),
-    (errors) => console.error(errors),
-  );
-
-  const handleSubmitSilence = handleSubmit(
-    (data) => silenceUser.mutate(data),
-    (errors) => console.error(errors),
-  );
-
-  const handleSubmitEscalation = handleSubmit(
-    (data) => escalateReport.mutate(data),
-    (errors) => console.error(errors),
-  );
-
-  const handleSubmitClear = handleSubmit(
-    (data) => clearReport.mutate(data),
-    (errors) => console.error(errors),
-  );
-
-  const handleSubmitWarn = handleSubmit(
-    (data) => warnUser.mutate(data),
-    (errors) => console.error(errors),
-  );
-
-  const handleSubmitTimeout = handleSubmit(
-    (data) => timeoutUser.mutate({ comment: data.comment, object_id: data.object_id }),
-    (errors) => console.error(errors),
+  /** Validate the comment form, then run one moderation action; invalid input is only logged. */
+  const submitWith = (action: (data: ReportCommentSchema) => void) =>
+    handleSubmit(
+      (data) => action(data),
+      (errors) => console.error(errors),
+    );
+  const handleSubmitComment = submitWith((data) => createComment.mutate(data));
+  const handleSubmitBan = submitWith((data) => banUser.mutate(data));
+  const handleSubmitTradeBan = submitWith((data) => tradebanUser.mutate(data));
+  const handleSubmitSilence = submitWith((data) => silenceUser.mutate(data));
+  const handleSubmitEscalation = submitWith((data) => escalateReport.mutate(data));
+  const handleSubmitClear = submitWith((data) => clearReport.mutate(data));
+  const handleSubmitWarn = submitWith((data) => warnUser.mutate(data));
+  const handleSubmitTimeout = submitWith((data) =>
+    timeoutUser.mutate({ comment: data.comment, object_id: data.object_id }),
   );
 
   if (!userData || !report) {
