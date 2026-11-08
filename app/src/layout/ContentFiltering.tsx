@@ -1,6 +1,6 @@
 import { Filter, X } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { TriStateToggle } from "@/components/control/Toggle";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,7 @@ import { useUserData } from "@/utils/UserContext";
  * - A buildFilter helper to emit API-ready filters
  *
  * Key guarantees:
- * - No hooks-in-loops (one state map + per-key debouncing)
+ * - No hooks-in-loops (one state map, one debounce over the typed inputs)
  * - Field keys and value unions are inferred from the schema (no any/unknown)
  */
 
@@ -313,8 +313,9 @@ const isTypingField = (field: AnyFieldConfig) =>
 
 /**
  * Hook: derives typed state maps (values, debounced, setters, exclusions) from a schema.
- * - Uses single state objects + per-key timers (no hooks-in-loops)
- * - Text, number and date inputs update after DEBOUNCE_MS; discrete choices apply immediately
+ * - Uses single state objects and one timer (no hooks-in-loops)
+ * - Text, number and date inputs apply together once none has changed for DEBOUNCE_MS;
+ *   discrete choices apply immediately
  */
 export const useContentFiltering = <
   F extends readonly AnyFieldConfig[],
@@ -347,31 +348,20 @@ export const useContentFiltering = <
     );
   }, [initialValues]);
 
-  // Debounce per field (one timer per key)
-  const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Any change restarts the timer; when it fires, every typed input applies at once.
   useEffect(() => {
-    const timers = timersRef.current;
-    for (const field of schema.fields) {
-      if (!isTypingField(field)) continue;
-      const key = field.id as keyof ValuesFromSchema<F> & string;
-      const timer = timers[key];
-      if (timer) clearTimeout(timer);
-      timers[key] = setTimeout(() => {
-        setFieldState((prev) =>
-          prev.debounced[key] === values[key]
-            ? prev
-            : {
-                ...prev,
-                debounced: { ...prev.debounced, [key]: values[key] },
-              },
-        );
-      }, DEBOUNCE_MS);
-    }
-    return () => {
-      for (const key of Object.keys(timers)) {
-        clearTimeout(timers[key]);
-      }
-    };
+    const timer = setTimeout(() => {
+      setFieldState((prev) => {
+        let next = prev.debounced;
+        for (const field of schema.fields) {
+          if (!isTypingField(field)) continue;
+          const key = field.id as keyof ValuesFromSchema<F> & string;
+          if (next[key] !== values[key]) next = { ...next, [key]: values[key] };
+        }
+        return next === prev.debounced ? prev : { ...prev, debounced: next };
+      });
+    }, DEBOUNCE_MS);
+    return () => clearTimeout(timer);
   }, [schema.fields, values]);
 
   // Generate typed setters (stable across renders for the same schema)
