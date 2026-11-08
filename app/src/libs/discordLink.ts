@@ -57,6 +57,9 @@ export const DISCORD_RELINK_REQUIRED = "Discord authorization missing";
 export const needsDiscordRelink = (syncError: string | null | undefined) =>
   !!syncError?.includes(DISCORD_RELINK_REQUIRED);
 
+/** Start of the action log message recording a new link's abuse flags; staff find flags by it. */
+export const DISCORD_LINK_FLAG_PREFIX = "Discord link flag";
+
 type ResultCopy = { title: string; description: string; success: boolean };
 
 /** Player-facing copy for each result. */

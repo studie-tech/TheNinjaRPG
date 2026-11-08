@@ -13,6 +13,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { DISCORD_LINK_FLAG_PREFIX } from "@/libs/discordLink";
 import { showMutationToast } from "@/libs/toast";
 import { canManageDiscordLinks, canViewDiscordLinks } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -157,7 +158,7 @@ const DiscordLinkCard: React.FC<{ link: StaffLink; canManage: boolean }> = ({
     onSuccess,
   });
   const flags = link.log.filter((entry) =>
-    entry.relatedMsg?.startsWith("Discord link flag"),
+    entry.relatedMsg?.startsWith(DISCORD_LINK_FLAG_PREFIX),
   );
 
   return (
