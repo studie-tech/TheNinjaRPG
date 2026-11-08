@@ -410,6 +410,8 @@ describe("package validation and merging", () => {
   it("keeps the highest current rank when packages are combined", () => {
     expect(collapseRewards([ObjectiveReward.parse({reward_rank:"JONIN"}),ObjectiveReward.parse({reward_rank:"ELDER"})]).reward_rank).toBe("ELDER");
     expect(collapseRewards([ObjectiveReward.parse({reward_rank:"ELDER"}),ObjectiveReward.parse({reward_rank:"GENIN"})]).reward_rank).toBe("ELDER");
+    expect(collapseRewards([ObjectiveReward.parse({reward_rank:"ELITE JONIN"}),ObjectiveReward.parse({reward_rank:"ELDER"})]).reward_rank).toBe("ELITE JONIN");
+    expect(collapseRewards([ObjectiveReward.parse({reward_rank:"ELDER"}),ObjectiveReward.parse({reward_rank:"ELITE JONIN"})]).reward_rank).toBe("ELITE JONIN");
   });
   it("resolves Village Mission token packages and rejects unsupported bundle contents", () => {
     const content={reward:QuestReward.parse({reward_packages:[packageReward("tokens",{reward_tokens:50})]}), objectives:[{id:"pvp",task:"pvp_kills",description:"Win",value:1}]};

@@ -1,4 +1,4 @@
-import { UserRanks } from "@/drizzle/constants";
+import { USER_RANK_ORDER } from "@/drizzle/constants";
 import {
   hasMasteryPromotion,
   ObjectiveReward,
@@ -42,10 +42,9 @@ export const collapseRewards = (
       if (collapsed.reward_rank === "NONE") {
         collapsed.reward_rank = reward.reward_rank;
       } else {
-        // Compare ranks and keep the higher one
-        const rankOrder = UserRanks;
-        const currentIndex = rankOrder.indexOf(collapsed.reward_rank);
-        const newIndex = rankOrder.indexOf(reward.reward_rank);
+        // Compare ranks along the progression and keep the higher one
+        const currentIndex = USER_RANK_ORDER.indexOf(collapsed.reward_rank);
+        const newIndex = USER_RANK_ORDER.indexOf(reward.reward_rank);
         if (newIndex > currentIndex) {
           collapsed.reward_rank = reward.reward_rank;
         }

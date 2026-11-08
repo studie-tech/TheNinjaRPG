@@ -634,6 +634,18 @@ export const UserRanks = [
   "NONE",
 ] as const;
 export type UserRank = (typeof UserRanks)[number];
+/**
+ * The shinobi progression, lowest first. UserRanks keeps the stored enum order; Elders are
+ * chosen from Jonin and rank below Elite Jonin.
+ */
+export const USER_RANK_ORDER: UserRank[] = [
+  "STUDENT",
+  "GENIN",
+  "CHUNIN",
+  "JONIN",
+  "ELDER",
+  "ELITE JONIN",
+];
 
 export const EMAIL_REMINDER_EXPERIENCE_REWARD = 10_000;
 
