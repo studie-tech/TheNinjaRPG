@@ -1539,6 +1539,15 @@ export const RECRUITMENT_REWARDS = [
   "RANK_MILESTONE",
 ] as const;
 
+/** Recruiters earn this many ryo times their recruit's new level cubed on each level-up. */
+export const RECRUITER_LEVEL_REWARD_FACTOR = 10;
+/** Share of a recruit's purchased reputation and quest prestige passed to their recruiter. */
+export const RECRUIT_SHARE = 0.1;
+/** Most reputation a reviewer can grant for one promotion link. */
+export const MAX_LINK_PROMOTION_POINTS = 500;
+/** Largest experience amount staff can award to every player at once. */
+export const MAX_MASS_EXPERIENCE_AWARD = 100000;
+
 // Reputation points a recruiter receives the first time an eligible recruit reaches each rank,
 // in rank order. Reaching a rank also reaches every milestone below it. Elder is not on the
 // ladder: Elders are chosen from Jonin and rank below Elite Jonin (see hasRequiredRank), so an

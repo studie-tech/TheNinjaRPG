@@ -3,6 +3,7 @@ import {
   MAX_SKILL_POINTS,
   MasteryNames,
   MEDNIN_EXP_CAP,
+  RECRUIT_SHARE,
   SAGE_MASTERY_EXP_CAP,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
@@ -326,7 +327,7 @@ export const updateRewards = async (info: {
   // Recruitment logic
   const prestigeReward = Math.floor(
     boostPvpGain(
-      Math.ceil(rewards.reward_prestige * 0.1),
+      Math.ceil(rewards.reward_prestige * RECRUIT_SHARE),
       getPvpBoost(recruiter ?? {}, pvpAverage ? [pvpAverage] : []).totalPercent,
     ),
   );

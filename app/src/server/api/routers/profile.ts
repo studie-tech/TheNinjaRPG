@@ -106,6 +106,7 @@ import {
   experienceAssignmentBlockMessage,
   getAssignedCombatStatTotal,
   levelUpBlockMessage,
+  recruiterLevelReward,
   scaleUserStats,
 } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
@@ -759,7 +760,7 @@ export const profileRouter = createTRPCRouter({
       if (result.success && user.recruiterId) {
         const amount = Math.floor(
           boostPvpGain(
-            10 * newLevel * newLevel * newLevel,
+            recruiterLevelReward(newLevel),
             getPvpBoost(recruiter ?? {}, settings).totalPercent,
           ),
         );

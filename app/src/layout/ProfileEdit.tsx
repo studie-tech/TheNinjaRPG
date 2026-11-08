@@ -84,6 +84,7 @@ import {
   COST_TAVERN_COLOR_CHANGE,
   GeneralTypes,
   MAX_ATTRIBUTES,
+  MAX_MASS_EXPERIENCE_AWARD,
   TavernColorPresets,
 } from "@/drizzle/constants";
 import type { Bloodline, Village } from "@/drizzle/schema";
@@ -2838,7 +2839,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
               <NumberInput
                 id="experienceAmount"
                 min={1}
-                max={100000}
+                max={MAX_MASS_EXPERIENCE_AWARD}
                 value={experienceAmount}
                 onValueChange={setExperienceAmount}
                 className="w-32"

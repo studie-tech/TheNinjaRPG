@@ -25,8 +25,9 @@ describe("vote claim cache update", () => {
   });
 
   it("marks the cached votes claimed and keeps the rest of the record", () => {
-    expect(getClaimedVotesPatch({ votes } as never)).toEqual({ votes: { ...votes, claimed: true } });
-    expect(getClaimedVotesPatch({ votes: null } as never)).toEqual({ votes: null });
+    type CachedUser = Parameters<typeof getClaimedVotesPatch>[0];
+    expect(getClaimedVotesPatch({ votes } as unknown as CachedUser)).toEqual({ votes: { ...votes, claimed: true } } as never);
+    expect(getClaimedVotesPatch({ votes: null } as unknown as CachedUser)).toEqual({ votes: null });
   });
 
   it("adds the reward to the balance cached when the claim started", async () => {

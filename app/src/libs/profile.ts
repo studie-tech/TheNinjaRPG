@@ -20,6 +20,7 @@ import {
   PLAYER_LEVEL_XP_HIGH_FACTOR,
   PLAYER_LEVEL_XP_HIGH_THRESHOLD,
   RANKS_RESTRICTED_FROM_PVP,
+  RECRUITER_LEVEL_REWARD_FACTOR,
   SCALED_AI_STAT_BUDGET_SHARE,
   SP_PER_LVL,
   VILLAGE_REDUCED_GAINS_FACTOR,
@@ -618,3 +619,7 @@ export const calcMaxEnergy = (user: MasteryBuffUser) => {
     }
   return Math.max(1, maximum);
 };
+
+/** Ryo a recruiter earns, before PvP boosts, when their recruit reaches `level`. */
+export const recruiterLevelReward = (level: number) =>
+  RECRUITER_LEVEL_REWARD_FACTOR * level * level * level;

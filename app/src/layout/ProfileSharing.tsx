@@ -31,7 +31,10 @@ import { Progress } from "@/components/ui/progress";
 import { getClaimedVotesPatch } from "@/deltas/profile";
 import {
   ACTIVE_VOTING_SITES,
+  MAX_LINK_PROMOTION_POINTS,
   RECRUIT_RANK_MILESTONES,
+  RECRUIT_SHARE,
+  RECRUITER_LEVEL_REWARD_FACTOR,
   type RecruitMilestoneRank,
   SITE_URL,
   VOTE_REWARD_REPUTATION,
@@ -44,7 +47,7 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
-import { showUserRank } from "@/libs/profile";
+import { recruiterLevelReward, showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getVotingLink } from "@/libs/voting";
@@ -286,21 +289,23 @@ const RecruitLinkTab: React.FC = () => {
           <strong>Money</strong>
           <br />
           Each time a recruited user levels up, you will receive money in your bank
-          account according to the following formula: <code>10 x level³</code>. i.e. if
-          a person you recruited achieved level 50, you get {(1250000).toLocaleString()}{" "}
-          ryo.
+          account according to the following formula:{" "}
+          <code>{RECRUITER_LEVEL_REWARD_FACTOR} x level³</code>. i.e. if a person you
+          recruited achieved level 50, you get{" "}
+          {recruiterLevelReward(50).toLocaleString()} ryo.
         </li>
         <li className="px-2 py-2">
           <strong>Reputation Points</strong>
           <br />
           Every time a recruited user buys reputation points, you will also receive an
-          amount of reputation points equal to 10% of what they bought.
+          amount of reputation points equal to {RECRUIT_SHARE * 100}% of what they
+          bought.
         </li>
         <li className="px-2 py-2">
           <strong>Village Prestige</strong>
           <br />
           Every time a recruited user earns village prestige from quests, you will
-          receive 10% of the prestige they earn.
+          receive {RECRUIT_SHARE * 100}% of the prestige they earn.
         </li>
         <li className="px-2 py-2">
           <strong>Rank Milestones</strong>
@@ -591,7 +596,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
                   <FormControl>
                     <NumberInput
                       min={0}
-                      max={500}
+                      max={MAX_LINK_PROMOTION_POINTS}
                       step={1}
                       inputMode="numeric"
                       disabled={reviewPromotion.isPending}
