@@ -496,60 +496,33 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
         )}
       />
       <div className="col-span-2 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:col-span-1 sm:grid-cols-3">
-        <FormField
-          control={form.control}
-          name="hair_color"
-          render={({ field }) => (
-            <FormItem className="min-w-0 gap-1">
-              <FormLabel>Hair color</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>{option_colors}</SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="eye_color"
-          render={({ field }) => (
-            <FormItem className="min-w-0 gap-1">
-              <FormLabel>Eye color</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>{option_colors}</SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="skin_color"
-          render={({ field }) => (
-            <FormItem className="min-w-0 gap-1">
-              <FormLabel>Skin color</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>{option_skins}</SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {(
+          [
+            ["hair_color", "Hair color", option_colors],
+            ["eye_color", "Eye color", option_colors],
+            ["skin_color", "Skin color", option_skins],
+          ] as const
+        ).map(([name, label, options]) => (
+          <FormField
+            key={name}
+            control={form.control}
+            name={name}
+            render={({ field }) => (
+              <FormItem className="min-w-0 gap-1">
+                <FormLabel>{label}</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={`None`} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>{options}</SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ))}
 
         {(["attribute_1", "attribute_2", "attribute_3"] as const).map((name, slot) => {
           const otherChoices = [watchAttr1, watchAttr2, watchAttr3].filter(
