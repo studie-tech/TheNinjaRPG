@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "bun:test";
-import { calcCurrent } from "@/layout/StatusBar";
+import { calcCurrent } from "@/libs/regeneration";
 import { IncreaseRegenerationTag } from "@/validators/combat";
 
 afterEach(() => vi.restoreAllMocks());

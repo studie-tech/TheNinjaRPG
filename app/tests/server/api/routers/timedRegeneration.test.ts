@@ -14,7 +14,7 @@ import {
   userQueue,
   userRaidBuff,
 } from "@/drizzle/schema";
-import { calcCurrent } from "@/layout/StatusBar";
+import { calcCurrent } from "@/libs/regeneration";
 import { Pusher } from "@/libs/pusher";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";

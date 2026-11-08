@@ -1,8 +1,8 @@
 "use client";
 
 import { Button, type ButtonProps } from "@/components/ui/button";
-import { calcCurrent } from "@/layout/StatusBar";
 import { calcChakraToPools } from "@/libs/hospital";
+import { calcCurrent } from "@/libs/regeneration";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
 

@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import * as nextServer from "next/server";
 import { REGEN_SECONDS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { bloodline, gameSetting, trainingLog, userData, userQueue, userRaidBuff, userVote, village, villageStructure } from "@/drizzle/schema";
-import { calcCurrent } from "@/layout/StatusBar";
+import { calcCurrent } from "@/libs/regeneration";
 import { Pusher } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { travelRouter } from "@/server/api/routers/travel";
