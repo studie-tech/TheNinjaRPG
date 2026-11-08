@@ -1136,41 +1136,59 @@ export const HomeScene = ({
             : "You are awake."}
       </p>
       {!isEditing && !isVisiting && (
-        <fieldset
-          aria-label="Home actions"
-          className="grid grid-cols-2 gap-2 px-3 pb-3 sm:grid-cols-4"
-        >
-          <Button onClick={onSleep} disabled={isTogglingSleep} className="h-11 px-2">
-            <BedDouble className="mr-2 h-4 w-4" aria-hidden />
-            {sleepLabel}
-          </Button>
-          <Button
-            onClick={(event) => onStorage(event.currentTarget)}
-            disabled={isGuest}
-            className="h-11 px-2"
-          >
-            <Package className="mr-2 h-4 w-4" aria-hidden />
-            Home storage
-          </Button>
-          <Button
-            onClick={(event) => onKitchen(event.currentTarget)}
-            className="h-11 px-2"
-          >
-            <ChefHat className="mr-2 h-4 w-4" aria-hidden />
-            Kitchen
-          </Button>
-          <Button
-            onClick={(event) => onFarm(event.currentTarget)}
-            className="h-11 px-2"
-          >
-            <Sprout className="mr-2 h-4 w-4" aria-hidden />
-            Farm
-          </Button>
-        </fieldset>
+        <HomeActions
+          sleepLabel={sleepLabel}
+          isGuest={isGuest}
+          isTogglingSleep={isTogglingSleep}
+          onSleep={onSleep}
+          onStorage={onStorage}
+          onKitchen={onKitchen}
+          onFarm={onFarm}
+        />
       )}
     </div>
   );
 };
+
+/** Owner game actions, shown while not decorating. */
+const HomeActions = ({
+  sleepLabel,
+  isGuest,
+  isTogglingSleep,
+  onSleep,
+  onStorage,
+  onKitchen,
+  onFarm,
+}: Pick<
+  HomeSceneProps,
+  "isGuest" | "isTogglingSleep" | "onSleep" | "onStorage" | "onKitchen" | "onFarm"
+> & { sleepLabel: string }) => (
+  <fieldset
+    aria-label="Home actions"
+    className="grid grid-cols-2 gap-2 px-3 pb-3 sm:grid-cols-4"
+  >
+    <Button onClick={onSleep} disabled={isTogglingSleep} className="h-11 px-2">
+      <BedDouble className="mr-2 h-4 w-4" aria-hidden />
+      {sleepLabel}
+    </Button>
+    <Button
+      onClick={(event) => onStorage(event.currentTarget)}
+      disabled={isGuest}
+      className="h-11 px-2"
+    >
+      <Package className="mr-2 h-4 w-4" aria-hidden />
+      Home storage
+    </Button>
+    <Button onClick={(event) => onKitchen(event.currentTarget)} className="h-11 px-2">
+      <ChefHat className="mr-2 h-4 w-4" aria-hidden />
+      Kitchen
+    </Button>
+    <Button onClick={(event) => onFarm(event.currentTarget)} className="h-11 px-2">
+      <Sprout className="mr-2 h-4 w-4" aria-hidden />
+      Farm
+    </Button>
+  </fieldset>
+);
 
 /** Tight alpha bounds crop transparent margins in CSS; every painted direction keeps its native proportions. */
 const FurnitureImage = ({
