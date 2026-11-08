@@ -7,7 +7,6 @@ import Modal, {
   modalViewportClassName,
 } from "@/layout/Modal";
 import { NumberInput } from "@/components/ui/number-input";
-import { restoreBrowserGlobals } from "../setup/browserGlobals";
 import { stubDialog } from "../setup/dialog";
 
 let restoreDialog: () => void;
@@ -16,7 +15,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   restoreDialog();
-  restoreBrowserGlobals();
 });
 
 describe("Modal", () => {

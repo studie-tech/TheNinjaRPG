@@ -12,6 +12,8 @@ beforeEach(() => {
 afterEach(() => {
   restoreDialog();
   restoreBrowserGlobals();
+  localStorage.removeItem("autoAttackMinLevel");
+  localStorage.removeItem("autoAttackDelay");
 });
 
 describe("AutoAttackModal", () => {
@@ -33,8 +35,6 @@ describe("AutoAttackModal", () => {
     fireEvent.input(getByRole("spinbutton", { name: "Attack Delay (seconds)" }), { target: { value: "2" } });
     fireEvent.click(getByRole("button", { name: "Enable Auto Attack" }));
     expect(enabled).toHaveBeenCalledTimes(1);
-    localStorage.removeItem("autoAttackMinLevel");
-    localStorage.removeItem("autoAttackDelay");
   });
 
   it("reads saved auto-attack settings and falls back to their defaults", () => {
@@ -42,6 +42,5 @@ describe("AutoAttackModal", () => {
     expect(readAutoAttackSetting(AUTO_ATTACK_SETTINGS.delay)).toBe(5);
     localStorage.setItem("autoAttackDelay", "12");
     expect(readAutoAttackSetting(AUTO_ATTACK_SETTINGS.delay)).toBe(12);
-    localStorage.removeItem("autoAttackDelay");
   });
 });
