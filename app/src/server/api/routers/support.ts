@@ -43,6 +43,7 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { offsetPage } from "@/server/utils/pagination";
@@ -111,7 +112,7 @@ export const supportRouter = createTRPCRouter({
       // Pagination handling
       const limit = input.limit;
       const { skip, cursorAfter } = offsetPage(input);
-      const isStaff = user.role !== "USER";
+      const isStaff = canViewStaffOnlyComments(user.role);
       // Run filtered query
       const tickets = await getSupportTicketsWithRelations({
         client: ctx.drizzle,
@@ -135,16 +136,17 @@ export const supportRouter = createTRPCRouter({
   getTicket: protectedProcedure
     .input(z.object({ ticketId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-
-      const ticket = await getSupportTicketWithRelations(ctx.drizzle, input.ticketId);
+      const [user, ticket] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        getSupportTicketWithRelations(ctx.drizzle, input.ticketId),
+      ]);
 
       if (!ticket) {
-        throw new Error("Ticket not found");
+        throw serverError("NOT_FOUND", "Ticket not found");
       }
 
       if (!canViewSupportTicket(ticket, ctx.userId, user.role)) {
-        throw new Error("Access denied");
+        throw serverError("FORBIDDEN", "Access denied");
       }
 
       // Sanitize ticket for public view if user is not staff
@@ -330,7 +332,7 @@ export const supportRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guards
       if (!canViewSupportStatistics(user.role)) {
-        throw new Error("Access denied");
+        throw serverError("FORBIDDEN", "Access denied");
       }
       // Destructure
       const dateFrom = input.dateFrom
@@ -390,8 +392,12 @@ export const supportRouter = createTRPCRouter({
 
   // Canned responses CRUD operations
   getCannedResponses: protectedProcedure.query(async ({ ctx }) => {
-    const responses = await selectCannedResponseForGetCannedResponses(ctx.drizzle);
-    return responses;
+    const [user, responses] = await Promise.all([
+      fetchUser(ctx.drizzle, ctx.userId),
+      selectCannedResponseForGetCannedResponses(ctx.drizzle),
+    ]);
+    // Canned responses are staff drafting material; players get none.
+    return canEditCannedResponses(user.role) ? responses : [];
   }),
 
   createCannedResponse: protectedProcedure
