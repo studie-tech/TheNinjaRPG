@@ -26,3 +26,21 @@ it.each([true, false])("preserves combat identity masking in sidebar profile lin
   expect(profiles).toHaveLength(isMasked ? 0 : 2);
   for (const profile of profiles) expect(profile.getAttribute("href")).toBe("/userid/opponent");
 });
+
+it.each([
+  { name: "player", isAi: false, isMasked: false, href: "/userid/opponent" },
+  { name: "masked player", isAi: false, isMasked: true, href: null },
+  { name: "AI", isAi: true, isMasked: false, href: null },
+])("links the opponent avatar to the opponent's own profile ($name)", ({ isAi, isMasked, href }) => {
+  const battle = makeCompleteBattle({ usersState: [
+    makeBattleUser("viewer"),
+    makeBattleUser("opponent", { username: "Mercenary", avatar: "/avatar.webp", isAi, isMasked }),
+  ] });
+  const store = createStore();
+  store.set(UserContext.userBattleAtom, maskBattle(battle, "viewer"));
+  const view = render(<Provider store={store}><MenuBoxCombat /></Provider>);
+  expect(view.getAllByRole("img", { name: /AvatarImage$/ }).length).toBeGreaterThan(0);
+  const avatarLink = view.queryAllByRole("link").find((link) => link.querySelector("img"));
+  expect(avatarLink?.getAttribute("href") ?? null).toBe(href);
+  for (const link of view.queryAllByRole("link")) expect(link.getAttribute("href")).not.toBe("/profile");
+});

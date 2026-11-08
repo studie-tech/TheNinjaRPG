@@ -53,15 +53,24 @@ const MenuBoxCombat: React.FC = () => {
         )}
       </SideBannerTitle>
       <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
-        <Link href="/profile">
+        {battleUser.isAi || battleUser.isMasked ? (
           <AvatarImage
             href={battleUser.avatar}
             alt={battleUser.username}
             size={100}
-            hover_effect={true}
             priority
           />
-        </Link>
+        ) : (
+          <Link href={`/userid/${battleUser.userId}`}>
+            <AvatarImage
+              href={battleUser.avatar}
+              alt={battleUser.username}
+              size={100}
+              hover_effect={true}
+              priority
+            />
+          </Link>
+        )}
 
         <div className="pt-5">
           <PoolStatusBars
