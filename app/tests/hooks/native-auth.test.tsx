@@ -97,6 +97,20 @@ describe("native browser-to-shell authentication", () => {
     expect(mocks.setActive).toHaveBeenCalledWith({ session: "session-native" });
   });
 
+  it("starts a browser handoff only for providers the handoff accepts", async () => {
+    const { result } = renderHook(() => useNativeAuth());
+    let outcome: NativeAuthResult | undefined;
+    await act(async () => { outcome = await result.current.signInWithProvider("github"); });
+    expect(outcome).toEqual({ status: "error", message: "This provider is unavailable" });
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.open).not.toHaveBeenCalled();
+    for (const provider of ["google", "discord", "facebook"] as const) {
+      await act(async () => { outcome = await result.current.signInWithProvider(provider); });
+      expect(outcome).toEqual({ status: "complete" });
+      expect(mocks.start).toHaveBeenLastCalledWith(expect.objectContaining({ provider }));
+    }
+  });
+
   it("settles a callback arriving after the browser-finished event", async () => {
     mocks.open.mockImplementation(async () => { onFinished(); setTimeout(() => onUrl(callback), 20); });
     expect(await signIn()).toEqual({ status: "complete" });
