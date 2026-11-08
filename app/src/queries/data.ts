@@ -5,7 +5,10 @@
 import {
   and,
   asc,
+  avg,
+  count,
   countDistinct,
+  desc,
   eq,
   gt,
   gte,
@@ -19,6 +22,7 @@ import {
   or,
   type SQL,
   sql,
+  sum,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
@@ -70,7 +74,7 @@ export const selectAbEventForGetAbTests = (
       experiment: sql<string>`ANY_VALUE(${abEvent.experiment})`,
       variant: sql<string>`ANY_VALUE(${abEvent.variant})`,
       userAgent: sql<string | null>`ANY_VALUE(${abEvent.userAgent})`,
-      loaded: sql`COUNT(*)`.mapWith(Number),
+      loaded: count(),
       // Empty IPs and completion IDs cannot identify an attributable conversion.
       register:
         sql`COUNT(CASE WHEN LENGTH(${abEvent.ipHash}) > 0 AND LENGTH(${completion.id}) > 0 THEN 1 END)`.mapWith(
@@ -376,7 +380,7 @@ export const selectPaypalTransactionForGetRevenueByReferralSource = (
   client
     .select({
       source: visitorLog.utmSource,
-      totalUsd: sql`SUM(${paypalTransaction.amount})`.mapWith(Number),
+      totalUsd: sum(paypalTransaction.amount).mapWith(Number),
     })
     .from(paypalTransaction)
     .innerJoin(userData, eq(paypalTransaction.createdById, userData.userId))
@@ -396,7 +400,7 @@ export const selectUserDataForGetRecruitmentLevelDistribution = (
     .select({
       source: referralSource.source,
       level: clampedExpr,
-      count: sql`COUNT(${userData.userId})`.mapWith(Number),
+      count: count(userData.userId),
     })
     .from(userData)
     .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
@@ -433,7 +437,7 @@ export const selectUserDataForGetRecruitmentLevelDistribution3 = (
   client
     .select({
       level: clampedExpr,
-      count: sql`COUNT(${userData.userId})`.mapWith(Number),
+      count: count(userData.userId),
     })
     .from(userData)
     .where(and(...dynamicWhere))
@@ -506,9 +510,9 @@ export const selectUserDataForGetRecruitmentDailyLevelStats = (
   client
     .select({
       day: dayExpr,
-      mean: sql`AVG(${userData.level})`.mapWith(Number),
+      mean: avg(userData.level).mapWith(Number),
       std: sql`STDDEV_SAMP(${userData.level})`.mapWith(Number),
-      count: sql`COUNT(${userData.userId})`.mapWith(Number),
+      count: count(userData.userId),
     })
     .from(userData)
     .leftJoin(referralSource, eq(referralSource.userId, userData.userId))
@@ -543,7 +547,7 @@ export const selectUserDataForGetRecruitmentDailyCountsBySource = (
     .select({
       day: dayExpr,
       source: referralSource.source,
-      count: sql`COUNT(${userData.userId})`.mapWith(Number),
+      count: count(userData.userId),
     })
     .from(userData)
     .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
@@ -563,7 +567,7 @@ export const selectUserDataForGetRecruitmentDailyCountsBySource2 = (
   client
     .select({
       day: dayExpr,
-      count: sql`COUNT(${userData.userId})`.mapWith(Number),
+      count: count(userData.userId),
     })
     .from(userData)
     .where(and(...recruitmentUserConditions(input), isDynamicSignup(client)))
@@ -582,7 +586,7 @@ export const selectUserDataForGetRecruitmentDailyCountsBySource3 = (
   client
     .select({
       day: dayExpr,
-      count: sql`COUNT(${userData.userId})`.mapWith(Number),
+      count: count(userData.userId),
     })
     .from(userData)
     .where(and(...recruitmentUserConditions(input), isNotNull(userData.recruiterId)))
@@ -680,13 +684,13 @@ export const selectDataBattleActionForGetBloodlineBalanceStatistics = (
       name: bloodline.name,
       bloodlineId: bloodline.id,
       battleWon: dataBattleAction.battleWon,
-      count: sql`SUM(${dataBattleAction.count})`.mapWith(Number),
+      count: sum(dataBattleAction.count).mapWith(Number),
     })
     .from(dataBattleAction)
     .innerJoin(bloodline, eq(dataBattleAction.contentId, bloodline.id))
     .groupBy(bloodline.name, bloodline.id, dataBattleAction.battleWon)
     .where(and(...whereConditions))
-    .having(gte(sql`SUM(${dataBattleAction.count})`, input.minCount));
+    .having(gte(sum(dataBattleAction.count), input.minCount));
 
 /** Build the `userJutsu` selection for `getJutsuBalanceStatistics`. */
 export const selectUserJutsuForGetJutsuBalanceStatistics = (
@@ -714,7 +718,7 @@ export const selectDataBattleActionForGetJutsuBalanceStatistics = (
       name: jutsu.name,
       jutsuId: jutsu.id,
       battleWon: dataBattleAction.battleWon,
-      count: sql`SUM(${dataBattleAction.count})`.mapWith(Number),
+      count: sum(dataBattleAction.count).mapWith(Number),
     })
     .from(dataBattleAction)
     .innerJoin(jutsu, eq(dataBattleAction.contentId, jutsu.id))
@@ -798,7 +802,7 @@ export const selectUserSkillForGetSkillTreeBalanceStatistics = (
   client
     .select({
       skillId: userSkill.skillId,
-      userCount: sql`COUNT(${userSkill.userId})`.mapWith(Number),
+      userCount: count(userSkill.userId),
     })
     .from(userSkill)
     .groupBy(userSkill.skillId);
@@ -865,7 +869,7 @@ export const selectDataBattleActionForGetItemBalanceStatistics = (
       name: item.name,
       itemId: item.id,
       battleWon: dataBattleAction.battleWon,
-      count: sql`SUM(${dataBattleAction.count})`.mapWith(Number),
+      count: sum(dataBattleAction.count).mapWith(Number),
     })
     .from(dataBattleAction)
     .innerJoin(item, eq(dataBattleAction.contentId, item.id))
@@ -889,7 +893,7 @@ export const selectDataBattleActionForGetAiBalanceStatistics = (
       name: sql<string>`CONCAT(${userData.username}, ' - lvl', ${userData.level})`,
       aiUserId: userData.userId,
       battleWon: dataBattleAction.battleWon,
-      count: sql`SUM(${dataBattleAction.count})`.mapWith(Number),
+      count: sum(dataBattleAction.count).mapWith(Number),
     })
     .from(dataBattleAction)
     .innerJoin(userData, eq(dataBattleAction.contentId, userData.userId))
@@ -907,7 +911,7 @@ export const selectLogBattleLengthsForGetBattleLengthStatistics = (
     .select({
       battleType: logBattleLengths.battleType,
       rounds: logBattleLengths.rounds,
-      count: sql`SUM(${logBattleLengths.count})`.mapWith(Number),
+      count: sum(logBattleLengths.count).mapWith(Number),
     })
     .from(logBattleLengths)
     .groupBy(logBattleLengths.battleType, logBattleLengths.rounds)
@@ -925,7 +929,7 @@ export const selectLogQueueLengthsForGetQueueLengthStatistics = (
     .select({
       rankedRank: logQueueLengths.rankedRank,
       ceiledMinutes: logQueueLengths.ceiledMinutes,
-      count: sql`SUM(${logQueueLengths.count})`.mapWith(Number),
+      count: sum(logQueueLengths.count).mapWith(Number),
     })
     .from(logQueueLengths)
     .groupBy(logQueueLengths.rankedRank, logQueueLengths.ceiledMinutes)
@@ -985,7 +989,7 @@ export const selectLogRankedPicksForGetRankedLoadoutStatistics = (
       type: logRankedPicks.type,
       contentId: logRankedPicks.contentId,
       battleType: logRankedPicks.battleType,
-      count: sql`SUM(${logRankedPicks.count})`.mapWith(Number),
+      count: sum(logRankedPicks.count).mapWith(Number),
       name: content.name,
     })
     .from(logRankedPicks)
@@ -999,8 +1003,8 @@ export const selectLogRankedPicksForGetRankedLoadoutStatistics = (
       ),
     )
     .groupBy(logRankedPicks.contentId, logRankedPicks.battleType)
-    .having(gte(sql`SUM(${logRankedPicks.count})`, input.minCount))
-    .orderBy(sql`SUM(${logRankedPicks.count}) DESC`)
+    .having(gte(sum(logRankedPicks.count), input.minCount))
+    .orderBy(desc(sum(logRankedPicks.count)))
     .limit(input.limit);
 };
 
@@ -1054,7 +1058,7 @@ export const selectDataBattleActionForGetStatistics = (
     .select({
       battleWon: dataBattleAction.battleWon,
       battleType: dataBattleAction.battleType,
-      count: sql`COUNT(${dataBattleAction.id})`.mapWith(Number),
+      count: count(dataBattleAction.id),
     })
     .from(dataBattleAction)
     .groupBy(dataBattleAction.battleWon, dataBattleAction.battleType)
@@ -1081,7 +1085,7 @@ export const selectUserJutsuForGetStatistics = (
   client
     .select({
       level: userJutsu.level,
-      count: sql`COUNT(${userJutsu.userId})`.mapWith(Number),
+      count: count(userJutsu.userId),
     })
     .from(userJutsu)
     .groupBy(userJutsu.level)
@@ -1094,7 +1098,7 @@ export const selectUserJutsuForGetStatistics2 = (
   input: { id: string },
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(userJutsu)
     .where(eq(userJutsu.jutsuId, input.id));
 
@@ -1106,7 +1110,7 @@ export const selectUserDataForGetStatistics = (
   client
     .select({
       level: userData.level,
-      count: sql`COUNT(${userData.userId})`.mapWith(Number),
+      count: count(userData.userId),
     })
     .from(userData)
     .groupBy(userData.level)
@@ -1119,7 +1123,7 @@ export const selectUserDataForGetStatistics2 = (
   input: { id: string },
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(userData)
     .where(eq(userData.bloodlineId, input.id));
 
