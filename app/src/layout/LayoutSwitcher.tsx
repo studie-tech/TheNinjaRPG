@@ -7,7 +7,7 @@ import ReactDOM from "react-dom";
 import { GameLayout } from "@/components/layout/GameLayout";
 import { PanelPublicLayout } from "@/components/layout/PanelPublicLayout";
 import PixelPublicLayout from "@/components/layout/PixelPublicLayout";
-import ParticleProvider from "@/components/layout/shared/LayoutParticles";
+import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { applyGameLayout } from "@/hooks/useGameLayout";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
@@ -129,7 +129,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
       wallpaper={wallpaper}
     >
       {content}
-      <ParticleProvider />
+      <LayoutParticles />
     </LayoutContextProvider>
   );
 };

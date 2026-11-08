@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn, vi } from "bun:test";
 import { act, cleanup, render } from "@testing-library/react";
 import { createElement, useEffect } from "react";
-import ParticleProvider from "@/components/layout/shared/LayoutParticles";
+import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import { setGameSceneVisible } from "@/libs/gameSceneVisibility";
 
@@ -24,7 +24,7 @@ mock.module("@tsparticles/react", () => ({
 }));
 
 const mountParticles = async () => {
-  render(<ParticleProvider />);
+  render(<LayoutParticles />);
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
 };
 const nextFrame = () => { act(() => frame(performance.now())); };

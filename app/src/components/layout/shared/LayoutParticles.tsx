@@ -121,7 +121,11 @@ const loadParticles = () => {
   return particlesLoader;
 };
 
-const ParticleProvider = () => {
+/**
+ * Ambient particle background of the game layouts. It also creates the confetti overlay
+ * canvas that toast celebrations paint into.
+ */
+export const LayoutParticles = () => {
   const [particles, setParticles] = useState<LoadedParticles | null>(null);
   const [particlesContainer, setParticlesContainer] = useState<Container>();
   const particleContainerRef = useRef<Container | undefined>(undefined);
@@ -333,5 +337,3 @@ const ParticleProvider = () => {
     </ParticlesProvider>
   );
 };
-
-export default ParticleProvider;
