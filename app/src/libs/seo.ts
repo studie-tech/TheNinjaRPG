@@ -86,6 +86,13 @@ interface BuildMetadataInput {
 }
 
 /**
+ * Robots policy of every noindex page: index only. These pages link onward to URLs the
+ * sitemap does advertise, and `follow: false` would tell Google to ignore those links --
+ * a good way to strand the very pages that should get indexed.
+ */
+const NOINDEX_ROBOTS: Metadata["robots"] = { index: false };
+
+/**
  * buildMetadata
  * - Builds a Next.js Metadata object with a self-referencing canonical plus matching
  *   OpenGraph and Twitter tags. Pages that skip this inherit the root metadata, which
@@ -115,13 +122,13 @@ export const buildMetadata = ({
     description,
     // A noindex page must not name a canonical: see noindexMetadata below for why.
     alternates: { canonical: noindex ? null : url },
-    ...(noindex ? { robots: { index: false, follow: false } } : {}),
+    ...(noindex ? { robots: NOINDEX_ROBOTS } : {}),
     openGraph: {
       title: fullTitle,
       description,
       url,
       siteName: SITE_NAME,
-      ...(images ? { images } : {}),
+      images,
       locale: "en_US",
       type,
     },
@@ -129,7 +136,7 @@ export const buildMetadata = ({
       card: "summary_large_image",
       title: fullTitle,
       description,
-      ...(images ? { images } : {}),
+      images,
     },
   };
 };
@@ -146,10 +153,7 @@ export const buildMetadata = ({
  */
 export const noindexMetadata = (title: string): Metadata => ({
   title: { absolute: `${stripSiteName(title)} | ${SITE_NAME}` },
-  // index only. These screens link onward to manual and profile URLs that the sitemap
-  // does advertise, and `follow: false` would tell Google to ignore those links -- a
-  // good way to strand the very pages this metadata exists to help get indexed.
-  robots: { index: false },
+  robots: NOINDEX_ROBOTS,
   // Next resolves each metadata key against the nearest ancestor that declares it, so
   // omitting `alternates` here does not mean "no canonical" -- it means the parent
   // segment's canonical is inherited. That made every staff route under /manual answer

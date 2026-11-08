@@ -97,6 +97,14 @@ describe("buildMetadata", () => {
     // follow: false here would tell Google to ignore every link on the gated screens,
     // including the ones pointing at manual and profile URLs the sitemap advertises.
     expect(noindexMetadata("Hospital").robots).toEqual({ index: false });
+    expect(
+      buildMetadata({
+        title: "Cart",
+        description: "Your merch cart.",
+        path: "/merch/cart",
+        noindex: true,
+      }).robots,
+    ).toEqual({ index: false });
   });
 
   it("names no canonical on a noindex page", () => {
