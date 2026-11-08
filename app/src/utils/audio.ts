@@ -125,6 +125,12 @@ const getSharedAudioContext = (): AudioContext | null => {
   return window.__sharedAudioContext ?? null;
 };
 
+/** Resume effect playback during a user gesture, before background notifications arrive. */
+export const unlockAudioPlayback = () => {
+  const context = getSharedAudioContext();
+  if (context) void resumeAudioContext(context);
+};
+
 // Get audio buffer cache (stored on window to survive HMR)
 const getAudioBufferCache = (): Map<string, AudioBuffer> => {
   if (typeof window === "undefined") return new Map();

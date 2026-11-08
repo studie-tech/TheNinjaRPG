@@ -11,11 +11,12 @@ import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
 import { addConversationMention } from "@/deltas/chat";
-import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
+import { BATTLE_ALERT_SFX_URL, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
 import Link from "@/layout/Link";
+import { getAudioPreference } from "@/libs/audioPreferences";
 import {
   chatMentionsAtom,
   chatPanelAtom,
@@ -23,6 +24,14 @@ import {
   isConversationMuted,
 } from "@/libs/chatPanel";
 import { showMutationToast } from "@/libs/toast";
+import {
+  addUserInteractionListeners,
+  playPreloadedAudio,
+  preloadAudioBuffers,
+  savedSfxVolume,
+  unlockAudioPlayback,
+} from "@/utils/audio";
+import { transformImageUrl } from "@/utils/image";
 import { pushToCombat, usePublicPathname } from "@/utils/routing";
 import { updateUserCache } from "@/utils/userCache";
 import type { UserRecovery } from "@/validators/base";
@@ -38,6 +47,8 @@ export type UserEvent = {
   route?: string;
   routeText?: string;
   battleId?: string;
+  /** Human defenders receive attack alerts; initiators stay silent in every tab. */
+  isDefender?: boolean;
   dungeonRunId?: string;
   alertType?: string;
   sector?: number;
@@ -45,7 +56,10 @@ export type UserEvent = {
   isPublic?: boolean;
 };
 
-/** Subscribe to the player's live game events and reconcile their notifications and caches. */
+/**
+ * Reconcile live game events with notifications and cached game state.
+ * Alert hidden defenders with their current sound-effect preference and volume.
+ */
 export const usePusherHandler = (
   userId?: string | null,
   userData?: Pick<NonNullable<UserWithRelations>, "clanId" | "villageId">,
@@ -71,11 +85,21 @@ export const usePusherHandler = (
 
   // Pending chat events belong to the account, including across membership-channel rebinding.
   const notificationSession = useRef<symbol | undefined>(undefined);
+  // Retain battle deduplication through membership rebinding, but reset it on account changes.
+  const lastBattleNotification = useRef<string | undefined>(undefined);
   useEffect(() => {
     notificationSession.current = Symbol();
+    lastBattleNotification.current = undefined;
     return () => {
       notificationSession.current = undefined;
     };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    void preloadAudioBuffers([transformImageUrl(BATTLE_ALERT_SFX_URL)]);
+    // Unlock during a foreground gesture so an incoming background alert can play.
+    return addUserInteractionListeners(unlockAudioPlayback);
   }, [userId]);
 
   // Listen on user channel for live updates on things
@@ -168,6 +192,25 @@ export const usePusherHandler = (
         if (data.type === "battle") {
           if (!data.battleId) return;
           const battleId = data.battleId;
+          const user = utils.profile.getUser.getData()?.userData;
+          if (
+            notificationSession.current === session &&
+            user?.userId === userId &&
+            lastBattleNotification.current !== battleId
+          ) {
+            // Record silent admissions too, so a duplicate cannot sound after the tab is hidden.
+            lastBattleNotification.current = battleId;
+            if (
+              data.isDefender &&
+              document.hidden &&
+              getAudioPreference("sfxOn", user.sfxOn)
+            ) {
+              void playPreloadedAudio(
+                transformImageUrl(BATTLE_ALERT_SFX_URL),
+                savedSfxVolume(),
+              );
+            }
+          }
           const userRecovery = data.userRecovery
             ? superjson.deserialize<UserRecovery>(data.userRecovery)
             : undefined;
