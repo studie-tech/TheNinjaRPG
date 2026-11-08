@@ -21,7 +21,7 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "window");
 });
 
-describe("image provider abort propagation", () => {
+describe("createThumbnail", () => {
   it("publishes transparent AI thumbnails containing both the head and feet", async () => {
     const source = await sharp({ create: { width: 64, height: 128, channels: 4, background: "#ff0000" } })
       .composite([{ input: await sharp({ create: { width: 64, height: 64, channels: 4, background: "#0000ff" } }).png().toBuffer(), top: 64, left: 0 }]).png().toBuffer();
@@ -38,6 +38,9 @@ describe("image provider abort propagation", () => {
     expect(at(32, 63)).toEqual([0, 0, 255, 255]);
     expect(at(0, 32)).toEqual([0, 0, 0, 0]);
   });
+});
+
+describe("image provider abort propagation", () => {
   it("returns an abort while the SDK remains stalled and never starts a paid fallback", async () => {
     const controller = new AbortController();
     const run = vi.spyOn(Replicate.prototype, "run").mockImplementation(async () => {
@@ -86,7 +89,9 @@ describe("image provider abort propagation", () => {
     expect(run.mock.calls.every((call) => call[1].signal === controller.signal)).toBe(true);
     expect(uploading.mock.calls[0]![1]?.signal).toBe(controller.signal);
   });
+});
 
+describe("txt2imgNanoBanana", () => {
   it("keeps a generated scene intact when background removal is disabled", async () => {
     const buffer = await sharp({ create: { width: 64, height: 64, channels: 3, background: "white" } }).webp().toBuffer();
     const file = { url: () => new URL("https://example.com/provider.webp"), blob: async () => new Blob([buffer as BlobPart]) };
@@ -96,7 +101,9 @@ describe("image provider abort propagation", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0]![0]).toBe("google/nano-banana");
   });
+});
 
+describe("generateSpriteGPT", () => {
   it("draws a GPT founder at the smallest square size with medium quality and native transparency", async () => {
     const png = await sharp({ create: { width: 8, height: 8, channels: 4, background: "transparent" } }).png().toBuffer();
     const generate = vi.spyOn(Images.prototype, "generate").mockResolvedValue({ created: 0, data: [{ b64_json: png.toString("base64") }] } as never);
@@ -130,7 +137,9 @@ describe("image provider abort propagation", () => {
     vi.spyOn(Images.prototype, "generate").mockResolvedValue({ created: 0, data: [] } as never);
     await expect(generateSpriteGPT({ prompt: "A fox sprite", userId: "owner" })).rejects.toThrow("No output");
   });
+});
 
+describe("removeBackgroundToBuffer", () => {
   it("cuts out sprite bytes with 851-labs under the caller's signal", async () => {
     const controller = new AbortController();
     const source = Buffer.from("source");

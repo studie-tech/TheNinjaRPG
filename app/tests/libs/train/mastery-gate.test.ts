@@ -55,7 +55,7 @@ const ninjutsuBuff = {
   calculation: "static",
 } as unknown as ZodAllTags;
 
-describe("jutsu mastery gate", () => {
+describe("jutsuRequirementWarning", () => {
   it("identifies a missing or different selected reskin when the bloodline requirement is met", () => {
     const reskinned = { ...jutsu, requiredNinjutsuMastery: null, bloodlineId: "blood", bloodlineReskinId: "scarlet" };
     for (const bloodlineId of ["blood", null]) {
