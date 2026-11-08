@@ -58,17 +58,18 @@ describe("native release configuration", () => {
 
   it("mounts native audio and device controls in the live settings module", () => {
     const settings = readRepoFile("app/src/layout/GameSettings.tsx");
+    const audio = readRepoFile("app/src/layout/GlobalAudioProvider.tsx");
     const controller = readRepoFile(
       "app/src/components/layout/shared/GameLayoutController.tsx",
     );
 
-    expect(controller).toContain('from "@/layout/GameSettings"');
+    expect(controller).toContain('from "@/layout/GlobalAudioProvider"');
     expect(settings).toContain('import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry"');
-    expect(settings).toContain('from "@/libs/native"');
+    expect(audio).toContain('from "@/libs/native"');
     expect(settings).toContain("<NativeSettingsEntry");
     const devicePage = readRepoFile("app/src/app/[shell]/settings/device/page.tsx");
     expect(devicePage).toContain("<DeviceSettings />");
-    expect(settings).toContain("audioSession.onRemoteCommand");
+    expect(audio).toContain("audioSession.onRemoteCommand");
   });
 
   it("propagates the configured app id through both native projects", () => {

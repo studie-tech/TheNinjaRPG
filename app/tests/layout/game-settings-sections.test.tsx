@@ -11,9 +11,9 @@ import * as layoutPicker from "@/layout/GameLayoutPicker";
 import {
   GameSettingsPanel,
   GameSettingsPopover,
-  GlobalAudioProvider,
   SETTINGS_HREF,
 } from "@/layout/GameSettings";
+import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import { hasTutorialReminder, TutorialSettings } from "@/layout/TutorialSettings";
 import * as audioPreferences from "@/libs/audioPreferences";
 import * as toast from "@/libs/toast";

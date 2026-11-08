@@ -14,7 +14,8 @@ import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTyp
 import { layoutVariantClasses } from "@/components/layout/shared/layoutVariants";
 import * as LayoutSidebars from "@/components/layout/shared/LayoutSidebars";
 import * as Footer from "@/layout/Footer";
-import { GameSettingsPanel, GlobalAudioProvider } from "@/layout/GameSettings";
+import { GameSettingsPanel } from "@/layout/GameSettings";
+import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import * as HelpButton from "@/layout/LowerRightHelpBtn";
 import * as Image from "@/layout/Image";
 import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";

@@ -19,7 +19,7 @@ import { useGameMenu } from "@/hooks/useGameMenu";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useRankedQueueCount } from "@/hooks/useRankedQueueCount";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
-import { GlobalAudioProvider } from "@/layout/GameSettings";
+import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import { getGameLayout } from "@/libs/gameLayouts";
 import {

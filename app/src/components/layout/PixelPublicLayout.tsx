@@ -2,7 +2,7 @@
 
 import { Music } from "lucide-react";
 import type React from "react";
-import { GlobalAudioProvider } from "@/layout/GameSettings";
+import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 
 interface LayoutProps {
