@@ -276,7 +276,6 @@ describe("shared SFX preference action", () => {
     vi.spyOn(iframeHook, "useIframeMute").mockReturnValue({
       isIframesMuted: false,
       setIframesMuted: vi.fn(),
-      toggleIframesMute: vi.fn(),
     });
   });
 

@@ -205,7 +205,7 @@ describe("game settings categories", () => {
     Object.assign(vi.spyOn(client, "api" as never), {
       profile: { updatePreferences: { useMutation: () => ({ mutate: vi.fn() }) } },
     });
-    vi.spyOn(iframeMute, "useIframeMute").mockReturnValue({ isIframesMuted: false, setIframesMuted: vi.fn(), toggleIframesMute: vi.fn() });
+    vi.spyOn(iframeMute, "useIframeMute").mockReturnValue({ isIframesMuted: false, setIframesMuted: vi.fn() });
     return render(
       <LayoutContextProvider value="17-obsidian-council" isPixelLanding={false}>
         <GlobalAudioProvider>

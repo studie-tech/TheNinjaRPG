@@ -45,7 +45,6 @@ beforeEach(() => {
   vi.spyOn(iframeHook, "useIframeMute").mockReturnValue({
     isIframesMuted: false,
     setIframesMuted: vi.fn(),
-    toggleIframesMute: vi.fn(),
   });
   vi.spyOn(gameLayoutHook, "useSelectGameLayout").mockReturnValue(vi.fn());
   vi.spyOn(layoutPicker, "GameLayoutPicker").mockReturnValue(null as never);

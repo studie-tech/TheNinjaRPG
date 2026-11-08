@@ -8,7 +8,6 @@ import { useUserDataSelector } from "@/utils/UserContext";
 interface UseIframeMuteReturn {
   isIframesMuted: boolean;
   setIframesMuted: (muted: boolean) => void;
-  toggleIframesMute: () => void;
 }
 
 /**
@@ -66,15 +65,9 @@ export const useIframeMute = (): UseIframeMuteReturn => {
     [userData, updatePreferences],
   );
 
-  // Toggle iframes mute state
-  const toggleIframesMute = useCallback(() => {
-    setIframesMuted(!isIframesMuted);
-  }, [isIframesMuted, setIframesMuted]);
-
   return {
     isIframesMuted,
     setIframesMuted,
-    toggleIframesMute,
   };
 };
 
