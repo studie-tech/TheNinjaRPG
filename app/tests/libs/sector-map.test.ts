@@ -4,7 +4,7 @@ import {
   resolveStructureTerrainSpec,
 } from "@/libs/sector-map/terrains";
 import { hexTileToPixel, normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
-import { toWysiwygTiledJson } from "@/libs/sector-map/tiled-download";
+import { ensureFullTerrainPalette, toWysiwygTiledJson } from "@/libs/sector-map/tiled-download";
 import type {
   NormalizedSectorMap,
   NormalizedSectorTile,
@@ -933,10 +933,7 @@ describe("standard terrain palette", () => {
     ].join("|");
   };
 
-  it("appends every missing terrain kind exactly once (idempotent)", async () => {
-    const { ensureFullTerrainPalette } = await import(
-      "@/libs/sector-map/tiled-download"
-    );
+  it("appends every missing terrain kind exactly once (idempotent)", () => {
     // A realistic generated tile carries battleBiome (the generator always
     // writes it); the ground palette entry must dedup against it.
     const tiles = [
@@ -971,10 +968,7 @@ describe("standard terrain palette", () => {
     expect(tiles.length).toBe(count);
   });
 
-  it("does not re-append palette kinds a real map already contains (battleBiome match)", async () => {
-    const { ensureFullTerrainPalette } = await import(
-      "@/libs/sector-map/tiled-download"
-    );
+  it("does not re-append palette kinds a real map already contains (battleBiome match)", () => {
     // A slice of a real generated map: each tile carries battleBiome exactly as
     // the generator emits it. None of these must be duplicated by the palette.
     const tile = (
