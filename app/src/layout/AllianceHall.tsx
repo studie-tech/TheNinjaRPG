@@ -28,6 +28,7 @@ import { isFactionVillage } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
 import { capitalizeFirstLetter } from "@/utils/string";
+import type { BaseServerResponse } from "@/validators/base";
 
 /**
  * Alliance Overview Component
@@ -43,37 +44,21 @@ export const AllianceHall: React.FC<{
 
   // tRPC utility
   const utils = api.useUtils();
+  /** Report an alliance change and refresh the relations it affects. */
+  const onAllianceChange = async (data: BaseServerResponse) => {
+    showMutationToast(data);
+    if (data.success) await utils.village.getAlliances.invalidate();
+  };
 
   // Mutations
   const { mutate: accept, isPending: isAccepting } =
-    api.village.acceptRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.village.getAlliances.invalidate();
-        }
-      },
-    });
+    api.village.acceptRequest.useMutation({ onSuccess: onAllianceChange });
 
   const { mutate: reject, isPending: isRejecting } =
-    api.village.rejectRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.village.getAlliances.invalidate();
-        }
-      },
-    });
+    api.village.rejectRequest.useMutation({ onSuccess: onAllianceChange });
 
   const { mutate: cancel, isPending: isCancelling } =
-    api.village.cancelRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.village.getAlliances.invalidate();
-        }
-      },
-    });
+    api.village.cancelRequest.useMutation({ onSuccess: onAllianceChange });
 
   if (isPending || !data) return <Loader explanation="Loading alliances" />;
 
@@ -136,9 +121,7 @@ const AllianceList: React.FC<{
   const [typeFilter, setTypeFilter] = useState<"ALL" | "VILLAGE" | "FACTION">("ALL");
 
   // Filter all villages/factions (exclude user's own)
-  const allEntities = villages.filter(
-    (v) => v.allianceSystem && v.id !== user.villageId,
-  );
+  const allEntities = villages.filter((v) => v.id !== user.villageId);
 
   // Apply search, status, and type filters
   const filteredEntities = allEntities
@@ -166,37 +149,22 @@ const AllianceList: React.FC<{
       return a.name.localeCompare(b.name);
     });
 
+  /** Report an alliance change and refresh the relations it affects. */
+  const onAllianceChange = async (data: BaseServerResponse) => {
+    showMutationToast(data);
+    if (data.success) await utils.village.getAlliances.invalidate();
+  };
+
   // Mutations
   const { mutate: create, isPending: isCreating } =
-    api.village.createRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.village.getAlliances.invalidate();
-        }
-      },
-    });
+    api.village.createRequest.useMutation({ onSuccess: onAllianceChange });
 
   const { mutate: leave, isPending: isLeaving } = api.village.leaveAlliance.useMutation(
-    {
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.village.getAlliances.invalidate();
-        }
-      },
-    },
+    { onSuccess: onAllianceChange },
   );
 
   const { mutate: attack, isPending: isAttacking } =
-    api.village.declareEnemy.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.village.getAlliances.invalidate();
-        }
-      },
-    });
+    api.village.declareEnemy.useMutation({ onSuccess: onAllianceChange });
 
   const isKage = user.userId === user.village?.kageId;
   const isLoading = isCreating || isLeaving || isAttacking;

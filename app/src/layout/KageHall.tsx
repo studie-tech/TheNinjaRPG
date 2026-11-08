@@ -240,7 +240,7 @@ const KageChallenge = ({ user }: { user: NonNullable<UserWithRelations> }) => {
       <KageDefense user={user} />
       {canTakeKage(user.role) && (
         <ContentBox title="Staff leadership" initialBreak>
-          {!isKage && canTakeKage(user.role) && (
+          {!isKage && (
             <div className="p-3">
               <Button
                 id="challenge"
