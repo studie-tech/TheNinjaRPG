@@ -201,6 +201,13 @@ export const runRawSql = async (statement: string) => {
   await pool?.query(statement);
 };
 
+/** Run one raw read and return its rows, for fixture tables outside the schema. */
+export const queryRawSql = async <Row>(statement: string) => {
+  await getTestDatabase();
+  const result = (await pool?.query(statement)) as [Row[], unknown] | undefined;
+  return result?.[0] ?? [];
+};
+
 /** Triggers present in the test database, sorted by name. */
 export const triggerNames = async () => {
   await getTestDatabase();

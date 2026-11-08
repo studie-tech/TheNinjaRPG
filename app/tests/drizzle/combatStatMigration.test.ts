@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, expect, it } from "bun:test";
-import { describeWithDatabase, getTestDatabase, runRawSql } from "../setup/testDatabase";
-import { sql } from "drizzle-orm";
+import { describeWithDatabase, queryRawSql, runRawSql } from "../setup/testDatabase";
 
 const migration = readFileSync(resolve(process.cwd(), "drizzle/migrations/0056_unified_combat_stats_masteries.sql"), "utf8");
 const backfill = migration.slice(migration.indexOf("UPDATE `UserData`\nSET"), migration.indexOf("ALTER TABLE `UserData` MODIFY COLUMN `currentlyTraining`"));
@@ -26,9 +25,8 @@ describeWithDatabase("uniform combat-stat SQL migration", () => {
     }
     await runRawSql(`INSERT INTO \`${table}\` (userId,isAi,ninjutsuOffence,taijutsuDefence) VALUES ('ai',1,200,500)`);
     await runRawSql(backfill.replaceAll("`UserData`", `\`${table}\``));
-    const db=await getTestDatabase();
-    const rows=await db.execute(sql.raw(`SELECT * FROM \`${table}\``)) as unknown as [Record<string, number | string>[], unknown];
-    const byId = Object.fromEntries(rows[0].map((row) => [row.userId, row]));
+    const rows = await queryRawSql<Record<string, number | string>>(`SELECT * FROM \`${table}\``);
+    const byId = Object.fromEntries(rows.map((row) => [row.userId, row]));
     for (const id of ["specialist", "broad", "capped", "overcap"]) {
       const row=byId[id]!;
       const invested=old.reduce((total, field) => total + Number(row[field]) - 10, 0);
@@ -77,8 +75,7 @@ describeWithDatabase("Energy SQL cutover", () => {
       return;
     }
     for (const statement of energyMigration) await runRawSql(statement);
-    const db = await getTestDatabase();
-    const [rows] = await db.execute(sql.raw(`SELECT curEnergy,maxEnergy FROM \`${energyTable}\``)) as unknown as [Record<string, number>[], unknown];
+    const rows = await queryRawSql<Record<string, number>>(`SELECT curEnergy,maxEnergy FROM \`${energyTable}\``);
     expect(rows).toEqual([{curEnergy:675, maxEnergy:675}]);
     await expect(runRawSql(`SELECT currentlyTraining FROM \`${energyTable}\``)).rejects.toThrow();
   });
@@ -100,15 +97,14 @@ describeWithDatabase("Energy getting-started guide migration", () => {
     await runRawSql(`CREATE TABLE \`${guideTable}\` (slug varchar(100) PRIMARY KEY, content text)`);
     await runRawSql(`INSERT INTO \`${guideTable}\` VALUES ('getting-started','<p>Staff introduction.</p><li>${oldText}</li><p>Staff conclusion.</p>'),('other-guide','${oldText}')`);
     for (const statement of guideMigration) await runRawSql(statement);
-    const db = await getTestDatabase();
-    const [rows] = await db.execute(sql.raw(`SELECT slug,content FROM \`${guideTable}\` ORDER BY slug`)) as unknown as [Record<string, string>[], unknown];
+    const rows = await queryRawSql<Record<string, string>>(`SELECT slug,content FROM \`${guideTable}\` ORDER BY slug`);
     expect(rows).toEqual([
       {slug: "getting-started", content: `<p>Staff introduction.</p><li>${energyTrainingGuide}</li><p>Staff conclusion.</p>`},
       {slug: "other-guide", content: oldText},
     ]);
     await runRawSql(`UPDATE \`${guideTable}\` SET content = 'Staff training instructions.' WHERE slug = 'getting-started'`);
     for (const statement of guideMigration) await runRawSql(statement);
-    const [edited] = await db.execute(sql.raw(`SELECT content FROM \`${guideTable}\` WHERE slug = 'getting-started'`)) as unknown as [Record<string, string>[], unknown];
+    const edited = await queryRawSql<Record<string, string>>(`SELECT content FROM \`${guideTable}\` WHERE slug = 'getting-started'`);
     expect(edited).toEqual([{content: "Staff training instructions."}]);
   });
 });
@@ -194,12 +190,11 @@ describeWithDatabase("combat content SQL migration", () => {
   afterEach(async () => { await runRawSql(`DROP TABLE IF EXISTS \`${contentTable}\``); });
   it("describes damage effects accurately and preserves edited wording or mechanics", async () => {
     await runRawSql(`CREATE TABLE \`${contentTable}\` (id varchar(191) PRIMARY KEY, description text, battleDescription text, effects json)`);
-    const db = await getTestDatabase();
     for (const fixture of contentFixtures) {
-      await db.execute(sql.raw(`INSERT INTO \`${contentTable}\` VALUES (${[fixture.id, fixture.description, fixture.battleDescription, JSON.stringify(fixture.effects)].map(value => "'" + value.replaceAll("'", "''") + "'").join(",")})`));
+      await runRawSql(`INSERT INTO \`${contentTable}\` VALUES (${[fixture.id, fixture.description, fixture.battleDescription, JSON.stringify(fixture.effects)].map(value => "'" + value.replaceAll("'", "''") + "'").join(",")})`);
     }
     for (const statement of contentMigration) await runRawSql(statement);
-    const [rows] = await db.execute(sql.raw(`SELECT id,description,battleDescription,CAST(effects AS CHAR) AS effects FROM \`${contentTable}\``)) as unknown as [Record<string, string>[], unknown];
+    const rows = await queryRawSql<Record<string, string>>(`SELECT id,description,battleDescription,CAST(effects AS CHAR) AS effects FROM \`${contentTable}\``);
     for (const fixture of contentFixtures) {
       const row = rows.find(row => row.id === fixture.id)!;
       expect(row.description).toBe(fixture.expectedDescription);
@@ -209,11 +204,11 @@ describeWithDatabase("combat content SQL migration", () => {
     const fixture = contentFixtures[0]!;
     await runRawSql(`UPDATE \`${contentTable}\` SET description='Staff wording.',battleDescription='Staff battle wording.'`);
     for (const statement of contentMigration) await runRawSql(statement);
-    const [edited] = await db.execute(sql.raw(`SELECT description,battleDescription FROM \`${contentTable}\``)) as unknown as [Record<string, string>[], unknown];
+    const edited = await queryRawSql<Record<string, string>>(`SELECT description,battleDescription FROM \`${contentTable}\``);
     expect(edited.every(row => row.description === "Staff wording." && row.battleDescription === "Staff battle wording.")).toBe(true);
-    await db.execute(sql.raw(`UPDATE \`${contentTable}\` SET description='${fixture.description.replaceAll("'", "''")}',effects='[{"type":"damage","target":"INHERIT"},{"type":"increasestat","target":"SELF"}]' WHERE id='${fixture.id}'`));
+    await runRawSql(`UPDATE \`${contentTable}\` SET description='${fixture.description.replaceAll("'", "''")}',effects='[{"type":"damage","target":"INHERIT"},{"type":"increasestat","target":"SELF"}]' WHERE id='${fixture.id}'`);
     for (const statement of contentMigration) await runRawSql(statement);
-    const [changed] = await db.execute(sql.raw(`SELECT description FROM \`${contentTable}\` WHERE id='${fixture.id}'`)) as unknown as [Record<string, string>[], unknown];
+    const changed = await queryRawSql<Record<string, string>>(`SELECT description FROM \`${contentTable}\` WHERE id='${fixture.id}'`);
     expect(changed[0]!.description).toBe(fixture.description);
   });
 });
