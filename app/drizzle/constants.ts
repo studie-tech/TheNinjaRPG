@@ -970,6 +970,15 @@ export const HEX_STACKING_DISPLACEMENT = 0.25; // To compensate for how hexagons
 export const HEX_ASPECT_RATIO = 0.5; // To give perspective, make hex height smaller than width
 export const NO_DURABILITY_LOSS_COMBATS: BattleType[] = ["SPARRING"];
 
+/** Practice battles: consumables are kept, pools are not persisted and nobody is hospitalized. */
+export const PRACTICE_BATTLE_TYPES: BattleType[] = ["SPARRING", "RANKED_PVP", "RANKED_SPARRING"];
+/** Battles that grant no money, mastery or other rewards: practice battles plus training. */
+export const NO_REWARD_BATTLE_TYPES: BattleType[] = [...PRACTICE_BATTLE_TYPES, "TRAINING"];
+/** Spars, ranked or not: no PvP outcome and the loser stays on the map. */
+export const SPARRING_BATTLE_TYPES: BattleType[] = ["SPARRING", "RANKED_SPARRING"];
+/** Battles started from an MPvP queue, whose queue and battle-user rows are cleaned up after. */
+export const MPVP_QUEUE_BATTLE_TYPES: BattleType[] = ["RAID", "SHRINE_WAR", "TERRITORY_WAR"];
+
 // Sector settings. Every sector uses the same unrotated local hex frame; the
 // cylindrical world grid only needs ordinary N/S and E/W edge stitching.
 export const SECTOR_WIDTH = 26;
@@ -2365,6 +2374,8 @@ export const WAR_STATES = [
 ] as const;
 export const WAR_SHRINE_MAINTENANCE_DAYS = 7;
 export const WAR_TYPES = ["VILLAGE_WAR", "SECTOR_WAR", "WAR_RAID"] as const;
+/** Wars fought between villages over their shrines, as opposed to sector wars. */
+export const VILLAGE_WAR_TYPES: (typeof WAR_TYPES)[number][] = ["VILLAGE_WAR", "WAR_RAID"];
 export const SHRINE_MAX_PER_VILLAGE = 4;
 export const SHRINE_BOOST_COST = 15_000;
 export const SHRINE_BOOST_BASE_PERC = 10; // Base shrine boost with 1+ shrines (10%)

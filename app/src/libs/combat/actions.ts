@@ -23,6 +23,7 @@ import {
   IMG_BASIC_WAIT,
   NonActionItemTypes,
   PET_BATTLE_CONFIG,
+  PRACTICE_BATTLE_TYPES,
   RankedBattleTypes,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   SAGE_MODE_DISABLED_BATTLES,
@@ -1243,8 +1244,7 @@ export const insertAction = (info: {
     if (
       useritem &&
       itemData?.destroyOnUse &&
-      battle.battleType !== "SPARRING" &&
-      !RankedBattleTypes.includes(battle.battleType)
+      !PRACTICE_BATTLE_TYPES.includes(battle.battleType)
     ) {
       useritem.quantity -= 1;
     }

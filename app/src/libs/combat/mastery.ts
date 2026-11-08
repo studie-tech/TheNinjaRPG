@@ -1,6 +1,7 @@
 import type { MasteryName } from "@/drizzle/constants";
 import {
   MasteryNames,
+  NO_REWARD_BATTLE_TYPES,
   PVP_MASTERY_LOSS_REWARD,
   PVP_MASTERY_WIN_REWARD,
 } from "@/drizzle/constants";
@@ -61,9 +62,7 @@ export const combatMasteryGains = (
   if (
     user.isAi ||
     user.isSummon ||
-    ["SPARRING", "TRAINING", "RANKED_PVP", "RANKED_SPARRING"].includes(
-      battle.battleType,
-    ) ||
+    NO_REWARD_BATTLE_TYPES.includes(battle.battleType) ||
     outcome === "Fled" ||
     outcome === "Draw"
   )

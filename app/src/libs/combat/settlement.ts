@@ -6,6 +6,8 @@ import {
   KAGE_PRESTIGE_COST,
   KILLING_NOTORIETY_GAIN,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  NO_REWARD_BATTLE_TYPES,
+  PRACTICE_BATTLE_TYPES,
   PVP_KILL_ANBU_POINTS_REWARD,
   PVP_KILL_PRESTIGE_REWARD,
   PVP_KILL_PRESTIGE_REWARD_ANBU,
@@ -14,7 +16,9 @@ import {
   PVP_KILL_TOKEN_REWARD_ANBU,
   PVP_KILL_TOKEN_REWARD_ASSASSIN,
   PvpBattleTypes,
+  SPARRING_BATTLE_TYPES,
   STREAK_LEVEL_DIFF,
+  VILLAGE_WAR_TYPES,
   WAR_HEALTH_ANBU_RECOVER,
   WAR_HEALTH_ANBU_REMOVE,
   WAR_HEALTH_ASSASSIN_RECOVER,
@@ -402,8 +406,7 @@ export const calcBattleResult = (
       };
 
       // Things to reward for non-spars
-      const noRewardBattles = ["SPARRING", "TRAINING", "RANKED_PVP", "RANKED_SPARRING"];
-      if (!noRewardBattles.includes(battleType)) {
+      if (!NO_REWARD_BATTLE_TYPES.includes(battleType)) {
         // Money stolen/given
         result.money = moneyDelta * battle.rewardScaling + user.moneyStolen;
         // If any stats were used, distribute exp change on stats.
@@ -644,7 +647,7 @@ const calcWarDamage = ({
         }
 
         // Village wars & raids
-        if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && battleType === "COMBAT") {
+        if (VILLAGE_WAR_TYPES.includes(war.type) && battleType === "COMBAT") {
           const targetVillage = getVillage(battle, target.villageId);
           if (didWin) {
             const { recover, remove } = getWarHealthTier(user, village, userClan);
@@ -703,7 +706,7 @@ const calcWarDamage = ({
         // Village wars and raids - abstract shrine HP mechanic
         // Track per-war to avoid accumulation bug when a user is in multiple wars
         // Track attacker and defender shrine changes separately
-        if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
+        if (VILLAGE_WAR_TYPES.includes(war.type)) {
           ensureVillageWarShrine(war);
           const isUserOnDefenderSide = !isUserOnAttackerSide;
 
@@ -765,7 +768,7 @@ const calcWarDamage = ({
     // target loop doesn't process it. Handle this case based on user's wars directly.
     if (battleType === "SHRINE_WAR" && didWin) {
       userWars
-        .filter(({ war }) => ["VILLAGE_WAR", "WAR_RAID"].includes(war.type))
+        .filter(({ war }) => VILLAGE_WAR_TYPES.includes(war.type))
         .forEach(({ war, sideVillageId }) => {
           // Objective-war recovery shares the same receipt boundary as damage.
           if (war.rules) return;
@@ -1233,7 +1236,7 @@ export const isPvpEnergyRewardBattle = (
   userId: string,
 ): boolean => {
   if (!PvpBattleTypes.includes(battle.battleType)) return false;
-  if (["SPARRING", "RANKED_SPARRING"].includes(battle.battleType)) return false;
+  if (SPARRING_BATTLE_TYPES.includes(battle.battleType)) return false;
   const user = battle.usersState.find((u) => u.userId === userId);
   if (!user) return false;
   return hasHumanOpponent(battle.usersState, user);
@@ -1249,7 +1252,7 @@ export const sendsToHospital = (
 ) =>
   !battle.forceKeepPools &&
   curHealth <= 0 &&
-  !["SPARRING", "RANKED_PVP", "RANKED_SPARRING"].includes(battle.battleType);
+  !PRACTICE_BATTLE_TYPES.includes(battle.battleType);
 
 /**
  * Resolve a Kage challenge from shared battle state. CombatResult is scoped to

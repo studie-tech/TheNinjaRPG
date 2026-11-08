@@ -12,7 +12,10 @@ import {
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_XP_TO_LEVEL,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MPVP_QUEUE_BATTLE_TYPES,
   REGEN_SECONDS,
+  SPARRING_BATTLE_TYPES,
+  VILLAGE_WAR_TYPES,
   WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
@@ -294,7 +297,7 @@ export const updateBattle = async (
           ? [insertLogBattleLengthsForFinishBattle(client, newBattle, user, other)]
           : []),
         // Clean up battle users in parallel - safe since they only read from mpvpBattleQueue
-        ...(["RAID", "SHRINE_WAR", "TERRITORY_WAR"].includes(newBattle.battleType)
+        ...(MPVP_QUEUE_BATTLE_TYPES.includes(newBattle.battleType)
           ? [deleteMpvpBattleUserForFinishBattle(client, newBattle)]
           : []),
         // Purge raid-chat memberships on any raid battle-over (boss kill OR team
@@ -352,7 +355,7 @@ export const updateBattle = async (
 
       // Delete queue entries AFTER the Promise.all to ensure mpvpBattleUser
       // subquery has completed (it references mpvpBattleQueue)
-      if (["RAID", "SHRINE_WAR", "TERRITORY_WAR"].includes(newBattle.battleType)) {
+      if (MPVP_QUEUE_BATTLE_TYPES.includes(newBattle.battleType)) {
         await deleteMpvpBattleQueueForFinishBattle(client, newBattle);
       }
 
@@ -672,7 +675,7 @@ export const updateWars = async (
       // Use per-war shrine HP change for village wars/raids (includes level diff adjustment)
       // For sector wars, use the total accumulated shrineChangeHp value
       let logShrineHpChange = 0;
-      if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
+      if (VILLAGE_WAR_TYPES.includes(w.type)) {
         // Use the already-computed villageWarShrineInfo which includes:
         // 1. The correct shrine change constants
         // 2. Level difference adjustment (reduced to ±1 when STREAK_LEVEL_DIFF exceeded)
@@ -741,7 +744,7 @@ export const updateWars = async (
       const shrineChanges = result.villageWarShrineInfo[w.id];
       if (
         hasShrineChange(shrineChanges) &&
-        ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
+        VILLAGE_WAR_TYPES.includes(w.type) &&
         !processedShrineWarIds.has(w.id)
       ) {
         processedShrineWarIds.add(w.id);
@@ -803,7 +806,7 @@ export const updateWars = async (
       // Skip if we've already scheduled an update for this war (prevents double-counting when multiple targets share a war)
       if (
         result.warHealthChange !== 0 &&
-        ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
+        VILLAGE_WAR_TYPES.includes(w.type) &&
         !processedWarHealthIds.has(w.id)
       ) {
         processedWarHealthIds.add(w.id);
@@ -830,7 +833,7 @@ export const updateWars = async (
 
       // Find the war from user's wars
       const w = userWars.find((war) => war.id === warId);
-      if (!w || w.rules || !["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) continue;
+      if (!w || w.rules || !VILLAGE_WAR_TYPES.includes(w.type)) continue;
 
       processedShrineWarIds.add(warId);
 
@@ -1586,10 +1589,7 @@ export const updateUser = async (
       });
     }
     // Update map status
-    if (
-      result.curHealth > 0 ||
-      ["SPARRING", "RANKED_SPARRING"].includes(curBattle.battleType)
-    ) {
+    if (result.curHealth > 0 || SPARRING_BATTLE_TYPES.includes(curBattle.battleType)) {
       void updateUserOnMap(pusher, user.sector, {
         ...user,
         longitude: user.originalLongitude,
