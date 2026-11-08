@@ -2,6 +2,7 @@ import { rateLimitResponse } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { towerDefenseClaimReceipt, towerDefenseRun, userData } from "@/drizzle/schema";
+import { env } from "@/env/server.mjs";
 import { towerDefenseRouter } from "@/server/api/routers/towerDefense";
 import { type SessionParams, signSessionParams } from "@/server/utils/towerDefenseCrypto";
 import { TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE } from "@/server/utils/towerDefenseClaims";
@@ -13,7 +14,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { restoreEnvAfterEach } from "../../../setup/env";
 
 const upgradeDefinitions = [
   { id: "u1", maxLevel: 5, baseCost: 10, costMultiplier: 1.5, effectValue: 1, upgradeType: "DAMAGE" },
@@ -82,10 +82,11 @@ const points = async (userId: string) => {
 };
 
 describeWithDatabase("towerDefense.claimCompletedRun", () => {
-  restoreEnvAfterEach("TOWER_DEFENSE_CLAIMS_ENABLED");
+  const configured = env.TOWER_DEFENSE_CLAIMS_ENABLED;
+  afterEach(() => Object.assign(env, { TOWER_DEFENSE_CLAIMS_ENABLED: configured }));
 
   beforeEach(async () => {
-    process.env.TOWER_DEFENSE_CLAIMS_ENABLED = "true";
+    env.TOWER_DEFENSE_CLAIMS_ENABLED = "true";
     await resetTables(towerDefenseClaimReceipt, towerDefenseRun, userData);
     await insertUsers([{ userId: "td-user" }, { userId: "td-other" }]);
   });
@@ -94,7 +95,7 @@ describeWithDatabase("towerDefense.claimCompletedRun", () => {
   });
 
   it("refuses every claim while rewards are paused", async () => {
-    delete process.env.TOWER_DEFENSE_CLAIMS_ENABLED;
+    env.TOWER_DEFENSE_CLAIMS_ENABLED = undefined;
     stubTransport([completedRun()]);
     const api = await callerFor(towerDefenseRouter, "td-user");
     const result = await api.claimCompletedRun({ spacetimeSessionId: "7", ...definitions });

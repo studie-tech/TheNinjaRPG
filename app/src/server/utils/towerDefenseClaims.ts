@@ -8,6 +8,7 @@
  * TowerDefenseClaimReceipt unique key makes each signed session claimable once.
  */
 
+import { env } from "@/env/server.mjs";
 import {
   getSpacetimeDBConfig,
   getSpacetimeDBHttpOrigin,
@@ -23,11 +24,11 @@ export const TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE =
 
 /**
  * Claims stay off unless `TOWER_DEFENSE_CLAIMS_ENABLED` is exactly "true". The switch is
- * read per call and checked inside the procedure, so it covers every caller: the browser,
- * the MCP adapter and any other server-side caller.
+ * checked inside the procedure, so it covers every caller: the browser, the MCP adapter and
+ * any other server-side caller.
  */
 export const areTowerDefenseClaimsEnabled = (): boolean =>
-  process.env.TOWER_DEFENSE_CLAIMS_ENABLED === "true";
+  env.TOWER_DEFENSE_CLAIMS_ENABLED === "true";
 
 /**
  * The receipt key for a claim. The nonce is server-generated and covered by the session
