@@ -4,9 +4,9 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
+import type { RouterInputs } from "@/app/_trpc/client";
 import { createTrpcSession, trpcSessionLink } from "@/libs/trpcSession";
 import type { UserWithRelations } from "@/routers/profile";
-import type { RegisterDeviceInput } from "@/validators/push";
 import { deferred } from "../setup/deferred";
 import { capacitorWindow, installCapacitor, removeCapacitor } from "../setup/native";
 
@@ -226,7 +226,7 @@ describe("native push ownership", () => {
       });
     };
     const firstClient = createClient();
-    mocks.sendToken.mockImplementation((input: RegisterDeviceInput) =>
+    mocks.sendToken.mockImplementation((input: RouterInputs["push"]["registerDevice"]) =>
       firstClient.push.registerDevice.mutate(input),
     );
     const first = renderHook(() =>

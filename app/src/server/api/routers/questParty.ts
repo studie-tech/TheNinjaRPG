@@ -1,5 +1,6 @@
 import { eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import { QUEST_PARTY_TYPES } from "@/drizzle/constants";
 import { type Quest, questParty, userData } from "@/drizzle/schema";
 import { questCoopParty, transitionCoopParty } from "@/libs/coop";
@@ -70,12 +71,25 @@ import {
 } from "@/server/utils/questParty";
 import { secondsPassed } from "@/utils/time";
 import { QuestTracker } from "@/validators/objectives";
-import {
-  questPartyCreateSchema,
-  questPartyIdSchema,
-  questPartyInviteSchema,
-  questPartyRemoveSchema,
-} from "@/validators/questParty";
+
+/** Select an eligible team-enabled quest and whether uninvited players may join. */
+const questPartyCreateSchema = z.object({
+  questId: z.string(),
+  isPublic: z.boolean(),
+});
+
+/** Identify a team; the router verifies the caller's membership and command permissions. */
+const questPartyIdSchema = z.object({ partyId: z.string() });
+
+/** Resolve a single invitation by username before applying the leader's roster CAS. */
+const questPartyInviteSchema = questPartyIdSchema.extend({
+  username: z.string().trim().min(1).max(191),
+});
+
+/** Remove a teammate while retaining their personal progress and reward receipts. */
+const questPartyRemoveSchema = questPartyIdSchema.extend({
+  userId: z.string().min(1),
+});
 
 /** Shared quest progress uses party CAS; membership and reward receipts remain personal. */
 export const questPartyRouter = createTRPCRouter({

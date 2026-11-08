@@ -2,7 +2,7 @@ import { eq, like } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getRemoveSageModeUserUpdate } from "@/deltas/sageMode";
-import { REMOVAL_COST } from "@/drizzle/constants";
+import { REMOVAL_COST, SAGE_MODE_MAX_LEVEL } from "@/drizzle/constants";
 import { sageMode } from "@/drizzle/schema";
 
 import { callDiscordContent } from "@/libs/socials";
@@ -42,9 +42,20 @@ import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";
 import { SageModeValidator } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
-import type { SageModeFilteringSchema } from "@/validators/sageMode";
-import { sageModeFilteringSchema } from "@/validators/sageMode";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+/**
+ * Query input for `sageMode.getAll` / `sageModeDatabaseFilter`.
+ * `hidden` is a tri-state: `undefined` = all (staff only), `true`/`false` = that set.
+ */
+const sageModeFilteringSchema = z.object({
+  name: z.string().max(256).optional(),
+  village: z.string().optional(),
+  level: z.coerce.number().min(1).max(SAGE_MODE_MAX_LEVEL).optional(),
+  hidden: z.boolean().optional(),
+});
+
+type SageModeFilteringSchema = z.infer<typeof sageModeFilteringSchema>;
 
 export const sageModeRouter = createTRPCRouter({
   /**
