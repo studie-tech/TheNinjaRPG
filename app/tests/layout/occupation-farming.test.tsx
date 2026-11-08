@@ -98,7 +98,7 @@ beforeEach(() => {
   // The controller's transport is isolated so load failures and farm states can be set directly.
   vi.spyOn(farmControllerModule, "useFarmController").mockImplementation(farmControllerState as never);
   // WebGL rendering and the day/night clock are outside this layout's contract.
-  vi.spyOn(FarmCanvas, "FarmCanvas").mockImplementation(() => <div data-testid="farm-canvas" />);
+  vi.spyOn(FarmCanvas, "FarmCanvas").mockImplementation((() => <div data-testid="farm-canvas" />) as never);
   vi.spyOn(FarmHUD, "FarmHUD").mockImplementation(() => <div data-testid="farm-hud" />);
 });
 afterEach(() => {
