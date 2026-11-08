@@ -66,7 +66,7 @@ const Button = ({
   decoration = "none",
   animation,
   loading = false,
-  count = undefined,
+  count,
   ref,
   ...props
 }: ButtonProps) => {
