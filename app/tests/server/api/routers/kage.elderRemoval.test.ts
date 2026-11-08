@@ -84,16 +84,13 @@ describeWithDatabase("elder kage removal protection", () => {
     expect(notices[0]?.userId).toBe(TERR_BOT_ID);
     expect(result.success).toBe(!isProtected);
     expect(vote?.status).toBe(isProtected ? "REJECTED" : "APPROVED");
+    expect(storedKage?.villagePrestige).toBe(KAGE_PRESTIGE_REQUIREMENT);
     if (isProtected) {
       expect(result.message).toContain("protected");
       expect(storedVillage?.kageId).toBe("kage");
-      expect(storedKage?.villagePrestige).toBe(KAGE_PRESTIGE_REQUIREMENT);
-      expect(notices.length).toBeGreaterThan(0);
     } else {
       expect(storedVillage?.kageId).not.toBe("kage");
       expect(storedVillage?.leaderUpdatedAt).toEqual(now);
-      expect(storedKage?.villagePrestige).toBe(KAGE_PRESTIGE_REQUIREMENT);
-      expect(notices.length).toBeGreaterThan(0);
     }
   });
   it.each([true, false])("records an eligible elder successor with the public reason and tally (explicit motion: %s)", async (withVoteId) => {
