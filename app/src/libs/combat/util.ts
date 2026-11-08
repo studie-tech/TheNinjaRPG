@@ -478,6 +478,10 @@ export const syncPoolAdjustments = (
   });
 };
 
+/** Whether a battle's lobby countdown is still running, on the server-synced clock. */
+export const isBattleInLobby = (battle: { createdAt: Date }, timeDiff: number) =>
+  battle.createdAt.getTime() > Date.now() - timeDiff;
+
 /** Preserve lobby pools while tracking the complete effect list saved to battle state. */
 export const reconcileLobbyPools = (
   user: BattleUserState,

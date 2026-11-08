@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { useEffect } from "react";
 import { useGameScene } from "@/hooks/game-scene";
 import { maskBattle } from "@/libs/combat/masking";
+import { isBattleInLobby } from "@/libs/combat/util";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { userBattleAtom } from "@/utils/UserContext";
 import { makeCompleteBattle } from "../setup/combat";
@@ -91,7 +92,7 @@ it("still drives live auto combat while its scene is paused in the background", 
     useEffect(callback: () => void) { callback(); },
     setInterval(callback: () => void) { drive = callback; return 1; },
     calcActiveUser: () => ({ actor: { userId: "ai" }, changedActor: false }),
-    getTurnControl: () => ({ isAITurn: true }),
+    getTurnControl: () => ({ isAITurn: true }), isBattleInLobby,
     canPerformAction: () => true, canDrive: () => true,
     performAction: () => { actions++; },
   };
@@ -161,7 +162,7 @@ it("resolves nothing autonomously until a visible field can show it", () => {
     useEffect(callback: () => void) { callback(); },
     setInterval(callback: () => void) { drive = callback; return 1; },
     calcActiveUser: () => ({ actor: { userId: "ai" }, changedActor: false }),
-    getTurnControl: () => ({ isAITurn: true }),
+    getTurnControl: () => ({ isAITurn: true }), isBattleInLobby,
     canPerformAction: () => true, canDrive: () => true,
     performAction: () => { actions++; },
   };

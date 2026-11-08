@@ -58,6 +58,7 @@ import { isPvpEnergyRewardBattle, sendsToHospital } from "@/libs/combat/settleme
 import { validateActionTarget } from "@/libs/combat/targetValidation";
 import { getTurnControl, resolveControlledActorId } from "@/libs/combat/turn";
 import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/types";
+import { isBattleInLobby } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { haptics } from "@/libs/native";
@@ -208,9 +209,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
   const [isInLobby, setIsInLobby] = useState(
-    () =>
-      !!battleState.battle &&
-      battleState.battle.createdAt.getTime() > Date.now() - timeDiff,
+    () => !!battleState.battle && isBattleInLobby(battleState.battle, timeDiff),
   );
   // Departed players and their summons can retain auto flags; only humans still
   // fighting keep optional auto combat active, matching the server's batch gate.
@@ -313,8 +312,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     tooltip.style.top = `${Math.max(8, Math.min(above >= 8 ? above : y + 15, window.innerHeight - height - 8))}px`;
   }, [detailsTarget, detailsEffects]);
 
-  // Store precomputed maps in refs for use in render loop
-  const setHoveredEffectRef = useRef(setHoveredEffect);
   const lastHoverKeyRef = useRef<string | null>(null);
   // Touch effects use a held gesture so their tooltip cannot intercept a quick
   // action tap. Aggro inspection is selected independently on pointer release.
@@ -322,11 +319,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   const touchDetailsOpenRef = useRef(false);
   const touchDetailsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClickUntilRef = useRef(0);
-
-  // Update refs when memos change
-  useEffect(() => {
-    setHoveredEffectRef.current = setHoveredEffect;
-  }, [battleMaps, setHoveredEffect]);
 
   // Session battle user state (the human's own account — used for lobby/ready
   // UI and loadout selection, NOT for piloting; piloting reads userIdRef).
@@ -792,7 +784,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
     touchDetailsOpenRef.current = false;
     lastHoverKeyRef.current = null;
-    setHoveredEffectRef.current(null);
+    setHoveredEffect(null);
   };
   // Long presses inspect effects without submitting a combat action.
   const onDocumentTouchStart = (event: TouchEvent) => {
@@ -852,7 +844,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         // server rejects early actions ("Battle has not started yet"), so
         // firing would only spam error toasts — relevant now that a player on
         // auto combat can be the initiative winner of a PvP lobby battle.
-        const inLobby = battleRef.current.createdAt.getTime() > Date.now() - timeDiff;
+        const inLobby = isBattleInLobby(battleRef.current, timeDiff);
         const { isAITurn } = getTurnControl(actor, suid);
         // Spectators follow the battle's channel; only its fighters drive its AI turns.
         const isFighter = battleRef.current.usersState.some(
@@ -981,8 +973,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   useEffect(() => {
     if (isInLobby) {
       const interval = setInterval(() => {
-        const syncedTime = Date.now() - timeDiff;
-        if (battleRef.current && battleRef.current.createdAt.getTime() > syncedTime) {
+        if (battleRef.current && isBattleInLobby(battleRef.current, timeDiff)) {
           setIsInLobby(true);
         } else {
           setIsInLobby(false);
@@ -1103,7 +1094,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           const key = hover ? `${hover.tileKey}-${hover.userId ?? ""}` : null;
           if (key !== lastHoverKeyRef.current) {
             lastHoverKeyRef.current = key;
-            setHoveredEffectRef.current(hover);
+            setHoveredEffect(hover);
           }
         },
       }),
