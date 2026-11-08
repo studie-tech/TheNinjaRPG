@@ -916,6 +916,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
           {/* Elder Nomination - only for non-outlaw clans */}
           {!userData?.isOutlaw && leaderLike && (
             <ElderNomination
+              now={new Date()}
               clanData={clanData}
               selectedNomineeId={selectedNomineeId}
               onSelectNominee={setSelectedNomineeId}
@@ -1173,6 +1174,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 };
 
 interface ElderNominationProps {
+  /** Read by the parent so the window follows the clan hall's own re-renders. */
+  now: Date;
   clanData: NonNullable<ClanRouter["get"]>;
   selectedNomineeId: string;
   onSelectNominee: (userId: string) => void;
@@ -1180,15 +1183,15 @@ interface ElderNominationProps {
   onNominate: () => void;
 }
 
-/** Monthly elder nomination for a top clan; the window is evaluated on each render. */
+/** Monthly elder nomination for a top clan, judged against the date the parent passes. */
 const ElderNomination: React.FC<ElderNominationProps> = ({
+  now,
   clanData,
   selectedNomineeId,
   onSelectNominee,
   isNominating,
   onNominate,
 }) => {
-  const now = new Date();
   const dayOfMonth = now.getUTCDate();
   const currentMonth = now.getUTCMonth() + 1;
   const currentYear = now.getUTCFullYear();
