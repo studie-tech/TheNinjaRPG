@@ -5,7 +5,7 @@ import * as pools from "@/hooks/useEffectivePools";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import * as avatar from "@/layout/Avatar";
 import { BattleFocusView } from "@/layout/BattleFocusView";
-import * as profileBox from "@/layout/MenuBoxProfile";
+import * as visualizeEffects from "@/layout/VisualizeEffects";
 import * as statusBar from "@/layout/StatusBar";
 import type { BattleState } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.spyOn(statusBar, "default").mockImplementation(
     ({ title }: { title: string }) => (<span>{title}</span>) as never,
   );
-  vi.spyOn(profileBox, "VisualizeEffects").mockReturnValue(null as never);
+  vi.spyOn(visualizeEffects, "VisualizeEffects").mockReturnValue(null as never);
 });
 
 afterEach(async () => {
@@ -185,7 +185,7 @@ describe("BattleFocusView", () => {
     const own = screen.getByRole("complementary", { name: "Your side" });
     expect(within(own).getByRole("region", { name: "summon" })).toBeTruthy();
     expect(within(own).getByRole("region", { name: "me" })).toBeTruthy();
-    expect(profileBox.VisualizeEffects).toHaveBeenCalledWith(
+    expect(visualizeEffects.VisualizeEffects).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "summon" }),
       undefined,
     );

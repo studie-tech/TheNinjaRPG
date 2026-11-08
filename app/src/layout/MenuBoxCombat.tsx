@@ -5,9 +5,9 @@ import { useEffectivePools } from "@/hooks/useEffectivePools";
 import AvatarImage from "@/layout/Avatar";
 import { BattleUserTraits } from "@/layout/BattleUserTraits";
 import Link from "@/layout/Link";
-import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import { SideBannerTitle } from "@/layout/SideBannerTitle";
+import { VisualizeEffects } from "@/layout/VisualizeEffects";
 import { findSidebarOpponent } from "@/libs/combat/actions";
 import {
   combatPresentedBattleAtom,

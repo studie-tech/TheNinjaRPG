@@ -25,7 +25,7 @@ import { CombatResultScreen } from "@/layout/CombatResultScreen";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import Loader from "@/layout/Loader";
 import { QuestUpdateModal } from "@/layout/Logbook";
-import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
+import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffects";
 import WebGlError from "@/layout/WebGLError";
 import { getAudioPreference } from "@/libs/audioPreferences";
 import {

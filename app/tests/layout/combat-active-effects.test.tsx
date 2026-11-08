@@ -1,6 +1,6 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
+import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffects";
 import { getEffectMagnitude, getEffectPower } from "@/libs/combat/power";
 import { invertPower } from "@/libs/combat/tags";
 import type { GroundEffect } from "@/libs/combat/types";
