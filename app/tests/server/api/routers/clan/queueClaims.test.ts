@@ -104,7 +104,7 @@ describeWithDatabase("clan queue claim ownership", () => {
       return { userId, client, read, stop, connection: { socket_id: delivery === "disconnected" && index === 0 ? undefined : `${index + 1}.1` } };
     }));
     const actor = tabs[0]!;
-    const source = readFileSync(join(import.meta.dirname, "../../../../../src/layout/Clan.tsx"), "utf8");
+    const source = readFileSync(join(import.meta.dirname, "../../../../../src/layout/clan/ClanBattles.tsx"), "utf8");
     const callbacks = source.slice(source.indexOf("api.clan.deleteClanBattle.useMutation(")).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
     const action = source.match(/const onDeleteBattle = (async [\s\S]*?\n  \});/)?.[1];
     if (!callbacks || !action) throw new Error("Clan deletion callbacks were not found");

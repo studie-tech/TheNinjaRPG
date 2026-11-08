@@ -8,7 +8,7 @@ import * as UserContext from "@/utils/UserContext";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
 import TerritoryWarPage from "@/app/[shell]/territory-war/page";
-import { ClanBattles } from "@/layout/Clan";
+import { ClanBattles } from "@/layout/clan/ClanBattles";
 
 let actor: Record<string, unknown>;
 const mutate = vi.fn(async () => ({ success: false }));

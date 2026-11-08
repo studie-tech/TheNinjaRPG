@@ -19,9 +19,10 @@ import {
   CLAN_CREATE_RYO_COST,
   CLAN_RANK_REQUIREMENT,
 } from "@/drizzle/constants";
-import { ClanProfile, ClansOverview } from "@/layout/Clan";
+import { ClanProfile } from "@/layout/Clan";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { ClansOverview } from "@/layout/clan/ClansOverview";
 import Loader from "@/layout/Loader";
 import { hasRequiredRank } from "@/libs/rank";
 import { showMutationToast } from "@/libs/toast";

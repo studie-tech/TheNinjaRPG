@@ -16,11 +16,11 @@ const flows = [
   { file: "layout/ProfileEdit.tsx", procedure: "staff.unequipAllJutsus", patch: { loadout: { jutsuIds: [] } } },
   { file: "layout/ProfileEdit.tsx", procedure: "blackmarket.updateStats", patch: { offence: 100, defence: 100 }, invalidations: 0 },
   { file: "layout/ProfileEdit.tsx", procedure: "skillTree.resetSkillPoints", patch: { userSkills: [], monthlySkillResets: { month: "2026-10", count: 1 }, maxEnergy: 100, effectiveMasteries: {} }, invalidations: 2 },
-  { file: "layout/Clan.tsx", procedure: "clan.editClanColor", patch: { village: { id: "home", hexColor: "#123456" } }, invalidations: 0 },
+  { file: "layout/clan/ClanInfo.tsx", procedure: "clan.editClanColor", patch: { village: { id: "home", hexColor: "#123456" } }, invalidations: 0 },
   { file: "layout/ProfileEdit.tsx", procedure: "skillTree.resetAllUsersSkillPoints", patch: { userSkills: [], skillPoints: 12 } },
   { file: "app/[shell]/adminbuilding/page.tsx", procedure: "quests.startQuest", patch: { userQuests: [], questData: [] } },
   { file: "layout/RaidBrowser.tsx", procedure: "raids.claimDamageReward", patch: { reputationPoints: 10 }, invalidations: 2 },
-  { file: "layout/Clan.tsx", procedure: "clan.upgradeHideoutToStronghold", patch: { village: { id: "home", type: "STRONGHOLD" } }, invalidations: 0 },
+  { file: "layout/clan/ClanInfo.tsx", procedure: "clan.upgradeHideoutToStronghold", patch: { village: { id: "home", type: "STRONGHOLD" } }, invalidations: 0 },
   { file: "layout/OccupationCrafting.tsx", procedure: "occupation.cancelQueuedCraft", patch: { queue: [] }, invalidations: 2 },
   { file: "app/[shell]/dungeon/page.tsx", procedure: "coop.dungeon.act", patch: { status: "BATTLE" }, invalidations: 2 },
   { file: "app/[shell]/territory-war/page.tsx", procedure: "territoryWar.startBattle", patch: { status: "QUEUED" } },
@@ -199,7 +199,7 @@ const admissionFlows = [
   { file: "layout/Objective.tsx", procedure: "quests.retryBattle" },
   { file: "layout/Sector.tsx", procedure: "overworldAi.interactWithOverworldAi" },
   { file: "layout/RaidBrowser.tsx", procedure: "raids.startRaidBattle" },
-  { file: "layout/Clan.tsx", procedure: "clan.initiateClanBattle" },
+  { file: "layout/clan/ClanBattles.tsx", procedure: "clan.initiateClanBattle" },
   { file: "app/[shell]/territory-war/page.tsx", procedure: "territoryWar.startBattle" },
 ];
 

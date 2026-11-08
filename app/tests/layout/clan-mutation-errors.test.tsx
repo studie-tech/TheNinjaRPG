@@ -4,7 +4,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
 import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
-import { ClanOrders } from "@/layout/Clan";
+import { ClanOrders } from "@/layout/clan/ClanOrders";
 import * as groupOrders from "@/layout/GroupOrders";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
