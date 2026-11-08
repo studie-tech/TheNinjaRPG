@@ -22,7 +22,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import Loader from "@/layout/Loader";
@@ -87,7 +86,6 @@ const ContentAudioSelector: React.FC<ContentAudioSelectorProps> = (props) => {
             <Button variant="outline" className="h-10 w-full justify-between">
               Pick / Generate Sound
             </Button>
-            <Label className="text-muted-foreground text-xs">Current Sound</Label>
           </div>
         </DialogTrigger>
         <DialogContent className="max-w-4xl">
