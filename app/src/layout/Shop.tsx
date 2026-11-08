@@ -22,9 +22,10 @@ import { ShopItemCard } from "@/layout/shop/ShopItemCard";
 import { cn } from "@/libs/shadui";
 import type { ShopCurrency, ShopSort } from "@/libs/shop";
 import {
+  canAffordShopPrice,
   getShopDiscounts,
+  getShopStackPrice,
   isItemAvailableInStore,
-  missingForPrices,
   SHOP_SORTS,
   shopItemDiscountFactor,
   shopItemPrices,
@@ -139,11 +140,11 @@ const Shop: React.FC<ShopProps> = (props) => {
       (!props.restrictTypes?.length || props.restrictTypes.includes(row.itemType)),
   );
   const rows = loaded.map((row) => {
-    const prices = shopItemPrices(row, shopItemDiscountFactor(discountsFor(row)));
+    const factor = shopItemDiscountFactor(discountsFor(row));
     return {
       item: row,
-      prices,
-      canAfford: missingForPrices(prices, wallet).length === 0,
+      prices: shopItemPrices(row, factor),
+      canAfford: canAffordShopPrice(userData, getShopStackPrice(row, 1, factor)),
     };
   });
   // Price sorting uses the currency this shop sells for; an item may also cost ryo.
@@ -181,14 +182,14 @@ const Shop: React.FC<ShopProps> = (props) => {
       index >= 0
         ? shown.splice(index, 1)[0]
         : (() => {
-            const prices = shopItemPrices(
-              tutorialItem,
-              shopItemDiscountFactor(discountsFor(tutorialItem)),
-            );
+            const factor = shopItemDiscountFactor(discountsFor(tutorialItem));
             return {
               item: tutorialItem,
-              prices,
-              canAfford: missingForPrices(prices, wallet).length === 0,
+              prices: shopItemPrices(tutorialItem, factor),
+              canAfford: canAffordShopPrice(
+                userData,
+                getShopStackPrice(tutorialItem, 1, factor),
+              ),
               name: tutorialItem.name,
               rarity: tutorialItem.rarity,
               itemType: tutorialItem.itemType,
