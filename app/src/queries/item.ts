@@ -41,6 +41,7 @@ import {
   craftingRequirement,
   huntingSession,
   type Item,
+  type ItemSlot,
   item,
   itemLoadout,
   itemPurchaseCounter,
@@ -1808,7 +1809,7 @@ export const listPetSpeciesForFetchRewardPetSpecies = (
  */
 export const updateUserItemForSelectItemLoadout = (
   client: Pick<DrizzleClient, "update">,
-  equipped: import("@/drizzle/schema").ItemSlot | SQL,
+  equipped: ItemSlot | SQL,
   user: { userId: string },
 ) =>
   client
