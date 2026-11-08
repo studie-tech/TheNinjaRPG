@@ -38,7 +38,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
+import { fetchTerritoryWarUser } from "@/server/utils/territoryWar";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Read the global competition and manage same-competitor guardian lobbies. */
@@ -51,7 +51,7 @@ export const territoryWarRouter = createTRPCRouter({
   getCurrent: protectedProcedure.query(async ({ ctx }) => {
     const [event, user] = await Promise.all([
       fetchLatestTerritoryWar(ctx.drizzle),
-      fetchUser(ctx.drizzle, ctx.userId),
+      fetchTerritoryWarUser(ctx.drizzle, ctx.userId),
     ]);
     const competitor = getTerritoryCompetitor(user);
     const boostUntil = getTerritoryWarBoostUntil(user);
@@ -172,7 +172,7 @@ export const territoryWarRouter = createTRPCRouter({
       const event = await findTerritoryWarById(ctx.drizzle, team.territoryWarId);
       if (!event || event.resolvedAt || event.endsAt <= new Date())
         return errorResponse("This Territory War has ended");
-      if (!team.queue.length || team.queue.length > TERRITORY_WAR_TEAM_SIZE)
+      if (team.queue.length > TERRITORY_WAR_TEAM_SIZE)
         return errorResponse("Invalid team size");
       const battleId = nanoid();
       const claimed = await claimBattleQueue(ctx.drizzle, battleId, team.id);
@@ -183,7 +183,6 @@ export const territoryWarRouter = createTRPCRouter({
         const roster = await listQueueMembers(ctx.drizzle, team.id);
         if (
           !roster.some((member) => member.userId === ctx.userId) ||
-          roster.length < 1 ||
           roster.length > TERRITORY_WAR_TEAM_SIZE
         )
           return errorResponse("The team changed. Try again");
