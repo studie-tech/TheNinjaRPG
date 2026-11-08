@@ -1085,7 +1085,7 @@ export const combatRouter = createTRPCRouter({
           input.stats ? "TRAINING" : "ARENA",
         );
       } else {
-        return { success: false, message: "No AI found" };
+        return errorResponse("No AI found");
       }
     }),
   attackUser: protectedProcedure
@@ -1482,7 +1482,7 @@ export const combatRouter = createTRPCRouter({
           battle: maskBattle(userBattle, ctx.userId),
         };
       } else {
-        return { success: false, message: "Battle state could not be updated" };
+        return errorResponse("Battle state could not be updated");
       }
     }),
   iAmHere: protectedProcedure
@@ -1999,16 +1999,10 @@ export const initiateBattle = async (
     dungeonEncounter &&
     userIds.length !== (dungeonEncounter.runState.pets ? 1 : DUNGEON_PARTY_SIZE)
   )
-    return {
-      success: false,
-      message: `A dungeon requires ${DUNGEON_PARTY_SIZE} players`,
-    };
+    return errorResponse(`A dungeon requires ${DUNGEON_PARTY_SIZE} players`);
 
   if (allyAiIds.length > 0 && !supportsNpcAllies(battleType)) {
-    return {
-      success: false,
-      message: "NPC allies are only supported in quest battles",
-    };
+    return errorResponse("NPC allies are only supported in quest battles");
   }
 
   // Pre-process loadouts if they exist
@@ -2145,7 +2139,7 @@ export const initiateBattle = async (
         creator.longitude !== longitude ||
         creator.latitude !== latitude)
     )
-      return { success: false, message: "Attack failed, did the target move?" };
+      return errorResponse("Attack failed, did the target move?");
     return await initiateBattle(
       {
         ...info,
@@ -2243,10 +2237,7 @@ export const initiateBattle = async (
         !pets.some((pet) => pet.userId === user.userId && pet.id === user.activePetId),
     )
   ) {
-    return {
-      success: false,
-      message: "A companion selection changed. Please try again.",
-    };
+    return errorResponse("A companion selection changed. Please try again.");
   }
 
   if (dungeonEncounter?.runState.pets) {
@@ -2300,10 +2291,7 @@ export const initiateBattle = async (
     ? getQuestEntryCharges(info.questAttempt, entryInventory)
     : [];
   if (!entryCharges)
-    return {
-      success: false,
-      message: "You do not have the required entry items in your inventory.",
-    };
+    return errorResponse("You do not have the required entry items in your inventory.");
   const hasEntryCharges = entryCharges.length > 0;
   // Entry receipts and consumed equipment extend beyond the bounded combat cache patch.
   requiresUserRefresh ||= hasEntryCharges;
@@ -2369,7 +2357,7 @@ export const initiateBattle = async (
       questEncounter,
       { sector, longitude, latitude },
     );
-    if (failure) return { success: false, message: failure };
+    if (failure) return errorResponse(failure);
   }
 
   // Recovery is explicit to the requesting actor; opponents and scheduled participants retain strict status checks.
@@ -2503,7 +2491,7 @@ export const initiateBattle = async (
 
   // Allies must be NPC templates, never extra player accounts.
   if (allyAiIds.some((id) => !fetchedUsers.find((u) => u.userId === id)?.isAi)) {
-    return { success: false, message: "One of the ally AIs is unavailable" };
+    return errorResponse("One of the ally AIs is unavailable");
   }
 
   // Clone each occurrence: one NPC template may appear repeatedly or on both teams.
@@ -2516,12 +2504,9 @@ export const initiateBattle = async (
     (users.length !== userIds.length + targetIds.length ||
       users.slice(userIds.length).some((u) => !u.isAi))
   )
-    return {
-      success: false,
-      message: dungeonEncounter
-        ? "A dungeon enemy is unavailable"
-        : "The trial is unavailable",
-    };
+    return errorResponse(
+      dungeonEncounter ? "A dungeon enemy is unavailable" : "The trial is unavailable",
+    );
 
   // The trial opens against the creator themself; only later forms carry a machine's name.
   const openingForm = info.creatorTrial && users[userIds.length];
@@ -2546,11 +2531,9 @@ export const initiateBattle = async (
           !isObjectiveWarActive(activeWar) ||
           !areWarObjectivesRevealed(activeWar, side)
         )
-          return {
-            success: false,
-            message:
-              "This objective shrine is unavailable until active combat and completed espionage",
-          };
+          return errorResponse(
+            "This objective shrine is unavailable until active combat and completed espionage",
+          );
       }
     }
   }
@@ -2609,7 +2592,7 @@ export const initiateBattle = async (
     sector === MAP_WAKE_ISLAND_SECTOR &&
     battleType === "COMBAT"
   ) {
-    return { success: false, message: "Cannot attack players in Wake Island" };
+    return errorResponse("Cannot attack players in Wake Island");
   }
 
   // Registered event tournament entrants wait at Wake Island for their ready checks
@@ -2624,11 +2607,9 @@ export const initiateBattle = async (
         ),
     )
   ) {
-    return {
-      success: false,
-      message:
-        "This player is registered for an ongoing tournament and can't be attacked",
-    };
+    return errorResponse(
+      "This player is registered for an ongoing tournament and can't be attacked",
+    );
   }
 
   if (sectorData?.pvpDisabled && battleType === "COMBAT") {
@@ -2649,10 +2630,7 @@ export const initiateBattle = async (
 
     // Block if non-protected users are trying to attack protected village members
     if (hasProtectedDefender && hasNonProtectedAttacker) {
-      return {
-        success: false,
-        message: "Cannot attack members of this protected village",
-      };
+      return errorResponse("Cannot attack members of this protected village");
     }
   }
 
@@ -2676,7 +2654,7 @@ export const initiateBattle = async (
         ? Math.max(...encounterWaves.map((w) => w.aiIds.length))
         : users.length - leftSideUserCount) > rightCapacity
     ) {
-      return { success: false, message: "Too many NPCs for this battlefield" };
+      return errorResponse("Too many NPCs for this battlefield");
     }
   }
 
@@ -2698,7 +2676,7 @@ export const initiateBattle = async (
           (latitude !== undefined && u.latitude !== latitude)),
     );
     if (movedAiTarget) {
-      return { success: false, message: "Attack failed, did the target move?" };
+      return errorResponse("Attack failed, did the target move?");
     }
   }
 
@@ -2706,15 +2684,15 @@ export const initiateBattle = async (
   for (const i of users.keys()) {
     // Get the user
     const user = users[i];
-    if (!user) return { success: false, message: "Could not find expected user" };
+    if (!user) return errorResponse("Could not find expected user");
 
     if (info.kageMatch && userIds.includes(user.userId)) {
       const reason = getKageEligibility(user, info.kageMatch.villageId);
-      if (reason) return { success: false, message: reason };
+      if (reason) return errorResponse(reason);
     }
 
     // If user is banned
-    if (user.isBanned) return { success: false, message: `${user.username} is banned` };
+    if (user.isBanned) return errorResponse(`${user.username} is banned`);
 
     // Force defender village id
     if (info.forceDefenderVillageId && targetIds.includes(user.userId)) {
@@ -2736,10 +2714,9 @@ export const initiateBattle = async (
     // Scheduled title fights claim both participants directly from ordinary play.
     if (battleType === "KAGE_PVP") {
       if (!user.isAi && user.status !== "AWAKE")
-        return {
-          success: false,
-          message: `${user.username} must be awake and free of other activities`,
-        };
+        return errorResponse(
+          `${user.username} must be awake and free of other activities`,
+        );
     } else if (!isAutoBattle && !user.isAi) {
       // For other battles, check if user status is appropriate (skip AI users)
       const isOk = dungeonEncounter
@@ -2755,13 +2732,12 @@ export const initiateBattle = async (
                 getIsolatedPyramid(user)?.id === info.questAttempt.id &&
                 info.questBattleSource?.questId === info.questAttempt.questId);
       if (!isOk) {
-        return {
-          success: false,
-          message: actionStatusMessage(
+        return errorResponse(
+          actionStatusMessage(
             user.status,
             userIds.includes(user.userId) ? "You" : user.username,
           ),
-        };
+        );
       }
     }
 
@@ -2769,11 +2745,11 @@ export const initiateBattle = async (
     if (battleType === "COMBAT") {
       if (userIds.includes(user.userId)) {
         if (RANKS_RESTRICTED_FROM_PVP.includes(user.rank)) {
-          return { success: false, message: "Need to rank up to do PvP combat" };
+          return errorResponse("Need to rank up to do PvP combat");
         }
       } else {
         if (RANKS_RESTRICTED_FROM_PVP.includes(user.rank) && !user.isAi) {
-          return { success: false, message: "Cannot attack students & genin" };
+          return errorResponse("Cannot attack students & genin");
         }
       }
     }
@@ -2821,10 +2797,7 @@ export const initiateBattle = async (
       .filter((u) => targetIds.includes(u.userId))
       .some((u) => u.immunityUntil > new Date())
   ) {
-    return {
-      success: false,
-      message: "One of the targets is immune from combat.",
-    };
+    return errorResponse("One of the targets is immune from combat.");
   }
 
   // Get previous battles between these two users within last 60min
@@ -3320,7 +3293,7 @@ export const initiateBattle = async (
       createBattle,
       didClaim: claimedEveryone,
     });
-    if (!committed.success) return { success: false, message: committed.message };
+    if (!committed.success) return errorResponse(committed.message);
     result = committed.result;
   } else if (info.kageMatch) {
     // The match receipt, battle and both participant claims commit together. A failed
@@ -3349,7 +3322,7 @@ export const initiateBattle = async (
         if (receipt.rowsAffected !== 1) reject(changed);
       },
     });
-    if (!committed.success) return { success: false, message: committed.message };
+    if (!committed.success) return errorResponse(committed.message);
     result = committed.result;
   } else if (info.hunting) {
     // The session reservation, battle/history inserts and guarded character claim must
@@ -3373,7 +3346,7 @@ export const initiateBattle = async (
         if (session.rowsAffected !== 1) reject(changed);
       },
     });
-    if (!committed.success) return { success: false, message: committed.message };
+    if (!committed.success) return errorResponse(committed.message);
     result = committed.result;
   } else if (info.tournamentGame) {
     // Battle/history inserts and both user claims must commit together. A single-row
@@ -3385,7 +3358,7 @@ export const initiateBattle = async (
       didClaim: claimedEveryone,
       claimFailedMessage: "Attack failed, did the target move?",
     });
-    if (!committed.success) return { success: false, message: committed.message };
+    if (!committed.success) return errorResponse(committed.message);
     result = committed.result;
   } else {
     result = await createBattle(client);
@@ -3441,7 +3414,7 @@ export const initiateBattle = async (
       deleteBattleHistoryByBattleId(client, battleId),
     ]);
     if (result.failed) throw result.failed.reason;
-    const failure = { success: false, message: "Attack failed, did the target move?" };
+    const failure = errorResponse("Attack failed, did the target move?");
     if (!recoveryActorId || !actionReadiness) return failure;
     if (actorCompensation.rowsAffected !== 1) {
       // Neither an aggregate claim nor a lost compensation guard proves the actor recovered.
