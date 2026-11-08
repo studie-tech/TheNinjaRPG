@@ -1177,6 +1177,18 @@ export const TrainingSpeeds = [
   "24hrs",
 ] as const;
 export type TrainingSpeed = (typeof TrainingSpeeds)[number];
+/** Duration, stat efficiency (%) and experience multiplier of each training interval. */
+export const TRAINING_SPEED_CONFIG: Record<
+  TrainingSpeed,
+  { seconds: number; efficiency: number; multiplier: number }
+> = {
+  "15min": { seconds: 15 * 60, efficiency: 100, multiplier: 0.01 },
+  "1hr": { seconds: 60 * 60, efficiency: 90, multiplier: 0.04 },
+  "4hrs": { seconds: 4 * 60 * 60, efficiency: 80, multiplier: 0.16 },
+  "8hrs": { seconds: 8 * 60 * 60, efficiency: 70, multiplier: 0.32 },
+  "12hrs": { seconds: 12 * 60 * 60, efficiency: 60, multiplier: 0.48 },
+  "24hrs": { seconds: 24 * 60 * 60, efficiency: 50, multiplier: 0.96 },
+};
 
 
 // Content difficulty ratings
@@ -1765,6 +1777,7 @@ export const ANBU_STEALTH_UPGRADE_COST = 200;
 export const SENSEI_REQUIRED_RANK: UserRank = "JONIN";
 export const SENSEI_STUDENT_RYO_PER_MISSION = 100;
 export const SENSEI_GENIN_TRAIN_EXP_BOOST_PERC = 5; // % extra stat training experience for Genin
+export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5; // % faster jutsu training for Genin with a sensei
 export const SENSEI_GENIN_MED_EXP_SHARE_PERC = 5; // % of medical exp shared to Genin student when sensei heals
 export const SENSEI_STUDENT_MISSION_EXP_BOOST_PERC = 3; // % extra mission experience for Chunin (<= lvl 40)
 export const SENSEI_MAX_STUDENT_LEVEL = 40;
