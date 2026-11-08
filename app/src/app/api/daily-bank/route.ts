@@ -1,5 +1,6 @@
 import { and, eq, ne, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { BANK_INTEREST_DAILY_CAP } from "@/drizzle/constants";
 import { type FederalStatus, userData } from "@/drizzle/schema";
 import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import { insertDailyBankInterestForGET, selectUserDataForGET } from "@/queries/bank";
@@ -78,7 +79,9 @@ export async function GET(request: Request) {
         // Create interest records for each user
         const interestRecords = usersWithBank.map(
           (user: (typeof usersWithBank)[number]) => {
-            const interestAmount = Math.floor(Math.min(user.bank * c.factor, 1000000));
+            const interestAmount = Math.floor(
+              Math.min(user.bank * c.factor, BANK_INTEREST_DAILY_CAP),
+            );
             return {
               id: nanoid(),
               userId: user.userId,

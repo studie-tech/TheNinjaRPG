@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { REFERRAL_REPUTATION_SHARE } from "@/drizzle/constants";
 import { stripePayment } from "@/drizzle/schema";
 import { handleEndpointError, lockWithGameTimer } from "@/libs/gamesettings";
 import {
@@ -56,7 +57,9 @@ export async function GET(request: Request) {
     for (const transaction of unawardedTransactions) {
       if (transaction.createdById && transaction.recruiterId) {
         // Bundles can include ryo/items, so referral rewards use the reputation actually purchased.
-        const referralBonus = Math.floor(transaction.reputationPoints * 0.1);
+        const referralBonus = Math.floor(
+          transaction.reputationPoints * REFERRAL_REPUTATION_SHARE,
+        );
         msgs.push(`Add ${referralBonus} ref reps - invoiceId ${transaction.invoiceId}`);
         await awardPaypalReferral(drizzleDB, {
           createdById: transaction.createdById,
@@ -104,7 +107,7 @@ const awardStripeReferralReputation = async (client: DrizzleClient) => {
   );
   const messages: string[] = [];
   for (const receipt of receipts) {
-    const amount = Math.floor(receipt.reputationPoints * 0.1);
+    const amount = Math.floor(receipt.reputationPoints * REFERRAL_REPUTATION_SHARE);
     if (amount === 0) continue;
     // The unique audit INSERT and balance increment must commit together; a guarded UPDATE
     // alone cannot create the durable reward claim without a schema change.

@@ -2102,6 +2102,8 @@ export const PITY_BLOODLINE_ROLLS = 200;
 // Reputation purchase config
 export const MAX_REPS_PER_MONTH = 4000;
 export const MAX_REPS_EXTRA_PER_MONTH = 250;
+/** Share of a referred player's purchased reputation paid to their recruiter. */
+export const REFERRAL_REPUTATION_SHARE = 0.1;
 
 // Federal config
 /** Days one PayPal or reputation payment keeps its federal tier. */
@@ -2122,6 +2124,8 @@ export const FED_UPGRADE_REPS_COST: Partial<
 export const FED_BANK_INTEREST: Record<FederalStatus, number> = {
   NONE: 0, NORMAL: 2, SILVER: 5, GOLD: 8,
 };
+/** Most ryo one daily interest payment can credit, for every federal tier. */
+export const BANK_INTEREST_DAILY_CAP = 1_000_000;
 export const FED_INVENTORY_SLOTS: Record<FederalStatus, number> = {
   NONE: 0, NORMAL: 2, SILVER: 5, GOLD: 10,
 };
