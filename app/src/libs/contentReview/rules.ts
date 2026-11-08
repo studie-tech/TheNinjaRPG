@@ -1,5 +1,6 @@
 import type { ContentProposalEntityType } from "@/drizzle/constants";
 import { ENTITY_CONFIG } from "./entities";
+import { ENTITY_LABELS } from "./labels";
 import { getAtPath, setAtPath, topLevelField } from "./paths";
 import { sameValue } from "./version";
 
@@ -37,10 +38,16 @@ export const applySetOperations = (
   for (const operation of operations) {
     const field = topLevelField(operation.path);
     if (!config.editableKeys.includes(field)) {
-      return { ok: false, reason: `${config.label} has no editable field ${field}` };
+      return {
+        ok: false,
+        reason: `${ENTITY_LABELS[entityType]} has no editable field ${field}`,
+      };
     }
     if (operation.path !== field && getAtPath(next, field) === undefined) {
-      return { ok: false, reason: `${config.label} field ${field} is empty` };
+      return {
+        ok: false,
+        reason: `${ENTITY_LABELS[entityType]} field ${field} is empty`,
+      };
     }
     try {
       next = setAtPath(next, operation.path, operation.value);

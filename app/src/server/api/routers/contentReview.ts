@@ -28,6 +28,7 @@ import {
   normalizeEditable,
 } from "@/libs/contentReview/entities";
 import { isEpidemicConfigured, searchEpidemicSfx } from "@/libs/contentReview/epidemic";
+import { ENTITY_LABELS } from "@/libs/contentReview/labels";
 import { importEpidemicSfx, materializeChoice } from "@/libs/contentReview/media";
 import {
   refreshProposalFreshness,
@@ -285,7 +286,7 @@ export const contentReviewRouter = createTRPCRouter({
             entityType: change.entityType,
             entityId: change.entityId,
             operation: change.operation,
-            label: config.label,
+            label: ENTITY_LABELS[change.entityType],
             name: entity?.name ?? (draftName(change.after) || "New"),
             detailHref: change.entityId ? config.detailHref(change.entityId) : null,
             before: change.before,
@@ -314,7 +315,7 @@ export const contentReviewRouter = createTRPCRouter({
             entityType: basis.entityType,
             entityId: basis.entityId,
             role: basis.role,
-            label: ENTITY_CONFIG[basis.entityType].label,
+            label: ENTITY_LABELS[basis.entityType],
             name: entity?.name ?? basis.entityId,
             version: basis.version,
             fresh: entity?.version === basis.version,
@@ -478,7 +479,7 @@ export const contentReviewRouter = createTRPCRouter({
         const entity = entities.get(
           entityKey(change.entityType, change.entityId as string),
         );
-        const label = ENTITY_CONFIG[change.entityType].label;
+        const label = ENTITY_LABELS[change.entityType];
         if (!entity) {
           if (change.operation === "CREATE") continue;
           return errorResponse(`${label} ${change.entityId} no longer exists`);
@@ -557,7 +558,7 @@ export const contentReviewRouter = createTRPCRouter({
           if (!outcome.success) {
             await restore(undone);
             return errorResponse(
-              `${ENTITY_CONFIG[change.entityType].label}: ${outcome.message}`,
+              `${ENTITY_LABELS[change.entityType]}: ${outcome.message}`,
             );
           }
           undone.push(change);
@@ -675,7 +676,9 @@ const applyProposal = async (
     const config = ENTITY_CONFIG[change.entityType];
     const entity = entityOfChange(entities, change);
     if (change.operation === "UPDATE" && !entity) {
-      return errorResponse(`${config.label} ${change.entityId} no longer exists`);
+      return errorResponse(
+        `${ENTITY_LABELS[change.entityType]} ${change.entityId} no longer exists`,
+      );
     }
     const excluded = new Set(
       choices.exclude
@@ -719,7 +722,10 @@ const applyProposal = async (
       config.validator,
       entity ? { ...entity.payload, ...editable } : editable,
     );
-    if (invalid) return errorResponse(`${config.label} would be invalid: ${invalid}`);
+    if (invalid)
+      return errorResponse(
+        `${ENTITY_LABELS[change.entityType]} would be invalid: ${invalid}`,
+      );
     plans.push({ change, entity, fields, editable });
   }
   if (plans.length === 0) return errorResponse("Tick at least one change to apply");
@@ -760,7 +766,7 @@ const applyProposal = async (
       const entityId = plan.entity?.id ?? outcome.id;
       if (!outcome.success || !entityId) {
         await rollback(ctx, proposal.id, done, added, startedAt);
-        return errorResponse(`${ENTITY_CONFIG[type].label}: ${outcome.message}`);
+        return errorResponse(`${ENTITY_LABELS[type]}: ${outcome.message}`);
       }
       done.push({ plan, entityId });
       current = undefined;
@@ -1091,7 +1097,7 @@ const toSummary = (
       entityType: change.entityType,
       entityId: change.entityId,
       operation: change.operation,
-      label: ENTITY_CONFIG[change.entityType].label,
+      label: ENTITY_LABELS[change.entityType],
       name: entity?.name ?? (draftName(change.after) || "New"),
       image: entity?.image ?? null,
       fields: Object.keys(change.after),
