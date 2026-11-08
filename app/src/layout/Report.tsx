@@ -5,6 +5,9 @@ import type React from "react";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import Modal from "@/layout/Modal";
+import Post from "@/layout/Post";
+import RichInput from "@/layout/RichInput";
 import { showMutationToast } from "@/libs/toast";
 import type { UserCard } from "@/queries/userColumns";
 import { parseHtml } from "@/utils/parse";
@@ -13,10 +16,7 @@ import {
   type systems,
   type UserReportSchema,
   userReportSchema,
-} from "../validators/reports";
-import Modal from "./Modal";
-import Post from "./Post";
-import RichInput from "./RichInput";
+} from "@/validators/reports";
 
 interface ReportUserProps {
   button: React.ReactNode;

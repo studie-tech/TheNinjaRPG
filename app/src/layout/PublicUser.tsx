@@ -97,6 +97,7 @@ import Confirm from "@/layout/Confirm";
 import { ConfirmedCloneControl } from "@/layout/ConfirmedCloneControl";
 import ContentBox from "@/layout/ContentBox";
 import DeleteUserButton from "@/layout/DeleteUserButton";
+import GlowingBorder from "@/layout/GlowingBorder";
 import GraphCombatLog from "@/layout/GraphCombatLog";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -142,7 +143,6 @@ import { useUserData } from "@/utils/UserContext";
 import { type ExperienceAwardSchema, experienceAwardSchema } from "@/validators/misc";
 import { awardSchema } from "@/validators/reputation";
 import type { UserDeltaResponse } from "@/validators/userCache";
-import GlowingBorder from "./GlowingBorder";
 
 // The staff editor includes content and 3D previews; load it only when its modal opens.
 const EditUserComponent = dynamic(

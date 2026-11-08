@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { BATTLE_LOG_DEFAULT_LIMIT, BATTLE_LOG_FULL_LIMIT } from "@/drizzle/constants";
 import ElementImage from "@/layout/ElementImage";
+import Loader from "@/layout/Loader";
 import { EFFECT_TEXT_COLORS } from "@/libs/combat/constants";
 import type { ActionEffect, CombatResult } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
@@ -13,7 +14,6 @@ import { getUserFederalStatus } from "@/utils/paypal";
 import { canViewFullBattleLog } from "@/utils/permissions";
 import { insertComponentsIntoText } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
-import Loader from "./Loader";
 
 interface CombatHistoryProps {
   battleId: string;

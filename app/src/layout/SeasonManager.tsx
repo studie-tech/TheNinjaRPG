@@ -32,12 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import SeasonForm from "@/layout/SeasonForm";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { isWithinDateRange } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
-import SeasonForm from "./SeasonForm";
 
 type RankedSeasonRecord = RouterOutputs["pvpRank"]["getSeasons"][number];
 

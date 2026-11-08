@@ -4,8 +4,8 @@
  */
 import type React from "react";
 import { useState } from "react";
+import Modal from "@/layout/Modal";
 import { cn } from "@/libs/shadui";
-import Modal from "./Modal";
 
 interface ConfirmProps {
   id?: string;

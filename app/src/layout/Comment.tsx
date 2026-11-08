@@ -10,8 +10,11 @@ import { CompactComment } from "@/layout/CompactComment";
 import Confirm from "@/layout/Confirm";
 import { EmojiPicker } from "@/layout/EmojiPicker";
 import { ModerationSummary } from "@/layout/ModerationSummary";
+import Post, { type PostProps } from "@/layout/Post";
+import { QuotingNote } from "@/layout/QuotingNote";
 import { ReactionPill } from "@/layout/ReactionPill";
 import ReportUser from "@/layout/Report";
+import RichInput from "@/layout/RichInput";
 import type { ChatStartUser } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -22,9 +25,6 @@ import { useUserData } from "@/utils/UserContext";
 import type { DeleteCommentSchema, MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
 import type { systems } from "@/validators/reports";
-import Post, { type PostProps } from "./Post";
-import { QuotingNote } from "./QuotingNote";
-import RichInput from "./RichInput";
 
 /**
  * Component for handling comments on user reports

@@ -27,6 +27,7 @@ import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { CombatAggro } from "@/layout/CombatAggro";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
 import { CombatRewards } from "@/layout/CombatRewards";
+import Countdown from "@/layout/Countdown";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import Image from "@/layout/Image";
@@ -76,7 +77,6 @@ import {
   useRequiredUserData,
   userBattleAtom,
 } from "@/utils/UserContext";
-import Countdown from "./Countdown";
 
 /** Autonomous requests stay inside the 60-per-minute limit that fines players. */
 const AUTONOMOUS_ACTION_MS = 1100;

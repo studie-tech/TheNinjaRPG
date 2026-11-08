@@ -20,6 +20,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { EventTimer, Objective, Reward } from "@/layout/Objective";
+import Post from "@/layout/Post";
 import { QuestTeams } from "@/layout/QuestTeams";
 import { PendingRewardChoices, useOpenRewardChoice } from "@/layout/RewardChoice";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
@@ -53,7 +54,6 @@ import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 import { hasAnyRewardValue } from "@/validators/rewards";
-import Post from "./Post";
 
 const tabs = ["Active", "History", "Battles", "Achievements"] as const;
 type tabType = (typeof tabs)[number];
