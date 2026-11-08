@@ -281,6 +281,34 @@ export const VillageWar: React.FC<{
     return false;
   });
   if (!attackerStructure || !defenderStructure) return null;
+  const attackerSide = {
+    village: war.attackerVillage,
+    structure: attackerStructure,
+    warHealth: war.attackerWarHealth,
+    warHealthMax: war.attackerWarHealthMax,
+    shrineHp: war.attackerShrineHp,
+    shrineMaxHp: war.attackerShrineMaxHp,
+    shrineStatus: war.attackerShrineStatus,
+  };
+  const defenderSide = {
+    village: war.defenderVillage,
+    structure: defenderStructure,
+    warHealth: war.defenderWarHealth,
+    warHealthMax: war.defenderWarHealthMax,
+    shrineHp: war.defenderShrineHp,
+    shrineMaxHp: war.defenderShrineMaxHp,
+    shrineStatus: war.defenderShrineStatus,
+  };
+  // The viewer's own side is listed first.
+  const sides = isAttacker
+    ? [attackerSide, defenderSide]
+    : [defenderSide, attackerSide];
+  const outcome =
+    war.status === "DRAW"
+      ? WAR_OUTCOMES.draw
+      : (war.status === "ATTACKER_VICTORY") === isAttacker
+        ? WAR_OUTCOMES.victory
+        : WAR_OUTCOMES.defeat;
   return (
     <div className="rounded-lg border p-4" aria-busy={isSurrendering || isAdminEnding}>
       <div className="mb-4 flex items-center justify-between">
@@ -295,19 +323,8 @@ export const VillageWar: React.FC<{
           {war.status !== "ACTIVE" && war.endedAt && (
             <>
               <p className="text-sm">Ended: {war.endedAt.toLocaleDateString()}</p>
-              <p
-                className={`font-bold ${war.status === "DRAW" ? "text-yellow-500" : war.status === "ATTACKER_VICTORY" ? (isAttacker ? "text-green-500" : "text-red-500") : !isAttacker ? "text-green-500" : "text-red-500"}`}
-              >
-                Outcome:{" "}
-                {war.status === "DRAW"
-                  ? "War ended in a Draw"
-                  : war.status === "ATTACKER_VICTORY"
-                    ? isAttacker
-                      ? "Victory"
-                      : "Defeat"
-                    : !isAttacker
-                      ? "Victory"
-                      : "Defeat"}
+              <p className={`font-bold ${outcome.className}`}>
+                Outcome: {outcome.label}
               </p>
             </>
           )}
@@ -556,24 +573,16 @@ export const VillageWar: React.FC<{
       {/* Structure health */}
       <div className="rounded-lg border border-border p-4">
         <div className="grid grid-cols-2 gap-4">
-          <WarSideTownHall
-            structure={isAttacker ? attackerStructure : defenderStructure}
-            village={isAttacker ? war.attackerVillage : war.defenderVillage}
-            warStatus={war.status}
-            warHealth={isAttacker ? war.attackerWarHealth : war.defenderWarHealth}
-            warHealthMax={
-              isAttacker ? war.attackerWarHealthMax : war.defenderWarHealthMax
-            }
-          />
-          <WarSideTownHall
-            structure={isAttacker ? defenderStructure : attackerStructure}
-            village={isAttacker ? war.defenderVillage : war.attackerVillage}
-            warStatus={war.status}
-            warHealth={isAttacker ? war.defenderWarHealth : war.attackerWarHealth}
-            warHealthMax={
-              isAttacker ? war.defenderWarHealthMax : war.attackerWarHealthMax
-            }
-          />
+          {sides.map((side) => (
+            <WarSideTownHall
+              key={side.village.id}
+              structure={side.structure}
+              village={side.village}
+              warStatus={war.status}
+              warHealth={side.warHealth}
+              warHealthMax={side.warHealthMax}
+            />
+          ))}
         </div>
       </div>
 
@@ -584,26 +593,15 @@ export const VillageWar: React.FC<{
         war.status === "ACTIVE" && (
           <div className="mt-4 rounded-lg border border-border p-4">
             <div className="grid grid-cols-2 gap-4">
-              <WarSideShrine
-                village={isAttacker ? war.attackerVillage : war.defenderVillage}
-                shrineHp={isAttacker ? war.attackerShrineHp : war.defenderShrineHp}
-                shrineMaxHp={
-                  isAttacker ? war.attackerShrineMaxHp : war.defenderShrineMaxHp
-                }
-                shrineStatus={
-                  isAttacker ? war.attackerShrineStatus : war.defenderShrineStatus
-                }
-              />
-              <WarSideShrine
-                village={isAttacker ? war.defenderVillage : war.attackerVillage}
-                shrineHp={isAttacker ? war.defenderShrineHp : war.attackerShrineHp}
-                shrineMaxHp={
-                  isAttacker ? war.defenderShrineMaxHp : war.attackerShrineMaxHp
-                }
-                shrineStatus={
-                  isAttacker ? war.defenderShrineStatus : war.attackerShrineStatus
-                }
-              />
+              {sides.map((side) => (
+                <WarSideShrine
+                  key={side.village.id}
+                  village={side.village}
+                  shrineHp={side.shrineHp}
+                  shrineMaxHp={side.shrineMaxHp}
+                  shrineStatus={side.shrineStatus}
+                />
+              ))}
             </div>
             <div className="mt-3 flex justify-center">
               <Button
@@ -675,14 +673,13 @@ export const VillageWar: React.FC<{
         <div className="mt-4 rounded-lg border border-border p-4">
           <h6 className="mb-3 text-center font-semibold text-sm">Supporting Forces</h6>
           <div className="grid grid-cols-2 gap-4">
-            <WarSideSupportingForces
-              village={isAttacker ? war.attackerVillage : war.defenderVillage}
-              warAllies={war.warAllies}
-            />
-            <WarSideSupportingForces
-              village={isAttacker ? war.defenderVillage : war.attackerVillage}
-              warAllies={war.warAllies}
-            />
+            {sides.map((side) => (
+              <WarSideSupportingForces
+                key={side.village.id}
+                village={side.village}
+                warAllies={war.warAllies}
+              />
+            ))}
           </div>
         </div>
       )}
@@ -905,6 +902,13 @@ const WarSideSupportingForces: React.FC<{
       </div>
     </div>
   );
+};
+
+/** Outcome line text and colour from the viewer's side. */
+const WAR_OUTCOMES = {
+  draw: { label: "War ended in a Draw", className: "text-yellow-500" },
+  victory: { label: "Victory", className: "text-green-500" },
+  defeat: { label: "Defeat", className: "text-red-500" },
 };
 
 type SurrenderParticipationRole =
