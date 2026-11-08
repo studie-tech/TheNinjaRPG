@@ -12,7 +12,6 @@ import {
   useState,
 } from "react";
 import { BUTTON_CLICK_SFX_URLS, CONFETTI_SFX_URL } from "@/drizzle/constants";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { useAudio } from "@/hooks/useAudio";
 import type { GameSettingsUser } from "@/layout/GameSettings";
 import { getAudioPreference, setLocalAudioPreference } from "@/libs/audioPreferences";
@@ -21,6 +20,7 @@ import { audioSession, platform } from "@/libs/native";
 import { getRandomElement } from "@/utils/array";
 import { createSerialQueue } from "@/utils/async";
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 import { combatThemeHeldAtom } from "@/utils/UserContext";
 
 /**
