@@ -3499,6 +3499,7 @@ export const initiateBattle = async (
             pusher.trigger(user.userId, "event", {
               type: "battle",
               battleId,
+              isDefender: !user.isAi && !info.userIds.includes(user.userId),
               ...(user.userId === actionActorId && info.originSocketId
                 ? { originSocketId: info.originSocketId }
                 : {}),

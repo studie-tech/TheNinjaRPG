@@ -592,6 +592,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
           />
           <SettingsToggle
             label="Combat sounds"
+            description="Battle effects and background attack alerts"
             checked={!!sfxOn}
             onCheckedChange={setSfxEnabled}
           />
