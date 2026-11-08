@@ -7,7 +7,7 @@ import { useNativeAuthHandoff } from "@/hooks/useNativeAuthHandoff";
 import { appEvents, appleAuth, isNative, oauthBrowser, platform } from "@/libs/native";
 import { createAuthProof } from "@/libs/native/authProof";
 import { browserAuthContinuation } from "@/libs/native/deepLink";
-import type { NativeAuthProvider } from "@/validators/nativeAuth";
+import { nativeAuthStartSchema } from "@/validators/nativeAuth";
 
 /** Where the provider sends the player back to. Registered in both native projects. */
 const OAUTH_REDIRECT = "tnr://oauth-callback";
@@ -101,7 +101,8 @@ export const useNativeAuth = () => {
       if (!isNative() || !signIn) {
         return { status: "error", message: "Authentication is still loading" };
       }
-      if (!["google", "discord", "facebook"].includes(provider)) {
+      const handoffProvider = nativeAuthStartSchema.shape.provider.safeParse(provider);
+      if (!handoffProvider.success) {
         return { status: "error", message: "This provider is unavailable" };
       }
       if (busy.current) return { status: "cancelled" };
@@ -113,7 +114,7 @@ export const useNativeAuth = () => {
       try {
         const proof = await createAuthProof();
         const { flowId } = await handoff.start({
-          provider: provider as NativeAuthProvider,
+          provider: handoffProvider.data,
           challenge: proof.challenge,
         });
         if (!alive.current) return { status: "cancelled" };
