@@ -3,7 +3,7 @@ import { BasicElementName, type BattleType, type BasicElement } from "@/drizzle/
 import { availableUserActions, insertAction } from "@/libs/combat/actions";
 import { getPreferredDamageElement, resolveElementalDamage } from "@/libs/combat/elementalDamage";
 import { resolvePotencyTags } from "@/libs/combat/potency";
-import { computeDamagePacket, emptyPreBattleGearModifiers } from "@/libs/combat/damagePipeline";
+import { computeDamagePacket } from "@/libs/combat/damagePipeline";
 import { clone, realizeTag } from "@/libs/combat/tags";
 import type { BattleUserJutsu, CombatQueryUser, GroundEffect, UserEffect } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
@@ -129,7 +129,7 @@ describe("elemental damage authoring and combat", () => {
     const packet = (usersEffects: UserEffect[]) => computeDamagePacket({
       rawDamage: 1000, damageEffect, usersEffects, attackerId: caster.userId,
       defenderId: "target", battleRound: 1,
-      preBattleGearModifiers: { caster: emptyPreBattleGearModifiers(), target: emptyPreBattleGearModifiers() },
+      preBattleGearModifiers: {},
     }).damage;
     expect(damageEffect).toMatchObject({ type: "damage", elements: ["Wind"] });
     const boost = makeEffect("increasedamagegiven", { power: 50, elements: ["Wind"], calculation: "percentage" }, { targetId: caster.userId, fromType: "bloodline" });

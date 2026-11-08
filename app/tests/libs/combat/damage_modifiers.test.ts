@@ -25,6 +25,37 @@ import {
   makeEffect,
 } from "./helpers/battleScenario";
 
+/**
+ * Damage of an attacker-to-defender hit through the full packet pipeline. Unset options mean
+ * 100 raw damage from the default damage effect on round 1, with no gear on either side.
+ */
+const packetDamage = (
+  usersEffects: UserEffect[],
+  {
+    rawDamage = 100,
+    damageEffect = makeDamageEffect(),
+    battleRound = 1,
+    gear = {},
+    modifierLists,
+  }: {
+    rawDamage?: number;
+    damageEffect?: UserEffect;
+    battleRound?: number;
+    gear?: Parameters<typeof computeDamagePacket>[0]["preBattleGearModifiers"];
+    modifierLists?: Parameters<typeof computeDamagePacket>[0]["modifierLists"];
+  } = {},
+) =>
+  computeDamagePacket({
+    rawDamage,
+    damageEffect,
+    usersEffects,
+    attackerId: "attacker",
+    defenderId: "defender",
+    battleRound,
+    preBattleGearModifiers: gear,
+    modifierLists,
+  }).damage;
+
 describe("isConsolidatedStage1PercentageModifier", () => {
   it("consolidates equipped gear percentage damage mods only", () => {
     const armorInc = makeModifierEffect({
@@ -174,32 +205,9 @@ describe("buildDamageModifierEligibilityById", () => {
       3,
       usersStateById,
     );
-    const emptyGear = { attacker: gearMods(), defender: gearMods() };
 
-    const baseline = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 3,
-      preBattleGearModifiers: emptyGear,
-    }).damage;
-    const withExpired = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [expiredDr],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 3,
-      preBattleGearModifiers: emptyGear,
-      modifierLists: buildDamagePacketModifierLists(
-        [expiredDr],
-        "attacker",
-        "defender",
-        eligibility,
-      ),
-    }).damage;
+    const baseline = packetDamage([], { battleRound: 3 });
+    const withExpired = packetDamage([expiredDr], { battleRound: 3, modifierLists: buildDamagePacketModifierLists([expiredDr], "attacker", "defender", eligibility) });
 
     expect(eligibility.has("expired-dr")).toBe(false);
     expect(withExpired).toBeCloseTo(baseline, 2);
@@ -224,13 +232,6 @@ describe("buildDamageModifierEligibilityById", () => {
         id: "buff-prevent",
         creatorId: "defender",
         targetId: "attacker",
-        level: 0,
-        isNew: false,
-        castThisRound: false,
-        createdRound: 0,
-        longitude: 0,
-        latitude: 0,
-        barrierAbsorb: 0,
         actionId: "prevent-action",
       },
     );
@@ -254,7 +255,6 @@ describe("buildDamageModifierEligibilityById", () => {
     );
     expect(lists.inBattleIncreases).toHaveLength(0);
 
-    const emptyGear = { attacker: gearMods(), defender: gearMods() };
     const activeInc = makeModifierEffect({
       id: "active-inc",
       type: "increasedamagegiven",
@@ -264,32 +264,9 @@ describe("buildDamageModifierEligibilityById", () => {
     });
     activeInc.createdRound = 0;
 
-    const withInc = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [activeInc],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: emptyGear,
-      modifierLists: buildDamagePacketModifierLists(
-        [activeInc],
-        "attacker",
-        "defender",
-        buildDamageModifierEligibilityById([activeInc], 1, usersStateById),
-      ),
-    }).damage;
+    const withInc = packetDamage([activeInc], { modifierLists: buildDamagePacketModifierLists([activeInc], "attacker", "defender", buildDamageModifierEligibilityById([activeInc], 1, usersStateById)) });
 
-    const prevented = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [inc, prevent],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: emptyGear,
-      modifierLists: lists,
-    }).damage;
+    const prevented = packetDamage([inc, prevent], { modifierLists: lists });
 
     const afterOoc =
       100 *
@@ -302,18 +279,7 @@ describe("buildDamageModifierEligibilityById", () => {
 
 describe("computeDamagePacket", () => {
   it("applies base 60% inc and 50% DR only", () => {
-    const { damage } = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([], { rawDamage: 505 });
 
     const expected =
       505 *
@@ -332,31 +298,9 @@ describe("computeDamagePacket", () => {
       power: 10,
     });
 
-    const gearOnly = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods({ drTakenFromGear: 30 }),
-      },
-    }).damage;
+    const gearOnly = packetDamage([], { gear: { attacker: gearMods(), defender: gearMods({ drTakenFromGear: 30 }) } });
 
-    const withSkillDr = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [skillDr],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods({ drTakenFromGear: 30 }),
-      },
-    }).damage;
+    const withSkillDr = packetDamage([skillDr], { gear: { attacker: gearMods(), defender: gearMods({ drTakenFromGear: 30 }) } });
 
     expect(gearOnly).toBeCloseTo(32, 2);
     expect(withSkillDr).toBeCloseTo(gearOnly * 0.9, 2);
@@ -371,18 +315,7 @@ describe("computeDamagePacket", () => {
       power: 10,
     });
 
-    const { damage } = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [skillInc],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods({ incDamageGivenFromGear: 10 }),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([skillInc], { gear: { attacker: gearMods({ incDamageGivenFromGear: 10 }), defender: gearMods() } });
 
     const expected =
       100 *
@@ -401,18 +334,7 @@ describe("computeDamagePacket", () => {
       power: 50,
     });
 
-    const { damage } = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [blBoost],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods({ drTakenFromKeystone: 150 }),
-      },
-    });
+    const damage = packetDamage([blBoost], { gear: { attacker: gearMods(), defender: gearMods({ drTakenFromKeystone: 150 }) } });
 
     const boosted = 100 * (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100);
     const floor =
@@ -423,18 +345,7 @@ describe("computeDamagePacket", () => {
   });
 
   it("applies keystone inc after % mitigation and before bloodline", () => {
-    const { damage } = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods({ incDamageGivenFromKeystone: 10 }),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([], { gear: { attacker: gearMods({ incDamageGivenFromKeystone: 10 }), defender: gearMods() } });
 
     const afterEarlyPools =
       100 *
@@ -451,32 +362,13 @@ describe("computeDamagePacket", () => {
   });
 
   it("applies gear inc and DR points additively into base pools", () => {
-    const { damage } = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: defaultTestGearModifiers(),
-    });
+    const damage = packetDamage([], { rawDamage: 505, gear: defaultTestGearModifiers() });
 
     expect(damage).toBeCloseTo(406.55, 2);
   });
 
   it("applies defender stage-1 increasedamagetaken in pre-battle inc pool", () => {
-    const { damage } = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods({ incDamageTakenFromGear: 10 }),
-      },
-    });
+    const damage = packetDamage([], { rawDamage: 505, gear: { attacker: gearMods(), defender: gearMods({ incDamageTakenFromGear: 10 }) } });
 
     const expected =
       505 *
@@ -487,31 +379,9 @@ describe("computeDamagePacket", () => {
   });
 
   it("does not apply attacker increasedamagetaken to outgoing damage", () => {
-    const baseline = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    }).damage;
+    const baseline = packetDamage([], { rawDamage: 505 });
 
-    const { damage } = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods({ incDamageTakenFromGear: 20 }),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([], { rawDamage: 505, gear: { attacker: gearMods({ incDamageTakenFromGear: 20 }), defender: gearMods() } });
 
     expect(damage).toBeCloseTo(baseline, 2);
   });
@@ -532,31 +402,9 @@ describe("computeDamagePacket", () => {
       power: 20,
     });
 
-    const withoutBlDr = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [jutsuDr],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    }).damage;
+    const withoutBlDr = packetDamage([jutsuDr]);
 
-    const { damage } = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [jutsuDr, blDr],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([jutsuDr, blDr]);
 
     expect(damage).toBeCloseTo(withoutBlDr * 0.8, 2);
   });
@@ -576,36 +424,13 @@ describe("computeDamagePacket", () => {
         id: "seal-1",
         creatorId: "defender",
         targetId: "attacker",
-        level: 0,
-        isNew: false,
-        castThisRound: false,
-        createdRound: 0,
-        longitude: 0,
-        latitude: 0,
-        barrierAbsorb: 0,
         actionId: "seal-action",
       },
     );
 
-    const baseline = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: defaultTestGearModifiers(),
-    }).damage;
+    const baseline = packetDamage([], { rawDamage: 505, gear: defaultTestGearModifiers() });
 
-    const { damage } = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [blBoost, seal],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: defaultTestGearModifiers(),
-    });
+    const damage = packetDamage([blBoost, seal], { rawDamage: 505, gear: defaultTestGearModifiers() });
 
     expect(damage).toBeCloseTo(baseline, 2);
   });
@@ -619,15 +444,7 @@ describe("computeDamagePacket", () => {
       power: 40,
     });
 
-    const { damage } = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [blBoost],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: defaultTestGearModifiers(),
-    });
+    const damage = packetDamage([blBoost], { rawDamage: 505, gear: defaultTestGearModifiers() });
 
     expect(damage).toBeCloseTo(569.17, 2);
   });
@@ -641,18 +458,7 @@ describe("computeDamagePacket", () => {
       power: 100,
     });
 
-    const { damage } = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [extremeDr],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([extremeDr]);
 
     const boosted = 100 * (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100);
     const afterOocDr = boosted * (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100);
@@ -777,35 +583,9 @@ describe("computeDamagePacket", () => {
       tag: { statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"] },
     });
 
-    const beforeBreakpointDamage = computeDamagePacket({
-      rawDamage,
-      damageEffect,
-      usersEffects: [...incEffects, ...drEffectsBeforeBreakpoint],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 2,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    }).damage;
+    const beforeBreakpointDamage = packetDamage([...incEffects, ...drEffectsBeforeBreakpoint], { rawDamage, damageEffect, battleRound: 2 });
 
-    const { damage: afterBreakpointDamage } = computeDamagePacket({
-      rawDamage,
-      damageEffect,
-      usersEffects: [
-        ...incEffects,
-        ...drEffectsBeforeBreakpoint,
-        smokeDamageGivenDr,
-      ],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 2,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    });
+    const afterBreakpointDamage = packetDamage([...incEffects, ...drEffectsBeforeBreakpoint, smokeDamageGivenDr], { rawDamage, damageEffect, battleRound: 2 });
 
     // The Wind-only Gust Armor bonus does not affect this Fire packet.
     const boostedDamage = [30, 35, 35, 15].reduce(
@@ -855,18 +635,7 @@ describe("computeDamagePacket", () => {
       }),
     );
 
-    const { damage } = computeDamagePacket({
-      rawDamage,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [...incEffects, ...drEffects],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 2,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([...incEffects, ...drEffects], { rawDamage, battleRound: 2 });
 
     const boostedDamage = incPowers.reduce(
       (total, power) => total * (1 + power / 100),
@@ -915,18 +684,7 @@ describe("computeDamagePacket", () => {
       }),
     );
 
-    const { damage } = computeDamagePacket({
-      rawDamage,
-      damageEffect: makeDamageEffect({ power: 50 }),
-      usersEffects: [...incEffects, ...drEffects],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 3,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([...incEffects, ...drEffects], { rawDamage, damageEffect: makeDamageEffect({ power: 50 }), battleRound: 3 });
 
     const boostedDamage = incPowers.reduce(
       (total, power) => total * (1 + power / 100),
@@ -984,18 +742,7 @@ describe("computeDamagePacket", () => {
       power: smokeDamageGivenDrPower,
     });
 
-    const { damage } = computeDamagePacket({
-      rawDamage,
-      damageEffect: makeDamageEffect({ power: 50 }),
-      usersEffects: [...incEffects, ...defenderDrEffects, smokeDamageGivenDr],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 4,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([...incEffects, ...defenderDrEffects, smokeDamageGivenDr], { rawDamage, damageEffect: makeDamageEffect({ power: 50 }), battleRound: 4 });
 
     const boostedDamage = incPowers.reduce(
       (total, power) => total * (1 + power / 100),
@@ -1130,31 +877,9 @@ describe("computeDamagePacket", () => {
       power: 50,
     });
 
-    const baseline = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    }).damage;
+    const baseline = packetDamage([]);
 
-    const { damage } = computeDamagePacket({
-      rawDamage: 100,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [staticInc, staticDr],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([staticInc, staticDr]);
 
     expect(damage).toBeCloseTo(baseline + 25 - 50, 2);
   });
@@ -1169,31 +894,9 @@ describe("computeDamagePacket", () => {
       power: 50,
     });
 
-    const baseline = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    }).damage;
+    const baseline = packetDamage([], { rawDamage: 505 });
 
-    const { damage } = computeDamagePacket({
-      rawDamage: 505,
-      damageEffect: makeDamageEffect(),
-      usersEffects: [staticDr],
-      attackerId: "attacker",
-      defenderId: "defender",
-      battleRound: 1,
-      preBattleGearModifiers: {
-        attacker: gearMods(),
-        defender: gearMods(),
-      },
-    });
+    const damage = packetDamage([staticDr], { rawDamage: 505 });
 
     expect(damage).toBeCloseTo(baseline - 50, 2);
   });
@@ -1208,18 +911,7 @@ describe("computeDamagePacket", () => {
       power: 50,
     });
     const packet = (damageEffect: ReturnType<typeof makeDamageEffect>, withDr: boolean) =>
-      computeDamagePacket({
-        rawDamage: 505,
-        damageEffect,
-        usersEffects: withDr ? [staticBloodlineDr] : [],
-        attackerId: "attacker",
-        defenderId: "defender",
-        battleRound: 1,
-        preBattleGearModifiers: {
-          attacker: gearMods(),
-          defender: gearMods(),
-        },
-      }).damage;
+      packetDamage(withDr ? [staticBloodlineDr] : [], { rawDamage: 505, damageEffect });
 
     const allowed = makeDamageEffect({ allowBloodlineDamageDecrease: true });
     const blocked = makeDamageEffect({ allowBloodlineDamageDecrease: false });
@@ -1240,15 +932,7 @@ describe("computeDamagePacket", () => {
       power: 50,
     });
     const packet = (usersEffects: UserEffect[]) =>
-      computeDamagePacket({
-        rawDamage: 505,
-        damageEffect: makeDamageEffect({ allowBloodlineDamageIncrease: false }),
-        usersEffects,
-        attackerId: "attacker",
-        defenderId: "defender",
-        battleRound: 1,
-        preBattleGearModifiers: { attacker: gearMods(), defender: gearMods() },
-      }).damage;
+      packetDamage(usersEffects, { rawDamage: 505, damageEffect: makeDamageEffect({ allowBloodlineDamageIncrease: false }) });
     expect(packet([staticIncrease])).toBeCloseTo(packet([]) + gain, 2);
   });
 });
@@ -1279,15 +963,7 @@ describe("element-scoped damage modifiers", () => {
       const { filteredEffects, preBattleGearModifiers } =
         consolidatePreBattleDamageModifiers([effect], ["attacker", "defender"]);
       const damage = (elements: ("Fire" | "Water")[], effects = filteredEffects) =>
-        computeDamagePacket({
-          rawDamage: 100,
-          damageEffect: makeDamageEffect({ elements }),
-          usersEffects: effects,
-          attackerId: "attacker",
-          defenderId: "defender",
-          battleRound: 2,
-          preBattleGearModifiers,
-        }).damage;
+        packetDamage(effects, { damageEffect: makeDamageEffect({ elements }), battleRound: 2, gear: preBattleGearModifiers });
       expect(filteredEffects).toContain(effect);
       const factor =
         fromType === "armor" || fromType === "accessory"
@@ -1315,15 +991,7 @@ describe("element-scoped damage modifiers", () => {
       tag: { elements: ["Fire"] },
     });
     const damage = (element: "Fire" | "Water", effects = [effect]) =>
-      computeDamagePacket({
-        rawDamage: 100,
-        damageEffect: makeDamageEffect({ elements: [element] }),
-        usersEffects: effects,
-        attackerId: "attacker",
-        defenderId: "defender",
-        battleRound: 2,
-        preBattleGearModifiers: {},
-      }).damage;
+      packetDamage(effects, { damageEffect: makeDamageEffect({ elements: [element] }), battleRound: 2 });
     expect(damage("Water")).toBeCloseTo(damage("Water", []));
     expect(damage("Fire")).toBeCloseTo(
       damage("Fire", []) * (type.startsWith("increase") ? 1.2 : 0.8),

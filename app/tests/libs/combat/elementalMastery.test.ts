@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { ELEMENTAL_MASTERY_BOOST, ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
-import { computeDamagePacket, emptyPreBattleGearModifiers } from "@/libs/combat/damagePipeline";
+import { computeDamagePacket } from "@/libs/combat/damagePipeline";
 import { applyEffects } from "@/libs/combat/process";
 import { clear, copy } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
@@ -25,7 +25,7 @@ const packet = (effects: UserEffect[], element: "Wind" | "Fire" | "None", battle
   rawDamage: 1000,
   damageEffect: { ...DamageTag.parse({ elements: [element] }), id: "damage", creatorId: "caster", targetId: "target", level: 50, isNew: false, castThisRound: false, createdRound: 1, longitude: 0, latitude: 0, barrierAbsorb: 0 } as UserEffect,
   usersEffects: effects, attackerId: "caster", defenderId: "target", battleRound,
-  preBattleGearModifiers: { caster: emptyPreBattleGearModifiers(), target: emptyPreBattleGearModifiers() },
+  preBattleGearModifiers: {},
 }).damage;
 
 describe("elemental mastery battle integration", () => {
