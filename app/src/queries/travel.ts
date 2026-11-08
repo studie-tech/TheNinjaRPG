@@ -108,7 +108,7 @@ export const fetchSectorWindowData = (
     }),
     fetchSector(client, sector),
     client.query.overworldAiPlacement.findMany({
-      // Copies of a multi-spawn placement can land anywhere, so those are always read.
+      // Copies of multi-spawn and biome placements can land anywhere, so those are always read.
       where: and(
         or(
           inArray(
@@ -116,6 +116,7 @@ export const fetchSectorWindowData = (
             buildSectorWindowLayout(sector).map((entry) => entry.sector),
           ),
           gt(overworldAiPlacement.spawnCount, 1),
+          eq(overworldAiPlacement.sectorType, "biome"),
         ),
         eq(overworldAiPlacement.isActive, true),
       ),

@@ -10605,7 +10605,7 @@
         },
         "sectorType": {
           "name": "sectorType",
-          "type": "enum('specific','random','from_list')",
+          "type": "enum('specific','random','from_list','biome')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,

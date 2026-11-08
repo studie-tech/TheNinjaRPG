@@ -15,6 +15,7 @@ import { overworldAiPlacement, type UserQuest } from "@/drizzle/schema";
 import {
   findActionableBoundObjective,
   hasFriendlyBindingToPlacement,
+  isMultiCopyPlacement,
   isOverworldCopyInReach,
   pickWeightedQuest,
   resolveOverworldPosition,
@@ -219,7 +220,7 @@ export const overworldAiRouter = createTRPCRouter({
         cfg.sectorType !== "specific" ||
         cfg.locationType !== "specific" ||
         cfg.wanderRadius > 0 ||
-        cfg.spawnCount > 1;
+        isMultiCopyPlacement(cfg);
       const changingAi =
         !!existingPlacement &&
         existingPlacement.aiTemplateUserId !== cfg.aiTemplateUserId;
@@ -470,11 +471,12 @@ export const overworldAiRouter = createTRPCRouter({
       }
       const onStoredTile =
         input.copy === 0 &&
+        storedPlacement.sectorType !== "biome" &&
         activeUser.sector === storedPlacement.sector &&
         activeUser.longitude === storedPlacement.longitude &&
         activeUser.latitude === storedPlacement.latitude;
       const stationary =
-        storedPlacement.wanderRadius < 1 && storedPlacement.spawnCount <= 1;
+        storedPlacement.wanderRadius < 1 && !isMultiCopyPlacement(storedPlacement);
       // Without the sector map, only the stored first copy can be located (as on the map).
       const inReach = stationary
         ? onStoredTile

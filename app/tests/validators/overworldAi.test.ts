@@ -37,6 +37,22 @@ describe("OverworldPlacementSchema", () => {
     ).toBe(true);
   });
 
+  it("accepts a biome placement with a few groups in every sector of its biomes", () => {
+    const biome = { ...base, interactionType: "AMBIENT", sectorType: "biome", locationType: "random", habitats: ["snow"], spawnCount: 2 };
+    expect(OverworldPlacementSchema.safeParse(biome).success).toBe(true);
+  });
+
+  it.each([
+    [{ habitats: [] }, "habitats"],
+    [{ locationType: "specific" }, "locationType"],
+    [{ spawnCount: 5 }, "spawnCount"],
+  ])("rejects a biome placement with %p", (patch, path) => {
+    const biome = { ...base, interactionType: "AMBIENT", sectorType: "biome", locationType: "random", habitats: ["grassland"], ...patch };
+    const result = OverworldPlacementSchema.safeParse(biome);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.path[0] === path)).toBe(true);
+  });
+
   it.each([
     [{ groupMin: 4, groupMax: 2 }, "groupMin"],
     [{ spawnCount: 3 }, "spawnCount"],

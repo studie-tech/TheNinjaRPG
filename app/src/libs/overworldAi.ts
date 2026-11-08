@@ -8,6 +8,7 @@ import {
   MAP_TOTAL_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  OVERWORLD_MAX_GROUPS_PER_SECTOR,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
 } from "@/drizzle/constants";
@@ -79,7 +80,8 @@ export const resolveOverworldPosition = (
   pool: OverworldSectorPool = [],
 ): { sector: number; longitude: number; latitude: number } => {
   let sector = cfg.sector;
-  if (cfg.sectorType === "random") {
+  // A biome placement stores one sample spot from its pool; its groups come from each sector.
+  if (cfg.sectorType === "random" || cfg.sectorType === "biome") {
     sector = pool.length
       ? (pool[randInt(pool.length, rng)] as number)
       : pickPlaceableSector(rng);
@@ -196,8 +198,10 @@ export const placementCopiesInSector = (
   sector: number,
   map: NormalizedSectorMap,
   pool: OverworldSectorPool = [],
-): OverworldCopy[] =>
-  placementCopyPositions(placement, pool).flatMap((position, copy) => {
+): OverworldCopy[] => {
+  if (placement.sectorType === "biome")
+    return biomeCopiesInSector(placement, sector, map, pool);
+  return placementCopyPositions(placement, pool).flatMap((position, copy) => {
     if (position.sector !== sector) return [];
     // Wildlife copies always land in the wild, including a seeded first copy.
     const anchor =
@@ -220,6 +224,59 @@ export const placementCopiesInSector = (
       },
     ];
   });
+};
+
+/**
+ * A biome placement's groups in one sector, rolled from the sector itself so every sector of
+ * the habitat is populated and no request enumerates the world. Copy numbers stay unique per
+ * placement: `sector * OVERWORLD_MAX_GROUPS_PER_SECTOR + slot`.
+ */
+const biomeCopiesInSector = (
+  placement: OverworldCopySource,
+  sector: number,
+  map: NormalizedSectorMap,
+  pool: OverworldSectorPool,
+): OverworldCopy[] => {
+  const inBiome = pool.length ? poolSet(pool).has(sector) : isPlaceableSector(sector);
+  if (!inBiome) return [];
+  const slots = Math.min(placement.spawnCount, OVERWORLD_MAX_GROUPS_PER_SECTOR);
+  return Array.from({ length: slots }).flatMap((_, slot) => {
+    const copy = sector * OVERWORLD_MAX_GROUPS_PER_SECTOR + slot;
+    const seed = wanderSeed(placement.id, placement.positionVersion, copy);
+    const rng = alea(seed);
+    const anchor = snapToWanderTile(
+      map,
+      { x: randInt(SECTOR_WIDTH, rng), y: randInt(SECTOR_HEIGHT, rng) },
+      placement.wildOnly,
+    );
+    if (!anchor) return [];
+    return [
+      {
+        copy,
+        sector,
+        anchor,
+        seed,
+        groupSize: wanderGroupSize(seed, placement.groupMin, placement.groupMax),
+      },
+    ];
+  });
+};
+
+/** Whether a placement shows more than its stored copy. */
+export const isMultiCopyPlacement = (placement: {
+  sectorType: OverworldSectorType;
+  spawnCount: number;
+}) => placement.sectorType === "biome" || placement.spawnCount > 1;
+
+const poolSets = new WeakMap<OverworldSectorPool, Set<number>>();
+const poolSet = (pool: OverworldSectorPool) => {
+  let set = poolSets.get(pool);
+  if (!set) {
+    set = new Set(pool);
+    poolSets.set(pool, set);
+  }
+  return set;
+};
 
 /**
  * Whether a player on `player` can reach a copy at `timeMs`. A still NPC must share the player's

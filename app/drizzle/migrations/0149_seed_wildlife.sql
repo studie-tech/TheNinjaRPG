@@ -46,11 +46,11 @@ INSERT INTO `AiSpriteAnimation` (`userId`, `actionKey`, `animationId`) VALUES
 ON DUPLICATE KEY UPDATE `animationId` = `AiSpriteAnimation`.`animationId`;
 
 INSERT INTO `OverworldAiPlacement` (`id`, `aiTemplateUserId`, `interactionType`, `isActive`, `sectorType`, `locationType`, `sectorList`, `sector`, `longitude`, `latitude`, `positionVersion`, `wanderRadius`, `spawnCount`, `groupMin`, `groupMax`, `habitats`, `wildOnly`, `mapScale`) VALUES
-  ('wildlife-deer-placement', 'wildlife-deer', 'AMBIENT', 1, 'random', 'random', '[]', 319, 13, 13, 0, 5, 240, 3, 5, '["grassland"]', 1, 75),
-  ('wildlife-boar-placement', 'wildlife-boar', 'AMBIENT', 1, 'random', 'random', '[]', 332, 13, 13, 0, 5, 160, 2, 3, '["grassland"]', 1, 60),
-  ('wildlife-rabbit-placement', 'wildlife-rabbit', 'AMBIENT', 1, 'random', 'random', '[]', 333, 13, 13, 0, 5, 220, 1, 2, '["grassland"]', 1, 38),
-  ('wildlife-fox-placement', 'wildlife-fox', 'AMBIENT', 1, 'random', 'random', '[]', 334, 13, 13, 0, 5, 150, 1, 1, '["grassland"]', 1, 55),
-  ('wildlife-camel-placement', 'wildlife-camel', 'AMBIENT', 1, 'random', 'random', '[]', 813, 13, 13, 0, 5, 180, 2, 4, '["desert"]', 1, 85),
-  ('wildlife-icebear-placement', 'wildlife-icebear', 'AMBIENT', 1, 'random', 'random', '[]', 193, 13, 13, 0, 5, 120, 1, 1, '["snow"]', 1, 85),
-  ('wildlife-reindeer-placement', 'wildlife-reindeer', 'AMBIENT', 1, 'random', 'random', '[]', 194, 13, 13, 0, 5, 160, 3, 5, '["snow"]', 1, 78)
+  ('wildlife-deer-placement', 'wildlife-deer', 'AMBIENT', 1, 'biome', 'random', '[]', 319, 13, 13, 0, 5, 1, 3, 5, '["grassland"]', 1, 75),
+  ('wildlife-boar-placement', 'wildlife-boar', 'AMBIENT', 1, 'biome', 'random', '[]', 332, 13, 13, 0, 5, 1, 2, 3, '["grassland"]', 1, 60),
+  ('wildlife-rabbit-placement', 'wildlife-rabbit', 'AMBIENT', 1, 'biome', 'random', '[]', 333, 13, 13, 0, 5, 1, 1, 2, '["grassland"]', 1, 38),
+  ('wildlife-fox-placement', 'wildlife-fox', 'AMBIENT', 1, 'biome', 'random', '[]', 334, 13, 13, 0, 5, 1, 1, 1, '["grassland"]', 1, 55),
+  ('wildlife-camel-placement', 'wildlife-camel', 'AMBIENT', 1, 'biome', 'random', '[]', 813, 13, 13, 0, 5, 2, 2, 4, '["desert"]', 1, 85),
+  ('wildlife-icebear-placement', 'wildlife-icebear', 'AMBIENT', 1, 'biome', 'random', '[]', 193, 13, 13, 0, 5, 1, 1, 1, '["snow"]', 1, 85),
+  ('wildlife-reindeer-placement', 'wildlife-reindeer', 'AMBIENT', 1, 'biome', 'random', '[]', 194, 13, 13, 0, 5, 1, 3, 5, '["snow"]', 1, 78)
 ON DUPLICATE KEY UPDATE `id` = `OverworldAiPlacement`.`id`;

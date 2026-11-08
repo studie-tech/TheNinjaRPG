@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { OVERWORLD_MAX_GROUPS_PER_SECTOR } from "@/drizzle/constants";
 import { oddQHexDistance, oddQLineStep } from "@/libs/hexgrid";
 import {
   isOverworldCopyInReach,
@@ -8,6 +9,7 @@ import {
   placementToSectorUser,
 } from "@/libs/overworldAi";
 import {
+  isWanderTile,
   snapToWanderTile,
   WANDER_STEP_MS,
   wanderGroupSize,
@@ -164,6 +166,43 @@ describe("placement copies", () => {
     // A hand-placed, non-wild copy 0 keeps its doorstep tile exactly.
     const keeper = placementCopiesInSector(placement({ wildOnly: false, longitude: 1, latitude: 2, spawnCount: 1 }), 301, map());
     expect(keeper.map((copy) => copy.anchor)).toEqual([{ x: 1, y: 2 }]);
+  });
+});
+
+describe("biome placements", () => {
+  const biome = (patch: Record<string, unknown> = {}) => placement({ sectorType: "biome", spawnCount: 2, ...patch });
+  const pool = [301, 302, 303];
+
+  it("puts its groups in every sector of the pool and nowhere else", () => {
+    for (const sector of pool) {
+      const copies = placementCopiesInSector(biome(), sector, map(), pool);
+      expect(copies.map((copy) => copy.copy)).toEqual([sector * OVERWORLD_MAX_GROUPS_PER_SECTOR, sector * OVERWORLD_MAX_GROUPS_PER_SECTOR + 1]);
+      for (const copy of copies) {
+        expect(copy.sector).toBe(sector);
+        expect(isWanderTile(map().tiles[copy.anchor.y * 20 + copy.anchor.x], true)).toBe(true);
+      }
+    }
+    expect(placementCopiesInSector(biome(), 304, map(), pool)).toEqual([]);
+  });
+
+  it("keeps a sector's groups stable for the day and reshuffles them with the daily version", () => {
+    const today = placementCopiesInSector(biome(), 302, map(), pool);
+    expect(placementCopiesInSector(biome(), 302, map(), [...pool])).toEqual(today);
+    expect(placementCopiesInSector(biome({ positionVersion: 5 }), 302, map(), pool)).not.toEqual(today);
+    // The stored sample spot never adds a copy of its own.
+    expect(placementCopiesInSector(biome({ sector: 302 }), 302, map(), pool)).toEqual(today);
+  });
+
+  it("lets a player reach a group in the sector they stand in", () => {
+    const roaming = biome({ spawnCount: 1, groupMin: 1, groupMax: 1 });
+    const [copy] = placementCopiesInSector(roaming, 303, map(), pool);
+    const template = { userId: "ai", username: "Deer", avatar: null, avatarLight: null, curHealth: 1, maxHealth: 1, level: 1, rank: "STUDENT" as const };
+    const npc = placementToSectorUser(roaming, template, copy);
+    expect(npc).toMatchObject({ sector: 303, npcCopy: copy!.copy });
+    const [live] = liveNpcTiles([npc], map(), 50_000, new Map());
+    const player = { sector: 303, longitude: live!.longitude, latitude: live!.latitude };
+    expect(isOverworldCopyInReach({ placement: roaming, copy: copy!.copy, map: map(), pool, player, timeMs: 50_000 })).toBe(true);
+    expect(isOverworldCopyInReach({ placement: roaming, copy: copy!.copy, map: map(), pool, player: { ...player, sector: 301 }, timeMs: 50_000 })).toBe(false);
   });
 });
 

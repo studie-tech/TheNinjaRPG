@@ -397,12 +397,15 @@ export const overworldAiPlacement = mysqlTable(
     wanderRadius: tinyint("wanderRadius", { unsigned: true })
       .default(consts.OVERWORLD_DEFAULT_WANDER_RADIUS)
       .notNull(),
-    /** Copies across the map; copies beyond the first derive their tile from the placement. */
+    /**
+     * Copies across the map; copies beyond the first derive their tile from the placement.
+     * A biome placement puts this many groups in each of its sectors instead.
+     */
     spawnCount: smallint("spawnCount", { unsigned: true }).default(1).notNull(),
     /** Each copy appears as a group of this many members, a herd when more than one. */
     groupMin: tinyint("groupMin", { unsigned: true }).default(1).notNull(),
     groupMax: tinyint("groupMax", { unsigned: true }).default(1).notNull(),
-    /** Globe regions random sectors are drawn from; empty allows every land region. */
+    /** Globe regions random and biome sectors are drawn from; empty allows every land region. */
     habitats: json("habitats")
       .$type<consts.OverworldHabitat[]>()
       .default(sql`(JSON_ARRAY())`)

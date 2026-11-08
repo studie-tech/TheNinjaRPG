@@ -482,9 +482,12 @@ export const travelRouter = createTRPCRouter({
           ...p.aiTemplate,
           sheets: snapshotSpriteAnimations(p.aiTemplate.spriteAnimationBindings),
         };
-        // Without the map, only a placement's stored first copy can be placed safely.
+        // Without the map, only a placement's stored first copy can be placed safely; a biome
+        // placement's stored spot is only a sample, so it shows nothing.
         if (!sectorMap)
-          return p.sector === user.sector ? [placementToSectorUser(p, template)] : [];
+          return p.sectorType !== "biome" && p.sector === user.sector
+            ? [placementToSectorUser(p, template)]
+            : [];
         return placementCopiesInSector(
           p,
           user.sector,

@@ -1,3 +1,4 @@
+ALTER TABLE `OverworldAiPlacement` MODIFY COLUMN `sectorType` enum('specific','random','from_list','biome') NOT NULL DEFAULT 'specific';
 ALTER TABLE `OverworldAiPlacement` MODIFY COLUMN `interactionType` enum('FRIENDLY','HOSTILE','AMBIENT') NOT NULL;
 ALTER TABLE `OverworldAiPlacement` ADD `wanderRadius` tinyint unsigned DEFAULT 5 NOT NULL;
 ALTER TABLE `OverworldAiPlacement` ADD `spawnCount` smallint unsigned DEFAULT 1 NOT NULL;

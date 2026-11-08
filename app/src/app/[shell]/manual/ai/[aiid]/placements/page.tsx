@@ -34,6 +34,7 @@ import {
   OVERWORLD_DEFAULT_WANDER_RADIUS,
   OVERWORLD_MAP_SCALE_RANGE,
   OVERWORLD_MAX_GROUP_SIZE,
+  OVERWORLD_MAX_GROUPS_PER_SECTOR,
   OVERWORLD_MAX_SPAWN_COUNT,
   OVERWORLD_MAX_WANDER_RADIUS,
   type OverworldHabitat,
@@ -229,11 +230,20 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     );
   };
 
-  /** Habitats only narrow random sectors, so leaving that mode clears them. */
+  /**
+   * Habitats only apply to random and biome sectors, so other modes clear them. A biome
+   * placement rolls its own tile in every sector and caps its groups per sector.
+   */
   const setSectorType = (value: OverworldPlacementInput["sectorType"]) => {
     form.setValue("sectorType", value);
-    if (value !== "random") form.setValue("habitats", []);
+    if (value !== "random" && value !== "biome") form.setValue("habitats", []);
+    if (value === "biome") {
+      form.setValue("locationType", "random");
+      if (Number(watched.spawnCount ?? 1) > OVERWORLD_MAX_GROUPS_PER_SECTOR)
+        form.setValue("spawnCount", 1);
+    }
   };
+  const isBiome = sectorType === "biome";
 
   const toggleHabitat = (habitat: OverworldHabitat) =>
     form.setValue(
@@ -360,9 +370,9 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                   )}
                 </FormItem>
               )}
-              {sectorType === "random" && (
+              {(sectorType === "random" || isBiome) && (
                 <FormItem>
-                  <FormLabel>Habitats</FormLabel>
+                  <FormLabel>{isBiome ? "Biomes" : "Habitats"}</FormLabel>
                   <div className="flex flex-wrap gap-2">
                     {OverworldHabitats.map((habitat) => {
                       const selected = habitats.includes(habitat);
@@ -390,9 +400,13 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                     })}
                   </div>
                   <FormDescription>
-                    {habitats.length === 0
-                      ? "Any land sector. Pick habitats to keep this AI in its climate."
-                      : `Only ${habitats.map((h) => HABITAT_LABELS[h].toLowerCase()).join(" and ")} sectors.`}
+                    {isBiome
+                      ? habitats.length === 0
+                        ? "Pick the biomes whose every sector this AI populates."
+                        : `Every ${habitatNames(habitats)} sector${habitatSectors ? `, ${sectorCount(habitats, habitatSectors).toLocaleString()} in all` : ""}.`
+                      : habitats.length === 0
+                        ? "Any land sector. Pick habitats to keep this AI in its climate."
+                        : `Only ${habitatNames(habitats)} sectors.`}
                   </FormDescription>
                   {errors.habitats?.message && (
                     <p className="text-destructive text-sm">
@@ -401,13 +415,19 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                   )}
                 </FormItem>
               )}
-              <ChoiceCards
-                label="Tile"
-                value={locationType}
-                onChange={(value) => form.setValue("locationType", value)}
-                options={LOCATION_OPTIONS}
-              />
-              {locationType === "specific" && (
+              {isBiome ? (
+                <p className="bg-muted/50 rounded-md p-2 text-sm">
+                  Each group rolls its own tile in every sector, rerolled daily.
+                </p>
+              ) : (
+                <ChoiceCards
+                  label="Tile"
+                  value={locationType}
+                  onChange={(value) => form.setValue("locationType", value)}
+                  options={LOCATION_OPTIONS}
+                />
+              )}
+              {!isBiome && locationType === "specific" && (
                 <div className="flex gap-4">
                   <IntegerField
                     control={form.control}
@@ -464,15 +484,23 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
             <Section
               icon={<Users className="h-4 w-4" />}
               title="Population"
-              description="Copies spread across the world; each copy appears as a group."
+              description={
+                isBiome
+                  ? "Groups in every sector of the biome; keep it low, since each sector draws them all."
+                  : "Copies spread across the world; each copy appears as a group."
+              }
             >
               <div className="grid gap-4 sm:grid-cols-3">
                 <BoundedIntegerField
                   control={form.control}
                   name="spawnCount"
-                  label="Copies"
+                  label={isBiome ? "Groups per sector" : "Copies"}
                   min={1}
-                  max={OVERWORLD_MAX_SPAWN_COUNT}
+                  max={
+                    isBiome
+                      ? OVERWORLD_MAX_GROUPS_PER_SECTOR
+                      : OVERWORLD_MAX_SPAWN_COUNT
+                  }
                 />
                 <BoundedIntegerField
                   control={form.control}
@@ -631,7 +659,12 @@ const ChoiceCards = <T extends string>({
 }) => (
   <fieldset className="space-y-1">
     <legend className="text-sm font-medium">{label}</legend>
-    <div className="grid gap-2 sm:grid-cols-3">
+    <div
+      className={cn(
+        "grid gap-2",
+        options.length > 3 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3",
+      )}
+    >
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -765,11 +798,23 @@ const PopulationSummary = ({
     high = Number(values.groupMax ?? 1);
   const group = low === high ? `${low}` : `${low}–${high}`;
   const members = low === high && low === 1 ? "on its own" : `in groups of ${group}`;
+  if (values.sectorType === "biome") {
+    const sectors = habitatSectors ? sectorCount(habitats, habitatSectors) : 0;
+    const groups = copies === 1 ? "One group" : `${copies} groups`;
+    const perSector = `up to ${copies * high} on a sector`;
+    return (
+      <p className="bg-muted/50 rounded-md p-2 text-sm">
+        {groups} {low === high && low === 1 ? "of one" : `of ${group}`} in every sector
+        {sectors
+          ? ` (${sectors.toLocaleString()} sectors, about ${Math.round(sectors * copies * ((low + high) / 2)).toLocaleString()} across the world)`
+          : ""}
+        , {perSector}.
+      </p>
+    );
+  }
   const pool =
     values.sectorType === "random" && habitatSectors
-      ? habitats.length
-        ? habitats.reduce((sum, h) => sum + habitatSectors[h], 0)
-        : OverworldHabitats.reduce((sum, h) => sum + habitatSectors[h], 0)
+      ? sectorCount(habitats, habitatSectors)
       : values.sectorType === "from_list"
         ? ((values.sectorList as number[] | undefined)?.length ?? 0)
         : 1;
@@ -805,11 +850,13 @@ const PlacementCard = ({
   const where =
     p.sectorType === "specific"
       ? `Sector ${p.sector}`
-      : p.sectorType === "from_list"
-        ? `Sectors ${((p.sectorList as number[] | null) ?? []).join(", ")}`
-        : p.habitats.length
-          ? `Random ${p.habitats.map((h) => HABITAT_LABELS[h].toLowerCase()).join(" / ")} sector`
-          : "Random sector";
+      : p.sectorType === "biome"
+        ? `Every ${habitatNames(p.habitats, " / ")} sector`
+        : p.sectorType === "from_list"
+          ? `Sectors ${((p.sectorList as number[] | null) ?? []).join(", ")}`
+          : p.habitats.length
+            ? `Random ${habitatNames(p.habitats, " / ")} sector`
+            : "Random sector";
   return (
     <div
       className={cn(
@@ -831,7 +878,13 @@ const PlacementCard = ({
           <Badge variant="outline">
             {p.wanderRadius ? `Roams ${p.wanderRadius} hexes` : "Stationary"}
           </Badge>
-          {p.spawnCount > 1 && <Badge variant="outline">{p.spawnCount} copies</Badge>}
+          {p.sectorType === "biome" ? (
+            <Badge variant="outline">
+              {p.spawnCount === 1 ? "1 group" : `${p.spawnCount} groups`} per sector
+            </Badge>
+          ) : (
+            p.spawnCount > 1 && <Badge variant="outline">{p.spawnCount} copies</Badge>
+          )}
           {p.groupMax > 1 && (
             <Badge variant="outline">
               {p.groupMin === p.groupMax
@@ -844,7 +897,7 @@ const PlacementCard = ({
         </div>
         <p className="text-muted-foreground">
           {where} ·{" "}
-          {p.locationType === "specific"
+          {p.sectorType !== "biome" && p.locationType === "specific"
             ? `tile (${p.longitude}, ${p.latitude})`
             : "random tile"}
           {p.interactionType === "FRIENDLY" &&
@@ -992,6 +1045,20 @@ const defaultFormValues = (aiId: string): OverworldPlacementInput => ({
   mapScale: 100,
 });
 
+/** Lower-case habitat names joined for a sentence. */
+const habitatNames = (habitats: readonly OverworldHabitat[], joiner = " and ") =>
+  habitats.map((h) => HABITAT_LABELS[h].toLowerCase()).join(joiner);
+
+/** Sectors in the chosen habitats; none chosen means every land sector. */
+const sectorCount = (
+  habitats: readonly OverworldHabitat[],
+  counts: Record<OverworldHabitat, number>,
+) =>
+  (habitats.length ? habitats : OverworldHabitats).reduce(
+    (sum, h) => sum + counts[h],
+    0,
+  );
+
 const HABITAT_LABELS: Record<OverworldHabitat, string> = {
   grassland: "Grassland",
   desert: "Desert",
@@ -1027,9 +1094,14 @@ const INTERACTION_OPTIONS: readonly (ChoiceOption<OverworldInteractionType> & {
 const SECTOR_OPTIONS: readonly ChoiceOption<
   OverworldPlacementInput["sectorType"] & string
 >[] = [
-  { value: "specific", label: "Fixed sector" },
-  { value: "random", label: "Random sector" },
-  { value: "from_list", label: "From a list" },
+  { value: "specific", label: "Fixed sector", description: "One chosen sector." },
+  { value: "random", label: "Random sector", description: "Rerolled every day." },
+  {
+    value: "from_list",
+    label: "From a list",
+    description: "One of your sectors daily.",
+  },
+  { value: "biome", label: "Whole biome", description: "Every sector of its biomes." },
 ];
 
 const LOCATION_OPTIONS: readonly ChoiceOption<
