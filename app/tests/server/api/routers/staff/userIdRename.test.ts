@@ -141,6 +141,15 @@ describeWithDatabase("staff user-id rename", () => {
     }
   });
 
+  it("rejects renaming a character that does not exist", async () => {
+    const database = await getTestDatabase();
+    const caller = await callerFor(staffRouter, STAFF);
+    await expect(
+      caller.updateUserId({ userId: "missing-character", newUserId: NEW_USER_ID }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await database.query.storeUserIdAlias.findFirst()).toBeUndefined();
+  });
+
   it("rejects a character ID change during hunting combat", async () => {
     const database = await getTestDatabase();
     await database.update(userData).set({ status: "BATTLE", battleId: "hunt" }).where(eq(userData.userId, OLD_USER_ID));
