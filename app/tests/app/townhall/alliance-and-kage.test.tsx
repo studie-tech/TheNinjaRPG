@@ -50,7 +50,7 @@ beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(({ children, title }) => (
     <section aria-label={String(title)}>{children}</section>
   ));
-  vi.spyOn(KageDefense, "KageDefense").mockImplementation(() => null);
+  vi.spyOn(KageDefense, "KageDefense").mockImplementation((() => null) as never);
   vi.spyOn(PublicUser, "default").mockImplementation((() => null) as never);
   vi.spyOn(UserRequestSystem, "default").mockImplementation(() => null);
   const capture = (name: string) => ({
