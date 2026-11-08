@@ -39,11 +39,6 @@ export default function SupportPage() {
       {
         ...getSupportTicketFilter(filterState),
         limit: 20,
-        // Replace CURRENT_USER placeholder with actual userId
-        createdByUserId:
-          getSupportTicketFilter(filterState).createdByUserId === "CURRENT_USER"
-            ? userData?.userId
-            : getSupportTicketFilter(filterState).createdByUserId,
       },
       {
         getNextPageParam: (lastPage) => lastPage.nextCursor,
