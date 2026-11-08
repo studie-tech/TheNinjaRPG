@@ -19,10 +19,9 @@ import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import UserSearchSelect from "@/layout/UserSearchSelect";
+import { SearchSelect } from "@/layout/SearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import { type AiTransformationInput, aiTransformationSchema } from "@/validators/ai";
-import type { UserSearchResult } from "@/validators/register";
 
 /** Staff control for what an AI becomes when it falls, with the boss it belongs to. */
 export const AiTransformationEdit: React.FC<{ userId: string; username: string }> = ({
@@ -36,14 +35,8 @@ export const AiTransformationEdit: React.FC<{ userId: string; username: string }
     defaultValues: emptyArrival,
   });
   const { errors } = useFormState({ control: form.control });
-  const picker = useForm<{ username: string; users: UserSearchResult[] }>({
-    defaultValues: { username: "", users: [] },
-  });
-  const [picked] = useWatch({
-    control: picker.control,
-    name: "users",
-    defaultValue: [],
-  });
+  const ais = api.profile.getAllAiNames.useQuery(undefined);
+  const nextAiId = useWatch({ control: form.control, name: "nextAiId" });
   const tier = useWatch({ control: form.control, name: "tier" });
   const color = useWatch({ control: form.control, name: "color" });
   const glow = useWatch({ control: form.control, name: "glow" });
@@ -53,15 +46,16 @@ export const AiTransformationEdit: React.FC<{ userId: string; username: string }
   useEffect(() => {
     if (saved) form.reset(saved);
   }, [saved, form]);
-  useEffect(() => {
+  const pickNextForm = (aiId: string) => {
+    const picked = ais.data?.find((ai) => ai.userId === aiId);
+    form.setValue("nextAiId", aiId, { shouldValidate: true });
     if (!picked) return;
-    form.setValue("nextAiId", picked.userId, { shouldValidate: true });
     // A first draft of the text, which staff are expected to make their own.
     if (!form.getValues("announce"))
       form.setValue("announce", picked.username.toUpperCase().slice(0, 32));
     if (!form.getValues("log"))
       form.setValue("log", `${username} rises again as ${picked.username}!`);
-  }, [picked, form, username]);
+  };
 
   const save = api.ai.updateTransformation.useMutation({
     onSuccess: async (result) => {
@@ -71,8 +65,11 @@ export const AiTransformationEdit: React.FC<{ userId: string; username: string }
   });
   const forms = boss.data?.forms ?? [];
   const nextName =
-    picked?.username ??
-    forms.find((entry) => entry.userId === saved?.nextAiId)?.username;
+    ais.data?.find((ai) => ai.userId === nextAiId)?.username ??
+    forms.find((entry) => entry.userId === nextAiId)?.username;
+  const tierDescription = TRANSFORMATION_TIERS.find(
+    (entry) => entry.tier === tier,
+  )?.description;
 
   return (
     <ContentBox
@@ -96,23 +93,37 @@ export const AiTransformationEdit: React.FC<{ userId: string; username: string }
         >
           {forms.length > 1 && <BossChain forms={forms} current={userId} />}
           <div>
-            <UserSearchSelect
-              useFormMethods={picker}
+            <Label htmlFor="transformation-next">Next form</Label>
+            <SearchSelect
+              id="transformation-next"
               label="Next form"
-              showYourself={false}
-              showAi={true}
-              inline={true}
-              maxUsers={1}
+              searchLabel="Search AIs"
+              emptyText="No AI has that name."
+              placeholder={ais.isPending ? "Loading AIs…" : "Choose the next form"}
+              value={nextAiId}
+              options={(ais.data ?? [])
+                .filter((ai) => ai.userId !== userId)
+                .map((ai) => ({
+                  value: ai.userId,
+                  label: `${ai.username} (Lv ${ai.level})`,
+                }))}
+              onChange={pickNextForm}
             />
-            <p className="mt-1 text-muted-foreground text-sm">
-              {nextName ? `Transforms into ${nextName}` : "Does not transform"}
-            </p>
-            <FieldError message={errors.nextAiId?.message} />
+            <FieldHint>
+              {nextName
+                ? `When ${username} falls, ${nextName} rises in its place, in the same battle.`
+                : `${username} does not transform. Choose the AI that rises in its place when it falls; leave the final form of a boss without one.`}
+            </FieldHint>
+            <FieldError message={errors.nextAiId?.message ?? ais.error?.message} />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="transformation-announce">Banner</Label>
               <Input id="transformation-announce" {...form.register("announce")} />
+              <FieldHint>
+                Large text across the battlefield as the next form arrives, up to 32
+                characters, such as GOD-MODE.
+              </FieldHint>
               <FieldError message={errors.announce?.message} />
             </div>
             <div>
@@ -132,11 +143,19 @@ export const AiTransformationEdit: React.FC<{ userId: string; username: string }
                   ))}
                 </SelectContent>
               </Select>
+              <FieldHint>
+                How big the arrival cinematic is. {tierDescription} Raise it with each
+                form so the boss escalates.
+              </FieldHint>
             </div>
           </div>
           <div>
             <Label htmlFor="transformation-log">Battle log line</Label>
             <Input id="transformation-log" {...form.register("log")} />
+            <FieldHint>
+              Written to the battle log when the next form arrives, up to 200
+              characters.
+            </FieldHint>
             <FieldError message={errors.log?.message} />
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-[auto_auto_minmax(0,1fr)]">
@@ -159,6 +178,11 @@ export const AiTransformationEdit: React.FC<{ userId: string; username: string }
               {announce || "PREVIEW"}
             </p>
           </div>
+          <FieldHint>
+            The main colour outlines the banner and fills the energy column the new form
+            rises from; the glow colour fills the halo and lightning around it. The
+            black box previews the banner.
+          </FieldHint>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={save.isPending}>
               Save transformation
@@ -171,7 +195,6 @@ export const AiTransformationEdit: React.FC<{ userId: string; username: string }
                 onClick={() => {
                   save.mutate({ aiId: userId, transformation: null });
                   form.reset(emptyArrival);
-                  picker.reset();
                 }}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -222,6 +245,10 @@ const ColorField: React.FC<{
       onChange={(event) => onChange(Number.parseInt(event.target.value.slice(1), 16))}
     />
   </div>
+);
+
+const FieldHint: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p className="mt-1 text-muted-foreground text-xs">{children}</p>
 );
 
 const FieldError: React.FC<{ message?: string }> = ({ message }) =>
