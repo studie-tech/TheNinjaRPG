@@ -10,15 +10,6 @@ const AUTO_SHOW_DELAY_MS = 3000;
 const SHORT_DISMISSAL_MS = 7 * 24 * 60 * 60 * 1000;
 const LONG_DISMISSAL_MS = 60 * 24 * 60 * 60 * 1000;
 
-const isRecentlyDismissed = (): boolean => {
-  const longTerm = safeLocalStorageGetItem("pwa-install-dismissed-long");
-  if (longTerm && Date.now() - parseInt(longTerm, 10) < LONG_DISMISSAL_MS) return true;
-  const shortTerm = safeLocalStorageGetItem("pwa-install-dismissed");
-  return Boolean(
-    shortTerm && Date.now() - parseInt(shortTerm, 10) < SHORT_DISMISSAL_MS,
-  );
-};
-
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -132,3 +123,12 @@ export function useInstallPrompt() {
   }
   return context;
 }
+
+const isRecentlyDismissed = (): boolean => {
+  const longTerm = safeLocalStorageGetItem("pwa-install-dismissed-long");
+  if (longTerm && Date.now() - parseInt(longTerm, 10) < LONG_DISMISSAL_MS) return true;
+  const shortTerm = safeLocalStorageGetItem("pwa-install-dismissed");
+  return Boolean(
+    shortTerm && Date.now() - parseInt(shortTerm, 10) < SHORT_DISMISSAL_MS,
+  );
+};

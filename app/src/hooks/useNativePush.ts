@@ -33,28 +33,6 @@ interface PendingDetach {
   widgetToken: string;
 }
 
-const readPendingDetach = (): PendingDetach | undefined => {
-  const raw = safeLocalStorageGetItem(PENDING_DETACH_KEY);
-  if (!raw) return undefined;
-  try {
-    const value = JSON.parse(raw) as Partial<PendingDetach>;
-    if (typeof value.token === "string" && typeof value.widgetToken === "string") {
-      return { token: value.token, widgetToken: value.widgetToken };
-    }
-  } catch {
-    // A corrupt marker cannot authorize a detach. Drop it instead of retrying garbage.
-  }
-  safeLocalStorageRemoveItem(PENDING_DETACH_KEY);
-  return undefined;
-};
-
-const writePendingDetach = (pending: PendingDetach): void => {
-  safeLocalStorageSetItem(PENDING_DETACH_KEY, JSON.stringify(pending));
-};
-
-const sameDetach = (left: PendingDetach, right: PendingDetach): boolean =>
-  left.token === right.token && left.widgetToken === right.widgetToken;
-
 /**
  * Bumped on every unregister, so a registration still in flight can tell that the account
  * it was for has since signed out.
@@ -293,6 +271,28 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
     widgetToken: accountId && widgetTokenOwner === accountId ? widgetToken : undefined,
   };
 };
+
+const readPendingDetach = (): PendingDetach | undefined => {
+  const raw = safeLocalStorageGetItem(PENDING_DETACH_KEY);
+  if (!raw) return undefined;
+  try {
+    const value = JSON.parse(raw) as Partial<PendingDetach>;
+    if (typeof value.token === "string" && typeof value.widgetToken === "string") {
+      return { token: value.token, widgetToken: value.widgetToken };
+    }
+  } catch {
+    // A corrupt marker cannot authorize a detach. Drop it instead of retrying garbage.
+  }
+  safeLocalStorageRemoveItem(PENDING_DETACH_KEY);
+  return undefined;
+};
+
+const writePendingDetach = (pending: PendingDetach): void => {
+  safeLocalStorageSetItem(PENDING_DETACH_KEY, JSON.stringify(pending));
+};
+
+const sameDetach = (left: PendingDetach, right: PendingDetach): boolean =>
+  left.token === right.token && left.widgetToken === right.widgetToken;
 
 /**
  * Clear what a successful detach proved. A replacement account can bind the same OS token

@@ -13,22 +13,6 @@ type Options = {
 };
 
 /**
- * normalizeVariant
- * - Normalizes a raw value to an A/B test variant
- * @param raw - The raw value to normalize
- * @param parser - The parser to use
- * @returns
- */
-const normalizeVariant = (
-  raw: string | undefined,
-  parser?: Options["parse"],
-): AbVariant | undefined => {
-  if (!raw) return undefined;
-  if (parser) return parser(raw);
-  return normalizeLemuVariant(raw);
-};
-
-/**
  * useAbVariant
  * - Reads an A/B test variant from a cookie
  * @param cookieName - The name of the cookie to read
@@ -59,4 +43,20 @@ export const useAbVariant = (cookieName: string, options?: Options) => {
     isTreatment,
     refresh,
   } as const;
+};
+
+/**
+ * normalizeVariant
+ * - Normalizes a raw value to an A/B test variant
+ * @param raw - The raw value to normalize
+ * @param parser - The parser to use
+ * @returns
+ */
+const normalizeVariant = (
+  raw: string | undefined,
+  parser?: Options["parse"],
+): AbVariant | undefined => {
+  if (!raw) return undefined;
+  if (parser) return parser(raw);
+  return normalizeLemuVariant(raw);
 };

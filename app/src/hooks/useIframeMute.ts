@@ -12,24 +12,6 @@ interface UseIframeMuteReturn {
 }
 
 /**
- * Get initial mute state from user data or localStorage
- * @param userData
- * @returns boolean
- */
-const getInitialIframeMuteState = (
-  userData: { iframesMuted?: boolean } | undefined,
-): boolean => {
-  // Respect explicit user preference when logged in
-  if (typeof userData?.iframesMuted === "boolean") return userData.iframesMuted;
-
-  // Fallback to locally saved preference
-  const saved = safeLocalStorageGetItem("iframesMuted");
-  if (saved !== null) return JSON.parse(saved) as boolean;
-
-  return false;
-};
-
-/**
  * Hook for managing user iframe muting state
  * Integrates with user database and localStorage fallback
  */
@@ -94,4 +76,22 @@ export const useIframeMute = (): UseIframeMuteReturn => {
     setIframesMuted,
     toggleIframesMute,
   };
+};
+
+/**
+ * Get initial mute state from user data or localStorage
+ * @param userData
+ * @returns boolean
+ */
+const getInitialIframeMuteState = (
+  userData: { iframesMuted?: boolean } | undefined,
+): boolean => {
+  // Respect explicit user preference when logged in
+  if (typeof userData?.iframesMuted === "boolean") return userData.iframesMuted;
+
+  // Fallback to locally saved preference
+  const saved = safeLocalStorageGetItem("iframesMuted");
+  if (saved !== null) return JSON.parse(saved) as boolean;
+
+  return false;
 };
