@@ -65,4 +65,23 @@ describeWithDatabase("configured equipment limits", () => {
     expect(equipped.filter((entry) => entry.equipped)).toHaveLength(9);
     expect(equipped.find((entry) => entry.jutsuId === "ap-9")?.equipped).toBe(true);
   });
+
+  it("keeps equips within a jutsu-type cap and ignores other jutsu types", async () => {
+    const db = await getTestDatabase();
+    await db.insert(jutsuEquipLimit).values({ category: "event", unrankedMaxEquipped: 1, rankedMaxEquipped: 0 });
+    await insertJutsus([
+      { id: "festival", jutsuType: "EVENT", requiredRank: "GENIN" as const },
+      { id: "parade", jutsuType: "EVENT", requiredRank: "GENIN" as const },
+      { id: "ordinary", jutsuType: "NORMAL", requiredRank: "GENIN" as const },
+    ]);
+    await db.insert(userJutsu).values(["festival", "parade", "ordinary"].map((id) => ({ id, userId: "player", jutsuId: id, equipped: false })));
+    const caps = await fetchJutsuEquipCaps(db);
+    const equip = (userJutsuId: string, jutsuType: "EVENT" | "NORMAL") =>
+      tryEquipUserJutsuAtomically({ client: db, userId: "player", userJutsuId, maxEquip: 15, flags: getJutsuCapFlags({ effects: [], jutsuType }), caps });
+    expect(await equip("festival", "EVENT")).toBe("equipped");
+    expect(await equip("parade", "EVENT")).toBe("cap-reached");
+    expect(await equip("ordinary", "NORMAL")).toBe("equipped");
+    const equipped = (await db.query.userJutsu.findMany()).filter((entry) => entry.equipped).map((entry) => entry.id);
+    expect(equipped.sort()).toEqual(["festival", "ordinary"]);
+  });
 });
