@@ -1092,16 +1092,6 @@ export const selectUserJutsuForGetStatistics = (
     .where(eq(userJutsu.jutsuId, input.id))
     .orderBy(asc(userJutsu.level));
 
-/** Build the `userJutsu` selection for `getStatistics`, using predicates on `jutsuId`. */
-export const selectUserJutsuForGetStatistics2 = (
-  client: Pick<DrizzleClient, "select">,
-  input: { id: string },
-) =>
-  client
-    .select({ count: count() })
-    .from(userJutsu)
-    .where(eq(userJutsu.jutsuId, input.id));
-
 /** Build the `userData` selection for `getStatistics`, using predicates on `bloodlineId`. */
 export const selectUserDataForGetStatistics = (
   client: Pick<DrizzleClient, "select">,
@@ -1116,16 +1106,6 @@ export const selectUserDataForGetStatistics = (
     .groupBy(userData.level)
     .where(eq(userData.bloodlineId, input.id))
     .orderBy(asc(userData.level));
-
-/** Build the `userData` selection for `getStatistics`, using predicates on `bloodlineId`. */
-export const selectUserDataForGetStatistics2 = (
-  client: Pick<DrizzleClient, "select">,
-  input: { id: string },
-) =>
-  client
-    .select({ count: count() })
-    .from(userData)
-    .where(eq(userData.bloodlineId, input.id));
 
 /** Build the distinct owner count of an item for `getStatistics`. */
 export const selectUserItemForGetStatistics = (

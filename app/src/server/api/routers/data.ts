@@ -85,12 +85,10 @@ import {
   selectUserDataForGetRecruitmentLevelDistribution3,
   selectUserDataForGetRecruitmentLevelDistribution4,
   selectUserDataForGetStatistics,
-  selectUserDataForGetStatistics2,
   selectUserItemForGetItemBalanceStatistics,
   selectUserItemForGetStatistics,
   selectUserJutsuForGetJutsuBalanceStatistics,
   selectUserJutsuForGetStatistics,
-  selectUserJutsuForGetStatistics2,
   selectUserSkillForGetSkillTreeBalanceStatistics,
   selectVisitorLogForGetRecruitmentMainMetrics,
   selectVisitorLogForGetRecruitmentMainMetrics2,
@@ -1403,48 +1401,50 @@ export const dataRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string(),
-        type: z.enum(["jutsu", "item", "bloodline", "basic", "ai"]),
+        type: z.enum(["jutsu", "item", "bloodline", "ai"]),
         battleType: z.enum(BattleTypes).optional(),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      // General User Statistics
-      const usage = await selectDataBattleActionForGetStatistics(ctx.drizzle, input);
-      // Process different inputs
-      if (input.type === "jutsu") {
-        // Jutsu Statistics
-        const info = await fetchJutsu(ctx.drizzle, input.id);
-        const levelDistribution = await selectUserJutsuForGetStatistics(
-          ctx.drizzle,
-          input,
-        );
-        const total = await selectUserJutsuForGetStatistics2(ctx.drizzle, input);
-        const totalUsers = total?.[0]?.count || 0;
-        return { info, usage, totalUsers, levelDistribution };
-      } else if (input.type === "bloodline") {
-        // Bloodline Statistics
-        const info = await fetchBloodline(ctx.drizzle, input.id);
-        const levelDistribution = await selectUserDataForGetStatistics(
-          ctx.drizzle,
-          input,
-        );
-        const total = await selectUserDataForGetStatistics2(ctx.drizzle, input);
-        const totalUsers = total?.[0]?.count || 0;
-        return { info, usage, totalUsers, levelDistribution };
-      } else if (input.type === "item") {
-        // Item Statistics
-        const info = await fetchItem(ctx.drizzle, input.id);
-        const total = await selectUserItemForGetStatistics(ctx.drizzle, input);
-        const totalUsers = total?.[0]?.count || 0;
-        return { info, usage, totalUsers, levelDistribution: null };
-      } else if (input.type === "ai") {
-        // AI Statistics
-        const info = await findUserDataForGetStatistics(ctx.drizzle, input);
-        return { info, usage, totalUsers: null, levelDistribution: null };
-      } else {
-        throw serverError("BAD_REQUEST", `Invalid input type: ${input.type}`);
+      // General user statistics load with the type-specific queries
+      const usage = selectDataBattleActionForGetStatistics(ctx.drizzle, input);
+      switch (input.type) {
+        case "jutsu": {
+          const [info, levelDistribution, usageRows] = await Promise.all([
+            fetchJutsu(ctx.drizzle, input.id),
+            selectUserJutsuForGetStatistics(ctx.drizzle, input),
+            usage,
+          ]);
+          const totalUsers = levelDistribution.reduce((sum, row) => sum + row.count, 0);
+          return { info, usage: usageRows, totalUsers, levelDistribution };
+        }
+        case "bloodline": {
+          const [info, levelDistribution, usageRows] = await Promise.all([
+            fetchBloodline(ctx.drizzle, input.id),
+            selectUserDataForGetStatistics(ctx.drizzle, input),
+            usage,
+          ]);
+          const totalUsers = levelDistribution.reduce((sum, row) => sum + row.count, 0);
+          return { info, usage: usageRows, totalUsers, levelDistribution };
+        }
+        case "item": {
+          const [info, total, usageRows] = await Promise.all([
+            fetchItem(ctx.drizzle, input.id),
+            selectUserItemForGetStatistics(ctx.drizzle, input),
+            usage,
+          ]);
+          const totalUsers = total?.[0]?.count || 0;
+          return { info, usage: usageRows, totalUsers, levelDistribution: null };
+        }
+        case "ai": {
+          const [info, usageRows] = await Promise.all([
+            findUserDataForGetStatistics(ctx.drizzle, input),
+            usage,
+          ]);
+          return { info, usage: usageRows, totalUsers: null, levelDistribution: null };
+        }
       }
     }),
 });
