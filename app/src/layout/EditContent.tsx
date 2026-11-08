@@ -249,6 +249,21 @@ export const EditContent = <
     return "default";
   };
 
+  // Prompt for image generation, based on name, title and description
+  let prompt = "";
+  if (currentValues?.name) {
+    prompt += `${currentValues?.name} `;
+  }
+  if (currentValues?.username) {
+    prompt += `${currentValues?.username} `;
+  }
+  if (currentValues?.title) {
+    prompt += `${currentValues?.title} `;
+  }
+  if (currentValues?.description) {
+    prompt += `${currentValues?.description} `;
+  }
+
   const FormTag = props.fieldsOnly ? "div" : "form";
   // Count how many columns have been used
   let columnCount = 0;
@@ -308,7 +323,7 @@ export const EditContent = <
               {assetPickerType === "SFX" ? (
                 <>
                   <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
-                    {(allPickerAssets || [])
+                    {allPickerAssets
                       .filter((a) => a.type === "SFX")
                       .map((a) => {
                         const selected =
@@ -365,7 +380,7 @@ export const EditContent = <
                 </>
               ) : (
                 <ActionSelector
-                  items={allPickerAssets?.map((a) => ({
+                  items={allPickerAssets.map((a) => ({
                     ...a,
                     type: "asset" as const,
                   }))}
@@ -433,22 +448,6 @@ export const EditContent = <
               value: o.value !== "" ? o.value : "None",
             }));
 
-            // Prompt for image generation
-            let prompt = "";
-            // Generate based on name, title and description
-            if (currentValues?.name) {
-              prompt += `${currentValues?.name} `;
-            }
-            if (currentValues?.username) {
-              prompt += `${currentValues?.username} `;
-            }
-            if (currentValues?.title) {
-              prompt += `${currentValues?.title} `;
-            }
-            if (currentValues?.description) {
-              prompt += `${currentValues?.description} `;
-            }
-
             // Figure out if we need to add a spacer
             let includeSpacer = false;
             if (formEntry.category !== lastCategory) {
@@ -474,34 +473,7 @@ export const EditContent = <
                       : formEntry.doubleWidth
                         ? "md:col-span-2"
                         : "",
-                    // Rewards drawn in green
-                    formEntry.category === "reward"
-                      ? "rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
-                      : "",
-                    // Oppoenents drawn in red
-                    formEntry.category === "opponent"
-                      ? "rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20"
-                      : "",
-                    // Attackers drawn in red
-                    formEntry.category === "attackers"
-                      ? "rounded-lg border border-pink-200 bg-pink-100 dark:border-pink-800 dark:bg-pink-900/20"
-                      : "",
-                    // Raid things in orange
-                    formEntry.category === "raid"
-                      ? "rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20"
-                      : "",
-                    // Location things in blue
-                    formEntry.category === "location"
-                      ? "rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20"
-                      : "",
-                    // Graph things in purple
-                    formEntry.category === "graph"
-                      ? "rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-900/20"
-                      : "",
-                    // Description things in yellow
-                    formEntry.category === "scene"
-                      ? "rounded-lg border border-yellow-200 bg-yellow-50 text-black dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-white"
-                      : "",
+                    CATEGORY_CLASSES[formEntry.category],
                   )}
                 >
                   {["text", "number", "date"].includes(type) && (
@@ -2232,6 +2204,30 @@ const isMaterialRewardFieldVisible = (
     return questType === "gathering";
   }
   return true;
+};
+
+/** Frame of each form-entry category; default entries have none. */
+const CATEGORY_CLASSES: Record<string, string> = {
+  // Rewards drawn in green
+  reward:
+    "rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20",
+  // Opponents drawn in red
+  opponent:
+    "rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20",
+  // Attackers drawn in pink
+  attackers:
+    "rounded-lg border border-pink-200 bg-pink-100 dark:border-pink-800 dark:bg-pink-900/20",
+  // Raid things in orange
+  raid: "rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20",
+  // Location things in blue
+  location:
+    "rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20",
+  // Graph things in purple
+  graph:
+    "rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-900/20",
+  // Description things in yellow
+  scene:
+    "rounded-lg border border-yellow-200 bg-yellow-50 text-black dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-white",
 };
 
 /** Effect fields edited through the game-asset picker instead of a combobox. */
