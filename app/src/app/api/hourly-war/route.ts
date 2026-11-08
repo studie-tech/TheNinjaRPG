@@ -279,14 +279,6 @@ async function processExpiredElderVotes() {
   await Promise.all(promises);
 }
 
-type ExpiredElderVote = Awaited<ReturnType<typeof fetchExpiredElderVotes>>[number];
-type VillageSnapshot = {
-  id: string;
-  name: string;
-  kageId: string | null;
-  tokens: number;
-};
-
 /**
  * Handle a single expired WAR_DECLARATION vote.
  * Villages and active wars are pre-fetched to avoid extra DB roundtrips.
@@ -332,3 +324,11 @@ async function handleExpiredWarDeclaration(
     activeWars,
   });
 }
+
+type ExpiredElderVote = Awaited<ReturnType<typeof fetchExpiredElderVotes>>[number];
+type VillageSnapshot = {
+  id: string;
+  name: string;
+  kageId: string | null;
+  tokens: number;
+};
