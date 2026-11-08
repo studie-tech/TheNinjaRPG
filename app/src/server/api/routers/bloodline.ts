@@ -662,7 +662,11 @@ export const bloodlineRouter = createTRPCRouter({
       mcp: { description: "Get bloodline roll statistics by rank" },
     })
     .query(async ({ ctx }) => {
-      const stats = await selectBloodlineRollsForGetNaturalRollStatistics(ctx.drizzle);
+      // Rolls with a bloodline are counted by rank, rolls without one separately
+      const [stats, noBloodlineCount] = await Promise.all([
+        selectBloodlineRollsForGetNaturalRollStatistics(ctx.drizzle),
+        selectBloodlineRollsForGetNaturalRollStatistics2(ctx.drizzle),
+      ]);
 
       // Create a complete result with all ranks, even those with zero counts
       const result: Record<BloodlineRank, number> = {
@@ -680,11 +684,6 @@ export const bloodlineRouter = createTRPCRouter({
           result[stat.rank] = stat.count;
         }
       });
-
-      // Also count rolls with no bloodline (null bloodlineId)
-      const noBloodlineCount = await selectBloodlineRollsForGetNaturalRollStatistics2(
-        ctx.drizzle,
-      );
 
       return {
         ...result,

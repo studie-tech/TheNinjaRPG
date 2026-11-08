@@ -132,9 +132,10 @@ export const bountyRouter = createTRPCRouter({
       // Guards
       if (targetUserId === ctx.userId) return errorResponse("Cannot bounty yourself");
       // Query
-      const [creator, target] = await Promise.all([
+      const [creator, target, existingBounty] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, targetUserId),
+        findBountyForCreate(ctx.drizzle, targetUserId),
       ]);
       // Guards
       if (RANKS_RESTRICTED_FROM_PVP.includes(target.rank))
@@ -146,7 +147,6 @@ export const bountyRouter = createTRPCRouter({
       if (creator.money < amountRyo) return errorResponse("Not enough ryo");
 
       // Check if target already has an active bounty
-      const existingBounty = await findBountyForCreate(ctx.drizzle, targetUserId);
       if (existingBounty) {
         return errorResponse(
           "Target already has an active bounty. You can add money to it instead.",
@@ -171,11 +171,12 @@ export const bountyRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const { bountyId } = input;
-      const [curBounty, curSignups, userSignups, target] = await Promise.all([
+      const [curBounty, curSignups, userSignups, target, hunter] = await Promise.all([
         findBountyById(ctx.drizzle, bountyId),
         listBountySignupForSignup(ctx.drizzle, bountyId),
         findBountySignupForSignup(ctx.drizzle, ctx),
         findUserById(ctx.drizzle, input.targetUserId),
+        fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Guards
       if (!curBounty) return errorResponse("Bounty not found");
@@ -187,7 +188,6 @@ export const bountyRouter = createTRPCRouter({
       if (!target) return errorResponse("Target user not found");
       if (target.userId !== curBounty.targetUserId)
         return errorResponse("Target user does not match bounty");
-      const hunter = await fetchUser(ctx.drizzle, ctx.userId);
       if (RANKS_RESTRICTED_FROM_PVP.includes(hunter.rank))
         return errorResponse("Your rank cannot engage in PvP");
       if (curSignups?.find((c) => c.hunterUserId === ctx.userId))
