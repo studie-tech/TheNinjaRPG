@@ -87,387 +87,8 @@ const DODGED_PANEL_TOP_REM = 5;
 /** Seconds a step without a Next button stays up before a "skip" escape appears. */
 const STUCK_STEP_SECONDS = 60;
 
-/** Include the Activity header when keeping highlighted controls clear of the dock. */
-const getAssistantPanelRect = (): DOMRect | null => {
-  const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
-  return (
-    (panel?.closest("[data-activity-dock]") ?? panel)?.getBoundingClientRect() ?? null
-  );
-};
-
-const rectsOverlap = (a: DOMRect, b: DOMRect) =>
-  !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
-
-/**
- * Where a highlight of this height should end up vertically. The window's own
- * middle is not safe: the assistant panel is fixed over the foot of the screen,
- * so on a short viewport the middle is underneath it.
- */
-const getPreferredHighlightCentre = (targetHeight: number) => {
-  const safeTop = 80;
-  const panel = getAssistantPanelRect();
-  const safeBottom =
-    panel && panel.top > safeTop + targetHeight ? panel.top : window.innerHeight;
-  return (safeTop + safeBottom) / 2;
-};
-
 /** Gap between Lemu and the end of the dock she stands at. */
 const PORTRAIT_INSET_PX = 16;
-
-/**
- * Lemu standing on the dock's top edge, cropped at the waist independently of
- * lesson height. She is decorative and lets clicks through, but moves to the
- * other end of the dock, or leaves, rather than stand over the highlight.
- */
-const AssistantPortrait: React.FC<{
-  characterImage?: string;
-  avoidBox: TutorialScreenBox | null;
-  dodgeHighlight?: boolean;
-}> = ({ characterImage, avoidBox, dodgeHighlight }) => {
-  const { variant } = useAbVariant(LEMU_EXPERIMENT);
-  const { swapSides } = useActivityDock();
-  const image = characterImage || getLemuImage(variant);
-  const waist = LEMU_PORTRAIT_WAIST[image] ?? 0.5;
-  const stripRef = React.useRef<HTMLDivElement>(null);
-  const [side, setSide] = useState<TutorialPortraitSide | null>("right");
-  // Measured after layout so she never paints where she is about to leave. The
-  // dock moves when it dodges to the top or swaps sides, which the effect re-runs for.
-  React.useLayoutEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    const place = () => {
-      setSide(
-        getTutorialPortraitSide({
-          frame: strip.getBoundingClientRect(),
-          portraitWidth: strip.querySelector("img")?.getBoundingClientRect().width ?? 0,
-          inset: PORTRAIT_INSET_PX,
-          avoid: avoidBox,
-        }),
-      );
-    };
-    place();
-    const observer = new ResizeObserver(place);
-    observer.observe(strip);
-    window.addEventListener("resize", place);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", place);
-    };
-  }, [avoidBox, dodgeHighlight, swapSides]);
-  // A dodging dock sits just below the top bar, with no room above it for her.
-  if (dodgeHighlight) return null;
-  return (
-    <div
-      ref={stripRef}
-      className="pointer-events-none absolute inset-x-0 bottom-full overflow-hidden"
-      style={{ height: `calc(var(--assistant-portrait-height) * ${waist})` }}
-    >
-      <Image
-        src={image}
-        width={512}
-        height={768}
-        alt=""
-        aria-hidden="true"
-        className={cn(
-          "h-[var(--assistant-portrait-height)] w-auto max-w-[60%] select-none object-contain drop-shadow-2xl",
-          // She faces the middle of the dock from whichever end she stands at.
-          side === "left" ? "mr-auto ml-4" : "mr-4 ml-auto scale-x-[-1]",
-          !side && "invisible",
-        )}
-      />
-    </div>
-  );
-};
-
-/**
- * The tutorial lesson inside the Activity dock: a header naming the chapter and
- * a progress bar, so a player always knows where they are in the trials, then
- * scrolling text above the call to action and the controls that answer it.
- */
-const AssistantDialog: React.FC<{
-  title: string;
-  eyebrow?: string;
-  progress?: { position: number; total: number };
-  stepId?: string;
-  action?: string;
-  /** What Lemu says, shown above the call to action. */
-  lead?: React.ReactNode;
-  children?: React.ReactNode;
-  /** Controls that answer the step, kept in view under the scrolling text. */
-  footer?: React.ReactNode;
-  onOpenDisableModal?: () => void;
-  characterImage?: string;
-  onOpenOrderingDialog?: () => void;
-  showOrderingButton?: boolean;
-  /** Anchor to the top instead, to uncover a highlight it would otherwise sit on. */
-  dodgeHighlight?: boolean;
-  /** The highlighted element, which Lemu's portrait must not stand over. */
-  avoidBox?: TutorialScreenBox | null;
-  isBusy?: boolean;
-  errorMessage?: string;
-}> = ({
-  title,
-  eyebrow,
-  progress,
-  stepId,
-  action,
-  lead,
-  children,
-  footer,
-  onOpenDisableModal,
-  characterImage,
-  onOpenOrderingDialog,
-  showOrderingButton,
-  dodgeHighlight,
-  avoidBox = null,
-  isBusy = false,
-  errorMessage,
-}) => {
-  const sectionRef = React.useRef<HTMLElement>(null);
-  // The dock is fixed over the foot of the page; while a lesson is open the game
-  // layouts pad their content by its height, so whatever it covers can be
-  // scrolled clear of it.
-  React.useLayoutEffect(() => {
-    const dock = sectionRef.current?.closest<HTMLElement>("[data-activity-dock]");
-    if (!dock) return;
-    const root = document.documentElement;
-    const reserve = () =>
-      root.style.setProperty("--activity-dock-space", `${dock.offsetHeight}px`);
-    reserve();
-    const observer = new ResizeObserver(reserve);
-    observer.observe(dock);
-    return () => {
-      observer.disconnect();
-      root.style.removeProperty("--activity-dock-space");
-    };
-  }, []);
-  return (
-    <section
-      ref={sectionRef}
-      id={TUTORIAL_ASSISTANT_PANEL_ID}
-      data-tutorial-step={stepId}
-      data-dodge-highlight={dodgeHighlight || undefined}
-      aria-label={`Tutorial: ${title}`}
-      aria-live="polite"
-      className="pointer-events-auto"
-    >
-      <AssistantPortrait
-        characterImage={characterImage}
-        avoidBox={avoidBox}
-        dodgeHighlight={dodgeHighlight}
-      />
-      <div className="relative z-10 rounded-b-xl bg-card" aria-busy={isBusy}>
-        <header className="flex items-start gap-2 px-4 pt-3 md:px-5">
-          <div className="min-w-0 flex-1">
-            {eyebrow && (
-              <p className="truncate font-semibold text-muted-foreground text-xs uppercase tracking-wider">
-                {eyebrow}
-              </p>
-            )}
-            <h2 className="font-bold text-lg text-primary leading-tight">{title}</h2>
-          </div>
-          {onOpenDisableModal && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onOpenDisableModal();
-              }}
-              disabled={isBusy}
-              className="-mr-2 h-8 w-8 shrink-0 opacity-60 hover:opacity-100"
-              title={isBusy ? "Disabling" : "Skip tutorial"}
-              aria-label={isBusy ? "Disabling" : "Skip tutorial"}
-            >
-              {isBusy ? (
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-              ) : (
-                <X className="h-5 w-5" aria-hidden="true" />
-              )}
-            </Button>
-          )}
-        </header>
-        {progress && (
-          <div
-            className="flex gap-1 px-4 pt-2 md:px-5"
-            role="progressbar"
-            aria-label="Chapter progress"
-            aria-valuemin={1}
-            aria-valuemax={progress.total}
-            aria-valuenow={progress.position}
-          >
-            {Array.from({ length: progress.total }, (_, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "h-1.5 flex-1 rounded-full",
-                  i < progress.position ? "bg-primary" : "bg-primary/20",
-                )}
-              />
-            ))}
-          </div>
-        )}
-        <div className="max-h-[min(40dvh,420px,calc(100dvh-var(--assistant-portrait-height)-22rem))] space-y-3 overflow-y-auto overscroll-contain px-4 py-3 md:px-5">
-          {isBusy && (
-            <div
-              role="status"
-              aria-live="polite"
-              className="flex items-center gap-2 font-medium text-base text-muted-foreground"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              Disabling
-            </div>
-          )}
-          {errorMessage && !isBusy && (
-            <p role="alert" className="text-base text-destructive">
-              {errorMessage}
-            </p>
-          )}
-          <fieldset disabled={isBusy} className="contents">
-            {lead}
-            {children}
-            {showOrderingButton && onOpenOrderingDialog && (
-              <div className="flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onOpenOrderingDialog();
-                  }}
-                  className="opacity-60 hover:opacity-100"
-                  title="Sort quest priorities"
-                >
-                  <Settings2 className="mr-1 h-4 w-4" />
-                  <span className="text-sm">Priority</span>
-                </Button>
-              </div>
-            )}
-          </fieldset>
-        </div>
-        {(action || footer) && (
-          <fieldset
-            disabled={isBusy}
-            className="space-y-3 rounded-b-xl border-border border-t bg-card px-4 py-3 md:px-5"
-          >
-            {action && (
-              <p className="flex items-start gap-2 rounded-lg border border-amber-500/70 bg-amber-500/15 px-3 py-2 font-semibold text-base">
-                <MousePointerClick
-                  className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
-                  aria-hidden="true"
-                />
-                <span>{action}</span>
-              </p>
-            )}
-            {footer}
-          </fieldset>
-        )}
-      </div>
-    </section>
-  );
-};
-
-/**
- * Confirmation dialog for cancelling the tutorial
- * Shows the assistant character and warns the user
- */
-const CancelTutorialConfirmDialog: React.FC<{
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
-  isPending: boolean;
-  errorMessage?: string;
-}> = ({ open, onOpenChange, onConfirm, isPending, errorMessage }) => {
-  const { variant } = useAbVariant(LEMU_EXPERIMENT);
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!isPending) onOpenChange(nextOpen);
-      }}
-    >
-      <DialogContent
-        className="z-[70] sm:max-w-md"
-        closeDisabled={isPending}
-        aria-busy={isPending}
-        onEscapeKeyDown={(event) => {
-          if (isPending) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isPending) event.preventDefault();
-        }}
-      >
-        <div className="flex gap-4">
-          <div className="min-w-0 flex-1 space-y-4">
-            <DialogHeader>
-              <DialogTitle>Skip the Academy Trials?</DialogTitle>
-              <DialogDescription className="pt-2">
-                The trials teach combat, training, travel and companions, and they grant
-                the experience you need for the Genin exam. We{" "}
-                <strong>highly recommend</strong> finishing them.
-                <br />
-                <br />
-                If you change your mind, you can turn the tutorial back on from the
-                support button.
-              </DialogDescription>
-            </DialogHeader>
-            {errorMessage && !isPending && (
-              <p role="alert" className="text-destructive text-sm">
-                {errorMessage}
-              </p>
-            )}
-            <div className="flex justify-start gap-2">
-              <Button
-                variant="outline"
-                disabled={isPending}
-                onClick={() => onOpenChange(false)}
-              >
-                Keep training
-              </Button>
-              <Button variant="destructive" disabled={isPending} onClick={onConfirm}>
-                {isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    <span role="status" aria-live="polite">
-                      Disabling
-                    </span>
-                  </>
-                ) : (
-                  "Skip tutorial"
-                )}
-              </Button>
-            </div>
-          </div>
-          <Image
-            src={getLemuImage(variant)}
-            width={256}
-            height={384}
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none h-40 w-auto shrink-0 select-none self-end object-contain drop-shadow-lg max-sm:hidden"
-          />
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-/**
- * Tutorial assistant component props
- * @param rightSideBarOpen - Whether the right side bar is open
- * @param setRightSideBarOpen - Function to set the right side bar open
- * @param rightSideBarRef - Reference to the right side bar
- * @returns
- */
-interface TutorialAssistantProps {
-  /** Viewport width below which the shell moves its game menu into a drawer. */
-  sidebarBreakpoint: number;
-  rightSideBarOpen: boolean;
-  setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  rightSideBarRef: React.RefObject<HTMLDivElement | null>;
-}
 
 /**
  * Tutorial assistant component
@@ -500,6 +121,8 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
     </ActivityDock>
   );
 };
+
+export default TutorialAssistant;
 
 /**
  * Finishes the tutorial of a player who graduated with the lesson collapsed, on
@@ -1728,7 +1351,345 @@ const PlayerTutorialAssistant: React.FC<
   );
 };
 
-export default TutorialAssistant;
+/**
+ * Lemu standing on the dock's top edge, cropped at the waist independently of
+ * lesson height. She is decorative and lets clicks through, but moves to the
+ * other end of the dock, or leaves, rather than stand over the highlight.
+ */
+const AssistantPortrait: React.FC<{
+  characterImage?: string;
+  avoidBox: TutorialScreenBox | null;
+  dodgeHighlight?: boolean;
+}> = ({ characterImage, avoidBox, dodgeHighlight }) => {
+  const { variant } = useAbVariant(LEMU_EXPERIMENT);
+  const { swapSides } = useActivityDock();
+  const image = characterImage || getLemuImage(variant);
+  const waist = LEMU_PORTRAIT_WAIST[image] ?? 0.5;
+  const stripRef = React.useRef<HTMLDivElement>(null);
+  const [side, setSide] = useState<TutorialPortraitSide | null>("right");
+  // Measured after layout so she never paints where she is about to leave. The
+  // dock moves when it dodges to the top or swaps sides, which the effect re-runs for.
+  React.useLayoutEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const place = () => {
+      setSide(
+        getTutorialPortraitSide({
+          frame: strip.getBoundingClientRect(),
+          portraitWidth: strip.querySelector("img")?.getBoundingClientRect().width ?? 0,
+          inset: PORTRAIT_INSET_PX,
+          avoid: avoidBox,
+        }),
+      );
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(strip);
+    window.addEventListener("resize", place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [avoidBox, dodgeHighlight, swapSides]);
+  // A dodging dock sits just below the top bar, with no room above it for her.
+  if (dodgeHighlight) return null;
+  return (
+    <div
+      ref={stripRef}
+      className="pointer-events-none absolute inset-x-0 bottom-full overflow-hidden"
+      style={{ height: `calc(var(--assistant-portrait-height) * ${waist})` }}
+    >
+      <Image
+        src={image}
+        width={512}
+        height={768}
+        alt=""
+        aria-hidden="true"
+        className={cn(
+          "h-[var(--assistant-portrait-height)] w-auto max-w-[60%] select-none object-contain drop-shadow-2xl",
+          // She faces the middle of the dock from whichever end she stands at.
+          side === "left" ? "mr-auto ml-4" : "mr-4 ml-auto scale-x-[-1]",
+          !side && "invisible",
+        )}
+      />
+    </div>
+  );
+};
+
+/**
+ * The tutorial lesson inside the Activity dock: a header naming the chapter and
+ * a progress bar, so a player always knows where they are in the trials, then
+ * scrolling text above the call to action and the controls that answer it.
+ */
+const AssistantDialog: React.FC<{
+  title: string;
+  eyebrow?: string;
+  progress?: { position: number; total: number };
+  stepId?: string;
+  action?: string;
+  /** What Lemu says, shown above the call to action. */
+  lead?: React.ReactNode;
+  children?: React.ReactNode;
+  /** Controls that answer the step, kept in view under the scrolling text. */
+  footer?: React.ReactNode;
+  onOpenDisableModal?: () => void;
+  characterImage?: string;
+  onOpenOrderingDialog?: () => void;
+  showOrderingButton?: boolean;
+  /** Anchor to the top instead, to uncover a highlight it would otherwise sit on. */
+  dodgeHighlight?: boolean;
+  /** The highlighted element, which Lemu's portrait must not stand over. */
+  avoidBox?: TutorialScreenBox | null;
+  isBusy?: boolean;
+  errorMessage?: string;
+}> = ({
+  title,
+  eyebrow,
+  progress,
+  stepId,
+  action,
+  lead,
+  children,
+  footer,
+  onOpenDisableModal,
+  characterImage,
+  onOpenOrderingDialog,
+  showOrderingButton,
+  dodgeHighlight,
+  avoidBox = null,
+  isBusy = false,
+  errorMessage,
+}) => {
+  const sectionRef = React.useRef<HTMLElement>(null);
+  // The dock is fixed over the foot of the page; while a lesson is open the game
+  // layouts pad their content by its height, so whatever it covers can be
+  // scrolled clear of it.
+  React.useLayoutEffect(() => {
+    const dock = sectionRef.current?.closest<HTMLElement>("[data-activity-dock]");
+    if (!dock) return;
+    const root = document.documentElement;
+    const reserve = () =>
+      root.style.setProperty("--activity-dock-space", `${dock.offsetHeight}px`);
+    reserve();
+    const observer = new ResizeObserver(reserve);
+    observer.observe(dock);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--activity-dock-space");
+    };
+  }, []);
+  return (
+    <section
+      ref={sectionRef}
+      id={TUTORIAL_ASSISTANT_PANEL_ID}
+      data-tutorial-step={stepId}
+      data-dodge-highlight={dodgeHighlight || undefined}
+      aria-label={`Tutorial: ${title}`}
+      aria-live="polite"
+      className="pointer-events-auto"
+    >
+      <AssistantPortrait
+        characterImage={characterImage}
+        avoidBox={avoidBox}
+        dodgeHighlight={dodgeHighlight}
+      />
+      <div className="relative z-10 rounded-b-xl bg-card" aria-busy={isBusy}>
+        <header className="flex items-start gap-2 px-4 pt-3 md:px-5">
+          <div className="min-w-0 flex-1">
+            {eyebrow && (
+              <p className="truncate font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+                {eyebrow}
+              </p>
+            )}
+            <h2 className="font-bold text-lg text-primary leading-tight">{title}</h2>
+          </div>
+          {onOpenDisableModal && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenDisableModal();
+              }}
+              disabled={isBusy}
+              className="-mr-2 h-8 w-8 shrink-0 opacity-60 hover:opacity-100"
+              title={isBusy ? "Disabling" : "Skip tutorial"}
+              aria-label={isBusy ? "Disabling" : "Skip tutorial"}
+            >
+              {isBusy ? (
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+              ) : (
+                <X className="h-5 w-5" aria-hidden="true" />
+              )}
+            </Button>
+          )}
+        </header>
+        {progress && (
+          <div
+            className="flex gap-1 px-4 pt-2 md:px-5"
+            role="progressbar"
+            aria-label="Chapter progress"
+            aria-valuemin={1}
+            aria-valuemax={progress.total}
+            aria-valuenow={progress.position}
+          >
+            {Array.from({ length: progress.total }, (_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "h-1.5 flex-1 rounded-full",
+                  i < progress.position ? "bg-primary" : "bg-primary/20",
+                )}
+              />
+            ))}
+          </div>
+        )}
+        <div className="max-h-[min(40dvh,420px,calc(100dvh-var(--assistant-portrait-height)-22rem))] space-y-3 overflow-y-auto overscroll-contain px-4 py-3 md:px-5">
+          {isBusy && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-center gap-2 font-medium text-base text-muted-foreground"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Disabling
+            </div>
+          )}
+          {errorMessage && !isBusy && (
+            <p role="alert" className="text-base text-destructive">
+              {errorMessage}
+            </p>
+          )}
+          <fieldset disabled={isBusy} className="contents">
+            {lead}
+            {children}
+            {showOrderingButton && onOpenOrderingDialog && (
+              <div className="flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenOrderingDialog();
+                  }}
+                  className="opacity-60 hover:opacity-100"
+                  title="Sort quest priorities"
+                >
+                  <Settings2 className="mr-1 h-4 w-4" />
+                  <span className="text-sm">Priority</span>
+                </Button>
+              </div>
+            )}
+          </fieldset>
+        </div>
+        {(action || footer) && (
+          <fieldset
+            disabled={isBusy}
+            className="space-y-3 rounded-b-xl border-border border-t bg-card px-4 py-3 md:px-5"
+          >
+            {action && (
+              <p className="flex items-start gap-2 rounded-lg border border-amber-500/70 bg-amber-500/15 px-3 py-2 font-semibold text-base">
+                <MousePointerClick
+                  className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+                  aria-hidden="true"
+                />
+                <span>{action}</span>
+              </p>
+            )}
+            {footer}
+          </fieldset>
+        )}
+      </div>
+    </section>
+  );
+};
+
+/**
+ * Confirmation dialog for cancelling the tutorial
+ * Shows the assistant character and warns the user
+ */
+const CancelTutorialConfirmDialog: React.FC<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+  isPending: boolean;
+  errorMessage?: string;
+}> = ({ open, onOpenChange, onConfirm, isPending, errorMessage }) => {
+  const { variant } = useAbVariant(LEMU_EXPERIMENT);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!isPending) onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent
+        className="z-[70] sm:max-w-md"
+        closeDisabled={isPending}
+        aria-busy={isPending}
+        onEscapeKeyDown={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+      >
+        <div className="flex gap-4">
+          <div className="min-w-0 flex-1 space-y-4">
+            <DialogHeader>
+              <DialogTitle>Skip the Academy Trials?</DialogTitle>
+              <DialogDescription className="pt-2">
+                The trials teach combat, training, travel and companions, and they grant
+                the experience you need for the Genin exam. We{" "}
+                <strong>highly recommend</strong> finishing them.
+                <br />
+                <br />
+                If you change your mind, you can turn the tutorial back on from the
+                support button.
+              </DialogDescription>
+            </DialogHeader>
+            {errorMessage && !isPending && (
+              <p role="alert" className="text-destructive text-sm">
+                {errorMessage}
+              </p>
+            )}
+            <div className="flex justify-start gap-2">
+              <Button
+                variant="outline"
+                disabled={isPending}
+                onClick={() => onOpenChange(false)}
+              >
+                Keep training
+              </Button>
+              <Button variant="destructive" disabled={isPending} onClick={onConfirm}>
+                {isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <span role="status" aria-live="polite">
+                      Disabling
+                    </span>
+                  </>
+                ) : (
+                  "Skip tutorial"
+                )}
+              </Button>
+            </div>
+          </div>
+          <Image
+            src={getLemuImage(variant)}
+            width={256}
+            height={384}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none h-40 w-auto shrink-0 select-none self-end object-contain drop-shadow-lg max-sm:hidden"
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 /**
  * Dims the page around a highlight. A mask cut-out rather than a huge
@@ -1793,6 +1754,30 @@ const HandPointer: React.FC<{
       }}
     />
   );
+};
+
+/** Include the Activity header when keeping highlighted controls clear of the dock. */
+const getAssistantPanelRect = (): DOMRect | null => {
+  const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
+  return (
+    (panel?.closest("[data-activity-dock]") ?? panel)?.getBoundingClientRect() ?? null
+  );
+};
+
+const rectsOverlap = (a: DOMRect, b: DOMRect) =>
+  !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+
+/**
+ * Where a highlight of this height should end up vertically. The window's own
+ * middle is not safe: the assistant panel is fixed over the foot of the screen,
+ * so on a short viewport the middle is underneath it.
+ */
+const getPreferredHighlightCentre = (targetHeight: number) => {
+  const safeTop = 80;
+  const panel = getAssistantPanelRect();
+  const safeBottom =
+    panel && panel.top > safeTop + targetHeight ? panel.top : window.innerHeight;
+  return (safeTop + safeBottom) / 2;
 };
 
 /**
@@ -1920,3 +1905,18 @@ const findElementToHighlight = (
     height: rect.height,
   };
 };
+
+/**
+ * Tutorial assistant component props
+ * @param rightSideBarOpen - Whether the right side bar is open
+ * @param setRightSideBarOpen - Function to set the right side bar open
+ * @param rightSideBarRef - Reference to the right side bar
+ * @returns
+ */
+interface TutorialAssistantProps {
+  /** Viewport width below which the shell moves its game menu into a drawer. */
+  sidebarBreakpoint: number;
+  rightSideBarOpen: boolean;
+  setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  rightSideBarRef: React.RefObject<HTMLDivElement | null>;
+}
