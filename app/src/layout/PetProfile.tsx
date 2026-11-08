@@ -433,12 +433,12 @@ export function PetProfile() {
     );
   // Send players through the existing destination picker instead of a location-gated page.
   const isAtSanctuary = userData.sector === MAP_WAKE_ISLAND_SECTOR;
-  const cannotTravel = !canAttemptAwakeAction(userData) || !!userData.battleId;
-  const travelReason = cannotTravel
+  const notAwakeOrInBattle = !canAttemptAwakeAction(userData) || !!userData.battleId;
+  const travelReason = notAwakeOrInBattle
     ? "Return to the awake state outside battle to travel."
     : "";
   const sanctuaryButton =
-    !isAtSanctuary && cannotTravel ? (
+    !isAtSanctuary && notAwakeOrInBattle ? (
       <Button variant="outline" disabled>
         Travel to Wake Island
       </Button>
@@ -479,12 +479,11 @@ export function PetProfile() {
     reputation: data.slotCost,
     silver: data.slotSilverCost,
   });
-  const slotBlockMessage =
-    !canAttemptAwakeAction(userData) || userData.battleId
-      ? "You must be awake and out of combat to unlock a slot."
-      : slotBalance < slotCost
-        ? `You need ${(slotCost - slotBalance).toLocaleString()} more ${slotCurrencyLabel} to unlock this slot.`
-        : null;
+  const slotBlockMessage = notAwakeOrInBattle
+    ? "You must be awake and out of combat to unlock a slot."
+    : slotBalance < slotCost
+      ? `You need ${(slotCost - slotBalance).toLocaleString()} more ${slotCurrencyLabel} to unlock this slot.`
+      : null;
   const canUnlockSlot = !isBusy && !slotBlockMessage && data.slots < data.maxSlots;
   const collection = (
     <>
@@ -543,7 +542,7 @@ export function PetProfile() {
             )}
           </div>
         </div>
-        {pet && !isAtSanctuary && cannotTravel && (
+        {pet && !isAtSanctuary && notAwakeOrInBattle && (
           <p className="mt-2 text-muted-foreground text-sm">{travelReason}</p>
         )}
         <details
@@ -679,12 +678,17 @@ export function PetProfile() {
   const settingsDisabled = isBusy || isAway || !canAttemptAwakeAction(userData);
   const nextRank = data.nextRank;
   const canEvolve = data.canRankUp && !settingsDisabled && !isGenerating;
-  const retryAt = data.generationRetryAt ? new Date(data.generationRetryAt) : null;
+  const retryAt = data.generationRetryAt;
   const selectedMeal =
     data.feedMeals.find((meal) => meal.id === selectedMealId) ?? data.feedMeals[0];
+  const feedDisabled = settingsDisabled || !data.canFeed || !selectedMeal;
   const canRetryGeneration = retryAt
     ? retryAt.getTime() <= Date.now()
     : pet.generationStatus !== "GENERATING";
+  const releaseDisabled =
+    settingsDisabled ||
+    isGenerating ||
+    (pet.generationStatus === "GENERATING" && !canRetryGeneration);
   // A claim whose lease expired unsettled produced no image and is not charged.
   const generationAbandoned =
     pet.generationStatus === "GENERATING" && !!retryAt && canRetryGeneration;
@@ -1102,7 +1106,7 @@ export function PetProfile() {
                       Cook meals in your home kitchen in {homeVillage.name}.{" "}
                       {travelReason}
                     </p>
-                    {cannotTravel ? (
+                    {notAwakeOrInBattle ? (
                       <Button variant="outline" disabled>
                         Travel home to cook
                       </Button>
@@ -1144,11 +1148,9 @@ export function PetProfile() {
                 </div>
                 <Confirm
                   title={`Feed ${selectedMeal?.name ?? "a meal"} to ${pet.name}?`}
-                  disabled={settingsDisabled || !data.canFeed || !selectedMeal}
+                  disabled={feedDisabled}
                   button={
-                    <Button
-                      disabled={settingsDisabled || !data.canFeed || !selectedMeal}
-                    >
+                    <Button disabled={feedDisabled}>
                       {feed.isPending ? "Feeding..." : "Feed one meal"}
                     </Button>
                   }
@@ -1658,20 +1660,9 @@ export function PetProfile() {
             <Confirm
               title={`Release ${pet.name}?`}
               className="break-words [&>div]:min-w-0"
-              disabled={
-                settingsDisabled ||
-                isGenerating ||
-                (pet.generationStatus === "GENERATING" && !canRetryGeneration)
-              }
+              disabled={releaseDisabled}
               button={
-                <Button
-                  variant="destructive"
-                  disabled={
-                    settingsDisabled ||
-                    isGenerating ||
-                    (pet.generationStatus === "GENERATING" && !canRetryGeneration)
-                  }
-                >
+                <Button variant="destructive" disabled={releaseDisabled}>
                   {release.isPending ? "Releasing..." : "Release companion"}
                 </Button>
               }

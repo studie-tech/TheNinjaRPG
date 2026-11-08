@@ -291,14 +291,8 @@ const PetTaskTerms = ({
     {entryRequirements.length > 0 && (
       <>
         {" "}
-        Accepting this contract consumes{" "}
-        {formatQuestEntryCost(
-          entryRequirements.map((entry) => ({
-            name: entry.name,
-            quantity: entry.quantity,
-          })),
-        )}{" "}
-        if it is not already active.
+        Accepting this contract consumes {formatQuestEntryCost(entryRequirements)} if it
+        is not already active.
       </>
     )}
   </p>
