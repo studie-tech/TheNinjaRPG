@@ -503,12 +503,8 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
         proceed_loading_label="Demoting"
         confirmClassName="bg-red-600 text-white hover:bg-red-700"
         isOpen={demoteTarget !== undefined}
-        setIsOpen={(nextOpen) => {
-          const shouldOpen =
-            typeof nextOpen === "function"
-              ? nextOpen(demoteTarget !== undefined)
-              : nextOpen;
-          if (!shouldOpen) setDemoteTargetId(null);
+        setIsOpen={(open) => {
+          if (!open) setDemoteTargetId(null);
         }}
         isLoading={
           demoteTarget !== undefined && demotingMembers.ids.has(demoteTarget.userId)
@@ -577,12 +573,8 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
         proceed_label="Promote member"
         proceed_loading_label="Promoting"
         isOpen={promoteTarget !== undefined}
-        setIsOpen={(nextOpen) => {
-          const shouldOpen =
-            typeof nextOpen === "function"
-              ? nextOpen(promoteTarget !== undefined)
-              : nextOpen;
-          if (!shouldOpen) setPromoteTargetId(null);
+        setIsOpen={(open) => {
+          if (!open) setPromoteTargetId(null);
         }}
         isLoading={
           promoteTarget !== undefined && promotingMembers.ids.has(promoteTarget.userId)
@@ -671,12 +663,8 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
         proceed_loading_label="Kicking"
         confirmClassName="bg-red-600 text-white hover:bg-red-700"
         isOpen={kickTarget !== undefined}
-        setIsOpen={(nextOpen) => {
-          const shouldOpen =
-            typeof nextOpen === "function"
-              ? nextOpen(kickTarget !== undefined)
-              : nextOpen;
-          if (!shouldOpen) setKickTargetId(null);
+        setIsOpen={(open) => {
+          if (!open) setKickTargetId(null);
         }}
         isLoading={
           kickTarget !== undefined && kickingMembers.ids.has(kickTarget.userId)
