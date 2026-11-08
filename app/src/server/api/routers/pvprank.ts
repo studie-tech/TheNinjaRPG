@@ -285,13 +285,15 @@ export const pvpRankRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user & permission guard
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Query
+      const [user, season] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        findRankedSeasonById(ctx.drizzle, input.id),
+      ]);
+      // Guard
       if (!canChangeContent(user.role)) {
         return errorResponse("You don't have permission to end ranked seasons");
       }
-      // Verify season exists & not already ended
-      const season = await findRankedSeasonById(ctx.drizzle, input.id);
       if (!season) {
         return errorResponse("Season not found");
       }
@@ -329,6 +331,9 @@ export const pvpRankRouter = createTRPCRouter({
             favoriteConsumableIds: [],
           },
         };
+        // RankedLoadout has no unique key on userId: two concurrent first reads of one
+        // account can each insert a row. Every read uses the same unordered lookup and in
+        // practice returns the same row, so the cost is a stray row support can remove.
         await insertRankedLoadoutForGetRankedLoadout(ctx.drizzle, loadout);
         return loadout;
       }

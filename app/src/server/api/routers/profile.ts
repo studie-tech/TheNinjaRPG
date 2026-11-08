@@ -1229,6 +1229,8 @@ export const profileRouter = createTRPCRouter({
           listAiSpriteAnimationBindings(ctx.drizzle, input.id),
         ]);
       // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!aiData) return errorResponse("AI not found");
       if (!aiData.isAi) return errorResponse("Not an AI");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
@@ -1274,15 +1276,16 @@ export const profileRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, ai, habitats] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        findUserById(ctx.drizzle, input.id),
+        listHuntingHabitats(ctx.drizzle),
+      ]);
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role))
         return errorResponse("Not allowed to delete AI");
-      const [ai, habitats] = await Promise.all([
-        fetchUser(ctx.drizzle, input.id),
-        listHuntingHabitats(ctx.drizzle),
-      ]);
+      if (!ai) return errorResponse("AI not found");
       if (habitats.some((h) => h.content.contracts.some((c) => c.aiId === input.id)))
         return errorResponse(
           "This AI is used by a hunting contract. Remove the target first.",
@@ -2285,7 +2288,7 @@ export const profileRouter = createTRPCRouter({
       // Query
       const [actor, target] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
+        findUserById(ctx.drizzle, input.userId),
       ]);
       // Guards
       if (actor.isBanned)
@@ -2293,6 +2296,7 @@ export const profileRouter = createTRPCRouter({
       if (!canEditSeichiSilver(actor.role)) {
         return errorResponse("You don't have permission to edit Seichi Silver");
       }
+      if (!target) return errorResponse("User not found");
       // Early sufficiency check: gives the admin the precise "Insufficient"
       // message and keeps the AI moderator from seeing a negative projected
       // balance. The atomic CAS in adjustSeichiSilverAtomically remains the
@@ -2332,7 +2336,7 @@ export const profileRouter = createTRPCRouter({
       // Query
       const [awarder, target] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.targetUserId),
+        findUserById(ctx.drizzle, input.targetUserId),
       ]);
 
       // Guards
@@ -2341,6 +2345,7 @@ export const profileRouter = createTRPCRouter({
       if (!canAwardExperience(awarder)) {
         return errorResponse("You don't have permission to award experience");
       }
+      if (!target) return errorResponse("User not found");
 
       // Mutation
       const result = await updateUserDataForAwardExperience(ctx.drizzle, input);

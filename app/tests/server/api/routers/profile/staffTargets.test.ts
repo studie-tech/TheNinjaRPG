@@ -26,25 +26,28 @@ describeWithDatabase("staff actions on other accounts", () => {
     ]);
   });
 
-  it("rejects awarding experience to a missing account", async () => {
+  it("answers awarding experience to a missing account", async () => {
     const caller = await callerFor(profileRouter, STAFF);
-    await expect(
-      caller.awardExperience({ targetUserId: MISSING, amount: 10 }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-  });
-
-  it("rejects adjusting Seichi Silver of a missing account", async () => {
-    const caller = await callerFor(profileRouter, STAFF);
-    await expect(
-      caller.adjustSeichiSilver({ userId: MISSING, delta: 5, reason: "Event prize" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await caller.awardExperience({ targetUserId: MISSING, amount: 10 })).toEqual({
+      success: false,
+      message: "User not found",
+    });
     expect(await (await getTestDatabase()).select().from(actionLog)).toHaveLength(0);
   });
 
-  it("rejects deleting a missing AI", async () => {
+  it("answers adjusting Seichi Silver of a missing account", async () => {
     const caller = await callerFor(profileRouter, STAFF);
-    await expect(caller.delete({ id: MISSING })).rejects.toMatchObject({
-      code: "NOT_FOUND",
+    expect(
+      await caller.adjustSeichiSilver({ userId: MISSING, delta: 5, reason: "Event prize" }),
+    ).toEqual({ success: false, message: "User not found" });
+    expect(await (await getTestDatabase()).select().from(actionLog)).toHaveLength(0);
+  });
+
+  it("answers deleting a missing AI", async () => {
+    const caller = await callerFor(profileRouter, STAFF);
+    expect(await caller.delete({ id: MISSING })).toEqual({
+      success: false,
+      message: "AI not found",
     });
   });
 
@@ -62,8 +65,13 @@ describeWithDatabase("staff actions on other accounts", () => {
     expect(await database.query.userData.findFirst({ where: eq(userData.userId, AI) })).toBeDefined();
   });
 
-  it("lets a banned editor clone an AI", async () => {
+  it("rejects a banned editor cloning an AI", async () => {
     const caller = await callerFor(profileRouter, BANNED);
-    expect(await caller.cloneAi({ id: AI })).toMatchObject({ success: true });
+    expect(await caller.cloneAi({ id: AI })).toEqual({
+      success: false,
+      message: "You are banned and cannot perform this action",
+    });
+    const database = await getTestDatabase();
+    expect(await database.query.userData.findMany({ where: eq(userData.isAi, true) })).toHaveLength(1);
   });
 });
