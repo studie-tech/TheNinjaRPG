@@ -133,8 +133,6 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
     invitation && new Date(invitation.expiresAt).getTime() > now
       ? invitation
       : undefined;
-  const setWindow = (index: number, field: "day" | "hour", value: number) =>
-    setDraft(windows.map((w, i) => (i === index ? { ...w, [field]: value } : w)));
   /** Validate with the server's schema so publication failures preserve an editable draft. */
   const publishSchedule = () => {
     const parsed = kageScheduleSchema.safeParse({
@@ -223,86 +221,12 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
             )}
           </div>
           {isKage && !locked && (
-            <div className="space-y-3 rounded-lg border p-3">
-              <p className="font-semibold">Publish defense times</p>
-              <p className="text-sm">
-                Choose at least {KAGE_DEFENSE_MIN_DAYS} different days. Each window
-                lasts {KAGE_DEFENSE_WINDOW_HOURS} hours. Assigned matches lock the
-                schedule.
-              </p>
-              {windows.map((w, i) => (
-                <div key={i} className="flex flex-wrap items-end gap-2">
-                  <label className="flex min-w-36 flex-1 flex-col gap-1 text-sm">
-                    Day {i + 1}
-                    <select
-                      aria-label={`Defense day ${i + 1}`}
-                      className="h-10 rounded border bg-background px-2"
-                      value={w.day}
-                      disabled={pending}
-                      onChange={(e) => setWindow(i, "day", Number(e.target.value))}
-                    >
-                      {days.map((day, index) => (
-                        <option key={day} value={index}>
-                          {day}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex min-w-36 flex-1 flex-col gap-1 text-sm">
-                    Start time (UTC)
-                    <select
-                      aria-label={`Defense start time ${i + 1}`}
-                      className="h-10 rounded border bg-background px-2"
-                      value={w.hour}
-                      disabled={pending}
-                      onChange={(e) => setWindow(i, "hour", Number(e.target.value))}
-                    >
-                      {Array.from(
-                        { length: 25 - KAGE_DEFENSE_WINDOW_HOURS },
-                        (_, h) => (
-                          <option key={h} value={h}>
-                            {hour(h)}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </label>
-                  {windows.length > KAGE_DEFENSE_MIN_DAYS && (
-                    <Button
-                      variant="outline"
-                      disabled={pending}
-                      onClick={() =>
-                        setDraft(windows.filter((_, index) => index !== i))
-                      }
-                    >
-                      Remove day {i + 1}
-                    </Button>
-                  )}
-                </div>
-              ))}
-              <div className="flex flex-wrap gap-2">
-                <Button disabled={pending} onClick={publishSchedule}>
-                  Publish schedule
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={pending || windows.length >= days.length}
-                  onClick={() =>
-                    setDraft([
-                      ...windows,
-                      {
-                        day: days.findIndex(
-                          (_, day) => !windows.some((w) => w.day === day),
-                        ),
-                        hour: 12,
-                      },
-                    ])
-                  }
-                >
-                  Add day
-                </Button>
-              </div>
-            </div>
+            <KageScheduleEditor
+              windows={windows}
+              pending={pending}
+              setDraft={setDraft}
+              onPublish={publishSchedule}
+            />
           )}
           {hall.kageId && hall.schedule?.predecessor && (
             <p className="rounded border p-3 text-sm">
@@ -552,36 +476,7 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
               );
             })}
           </div>
-          <div className="space-y-2 border-t pt-3 text-muted-foreground text-sm">
-            <p>
-              Challengers may fight {KAGE_CHALLENGER_DAILY_LIMIT} time per UTC day and{" "}
-              {KAGE_CHALLENGER_WEEKLY_LIMIT} times per Monday–Sunday week. New matches
-              have at least {KAGE_DEFENSE_NOTICE_HOURS} hours’ notice. You remain free
-              to play while queued.
-            </p>
-            <p>
-              Check in {KAGE_DEFENSE_CHECK_IN_MINUTES} minutes early and remain awake.{" "}
-              {hall.kage?.isAi ? "The challenger" : "The Kage"} starts at the appointed
-              time with a {KAGE_DEFENSE_GRACE_MINUTES}
-              -minute grace period. Hospital stays defer the match.{" "}
-              {KAGE_DEFENSE_MAX_NO_SHOWS} missed attended starts remove the Kage;
-              strikes reset with each tenure. Service interruptions and wars cause no
-              attendance penalty.
-            </p>
-            <p>
-              The Kage can invite a scheduled challenger to fight immediately.
-              Invitations expire after {KAGE_DEFENSE_INSTANT_REQUEST_MINUTES} minutes
-              without penalty; accepting starts the title fight with the usual combat
-              rules and challenge limits.
-            </p>
-            <p>
-              Both fighters begin with full health, chakra and stamina. A losing
-              challenger pays {KAGE_PRESTIGE_COST.toLocaleString()} prestige. Queue
-              withdrawals and ordinary offline time have no prestige cost. Each new Kage
-              has {KAGE_DEFENSE_SETUP_HOURS} hours to publish a schedule; leadership
-              changes clear defense times and retain challenger priority.
-            </p>
-          </div>
+          <KageDefenseRules isAiKage={hall.kage?.isAi} />
           {!!hall.history.length && (
             <div className="space-y-2 border-t pt-3">
               <p className="font-semibold">Recent outcomes</p>
@@ -597,6 +492,128 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
     </ContentBox>
   );
 };
+
+/** Kage-only editor for the weekly defense windows; the parent owns the draft and publication. */
+const KageScheduleEditor = ({
+  windows,
+  pending,
+  setDraft,
+  onPublish,
+}: {
+  windows: KageWindow[];
+  pending: boolean;
+  setDraft: (windows: KageWindow[]) => void;
+  onPublish: () => void;
+}) => {
+  const setWindow = (index: number, field: "day" | "hour", value: number) =>
+    setDraft(windows.map((w, i) => (i === index ? { ...w, [field]: value } : w)));
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <p className="font-semibold">Publish defense times</p>
+      <p className="text-sm">
+        Choose at least {KAGE_DEFENSE_MIN_DAYS} different days. Each window lasts{" "}
+        {KAGE_DEFENSE_WINDOW_HOURS} hours. Assigned matches lock the schedule.
+      </p>
+      {windows.map((w, i) => (
+        <div key={i} className="flex flex-wrap items-end gap-2">
+          <label className="flex min-w-36 flex-1 flex-col gap-1 text-sm">
+            Day {i + 1}
+            <select
+              aria-label={`Defense day ${i + 1}`}
+              className="h-10 rounded border bg-background px-2"
+              value={w.day}
+              disabled={pending}
+              onChange={(e) => setWindow(i, "day", Number(e.target.value))}
+            >
+              {days.map((day, index) => (
+                <option key={day} value={index}>
+                  {day}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-36 flex-1 flex-col gap-1 text-sm">
+            Start time (UTC)
+            <select
+              aria-label={`Defense start time ${i + 1}`}
+              className="h-10 rounded border bg-background px-2"
+              value={w.hour}
+              disabled={pending}
+              onChange={(e) => setWindow(i, "hour", Number(e.target.value))}
+            >
+              {Array.from({ length: 25 - KAGE_DEFENSE_WINDOW_HOURS }, (_, h) => (
+                <option key={h} value={h}>
+                  {hour(h)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {windows.length > KAGE_DEFENSE_MIN_DAYS && (
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => setDraft(windows.filter((_, index) => index !== i))}
+            >
+              Remove day {i + 1}
+            </Button>
+          )}
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={pending} onClick={onPublish}>
+          Publish schedule
+        </Button>
+        <Button
+          variant="outline"
+          disabled={pending || windows.length >= days.length}
+          onClick={() =>
+            setDraft([
+              ...windows,
+              {
+                day: days.findIndex((_, day) => !windows.some((w) => w.day === day)),
+                hour: 12,
+              },
+            ])
+          }
+        >
+          Add day
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+/** Challenge limits, attendance, instant-fight and prestige rules shown to every viewer. */
+const KageDefenseRules = ({ isAiKage }: { isAiKage?: boolean }) => (
+  <div className="space-y-2 border-t pt-3 text-muted-foreground text-sm">
+    <p>
+      Challengers may fight {KAGE_CHALLENGER_DAILY_LIMIT} time per UTC day and{" "}
+      {KAGE_CHALLENGER_WEEKLY_LIMIT} times per Monday–Sunday week. New matches have at
+      least {KAGE_DEFENSE_NOTICE_HOURS} hours’ notice. You remain free to play while
+      queued.
+    </p>
+    <p>
+      Check in {KAGE_DEFENSE_CHECK_IN_MINUTES} minutes early and remain awake.{" "}
+      {isAiKage ? "The challenger" : "The Kage"} starts at the appointed time with a{" "}
+      {KAGE_DEFENSE_GRACE_MINUTES}
+      -minute grace period. Hospital stays defer the match. {KAGE_DEFENSE_MAX_NO_SHOWS}{" "}
+      missed attended starts remove the Kage; strikes reset with each tenure. Service
+      interruptions and wars cause no attendance penalty.
+    </p>
+    <p>
+      The Kage can invite a scheduled challenger to fight immediately. Invitations
+      expire after {KAGE_DEFENSE_INSTANT_REQUEST_MINUTES} minutes without penalty;
+      accepting starts the title fight with the usual combat rules and challenge limits.
+    </p>
+    <p>
+      Both fighters begin with full health, chakra and stamina. A losing challenger pays{" "}
+      {KAGE_PRESTIGE_COST.toLocaleString()} prestige. Queue withdrawals and ordinary
+      offline time have no prestige cost. Each new Kage has {KAGE_DEFENSE_SETUP_HOURS}{" "}
+      hours to publish a schedule; leadership changes clear defense times and retain
+      challenger priority.
+    </p>
+  </div>
+);
 
 const days = [
   "Sunday",
