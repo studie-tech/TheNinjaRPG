@@ -141,8 +141,7 @@ describeWithDatabase("web store payments", () => {
   });
   it("reserves one lifetime purchase atomically across concurrent gift recipients, including zero-reputation offers", async () => {
     const db = await getTestDatabase();
-    const limited = {...offer, contents:{...contents,reputationPoints:0}, bundleId:"limited"};
-    await db.insert(webStoreBundle).values({id:limited.bundleId,...limited,description:"",isActive:true,purchaseLimit:1});
+    const limited = await seedBundle({purchaseLimit:1}, {...offer, contents:{...contents,reputationPoints:0}});
     const attempts = await Promise.all(Array.from({length:6},(_,index) => reserveStoreOrder(db,"buyer",index % 2 ? "buyer" : "recipient",limited)));
     expect(attempts.filter(result => result.success)).toHaveLength(1);
     expect(attempts.filter(result => !result.success).every(result => result.message.includes("purchase limit"))).toBe(true);
@@ -163,8 +162,7 @@ describeWithDatabase("web store payments", () => {
   });
   it("counts earlier purchases after staff enable a limit and keeps counts through bundle edits", async () => {
     const db = await getTestDatabase();
-    const limited = {...offer,bundleId:"limited"};
-    await db.insert(webStoreBundle).values({id:limited.bundleId,...offer,description:"",isActive:true});
+    const limited = await seedBundle();
     for (let index=0;index<2;index++) {
       const result = await reserveStoreOrder(db,"buyer","recipient",limited);
       if (!result.success) throw new Error(result.message);
@@ -184,8 +182,7 @@ describeWithDatabase("web store payments", () => {
   });
   it("releases expired bundle slots and rechecks them before capturing stale checkouts", async () => {
     const db = await getTestDatabase();
-    const limited = {...offer,bundleId:"limited"};
-    await db.insert(webStoreBundle).values({id:limited.bundleId,...offer,description:"",isActive:true,purchaseLimit:1});
+    const limited = await seedBundle({purchaseLimit:1});
     const first = await reserveStoreOrder(db,"buyer","recipient",limited);
     if (!first.success) throw new Error(first.message);
     await db.update(webStoreOrder).set({expiresAt:new Date(0)}).where(eq(webStoreOrder.id,first.order.id));
@@ -210,8 +207,7 @@ describeWithDatabase("web store payments", () => {
     "CARD_BRAND_NOT_SUPPORTED", "CARD_COUNTRY_NOT_SUPPORTED", "CARD_DATA_NOT_FOUND", "PREFERRED_BRAND_NOT_SUPPORTED",
   ])("releases definitive funding failure %s while preserving pending and newer capture attempts", async issue => {
     const db = await getTestDatabase();
-    const limited = {...offer,bundleId:"limited"};
-    await db.insert(webStoreBundle).values({id:limited.bundleId,...offer,description:"",isActive:true,purchaseLimit:1});
+    const limited = await seedBundle({purchaseLimit:1});
     const reserved = await reserveStoreOrder(db,"buyer","recipient",limited);
     if (!reserved.success) throw new Error(reserved.message);
     expect(await authorizeStoreCapture(db,reserved.order.id,"buyer","old-attempt")).toBeNull();
@@ -220,9 +216,8 @@ describeWithDatabase("web store payments", () => {
     expect((await db.query.webStoreOrder.findFirst())?.captureAttemptId).toBe("new-attempt");
     const owner = await callerFor(paypalRouter,"buyer");
     let declined = false;
-    const fetchMock = spyOn(globalThis,"fetch").mockImplementation(async url => {
+    const fetchMock = mockPayPal(async url => {
       const path = String(url);
-      if (path.endsWith("/v1/oauth2/token")) return Response.json({access_token:"test-only"});
       if (path.endsWith("/v2/checkout/orders")) return Response.json({id:"NEXTORDER123456789"});
       if (path.endsWith("/capture")) return declined
         ? Response.json({details:[{issue}]},{status:422})
@@ -252,14 +247,12 @@ describeWithDatabase("web store payments", () => {
     {status:500,details:[{issue:"CARD_EXPIRED"}]},
   ])("keeps the purchase slot after an ambiguous capture error (%j)", async failure => {
     const db = await getTestDatabase();
-    const limited = {...offer,bundleId:"limited"};
-    await db.insert(webStoreBundle).values({id:limited.bundleId,...offer,description:"",isActive:true,purchaseLimit:1});
+    const limited = await seedBundle({purchaseLimit:1});
     const reserved = await reserveStoreOrder(db,"buyer","recipient",limited);
     if (!reserved.success) throw new Error(reserved.message);
     const owner = await callerFor(paypalRouter,"buyer");
-    const fetchMock = spyOn(globalThis,"fetch").mockImplementation(async url => {
+    const fetchMock = mockPayPal(async url => {
       const path = String(url);
-      if (path.endsWith("/v1/oauth2/token")) return Response.json({access_token:"test-only"});
       if (path.endsWith("/capture")) return Response.json({details:failure.details},{status:failure.status});
       return Response.json({status:"APPROVED",purchase_units:[{custom_id:`store:${reserved.order.id}`,invoice_id:reserved.order.id,amount:{currency_code:"USD",value:"12.50"}}]});
     });
@@ -274,8 +267,7 @@ describeWithDatabase("web store payments", () => {
   });
   it("rechecks current limits before capture but still delivers a completed provider payment", async () => {
     const db = await getTestDatabase();
-    const limited = {...offer,bundleId:"limited"};
-    await db.insert(webStoreBundle).values({id:limited.bundleId,...offer,description:"",isActive:true});
+    const limited = await seedBundle();
     const first = await reserveStoreOrder(db,"buyer","recipient",limited);
     const second = await reserveStoreOrder(db,"buyer","recipient",limited);
     if (!first.success || !second.success) throw new Error("Reservations failed");
@@ -288,15 +280,13 @@ describeWithDatabase("web store payments", () => {
   });
   it("releases a previously pending capture after PayPal reports a terminal failure", async () => {
     const db = await getTestDatabase();
-    const limited = {...offer,bundleId:"limited"};
-    await db.insert(webStoreBundle).values({id:limited.bundleId,...offer,description:"",isActive:true,purchaseLimit:1});
+    const limited = await seedBundle({purchaseLimit:1});
     const reserved = await reserveStoreOrder(db,"buyer","recipient",limited);
     if (!reserved.success) throw new Error(reserved.message);
     const owner = await callerFor(paypalRouter,"buyer");
     let status = "DECLINED";
-    const fetchMock = spyOn(globalThis,"fetch").mockImplementation(async url => String(url).endsWith("/v1/oauth2/token")
-      ? Response.json({access_token:"test-only"})
-      : Response.json({status:"COMPLETED",purchase_units:[{custom_id:`store:${reserved.order.id}`,invoice_id:reserved.order.id,amount:{currency_code:"USD",value:"12.50"},payments:{captures:[{status}]}}]}));
+    const fetchMock = mockPayPal(async () =>
+      Response.json({status:"COMPLETED",purchase_units:[{custom_id:`store:${reserved.order.id}`,invoice_id:reserved.order.id,amount:{currency_code:"USD",value:"12.50"},payments:{captures:[{status}]}}]}));
     try {
       for (const endpoint of ["captureStoreOrder","resolveOrder"] as const) {
         for (status of ["DECLINED","DENIED","FAILED"]) {
@@ -336,8 +326,7 @@ describeWithDatabase("web store payments", () => {
     const pending = reportingTransaction(order.id);
     pending.transaction_info.transaction_status = "P";
     let transactions: Parameters<typeof syncTransactions>[1] = [];
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async url => {
-      if (String(url).endsWith("/v1/oauth2/token")) return Response.json({ access_token: "test-only" });
+    const fetchMock = mockPayPal(async url => {
       return Response.json({ transaction_details: transactions });
     });
     try {
@@ -359,8 +348,7 @@ describeWithDatabase("web store payments", () => {
     const db = await getTestDatabase();
     const order = await reserve();
     await db.delete(userData).where(eq(userData.userId, "recipient"));
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async url => {
-      if (String(url).endsWith("/v1/oauth2/token")) return Response.json({ access_token: "test-only" });
+    const fetchMock = mockPayPal(async url => {
       return Response.json({ transaction_details: [reportingTransaction(order.id)] });
     });
     try {
@@ -448,8 +436,7 @@ describeWithDatabase("web store payments", () => {
     const batch = [reportingTransaction(failed.order.id), reportingTransaction(paid.id), legacy];
     const failure = `Transaction ID ${capture(failed.order.id).captureId}: Recipient unavailable. Contact support with your payment receipt.`;
     const caller = await callerFor(paypalRouter, "buyer");
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async url => {
-      if (String(url).endsWith("/v1/oauth2/token")) return Response.json({ access_token: "test-only" });
+    const fetchMock = mockPayPal(async url => {
       return Response.json({ transaction_details: batch });
     });
     try {
@@ -663,9 +650,8 @@ describeWithDatabase("web store payments", () => {
   it.each(["buyer", "recipient"])("creates server-priced provider orders and reconciles exactly once for %s", async recipientId => {
     const owner = await callerFor(paypalRouter,"buyer"); const db = await getTestDatabase();
     let provider:any; let captures=0; let requestedRepresentation=false;
-    const fetchMock = spyOn(globalThis,"fetch").mockImplementation(async (url,options) => {
+    const fetchMock = mockPayPal(async (url,options) => {
       const path=String(url);
-      if (path.endsWith("/v1/oauth2/token")) return Response.json({access_token:"test-only"});
       if (path.endsWith("/v2/checkout/orders")) {provider={...JSON.parse(String(options?.body)),id:"TESTORDER123456789",status:"APPROVED"}; return Response.json(provider);}
       if (path.endsWith("/capture")) {captures++;requestedRepresentation=new Headers(options?.headers).get("Prefer")==="return=representation";provider.status="COMPLETED";provider.purchase_units[0].payments={captures:[{id:"CAPTURE1",status:"COMPLETED",amount:provider.purchase_units[0].amount}]};return Response.json({id:provider.id,status:provider.status});}
       return Response.json(provider);
@@ -696,8 +682,7 @@ describeWithDatabase("web store payments", () => {
     const reserved = await reserveStoreOrder(db, "buyer", recipientId, offer);
     if (!reserved.success) throw new Error(reserved.message);
     const order = reserved.order;
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async url => {
-      if (String(url).endsWith("/v1/oauth2/token")) return Response.json({access_token:"test-only"});
+    const fetchMock = mockPayPal(async url => {
       return Response.json({
         id:"TESTORDER123456789",status:"COMPLETED",
         purchase_units:[{
@@ -736,9 +721,8 @@ describeWithDatabase("web store payments", () => {
       purchase_units:[{custom_id:`store:${order.id}`,invoice_id:order.id,amount:{currency_code:"USD",value:"12.50"},payments:{captures:[] as unknown[]}}],
     };
     let captures = 0;
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async url => {
+    const fetchMock = mockPayPal(async url => {
       const path = String(url);
-      if (path.endsWith("/v1/oauth2/token")) return Response.json({access_token:"test-only"});
       if (path.endsWith("/capture")) {
         captures++;
         provider.status = "COMPLETED";
@@ -763,43 +747,27 @@ describeWithDatabase("web store payments", () => {
     const owner = await callerFor(paypalRouter, "buyer");
     const db = await getTestDatabase();
     await db.update(userData).set({ reputationPointsTotal: 0 }).where(eq(userData.userId, "buyer"));
-    let provider: any;
-    let captures = 0;
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
-      const path = String(url);
-      if (path.endsWith("/v1/oauth2/token")) return Response.json({ access_token: "test-only" });
-      if (path.endsWith("/v2/checkout/orders")) {
-        provider = { ...JSON.parse(String(options?.body)), id: "TESTORDER123456789", status: "APPROVED" };
-        return Response.json(provider);
-      }
-      if (path.endsWith("/capture")) {
-        captures++;
-        provider.status = "COMPLETED";
-        provider.purchase_units[0].payments = { captures: [{ id: "CONFIRMATION1", status: "COMPLETED", amount: provider.purchase_units[0].amount }] };
-      }
-      return Response.json(provider);
-    });
+    const paypal = paypalProvider("CONFIRMATION1");
     const confirmation = spyOn(purchaseQueries, "findPurchaseUserSnapshot");
     try {
       expect((await owner.createStoreOrder({ recipientId: "buyer", selection: { type: "custom", reputationPoints: 73 } })).success).toBe(true);
       if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
       else confirmation.mockRejectedValueOnce(new Error("Payment confirmation unavailable"));
-      const result = await owner.captureStoreOrder({ orderId: provider.id });
+      const result = await owner.captureStoreOrder({ orderId: paypal.provider.id });
       expect(result.success).toBe(true);
       expect(result.userPatch).toBeUndefined();
       expect(result.userDelta).toBeUndefined();
       expect(result.purchase).toMatchObject({ transactionId: "CONFIRMATION1" });
-      expect((await owner.captureStoreOrder({ orderId: provider.id })).success).toBe(true);
-      expect(captures).toBe(1);
+      expect((await owner.captureStoreOrder({ orderId: paypal.provider.id })).success).toBe(true);
+      expect(paypal.captures).toBe(1);
       expect(await db.query.userData.findFirst({ where: eq(userData.userId, "buyer") })).toMatchObject({ reputationPoints: 73, reputationPointsTotal: 73 });
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
       expect(await db.query.webStoreOrder.findFirst()).toMatchObject({ grantedAt: expect.any(Date) });
-    } finally { confirmation.mockRestore(); fetchMock.mockRestore(); }
+    } finally { confirmation.mockRestore(); paypal.fetchMock.mockRestore(); }
   });
   it("refuses a mismatched order before calling the provider capture API", async () => {
     const owner = await callerFor(paypalRouter,"buyer"); const order=await reserve(); let captures=0;
-    const fetchMock=spyOn(globalThis,"fetch").mockImplementation(async (url) => {
-      if (String(url).endsWith("/v1/oauth2/token")) return Response.json({access_token:"test-only"});
+    const fetchMock = mockPayPal(async url => {
       if (String(url).endsWith("/capture")) captures++;
       return Response.json({id:"TESTORDER123456789",status:"APPROVED",purchase_units:[{custom_id:`store:${order.id}`,invoice_id:order.id,amount:{currency_code:"USD",value:"0.01"}}]});
     });
@@ -812,8 +780,7 @@ describeWithDatabase("web store payments", () => {
     const expiresAt = new Date(0);
     await db.update(webStoreOrder).set({ expiresAt }).where(eq(webStoreOrder.id, order.id));
     let captures = 0;
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async url => {
-      if (String(url).endsWith("/v1/oauth2/token")) return Response.json({ access_token: "test-only" });
+    const fetchMock = mockPayPal(async url => {
       if (String(url).endsWith("/capture")) captures++;
       return Response.json({
         id: "TESTORDER123456789", status,
@@ -838,8 +805,7 @@ describeWithDatabase("web store payments", () => {
     const expiresAt = new Date(0);
     await db.update(webStoreOrder).set({ expiresAt }).where(eq(webStoreOrder.id, order.id));
     let captures = 0;
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async url => {
-      if (String(url).endsWith("/v1/oauth2/token")) return Response.json({ access_token: "test-only" });
+    const fetchMock = mockPayPal(async url => {
       if (String(url).endsWith("/capture")) captures++;
       return Response.json({
         id: "TESTORDER123456789", status: "COMPLETED",
@@ -863,8 +829,7 @@ describeWithDatabase("web store payments", () => {
   });
   it("refuses to capture after the recipient or bundle items disappear", async () => {
     const owner=await callerFor(paypalRouter,"buyer");const db=await getTestDatabase();const order=await reserve();let captures=0;
-    const fetchMock=spyOn(globalThis,"fetch").mockImplementation(async url=>{
-      if(String(url).endsWith("/v1/oauth2/token"))return Response.json({access_token:"test-only"});
+    const fetchMock = mockPayPal(async url => {
       if(String(url).endsWith("/capture"))captures++;
       return Response.json({id:"TESTORDER123456789",status:"APPROVED",purchase_units:[{custom_id:`store:${order.id}`,invoice_id:order.id,amount:{currency_code:"USD",value:"12.50"}}]});
     });
@@ -958,33 +923,22 @@ describeWithDatabase("web store payments", () => {
     const owner = await callerFor(paypalRouter,"buyer");
     await owner.saveStoreBundle({data:{...offer,description:"",isActive:true}});
     const bundle = (await db.query.webStoreBundle.findFirst())!;
-    let provider:any; let captures=0;
-    const completePayment = () => {
-      provider.status="COMPLETED";
-      provider.purchase_units[0].payments={captures:[{id:"REPRICEDCAPTURE",status:"COMPLETED",amount:provider.purchase_units[0].amount}]};
-    };
-    const fetchMock = spyOn(globalThis,"fetch").mockImplementation(async (url,options) => {
-      const path=String(url);
-      if(path.endsWith("/v1/oauth2/token"))return Response.json({access_token:"test-only"});
-      if(path.endsWith("/v2/checkout/orders")){provider={...JSON.parse(String(options?.body)),id:"TESTORDER123456789",status:"APPROVED"};return Response.json(provider);}
-      if(path.endsWith("/capture")){captures++;completePayment();}
-      return Response.json(provider);
-    });
+    const paypal = paypalProvider("REPRICEDCAPTURE");
     try {
       expect((await owner.createStoreOrder({recipientId:"recipient",selection:{type:"bundle",bundleId:bundle.id}})).success).toBe(true);
       await db.update(item).set({repsCost:10}).where(eq(item.id,"store-item"));
-      const rejected=await owner.captureStoreOrder({orderId:provider.id});
+      const rejected=await owner.captureStoreOrder({orderId:paypal.provider.id});
       expect(rejected.success).toBe(false);
       expect(rejected.message).toContain("No payment was captured");
-      expect(captures).toBe(0);
+      expect(paypal.captures).toBe(0);
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(0);
-      completePayment();
-      expect((await owner.captureStoreOrder({orderId:provider.id})).success).toBe(true);
-      expect((await owner.resolveOrder({orderId:provider.id})).success).toBe(true);
+      paypal.completePayment();
+      expect((await owner.captureStoreOrder({orderId:paypal.provider.id})).success).toBe(true);
+      expect((await owner.resolveOrder({orderId:paypal.provider.id})).success).toBe(true);
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
       expect(await db.query.userData.findFirst({where:eq(userData.userId,"recipient")})).toMatchObject({reputationPoints:20,money:500});
       expect((await db.query.userItem.findMany()).reduce((sum,row)=>sum+row.quantity,0)).toBe(7);
-    } finally {fetchMock.mockRestore();}
+    } finally {paypal.fetchMock.mockRestore();}
   });
   it("rejects published bundles containing hidden items before opening checkout", async () => {
     const owner = await callerFor(paypalRouter,"buyer"); const db = await getTestDatabase();
@@ -1006,35 +960,24 @@ describeWithDatabase("web store payments", () => {
     const bundle = (await owner.getStoreBundles()).bundles[0]!;
     const player = await callerFor(paypalRouter,"recipient");
     const inventory = await callerFor(itemRouter,"recipient");
-    let provider:any; let captures=0;
-    const completePayment = () => {
-      provider.status="COMPLETED";
-      provider.purchase_units[0].payments={captures:[{id:"HIDDENITEMCAPTURE",status:"COMPLETED",amount:provider.purchase_units[0].amount}]};
-    };
-    const fetchMock = spyOn(globalThis,"fetch").mockImplementation(async (url,options) => {
-      const path=String(url);
-      if(path.endsWith("/v1/oauth2/token"))return Response.json({access_token:"test-only"});
-      if(path.endsWith("/v2/checkout/orders")){provider={...JSON.parse(String(options?.body)),id:"TESTORDER123456789",status:"APPROVED"};return Response.json(provider);}
-      if(path.endsWith("/capture")){captures++;completePayment();}
-      return Response.json(provider);
-    });
+    const paypal = paypalProvider("HIDDENITEMCAPTURE");
     try {
       expect((await player.createStoreOrder({recipientId:"recipient",selection:{type:"bundle",bundleId:bundle.id}})).success).toBe(true);
       await db.update(item).set({hidden:true}).where(eq(item.id,"store-item"));
-      const result=await player.captureStoreOrder({orderId:provider.id});
-      expect({success:result.success,captures,receipts:(await db.query.paypalTransaction.findMany()).length,inventoryRows:(await db.query.userItem.findMany()).length,visibleItems:(await inventory.getUserItems()).length,visibleVariants:(await inventory.getUserItemsWithVariants()).length}).toEqual({success:false,captures:0,receipts:0,inventoryRows:0,visibleItems:0,visibleVariants:0});
+      const result=await player.captureStoreOrder({orderId:paypal.provider.id});
+      expect({success:result.success,captures:paypal.captures,receipts:(await db.query.paypalTransaction.findMany()).length,inventoryRows:(await db.query.userItem.findMany()).length,visibleItems:(await inventory.getUserItems()).length,visibleVariants:(await inventory.getUserItemsWithVariants()).length}).toEqual({success:false,captures:0,receipts:0,inventoryRows:0,visibleItems:0,visibleVariants:0});
       expect(result.message).toBe("An item in this checkout is no longer available. No payment was captured.");
-      expect(provider.status).toBe("APPROVED");
-      completePayment();
-      expect((await player.captureStoreOrder({orderId:provider.id})).success).toBe(true);
-      expect((await player.captureStoreOrder({orderId:provider.id})).success).toBe(true);
-      expect(captures).toBe(0);
+      expect(paypal.provider.status).toBe("APPROVED");
+      paypal.completePayment();
+      expect((await player.captureStoreOrder({orderId:paypal.provider.id})).success).toBe(true);
+      expect((await player.captureStoreOrder({orderId:paypal.provider.id})).success).toBe(true);
+      expect(paypal.captures).toBe(0);
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
       expect(await db.query.userItem.findMany()).toHaveLength(1);
       await db.update(item).set({hidden:false}).where(eq(item.id,"store-item"));
       expect(await inventory.getUserItems()).toHaveLength(1);
       expect(await inventory.getUserItemsWithVariants()).toHaveLength(1);
-    } finally {fetchMock.mockRestore();}
+    } finally {paypal.fetchMock.mockRestore();}
   });
   it("assigns fresh checkout identities to repeated purchases of a published bundle", async () => {
     const owner = await callerFor(paypalRouter,"buyer");
@@ -1082,8 +1025,7 @@ describeWithDatabase("web store payments", () => {
     const order = await reserve();
     const buyer = await callerFor(paypalRouter,"buyer");
     await db.insert(userItem).values({id:"existing-item",userId:"recipient",itemId:"store-item",quantity:1});
-    const fetchMock = spyOn(globalThis,"fetch").mockImplementation(async url => {
-      if(String(url).endsWith("/v1/oauth2/token"))return Response.json({access_token:"test-only"});
+    const fetchMock = mockPayPal(async url => {
       return Response.json({id:"TESTORDER123456789",status:"COMPLETED",purchase_units:[{custom_id:`store:${order.id}`,invoice_id:order.id,amount:{currency_code:"USD",value:"12.50"},payments:{captures:[{id:"DELETIONCAPTURE",status:"COMPLETED",amount:{currency_code:"USD",value:"12.50"}}]}}]});
     });
     let attemptedRecovery = false;
@@ -1119,3 +1061,41 @@ describeWithDatabase("web store payments", () => {
   });
 });
 const dbAuditCount = async () => (await (await getTestDatabase()).query.actionLog.findMany()).length;
+
+/** Stub fetch so PayPal's OAuth token request succeeds and every other request goes to `route`. */
+const mockPayPal = (route: (url: string, options?: RequestInit) => Promise<Response>) =>
+  spyOn(globalThis, "fetch").mockImplementation(async (url, options) =>
+    String(url).endsWith("/v1/oauth2/token") ? Response.json({ access_token: "test-only" }) : route(String(url), options));
+
+/** Simulate PayPal for a server-created order: approved on creation, completed with `captureId` on capture. */
+function paypalProvider(captureId: string) {
+  let provider: any;
+  let captures = 0;
+  const completePayment = () => {
+    provider.status = "COMPLETED";
+    provider.purchase_units[0].payments = { captures: [{ id: captureId, status: "COMPLETED", amount: provider.purchase_units[0].amount }] };
+  };
+  const fetchMock = mockPayPal(async (url, options) => {
+    if (url.endsWith("/v2/checkout/orders")) {
+      provider = { ...JSON.parse(String(options?.body)), id: "TESTORDER123456789", status: "APPROVED" };
+      return Response.json(provider);
+    }
+    if (url.endsWith("/capture")) {
+      captures++;
+      completePayment();
+    }
+    return Response.json(provider);
+  });
+  return {
+    fetchMock,
+    completePayment,
+    get provider() { return provider; },
+    get captures() { return captures; },
+  };
+}
+
+/** Publish the shared offer as the "limited" bundle with `row` overrides and return the offer bound to it. */
+async function seedBundle(row: Partial<typeof webStoreBundle.$inferInsert> = {}, bundle = offer) {
+  await (await getTestDatabase()).insert(webStoreBundle).values({ id: "limited", ...bundle, description: "", isActive: true, ...row });
+  return { ...bundle, bundleId: "limited" };
+}
