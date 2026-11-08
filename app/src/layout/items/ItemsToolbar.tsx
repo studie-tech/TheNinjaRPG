@@ -104,8 +104,7 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   // Calculate which kits will be used (shared with item.useRepairAll)
   const repairKitCalculation = calculateKitsToUse(itemsNeedingRepair, repairKits);
 
-  const repairAllInfo = repairKitCalculation;
-  const canRepairWithKits = repairKits.length > 0 && repairAllInfo.canRepairAll;
+  const canRepairWithKits = repairKits.length > 0 && repairKitCalculation.canRepairAll;
   // The selector renders nothing for a single loadout; drop its label with it.
   const hasLoadouts = fedItemLoadouts(userData) > 1;
   const canRepairAll =
@@ -200,11 +199,11 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
                 You are about to repair all {itemsNeedingRepair.length} item
                 {itemsNeedingRepair.length !== 1 ? "s" : ""} using repair kits.
               </p>
-              {repairAllInfo.kitsToUse.length > 0 && (
+              {repairKitCalculation.kitsToUse.length > 0 && (
                 <div>
                   <p className="mb-2 font-semibold">Repair kits to be used:</p>
                   <div className="space-y-1">
-                    {repairAllInfo.kitsToUse.map((kit) => (
+                    {repairKitCalculation.kitsToUse.map((kit) => (
                       <div
                         key={kit.repairItemId}
                         className="flex items-center justify-between text-sm"
@@ -224,7 +223,7 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
                 You have {itemsNeedingRepair.length} damaged item
                 {itemsNeedingRepair.length !== 1 ? "s" : ""} that need
                 {itemsNeedingRepair.length === 1 ? "s" : ""}{" "}
-                {repairAllInfo.totalDurabilityNeeded} total durability, but you
+                {repairKitCalculation.totalDurabilityNeeded} total durability, but you
                 don&apos;t have enough repair kits to repair all of them.
               </p>
             </div>

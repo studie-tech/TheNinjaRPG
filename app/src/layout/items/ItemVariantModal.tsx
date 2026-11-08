@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
@@ -21,7 +20,6 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
 }) => {
   const utils = api.useUtils();
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
-  const [isOpen, setIsOpen] = useState(true);
   const variants = userItem.item.variants ?? [];
   const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {
     enabled: variants.some((variant) => Boolean(variant.requiredItemId)),
@@ -63,7 +61,6 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
       if (result.success || result.userRecovery)
         await updateUser(result, { revision, refetch: false });
       if (result.success) {
-        setIsOpen(false);
         onClose();
         await Promise.all([
           utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
@@ -83,7 +80,6 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
           utils.profile.getUser.invalidate(),
           utils.travel.getSectorData.invalidate(),
         ]);
-        setIsOpen(false);
         onClose();
       }
     },
@@ -91,17 +87,13 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
 
   const activeVariantId = userItem.activeVariantId;
 
-  const handleClose: React.Dispatch<React.SetStateAction<boolean>> = (value) => {
-    const nextOpen = typeof value === "function" ? value(isOpen) : value;
-    setIsOpen(nextOpen);
-    if (!nextOpen) onClose();
-  };
-
   return (
     <Modal
       title={`Variants — ${userItem.item.name}`}
-      isOpen={isOpen}
-      setIsOpen={handleClose}
+      isOpen
+      setIsOpen={(open) => {
+        if (!open) onClose();
+      }}
       isValid={false}
     >
       <p className="mb-4 text-muted-foreground text-sm">
