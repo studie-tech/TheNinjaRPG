@@ -13,6 +13,7 @@ import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -25,6 +26,7 @@ const LEADER = "poll-leader";
 
 describeWithDatabase("getBattle settlement of a clan challenge", () => {
   beforeEach(async () => {
+    stubRateLimitTransport({ answerOtherRequests: true });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
       aiProfile,

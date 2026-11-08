@@ -592,6 +592,7 @@ describeWithDatabase("original sanctions during native deletion", () => {
     });
     expect(revised!.banEnd!.getTime()).toBeGreaterThan(end.getTime());
     // The raw report can expire during the native drain while its retained case runs on.
+    // Cleanup also compares MySQL's clock, so advancing only Bun would change the report state.
     await new Promise((resolve) =>
       setTimeout(resolve, Math.max(0, end.getTime() - Date.now() + 30)),
     );
@@ -1178,6 +1179,7 @@ describeWithDatabase("original sanctions during native deletion", () => {
       await startDeletion();
       const staff = await callerFor(reportsRouter, "staff");
       if (retiring === "expiry") {
+        // Cleanup's CURRENT_TIMESTAMP guard must observe expiry on the database clock.
         await new Promise((resolve) => setTimeout(resolve, 1300));
         await sanctions.removeExpiredSanctionTombstones(database);
       } else {
@@ -1305,6 +1307,7 @@ describeWithDatabase("original sanctions during native deletion", () => {
         success: true,
       });
       if (!hasOwnSource) {
+        // Both the retained source and its SQL clock guards must cross the deadline.
         await new Promise((resolve) => setTimeout(resolve, 1800));
         await sanctions.removeExpiredSanctionTombstones(database);
       }

@@ -211,7 +211,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     const priorState = await actor.getState();
     const cache = cachedProfile(initial, () => profile.getUser(), priorState);
     const revision = cache.callbacks.onMutate();
-    const deadline = new Date(Date.now() + 1500);
+    const deadline = new Date(Date.now() + 60_000);
     await db.update(dungeonRun).set({ expiresAt: deadline }).where(eq(dungeonRun.id, created.id));
     // The mutation commits while live; only its required state read crosses the deadline.
     const response = userDeltaResponseSchema.parse(await actor.act({ id: created.id,
@@ -219,7 +219,10 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     if (accepts) expect(response).toMatchObject({ success: true, userPatch: { status: "QUEUED" } });
     else expect(response).toMatchObject({ success: true, userPatch: {} });
     expect(deadline.getTime()).toBeGreaterThan(Date.now());
-    if (scenario !== "live") await new Promise((resolve) => setTimeout(resolve, Math.max(0, deadline.getTime() - Date.now()) + 50));
+    if (scenario !== "live") {
+      // The expiry CAS uses MySQL NOW(3); both clocks must see an expired deadline.
+      await db.update(dungeonRun).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(dungeonRun.id, created.id));
+    }
     if (scenario === "other-poll" || scenario === "vanished") await actor.getState();
     if (scenario === "vanished") await db.delete(dungeonMember).where(eq(dungeonMember.userId, userId));
     if (scenario === "read-error")

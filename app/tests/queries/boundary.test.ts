@@ -60,6 +60,7 @@ const propertyName = (node: SyntaxNode) => {
 };
 
 describe("database query boundary", () => {
+  // Parsing the whole application needs a separate budget when CI shards share the CPU.
   it("keeps statement definitions and query builder continuations in queries/", () => {
     const violations = filesIn(sourceRoot)
       .filter((file) => !relative(sourceRoot, file).startsWith("queries/"))
@@ -68,7 +69,7 @@ describe("database query boundary", () => {
         return calls.length ? [`${relative(sourceRoot, file)}: ${calls.join(", ")}`] : [];
       });
     expect(violations).toEqual([]);
-  });
+  }, 20_000);
 
   it("covers the installed adapter's database entry points", () => {
     const { program } = parse(readFileSync(join(sourceRoot, "../node_modules/drizzle-orm/mysql-core/db.d.ts"), "utf8"), {

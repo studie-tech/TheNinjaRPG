@@ -138,6 +138,8 @@ describe("combat deferred rate limit", () => {
   /** `fineSlot` answers the per-user fine cooldown claim (SET NX): "OK" = claimed, null = cooling down. */
   const mockLimiter = (answer: () => Promise<number[] | { error: string }>, fineSlot: () => string | null = () => "OK") => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (typeof init?.body === "string" && init.body.includes("combat-completion:"))
+        return Response.json({ error: "ERR receipt unavailable in rate-limit tests" });
       if (typeof init?.body !== "string" || !init.body.includes("trpc-ratelimit")) throw new Error("Unexpected HTTP request");
       const commands = JSON.parse(init.body) as unknown[][];
       const response = async (command: unknown[]) => {

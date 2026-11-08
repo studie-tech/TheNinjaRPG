@@ -57,7 +57,7 @@ describeWithDatabase("quest team snapshots during unrelated battle", () => {
       villageStructure,
     );
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    stubRateLimitTransport();
+    stubRateLimitTransport({ answerOtherRequests: true });
     await insertQuestTeamWorld();
     await insertUsers([
       { userId: "enemy", username: "enemy", isAi: true, inArena: true, level: 50, rank: "JONIN" },

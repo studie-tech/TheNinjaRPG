@@ -241,7 +241,8 @@ const startLethalBattle = async (battleType: "COMBAT" | "ARENA", auto = false) =
       if (user.userId === "killer") user.isAutoCombat = auto;
       if (user.userId !== "killer") user.curHealth = 1;
     });
-    await db.update(battle).set({ usersState: snapshot.usersState, activeUserId: "killer",
+    snapshot.groundEffects = [];
+    await db.update(battle).set({ usersState: snapshot.usersState, groundEffects: snapshot.groundEffects, activeUserId: "killer",
       createdAt: new Date(Date.now() - 60_000), roundStartAt: new Date(), updatedAt: new Date(),
     }).where(eq(battle.id, snapshot.id));
     return snapshot;

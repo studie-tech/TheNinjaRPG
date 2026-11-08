@@ -21,11 +21,14 @@ const mocks = {
 let session: { id: string } | undefined;
 let onState: (isActive: boolean) => void;
 let shellActive = true;
+let browserOpened: () => void;
 
 beforeEach(() => {
+  vi.useFakeTimers();
   vi.clearAllMocks();
   session = undefined;
   shellActive = true;
+  browserOpened = () => {};
   onState = () => {};
   vi.spyOn(native, "platform").mockReturnValue("android");
   mocks.create.mockReset().mockResolvedValue({ createdSessionId: "session-native" });
@@ -46,15 +49,26 @@ beforeEach(() => {
   vi.spyOn(appEvents, "onStateChange").mockImplementation((callback) => { onState = callback; return () => {}; });
   vi.spyOn(appEvents, "onUrlOpen").mockImplementation((callback) => { onUrl = callback; return mocks.stopUrl; });
   vi.spyOn(oauthBrowser, "onFinished").mockImplementation((callback) => { onFinished = callback; return mocks.stopFinished; });
-  vi.spyOn(oauthBrowser, "open").mockImplementation(mocks.open);
+  vi.spyOn(oauthBrowser, "open").mockImplementation(async (url) => {
+    const result = mocks.open(url);
+    browserOpened();
+    return result;
+  });
   vi.spyOn(oauthBrowser, "close").mockImplementation(mocks.close);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
-const signIn = async () => {
+const signIn = async (milliseconds = 2000) => {
+  const opened = deferred();
+  browserOpened = opened.resolve;
   const { result } = renderHook(() => useNativeAuth());
   let outcome: NativeAuthResult | undefined;
-  await act(async () => { outcome = await result.current.signInWithProvider("google"); });
+  await act(async () => {
+    const pending = result.current.signInWithProvider("google");
+    await opened.promise;
+    vi.advanceTimersByTime(milliseconds);
+    outcome = await pending;
+  });
   expect(result.current.isPending).toBe(false);
   expect(mocks.stopUrl).toHaveBeenCalledTimes(1);
   expect(mocks.stopFinished).toHaveBeenCalledTimes(1);
@@ -90,8 +104,13 @@ describe("native browser-to-shell authentication", () => {
   });
 
   it("does not authenticate a cancelled browser and permits retry", async () => {
-    mocks.open.mockImplementationOnce(async () => onFinished());
-    expect(await signIn()).toEqual({ status: "cancelled" });
+    mocks.open.mockImplementationOnce(async () => {
+      onFinished();
+      vi.advanceTimersByTime(1999);
+      expect(mocks.getState).not.toHaveBeenCalled();
+      expect(mocks.exchange).not.toHaveBeenCalled();
+    });
+    expect(await signIn(1)).toEqual({ status: "cancelled" });
     expect(mocks.exchange).not.toHaveBeenCalled();
     expect(mocks.setActive).not.toHaveBeenCalled();
     mocks.stopUrl.mockClear(); mocks.stopFinished.mockClear();
@@ -150,7 +169,7 @@ describe("native browser-to-shell authentication", () => {
 describe("browser authentication App Link continuations", () => {
   const continuation = () => `${window.location.origin}/native-sign-in?flow=${flowId}&step=callback`;
   const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
-  const grace = () => new Promise<void>((resolve) => setTimeout(resolve, 2050));
+  const grace = async () => { vi.advanceTimersByTime(2050); await flush(); };
   const exercise = async (run: () => Promise<void>) => {
     const { promise: initialOpen, resolve: opened } = deferred<void>();
     mocks.open.mockImplementation(async () => { opened(); });
@@ -160,6 +179,8 @@ describe("browser authentication App Link continuations", () => {
       const pending = result.current.signInWithProvider("google");
       await initialOpen;
       await run();
+      await flush();
+      vi.advanceTimersByTime(2000);
       outcome = await pending;
     });
     expect(result.current.isPending).toBe(false);
@@ -199,7 +220,7 @@ describe("browser authentication App Link continuations", () => {
       let finishCheck: (state: { isActive: boolean }) => void = () => {};
       const { promise: started, resolve: checkStarted } = deferred<void>();
       mocks.getState.mockImplementationOnce(() => new Promise((resolve) => { finishCheck = resolve; checkStarted(); }));
-      onFinished(); await started;
+      onFinished(); vi.advanceTimersByTime(2000); await started;
       onUrl(continuation()); await flush();
       expect(mocks.open).toHaveBeenCalledTimes(2);
       finishCheck({ isActive: true }); await flush(); onUrl(callback);
@@ -211,7 +232,7 @@ describe("browser authentication App Link continuations", () => {
       shellActive = false; onFinished(); await grace();
       shellActive = true; onState(true);
     })).toEqual({ status: "cancelled" });
-  }, 6000);
+  });
 
   it("rejects stale/foreign continuations and suppresses duplicate browser opens", async () => {
     expect(await exercise(async () => {
