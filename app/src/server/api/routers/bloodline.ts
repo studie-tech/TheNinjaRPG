@@ -193,13 +193,12 @@ export const bloodlineRouter = createTRPCRouter({
     const user = await fetchUser(ctx.drizzle, ctx.userId);
     if (user.isBanned)
       return errorResponse("You are banned and cannot perform this action");
-    if (canChangeContent(user.role)) {
-      const id = nanoid();
-      await insertBloodlineForCreate(ctx.drizzle, id);
-      return { success: true, message: id };
-    } else {
-      return { success: false, message: `Not allowed to create bloodline` };
+    if (!canChangeContent(user.role)) {
+      return errorResponse(`Not allowed to create bloodline`);
     }
+    const id = nanoid();
+    await insertBloodlineForCreate(ctx.drizzle, id);
+    return { success: true, message: id };
   }),
   // Get all bloodlines a user has ever had
   getUserHistoricBloodlines: protectedProcedure
@@ -609,43 +608,42 @@ export const bloodlineRouter = createTRPCRouter({
       if (!entry) return errorResponse("Bloodline not found");
       if (bloodlineWithName && bloodlineWithName.id !== entry.id)
         return errorResponse("Bloodline name already exists");
-      if (canChangeContent(user.role)) {
-        // Prepare data: convert empty strings to null for optional fields
-        setEmptyStringsToNulls(
-          input.data as unknown as Record<string, unknown>,
-          bloodline,
-        );
-        // Calculate diff
-        const newData = {
-          ...input.data,
-          effects: input.data.effects.map((e) => {
-            delete e.rounds;
-            delete e.friendlyFire;
-            return e;
-          }),
-        };
-        const diff = calculateContentDiff(entry, {
-          id: entry.id,
-          updatedAt: entry.updatedAt,
-          createdAt: entry.createdAt,
-          ...newData,
-        });
-        // Update database
-        await updateBloodlineForUpdate(ctx.drizzle, newData, input);
-        await Promise.all([
-          insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
-          outdateProposalsFor(
-            ctx.drizzle,
-            "BLOODLINE",
-            [entry.id],
-            editedReason("BLOODLINE", entry.name, user.username),
-          ),
-        ]);
-        await callDiscordContent(user.username, entry.name, diff, entry.image);
-        return { success: true, message: `Data updated: ${diff.join(". ")}` };
-      } else {
-        return { success: false, message: `Not allowed to edit bloodline` };
+      if (!canChangeContent(user.role)) {
+        return errorResponse(`Not allowed to edit bloodline`);
       }
+      // Prepare data: convert empty strings to null for optional fields
+      setEmptyStringsToNulls(
+        input.data as unknown as Record<string, unknown>,
+        bloodline,
+      );
+      // Calculate diff
+      const newData = {
+        ...input.data,
+        effects: input.data.effects.map((e) => {
+          delete e.rounds;
+          delete e.friendlyFire;
+          return e;
+        }),
+      };
+      const diff = calculateContentDiff(entry, {
+        id: entry.id,
+        updatedAt: entry.updatedAt,
+        createdAt: entry.createdAt,
+        ...newData,
+      });
+      // Update database
+      await updateBloodlineForUpdate(ctx.drizzle, newData, input);
+      await Promise.all([
+        insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
+        outdateProposalsFor(
+          ctx.drizzle,
+          "BLOODLINE",
+          [entry.id],
+          editedReason("BLOODLINE", entry.name, user.username),
+        ),
+      ]);
+      await callDiscordContent(user.username, entry.name, diff, entry.image);
+      return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   // Get bloodline roll of a specific user
   getNaturalRolls: protectedProcedure

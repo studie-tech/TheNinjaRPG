@@ -628,13 +628,12 @@ export const itemRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
-      if (canChangeContent(user.role)) {
-        const id = nanoid();
-        await insertItemForCreate(ctx.drizzle, id, input);
-        return { success: true, message: id };
-      } else {
-        return { success: false, message: `Not allowed to create item` };
+      if (!canChangeContent(user.role)) {
+        return errorResponse(`Not allowed to create item`);
       }
+      const id = nanoid();
+      await insertItemForCreate(ctx.drizzle, id, input);
+      return { success: true, message: id };
     }),
   // Clone an existing item
   clone: protectedProcedure

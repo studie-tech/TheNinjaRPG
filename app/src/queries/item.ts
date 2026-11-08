@@ -388,7 +388,6 @@ export const insertItemForCreate = (
       ? {
           ...FURNITURE_ITEM_DEFAULTS,
           furnitureData: { ...DEFAULT_FURNITURE_DATA },
-          effects: [],
           inShop: false,
           cost: 0,
           repsCost: 0,
