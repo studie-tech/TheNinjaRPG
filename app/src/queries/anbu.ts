@@ -9,6 +9,7 @@ import {
   ANBU_ESPIONAGE_POINTS_COST,
   ANBU_ESPIONAGE_PRESTIGE_COST,
   ANBU_MAX_MEMBERS,
+  ANBU_REQUEST_EXPIRY_SECS,
   IMG_AVATAR_DEFAULT,
   KAGE_ANBU_DELETE_COST,
   type UserRequestState,
@@ -112,7 +113,7 @@ export const fetchRecentPendingAnbuRequest = async (
     columns: { id: true },
     where: and(
       eq(userRequest.pendingAnbuSenderId, senderId),
-      gt(userRequest.createdAt, secondsFromNow(-3600 * 12)),
+      gt(userRequest.createdAt, secondsFromNow(-ANBU_REQUEST_EXPIRY_SECS)),
     ),
   });
 
@@ -375,7 +376,7 @@ export const updateUserRequestForCreateAnbuRequest = (
         eq(userRequest.senderId, user.userId),
         eq(userRequest.type, "ANBU"),
         eq(userRequest.status, "PENDING"),
-        lt(userRequest.createdAt, secondsFromNow(-3600 * 12)),
+        lt(userRequest.createdAt, secondsFromNow(-ANBU_REQUEST_EXPIRY_SECS)),
       ),
     );
 

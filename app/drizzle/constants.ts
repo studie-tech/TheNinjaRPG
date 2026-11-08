@@ -1814,6 +1814,7 @@ export const ANBU_MAX_MEMBERS = 4;
 export const ANBU_HOSPITAL_DISCOUNT_PERC = 5;
 export const ANBU_ITEMSHOP_DISCOUNT_PERC = 5;
 export const ANBU_DELAY_SECS = 5 * 24 * 3600; // Delay before kage can disband ANBU squads (5 days)
+export const ANBU_REQUEST_EXPIRY_SECS = 12 * 3600; // Pending join requests stay listed and blocking this long
 export const ANBU_MAX_ESPIONAGE_LEVEL = 10;
 export const ANBU_ESPIONAGE_BASE_CHANCE_PERC = 10;
 export const ANBU_ESPIONAGE_CHANGE_PER_LEVEL = 5;
