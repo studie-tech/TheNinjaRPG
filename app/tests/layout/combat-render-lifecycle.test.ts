@@ -82,7 +82,7 @@ it("still drives live auto combat while its scene is paused in the background", 
   const scope = {
     isPageActive: false, hasAutoCombat: true, isPending: false, settledResult: null,
     suid: "viewer", timeDiff: 0, controlledActorId: "viewer",
-    battleRef: { current: { id: "live-battle", version: 1, createdAt: new Date(0) } },
+    battleRef: { current: { id: "live-battle", version: 1, createdAt: new Date(0), usersState: [{ controllerId: "viewer" }] } },
     userIdRef: { current: "viewer" }, precomputedActionsRef: { current: [] },
     lastAutonomousActionRef: { current: 0 }, lastBattleCheckRef: { current: 0 },
     fieldFailedRef: { current: false },
@@ -115,6 +115,36 @@ it("still drives live auto combat while its scene is paused in the background", 
   expect(actions).toBe(2);
 });
 
+it("lets only the battle's fighters drive its AI turns, never a spectator", () => {
+  const driver = sourceBetween("  useEffect(() => {\n    if (!isPageActive && !hasAutoCombat)", "\n\n  useEffect(() => {\n    actionRef.current");
+  let drive = () => {};
+  let actions = 0;
+  const scope = {
+    isPageActive: true, hasAutoCombat: false, isPending: false, settledResult: null,
+    suid: "spectator", timeDiff: 0, controlledActorId: "spectator",
+    battleRef: { current: { id: "live-battle", version: 1, createdAt: new Date(0), roundStartAt: new Date(), usersState: [{ controllerId: "fighter" }, { controllerId: "ai" }] } },
+    userIdRef: { current: "spectator" }, precomputedActionsRef: { current: [] },
+    lastAutonomousActionRef: { current: 0 }, lastBattleCheckRef: { current: 0 },
+    fieldFailedRef: { current: false },
+    combat: { scene: { current: { isPresenting: () => false } } },
+    utils: { combat: { getBattle: { invalidate: () => Promise.resolve() } } },
+    AUTONOMOUS_ACTION_MS: 1100, BATTLE_CHECK_MS: 1000, DRIVER_TICK_MS: 200,
+    COMBAT_SECONDS: 30, COMBAT_LOBBY_SECONDS: 15,
+    useEffect(callback: () => void) { callback(); },
+    setInterval(callback: () => void) { drive = callback; return 1; },
+    calcActiveUser: () => ({ actor: { userId: "ai" }, changedActor: false }),
+    getTurnControl: () => ({ isAITurn: true }),
+    canPerformAction: () => true, canDrive: () => true,
+    performAction: () => { actions++; },
+  };
+  new Function("scope", `with (scope) { ${transpiler.transformSync(driver)} }`)(scope);
+  drive();
+  expect(actions).toBe(0);
+  scope.battleRef.current.usersState.push({ controllerId: "spectator" });
+  drive();
+  expect(actions).toBe(1);
+});
+
 it("resolves nothing autonomously until a visible field can show it", () => {
   const driver = sourceBetween("  useEffect(() => {\n    if (!isPageActive && !hasAutoCombat)", "\n\n  useEffect(() => {\n    actionRef.current");
   let drive = () => {};
@@ -122,7 +152,7 @@ it("resolves nothing autonomously until a visible field can show it", () => {
   const scope = {
     isPageActive: true, hasAutoCombat: true, isPending: false, settledResult: null,
     suid: "viewer", timeDiff: 0, controlledActorId: "viewer",
-    battleRef: { current: { id: "live-battle", version: 1, createdAt: new Date(0) } },
+    battleRef: { current: { id: "live-battle", version: 1, createdAt: new Date(0), usersState: [{ controllerId: "viewer" }] } },
     userIdRef: { current: "viewer" }, precomputedActionsRef: { current: [] },
     lastAutonomousActionRef: { current: 0 }, lastBattleCheckRef: { current: 0 },
     fieldFailedRef: { current: false },

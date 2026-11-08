@@ -474,10 +474,7 @@ export const combatRouter = createTRPCRouter({
           ]);
           // Idle effects can land a killing blow here too. Announce only after
           // their log insert finishes so clients can refresh an earlier read.
-          if (
-            history.length &&
-            settledBattle.usersState.filter((user) => !user.isAi).length > 1
-          ) {
+          if (history.length) {
             notifyBattleLogs(
               pusher,
               settledBattle,
@@ -972,16 +969,13 @@ export const combatRouter = createTRPCRouter({
 
             // Notify after logs are persisted, including the terminal action.
             // Polling clients may have read the claimed state before its log insert.
-            const nUsers = battle.usersState.filter((u) => !u.isAi).length;
-            if (nUsers > 1) {
-              notifyBattleLogs(
-                pusher,
-                newBattle,
-                logEntries,
-                !!result,
-                result ? undefined : buildCombatStateUpdate(stateBaseline, newBattle),
-              );
-            }
+            notifyBattleLogs(
+              pusher,
+              newBattle,
+              logEntries,
+              !!result,
+              result ? undefined : buildCombatStateUpdate(stateBaseline, newBattle),
+            );
 
             // Return the new battle + result state if applicable
             return {
@@ -1814,7 +1808,11 @@ export const combatRouter = createTRPCRouter({
 /***********************************************
  * CONVENIENCE FUNCTIONS USED ON COMBAT ENDPOINTS
  ***********************************************/
-/** Send committed public changes; oversized payloads retain log or version recovery signals. */
+/**
+ * Send committed public changes to everyone on the battle's channel, solo fights included,
+ * since Colosseum spectators follow them; oversized payloads retain log or version recovery
+ * signals.
+ */
 const notifyBattleLogs = (
   pusher: ReturnType<typeof getServerPusher>,
   battle: { id: string; version: number },
