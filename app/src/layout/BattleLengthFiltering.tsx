@@ -12,50 +12,49 @@ interface BattleLengthFilteringProps {
   state: BattleLengthFilteringState;
 }
 
-const makeSchema = () =>
-  defineFilteringSchema({
-    fields: [
-      battleTypesField(["COMBAT", "RANKED_PVP"]),
-      minCountField,
-      {
-        id: "minWinnerLevel",
-        label: "Min Winner Level",
-        type: "number",
-        defaultValue: undefined,
-        min: 1,
-        max: MAX_PLAYER_LEVEL,
-      },
-      {
-        id: "maxWinnerLevel",
-        label: "Max Winner Level",
-        type: "number",
-        defaultValue: undefined,
-        min: 1,
-        max: MAX_PLAYER_LEVEL,
-      },
-      {
-        id: "minLoserLevel",
-        label: "Min Loser Level",
-        type: "number",
-        defaultValue: undefined,
-        min: 1,
-        max: MAX_PLAYER_LEVEL,
-      },
-      {
-        id: "maxLoserLevel",
-        label: "Max Loser Level",
-        type: "number",
-        defaultValue: undefined,
-        min: 1,
-        max: MAX_PLAYER_LEVEL,
-      },
-    ] as const,
-  });
+const BATTLE_LENGTH_FILTERING_SCHEMA = defineFilteringSchema({
+  fields: [
+    battleTypesField(["COMBAT", "RANKED_PVP"]),
+    minCountField,
+    {
+      id: "minWinnerLevel",
+      label: "Min Winner Level",
+      type: "number",
+      defaultValue: undefined,
+      min: 1,
+      max: MAX_PLAYER_LEVEL,
+    },
+    {
+      id: "maxWinnerLevel",
+      label: "Max Winner Level",
+      type: "number",
+      defaultValue: undefined,
+      min: 1,
+      max: MAX_PLAYER_LEVEL,
+    },
+    {
+      id: "minLoserLevel",
+      label: "Min Loser Level",
+      type: "number",
+      defaultValue: undefined,
+      min: 1,
+      max: MAX_PLAYER_LEVEL,
+    },
+    {
+      id: "maxLoserLevel",
+      label: "Max Loser Level",
+      type: "number",
+      defaultValue: undefined,
+      min: 1,
+      max: MAX_PLAYER_LEVEL,
+    },
+  ] as const,
+});
 
 const BattleLengthFiltering: React.FC<BattleLengthFilteringProps> = (props) => {
   return (
     <ContentFiltering
-      schema={makeSchema()}
+      schema={BATTLE_LENGTH_FILTERING_SCHEMA}
       state={props.state.cf}
       triggerButtonId="filter-battle-length"
     />
@@ -65,10 +64,10 @@ const BattleLengthFiltering: React.FC<BattleLengthFilteringProps> = (props) => {
 export default BattleLengthFiltering;
 
 export const getFilter = (state: BattleLengthFilteringState) =>
-  buildFilter(state.cf, makeSchema());
+  buildFilter(state.cf, BATTLE_LENGTH_FILTERING_SCHEMA);
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(makeSchema());
+  const cf = useContentFiltering(BATTLE_LENGTH_FILTERING_SCHEMA);
   return {
     ...cf.values,
     cf,

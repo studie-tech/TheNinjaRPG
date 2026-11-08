@@ -12,35 +12,34 @@ interface RankedLoadoutFilteringProps {
   state: RankedLoadoutFilteringState;
 }
 
-const makeSchema = () =>
-  defineFilteringSchema({
-    fields: [
-      {
-        id: "types",
-        label: "Types",
-        type: "multi-select",
-        defaultValue: ["jutsu", "item", "consumable"],
-        options: [
-          { value: "jutsu", label: "Jutsu" },
-          { value: "item", label: "Item" },
-          { value: "consumable", label: "Consumable" },
-        ],
-      },
-      {
-        id: "name",
-        label: "Name",
-        type: "text",
-        defaultValue: "",
-        normalizeForFilter: (v: string) => v.trim(),
-      },
-      minCountField,
-    ] as const,
-  });
+const RANKED_LOADOUT_FILTERING_SCHEMA = defineFilteringSchema({
+  fields: [
+    {
+      id: "types",
+      label: "Types",
+      type: "multi-select",
+      defaultValue: ["jutsu", "item", "consumable"],
+      options: [
+        { value: "jutsu", label: "Jutsu" },
+        { value: "item", label: "Item" },
+        { value: "consumable", label: "Consumable" },
+      ],
+    },
+    {
+      id: "name",
+      label: "Name",
+      type: "text",
+      defaultValue: "",
+      normalizeForFilter: (v: string) => v.trim(),
+    },
+    minCountField,
+  ] as const,
+});
 
 const RankedLoadoutFiltering: React.FC<RankedLoadoutFilteringProps> = (props) => {
   return (
     <ContentFiltering
-      schema={makeSchema()}
+      schema={RANKED_LOADOUT_FILTERING_SCHEMA}
       state={props.state.cf}
       triggerButtonId="filter-ranked-loadout"
     />
@@ -50,10 +49,10 @@ const RankedLoadoutFiltering: React.FC<RankedLoadoutFilteringProps> = (props) =>
 export default RankedLoadoutFiltering;
 
 export const getFilter = (state: RankedLoadoutFilteringState) =>
-  buildFilter(state.cf, makeSchema());
+  buildFilter(state.cf, RANKED_LOADOUT_FILTERING_SCHEMA);
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(makeSchema());
+  const cf = useContentFiltering(RANKED_LOADOUT_FILTERING_SCHEMA);
   return {
     ...cf.values,
     cf,

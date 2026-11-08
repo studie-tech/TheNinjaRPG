@@ -13,35 +13,34 @@ interface RankedRankDistributionFilteringProps {
   state: RankedRankDistributionFilteringState;
 }
 
-const makeSchema = () =>
-  defineFilteringSchema({
-    fields: [
-      minCountField,
-      {
-        id: "minLevel",
-        label: "Min Level",
-        type: "number",
-        defaultValue: undefined,
-        min: 1,
-        max: MAX_PLAYER_LEVEL,
-      },
-      {
-        id: "maxLevel",
-        label: "Max Level",
-        type: "number",
-        defaultValue: undefined,
-        min: 1,
-        max: MAX_PLAYER_LEVEL,
-      },
-    ] as const,
-  });
+const RANKED_RANK_DISTRIBUTION_FILTERING_SCHEMA = defineFilteringSchema({
+  fields: [
+    minCountField,
+    {
+      id: "minLevel",
+      label: "Min Level",
+      type: "number",
+      defaultValue: undefined,
+      min: 1,
+      max: MAX_PLAYER_LEVEL,
+    },
+    {
+      id: "maxLevel",
+      label: "Max Level",
+      type: "number",
+      defaultValue: undefined,
+      min: 1,
+      max: MAX_PLAYER_LEVEL,
+    },
+  ] as const,
+});
 
 const RankedRankDistributionFiltering: React.FC<
   RankedRankDistributionFilteringProps
 > = (props) => {
   return (
     <ContentFiltering
-      schema={makeSchema()}
+      schema={RANKED_RANK_DISTRIBUTION_FILTERING_SCHEMA}
       state={props.state.cf}
       triggerButtonId="filter-ranked-rank-dist"
     />
@@ -51,10 +50,10 @@ const RankedRankDistributionFiltering: React.FC<
 export default RankedRankDistributionFiltering;
 
 export const getFilter = (state: RankedRankDistributionFilteringState) =>
-  buildFilter(state.cf, makeSchema());
+  buildFilter(state.cf, RANKED_RANK_DISTRIBUTION_FILTERING_SCHEMA);
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(makeSchema());
+  const cf = useContentFiltering(RANKED_RANK_DISTRIBUTION_FILTERING_SCHEMA);
   return {
     ...cf.values,
     cf,

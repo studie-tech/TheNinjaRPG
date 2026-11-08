@@ -8,12 +8,11 @@ import {
   defineFilteringSchema,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { makeQuestFilteringSchema } from "@/layout/QuestFiltering";
+import { QUEST_FILTERING_SCHEMA } from "@/layout/QuestFiltering";
 import { questFilteringSchema } from "@/validators/quest";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-// The app's React Compiler keeps this stable; without it a schema per render never settles.
-const schema = makeQuestFilteringSchema();
+const schema = QUEST_FILTERING_SCHEMA;
 let state: ReturnType<typeof useContentFiltering<typeof schema.fields>>;
 
 const Harness = () => {
