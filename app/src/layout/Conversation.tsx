@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { RefreshCw, Search, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { usePageActive } from "@/hooks/usePageActive";
+import { useTypingIndicators } from "@/hooks/useTypingIndicators";
 import { AiSenderSelect } from "@/layout/AiSenderSelect";
 import ContentBox from "@/layout/ContentBox";
 import { ConversationComments } from "@/layout/ConversationComments";
@@ -110,13 +111,6 @@ export const useConversation = (props: ConversationLogicProps) => {
     );
     return () => clearTimeout(timeout);
   }, [isPageActive]);
-
-  // Typing indicator state
-  type TypingUser = { username: string; timestamp: number };
-  const [typingUsers, setTypingUsers] = useState<Map<string, TypingUser>>(
-    () => new Map(),
-  );
-  const lastTypingSentRef = useRef<number>(0);
 
   const queryKey = useMemo(
     () => ({
@@ -334,10 +328,6 @@ export const useConversation = (props: ConversationLogicProps) => {
       onError: () => void refetch(),
     });
 
-  // Mutation for typing indicator
-  const { mutate: sendTypingIndicator } =
-    api.comments.sendTypingIndicator.useMutation();
-
   // infinite pagination
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
@@ -408,26 +398,11 @@ export const useConversation = (props: ConversationLogicProps) => {
     defaultValue: "",
   });
 
-  // Send typing indicator when user types (debounced)
-  useEffect(() => {
-    const DEBOUNCE_MS = 2000;
-    if (
-      userData?.userId &&
-      conversation?.isPublic &&
-      commentValue &&
-      commentValue.length > 0 &&
-      Date.now() - lastTypingSentRef.current > DEBOUNCE_MS
-    ) {
-      lastTypingSentRef.current = Date.now();
-      sendTypingIndicator({ conversationId: conversation.id });
-    }
-  }, [
+  const { typingUsers, markTyping } = useTypingIndicators(
+    conversation,
     commentValue,
-    conversation?.isPublic,
-    conversation?.id,
-    sendTypingIndicator,
     userData?.userId,
-  ]);
+  );
 
   // Set the object_id to the conversation id, and drop quotes from the previous one
   useEffect(() => {
@@ -619,16 +594,7 @@ export const useConversation = (props: ConversationLogicProps) => {
               break;
             case "typing":
               if (data.fromId && data.fromId !== ownUserId && data.username) {
-                const fromId = data.fromId;
-                const username = data.username;
-                setTypingUsers((prev) => {
-                  const next = new Map(prev);
-                  next.set(fromId, {
-                    username: username,
-                    timestamp: Date.now(),
-                  });
-                  return next;
-                });
+                markTyping(data.fromId, data.username);
               }
               break;
           }
@@ -656,26 +622,6 @@ export const useConversation = (props: ConversationLogicProps) => {
       pusher.connection.unbind("connected", refreshConversation);
     };
   }, [pusher, refetch, isPaused]);
-
-  // Cleanup stale typing indicators every second
-  useEffect(() => {
-    const TYPING_TIMEOUT_MS = 3000;
-    const interval = setInterval(() => {
-      setTypingUsers((prev) => {
-        const now = Date.now();
-        const next = new Map(prev);
-        let changed = false;
-        for (const [userId, data] of next) {
-          if (now - data.timestamp > TYPING_TIMEOUT_MS) {
-            next.delete(userId);
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   /**
    * Submit comment. The handler is built on submit, not during render: the compiler
