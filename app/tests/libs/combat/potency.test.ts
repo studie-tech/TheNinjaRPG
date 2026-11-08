@@ -94,6 +94,14 @@ const powerOf = (tag: ZodAllTags) => getPower({ ...tag, level: 0 } as UserEffect
 
 afterEach(() => vi.restoreAllMocks());
 
+/** Each potency direction and mode at power 20 against a 40-power tag, with the power it yields. */
+const POTENCY_CASES = [
+  ["increasepotency", "static", 60],
+  ["increasepotency", "percentage", 48],
+  ["decreasepotency", "static", 20],
+  ["decreasepotency", "percentage", 32],
+] as const;
+
 describe("potency configuration", () => {
   it("round-trips both modes and every supported selection through AllTags", () => {
     for (const schema of [IncreasePotencyTag, DecreasePotencyTag]) {
@@ -193,12 +201,7 @@ describe("potency configuration", () => {
 describe("potency arithmetic", () => {
   it.each([...PotencyTagTypes])("adjusts %s in both directions and modes", (type) => {
     const action = makeAction([makeTag(type, { power: 40 })]);
-    for (const [kind, calculation, expected] of [
-      ["increasepotency", "static", 60],
-      ["increasepotency", "percentage", 48],
-      ["decreasepotency", "static", 20],
-      ["decreasepotency", "percentage", 32],
-    ] as const) {
+    for (const [kind, calculation, expected] of POTENCY_CASES) {
       const tags = resolvePotencyTags(
         action,
         [makePotency({ type: kind, calculation, affectedTag: type, power: 20 })],
@@ -344,12 +347,7 @@ describe("potency arithmetic", () => {
 });
 
 describe("potency element matching", () => {
-  it.each([
-    ["increasepotency", "static", 60],
-    ["increasepotency", "percentage", 48],
-    ["decreasepotency", "static", 20],
-    ["decreasepotency", "percentage", 32],
-  ] as const)(
+  it.each(POTENCY_CASES)(
     "uses only elements for None with %s in %s mode",
     (type, calculation, expected) => {
       const action = makeAction([
@@ -380,7 +378,7 @@ describe("potency element matching", () => {
   );
 
   it.each(
-    PotencyTagTypes.filter((type): type is Extract<(typeof PotencyTagTypes)[number], "damage" | "afterburn" | "lifesteal" | "reflect"> => ["damage", "afterburn", "lifesteal", "reflect"].includes(type)),
+    ["damage", "afterburn", "lifesteal", "reflect"] as const,
   )(
     "matches elements on %s in both directions and modes",
     (type) => {
@@ -390,12 +388,7 @@ describe("potency element matching", () => {
         makeTag(type, { power: 40, elements: ["Wind", "Fire"] }),
         makeTag(type, { power: 40 }),
       ]);
-      for (const [kind, calculation, expected] of [
-        ["increasepotency", "static", 60],
-        ["increasepotency", "percentage", 48],
-        ["decreasepotency", "static", 20],
-        ["decreasepotency", "percentage", 32],
-      ] as const) {
+      for (const [kind, calculation, expected] of POTENCY_CASES) {
         const tags = resolvePotencyTags(
           action,
           [
