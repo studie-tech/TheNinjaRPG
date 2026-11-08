@@ -90,8 +90,13 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
   // Loading states
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing ANBU" />;
+  if (userData.isOutlaw)
+    return (
+      <ContentBox title="ANBU" defaultBackHref="/village">
+        Unlikely to find outlaw ANBU.
+      </ContentBox>
+    );
   if (!squad) return <Loader explanation="Loading ANBU squad" />;
-  if (userData.isOutlaw) return <Loader explanation="Unlikely to find outlaw ANBU" />;
   if (userData.isBanned) return <BanInfo />;
 
   // Derived — village-gate kage/elder so cross-village staff (canStaffEdit) do not
