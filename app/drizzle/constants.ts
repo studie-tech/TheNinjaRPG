@@ -832,6 +832,16 @@ export type SkillTreeTarget = (typeof SkillTreeTargets)[number];
 export const DURABILITY_MAX_DEFAULT = 100;
 export const DURABILITY_USABILITY_THR = 0;
 export const DURABILITY_POINT_PRICE_PERCENT = 0.1;
+// Repair price per durability-point percent, by rarity.
+export const ITEM_REPAIR_BASE_COST: Record<ItemRarity, number> = {
+  COMMON: 50,
+  RARE: 200,
+  EPIC: 400,
+  LEGENDARY: 800,
+};
+// Selling discount off the item cost before other discounts, and the cap on all of them.
+export const ITEM_SELL_BASE_DISCOUNT_PERC = 80;
+export const ITEM_SELL_MAX_DISCOUNT_PERC = 95;
 
 // Skill Tree Entry Types
 export const SkillTreeEntryTypes = ["DEFAULT", "SPECIAL"] as const;
@@ -1808,6 +1818,23 @@ export const MEDNIN_EXP_CAP = 4000000; // 4 million medical experience cap
 export const MEDNIN_EXP_PER_IMPROVEMENT = 340000; // 340k exp per improvement
 export const MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT = 0.01; // 0.01 reduction per improvement
 export const MEDNIN_MIN_CHAKRA_FACTOR = 0.05; // Minimum chakra factor
+// Chakra paid per healed HP is MEDNIN_BASE_CHAKRA_FACTOR minus the rank's reduction;
+// unranked users cannot heal.
+export const MEDNIN_BASE_CHAKRA_FACTOR = 0.5;
+export const MEDNIN_CHAKRA_FACTOR_REDUCTION: Record<Exclude<MEDNIN_RANK, "NONE">, number> = {
+  NOVICE: 0.05,
+  APPRENTICE: 0.1,
+  MASTER: 0.25,
+  LEGENDARY: 0.35,
+};
+// Percentage of the target's pools a combat heal restores, by mednin rank.
+export const MEDNIN_COMBAT_HEAL_PERC: Record<MEDNIN_RANK, number> = {
+  NONE: 30,
+  NOVICE: 30,
+  APPRENTICE: 40,
+  MASTER: 50,
+  LEGENDARY: 60,
+};
 
 // Hunting config
 /** Staff-editor starting values; each saved contract supplies its own encounter rules. */
@@ -3682,6 +3709,9 @@ export const SUPPORT_TICKET_PRIORITY_DESCRIPTIONS: Record<
   HIGH: "Important issue that significantly affects gameplay",
   URGENT: "Critical issue that prevents gameplay",
 } as const;
+
+// Carried inventory config
+export const INVENTORY_BASE_SLOTS = 20;
 
 // Materials inventory config
 export const MATERIALS_BASE_SLOTS = 25;

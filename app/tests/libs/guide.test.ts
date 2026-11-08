@@ -77,4 +77,17 @@ describe("system guide articles", () => {
       expect(article.seoDescription.length, article.slug).toBeLessThanOrEqual(160);
     }
   });
+
+  it("states combat and farming numbers from the game constants", () => {
+    const article = (slug: string) => {
+      const found = SYSTEM_GUIDE_ARTICLES.find((entry) => entry.slug === slug);
+      return JSON.stringify(found);
+    };
+    expect(article("combat")).toContain("60-second rounds");
+    const farming = article("farming");
+    expect(farming).toContain("Level farming to 100");
+    expect(farming).toContain("through 4 growth stages");
+    expect(farming).toContain("require at least level 10");
+    expect(farming).toContain("Seed extractors unlock at levels 10, 55 and 100 (up to 3).");
+  });
 });

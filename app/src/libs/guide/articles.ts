@@ -2,7 +2,10 @@ import {
   BLOODLINE_COST,
   COST_SWAP_BLOODLINE,
   CoreVillages,
+  FARM_GROWTH_STAGES,
+  FARM_LEVEL_EXTRACTOR_CAP,
   FARM_PLOT_PURCHASE_COST,
+  FARM_PLOT_PURCHASE_MIN_LEVEL,
   FARMING_MAX_LEVEL,
   type GuideCategory,
   HOSPITAL_BASE_HEAL_SECONDS,
@@ -14,6 +17,11 @@ import {
 } from "@/drizzle/constants";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import type { GuideFaqItem } from "@/validators/guide";
+
+const EXTRACTOR_UNLOCK_LEVELS = FARM_LEVEL_EXTRACTOR_CAP.filter(
+  (cap) => cap.max > 0,
+).map((cap) => cap.level);
+const MAX_EXTRACTORS = Math.max(...FARM_LEVEL_EXTRACTOR_CAP.map((cap) => cap.max));
 
 export interface GuideSeedArticle {
   slug: string;
@@ -115,11 +123,9 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     image: "https://ui0arpl8sm.ufs.sh/f/guide-combat-v3.webp",
     title: "Combat in TheNinja-RPG",
     subtitle: "Rounds, action points and initiative",
-    excerpt:
-      "Hex-based turn combat: 60-second rounds, action points, initiative and how to fight on the battlefield.",
+    excerpt: `Hex-based turn combat: ${COMBAT_SECONDS}-second rounds, action points, initiative and how to fight on the battlefield.`,
     seoTitle: "Combat Guide",
-    seoDescription:
-      "How combat works in TheNinja-RPG: 60-second rounds, action points, initiative, movement and basic attacks on the hex battlefield.",
+    seoDescription: `How combat works in TheNinja-RPG: ${COMBAT_SECONDS}-second rounds, action points, initiative, movement and basic attacks on the hex battlefield.`,
     category: "combat",
     sortOrder: 10,
     published: true,
@@ -451,11 +457,9 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     image: "https://ui0arpl8sm.ufs.sh/f/guide-farming-v3.webp",
     title: "Farming in TheNinja-RPG",
     subtitle: "Plots, seeds, water and extractors",
-    excerpt:
-      "Level farming to 100, buy extra plots, water crops and extract seeds from harvests.",
+    excerpt: `Level farming to ${FARMING_MAX_LEVEL}, buy extra plots, water crops and extract seeds from harvests.`,
     seoTitle: "Farming Guide",
-    seoDescription:
-      "How farming works in TheNinja-RPG: plots, watering, seed extractors, crop tiers and the level 100 cap.",
+    seoDescription: `How farming works in TheNinja-RPG: plots, watering, seed extractors, crop tiers and the level ${FARMING_MAX_LEVEL} cap.`,
     category: "farming",
     sortOrder: 20,
     published: true,
@@ -463,7 +467,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     faq: [
       {
         question: "What is the farming level cap?",
-        answer: `Farming levels to ${FARMING_MAX_LEVEL}. Extra plots unlock on a level interval after level 10.`,
+        answer: `Farming levels to ${FARMING_MAX_LEVEL}. Extra plots unlock on a level interval after level ${FARM_PLOT_PURCHASE_MIN_LEVEL}.`,
       },
       {
         question: "How much is an extra plot?",
@@ -472,13 +476,13 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     ],
     content: [
       p(
-        `Farming is a gathering occupation on your homestead. Plant seeds, water them through four growth stages, harvest herbs, and optionally extract more seeds. Numbers below come from live game constants and will change if staff rebalance the activity.`,
+        `Farming is a gathering occupation on your homestead. Plant seeds, water them through ${FARM_GROWTH_STAGES} growth stages, harvest herbs, and optionally extract more seeds. Numbers below come from live game constants and will change if staff rebalance the activity.`,
       ),
       h2("Plots and level"),
       ul([
         `Farming levels to ${FARMING_MAX_LEVEL}.`,
-        `Extra plots cost ${FARM_PLOT_PURCHASE_COST} ryo and require at least level 10, then more plots on a level interval.`,
-        `Seed extractors unlock at levels 10, 55 and 100 (up to three).`,
+        `Extra plots cost ${FARM_PLOT_PURCHASE_COST} ryo and require at least level ${FARM_PLOT_PURCHASE_MIN_LEVEL}, then more plots on a level interval.`,
+        `Seed extractors unlock at levels ${EXTRACTOR_UNLOCK_LEVELS.slice(0, -1).join(", ")} and ${EXTRACTOR_UNLOCK_LEVELS.at(-1)} (up to ${MAX_EXTRACTORS}).`,
       ]),
       h2("The loop"),
       ul([
