@@ -43,18 +43,10 @@ const createTournamentData = (overrides?: Partial<typeof baseTournament>) => ({
   matches: [finalMatch],
 });
 
-const createTournamentRecord = (overrides?: Record<string, unknown>) => ({
-  id: "tournament-1",
-  name: "Test Tournament",
-  image: "image.png",
-  description: "desc",
-  round: 1,
-  type: "KAGE",
-  rewards: { reward_money: 5000 },
-  startedAt: new Date("2026-05-01T08:00:00.000Z"),
-  winnerId: "winner-1",
-  ...overrides,
-});
+const createTournamentRecord = (overrides?: Record<string, unknown>) => {
+  const { roundStartedAt: _roundStartedAt, createdAt: _createdAt, status: _status, ...record } = baseTournament;
+  return { ...record, winnerId: "winner-1", ...overrides };
+};
 
 const createClient = ({
   recordResponses = [null],
