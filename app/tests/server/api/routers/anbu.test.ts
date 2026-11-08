@@ -36,15 +36,6 @@ const describeSql = (node: unknown) => {
 };
 
 describe("ANBU request squad identity", () => {
-  afterEach(resetServerModuleStubs);
-  beforeEach(() => {
-    stubProfile("fetchUser", fetchUserMock);
-    stubProfile("updateNindo", (() => undefined) as never);
-    stubSparring("fetchRequest", fetchRequestMock);
-    stubSparring("fetchRequests", fetchRequestsMock);
-    stubSparring("insertRequest", insertRequestMock);
-    vi.clearAllMocks();
-  });
 
   it("resolves the squad from relatedId after a leader change", async () => {
     const squad = {
@@ -199,16 +190,9 @@ function makeDrizzleMock(
 
 describe("ANBU router request permissions and concurrency", () => {
   const queuePush = vi.fn();
-  afterEach(resetServerModuleStubs);
   beforeEach(() => {
     queuePush.mockReset();
     vi.spyOn(nativePush, "deferPushToUsers").mockImplementation(queuePush);
-    stubProfile("fetchUser", fetchUserMock);
-    stubProfile("updateNindo", (() => undefined) as never);
-    stubSparring("fetchRequest", fetchRequestMock);
-    stubSparring("fetchRequests", fetchRequestsMock);
-    stubSparring("insertRequest", insertRequestMock);
-    vi.clearAllMocks();
   });
 
   it("queues a request alert only after insertion succeeds", async () => {
@@ -594,15 +578,6 @@ describe("ANBU router request permissions and concurrency", () => {
 });
 
 describe("ANBU membership invariants", () => {
-  afterEach(resetServerModuleStubs);
-  beforeEach(() => {
-    stubProfile("fetchUser", fetchUserMock);
-    stubProfile("updateNindo", (() => undefined) as never);
-    stubSparring("fetchRequest", fetchRequestMock);
-    stubSparring("fetchRequests", fetchRequestsMock);
-    stubSparring("insertRequest", insertRequestMock);
-    vi.clearAllMocks();
-  });
 
   it("atomically refuses to remove the last member", async () => {
     const squad = makeSquad({ leaderId: "member-1", memberCount: 1 });
@@ -660,8 +635,17 @@ describe("ANBU membership invariants", () => {
   });
 });
 
-// Notification transport belongs to the current test, including nested suites.
+// Notification transport and router dependencies belong to the current test, including nested suites.
 beforeEach(() => {
   vi.spyOn(Pusher.prototype, "trigger").mockImplementation(notifyMock);
+  stubProfile("fetchUser", fetchUserMock);
+  stubProfile("updateNindo", (() => undefined) as never);
+  stubSparring("fetchRequest", fetchRequestMock);
+  stubSparring("fetchRequests", fetchRequestsMock);
+  stubSparring("insertRequest", insertRequestMock);
+  vi.clearAllMocks();
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  resetServerModuleStubs();
+  vi.restoreAllMocks();
+});
