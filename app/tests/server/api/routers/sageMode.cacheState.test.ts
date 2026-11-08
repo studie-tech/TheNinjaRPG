@@ -58,9 +58,9 @@ describe("sage removal cache response", () => {
       update: () => ({ set: () => ({ where: async () => ({ rowsAffected: 0 }) }) }),
       insert: vi.fn(),
     };
-    await expect(
-      callerForDatabase(sageModeRouter, userId, db as never).removeSageMode(),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(
+      await callerForDatabase(sageModeRouter, userId, db as never).removeSageMode(),
+    ).toMatchObject({ success: false, message: "Unable to update sage mode" });
     expect(db.insert).not.toHaveBeenCalled();
   });
   it("does not charge a player who has no sage mode", async () => {
@@ -69,9 +69,9 @@ describe("sage removal cache response", () => {
       update: vi.fn(),
       insert: vi.fn(),
     };
-    await expect(
-      callerForDatabase(sageModeRouter, userId, db as never).removeSageMode(),
-    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(
+      await callerForDatabase(sageModeRouter, userId, db as never).removeSageMode(),
+    ).toMatchObject({ success: false, message: "You do not have a sage mode" });
     expect(db.update).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
   });

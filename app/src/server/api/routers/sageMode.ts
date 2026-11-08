@@ -217,7 +217,7 @@ export const sageModeRouter = createTRPCRouter({
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
       if (!user.sageModeId) {
-        throw serverError("PRECONDITION_FAILED", "You do not have a sage mode");
+        return errorResponse("You do not have a sage mode");
       }
       if (user.reputationPoints < REMOVAL_COST) {
         return errorResponse("You do not have enough reputation points");
@@ -229,7 +229,7 @@ export const sageModeRouter = createTRPCRouter({
         readiness,
       );
       if (!removed.rowsAffected) {
-        throw serverError("BAD_REQUEST", "Unable to update sage mode");
+        return errorResponse("Unable to update sage mode");
       }
       await insertActionLogForRemoveSageMode(ctx.drizzle, user, "SageMode Removed");
       return actionReadinessResponse(
