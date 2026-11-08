@@ -65,10 +65,8 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
   // Only fetch the list of all badges when the add-badge popover is opened
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [assignment, setAssignment] = useState<BadgeAssignmentSnapshot | null>(null);
-  const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [assignmentNeedsRetry, setAssignmentNeedsRetry] = useState(false);
   const [removal, setRemoval] = useState<BadgeRemovalSnapshot | null>(null);
-  const [removalOpen, setRemovalOpen] = useState(false);
   const [removalNeedsRetry, setRemovalNeedsRetry] = useState(false);
   const [removedAssignments, setRemovedAssignments] = useState<Set<string>>(
     () => new Set(),
@@ -124,7 +122,6 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
     // choice from the old profile become an assignment to the new one.
     if (!assignmentFlight.current()) {
       setAssignment(null);
-      setAssignmentOpen(false);
       setAssignmentNeedsRetry(false);
     }
     setPopoverOpen(false);
@@ -132,7 +129,6 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
     setOptimisticBadges(new Map());
     if (!removalFlight.current()) {
       setRemoval(null);
-      setRemovalOpen(false);
       setRemovalNeedsRetry(false);
     }
     setRemovedAssignments(new Set());
@@ -152,12 +148,10 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
     });
     setAssignmentNeedsRetry(false);
     setPopoverOpen(false);
-    setAssignmentOpen(true);
   };
 
   const closeBadgeAssignment = () => {
     if (assignmentFlight.current()) return;
-    setAssignmentOpen(false);
     setAssignment(null);
     setAssignmentNeedsRetry(false);
   };
@@ -189,7 +183,6 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
             return next;
           });
         }
-        setAssignmentOpen(false);
         setAssignment(null);
         setAssignmentNeedsRetry(false);
         void Promise.allSettled([
@@ -220,12 +213,10 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
     });
     setRemovalNeedsRetry(false);
     setPopoverOpen(false);
-    setRemovalOpen(true);
   };
 
   const closeBadgeRemoval = () => {
     if (removalFlight.current()) return;
-    setRemovalOpen(false);
     setRemoval(null);
     setRemovalNeedsRetry(false);
   };
@@ -254,7 +245,6 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
             return next;
           });
         }
-        setRemovalOpen(false);
         setRemoval(null);
         setRemovalNeedsRetry(false);
         void Promise.allSettled([
@@ -402,10 +392,9 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
       <Modal
         id="insert-user-badge"
         title="Add badge"
-        isOpen={assignmentOpen}
+        isOpen={assignment !== null}
         setIsOpen={(open) => {
-          if (open) setAssignmentOpen(true);
-          else closeBadgeAssignment();
+          if (!open) closeBadgeAssignment();
         }}
         proceed_label="Add badge"
         proceed_loading_label="Adding"
@@ -451,10 +440,9 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
       <Modal
         id="remove-user-badge"
         title="Remove badge"
-        isOpen={removalOpen}
+        isOpen={removal !== null}
         setIsOpen={(open) => {
-          if (open) setRemovalOpen(true);
-          else closeBadgeRemoval();
+          if (!open) closeBadgeRemoval();
         }}
         proceed_label="Remove badge"
         proceed_loading_label="Removing"

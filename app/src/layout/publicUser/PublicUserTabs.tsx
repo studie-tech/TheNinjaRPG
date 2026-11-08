@@ -257,10 +257,7 @@ export const MarriagesTab: React.FC<MarriagesTabProps> = ({
 
 // ---------------- Ranked Matches Tab ----------------
 
-export const RankedMatchesTab: React.FC<TabComponentProps> = ({
-  userId,
-  isActive: _isActive,
-}) => {
+export const RankedMatchesTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
   return (
     <ContentBox
       title="Ranked Match History"
@@ -271,7 +268,7 @@ export const RankedMatchesTab: React.FC<TabComponentProps> = ({
       <BattleHistoryTable
         userId={userId}
         combatTypes={["RANKED_PVP"]}
-        enabled={_isActive}
+        enabled={isActive}
         emptyMessage="No ranked matches found"
       />
     </ContentBox>
@@ -280,10 +277,7 @@ export const RankedMatchesTab: React.FC<TabComponentProps> = ({
 
 // ---------------- Combat History Tab ----------------
 
-export const CombatHistoryTab: React.FC<TabComponentProps> = ({
-  userId,
-  isActive: _isActive,
-}) => {
+export const CombatHistoryTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
   const [selectedType, setSelectedType] = useState<string>("all");
 
   return (
@@ -311,7 +305,7 @@ export const CombatHistoryTab: React.FC<TabComponentProps> = ({
       <BattleHistoryTable
         userId={userId}
         combatTypes={selectedType === "all" ? undefined : [selectedType as BattleType]}
-        enabled={_isActive}
+        enabled={isActive}
         showBattleType
       />
     </ContentBox>

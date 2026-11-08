@@ -107,7 +107,6 @@ export const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
   const removalFlight = useSingleFlight<ReferralRemovalRequest>();
   const isRemoving = removalFlight.isPending;
   const [retryRequest, setRetryRequest] = useState<ReferralRemovalRequest | null>(null);
-  const [modalVersion, setModalVersion] = useState(0);
   const deleteReferral = api.staff.deleteReferral.useMutation({
     meta: { handlesTransportError: true },
   });
@@ -131,7 +130,6 @@ export const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
         showMutationToast(result);
         setRetryRequest(null);
         onRemoved(request.userId);
-        setModalVersion((version) => version + 1);
         void Promise.allSettled([
           utils.profile.getPublicUser.invalidate({
             userId: request.expectedRecruiterId,
@@ -150,7 +148,6 @@ export const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
 
   return (
     <Confirm
-      key={modalVersion}
       id={`remove-referral-${recruit.userId}`}
       title="Remove referral relationship?"
       proceed_label="Remove referral"

@@ -39,7 +39,6 @@ export const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
     newUserId: string;
   }>();
   const isPending = userIdFlight.isPending;
-  const [modalVersion, setModalVersion] = useState(0);
   const [committedSourceId, setCommittedSourceId] = useState<string | null>(null);
 
   const userIdForm = useForm<{ newUserId: string }>({
@@ -73,7 +72,6 @@ export const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
         // The old identity no longer exists. Suppress this stale action and close the confirmation
         // before cache/network work; every later move requires a fresh profile and confirmation.
         setCommittedSourceId(request.userId);
-        setModalVersion((version) => version + 1);
         void Promise.allSettled([
           utils.profile.getPublicUser.invalidate({ userId: request.userId }),
           utils.profile.getPublicUser.invalidate({ userId: request.newUserId }),
@@ -94,7 +92,6 @@ export const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
 
   return (
     <Confirm
-      key={modalVersion}
       id="update-user-id"
       title="Update User ID"
       proceed_label="Update user ID"
