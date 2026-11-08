@@ -180,7 +180,7 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
       const result = await callerForDatabase(bloodlineRouter, userId, db)[name]((name === "swapBloodline" ? { bloodlineId: "line" } : undefined) as never);
       expect(result).toMatchObject({ success: false, message: "You cannot change bloodline during battle" });
     }
-    await expect(updateBloodline(db, awake, null, 0, "Bloodline Removed")).rejects.toThrow("Bloodline or battle status changed. Refresh and try again");
+    expect(await updateBloodline(db, awake, null, 0, "Bloodline Removed")).toEqual({ granted: false, message: "Bloodline or battle status changed. Refresh and try again" });
     expect(await read()).toMatchObject({ bloodlineId: "line", seichiSilver: 900, bloodrightSpent: 100, reputationPoints: 100 });
     expect(await db.query.actionLog.findMany()).toHaveLength(0);
   });

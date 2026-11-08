@@ -1,5 +1,4 @@
 import { randomInt } from "node:crypto";
-import { TRPCError } from "@trpc/server";
 import { and, eq, isNotNull, isNull, like, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -313,13 +312,14 @@ export const bloodlineRouter = createTRPCRouter({
       // Update bloodline (this creates the "Bloodline Changed" log entry)
       const swapCost = isFreeSwap ? 0 : COST_SWAP_BLOODLINE;
       const swapMessage = `Bloodline Swapped from ${user.bloodline?.name} to ${line.name}`;
-      try {
-        await updateBloodline(ctx.drizzle, user, line, swapCost, swapMessage);
-      } catch (error) {
-        if (error instanceof BloodlineGrantRejectedError)
-          return errorResponse(error.message);
-        throw error;
-      }
+      const swap = await updateBloodline(
+        ctx.drizzle,
+        user,
+        line,
+        swapCost,
+        swapMessage,
+      );
+      if (!swap.granted) return errorResponse(swap.message);
 
       // Log federal free swaps for monthly Silver/Gold tracking (staff benefit takes priority)
       if (hasFreeSwapAvailable && !isStaffFreeSwap) {
@@ -858,37 +858,26 @@ export const bloodlineRouter = createTRPCRouter({
       if (!reserved) {
         return errorResponse("No pity rolls available");
       }
-      // Refund the reserved credit ONLY when the grant's own pre-write CAS rejected — signalled
-      // structurally by BloodlineGrantRejectedError (rowsAffected 0, i.e. nothing was granted).
-      // A raw DB error from its post-grant side-effect writes — or an ambiguous driver error
-      // during the CAS — is NOT that marker, so the bloodline may already be granted, the credit
-      // was legitimately spent, and it must not be handed back (avoids a grant + refund double
-      // benefit even if a future edit throws a plain TRPCError from those side-effect writes).
-      let grantedAt: Date | undefined;
-      try {
-        const granted = await updateBloodline(
-          ctx.drizzle,
-          user,
-          randomBloodline,
-          0,
-          `Pity roll for ${input.rank}: ${randomBloodline.name}`,
-        );
-        grantedAt = granted.updatedAt;
-      } catch (error) {
-        if (error instanceof BloodlineGrantRejectedError) {
-          // Swallow refund failures: the grant rejection is the meaningful error for the caller,
-          // and letting a transient refund error propagate would mask it. A dropped refund leaves
-          // the credit reserved (user-visible as one missing pity roll) rather than double-spent.
-          try {
-            await refundPityCredit({
-              client: ctx.drizzle,
-              rollId: prevRoll.id,
-            });
-          } catch (refundError) {
-            console.error("Pity credit refund failed", refundError);
-          }
+      const granted = await updateBloodline(
+        ctx.drizzle,
+        user,
+        randomBloodline,
+        0,
+        `Pity roll for ${input.rank}: ${randomBloodline.name}`,
+      );
+      // Refund only a rejection that granted nothing. A thrown error may follow a grant, so the
+      // credit stays spent rather than risk a grant plus a refund.
+      if (!granted.granted) {
+        // A dropped refund leaves one pity roll missing instead of masking the rejection.
+        try {
+          await refundPityCredit({
+            client: ctx.drizzle,
+            rollId: prevRoll.id,
+          });
+        } catch (refundError) {
+          console.error("Pity credit refund failed", refundError);
         }
-        throw error;
+        return errorResponse(granted.message);
       }
       await insertBloodlineRollsForPityRoll(ctx.drizzle, ctx, randomBloodline, input);
       const userPatch = bloodlineCachePatch(
@@ -896,7 +885,7 @@ export const bloodlineRouter = createTRPCRouter({
         randomBloodline,
         settings,
         progression,
-        grantedAt,
+        granted.updatedAt,
       );
       return {
         success: true,
@@ -917,25 +906,18 @@ export const bloodlineRouter = createTRPCRouter({
       // Guard
       if (user.status === "BATTLE")
         return errorResponse("You cannot change bloodline during battle");
-      if (!user.bloodlineId) {
-        throw serverError("PRECONDITION_FAILED", "You do not have a bloodline");
-      }
+      if (!user.bloodlineId) return errorResponse("You do not have a bloodline");
       const removalCost = user.bloodlineId === roll?.bloodlineId ? 0 : REMOVAL_COST;
       if (user.reputationPoints < removalCost)
         return errorResponse("You do not have enough reputation points");
-      try {
-        await updateBloodline(
-          ctx.drizzle,
-          user,
-          null,
-          removalCost,
-          "Bloodline Removed",
-        );
-      } catch (error) {
-        if (error instanceof BloodlineGrantRejectedError)
-          return errorResponse(error.message);
-        throw error;
-      }
+      const removal = await updateBloodline(
+        ctx.drizzle,
+        user,
+        null,
+        removalCost,
+        "Bloodline Removed",
+      );
+      if (!removal.granted) return errorResponse(removal.message);
       return {
         success: true,
         message: removalCost
@@ -978,6 +960,7 @@ export const bloodlineRouter = createTRPCRouter({
         BLOODLINE_COST[line.rank],
         `Bloodline Purchased: ${line.name}`,
       );
+      if (!granted.granted) return errorResponse(granted.message);
       await insertBloodlineRollsForPurchaseBloodline(ctx.drizzle, ctx, line);
       const patch = bloodlineCachePatch(
         user,
@@ -995,28 +978,19 @@ export const bloodlineRouter = createTRPCRouter({
 });
 
 /**
- * Update bloodline of user, ensuring the current blooline jutsus are unequipped
+ * Update bloodline of user, ensuring the current blooline jutsus are unequipped. A rejection
+ * before the change returns `granted: false` with a user-facing message and writes nothing;
+ * failures after the guarded write throw.
  */
-
-/**
- * Marks a rejection before updateBloodline changes the user's bloodline. The pity handler
- * refunds the reserved credit exclusively on this marker, so post-grant side-effect failures
- * and ambiguous driver errors cannot trigger a grant + refund double benefit. Extends
- * TRPCError for BAD_REQUEST serialization and `instanceof TRPCError` handling.
- */
-class BloodlineGrantRejectedError extends TRPCError {
-  constructor(message: string) {
-    super({ code: "BAD_REQUEST", message });
-  }
-}
-
 export const updateBloodline = async (
   client: DrizzleClient,
   user: UserData,
   bloodline: Bloodline | null,
   repCost: number,
   logMsg: string,
-) => {
+): Promise<
+  { granted: true; updatedAt: Date } | { granted: false; message: string }
+> => {
   // Get current bloodline jutsus
   const [bloodlineJutsus, queued] = user.bloodlineId
     ? await Promise.all([
@@ -1030,9 +1004,11 @@ export const updateBloodline = async (
   // refund first. A level queued after this check is refunded when its turn comes.
   if (bloodlineJutsus.length > 0) {
     if (bloodlineJutsus.some((id) => queued.has(id))) {
-      throw new BloodlineGrantRejectedError(
-        "Cancel queued training of your bloodline jutsu before changing bloodline",
-      );
+      return {
+        granted: false,
+        message:
+          "Cancel queued training of your bloodline jutsu before changing bloodline",
+      };
     }
   }
   // Update user first, with a CAS on both reputation (atomic decrement, floor guard) and the
@@ -1047,9 +1023,10 @@ export const updateBloodline = async (
     updatedAt,
   );
   if (!updateResult.rowsAffected) {
-    throw new BloodlineGrantRejectedError(
-      "Bloodline or battle status changed. Refresh and try again",
-    );
+    return {
+      granted: false,
+      message: "Bloodline or battle status changed. Refresh and try again",
+    };
   }
   // Only once the grant is confirmed, run the side-effect writes
   await Promise.all([
@@ -1060,7 +1037,7 @@ export const updateBloodline = async (
     // Create a log entry for this action
     insertActionLogForUpdateBloodline(client, user, logMsg),
   ]);
-  return { updatedAt };
+  return { granted: true, updatedAt };
 };
 
 /**

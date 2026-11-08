@@ -88,15 +88,16 @@ describeWithDatabase("bloodline grant rejection", () => {
 
   it("removeBloodline rejects a user without a bloodline", async () => {
     const caller = callerForDatabase(bloodlineRouter, userId, await getTestDatabase());
-    await expect(caller.removeBloodline()).rejects.toThrow("You do not have a bloodline");
+    expect(await caller.removeBloodline()).toEqual({ success: false, message: "You do not have a bloodline" });
   });
 
   it("purchaseBloodline grants nothing when battle starts during the request", async () => {
     const db = await getTestDatabase();
     const caller = callerForDatabase(bloodlineRouter, userId, await raceToBattle());
-    await expect(caller.purchaseBloodline({ bloodlineId: "next-line" })).rejects.toThrow(
-      "Bloodline or battle status changed. Refresh and try again",
-    );
+    expect(await caller.purchaseBloodline({ bloodlineId: "next-line" })).toEqual({
+      success: false,
+      message: "Bloodline or battle status changed. Refresh and try again",
+    });
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({
       bloodlineId: null, reputationPoints: BLOODLINE_COST.D,
     });
@@ -107,9 +108,10 @@ describeWithDatabase("bloodline grant rejection", () => {
   it("pityRoll refunds the reserved credit when battle starts during the request", async () => {
     const db = await getTestDatabase();
     const caller = callerForDatabase(bloodlineRouter, userId, await raceToBattle());
-    await expect(caller.pityRoll({ rank: "D" })).rejects.toThrow(
-      "Bloodline or battle status changed. Refresh and try again",
-    );
+    expect(await caller.pityRoll({ rank: "D" })).toEqual({
+      success: false,
+      message: "Bloodline or battle status changed. Refresh and try again",
+    });
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ bloodlineId: null });
     expect(await db.query.bloodlineRolls.findFirst({ where: eq(bloodlineRolls.id, "item-roll") })).toMatchObject({ pityRolls: 0 });
     expect(await db.query.bloodlineRolls.findMany({ where: eq(bloodlineRolls.type, "PITY") })).toHaveLength(0);

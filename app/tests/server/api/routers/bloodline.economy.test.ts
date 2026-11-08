@@ -25,24 +25,23 @@ const baseUser = {
 } as never;
 
 describe("updateBloodline", () => {
-  it("throws when the CAS matches zero rows", async () => {
+  it("reports a rejection when the CAS matches zero rows", async () => {
     const { client } = bloodlineClient(0);
-    await expect(
-      updateBloodline(client, baseUser, null, 50, "Bloodline Removed"),
-    ).rejects.toThrow();
+    expect(await updateBloodline(client, baseUser, null, 50, "Bloodline Removed")).toEqual({
+      granted: false,
+      message: "Bloodline or battle status changed. Refresh and try again",
+    });
   });
 
   it("does not run the side-effect writes (actionLog) when the CAS fails", async () => {
     const { client, insert } = bloodlineClient(0);
-    await expect(
-      updateBloodline(client, baseUser, null, 50, "Bloodline Removed"),
-    ).rejects.toThrow();
+    expect((await updateBloodline(client, baseUser, null, 50, "Bloodline Removed")).granted).toBe(false);
     expect(insert).not.toHaveBeenCalled();
   });
 
   it("runs the actionLog side-effect write once the CAS succeeds", async () => {
     const { client, insert } = bloodlineClient(1);
-    await updateBloodline(client, baseUser, null, 50, "Bloodline Removed");
+    expect((await updateBloodline(client, baseUser, null, 50, "Bloodline Removed")).granted).toBe(true);
     expect(insert).toHaveBeenCalledTimes(1);
   });
 });
