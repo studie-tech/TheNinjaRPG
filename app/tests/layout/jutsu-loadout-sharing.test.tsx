@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { JutsuLoadoutSharingDialog } from "@/layout/JutsuLoadoutSharing";
 import { exportJutsuLoadout } from "@/libs/loadout";
@@ -101,8 +101,11 @@ describe("jutsu loadout sharing dialogs", () => {
     fireEvent.click(view.getByRole("button", { name: "Import" }));
     fireEvent.change(view.getByLabelText("Loadout text"), { target: { value: exportJutsuLoadout(["strike"]) } });
     const previewButton = view.getByRole("button", { name: "Preview" });
-    fireEvent.click(previewButton);
-    fireEvent.click(previewButton);
+    // Both activations land before React re-renders the disabled button.
+    act(() => {
+      fireEvent.click(previewButton);
+      fireEvent.click(previewButton);
+    });
     expect(onPreview).toHaveBeenCalledTimes(1);
     expect((view.getByRole("button", { name: "Please wait…" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.keyDown(view.getByRole("dialog"), { key: "Escape" });
