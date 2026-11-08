@@ -29,6 +29,7 @@ import {
   uploadFileFromReplicate,
 } from "@/libs/replicate";
 import { servedUfsUrl } from "@/libs/uploadthing";
+import { isAiProviderQuotaError } from "@/utils/aiProviderErrors";
 
 /** Authored traits and last accepted image needed for initial art, redraws or evolution. */
 type AppearancePet = Pick<
@@ -108,36 +109,44 @@ export const generatePetAppearance = async (
   signal = AbortSignal.timeout(PET_GENERATION_TIMEOUT_MS),
 ) => {
   signal.throwIfAborted();
-  const prompt = getPetAppearancePrompt(pet, provider);
   const { species } = getPetAppearanceTraits(pet);
   // Fetch the accepted reference before spending on an edit, then reuse it for identity review.
   const previousImage = pet.avatar
     ? await downloadPetImage(pet.avatar, signal)
     : undefined;
+  // A GPT quota failure switches the rest of this generation, including a correction, to Nano Banana.
+  let activeProvider = provider;
   /** Apply the same cutout, framing, moderation and visual checks to every candidate. */
   const generateCandidate = async (
-    candidatePrompt: string,
+    buildPrompt: (provider: PetArtProvider) => string,
     referenceImage?: Buffer,
   ) => {
-    const image = await renderPetSprite({
-      provider,
-      prompt: candidatePrompt,
+    const rendered = await renderPetSprite({
+      provider: activeProvider,
+      buildPrompt,
       referenceImage,
       userId: pet.userId,
       signal,
     });
+    activeProvider = rendered.provider;
+    const { image } = rendered;
     await checkModeration(image, signal);
     const verdict = await reviewVisualQuality(image, previousImage, pet, signal);
     return { image, verdict };
   };
-  let candidate = await generateCandidate(prompt, previousImage);
+  let candidate = await generateCandidate(
+    (p) => getPetAppearancePrompt(pet, p),
+    previousImage,
+  );
   try {
     validatePetAppearanceQuality(candidate.verdict);
   } catch {
     // Correct visual failures once under the same deadline; safety/provider failures never retry.
     // Evolution repairs start from the accepted form so rejected cutout artifacts do not propagate.
+    const defects = candidate.verdict.reason;
     candidate = await generateCandidate(
-      `Create a new full-body ${species.name} candidate from the supplied reference. The previous attempt was rejected for these visible defects: ${candidate.verdict.reason}. Correct those defects while following this complete request: ${prompt}`,
+      (p) =>
+        `Create a new full-body ${species.name} candidate from the supplied reference. The previous attempt was rejected for these visible defects: ${defects}. Correct those defects while following this complete request: ${getPetAppearancePrompt(pet, p)}`,
       previousImage ?? candidate.image,
     );
     // The strength comparison is subjective; a corrected sprite that passes every
@@ -181,32 +190,56 @@ export const generatePetAppearance = async (
 };
 
 /**
- * Draw one candidate with the selected provider and return a framed 512px sprite.
- * Nano Banana is always cut out with 851-labs. GPT draws with native transparency; when that
- * leaves an opaque corner or a semi-transparent haze, the same cutout model is applied to the
- * image flattened on the neutral backdrop before the cutout is rejected. Every cutout must
- * pass the transparency check before it is trimmed and padded onto the shared canvas.
+ * Draw one candidate with the selected provider and return a framed 512px sprite and the
+ * provider that drew it. Nano Banana is always cut out with 851-labs. GPT draws with native
+ * transparency; when that leaves an opaque corner or a semi-transparent haze, the same cutout
+ * model is applied to the image flattened on the neutral backdrop before the cutout is
+ * rejected. When GPT refuses the request for quota, credits or rate limits, the candidate is
+ * drawn with Nano Banana and its own prompt instead. Every cutout must pass the transparency
+ * check before it is trimmed and padded onto the shared canvas.
  */
 const renderPetSprite = async (config: {
   provider: PetArtProvider;
-  prompt: string;
+  buildPrompt: (provider: PetArtProvider) => string;
   referenceImage?: Buffer;
   userId: string;
   signal: AbortSignal;
-}) => {
-  const { provider, prompt, userId, signal } = config;
+}): Promise<{ image: Buffer; provider: PetArtProvider }> => {
+  const { buildPrompt, userId, signal } = config;
   signal.throwIfAborted();
   // Explicit opaque reference pixels prevent transparent gaps being interpreted as black fur.
   const reference = config.referenceImage
     ? await flattenOnBackdrop(config.referenceImage)
     : undefined;
   signal.throwIfAborted();
-  let cutout: Buffer;
-  if (provider === "NANO_BANANA") {
+  let provider = config.provider;
+  let cutout: Buffer | undefined;
+  if (provider === "GPT") {
+    try {
+      cutout = await generateSpriteGPT({
+        prompt: buildPrompt(provider),
+        reference,
+        userId,
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted || !isAiProviderQuotaError(error)) throw error;
+      // generateSpriteGPT already logged the provider error; record only the switch.
+      console.warn(
+        "[pets] GPT image quota unavailable, drawing companion with Nano Banana",
+        JSON.stringify({ userId }),
+      );
+      provider = "NANO_BANANA";
+    }
+    if (cutout && !(await isCleanCutout(cutout))) {
+      cutout = await removeBackgroundToBuffer(await flattenOnBackdrop(cutout), signal);
+    }
+  }
+  if (!cutout) {
     // Inline bytes reuse the downloaded image without another upload or provider request.
     cutout = await generateNanoBananaImage({
-      preprompt: getPetArtStyle(provider),
-      prompt,
+      preprompt: getPetArtStyle("NANO_BANANA"),
+      prompt: buildPrompt("NANO_BANANA"),
       previousImg: reference
         ? `data:image/png;base64,${reference.toString("base64")}`
         : undefined,
@@ -216,11 +249,6 @@ const renderPetSprite = async (config: {
       size: "square",
       signal,
     });
-  } else {
-    cutout = await generateSpriteGPT({ prompt, reference, userId, signal });
-    if (!(await isCleanCutout(cutout))) {
-      cutout = await removeBackgroundToBuffer(await flattenOnBackdrop(cutout), signal);
-    }
   }
   signal.throwIfAborted();
   await validateSceneCharacterImage(cutout);
@@ -228,7 +256,7 @@ const renderPetSprite = async (config: {
     throw new Error("Scene character background was not removed cleanly");
   const image = await normalizePetSprite(cutout);
   signal.throwIfAborted();
-  return image;
+  return { image, provider };
 };
 
 /** Whether a native-transparency cutout passes the corner and haze checks unaided. */

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import sharp from "sharp";
+import { RateLimitError } from "openai";
 import { Moderations } from "openai/resources/moderations";
 import * as moderator from "@/libs/moderator";
 import { PIXEL_ART_RENDERING } from "@/libs/imagePrompts";
@@ -58,6 +59,42 @@ describe("companion provider pipeline", () => {
     expect(nano).toHaveBeenCalledWith(expect.objectContaining({ previousImg: undefined, removeBg: true, backgroundRemovalModel: "851-labs", size: "square", signal: controller.signal, preprompt: expect.stringContaining(PIXEL_ART_RENDERING) }));
     expect(nano.mock.calls[0]![0].prompt).toContain("#f0f0f0");
     expect(gpt).not.toHaveBeenCalled();
+  });
+
+  it("draws with Nano Banana and its own prompt for the whole generation when GPT is out of credits", async () => {
+    const quota = new RateLimitError(429, { message: "You have no credits remaining.", code: "insufficient_quota", type: "insufficient_quota" }, "429 You have no credits remaining.", new Headers());
+    const gpt = vi.spyOn(replicate, "generateSpriteGPT").mockRejectedValue(quota);
+    const nano = vi.spyOn(replicate, "generateNanoBananaImage").mockResolvedValue(await cutout());
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(quality, "classifyPetAppearanceImage").mockResolvedValueOnce({ ...acceptedQuality, singleAnimal: false, reason: "Two heads on one animal" });
+    expect(await generatePetAppearance(pet, "GPT", async () => {})).toEqual({ avatar: avatarUrl, avatarFacing: "left" });
+    expect(gpt).toHaveBeenCalledTimes(1);
+    expect(nano).toHaveBeenCalledTimes(2);
+    for (const [call] of nano.mock.calls) {
+      expect(call.prompt).toContain("#f0f0f0");
+      expect(call.prompt).not.toContain("fully transparent background");
+      expect(call).toMatchObject({ removeBg: true, backgroundRemovalModel: "851-labs" });
+    }
+    expect(nano.mock.calls[1]![0].prompt).toContain("Two heads on one animal");
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects without another provider when GPT fails for a reason other than quota", async () => {
+    vi.spyOn(replicate, "generateSpriteGPT").mockRejectedValue(new Error("Image request blocked by safety system"));
+    const nano = vi.spyOn(replicate, "generateNanoBananaImage");
+    await expect(generatePetAppearance(pet, "GPT", async () => {})).rejects.toThrow("safety system");
+    expect(nano).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the Nano Banana fallback also fails", async () => {
+    vi.spyOn(replicate, "generateSpriteGPT").mockRejectedValue(Object.assign(new Error("quota"), { status: 429 }));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const nano = vi.spyOn(replicate, "generateNanoBananaImage").mockRejectedValue(new Error("Replicate unavailable"));
+    await expect(generatePetAppearance(pet, "GPT", async () => {})).rejects.toThrow("Replicate unavailable");
+    expect(nano).toHaveBeenCalledTimes(1);
+    expect(upload).not.toHaveBeenCalled();
   });
 
   it.each([
