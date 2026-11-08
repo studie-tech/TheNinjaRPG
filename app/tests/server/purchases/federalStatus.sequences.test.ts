@@ -96,6 +96,25 @@ const statusOf = async (): Promise<FederalStatus> => {
   return row?.federalStatus ?? "NONE";
 };
 
+/** Write a tier directly, as a PayPal writer or a stale snapshot would leave it. */
+const setStatus = async (tier: FederalStatus, userId = USER) => {
+  await (await db()).update(userData).set({ federalStatus: tier }).where(eq(userData.userId, userId));
+};
+
+/** A production Apple gold receipt for USER as the webhook delivers it; pass what differs. */
+const federalReceipt = (
+  overrides: Partial<Parameters<typeof grantStorePurchase>[1]> = {},
+): Parameters<typeof grantStorePurchase>[1] => ({
+  userId: USER,
+  transactionId: nanoid(),
+  productId: "tnr_federal_gold",
+  store: "APPLE",
+  isSandbox: false,
+  purchasedAt: new Date(),
+  raw: {},
+  ...overrides,
+});
+
 /** The tier the production writer settles on when no PayPal tier vouches for one. */
 const storeFloorOf = async (userId = USER): Promise<FederalStatus> => {
   const database = await db();
@@ -114,10 +133,7 @@ const buyFederal = async (
   store: StorePlatform = "APPLE",
 ): Promise<string> => {
   const database = await db();
-  const transactionId = nanoid();
-  await grantStorePurchase(database, {
-    userId: USER,
-    transactionId,
+  const receipt = federalReceipt({
     productId:
       tier === "GOLD"
         ? "tnr_federal_gold"
@@ -125,17 +141,16 @@ const buyFederal = async (
           ? "tnr_federal_silver"
           : "tnr_federal_normal",
     store,
-    isSandbox: false,
     purchasedAt: new Date(Date.now() - agoMs),
-    raw: {},
   });
+  await grantStorePurchase(database, receipt);
   if (agoMs > 0) {
     await database
       .update(storePurchase)
       .set({ createdAt: new Date(Date.now() - agoMs) })
-      .where(eq(storePurchase.transactionId, transactionId));
+      .where(eq(storePurchase.transactionId, receipt.transactionId));
   }
-  return transactionId;
+  return receipt.transactionId;
 };
 
 const givePaypal = async (tier: FederalStatus, status = "ACTIVE") => {
@@ -162,16 +177,11 @@ const raceRevocationWithTransfer = async (expiresAt: Date | null) => {
   const database = await db();
   await insertUsers([{ userId: DESTINATION, username: "federal-destination" }]);
   const transactionId = nanoid();
-  await grantStorePurchase(database, {
-    userId: USER,
+  await grantStorePurchase(database, federalReceipt({
     transactionId,
-    productId: "tnr_federal_gold",
-    store: "APPLE",
-    isSandbox: false,
     purchasedAt: new Date(Date.now() - 2 * MINUTE),
     expiresAt,
-    raw: {},
-  });
+  }));
   const revoking = beforeStatements(database, storeEntitlementRevocation, [
     () =>
       transferStorePurchases(database, {
@@ -200,16 +210,11 @@ const raceRevocationWithReturningTransfer = async () => {
   const database = await db();
   await insertUsers([{ userId: DESTINATION, username: "federal-destination" }]);
   const transactionId = nanoid();
-  await grantStorePurchase(database, {
-    userId: USER,
+  await grantStorePurchase(database, federalReceipt({
     transactionId,
-    productId: "tnr_federal_gold",
-    store: "APPLE",
-    isSandbox: false,
     purchasedAt: new Date(Date.now() - 2 * MINUTE),
     expiresAt: new Date(Date.now() + 30 * DAY),
-    raw: {},
-  });
+  }));
   const at = new Date();
   const revoking = beforeStatements(database, storeEntitlementRevocation, [
     () =>
@@ -315,24 +320,14 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     const oldTransactionId = nanoid();
     const renewalTransactionId = nanoid();
 
-    await grantStorePurchase(database, {
-      userId: USER,
+    await grantStorePurchase(database, federalReceipt({
       transactionId: oldTransactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE",
-      isSandbox: false,
       purchasedAt: new Date(endedAt.getTime() - DAY),
-      raw: {},
-    });
-    await grantStorePurchase(database, {
-      userId: USER,
+    }));
+    await grantStorePurchase(database, federalReceipt({
       transactionId: renewalTransactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE",
-      isSandbox: false,
       purchasedAt: endedAt,
-      raw: {},
-    });
+    }));
 
     await revokeFederalStatus(database, USER, {
       occurredAt: endedAt,
@@ -403,10 +398,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
   it("keeps and restores an old receipt when the store extends its paid-through date", async () => {
     const transactionId = await buyFederal("GOLD", 70 * DAY);
     const database = await db();
-    await database
-      .update(userData)
-      .set({ federalStatus: "NONE" })
-      .where(eq(userData.userId, USER));
+    await setStatus("NONE");
 
     await extendStoreSubscription(database, {
       userId: USER,
@@ -433,10 +425,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     // already bought.
     const database = await db();
     await givePaypal("GOLD", "CANCELLED");
-    await database
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, USER));
+    await setStatus("GOLD");
     await reconcileFederalStatuses(database);
     expect(await statusOf()).toBe("GOLD");
   });
@@ -448,10 +437,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     // write NONE, which the reconcile then refuses to undo.
     const database = await db();
     await givePaypal("GOLD", "CANCELLED");
-    await database
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, USER));
+    await setStatus("GOLD");
     await setFederalStatusWithStoreFloor(database, USER, "NONE");
     expect(await statusOf()).toBe("GOLD");
   });
@@ -466,16 +452,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       .update(paypalSubscription)
       .set({ updatedAt: new Date(Date.now() - 40 * DAY) })
       .where(eq(paypalSubscription.affectedUserId, USER));
-    await database
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, USER));
+    await setStatus("GOLD");
     await setFederalStatusWithStoreFloor(database, USER, "NONE");
     expect(await statusOf()).toBe("NONE");
-    await database
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, USER));
+    await setStatus("GOLD");
     await reconcileFederalStatuses(database);
     expect(await statusOf()).toBe("NONE");
   });
@@ -486,10 +466,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     // on the exact column value it could not, because the column still read GOLD.
     const database = await db();
     await givePaypal("SILVER", "CANCELLED");
-    await database
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, USER));
+    await setStatus("GOLD");
     await setFederalStatusWithStoreFloor(database, USER, "NONE");
     expect(await statusOf()).toBe("SILVER");
   });
@@ -499,10 +476,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     // SILVER, or the grace becomes a restore.
     const database = await db();
     await givePaypal("GOLD", "CANCELLED");
-    await database
-      .update(userData)
-      .set({ federalStatus: "SILVER" })
-      .where(eq(userData.userId, USER));
+    await setStatus("SILVER");
     await setFederalStatusWithStoreFloor(database, USER, "NONE");
     expect(await statusOf()).not.toBe("GOLD");
   });
@@ -512,10 +486,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     // is naming a real tier, or the branch changes what the web flow has always done.
     const database = await db();
     await givePaypal("GOLD", "CANCELLED");
-    await database
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, USER));
+    await setStatus("GOLD");
     await setFederalStatusWithStoreFloor(database, USER, "SILVER");
     expect(await statusOf()).toBe("SILVER");
   });
@@ -525,10 +496,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     // a reconcile would undo every revocation for anyone holding a stale subscription.
     const database = await db();
     await givePaypal("GOLD", "CANCELLED");
-    await database
-      .update(userData)
-      .set({ federalStatus: "NONE" })
-      .where(eq(userData.userId, USER));
+    await setStatus("NONE");
     await reconcileFederalStatuses(database);
     expect(await statusOf()).toBe("NONE");
   });
@@ -654,15 +622,9 @@ describeWithDatabase("federal status across real webhook sequences", () => {
   });
 
   it("does not let a sandbox receipt vouch for anything", async () => {
-    await grantStorePurchase(await db(), {
-      userId: USER,
-      transactionId: nanoid(),
-      productId: "tnr_federal_gold",
-      store: "APPLE",
+    await grantStorePurchase(await db(), federalReceipt({
       isSandbox: true,
-      purchasedAt: new Date(),
-      raw: {},
-    });
+    }));
     // Recorded for the audit trail, but never accepted, so nothing vouches for a tier.
     expect(await storeFloorOf()).toBe("NONE");
   });
@@ -692,15 +654,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
 
     const transactionId = "production-after-sandbox-history";
     await expect(
-      grantStorePurchase(database, {
-        userId: USER,
+      grantStorePurchase(database, federalReceipt({
         transactionId,
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
         purchasedAt,
-        raw: {},
-      }),
+      })),
     ).resolves.toMatchObject({ status: "granted" });
     expect(await statusOf()).toBe("GOLD");
     const receipt = await database.query.storePurchase.findFirst({
@@ -735,15 +692,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
 
     const transactionId = "sandbox-after-production-history";
     await expect(
-      grantStorePurchase(database, {
-        userId: USER,
+      grantStorePurchase(database, federalReceipt({
         transactionId,
-        productId: "tnr_federal_gold",
-        store: "APPLE",
         isSandbox: true,
         purchasedAt,
-        raw: {},
-      }),
+      })),
     ).resolves.toMatchObject({ status: "granted" });
     expect(await statusOf()).toBe("GOLD");
     const receipt = await database.query.storePurchase.findFirst({
@@ -804,15 +757,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     const database = await db();
     const purchasedAt = new Date(Date.now() - 3 * MINUTE);
     const transactionId = nanoid();
-    await grantStorePurchase(database, {
-      userId: USER,
+    await grantStorePurchase(database, federalReceipt({
       transactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE",
       isSandbox: true,
       purchasedAt,
-      raw: {},
-    });
+    }));
 
     await transferStorePurchases(database, {
       eventId: "sandbox-transfer-away",
@@ -844,10 +793,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       .set({ acceptedAt: new Date() })
       .where(eq(storePurchase.transactionId, transactionId));
     expect(await storeFloorOf(DESTINATION)).toBe("NONE");
-    await database
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, DESTINATION));
+    await setStatus("GOLD", DESTINATION);
     await reconcileFederalStatuses(database);
     const reconciledDestination = await database.query.userData.findFirst({
       columns: { federalStatus: true },
@@ -864,15 +810,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     const database = await db();
     const purchasedAt = new Date(Date.now() - 4 * MINUTE);
     const transactionId = nanoid();
-    await grantStorePurchase(database, {
-      userId: USER,
+    await grantStorePurchase(database, federalReceipt({
       transactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE",
       isSandbox: true,
       purchasedAt,
-      raw: {},
-    });
+    }));
     await transferStorePurchases(database, {
       eventId: "sandbox-transfer-away-before-return",
       fromUserIds: [USER],
@@ -907,15 +849,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     const database = await db();
     const purchasedAt = new Date(Date.now() - 4 * MINUTE);
     const transactionId = nanoid();
-    await grantStorePurchase(database, {
-      userId: USER,
+    await grantStorePurchase(database, federalReceipt({
       transactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE",
       isSandbox: true,
       purchasedAt,
-      raw: {},
-    });
+    }));
     await transferStorePurchases(database, {
       eventId: "sandbox-expiry-transfer-away",
       fromUserIds: [USER],
@@ -961,15 +899,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     const database = await db();
     const purchasedAt = new Date(Date.now() - 4 * MINUTE);
     const transactionId = nanoid();
-    await grantStorePurchase(database, {
-      userId: USER,
+    await grantStorePurchase(database, federalReceipt({
       transactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE",
       isSandbox: true,
       purchasedAt,
-      raw: {},
-    });
+    }));
     await transferStorePurchases(database, {
       eventId: "sandbox-expiry-at-ordinary-owner",
       fromUserIds: [USER],
@@ -1085,15 +1019,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     });
 
     const transactionId = nanoid();
-    const grant = {
-      userId: USER,
+    const grant = federalReceipt({
       transactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE" as const,
-      isSandbox: false,
       purchasedAt: new Date(transferredAt.getTime() - MINUTE),
-      raw: {},
-    };
+    });
     await expect(grantStorePurchase(database, grant)).resolves.toMatchObject({
       status: "granted",
     });
@@ -1240,24 +1169,15 @@ describeWithDatabase("federal status across real webhook sequences", () => {
 
     const beforeFirst = nanoid();
     const betweenTransfers = nanoid();
-    await grantStorePurchase(database, {
-      userId: USER,
+    await grantStorePurchase(database, federalReceipt({
       transactionId: beforeFirst,
-      productId: "tnr_federal_gold",
-      store: "APPLE",
-      isSandbox: false,
       purchasedAt: new Date(firstTransferAt.getTime() - MINUTE),
-      raw: {},
-    });
-    await grantStorePurchase(database, {
-      userId: USER,
+    }));
+    await grantStorePurchase(database, federalReceipt({
       transactionId: betweenTransfers,
       productId: "tnr_federal_silver",
-      store: "APPLE",
-      isSandbox: false,
       purchasedAt: new Date(firstTransferAt.getTime() + MINUTE),
-      raw: {},
-    });
+    }));
     const [oldReceipt, laterReceipt, flattened] = await Promise.all([
       database.query.storePurchase.findFirst({
         columns: { userId: true },
@@ -1390,15 +1310,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       [between, new Date(olderAt.getTime() + 1)],
       [afterBoth, new Date(newerAt.getTime() + MINUTE)],
     ] as const) {
-      await grantStorePurchase(database, {
-        userId: USER,
+      await grantStorePurchase(database, federalReceipt({
         transactionId,
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
         purchasedAt,
-        raw: {},
-      });
+      }));
     }
     const [redirects, receipts] = await Promise.all([
       database.query.storePurchaseTransfer.findMany({
@@ -1566,15 +1481,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       },
     ]);
     await expect(
-      grantStorePurchase(granting, {
-        userId: USER,
+      grantStorePurchase(granting, federalReceipt({
         transactionId,
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
         purchasedAt: new Date(firstTransferAt.getTime() - MINUTE),
-        raw: {},
-      }),
+      })),
     ).resolves.toMatchObject({ status: "granted" });
     expect(transfer).toMatchObject({ destinationUserId: finalUserId });
     const [receipt, middle, final] = await Promise.all([
@@ -1675,15 +1585,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     });
     const transactionId = nanoid();
     await expect(
-      grantStorePurchase(database, {
-        userId: USER,
+      grantStorePurchase(database, federalReceipt({
         transactionId,
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
         purchasedAt: new Date(firstAt.getTime() - MINUTE),
-        raw: {},
-      }),
+      })),
     ).resolves.toMatchObject({ status: "granted" });
     const receipt = await database.query.storePurchase.findFirst({
       columns: { userId: true },
@@ -1712,15 +1617,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       occurredAt,
     });
     const transactionId = nanoid();
-    await grantStorePurchase(database, {
-      userId: USER,
+    await grantStorePurchase(database, federalReceipt({
       transactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE",
-      isSandbox: false,
       purchasedAt: new Date(occurredAt.getTime() - MINUTE),
-      raw: {},
-    });
+    }));
     const receipt = await database.query.storePurchase.findFirst({
       columns: { userId: true },
       where: eq(storePurchase.transactionId, transactionId),
@@ -1825,15 +1725,9 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     });
 
     await expect(
-      grantStorePurchase(database, {
-        userId: USER,
-        transactionId: nanoid(),
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
+      grantStorePurchase(database, federalReceipt({
         purchasedAt: new Date(endedAt.getTime() - MINUTE),
-        raw: {},
-      }),
+      })),
     ).resolves.toEqual({ status: "ignored", reason: "Expired purchase" });
     const [destination, receipt] = await Promise.all([
       database.query.userData.findFirst({
@@ -1875,15 +1769,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       occurredAt: transferredAt,
     });
     await expect(
-      grantStorePurchase(database, {
-        userId: USER,
+      grantStorePurchase(database, federalReceipt({
         transactionId: "delayed-ended-period",
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
         purchasedAt,
-        raw: {},
-      }),
+      })),
     ).resolves.toEqual({ status: "ignored", reason: "Expired purchase" });
     const receipt = await database.query.storePurchase.findFirst({
       where: eq(storePurchase.transactionId, "delayed-ended-period"),
@@ -1907,15 +1796,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       occurredAt: transferredAt,
     });
     const newerTransactionId = "post-transfer-period";
-    await grantStorePurchase(database, {
-      userId: USER,
+    await grantStorePurchase(database, federalReceipt({
       transactionId: newerTransactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE",
-      isSandbox: false,
       purchasedAt: new Date(transferredAt.getTime() + MINUTE),
-      raw: {},
-    });
+    }));
     await revokeFederalStatus(database, USER, {
       eventId: "post-transfer-expiry",
       occurredAt: new Date(),
@@ -1925,16 +1809,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     });
 
     await expect(
-      grantStorePurchase(database, {
-        userId: USER,
+      grantStorePurchase(database, federalReceipt({
         transactionId: "old-transferred-live-period",
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
         purchasedAt: new Date(transferredAt.getTime() - MINUTE),
         expiresAt: new Date(Date.now() + DAY),
-        raw: {},
-      }),
+      })),
     ).resolves.toMatchObject({ status: "granted" });
     const oldReceipt = await database.query.storePurchase.findFirst({
       where: eq(storePurchase.transactionId, "old-transferred-live-period"),
@@ -1962,29 +1841,23 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     env.STORE_SANDBOX_USER_IDS = USER;
     const database = await db();
     const silverTransactionId = nanoid();
-    await grantStorePurchase(database, {
-      userId: USER,
+    await grantStorePurchase(database, federalReceipt({
       transactionId: silverTransactionId,
       productId: "tnr_federal_silver:monthly",
       store: "GOOGLE",
       isSandbox: true,
       purchasedAt: new Date(Date.now() - MINUTE),
-      raw: {},
-    });
+    }));
     await database
       .update(storePurchase)
       .set({ expiresAt: new Date(Date.now() - 1) })
       .where(eq(storePurchase.transactionId, silverTransactionId));
 
-    const result = await grantStorePurchase(database, {
-      userId: USER,
-      transactionId: nanoid(),
+    const result = await grantStorePurchase(database, federalReceipt({
       productId: "tnr_federal_normal:monthly",
       store: "GOOGLE",
       isSandbox: true,
-      purchasedAt: new Date(),
-      raw: {},
-    });
+    }));
     expect(result).toMatchObject({ status: "granted" });
     expect(await statusOf()).toBe("NORMAL");
   });
@@ -1992,19 +1865,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
   it("repairs a previously granted downgrade on retry", async () => {
     const database = await db();
     const transactionId = await buyFederal("NORMAL");
-    await database
-      .update(userData)
-      .set({ federalStatus: "SILVER" })
-      .where(eq(userData.userId, USER));
-    const grant = {
-      userId: USER,
+    await setStatus("SILVER");
+    const grant = federalReceipt({
       transactionId,
       productId: "tnr_federal_normal",
-      store: "APPLE" as const,
-      isSandbox: false,
-      purchasedAt: new Date(),
-      raw: {},
-    };
+    });
 
     await expect(
       grantStorePurchase(failStatements(database, userData), grant),
@@ -2027,7 +1892,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
 
   it("bulk reconciliation only updates the selected candidate ids", async () => {
     const database = await db();
-    await database.update(userData).set({ federalStatus: "GOLD" }).where(eq(userData.userId, USER));
+    await setStatus("GOLD");
     const concurrent = beforeStatements(database, userData, [async () => {
       await insertUsers([{ userId: DESTINATION, username: "destination", federalStatus: "NONE" }]);
       await database.insert(paypalSubscription).values({
@@ -2056,10 +1921,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       .where(eq(storePurchase.transactionId, goldTransactionId));
     await buyFederal("SILVER");
     // Simulate stale derived state from an interrupted or older grant implementation.
-    await database
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, USER));
+    await setStatus("GOLD");
 
     await reconcileFederalStatuses(database);
     expect(await statusOf()).toBe("SILVER");
@@ -2168,15 +2030,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     const transactionId = nanoid();
     await insertUsers([{ userId, username: "expired", federalStatus: "NONE" }]);
     const database = await db();
-    const grant = {
+    const grant = federalReceipt({
       userId,
       transactionId,
-      productId: "tnr_federal_gold",
-      store: "APPLE" as const,
-      isSandbox: false,
       purchasedAt: new Date(Date.now() - MINUTE),
-      raw: {},
-    };
+    });
     // Leave the receipt pending by failing the atomic status/claim statement.
     await expect(
       grantStorePurchase(failStatements(database, userData), grant),
@@ -2218,15 +2076,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     });
     const transactionId = nanoid();
     await expect(
-      grantStorePurchase(database, {
+      grantStorePurchase(database, federalReceipt({
         userId,
         transactionId,
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
         purchasedAt: new Date(endedAt.getTime() - MINUTE),
-        raw: {},
-      }),
+      })),
     ).resolves.toEqual({ status: "ignored", reason: "Expired purchase" });
 
     const [receipt, user] = await Promise.all([
@@ -2252,16 +2106,12 @@ describeWithDatabase("federal status across real webhook sequences", () => {
 
     const transactionId = nanoid();
     await expect(
-      grantStorePurchase(database, {
+      grantStorePurchase(database, federalReceipt({
         userId,
         transactionId,
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
         purchasedAt: new Date(endedAt.getTime() - DAY),
         expiresAt: endedAt,
-        raw: {},
-      }),
+      })),
     ).resolves.toEqual({ status: "ignored", reason: "Expired purchase" });
 
     const [receipt, user] = await Promise.all([
@@ -2292,15 +2142,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       store: "APPLE",
     });
     await expect(
-      grantStorePurchase(database, {
+      grantStorePurchase(database, federalReceipt({
         userId,
-        transactionId: nanoid(),
-        productId: "tnr_federal_gold",
-        store: "APPLE",
-        isSandbox: false,
         purchasedAt: endedAt,
-        raw: {},
-      }),
+      })),
     ).resolves.toMatchObject({ status: "granted" });
     const user = await database.query.userData.findFirst({
       columns: { federalStatus: true },
