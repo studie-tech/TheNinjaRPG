@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import { getCancelUserUpdate, getClaimUserUpdate } from "@/deltas/villageMission";
-
 import { boostPvpGain } from "@/libs/pvpExperience";
 import { collapseRewards } from "@/libs/rewards";
 import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
@@ -24,10 +24,17 @@ import { rewardPayloads } from "@/validators/rewardPackages";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import {
   type VillageMission,
-  villageMissionActionSchema,
-  villageMissionCancelSchema,
   villageMissionObjectiveSchema,
 } from "@/validators/villageMission";
+
+const villageMissionActionSchema = z.object({
+  villageId: z.string().min(1),
+  missionId: z.string().min(1).optional(),
+});
+
+const villageMissionCancelSchema = villageMissionActionSchema.extend({
+  missionId: z.string().min(1),
+});
 
 export const villageMissionRouter = createTRPCRouter({
   get: protectedProcedure.input(idSchema).query(async ({ ctx, input }) => {

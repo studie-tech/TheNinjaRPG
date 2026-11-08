@@ -10,11 +10,3 @@ export const awardSchema = z
   .refine((data) => data.reputationAmount || data.moneyAmount, {
     error: "Either reputation or money amount must be provided",
   });
-
-// Filtering schema for listing awards
-export const awardsFilteringSchema = z.object({
-  rewardType: z.enum(["all", "reputation", "money", "both"]).prefault("all"),
-  awardedTo: z.string().optional(), // receiver username contains
-  awardedBy: z.string().optional(), // awardedBy username contains
-  date: z.string().optional(),
-});

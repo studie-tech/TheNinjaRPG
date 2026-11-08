@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import { fetchUser } from "@/queries/profile";
 import {
   deleteRewardNodeForDeleteNode,
@@ -16,7 +17,6 @@ import {
   updateRewardNodeForSaveNode,
   updateRewardPackageForSavePackage,
 } from "@/queries/rewardPackages";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -27,7 +27,22 @@ import {
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canAwardReputation, canManageRewards, isStaffRole } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
-import { SaveRewardNode, SaveRewardPackage } from "@/validators/rewardPackages";
+import {
+  RewardNodeValidator,
+  RewardPackageValidator,
+} from "@/validators/rewardPackages";
+
+/** Catalog package create/update input; an absent id creates a new source. */
+const SaveRewardPackage = z.object({
+  id: z.string().optional(),
+  data: RewardPackageValidator,
+});
+
+/** Catalog node create/update input; an absent id creates a new grouping. */
+const SaveRewardNode = z.object({
+  id: z.string().optional(),
+  data: RewardNodeValidator,
+});
 
 /** Staff reward catalog maintenance; reward delivery stays in the quest claim path. */
 export const rewardPackagesRouter = createTRPCRouter({

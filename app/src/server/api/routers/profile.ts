@@ -33,6 +33,7 @@ import {
   type MasteryName,
   MasteryNames,
   REGEN_SECONDS,
+  SEICHI_SILVER_ADJUST_LIMIT,
   SENSEI_MAX_STUDENT_LEVEL,
   SHRINE_BOOST_TYPES,
   SKILL_POINT_MAX_LEVEL,
@@ -383,16 +384,32 @@ import {
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
 import {
-  adjustSeichiSilverSchema,
   assignableMasteryNames,
   createAssignedExperienceSchema,
   getPublicUsersSchema,
-  resetPetImageGenerationSchema,
   tavernColorChangeSchema,
   updateUserPreferencesSchema,
   updateUserSchema,
 } from "@/validators/user";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const adjustSeichiSilverSchema = z.object({
+  userId: z.string(),
+  delta: z.coerce
+    .number()
+    .int()
+    .min(-SEICHI_SILVER_ADJUST_LIMIT)
+    .max(SEICHI_SILVER_ADJUST_LIMIT)
+    .refine((d) => d !== 0, { message: "Delta cannot be zero" }),
+  reason: z.string().trim().min(10).max(500),
+});
+
+/** Identify the owner's companion and require an auditable reason for restoring attempts. */
+const resetPetImageGenerationSchema = z.object({
+  userId: z.string().min(1),
+  petId: z.string().min(1),
+  reason: z.string().trim().min(10).max(500),
+});
 
 const pusher = getServerPusher();
 const voteSecret = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyzABCDEF", 8);

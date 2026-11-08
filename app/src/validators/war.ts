@@ -24,17 +24,6 @@ export type WarSettlement = {
   notified: boolean;
 };
 
-export const declareVillageWarSchema = z.object({
-  targetVillageId: z.string(),
-  targetStructureRoute: z.string(),
-  userVillageId: z.string(),
-});
-
-export const raidOptionsSchema = z.object({
-  userVillageId: z.string(),
-  targetVillageId: z.string(),
-});
-
 const positiveRule = z.number().int().min(1).max(100000000);
 const roleRule = z.number().int().min(0).max(10000);
 /** Staff-editable rules validated before saving and frozen at declaration approval. */
@@ -93,11 +82,3 @@ export type WarMissionAttempt = {
   value: number;
   endsAt: string;
 };
-/** Resource identifiers only; router guards enforce participation and current eligibility. */
-export const warIdSchema = z.object({ warId: z.string().min(1) });
-export const startWarMissionSchema = warIdSchema.extend({
-  questId: z.string().min(1),
-  objectiveId: z.string().min(1),
-});
-export const completeWarMissionSchema = z.object({ attemptId: z.string().min(1) });
-export const warCampSchema = z.object({ campId: z.string().min(1) });

@@ -274,12 +274,23 @@ import {
 } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import { QuestTracker } from "@/validators/objectives";
-import {
-  cancelQueuedJobInputSchema,
-  jutsuTrainingQueueOutputSchema,
-} from "@/validators/train";
+import { cancelQueuedJobInputSchema, queuedJobSchema } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUpdatedUser } from "./profile";
+
+const jutsuTrainingQueueOutputSchema = z.object({
+  capacity: z.number(),
+  waiting: z.array(
+    queuedJobSchema.extend({
+      jutsuId: z.string(),
+      name: z.string(),
+      image: z.string().nullable(),
+      reservedRyo: z.number(),
+      /** The level this entry trains the jutsu to */
+      level: z.number(),
+    }),
+  ),
+});
 
 /** Defer JSON decoding to preparation so malformed text uses the normal mutation response. */
 const previewJutsuLoadoutSchema = z.object({

@@ -85,10 +85,15 @@ import { idSchema } from "@/validators/misc";
 import {
   type RankedSeasonDivisionReward,
   rankedLoadoutSchema,
-  rankedQueueResponseSchema,
   rankedSeasonSchema,
 } from "@/validators/pvpRank";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const rankedQueueResponseSchema = userDeltaResponseSchema.extend({
+  battleId: z.string().optional(),
+  removedJutsuIds: z.array(z.string()).optional(),
+  removedItemIds: z.array(z.string()).optional(),
+});
 
 export const pvpRankRouter = createTRPCRouter({
   // Get the user's season rewards

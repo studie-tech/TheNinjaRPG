@@ -65,13 +65,3 @@ export const rewardPayloads = <
 export const QuestReward = z.object(questRewardFields);
 export type QuestRewardType = z.infer<typeof QuestReward>;
 export type RewardPackageSnapshotType = z.infer<typeof RewardPackageSnapshot>;
-/** Catalog package create/update input; an absent id creates a new source. */
-export const SaveRewardPackage = z.object({
-  id: z.string().optional(),
-  data: RewardPackageValidator,
-});
-/** Catalog node create/update input; an absent id creates a new grouping. */
-export const SaveRewardNode = z.object({
-  id: z.string().optional(),
-  data: RewardNodeValidator,
-});

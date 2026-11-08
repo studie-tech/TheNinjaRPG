@@ -3,7 +3,12 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { SupportTicketCategory, SupportTicketPriority } from "@/drizzle/constants";
-import { GITHUB_API_ENDPOINT } from "@/drizzle/constants";
+import {
+  GITHUB_API_ENDPOINT,
+  SupportTicketCategories,
+  SupportTicketPriorities,
+  SupportTicketStatuses,
+} from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { supportTicket } from "@/drizzle/schema";
 import { anonymizeStaffInfo, getTicketUpdateActivities } from "@/libs/support";
@@ -32,7 +37,6 @@ import {
   updateSupportTicketForEscalateToGithub,
   updateSupportTicketForUpdateTicket,
 } from "@/queries/support";
-
 import { createConvo } from "@/server/api/routers/comments";
 import {
   baseServerResponse,
@@ -59,12 +63,43 @@ import sanitize from "@/utils/sanitize";
 import { idSchema } from "@/validators/misc";
 import {
   createSupportTicketSchema,
-  escalateToGithubSchema,
-  type SupportTicketFilteringSchema,
-  supportTicketFilterSchema,
-  supportTicketMetricsSchema,
   updateSupportTicketSchema,
 } from "@/validators/support";
+
+// Escalate to GitHub Schema
+const escalateToGithubSchema = z.object({
+  ticketId: z.string(),
+});
+
+// Support Ticket Filter Schema
+const supportTicketFilterSchema = z.object({
+  status: z.array(z.enum(SupportTicketStatuses)).optional(),
+  category: z.array(z.enum(SupportTicketCategories)).optional(),
+  priority: z.array(z.enum(SupportTicketPriorities)).optional(),
+  assignedToUserId: z.string().nullable().optional(),
+  createdByUserId: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  isPublic: z.boolean().optional(),
+  search: z.string().optional(),
+  dateFrom: z.iso.datetime().optional(),
+  dateTo: z.iso.datetime().optional(),
+  cursor: z.number().nullish(),
+  limit: z.number().min(1).max(100).prefault(20),
+  orderBy: z
+    .enum(["createdAt", "updatedAt", "priority", "status"])
+    .prefault("createdAt"),
+  orderDirection: z.enum(["asc", "desc"]).prefault("desc"),
+});
+
+type SupportTicketFilteringSchema = z.infer<typeof supportTicketFilterSchema>;
+
+// Support Ticket Metrics Schema
+const supportTicketMetricsSchema = z.object({
+  dateFrom: z.iso.datetime().optional(),
+  dateTo: z.iso.datetime().optional(),
+  category: z.enum(SupportTicketCategories).optional(),
+  assignedToUserId: z.string().optional(),
+});
 
 export const supportRouter = createTRPCRouter({
   // Get all support tickets with filtering

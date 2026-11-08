@@ -32,10 +32,3 @@ export const boostTemplateSchema = z
         "Duplicate (boostType, dayOfWeek, slotIndex) combinations are not allowed",
     },
   );
-
-export const getBoostTemplateSchema = z.object({ villageId: z.string() });
-
-export const setBoostTemplateSchema = z.object({
-  villageId: z.string(),
-  template: boostTemplateSchema,
-});

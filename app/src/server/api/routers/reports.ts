@@ -4,6 +4,7 @@ import {
   ActiveBanStates,
   ActiveSilenceStates,
   type BanState,
+  BanStates,
 } from "@/drizzle/constants";
 import type { UserReport } from "@/drizzle/schema";
 import { getForumContext, resolveForumPost } from "@/libs/forum";
@@ -89,12 +90,24 @@ import type { ReportCommentSchema } from "@/validators/reports";
 import {
   modBotPerformanceSchema,
   reportCommentSchema,
-  reportFilteringSchema,
-  reportTimeoutSchema,
   userReportSchema,
   userReviewSchema,
 } from "@/validators/reports";
 import type { DrizzleClient } from "../../db";
+
+const reportTimeoutSchema = z.object({
+  comment: z.string().min(10).max(5000),
+  object_id: z.string(),
+});
+
+const reportFilteringSchema = z.object({
+  reportedUser: z.string().optional(),
+  reporterUser: z.string().optional(),
+  status: z.enum(BanStates).optional(),
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+  system: z.string().optional(),
+});
 
 const pusher = getServerPusher();
 const SANCTION_UNAVAILABLE_MESSAGE =

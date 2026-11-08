@@ -75,12 +75,22 @@ import {
 import { SkillTreeValidator } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
 import {
-  createSkillSchema,
   type SkillTreeFilteringSchema,
   skillTreeFilteringSchema,
-  skillTreeFolderSchema,
 } from "@/validators/skillTree";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const skillTreeFolderSchema = z.object({
+  name: z.string().min(1).max(191),
+  image: z.string().max(512).optional(),
+  description: z.string().optional(),
+  hidden: z.boolean().optional(),
+  order: z.int().optional(),
+});
+
+const createSkillSchema = z
+  .object({ bloodlineId: z.string().min(1).optional() })
+  .optional();
 
 export const skillTreeRouter = createTRPCRouter({
   // Get all skill names for selectors

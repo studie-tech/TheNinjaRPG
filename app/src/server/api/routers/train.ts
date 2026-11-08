@@ -14,7 +14,11 @@ import {
   MASTERY_QUEUE_KIND_LABELS,
   MAX_DAILY_TRAININGS,
   MasteryNames,
+  MasteryQueueKinds,
+  QUEUE_WAITING_SLOTS,
   type TimedMasteryName,
+  TimedMasteryNames,
+  TrainingSpeeds,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
@@ -72,15 +76,46 @@ import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
 import {
-  startMasteryTrainingInputSchema,
+  energyTrainingQueueEntrySchema,
+  masteryTrainingQueueEntrySchema,
   startTrainingInputSchema,
-  stopTrainingInputSchema,
-  trainingLogInputSchema,
-  updateEnergyTrainingQueueInputSchema,
-  updateMasteryTrainingQueueInputSchema,
-  updateTrainingSpeedInputSchema,
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const updateEnergyTrainingQueueInputSchema = z.object({
+  entries: z.array(energyTrainingQueueEntrySchema).max(1 + QUEUE_WAITING_SLOTS.GOLD),
+  expectedEntries: z
+    .array(energyTrainingQueueEntrySchema)
+    .max(1 + QUEUE_WAITING_SLOTS.GOLD),
+  guess: z.string().optional(),
+});
+
+const updateMasteryTrainingQueueInputSchema = z.object({
+  kind: z.enum(MasteryQueueKinds).default("MASTERY"),
+  entries: z.array(masteryTrainingQueueEntrySchema).max(QUEUE_WAITING_SLOTS.GOLD),
+  expectedEntries: z
+    .array(masteryTrainingQueueEntrySchema)
+    .max(QUEUE_WAITING_SLOTS.GOLD),
+});
+
+const startMasteryTrainingInputSchema = z.object({
+  stat: z.enum(TimedMasteryNames),
+  speed: z.enum(TrainingSpeeds).optional(),
+});
+
+const stopTrainingInputSchema = z.object({
+  stat: z.enum(TimedMasteryNames),
+  startedAt: z.date(),
+  guess: z.string().optional(),
+});
+
+const updateTrainingSpeedInputSchema = z.object({
+  speed: z.enum(TrainingSpeeds),
+});
+
+const trainingLogInputSchema = z.object({
+  userId: z.string(),
+});
 
 const selectTrainedElementSchema = z.object({
   element: z.enum(BasicElementName).nullable(),

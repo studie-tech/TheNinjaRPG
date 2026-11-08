@@ -167,15 +167,30 @@ import {
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromNow } from "@/utils/time";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import {
-  completeWarMissionSchema,
-  declareVillageWarSchema,
-  raidOptionsSchema,
-  startWarMissionSchema,
-  warCampSchema,
-  warIdSchema,
-  warRulesSchema,
-} from "@/validators/war";
+import { warRulesSchema } from "@/validators/war";
+
+const declareVillageWarSchema = z.object({
+  targetVillageId: z.string(),
+  targetStructureRoute: z.string(),
+  userVillageId: z.string(),
+});
+
+const raidOptionsSchema = z.object({
+  userVillageId: z.string(),
+  targetVillageId: z.string(),
+});
+
+/** Resource identifiers only; router guards enforce participation and current eligibility. */
+const warIdSchema = z.object({ warId: z.string().min(1) });
+
+const startWarMissionSchema = warIdSchema.extend({
+  questId: z.string().min(1),
+  objectiveId: z.string().min(1),
+});
+
+const completeWarMissionSchema = z.object({ attemptId: z.string().min(1) });
+
+const warCampSchema = z.object({ campId: z.string().min(1) });
 
 export const warRouter = createTRPCRouter({
   /** Return the caller's pending and accepted contracts in open wars, including notice. */

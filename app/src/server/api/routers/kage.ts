@@ -75,7 +75,12 @@ import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";
 import { kageVillageSchema } from "@/validators/kage";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import { structureUpgradeSchema } from "@/validators/villageMission";
+
+const structureUpgradeSchema = z.object({
+  structureId: z.string().min(1),
+  villageId: z.string().min(1),
+  clanId: z.string().nullish(),
+});
 
 const kageRemovalSchema = kageVillageSchema.extend({
   reason: z.string().trim().min(10).max(1000),

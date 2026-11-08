@@ -14,17 +14,4 @@ export const skillTreeFilteringSchema = z.object({
 
 export type SkillTreeFilteringSchema = z.infer<typeof skillTreeFilteringSchema>;
 
-export const skillTreeFolderSchema = z.object({
-  name: z.string().min(1).max(191),
-  image: z.string().max(512).optional(),
-  description: z.string().optional(),
-  hidden: z.boolean().optional(),
-  order: z.int().optional(),
-});
-
-export type SkillTreeFolderSchema = z.infer<typeof skillTreeFolderSchema>;
-
 export const bloodrightTierSchema = z.object({ skillId: z.string() });
-export const createSkillSchema = z
-  .object({ bloodlineId: z.string().min(1).optional() })
-  .optional();

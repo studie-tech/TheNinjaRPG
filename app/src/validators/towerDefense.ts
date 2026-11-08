@@ -200,13 +200,6 @@ export interface RuntimeState {
 }
 
 // ============================================
-// API Input Schemas
-// ============================================
-export const purchaseUpgradeInputSchema = z.object({
-  upgradeId: z.string(),
-});
-
-// ============================================
 // Signed Definitions
 // ============================================
 export const signedUpgradeDefinitionSchema = z.object({
@@ -288,18 +281,6 @@ export type UpdateTowerDefenseUpgradeInput = z.input<
 // ============================================
 // Run Claims
 // ============================================
-
-/**
- * A claim names the SpacetimeDB session only. Score, wave and the signed session
- * parameters are read from that session's authoritative completed_run row; the
- * definitions are not stored there, so the client supplies them and the session
- * signature proves they are the ones the server signed.
- */
-export const claimCompletedRunInputSchema = z.object({
-  spacetimeSessionId: z.string().regex(/^\d{1,20}$/, "Invalid session ID"),
-  upgradeDefinitionsJson: z.string().min(1, "Upgrade definitions required"),
-  enemyDefinitionsJson: z.string().min(1, "Enemy definitions required"),
-});
 
 /** A completed_run row as SpacetimeDB's SQL endpoint returns it. */
 export const spacetimeCompletedRunSchema = z.object({

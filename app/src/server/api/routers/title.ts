@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUser } from "@/queries/profile";
@@ -14,7 +15,6 @@ import {
   updateTitleForUpdate,
   updateUserDataForSelect,
 } from "@/queries/title";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -26,7 +26,16 @@ import {
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
-import { SelectTitleSchema, UpdateTitleSchema } from "@/validators/title";
+import { TitleValidator } from "@/validators/title";
+
+/** Identify the staff catalog row and validate its complete editable payload. */
+const UpdateTitleSchema = z.object({
+  id: z.string().min(1),
+  data: TitleValidator,
+});
+
+/** Null clears the displayed label; the mutation verifies ownership for every selected ID. */
+const SelectTitleSchema = z.object({ titleId: z.string().min(1).nullable() });
 
 /** Public reward options, staff catalog management and ownership-guarded label selection. */
 export const titleRouter = createTRPCRouter({

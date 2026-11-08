@@ -91,13 +91,27 @@ import type {
 } from "@/validators/towerDefense";
 import {
   characterAssetConfigSchema,
-  claimCompletedRunInputSchema,
-  purchaseUpgradeInputSchema,
   signedEnemyDefinitionSchema,
   signedUpgradeDefinitionSchema,
   updateTowerDefenseUpgradeSchema,
 } from "@/validators/towerDefense";
 import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefenseCharacter";
+
+const purchaseUpgradeInputSchema = z.object({
+  upgradeId: z.string(),
+});
+
+/**
+ * A claim names the SpacetimeDB session only. Score, wave and the signed session
+ * parameters are read from that session's authoritative completed_run row; the
+ * definitions are not stored there, so the client supplies them and the session
+ * signature proves they are the ones the server signed.
+ */
+const claimCompletedRunInputSchema = z.object({
+  spacetimeSessionId: z.string().regex(/^\d{1,20}$/, "Invalid session ID"),
+  upgradeDefinitionsJson: z.string().min(1, "Upgrade definitions required"),
+  enemyDefinitionsJson: z.string().min(1, "Enemy definitions required"),
+});
 
 /**
  * Tower Defense tRPC Router

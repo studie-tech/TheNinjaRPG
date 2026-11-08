@@ -87,12 +87,20 @@ import {
   jutsuEquipLimitSchema,
 } from "@/validators/jutsuEquipLimit";
 import { changeSettingSchema } from "@/validators/misc";
-import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
+import { awardSchema } from "@/validators/reputation";
 import {
   sharedCooldownSchema,
   sharedCooldownTagSchema,
 } from "@/validators/sharedCooldown";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+// Filtering schema for listing awards
+const awardsFilteringSchema = z.object({
+  rewardType: z.enum(["all", "reputation", "money", "both"]).prefault("all"),
+  awardedTo: z.string().optional(), // receiver username contains
+  awardedBy: z.string().optional(), // awardedBy username contains
+  date: z.string().optional(),
+});
 
 const trackVisitorSchema = z.object({
   ref: z.string().max(191).optional(),

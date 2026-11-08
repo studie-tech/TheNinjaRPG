@@ -22,6 +22,7 @@ import {
   PET_FEED_EXPERIENCE_BY_RARITY,
   PET_GENERATION_LEASE_MS,
   PET_GENERATION_RETRY_MS,
+  PET_MAX_ABILITY_SLOTS,
   PET_MAX_COLLECTION_SLOTS,
   PET_MAX_GENERATION_ATTEMPTS,
   PET_OPTION_COUNTS,
@@ -107,15 +108,36 @@ import { AiRule } from "@/validators/ai";
 import {
   acquirePetSchema,
   assignPetExperienceSchema,
-  feedPetSchema,
-  generatePetAppearanceSchema,
   petPaymentSchema,
   petSelectionSchema,
-  updatePetAbilitiesSchema,
   updatePetAiSchema,
   updatePetSchema,
 } from "@/validators/pets";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+/** Include the displayed stack quantity so a changed meal stack must be refreshed before consumption. */
+const feedPetSchema = petSelectionSchema.extend({
+  userItemId: z.string().min(1).max(191),
+  expectedQuantity: z.number().int().positive(),
+});
+
+/** Bound request size; owner access, duplicates and the combined budget are validated against live content. */
+const updatePetAbilitiesSchema = petSelectionSchema.extend({
+  jutsuIds: z.array(z.string().min(1).max(191)).max(PET_MAX_ABILITY_SLOTS),
+  skillIds: z.array(z.string().min(1).max(191)).max(PET_MAX_ABILITY_SLOTS),
+});
+
+/** Only founders without accepted artwork can choose daily cosmetics. */
+const generatePetAppearanceSchema = petSelectionSchema.extend({
+  appearance: acquirePetSchema
+    .pick({
+      dayKey: true,
+      paletteIndex: true,
+      characteristicIndex: true,
+      auraIndex: true,
+    })
+    .optional(),
+});
 
 /** Settings responses expose a fixed public allowlist, never a database pet row. */
 const petSettingsResponseSchema = userDeltaResponseSchema.extend({

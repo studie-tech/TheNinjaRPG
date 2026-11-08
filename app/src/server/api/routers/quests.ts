@@ -231,11 +231,7 @@ import {
   QuestValidator,
 } from "@/validators/objectives";
 import { petSelectionSchema } from "@/validators/pets";
-import {
-  type PetTask,
-  petTaskActionSchema,
-  startPetTaskSchema,
-} from "@/validators/petTasks";
+import { type PetTask, petTaskSchema } from "@/validators/petTasks";
 import { questFilteringSchema } from "@/validators/quest";
 import { rewardPayloads } from "@/validators/rewardPackages";
 import {
@@ -250,6 +246,18 @@ import {
   RewardChoiceDisplaySchema,
 } from "@/validators/rewards";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+/** The displayed attempt identity prevents a stale cancel or claim from affecting a later task. */
+const petTaskActionSchema = petTaskSchema.pick({
+  petId: true,
+  questHistoryId: true,
+  startedAt: true,
+});
+
+/** Dispatch accepts catalogue IDs only; occupation, duration and availability are server-owned. */
+const startPetTaskSchema = petSelectionSchema.extend({
+  questId: z.string().min(1).max(191),
+});
 
 export const questsRouter = createTRPCRouter({
   /** Public scenery exposes neutral presentation, never quest steps or player progress. */

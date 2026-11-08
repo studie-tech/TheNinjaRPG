@@ -7,7 +7,6 @@ import { userData, userItem, userSkill } from "@/drizzle/schema";
 import type { MasterySources } from "@/libs/mastery";
 import type { DrizzleClient } from "@/server/db";
 import { getNextUserSnapshotAt } from "@/utils/time";
-import type { SkillTreeFolderSchema } from "@/validators/skillTree";
 
 /**
  * Fetch the user's skills
@@ -456,7 +455,7 @@ export const listSkillTreeForGetFolderStats = (client: Pick<DrizzleClient, "quer
 export const insertSkillTreeFolderForCreateFolder = (
   client: Pick<DrizzleClient, "insert">,
   id: string,
-  input: SkillTreeFolderSchema,
+  input: SkillTreeFolderInput,
 ) =>
   client.insert(skillTreeFolder).values({
     id,
@@ -480,7 +479,7 @@ export const findSkillTreeFolderForUpdateFolder = (
 export const updateSkillTreeFolderForUpdateFolder = (
   client: Pick<DrizzleClient, "update">,
   input: {
-    data: SkillTreeFolderSchema;
+    data: SkillTreeFolderInput;
     id: string;
   },
 ) =>
@@ -542,3 +541,12 @@ export const findRequiredSkillTreeEntry = (
     columns: { id: true, pathType: true },
     where: eq(skillTree.id, input.data.requiredSkillId),
   });
+
+/** Editable folder fields shared by the create and update statements. */
+type SkillTreeFolderInput = {
+  name: string;
+  image?: string | undefined;
+  description?: string | undefined;
+  hidden?: boolean | undefined;
+  order?: number | undefined;
+};

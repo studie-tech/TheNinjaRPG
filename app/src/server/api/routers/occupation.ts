@@ -109,9 +109,22 @@ import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import {
   type CraftingQueueMaterial,
   cancelQueuedJobInputSchema,
-  craftingQueueOutputSchema,
+  queuedJobSchema,
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const craftingQueueOutputSchema = z.object({
+  capacity: z.number(),
+  waiting: z.array(
+    queuedJobSchema.extend({
+      itemId: z.string(),
+      name: z.string(),
+      image: z.string().nullable(),
+      quantity: z.number(),
+      materials: z.array(z.object({ name: z.string(), quantity: z.number() })),
+    }),
+  ),
+});
 
 /** Shared production input counts batches; meal output quantity comes from the recipe. */
 const cookItemInputSchema = z.object({

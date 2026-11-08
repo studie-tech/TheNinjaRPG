@@ -114,9 +114,16 @@ import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
-import { getBoostTemplateSchema, setBoostTemplateSchema } from "@/validators/shrine";
+import { boostTemplateSchema } from "@/validators/shrine";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchActiveWars } from "./war";
+
+const getBoostTemplateSchema = z.object({ villageId: z.string() });
+
+const setBoostTemplateSchema = z.object({
+  villageId: z.string(),
+  template: boostTemplateSchema,
+});
 
 const pusher = getServerPusher();
 

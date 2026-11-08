@@ -46,14 +46,39 @@ import {
 } from "@/utils/permissions";
 import {
   addPollOptionSchema,
-  closePollSchema,
   createPollSchema,
-  deletePollOptionSchema,
-  getPollsSchema,
-  retractVoteSchema,
   updatePollSchema,
-  votePollSchema,
 } from "@/validators/poll";
+
+// Schema for voting in a poll
+const votePollSchema = z.object({
+  pollId: z.string(),
+  optionId: z.string(),
+});
+
+// Schema for getting polls with pagination
+const getPollsSchema = z.object({
+  cursor: z.number().nullish(),
+  limit: z.number().min(1).max(100).prefault(10),
+  includeInactive: z.boolean().prefault(false),
+});
+
+// Schema for retracting a vote from a poll
+const retractVoteSchema = z.object({
+  pollId: z.string(),
+});
+
+// Schema for closing a poll
+const closePollSchema = z.object({
+  id: z.string(),
+  isActive: z.boolean(),
+});
+
+// Schema for deleting a poll option
+const deletePollOptionSchema = z.object({
+  pollId: z.string(),
+  optionId: z.string(),
+});
 
 const POLL_RANK_MESSAGE = "Too low rank to use polls. Must be at least Genin.";
 

@@ -14,7 +14,6 @@ import {
   SuperRefineEffects,
   SuperRefinePassiveEffects,
 } from "@/validators/combat";
-import { idSchema } from "@/validators/misc";
 import { petAiProfileSchema } from "@/validators/pets";
 
 /**
@@ -101,9 +100,6 @@ export const PetSpeciesValidator = z
       });
     }
   });
-
-/** IDs remain immutable when staff edit species content or retire an offering. */
-export const updatePetSpeciesSchema = idSchema.extend({ data: PetSpeciesValidator });
 
 export type ZodPetSpeciesType = z.infer<typeof PetSpeciesValidator>;
 export type ZodPetSpeciesInput = z.input<typeof PetSpeciesValidator>;
