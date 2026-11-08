@@ -6,7 +6,7 @@ import { Eye, Pencil, Plus, Trash2, Type, User, Vote, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import type { z } from "zod";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,7 +30,6 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PollOptionType } from "@/drizzle/constants";
-import type { Poll, PollOption } from "@/drizzle/schema";
 import Accordion from "@/layout/Accordion";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
@@ -56,29 +55,6 @@ import {
   type UpdatePollSchema,
   updatePollSchema,
 } from "@/validators/poll";
-
-type PollUser = {
-  userId: string;
-  username: string;
-  avatar: string | null;
-};
-
-type PollOptionWithRelations = PollOption & {
-  createdBy: PollUser;
-  targetUser?: PollUser | null;
-  voteCount: number;
-  percentage: number;
-};
-
-// Define types for the poll data
-interface PollWithRelations extends Poll {
-  createdBy: PollUser;
-  options: PollOptionWithRelations[];
-  totalVotes: number;
-}
-
-// Form input type for the poll creation form; z.input keeps Zod v4 prefaults optional
-type CreatePollInput = z.input<typeof createPollSchema>;
 
 export default function PollsPage() {
   const { data: userData } = useUserData();
@@ -1066,3 +1042,9 @@ function EditPollForm({
     </Form>
   );
 }
+
+type PollWithRelations = RouterOutputs["poll"]["getPolls"]["data"][number];
+type PollOptionWithRelations = PollWithRelations["options"][number];
+
+// Form input type for the poll creation form; z.input keeps Zod v4 prefaults optional
+type CreatePollInput = z.input<typeof createPollSchema>;
