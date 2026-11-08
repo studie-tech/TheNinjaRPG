@@ -665,7 +665,7 @@ export default function MyJutsu() {
                     : "Unequip other first"
                 : undefined
             }
-            isValid={false}
+            keepOpenOnAccept
             onAccept={() => {
               if (canEquip || userjutsu.equipped) {
                 if (loadoutRequestInFlightRef.current) return;
@@ -770,7 +770,7 @@ export default function MyJutsu() {
                           setTransferTarget(undefined);
                           setTransferValue(1);
                         }}
-                        isValid={false}
+                        keepOpenOnAccept
                         onAccept={(e) => {
                           e.preventDefault();
                           if (transferTarget) {

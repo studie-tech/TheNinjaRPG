@@ -87,7 +87,7 @@ export default function ManualBadges() {
           title="Badge Details"
           isOpen={isOpen}
           setIsOpen={setIsOpen}
-          isValid={false}
+          keepOpenOnAccept
           className="max-w-3xl"
         >
           {!isPending && (

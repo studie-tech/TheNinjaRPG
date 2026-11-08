@@ -1545,7 +1545,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
               proceedDisabled={!Number.isFinite(levelCount)}
               isOpen={isOpen}
               setIsOpen={setJutsuConfirmOpen}
-              isValid={false}
+              keepOpenOnAccept
               onClose={() => startTransition(() => setJutsu(undefined))}
               onAccept={() => {
                 if (canTrain && !isPending) {

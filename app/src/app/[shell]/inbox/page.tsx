@@ -222,10 +222,8 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
             title="Confirm exiting conversation"
             isOpen={isExitConfirmOpen}
             setIsOpen={setIsExitConfirmOpen}
-            // Keep Modal from self-closing on accept, so this destructive action
-            // stays visible in its disabled "Exiting" state until the request
-            // settles and onSettled closes the dialog.
-            isValid={false}
+            // Stays in its disabled "Exiting" state until onSettled closes it.
+            keepOpenOnAccept
             isLoading={isExitingPending}
             proceed_loading_label="Exiting"
             proceed_label="Proceed"

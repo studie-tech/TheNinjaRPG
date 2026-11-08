@@ -1303,7 +1303,7 @@ function Travel() {
               isOpen={showModal}
               setIsOpen={setShowModal}
               proceed_label={!isStartingTravel ? "Travel" : undefined}
-              isValid={false}
+              keepOpenOnAccept
               onAccept={() => handleGlobalMove(targetSector)}
             >
               {isStartingTravel && <Loader explanation="Preparing to Travel" />}
@@ -1386,7 +1386,7 @@ function Travel() {
               title="Item Details"
               isOpen={isOpen}
               setIsOpen={setIsOpen}
-              isValid={false}
+              keepOpenOnAccept
             >
               <ItemWithEffects
                 item={{
@@ -1433,7 +1433,7 @@ function Travel() {
           title="Players Revealed by Sensory!"
           isOpen={showRevealedPlayersModal}
           setIsOpen={setShowRevealedPlayersModal}
-          isValid={false}
+          keepOpenOnAccept
         >
           <div className="space-y-3">
             <p className="text-muted-foreground text-sm">
