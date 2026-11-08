@@ -45,31 +45,23 @@ import {
   type IMG_ORIENTATION,
   STARTER_VILLAGES,
 } from "@/drizzle/constants";
-import type { Quest } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
 import ContentImage from "@/layout/ContentImage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import { CoordinateTargetingEditor } from "@/layout/CoordinateTargetingEditor";
 import { EpidemicSfxSearch } from "@/layout/EpidemicSfxSearch";
-import { MapLocationPreview } from "@/layout/MapLocationPreview";
 import { MethodSizeEditor } from "@/layout/MethodSizeEditor";
 import Modal from "@/layout/Modal";
-import { RewardEditor } from "@/layout/RewardEditor";
 import RichInput from "@/layout/RichInput";
 import { WeightedCacheEditor } from "@/layout/WeightedCacheEditor";
 import { damageModifierTypes } from "@/libs/combat/constants";
 import { POTENCY_TAG_LABELS } from "@/libs/combat/potency";
 import type { CombatAction } from "@/libs/combat/types";
-import {
-  isSupportedOverworldBindingTask,
-  placementsForObjective,
-} from "@/libs/overworldAi";
 import { cn } from "@/libs/shadui";
 import { defaultWeightedCache, getWeightedCacheIssues } from "@/libs/weightedCache";
 import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation } from "@/utils/permissions";
-import type { DeepPartial } from "@/utils/typeutils";
 import { objectKeys } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
 import { showUploadError, UploadButton } from "@/utils/uploadthing";
@@ -78,99 +70,9 @@ import {
   activityBonusPowerLabel,
   getTagSchema,
   isActivityBonus,
-  questBuffTypes,
-  questDebuffTypes,
 } from "@/validators/combat";
 import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
-import { supportsMapStructure } from "@/validators/mapLocation";
 import type { MethodSize } from "@/validators/methodSize";
-import type { AllObjectivesType } from "@/validators/objectives";
-import {
-  getObjectiveSchema,
-  InstantTasks,
-  type RaidTask,
-  RaidTasks,
-  type SimpleTask,
-  SimpleTasks,
-} from "@/validators/objectives";
-import type { ObjectiveRewardType } from "@/validators/rewards";
-import { ObjectiveReward } from "@/validators/rewards";
-
-export type FormDbValue = { id: string; name: string };
-
-/**
- * Whether a combobox field has a selected value. `0` is a real choice (e.g. sage
- * Tier 2 "None"); only `undefined` / `null` / `""` count as empty.
- */
-const hasComboboxValue = (value: unknown) =>
-  value !== undefined && value !== null && value !== "";
-
-export type FormEntry<K> = {
-  id: K;
-  label?: string;
-  doubleWidth?: boolean;
-  /** Span every grid track at all breakpoints, including implicit mobile tracks. */
-  fullWidth?: boolean;
-  resetButton?: boolean;
-  searchable?: boolean;
-  readonly?: boolean;
-} & (
-  | { type: "coordinate_targeting" }
-  | { type: "method_size" }
-  | { type: "text" }
-  | { type: "textarea"; rows?: number }
-  | { type: "richinput"; height?: string }
-  | { type: "date" }
-  | { type: "number" }
-  | { type: "boolean" }
-  | { type: "audio"; href?: string | null }
-  | { type: "avatar"; href?: string | null; size?: IMG_ORIENTATION; maxDim?: number }
-  | {
-      type: "str_array";
-      values: readonly string[];
-      multiple?: boolean;
-      allowAddNew?: boolean;
-    }
-  | {
-      type: "db_values";
-      values: FormDbValue[] | undefined;
-      multiple?: boolean;
-      current?: string;
-      /** Save the empty option as null instead of the generic None sentinel. */
-      nullable?: boolean;
-    }
-  | {
-      type: "db_values_with_number";
-      values: FormDbValue[] | undefined;
-    }
-  | {
-      type: "dialog_options";
-      objectiveIds: string[];
-    }
-);
-
-interface EditContentProps<T, K, S extends FieldValues> {
-  schema: T;
-  form: UseFormReturn<S, any>;
-  formData: FormEntry<K>[];
-  showSubmit: boolean;
-  /** Render controls without a nested form when embedded in another editor. */
-  fieldsOnly?: boolean;
-  /** Expose occupation drops in generic packages, which have no hunting/gathering quest type. */
-  allowMaterialRewards?: boolean;
-  /** Additional controls sharing this form's submission and disabled state. */
-  children?: React.ReactNode;
-  buttonTxt?: string;
-  allowImageUpload?: boolean;
-  relationId?: string;
-  type?: ContentType;
-  onAccept?: (
-    e: React.BaseSyntheticEvent<object, any, any> | undefined,
-  ) => Promise<void>;
-  submitDisabled?: boolean;
-  submitLoading?: boolean;
-  submitLoadingText?: string;
-}
 
 /**
  * Generic edit content component, used for creating and editing e.g. jutsu, bloodline, item, AI
@@ -1544,23 +1446,6 @@ export const EditContent = <
   );
 };
 
-interface EffectFormWrapperProps {
-  /** Offer permanent slot grants only for noncombat consumables. */
-  allowJutsuSlotGrants?: boolean;
-  /** Opt in only for sources that the runtime includes in passive activity aggregation. */
-  allowActivityBonuses?: boolean;
-  allowCoordinateTargeting?: boolean;
-  idx: number;
-  type: "jutsu" | "bloodline" | "item" | "skillTree" | "sageMode";
-  availableTags: readonly string[];
-  hideTagType?: boolean;
-  editableFields?: readonly string[];
-  tag: ZodAllTags;
-  effects: ZodAllTags[];
-  setEffects: (effects: ZodAllTags[]) => void;
-  submitLoading?: boolean;
-}
-
 /**
  * Render one effect tag with schema-derived editor fields.
  * @returns React.ReactNode
@@ -2262,731 +2147,11 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   );
 };
 
-interface ObjectiveFormWrapperProps {
-  idx: number;
-  quest: DeepPartial<Quest>;
-  availableTags: readonly string[];
-  hideTagType?: boolean;
-  objective: AllObjectivesType;
-  objectives: AllObjectivesType[];
-  setObjectives: (content: AllObjectivesType[]) => void;
-  submitLoading?: boolean;
-}
-
-/**
- * Render one objective with schema-derived editor fields.
- * Enemy, ally and random-encounter NPC entries share the existing template/count
- * selector; field labels retain their distinct combatant-count or chance semantics.
- * @returns React.ReactNode
- */
-export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props) => {
-  // Destructure props
-  const { idx, objective, objectives, setObjectives } = props;
-
-  // Get user data for permission checks
-  const { data: userData } = useUserData();
-  const userRole = userData?.role ?? "USER";
-  const hasReputationPermission = canAwardReputation(userRole);
-
-  // Get the schema & parse the tag
-  const objectiveSchema = getObjectiveSchema(objective.task as string);
-  const parsedTag = objectiveSchema.safeParse(objective);
-  const shownTag = parsedTag.success ? parsedTag.data : objective;
-
-  // Queries
-  const fields = Object.keys(shownTag);
-  const hasAIs =
-    fields.includes("attackers") ||
-    fields.includes("opponentAIs") ||
-    fields.includes("allyAIs");
-  const { data: aiData } = api.profile.getAllAiNames.useQuery(undefined, {
-    enabled: hasAIs,
-  });
-
-  const { data: jutsuData } = api.jutsu.getAllNames.useQuery(undefined, {
-    enabled:
-      fields.includes("reward_jutsus") ||
-      fields.includes("trainJutsuIds") ||
-      fields.includes("useJutsuIds"),
-  });
-
-  const { data: titleData } = api.title.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("reward_titles"),
-  });
-
-  const { data: badgeData } = api.badge.getAll.useQuery(undefined, {
-    enabled: fields.includes("reward_badges"),
-  });
-
-  const { data: itemData } = api.item.getAllNames.useQuery(undefined, {
-    enabled:
-      fields.includes("reward_items") ||
-      fields.includes("collectItemIds") ||
-      fields.includes("deliverItemIds") ||
-      fields.includes("craftItemIds") ||
-      fields.includes("buyItemIds") ||
-      fields.includes("useItemIds"),
-  });
-
-  const { data: sceneBackgrounds } = api.gameAsset.getAllNames.useQuery(
-    { type: "SCENE_BACKGROUND", folderPrefix: true },
-    { enabled: fields.includes("sceneBackground") },
-  );
-
-  const { data: sceneCharacters } = api.gameAsset.getAllNames.useQuery(
-    { type: "SCENE_CHARACTER", folderPrefix: true },
-    { enabled: fields.includes("sceneCharacters") },
-  );
-
-  const { data: quests } = api.quests.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("newQuestIds") || fields.includes("completeQuestIds"),
-  });
-
-  const { data: structureAssets = [] } = api.mapAsset.getAll.useQuery(undefined, {
-    enabled: supportsMapStructure(objective.task),
-  });
-
-  const { data: placementNames } = api.overworldAi.getAllPlacementNames.useQuery(
-    undefined,
-    { enabled: isSupportedOverworldBindingTask(objective.task) },
-  );
-
-  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("reward_bloodlines"),
-  });
-
-  const { data: sageModes } = api.sageMode.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("reward_sage_modes"),
-  });
-
-  // Form for handling the specific tag
-  const form = useForm<any>({
-    defaultValues: shownTag,
-    values: shownTag,
-    resolver: zodResolver(objectiveSchema),
-    mode: "all",
-    reValidateMode: "onBlur",
-  });
-
-  // A few fields we need to watch
-  const watchAll = useWatch({ control: form.control });
-  const watchTask = watchAll.task;
-  const watchPlacementId = watchAll.overworldPlacementId;
-  const watchOpponentAis = watchAll.opponentAIs;
-  const [showStructureDraftFields, setShowStructureDraftFields] = useState(false);
-
-  // When user changes type, we need to update the effects array to re-render form
-  useEffect(() => {
-    if (watchTask && watchTask !== objective.task) {
-      const newObjectives = [...objectives];
-      const curObjective = newObjectives?.[idx];
-      if (curObjective && watchTask) {
-        const tagSchema = getObjectiveSchema(watchTask);
-        const parsedTag = tagSchema.safeParse({ id: objective.id, task: watchTask });
-        const shownTag = parsedTag.success ? parsedTag.data : objective;
-        shownTag.task = watchTask;
-        newObjectives[idx] = shownTag;
-      }
-      setObjectives(newObjectives);
-    }
-  }, [objective, watchTask, idx, objectives]);
-
-  // Trigger re-validation after type changes
-  useEffect(() => {
-    void form.trigger(undefined, { shouldFocus: true });
-  }, [objective.task]);
-
-  // Automatically update the effects whenever dirty
-  useEffect(() => {
-    const newObjectives = [...objectives];
-    const parsedTag = objectiveSchema.safeParse(watchAll);
-    // Keep cleared artwork's invalid drafts repairable through correction and blur.
-    if (watchAll.structureAssetId) {
-      setShowStructureDraftFields(false);
-    } else if (
-      !parsedTag.success &&
-      parsedTag.error.issues.some((issue) =>
-        ["locationName", "locationDescription", "structureScale"].includes(
-          String(issue.path[0]),
-        ),
-      )
-    ) {
-      setShowStructureDraftFields(true);
-    }
-    const shownTag = parsedTag.success ? parsedTag.data : watchAll;
-    if ("id" in shownTag && shownTag.id) {
-      newObjectives[idx] = shownTag as AllObjectivesType;
-      const diff = calculateContentDiff(objectives, newObjectives);
-      if (diff.length > 0) {
-        if (objective.task === watchTask) {
-          if (form.formState.isDirty) {
-            void form.trigger();
-          }
-          // Parent save validation must see current drafts, including invalid numbers.
-          setObjectives(newObjectives);
-          // Invalid NaN drafts diff as changed; resetting them would repeat this effect.
-          if (parsedTag.success) form.reset(watchAll);
-        }
-      }
-    }
-  }, [watchAll]);
-
-  // Attributes on this tag, each of which we should show a form field for
-  type Attribute = keyof AllObjectivesType;
-  const attributes = Object.keys(objectiveSchema.shape) as Attribute[];
-
-  const sectorType = "sectorType" in watchAll ? watchAll.sectorType : undefined;
-  const locationType = "locationType" in watchAll ? watchAll.locationType : undefined;
-
-  // Parse how to present the tag form
-  const rewardCatalogs = {
-    items: itemData,
-    jutsus: jutsuData,
-    bloodlines: bloodlines,
-    sageModes: sageModes,
-    titles: titleData,
-    badges: badgeData?.data,
-  };
-  const formData: FormEntry<Attribute>[] = attributes
-    .filter((value) => value !== "reward_packages")
-    .filter(
-      (value) =>
-        ![
-          "structureAssetId",
-          "locationName",
-          "locationDescription",
-          "structureScale",
-        ].includes(String(value)) || supportsMapStructure(watchTask),
-    )
-    .filter(
-      (value) =>
-        !["locationName", "locationDescription", "structureScale"].includes(
-          String(value),
-        ) ||
-        !!watchAll.structureAssetId ||
-        showStructureDraftFields ||
-        !objectiveSchema.shape[value].safeParse(watchAll[value]).success,
-    )
-    .filter(
-      (value) =>
-        String(value) !== "durationSeconds" ||
-        ["espionage", "sabotage"].includes(watchTask),
-    )
-    .filter(
-      (value) =>
-        ![
-          "applyBuffs",
-          "applyDebuffs",
-          "task",
-          "id",
-          "image",
-          "item_name",
-          "reward",
-          "completed",
-          // Mastery promotions are claimed only with the quest's final reward.
-          "reward_mastery_stat",
-          "reward_mastery_rank",
-        ].includes(value),
-    )
-    .filter((value) => {
-      return (
-        (!SimpleTasks.includes(watchTask as SimpleTask) &&
-          watchTask !== "bloodline_collection") ||
-        !["latitude", "longitude", "sector"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !sectorType ||
-        (sectorType === "specific" && !["sectorList"].includes(value)) ||
-        (sectorType === "from_list" && !["sector"].includes(value)) ||
-        (sectorType === "random" && !["sector", "sectorList"].includes(value)) ||
-        (sectorType === "user_village" && !["sector", "sectorList"].includes(value)) ||
-        (sectorType === "current_sector" && !["sector", "sectorList"].includes(value))
-      );
-    })
-    .filter((value) => {
-      return (
-        props?.quest?.consecutiveObjectives ||
-        !["nextObjectiveId", "failObjectiveId", "resetObjectiveId"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !["fail_quest", "win_quest", "reset_quest"].includes(watchTask) ||
-        !["nextObjectiveId"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !([...InstantTasks, "dialog"] as string[]).includes(watchTask) ||
-        !["sector", "longitude", "latitude"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !locationType ||
-        locationType === "specific" ||
-        (locationType === "random" && !["longitude", "latitude"].includes(value))
-      );
-    })
-    .filter((value) => {
-      // Hide longitude/latitude for raid tasks - these are set via shrine placement
-      return (
-        !RaidTasks.includes(watchTask as RaidTask) ||
-        !["longitude", "latitude"].includes(value)
-      );
-    })
-    .filter((value) => {
-      // The field is part of the shared base schema, but only these tasks have defined
-      // overworld interaction semantics. Hiding it prevents invalid content at the source;
-      // server save validation is the authoritative backstop.
-      return (
-        value !== "overworldPlacementId" || isSupportedOverworldBindingTask(watchTask)
-      );
-    })
-    .filter((value) => {
-      // Opponent is derived from the bound placement at save; hide manual opponentAIs entry
-      // for a placement-bound defeat_opponents objective to avoid double configuration.
-      return (
-        (value as string) !== "opponentAIs" ||
-        watchTask !== "defeat_opponents" ||
-        !watchPlacementId
-      );
-    })
-    .map((value) => {
-      const innerType = unwrapFieldSchema(objectiveSchema.shape[value]);
-      const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
-      if (rewardCatalogEntry) return rewardCatalogEntry;
-      if (value === "structureAssetId")
-        return {
-          id: value,
-          type: "db_values",
-          label: "Map structure (optional)",
-          values: structureAssets,
-          searchable: true,
-          resetButton: true,
-        };
-      if (value === "locationName")
-        return { id: value, type: "text", label: "Location name" };
-      if (value === "locationDescription")
-        return {
-          id: value,
-          type: "textarea",
-          label: "Location description (Inspect)",
-          doubleWidth: true,
-        };
-      if (value === "structureScale")
-        return { id: value, type: "number", label: "Structure size multiplier" };
-
-      if (
-        (["attackers", "opponentAIs", "allyAIs"] as string[]).includes(value) &&
-        aiData
-      ) {
-        return {
-          id: value,
-          values: [...aiData]
-            .sort((a, b) => a.level - b.level)
-            .map((ai) => ({
-              id: ai.userId,
-              name: `lvl ${ai.level}: ${ai.username}`,
-            })),
-          doubleWidth: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values_with_number",
-        };
-      } else if (
-        [
-          "collectItemIds",
-          "deliverItemIds",
-          "craftItemIds",
-          "buyItemIds",
-          "useItemIds",
-        ].includes(value) &&
-        itemData
-      ) {
-        return {
-          id: value,
-          values: itemData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (["trainJutsuIds", "useJutsuIds"].includes(value) && jutsuData) {
-        return {
-          id: value,
-          values: jutsuData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (["sceneBackground"].includes(value) && sceneBackgrounds) {
-        return {
-          id: value,
-          values: sceneBackgrounds,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (["sceneCharacters"].includes(value) && sceneCharacters) {
-        return {
-          id: value,
-          values: sceneCharacters,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (value === "nextObjectiveId" && props.objectives) {
-        const obejctiveIds = props.objectives.map((objective) => objective.id);
-        if (innerType instanceof z.ZodArray) {
-          // Dialog objective: nextObjectiveId is an array of {text, nextObjectiveId}
-          return {
-            id: value,
-            doubleWidth: true,
-            label: FORM_LABEL_MAP[value] ?? value,
-            type: "dialog_options",
-            objectiveIds: obejctiveIds,
-          };
-        } else {
-          return {
-            id: value,
-            values: obejctiveIds,
-            type: "str_array",
-            label: FORM_LABEL_MAP[value] ?? value,
-            resetButton: true,
-          };
-        }
-      } else if (
-        ["failObjectiveId", "resetObjectiveId"].includes(value) &&
-        props.objectives
-      ) {
-        const obejctiveIds = props.objectives.map((objective) => objective.id);
-        return {
-          id: value,
-          values: obejctiveIds,
-          type: "str_array",
-          label: FORM_LABEL_MAP[value] ?? value,
-          resetButton: true,
-        };
-      } else if (["newQuestIds", "completeQuestIds"].includes(value) && quests) {
-        return {
-          id: value,
-          values: quests,
-          multiple: true,
-          type: "db_values",
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else if (value === "overworldPlacementId") {
-        // Always render a select (never a free-text fallback) so an arbitrary placement id
-        // can't be saved while the names query is still loading or has failed.
-        //
-        // Narrow the list to placements for the AI chosen in opponentAIs (AI -> placement),
-        // so an author picks the AI then its placement. This stays filtered even after a
-        // placement is bound: opponentAIs hides (see the filter above) but its value persists,
-        // so re-opening the dropdown still shows that enemy's placements, not the full list.
-        // deliver_item/dialog instead show only FRIENDLY placements (placementsForObjective).
-        const selectedAiIds = (
-          (watchOpponentAis as { ids?: string[] }[] | undefined) ?? []
-        ).flatMap((o) => o.ids ?? []);
-        const matching = placementsForObjective(placementNames ?? [], {
-          task: watchTask,
-          selectedAiIds,
-        });
-        return {
-          id: value,
-          values: matching.map((p) => ({ id: p.id, name: p.label })),
-          type: "db_values",
-          label: FORM_LABEL_MAP[value] ?? value,
-          resetButton: true,
-        };
-      } else if (["description", "successDescription"].includes(value)) {
-        return {
-          id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "richinput",
-          doubleWidth: true,
-        };
-      } else if (
-        innerType instanceof z.ZodLiteral ||
-        innerType instanceof z.ZodString
-      ) {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "text" };
-      } else if (innerType instanceof z.ZodNumber) {
-        // Check if this is the reward_reputation field
-        const valueStr = String(value);
-        const isReputationField = valueStr === "reward_reputation";
-        return {
-          id: value,
-          label:
-            valueStr === "value" && watchTask === "espionage"
-              ? "Espionage points"
-              : valueStr === "value" && watchTask === "sabotage"
-                ? "Sabotage damage"
-                : (FORM_LABEL_MAP[value] ?? value),
-          type: "number",
-          readonly: isReputationField && !hasReputationPermission,
-        };
-      } else if (innerType instanceof z.ZodEnum) {
-        return {
-          id: value,
-          type: "str_array",
-          values: innerType.options as string[],
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else if (
-        innerType instanceof z.ZodArray &&
-        innerType.element instanceof z.ZodEnum
-      ) {
-        const values = (innerType.element as unknown as { options: string[] }).options;
-        return {
-          id: value,
-          type: "str_array",
-          values: values,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else if (
-        innerType instanceof z.ZodArray &&
-        innerType.element instanceof z.ZodString
-      ) {
-        return {
-          id: value,
-          type: "str_array",
-          values: [],
-          multiple: true,
-          allowAddNew: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else if (innerType instanceof z.ZodBoolean) {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "boolean" };
-      } else {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "text" };
-      }
-    });
-
-  // Add tag type as first entry
-  if (!props.hideTagType) {
-    formData.unshift({
-      id: "task",
-      type: "str_array",
-      values: props.availableTags,
-    });
-  }
-
-  // Re-used EditContent component for actually showing the form
-  return (
-    <>
-      {"applyBuffs" in shownTag && (
-        <>
-          <QuestBattleEffects
-            title="Starting buffs"
-            effects={watchAll.applyBuffs ?? []}
-            availableTags={questBuffTypes}
-            setEffects={(effects) =>
-              form.setValue("applyBuffs", effects, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-            disabled={props.submitLoading}
-          />
-          <QuestBattleEffects
-            title="Starting debuffs"
-            effects={watchAll.applyDebuffs ?? []}
-            availableTags={questDebuffTypes}
-            setEffects={(effects) =>
-              form.setValue("applyDebuffs", effects, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-            disabled={props.submitLoading}
-          />
-        </>
-      )}
-      {watchAll.structureAssetId && (
-        <MapLocationPreview
-          isDynamic={Boolean(
-            (watchAll.sectorType && watchAll.sectorType !== "specific") ||
-              (watchAll.locationType && watchAll.locationType !== "specific") ||
-              watchAll.overworldPlacementId,
-          )}
-          location={{
-            id: objective.id,
-            sector: Number(watchAll.sector),
-            longitude: Number(watchAll.longitude),
-            latitude: Number(watchAll.latitude),
-            name: watchAll.locationName || "Quest location",
-            description: watchAll.locationDescription || "",
-            assetId: watchAll.structureAssetId,
-            scale: Number(watchAll.structureScale) || 1,
-          }}
-        />
-      )}
-      <EditContent
-        schema={objectiveSchema}
-        form={form}
-        formData={formData.filter((entry) => !String(entry.id).startsWith("reward_"))}
-        showSubmit={false}
-        submitLoading={props.submitLoading}
-      >
-        <RewardEditor
-          form={form}
-          formData={formData}
-          hideFields={["reward_mastery_stat", "reward_mastery_rank"]}
-          isObjectiveReward
-        />
-      </EditContent>
-    </>
-  );
-};
-
-interface RewardFormWrapperProps {
-  /** Use node groups for package payloads without recursively offering more packages. */
-  grouped?: boolean;
-  idx: number;
-  reward: ObjectiveRewardType;
-  rewards: ObjectiveRewardType[];
-  setRewards: (rewards: ObjectiveRewardType[]) => void;
-  hideFields?: string[];
-}
-
-/**
- * A wrapper component around EditContent for creating a form for reward fields
- * @returns React.ReactNode
- */
-export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
-  const { idx, reward, rewards, setRewards, hideFields = [] } = props;
-
-  const { data: rewardUser } = useUserData();
-  // Parse reward with schema
-  const parsedReward = ObjectiveReward.safeParse(reward);
-  const shownReward = parsedReward.success ? parsedReward.data : reward;
-
-  // Queries for db-backed fields
-  const { data: itemData } = api.item.getAllNames.useQuery();
-  const { data: jutsuData } = api.jutsu.getAllNames.useQuery();
-  const { data: badgeData } = api.badge.getAll.useQuery();
-  const { data: titleData } = api.title.getAllNames.useQuery();
-  const { data: bloodlineData } = api.bloodline.getAllNames.useQuery();
-  const { data: sageModeData } = api.sageMode.getAllNames.useQuery();
-
-  // Form for handling the reward
-  const form = useForm<any>({
-    defaultValues: shownReward,
-    values: shownReward,
-    resolver: zodResolver(ObjectiveReward),
-    mode: "all",
-  });
-
-  // Watch form values
-  const watchAll = useWatch({ control: form.control });
-
-  // Sync changed drafts; grouped editors include invalid values for parent validation.
-  useEffect(() => {
-    const newRewards = [...rewards];
-    const parsed = ObjectiveReward.safeParse(watchAll);
-    if (parsed.success || props.grouped) {
-      newRewards[idx] = parsed.success
-        ? parsed.data
-        : (watchAll as ObjectiveRewardType);
-      const diff = calculateContentDiff(rewards, newRewards);
-      if (diff.length > 0) {
-        setRewards(newRewards);
-        // Keep invalid drafts without repeatedly resetting NaN values that diff as changed.
-        if (parsed.success) form.reset(watchAll);
-      }
-    }
-  }, [watchAll]);
-
-  // Attributes on this reward schema
-  type Attribute = keyof ObjectiveRewardType;
-  const attributes = Object.keys(ObjectiveReward.shape) as Attribute[];
-
-  // Generate form data dynamically
-  const rewardCatalogs = {
-    items: itemData,
-    jutsus: jutsuData,
-    bloodlines: bloodlineData,
-    sageModes: sageModeData,
-    titles: titleData,
-    badges: badgeData?.data,
-  };
-  const formData: FormEntry<Attribute>[] = attributes
-    .filter((value) => !hideFields.includes(value))
-    .map((value) => {
-      const innerType = unwrapFieldSchema(ObjectiveReward.shape[value]);
-      const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
-      if (rewardCatalogEntry) return rewardCatalogEntry;
-
-      // Special handling for db-backed array fields
-      if (
-        (value === "reward_hunter_items_ids" ||
-          value === "reward_gathering_items_ids") &&
-        itemData
-      ) {
-        return {
-          id: value,
-          values: itemData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values" as const,
-        };
-      } else if (innerType instanceof z.ZodNumber) {
-        return {
-          id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "number" as const,
-          readonly:
-            value === "reward_reputation" &&
-            !canAwardReputation(rewardUser?.role ?? "USER"),
-        };
-      } else if (innerType instanceof z.ZodBoolean) {
-        return {
-          id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "boolean" as const,
-        };
-      } else if (innerType instanceof z.ZodEnum) {
-        return {
-          id: value,
-          type: "str_array" as const,
-          values: innerType.options as string[],
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else {
-        return {
-          id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "text" as const,
-        };
-      }
-    });
-
-  if (props.grouped)
-    return (
-      <RewardEditor
-        form={form}
-        formData={formData}
-        allowPackages={false}
-        hideFields={hideFields}
-      />
-    );
-  return (
-    <EditContent
-      fieldsOnly
-      schema={ObjectiveReward}
-      form={form}
-      formData={formData}
-      showSubmit={false}
-    />
-  );
-};
-
 /**
  * Entry of a catalog-backed reward field, or undefined for any other field and until
  * its catalog has loaded, so the caller falls through to its schema-based handling.
  */
-const rewardCatalogFormEntry = <K extends string | number | symbol>(
+export const rewardCatalogFormEntry = <K extends string | number | symbol>(
   field: K,
   catalogs: RewardCatalogs,
 ): FormEntry<K> | undefined => {
@@ -3092,72 +2257,6 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   delayRounds: "Diffuse Repayment Turns",
 };
 
-/** Reuse full combat tag configuration while keeping authored starting effects player-only. */
-const QuestBattleEffects = ({
-  title,
-  effects,
-  setEffects,
-  availableTags,
-  disabled,
-}: {
-  title: string;
-  effects: ZodAllTags[];
-  setEffects: (effects: ZodAllTags[]) => void;
-  availableTags: readonly ZodAllTags["type"][];
-  disabled?: boolean;
-}) => (
-  <div className="my-4 space-y-3 rounded border p-3">
-    <div className="flex items-center justify-between">
-      <h3 className="font-bold">{title}</h3>
-      <Button
-        type="button"
-        size="sm"
-        disabled={disabled}
-        onClick={() => {
-          const type = availableTags[0];
-          if (type)
-            setEffects([
-              ...effects,
-              getTagSchema(type).parse({ target: "SELF", rounds: 3 }) as ZodAllTags,
-            ]);
-        }}
-      >
-        Add effect
-      </Button>
-    </div>
-    <p className="text-muted-foreground text-sm">
-      Applies to the player. Duration includes the opening round.
-    </p>
-    {effects.map((effect, idx) => (
-      <div key={`${effect.type}-${idx}`} className="rounded border p-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={() => setEffects(effects.filter((_, i) => i !== idx))}
-        >
-          Remove effect {idx + 1}
-        </Button>
-        <EffectFormWrapper
-          idx={idx}
-          type="jutsu"
-          tag={effect}
-          effects={effects}
-          availableTags={availableTags}
-          editableFields={Object.keys(getTagSchema(effect.type).shape).filter(
-            (field) => field !== "target" && field !== "friendlyFire",
-          )}
-          submitLoading={disabled}
-          setEffects={(values) =>
-            setEffects(values.map((tag) => ({ ...tag, target: "SELF" })))
-          }
-        />
-      </div>
-    ))}
-  </div>
-);
-
 /** Resolve a field control's schema without removing refinements or transforms. */
 export const unwrapFieldSchema = (schema: z.ZodType): z.ZodType => {
   let inner = schema;
@@ -3200,6 +2299,99 @@ const ASSET_PICKER_FIELDS: readonly string[] = [
   "appearSfx",
   "disappearSfx",
 ];
+
+/**
+ * Whether a combobox field has a selected value. `0` is a real choice (e.g. sage
+ * Tier 2 "None"); only `undefined` / `null` / `""` count as empty.
+ */
+const hasComboboxValue = (value: unknown) =>
+  value !== undefined && value !== null && value !== "";
+
+export type FormDbValue = { id: string; name: string };
+
+export type FormEntry<K> = {
+  id: K;
+  label?: string;
+  doubleWidth?: boolean;
+  /** Span every grid track at all breakpoints, including implicit mobile tracks. */
+  fullWidth?: boolean;
+  resetButton?: boolean;
+  searchable?: boolean;
+  readonly?: boolean;
+} & (
+  | { type: "coordinate_targeting" }
+  | { type: "method_size" }
+  | { type: "text" }
+  | { type: "textarea"; rows?: number }
+  | { type: "richinput"; height?: string }
+  | { type: "date" }
+  | { type: "number" }
+  | { type: "boolean" }
+  | { type: "audio"; href?: string | null }
+  | { type: "avatar"; href?: string | null; size?: IMG_ORIENTATION; maxDim?: number }
+  | {
+      type: "str_array";
+      values: readonly string[];
+      multiple?: boolean;
+      allowAddNew?: boolean;
+    }
+  | {
+      type: "db_values";
+      values: FormDbValue[] | undefined;
+      multiple?: boolean;
+      current?: string;
+      /** Save the empty option as null instead of the generic None sentinel. */
+      nullable?: boolean;
+    }
+  | {
+      type: "db_values_with_number";
+      values: FormDbValue[] | undefined;
+    }
+  | {
+      type: "dialog_options";
+      objectiveIds: string[];
+    }
+);
+
+interface EditContentProps<T, K, S extends FieldValues> {
+  schema: T;
+  form: UseFormReturn<S, any>;
+  formData: FormEntry<K>[];
+  showSubmit: boolean;
+  /** Render controls without a nested form when embedded in another editor. */
+  fieldsOnly?: boolean;
+  /** Expose occupation drops in generic packages, which have no hunting/gathering quest type. */
+  allowMaterialRewards?: boolean;
+  /** Additional controls sharing this form's submission and disabled state. */
+  children?: React.ReactNode;
+  buttonTxt?: string;
+  allowImageUpload?: boolean;
+  relationId?: string;
+  type?: ContentType;
+  onAccept?: (
+    e: React.BaseSyntheticEvent<object, any, any> | undefined,
+  ) => Promise<void>;
+  submitDisabled?: boolean;
+  submitLoading?: boolean;
+  submitLoadingText?: string;
+}
+
+interface EffectFormWrapperProps {
+  /** Offer permanent slot grants only for noncombat consumables. */
+  allowJutsuSlotGrants?: boolean;
+  /** Opt in only for sources that the runtime includes in passive activity aggregation. */
+  allowActivityBonuses?: boolean;
+  allowCoordinateTargeting?: boolean;
+  idx: number;
+  type: "jutsu" | "bloodline" | "item" | "skillTree" | "sageMode";
+  availableTags: readonly string[];
+  hideTagType?: boolean;
+  editableFields?: readonly string[];
+  tag: ZodAllTags;
+  effects: ZodAllTags[];
+  setEffects: (effects: ZodAllTags[]) => void;
+  submitLoading?: boolean;
+}
 
 interface RewardCatalogs {
   items: FormDbValue[] | undefined;

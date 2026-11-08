@@ -13,7 +13,7 @@ import {
   MAX_PVP_BRACKET,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
-import { RewardFormWrapper } from "@/layout/EditContent";
+import { RewardFormWrapper } from "@/layout/RewardEditor";
 import { showMutationToast } from "@/libs/toast";
 import { formatLocalDateTimeInput } from "@/utils/time";
 import { ObjectiveReward } from "@/validators/rewards";
