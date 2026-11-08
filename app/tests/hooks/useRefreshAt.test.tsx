@@ -49,6 +49,24 @@ describe("boundary refresh", () => {
     unmount();
   });
 
+  it("keeps a pending refresh when a fresh array with the same boundary renders in the grace window", () => {
+    const refresh = vi.fn();
+    const boundary = Date.now() + 5000;
+    const { rerender, unmount } = renderHook(
+      ({ dates }) => useRefreshAt(dates, refresh),
+      { initialProps: { dates: [boundary] } },
+    );
+    act(() => {
+      advanceTimers(5500);
+    });
+    rerender({ dates: [boundary] });
+    act(() => {
+      advanceTimers(1000);
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
   it("does not refresh disabled or unmounted surfaces", () => {
     const refresh = vi.fn();
     const now = Date.now();

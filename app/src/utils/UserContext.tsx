@@ -223,16 +223,12 @@ export function UserContextProvider(props: {
   const territoryWarBoostUntil = data?.userData
     ? getTerritoryWarBoostUntil(data.userData)?.getTime()
     : undefined;
-  const timedDeadlines = useMemo(
-    () => [
+  useRefreshAt(
+    [
       territoryWarBoostUntil,
       ...(data?.userData?.raidBuffs?.map((buff) => buff.expiresAt) ?? []),
       ...(data?.userData?.cookingJobs?.map((job) => job.finishesAt) ?? []),
     ],
-    [territoryWarBoostUntil, data?.userData?.raidBuffs, data?.userData?.cookingJobs],
-  );
-  useRefreshAt(
-    timedDeadlines,
     () => {
       void refetch({ cancelRefetch: false });
     },
