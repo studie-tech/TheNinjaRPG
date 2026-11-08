@@ -348,7 +348,7 @@ import {
   canAwardReputation,
   canChangeContent,
   canEditItems,
-  canOnlyEditSelf,
+  isRestrictedToSelf,
 } from "@/utils/permissions";
 import { sanitizeVariantText } from "@/utils/sanitize";
 import { getNextUserSnapshotAt, getUtcDayKey } from "@/utils/time";
@@ -460,7 +460,7 @@ export const itemRouter = createTRPCRouter({
     .input(furnitureImageMeasurementSchema)
     .query(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (!canEditItems(user.role) || user.isBanned)
+      if (!canChangeContent(user.role) || user.isBanned)
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Only content staff can measure furniture images",
@@ -1198,7 +1198,7 @@ export const itemRouter = createTRPCRouter({
           message: "Not allowed to edit public user",
         });
       }
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, input.userId)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "You can only view your own items",
@@ -1221,7 +1221,7 @@ export const itemRouter = createTRPCRouter({
       if (!canEditItems(user.role)) {
         return errorResponse("Not allowed to edit public user");
       }
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, input.userId)) {
         return errorResponse("You can only edit your own items");
       }
       if (!owned?.item) {

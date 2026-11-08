@@ -44,7 +44,7 @@ import {
   canEditStaffAccountFlag,
   canEditUsername,
   canEditVillage,
-  canOnlyEditSelf,
+  isRestrictedToSelf,
 } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import type { UpdateUserSchema } from "@/validators/user";
@@ -100,7 +100,7 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
   const { data: currentUser } = useUserData();
   const userRole = currentUser?.role || "USER";
   // Roles limited to self-editing may not read another user's items
-  const restrictedToSelf = canOnlyEditSelf(userRole) && currentUser?.userId !== userId;
+  const restrictedToSelf = isRestrictedToSelf(userRole, currentUser?.userId, userId);
 
   // Permission checks
   const perms = {

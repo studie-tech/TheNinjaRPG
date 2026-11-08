@@ -358,6 +358,7 @@ import {
   canSeeSecretData,
   getApprovalGroup,
   getBanOrSilenceRestriction,
+  isRestrictedToSelf,
   isStaffRole,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
@@ -1331,7 +1332,7 @@ export const profileRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       // Roles that can only edit themselves
-      if (canOnlyEditSelf(user.role) && user.userId !== target.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, target.userId)) {
         return errorResponse("You can only edit your own profile");
       }
 

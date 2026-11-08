@@ -523,6 +523,13 @@ export const canOnlyEditSelf = (userRole: UserRole) => {
   return ["CONTENT", "BALANCE", "EVENT", "CODER"].includes(userRole);
 };
 
+/** Whether a role limited to editing itself is acting on someone else. */
+export const isRestrictedToSelf = (
+  role: UserRole,
+  actorId: string | undefined,
+  targetId: string,
+) => canOnlyEditSelf(role) && actorId !== targetId;
+
 export const canAwardReputation = (role: UserRole) => ADMIN_ROLES.includes(role);
 
 export const canReviewLinkPromotions = (role: UserRole) => {

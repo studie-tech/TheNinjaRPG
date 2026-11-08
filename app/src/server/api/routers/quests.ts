@@ -219,8 +219,8 @@ import {
   canChangeContent,
   canEditQuests,
   canEditStarterQuests,
-  canOnlyEditSelf,
   canPlayHiddenQuests,
+  isRestrictedToSelf,
 } from "@/utils/permissions";
 import { getNextUserSnapshotAt, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
@@ -1923,7 +1923,7 @@ export const questsRouter = createTRPCRouter({
         return errorResponse("Target user not found");
       }
       // Roles that can only edit themselves
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, input.userId)) {
         return errorResponse("You can only delete quests from your own profile");
       }
       // Derives

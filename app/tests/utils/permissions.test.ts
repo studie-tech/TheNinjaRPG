@@ -19,6 +19,7 @@ import {
   canViewAllApplications,
   getApprovalGroup,
   isSiteOwnerAccount,
+  isRestrictedToSelf,
   getConversationComposeRestriction,
   getMessagingRestriction,
   RESTRICTED_STAFF_CONVERSATION_MESSAGE,
@@ -244,4 +245,12 @@ test("isSiteOwnerAccount matches only the owner's exact username", () => {
   for (const username of ["terriator", "Terriator2", " Terriator", "Terr"]) {
     expect(isSiteOwnerAccount({ username })).toBe(false);
   }
+});
+
+test("isRestrictedToSelf limits self-only editors to their own account", () => {
+  expect(isRestrictedToSelf("CONTENT", "me", "other")).toBe(true);
+  expect(isRestrictedToSelf("CONTENT", "me", "me")).toBe(false);
+  expect(isRestrictedToSelf("CONTENT", undefined, "other")).toBe(true);
+  expect(isRestrictedToSelf("CONTENT-ADMIN", "me", "other")).toBe(false);
+  expect(isRestrictedToSelf("USER", "me", "other")).toBe(false);
 });

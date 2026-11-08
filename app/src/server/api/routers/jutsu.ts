@@ -246,9 +246,9 @@ import {
   canChangeContent,
   canEditJutsus,
   canModerateReskin,
-  canOnlyEditSelf,
   canReskinFreely,
   canTransferJutsu,
+  isRestrictedToSelf,
 } from "@/utils/permissions";
 import { getNextUserSnapshotAt } from "@/utils/time";
 import {
@@ -1282,7 +1282,7 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("Not allowed to edit public user");
       }
       // Roles that can only edit themselves
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, input.userId)) {
         return errorResponse("You can only edit your own jutsus");
       }
       const userjutsu = userjutsus.find((j) => j.jutsuId === input.jutsuId);
