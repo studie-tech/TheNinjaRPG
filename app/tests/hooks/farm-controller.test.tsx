@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
 import * as appClient from "@/app/_trpc/client";
 import type { UserCache } from "@/deltas/profile";
-import { actualUseFarmController as useFarmController } from "../setup/preload";
+import { useFarmController } from "@/hooks/farm-controller";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { QuestTracker } from "@/validators/objectives";

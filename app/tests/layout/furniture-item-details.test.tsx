@@ -7,12 +7,11 @@ import * as UserContext from "@/utils/UserContext";
 import * as ContentImage from "@/layout/ContentImage";
 import * as DurabilityBar from "@/layout/DurabilityBar";
 import { NonCombatConsumeRewardTag } from "@/validators/combat";
-import { actualItemWithEffects } from "../setup/preload";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 
 const names = { useQuery: () => ({ data: [] }) };
 const evolutions = { useQuery: vi.fn(() => ({ data: [] })) };
 const durability = vi.fn(() => <span>Durability bar</span>);
-const ItemWithEffects = actualItemWithEffects;
 const furniture = {
   id: "custom-rug", name: "Painted Rug", description: "A warm woven decoration.",
   image: "/custom-rug.webp", createdAt: new Date(), updatedAt: new Date(),

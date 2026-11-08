@@ -1,7 +1,7 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as NextImage from "@/layout/Image";
-import { actualContentImage as ContentImage } from "../setup/preload";
+import ContentImage from "@/layout/ContentImage";
 
 beforeEach(() => {
   vi.spyOn(NextImage, "default").mockImplementation((({ src, alt, className }: { src: string; alt: string; className?: string }) => (

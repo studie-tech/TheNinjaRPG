@@ -23,7 +23,6 @@ import * as uploadthing from "@/utils/uploadthing";
 import * as UserContext from "@/utils/UserContext";
 import type { ActivityStreakFormType } from "@/validators/activityStreak";
 import type { FurnitureViews } from "@/validators/itemFurniture";
-import { actualContentImageSelector as ActualContentImageSelector } from "../setup/preload";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 type SelectorProps = ComponentProps<typeof ContentImageSelector.default>;
@@ -67,7 +66,6 @@ const props: SelectorProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(ContentImageSelector, "default").mockImplementation(ActualContentImageSelector);
   requests.length = 0;
   installBrowserGlobals({ animationFrame: true });
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -180,7 +178,7 @@ describe("content furniture image generation", () => {
   for (const [rotation, degrees] of [[1, 90], [2, 180], [3, 270]] as const) {
     it(`recreates ${degrees}° from canonical art with its style and direction in the actual request`, () => {
       const prompt = furnitureViewPrompt("Tea table", rotation);
-      const view = render(<ActualContentImageSelector {...props} prompt={prompt} />);
+      const view = render(<ContentImageSelector.default {...props} prompt={prompt} />);
       open(view);
       expect(view.getByRole("tab", { name: "Recreate from original" })).toBeTruthy();
       fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
@@ -199,7 +197,7 @@ describe("content furniture image generation", () => {
   }
 
   it("edits the current painted direction instead of returning to the original", () => {
-    const view = render(<ActualContentImageSelector {...props} />);
+    const view = render(<ContentImageSelector.default {...props} />);
     open(view);
     fireEvent.mouseDown(view.getByRole("tab", { name: "Edit current" }), {
       button: 0,
@@ -218,7 +216,7 @@ describe("content furniture image generation", () => {
   });
 
   it("accepts the current generation and refreshes history only after a successful image", async () => {
-    const view = render(<ActualContentImageSelector {...props} />);
+    const view = render(<ContentImageSelector.default {...props} />);
     open(view);
     fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
     await act(() => requests[0]!.complete(generated));
@@ -231,7 +229,7 @@ describe("content furniture image generation", () => {
     function UpdatingSelector() {
       const [imageUrl, setImageUrl] = useState(current);
       return (
-        <ActualContentImageSelector
+        <ContentImageSelector.default
           {...props}
           imageUrl={imageUrl}
           onUploadComplete={(url) => {
@@ -296,7 +294,7 @@ describe("content furniture image generation", () => {
   });
 
   it("shows missing-view guidance in the picker and dialog instead of a character avatar", () => {
-    const view = render(<ActualContentImageSelector {...props} imageUrl="" emptyImageLabel="Generate or upload this view" />);
+    const view = render(<ContentImageSelector.default {...props} imageUrl="" emptyImageLabel="Generate or upload this view" />);
     expect(view.getByText("Generate or upload this view")).toBeTruthy();
     expect(view.queryByRole("img")).toBeNull();
     open(view);
@@ -307,11 +305,11 @@ describe("content furniture image generation", () => {
   it.each(["id", "referenceImageUrl", "imageUrl"] as const)(
     "rejects a delayed generation when the form's %s changes",
     async (field) => {
-      const view = render(<ActualContentImageSelector {...props} />);
+      const view = render(<ContentImageSelector.default {...props} />);
       open(view);
       fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
       const replacement = vi.fn();
-      view.rerender(<ActualContentImageSelector {...props} {...{
+      view.rerender(<ContentImageSelector.default {...props} {...{
         [field]: field === "id" ? "other-item:furniture:90" : "https://example.com/replacement.webp",
       }} onUploadComplete={replacement} />);
       await act(() => requests[0]!.complete(generated));
@@ -322,24 +320,24 @@ describe("content furniture image generation", () => {
   );
 
   it("rejects a delayed generation after the editor was disabled and made available again", async () => {
-    const view = render(<ActualContentImageSelector {...props} />);
+    const view = render(<ContentImageSelector.default {...props} />);
     open(view);
     fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
-    view.rerender(<ActualContentImageSelector {...props} disabled />);
+    view.rerender(<ContentImageSelector.default {...props} disabled />);
     expect(view.queryByRole("dialog")).toBeNull();
-    view.rerender(<ActualContentImageSelector {...props} />);
+    view.rerender(<ContentImageSelector.default {...props} />);
     await act(() => requests[0]!.complete(generated));
     expect(onUploadComplete).not.toHaveBeenCalled();
     expect(invalidate).not.toHaveBeenCalled();
   });
 
   it("rejects a completion from an unmounted editor without writing into its replacement", async () => {
-    const view = render(<ActualContentImageSelector {...props} />);
+    const view = render(<ContentImageSelector.default {...props} />);
     open(view);
     fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
     view.unmount();
     const replacement = vi.fn();
-    render(<ActualContentImageSelector {...props} id="replacement" onUploadComplete={replacement} />);
+    render(<ContentImageSelector.default {...props} id="replacement" onUploadComplete={replacement} />);
     await act(() => requests[0]!.complete(generated));
     expect(onUploadComplete).not.toHaveBeenCalled();
     expect(replacement).not.toHaveBeenCalled();
@@ -347,38 +345,38 @@ describe("content furniture image generation", () => {
   });
 
   it("keeps upload callbacks from an old item from replacing another item's image", () => {
-    const view = render(<ActualContentImageSelector {...props} />);
+    const view = render(<ContentImageSelector.default {...props} />);
     open(view);
     fireEvent.click(view.getByRole("button", { name: "Upload image" }));
     const previousUpload = upload;
     const replacement = vi.fn();
-    view.rerender(<ActualContentImageSelector {...props} id="other-item" onUploadComplete={replacement} />);
+    view.rerender(<ContentImageSelector.default {...props} id="other-item" onUploadComplete={replacement} />);
     act(() => previousUpload.onClientUploadComplete([{ serverData: { fileUrl: generated.url } }]));
     expect(onUploadComplete).not.toHaveBeenCalled();
     expect(replacement).not.toHaveBeenCalled();
   });
 
   it("accepts historical art selected for the current editor", () => {
-    const view = render(<ActualContentImageSelector {...props} />);
+    const view = render(<ContentImageSelector.default {...props} />);
     open(view);
     act(() => history.onUpdate?.(generated.url));
     expect(onUploadComplete).toHaveBeenCalledWith(generated.url);
   });
 
   it("rejects a delayed historical selection after the editor is unmounted", () => {
-    const view = render(<ActualContentImageSelector {...props} />);
+    const view = render(<ContentImageSelector.default {...props} />);
     open(view);
     const previousSelection = history.onUpdate;
     view.unmount();
     const replacement = vi.fn();
-    render(<ActualContentImageSelector {...props} id="replacement" onUploadComplete={replacement} />);
+    render(<ContentImageSelector.default {...props} id="replacement" onUploadComplete={replacement} />);
     act(() => previousSelection?.(generated.url));
     expect(onUploadComplete).not.toHaveBeenCalled();
     expect(replacement).not.toHaveBeenCalled();
   });
 
   it("shows expected generation failures without changing the current art", async () => {
-    const view = render(<ActualContentImageSelector {...props} />);
+    const view = render(<ContentImageSelector.default {...props} />);
     open(view);
     fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
     const rejection = { success: false, message: "Image generation failed. Try again." };

@@ -8,13 +8,7 @@
  */
 import { afterAll, beforeAll, beforeEach } from "bun:test";
 import Link from "@/layout/Link";
-import RichInput from "@/layout/RichInput";
-import ContentImage from "@/layout/ContentImage";
-import ContentImageSelector from "@/layout/ContentImageSelector";
 import ContentBox from "@/layout/ContentBox";
-import { EmojiPicker } from "@/layout/EmojiPicker";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import { useFarmController } from "@/hooks/farm-controller";
 import * as gamesettings from "@/libs/gamesettings";
 import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
 import {
@@ -29,16 +23,9 @@ import * as userContext from "@/utils/UserContext";
 
 // UI suites can restore real components and feedback after another suite mocks their module.
 export const actualLink = Link;
-export const actualRichInput = RichInput;
-export const actualItemWithEffects = ItemWithEffects;
-export const actualContentImage = ContentImage;
-export const actualContentImageSelector = ContentImageSelector;
 export const actualContentBox = ContentBox;
-export const actualEmojiPicker = EmojiPicker;
 export const actualShowMutationToast = toast.showMutationToast;
 export const actualUserContext = { ...userContext };
-// Layout suites replace the controller module; hook suites retain its real implementation.
-export const actualUseFarmController = useFarmController;
 
 // Cron SQL suites restore real timers after unit suites replace the module exports.
 export const actualGameSettings = { ...gamesettings };

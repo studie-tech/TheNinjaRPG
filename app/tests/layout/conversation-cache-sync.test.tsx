@@ -25,7 +25,6 @@ import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as uploadthing from "@/utils/uploadthing";
 import * as userContext from "@/utils/UserContext";
-import { actualRichInput } from "../setup/preload";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
 
@@ -395,7 +394,6 @@ it.each(["", "<p>Unsent Tavern draft</p>"])("keeps arrow-key tab focus when moun
   getDefaultStore().set(chatDraftsAtom, { Global: draft });
   vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global"], canAccessGlobal: true, isLoading: false } as never);
   vi.spyOn(mutes, "useChatMutes").mockReturnValue({ isSilenced: () => false, isTavernSilenced: () => false } as never);
-  vi.spyOn(richInput, "default").mockImplementation(actualRichInput);
   vi.spyOn(uploadthing, "useUploadThing").mockReturnValue({ startUpload: vi.fn() } as never);
   vi.spyOn(conversationComments, "ConversationComments").mockImplementation(({ onMentionUser }) => <button type="button" onClick={() => onMentionUser?.("Friend")}>Mention Friend</button>);
   if (!Range.prototype.getBoundingClientRect) Range.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0, toJSON: () => ({}) });

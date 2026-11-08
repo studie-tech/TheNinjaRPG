@@ -7,7 +7,7 @@ import * as uploadthing from "@/utils/uploadthing";
 import * as toast from "@/libs/toast";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { actualRichInput as RichInput } from "../setup/preload";
+import RichInput from "@/layout/RichInput";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const startUpload = vi.fn();

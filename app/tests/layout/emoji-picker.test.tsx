@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
-import { actualEmojiPicker as EmojiPicker } from "../setup/preload";
+import { EmojiPicker } from "@/layout/EmojiPicker";
 
 vi.mock("@/layout/EmojiPickerImpl", () => ({
   EmojiPickerImpl: () => <section data-testid="emoji-mart" />,

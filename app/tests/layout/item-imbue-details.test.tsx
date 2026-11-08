@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import type { ItemWithEffectsProps } from "@/layout/ItemWithEffects";
 import * as UserContext from "@/utils/UserContext";
-import { actualItemWithEffects as ItemWithEffects } from "../setup/preload";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 
 const names = { useQuery: () => ({ data: [] }) };
 

@@ -4,7 +4,7 @@ import * as client from "@/app/_trpc/client";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import * as UserContext from "@/utils/UserContext";
 import { CurseTag } from "@/validators/combat";
-import { actualItemWithEffects as ItemWithEffects } from "../setup/preload";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 
 const names = { useQuery: () => ({ data: [] }) };
 
