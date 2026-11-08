@@ -36,7 +36,7 @@ export const coopPolicies = {
   },
 } as const;
 
-/** Normalize the two persistence adapters into the same party command contract. */
+/** Normalize a quest party into the coop command contract. */
 export const questCoopParty = (party: {
   leaderId: string;
   memberIds: string[];
