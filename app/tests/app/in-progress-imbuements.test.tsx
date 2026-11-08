@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ReactNode } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as client from "@/app/_trpc/client";
+import { CRAFTING_REQUIRED_EXP, CRAFTING_TIMES_MINS } from "@/drizzle/constants";
 import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/page";
 import { AuctionOffers } from "@/app/[shell]/auctionhouse/Offers";
 import * as CombatActions from "@/layout/CombatActions";
@@ -235,4 +236,46 @@ it("leaves a removed imbuement off the imbue confirmation of an item selected ea
   fireEvent.click(screen.getByRole("button", { name: "Fresh Crystal" }));
   const dialog = within(screen.getByRole("region", { name: "Imbue Item" }));
   expect(dialog.getAllByTestId("imbuements")[0]?.textContent).toBe("Second Crystal");
+});
+
+it("lists each crafting rank's experience range and craftable rarity times", () => {
+  stubApi();
+  renderCrafting();
+  const card = screen.getByText("Crafting Information").closest(".rounded-xl") as HTMLElement;
+  const ranks = [...card.querySelectorAll(".md\\:grid-cols-2 > div")].map((rank) => [
+    rank.querySelector(".mb-2")?.textContent,
+    [...rank.querySelectorAll("li")].map((item) => item.textContent),
+  ]);
+  const times = CRAFTING_TIMES_MINS;
+  const exp = CRAFTING_REQUIRED_EXP;
+  expect(ranks).toEqual([
+    [`Novice (0-${(exp.APPRENTICE - 1).toLocaleString()} exp)`, [`• Common: ${times.NOVICE.COMMON} minutes`]],
+    [
+      `Apprentice (${exp.APPRENTICE.toLocaleString()}-${(exp.MASTER - 1).toLocaleString()} exp)`,
+      [`• Common: ${times.APPRENTICE.COMMON} minutes`, `• Rare: ${times.APPRENTICE.RARE} minutes`],
+    ],
+    [
+      `Master (${exp.MASTER.toLocaleString()}-${(exp.FORGEMASTER - 1).toLocaleString()} exp)`,
+      [
+        `• Common: ${times.MASTER.COMMON} minutes`,
+        `• Rare: ${times.MASTER.RARE} minutes`,
+        `• Epic: ${times.MASTER.EPIC} minutes`,
+      ],
+    ],
+    [
+      `Forgemaster (${exp.FORGEMASTER.toLocaleString()}+ exp)`,
+      [
+        `• Common: ${times.FORGEMASTER.COMMON} minutes`,
+        `• Rare: ${times.FORGEMASTER.RARE} minutes`,
+        `• Epic: ${times.FORGEMASTER.EPIC} minutes`,
+        `• Legendary: ${times.FORGEMASTER.LEGENDARY} minutes`,
+      ],
+    ],
+  ]);
+  for (const badge of card.querySelectorAll(".md\\:grid-cols-2 > div > .mb-2")) {
+    expect(badge.className).toContain("mb-2");
+  }
+  for (const list of card.querySelectorAll(".md\\:grid-cols-2 ul")) {
+    expect(list.className).toBe("space-y-1 text-muted-foreground");
+  }
 });
