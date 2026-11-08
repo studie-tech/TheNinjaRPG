@@ -143,54 +143,12 @@ import { shareUserCache } from "@/utils/userCacheSharing";
 import type { MapLocation } from "@/validators/mapLocation";
 import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
 
-type SectorWindowEntry =
-  RouterOutputs["worldMap"]["getSectorWindow"]["sectors"][number];
-
-type NpcDialog = NonNullable<
-  RouterOutputs["overworldAi"]["interactWithOverworldAi"]["dialog"]
->;
-
-/**
- * The assembled window the travel page passes in: the 3x3 sector entries
- * (assembled client-side from per-sector data so crossings need no refetch)
- * plus the session-cached asset/terrain libraries from mapAsset.getAll and
- * mapTerrain.getAll.
- */
-export interface SectorWindowData {
-  mapAssets: Omit<
-    RouterOutputs["mapAsset"]["getAll"][number],
-    "createdAt" | "updatedAt"
-  >[];
-  mapTerrains: RouterOutputs["mapTerrain"]["getAll"];
-  sectors: SectorWindowEntry[];
-}
-
-interface SectorProps {
-  loadLpcCatalog: () => Promise<LpcCatalog>;
-  sector: number;
-  tile: GlobalTile;
-  sectorWindow: SectorWindowData;
-  target: SectorPoint | null;
-  showSorrounding: boolean;
-  showActive: boolean;
-  autoAttackMode: boolean;
-  isWorldExpanded: boolean;
-  /** Re-selecting the player tab resumes camera follow without remounting the scene. */
-  cameraFocusRevision: number;
-  setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
-  setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
-  setPosition: (position: SectorPoint | null) => void;
-}
-
 /**
  * Renders the player's current sector plus its 8 neighbors (the sectorWindow
  * prop) as one continuous, seamlessly scrollable world. Moves and border
  * crossings animate client-side and reconcile with the server afterwards;
  * window changes patch the live scene in place instead of rebuilding it.
  */
-/** Most zoomed-in the sector camera may go. */
-const SECTOR_MAX_ZOOM = 3;
-
 const Sector = (props: SectorProps) => {
   const centerEntry = props.sectorWindow.sectors.find(
     (entry) => entry.sector === props.sector,
@@ -2818,28 +2776,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
 export default Sector;
 
-/**
- * Mobile browsers synthesize a click on whatever sits under a dialog after the
- * overlay unmounts from the same tap. Keep the sector canvas deaf for that
- * window so closing scouting cannot also walk to a tile.
- */
-const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
-
-interface SorroundingUsersProps {
-  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  userData: NonNullable<UserWithRelations>;
-  hex: TerrainHex;
-  users: SectorUser[];
-  allyAttack: boolean;
-  wars: Parameters<typeof canShowMapAttack>[3];
-  setAllyAttack: (newValue: boolean) => void;
-  storedBracket: number;
-  setStoredBracket: (newValue: number) => void;
-  attackUser: (userId: string) => void;
-  robUser: (userId: string) => void;
-  move: (longitude: number, latitude: number) => void;
-}
-
 export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   // Destructure props
   const { userData, storedBracket, setStoredBracket } = props;
@@ -3016,3 +2952,67 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
     </Modal>
   );
 };
+
+/** Most zoomed-in the sector camera may go. */
+const SECTOR_MAX_ZOOM = 3;
+
+/**
+ * Mobile browsers synthesize a click on whatever sits under a dialog after the
+ * overlay unmounts from the same tap. Keep the sector canvas deaf for that
+ * window so closing scouting cannot also walk to a tile.
+ */
+const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
+
+type SectorWindowEntry =
+  RouterOutputs["worldMap"]["getSectorWindow"]["sectors"][number];
+
+type NpcDialog = NonNullable<
+  RouterOutputs["overworldAi"]["interactWithOverworldAi"]["dialog"]
+>;
+
+/**
+ * The assembled window the travel page passes in: the 3x3 sector entries
+ * (assembled client-side from per-sector data so crossings need no refetch)
+ * plus the session-cached asset/terrain libraries from mapAsset.getAll and
+ * mapTerrain.getAll.
+ */
+export interface SectorWindowData {
+  mapAssets: Omit<
+    RouterOutputs["mapAsset"]["getAll"][number],
+    "createdAt" | "updatedAt"
+  >[];
+  mapTerrains: RouterOutputs["mapTerrain"]["getAll"];
+  sectors: SectorWindowEntry[];
+}
+
+interface SectorProps {
+  loadLpcCatalog: () => Promise<LpcCatalog>;
+  sector: number;
+  tile: GlobalTile;
+  sectorWindow: SectorWindowData;
+  target: SectorPoint | null;
+  showSorrounding: boolean;
+  showActive: boolean;
+  autoAttackMode: boolean;
+  isWorldExpanded: boolean;
+  /** Re-selecting the player tab resumes camera follow without remounting the scene. */
+  cameraFocusRevision: number;
+  setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
+  setPosition: (position: SectorPoint | null) => void;
+}
+
+interface SorroundingUsersProps {
+  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  userData: NonNullable<UserWithRelations>;
+  hex: TerrainHex;
+  users: SectorUser[];
+  allyAttack: boolean;
+  wars: Parameters<typeof canShowMapAttack>[3];
+  setAllyAttack: (newValue: boolean) => void;
+  storedBracket: number;
+  setStoredBracket: (newValue: number) => void;
+  attackUser: (userId: string) => void;
+  robUser: (userId: string) => void;
+  move: (longitude: number, latitude: number) => void;
+}
