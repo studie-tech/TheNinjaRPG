@@ -370,6 +370,19 @@ export const useConversation = (props: ConversationLogicProps) => {
     defaultValue: [],
   });
 
+  const toggleQuoteId = useCallback(
+    (quoteId: string) => {
+      const currentQuoteIds = getValues("quoteIds");
+      setValue(
+        "quoteIds",
+        currentQuoteIds?.includes(quoteId)
+          ? currentQuoteIds.filter((id) => id !== quoteId)
+          : [...(currentQuoteIds ?? []), quoteId],
+      );
+    },
+    [getValues, setValue],
+  );
+
   // A proven-successful delete remains hidden even if the subsequent
   // best-effort invalidation fails or briefly returns stale data.
   const handleConversationCommentDeleted = useCallback(
@@ -383,32 +396,9 @@ export const useConversation = (props: ConversationLogicProps) => {
       updateCachedComments((data) =>
         data.filter((comment) => comment.id !== commentId),
       );
-      const currentQuoteIds = getValues("quoteIds");
-      if (currentQuoteIds?.includes(commentId)) {
-        setValue(
-          "quoteIds",
-          currentQuoteIds.filter((id) => id !== commentId),
-        );
-      }
+      if (getValues("quoteIds")?.includes(commentId)) toggleQuoteId(commentId);
     },
-    [getValues, setValue, updateCachedComments],
-  );
-
-  const toggleQuoteId = useCallback(
-    (quoteId: string) => {
-      const currentQuoteIds = getValues("quoteIds");
-      if (currentQuoteIds?.includes(quoteId)) {
-        setValue(
-          "quoteIds",
-          currentQuoteIds.filter((id) => id !== quoteId),
-        );
-      } else if (currentQuoteIds && currentQuoteIds.length > 0) {
-        setValue("quoteIds", [...currentQuoteIds, quoteId]);
-      } else {
-        setValue("quoteIds", [quoteId]);
-      }
-    },
-    [getValues, setValue],
+    [getValues, toggleQuoteId, updateCachedComments],
   );
 
   // Watch comment field for typing indicator
@@ -767,7 +757,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     userSearchMethods,
     senderUser,
     quoteIds,
-    setValue,
     toggleQuoteId,
     control,
     errors,
@@ -854,12 +843,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                       key={quoteId}
                       author={quote.username || "Unknown"}
                       date={format(quote.createdAt, "MM/dd/yyyy")}
-                      onRemove={() => {
-                        setValue(
-                          "quoteIds",
-                          quoteIds.filter((id) => id !== quoteId),
-                        );
-                      }}
+                      onRemove={() => toggleQuoteId(quoteId)}
                     >
                       {stripBlockquotes(quote.content)}
                     </Quote>
