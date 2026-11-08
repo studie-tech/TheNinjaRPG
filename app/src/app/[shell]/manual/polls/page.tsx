@@ -213,18 +213,19 @@ function PollAccordion({
   setSelectedPollId: React.Dispatch<React.SetStateAction<string>>;
 }) {
   const { data: userData } = useUserData();
-  const isSelected = selectedPollId === poll.id;
   const userCanEditPolls = userData?.role ? canEditPolls(userData.role) : false;
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const subtitle = `Created by ${poll.createdBy.username} • ${format(new Date(poll.createdAt), "PPP")} • ${poll.totalVotes} votes${!poll.isActive ? " • Closed" : ""}`;
 
   return (
     <Accordion
       key={poll.id}
       title={poll.title}
-      selectedTitle={isSelected ? poll.title : ""}
-      unselectedSubtitle={`Created by ${poll.createdBy.username} • ${format(new Date(poll.createdAt), "PPP")} • ${poll.totalVotes} votes${!poll.isActive ? " • Closed" : ""}`}
-      selectedSubtitle={`Created by ${poll.createdBy.username} • ${format(new Date(poll.createdAt), "PPP")} • ${poll.totalVotes} votes${!poll.isActive ? " • Closed" : ""}`}
-      onClick={() => setSelectedPollId(isSelected ? "" : poll.id)}
+      selectionKey={poll.id}
+      selectedTitle={selectedPollId}
+      unselectedSubtitle={subtitle}
+      selectedSubtitle={subtitle}
+      onClick={setSelectedPollId}
       options={
         userCanEditPolls ? (
           <Button
@@ -417,6 +418,18 @@ function PollContent({
     closePoll({ id: poll.id, isActive: !poll.isActive });
   };
 
+  // The voting view only shows for active polls, so both views share the results styling
+  const statusButton = userCanClosePolls && (
+    <Button
+      variant={poll.isActive ? "destructive" : "default"}
+      size="sm"
+      onClick={handleTogglePollStatus}
+      disabled={isClosingPoll}
+    >
+      {poll.isActive ? "Close Poll" : "Reopen Poll"}
+    </Button>
+  );
+
   // Render option content based on option type
   const renderOptionContent = (option: PollWithRelations["options"][0]) => {
     // Check if it's a user option and has a targetUser
@@ -517,16 +530,7 @@ function PollContent({
               )}
 
               {/* Admin controls */}
-              {userCanClosePolls && (
-                <Button
-                  variant={poll.isActive ? "destructive" : "default"}
-                  size="sm"
-                  onClick={handleTogglePollStatus}
-                  disabled={isClosingPoll}
-                >
-                  {poll.isActive ? "Close Poll" : "Reopen Poll"}
-                </Button>
-              )}
+              {statusButton}
             </div>
           </div>
         ) : (
@@ -655,16 +659,7 @@ function PollContent({
               )}
 
               {/* Admin controls */}
-              {userCanClosePolls && (
-                <Button
-                  variant={poll.isActive ? "destructive" : "outline"}
-                  size="sm"
-                  onClick={handleTogglePollStatus}
-                  disabled={isClosingPoll}
-                >
-                  {poll.isActive ? "Close Poll" : "Reopen Poll"}
-                </Button>
-              )}
+              {statusButton}
             </div>
           </div>
         )}
@@ -966,18 +961,12 @@ function EditPollForm({
     },
   });
 
-  const onSubmit = (data: UpdatePollSchema) => {
-    updatePoll({
-      id: poll.id,
-      title: data.title,
-      description: data.description,
-      allowCustomOptions: data.allowCustomOptions,
-    });
-  };
-
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form
+        onSubmit={form.handleSubmit((data) => updatePoll(data))}
+        className="space-y-4"
+      >
         <FormField
           control={form.control}
           name="title"
