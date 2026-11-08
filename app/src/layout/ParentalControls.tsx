@@ -14,6 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  PARENTAL_PIN_MAX_ATTEMPTS,
+  PARENTAL_PIN_WINDOW_MINUTES,
+} from "@/drizzle/constants";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { QueryError } from "@/layout/QueryError";
@@ -222,7 +226,8 @@ function ParentalSettingsForm({
               />
             )}
             <p className="text-muted-foreground text-xs">
-              Five PIN attempts are allowed every 15 minutes. Forgot the PIN?{" "}
+              {PARENTAL_PIN_MAX_ATTEMPTS} PIN attempts are allowed every{" "}
+              {PARENTAL_PIN_WINDOW_MINUTES} minutes. Forgot the PIN?{" "}
               <Link href="/support" className="underline">
                 Contact support
               </Link>

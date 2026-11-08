@@ -51,6 +51,10 @@ export const CHARACTER_DELETION_DELAY_DAYS = 2;
 /** Verbatim confirmation for self-service timer creation and permanent deletion. */
 export const CHARACTER_DELETION_CONFIRMATION = "Delete my character";
 
+/** Parent PIN attempts allowed per window before parental-control saves lock. */
+export const PARENTAL_PIN_MAX_ATTEMPTS = 5;
+export const PARENTAL_PIN_WINDOW_MINUTES = 15;
+
 export const PollOptionTypes = ["text", "user"] as const;
 export type PollOptionType = (typeof PollOptionTypes)[number];
 

@@ -2,6 +2,7 @@
  * Database access for parental controls; authorization and transaction scopes stay in callers.
  */
 import { and, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
+import { PARENTAL_PIN_MAX_ATTEMPTS } from "@/drizzle/constants";
 import { parentalControl, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
@@ -79,7 +80,10 @@ export const updateParentalControlForSave = (
       and(
         eq(parentalControl.userId, ctx.userId),
         eq(parentalControl.version, input.version),
-        or(lt(parentalControl.failedAttempts, 5), windowExpired),
+        or(
+          lt(parentalControl.failedAttempts, PARENTAL_PIN_MAX_ATTEMPTS),
+          windowExpired,
+        ),
       ),
     );
 };
