@@ -105,7 +105,7 @@ export const getProceduralTerrain = (
   return terrain(key, variant);
 };
 
-export type AssetType = {
+type AssetType = {
   filepath: string;
   frame?: DecorationAsset["frame"];
   shadow?: number;
@@ -136,7 +136,7 @@ const groundDetailProps = (assets: DecorationAsset[], chance: number): AssetType
   }));
 
 // Ground assets settings default
-export const GROUND_ASSETS_PROPS: AssetType[] = [
+const GROUND_ASSETS_PROPS: AssetType[] = [
   ...groundDetailProps(
     WORLD_UNDERSTORY.ground.filter((_, index) => [2, 3, 4, 7].includes(index)),
     0.16,
@@ -206,7 +206,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
 ];
 
 // Dessert assets settings default
-export const DESSERT_ASSET_PROPS: AssetType[] = [
+const DESSERT_ASSET_PROPS: AssetType[] = [
   ...groundDetailProps(WORLD_UNDERSTORY.dessert, 0.3),
   // Cactus
   {
@@ -261,7 +261,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
 ];
 
 // Dessert assets settings default
-export const ICE_ASSET_PROPS: AssetType[] = [
+const ICE_ASSET_PROPS: AssetType[] = [
   {
     ...decorationArt("ice.floe"),
     chance: 0.1,
@@ -274,7 +274,7 @@ export const ICE_ASSET_PROPS: AssetType[] = [
 ];
 
 // Dessert assets settings default
-export const SNOW_ASSET_PROPS: AssetType[] = [
+const SNOW_ASSET_PROPS: AssetType[] = [
   ...groundDetailProps(WORLD_UNDERSTORY.snow, 0.3),
   // Stones
   {
@@ -305,7 +305,7 @@ export const SNOW_ASSET_PROPS: AssetType[] = [
 ];
 
 // Ocean assets settings default
-export const OCEAN_ASSET_PROPS: AssetType[] = [];
+const OCEAN_ASSET_PROPS: AssetType[] = [];
 
 /** Seeded art selection and movement cost contain no texture or scene objects. */
 export const proceduralDecoration = (

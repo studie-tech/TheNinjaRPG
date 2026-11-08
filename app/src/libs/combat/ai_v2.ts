@@ -25,14 +25,13 @@ import {
   getEffectiveCurPool,
   getEffectiveMaxPool,
 } from "@/libs/combat/util";
-import type { Point2D, UserLocation } from "@/libs/hexgrid";
+import type { Point2D, TerrainHex, UserLocation } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { getRandomElement } from "@/utils/array";
 import { secureRandomInt } from "@/utils/math";
 import type { ZodAllAiAction, ZodAllAiCondition } from "@/validators/ai";
 import { ActionEndTurn, enforceExtraRules, getBackupRules } from "@/validators/ai";
 import type { ZodAllTags } from "@/validators/combat";
-import type { TerrainHex } from "../hexgrid";
 
 type ActionWithTarget = {
   action: CombatAction;

@@ -21,10 +21,10 @@ import { areBattleAllies } from "@/libs/combat/participants";
 import { getEffectPower } from "@/libs/combat/power";
 import { getTargetTiles } from "@/libs/combat/targeting";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
+import type { PathCalculator, TerrainHex } from "@/libs/hexgrid";
+import { createHexGrid, nameArenaTile, oddQHexDistance } from "@/libs/hexgrid";
 import { randomInt, secureRandomInt } from "@/utils/math";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
-import type { PathCalculator, TerrainHex } from "../hexgrid";
-import { createHexGrid, nameArenaTile, oddQHexDistance } from "../hexgrid";
 import { stillInBattle } from "./actions";
 import type { GenName } from "./constants";
 import {
