@@ -154,12 +154,7 @@ const TutorialCompletionSync: React.FC = () => {
 };
 
 const PlayerTutorialAssistant: React.FC<
-  TutorialAssistantProps & {
-    tutorialIdentityRef: React.RefObject<{
-      userId: string | undefined;
-      tutorialStep: number | undefined;
-    }>;
-  }
+  TutorialAssistantProps & { tutorialIdentityRef: TutorialIdentityRef }
 > = ({
   tutorialIdentityRef,
   rightSideBarOpen,
@@ -189,58 +184,13 @@ const PlayerTutorialAssistant: React.FC<
   const pathname = usePublicPathname();
   const router = useRouter();
 
-  // Mutation to disable tutorial
-  const { mutateAsync: disableTutorial } = api.profile.updatePreferences.useMutation();
-  const disableTutorialLockRef = React.useRef(false);
-  const [isDisablingTutorial, setIsDisablingTutorial] = useState(false);
-  const [disableTutorialError, setDisableTutorialError] = useState<string>();
-  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
-
-  const handleDisableTutorial = async () => {
-    if (disableTutorialLockRef.current) return;
-    if (!userData?.userId || userData.tutorialOn !== true) return;
-
-    const request = { userId: userData.userId, tutorialStep: userData.tutorialStep };
-    disableTutorialLockRef.current = true;
-    setDisableTutorialError(undefined);
-    setIsDisablingTutorial(true);
-
-    await disableTutorial({ tutorialOn: false })
-      .then(async (result) => {
-        const identity = tutorialIdentityRef.current;
-        const isCurrentTutorial =
-          identity.userId === request.userId &&
-          identity.tutorialStep === request.tutorialStep;
-        if (!isCurrentTutorial) return;
-        if (!result.success) {
-          setDisableTutorialError(result.message);
-          return;
-        }
-
-        await updateUser((current) =>
-          current.userId === request.userId ? { tutorialOn: false } : undefined,
-        );
-        if (tutorialIdentityRef.current.userId !== request.userId) {
-          return;
-        }
-        setShowCancelConfirmDialog(false);
-      })
-      .catch(() => {
-        const identity = tutorialIdentityRef.current;
-        if (
-          identity.userId === request.userId &&
-          identity.tutorialStep === request.tutorialStep
-        ) {
-          setDisableTutorialError(
-            "We couldn't turn off the tutorial. Your progress is unchanged; please try again.",
-          );
-        }
-      })
-      .finally(() => {
-        disableTutorialLockRef.current = false;
-        setIsDisablingTutorial(false);
-      });
-  };
+  const {
+    isDisablingTutorial,
+    disableTutorialError,
+    showCancelConfirmDialog,
+    setShowCancelConfirmDialog,
+    handleDisableTutorial,
+  } = useDisableTutorial(userData, updateUser, tutorialIdentityRef);
 
   const [highlight, setHighlight] = useState<{
     stepId: string;
@@ -1756,6 +1706,76 @@ const HandPointer: React.FC<{
   );
 };
 
+/**
+ * Turns the tutorial off for the player who asked, and keeps the confirmation open with an
+ * error when it fails. Answers that arrive after an account or step change are ignored.
+ */
+const useDisableTutorial = (
+  userData: { userId: string; tutorialOn: boolean; tutorialStep: number } | undefined,
+  updateUser: ReturnType<typeof useUserDataSelector>["updateUser"],
+  tutorialIdentityRef: TutorialIdentityRef,
+) => {
+  // Mutation to disable tutorial
+  const { mutateAsync: disableTutorial } = api.profile.updatePreferences.useMutation();
+  const disableTutorialLockRef = React.useRef(false);
+  const [isDisablingTutorial, setIsDisablingTutorial] = useState(false);
+  const [disableTutorialError, setDisableTutorialError] = useState<string>();
+  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
+
+  const handleDisableTutorial = async () => {
+    if (disableTutorialLockRef.current) return;
+    if (!userData?.userId || userData.tutorialOn !== true) return;
+
+    const request = { userId: userData.userId, tutorialStep: userData.tutorialStep };
+    disableTutorialLockRef.current = true;
+    setDisableTutorialError(undefined);
+    setIsDisablingTutorial(true);
+
+    await disableTutorial({ tutorialOn: false })
+      .then(async (result) => {
+        const identity = tutorialIdentityRef.current;
+        const isCurrentTutorial =
+          identity.userId === request.userId &&
+          identity.tutorialStep === request.tutorialStep;
+        if (!isCurrentTutorial) return;
+        if (!result.success) {
+          setDisableTutorialError(result.message);
+          return;
+        }
+
+        await updateUser((current) =>
+          current.userId === request.userId ? { tutorialOn: false } : undefined,
+        );
+        if (tutorialIdentityRef.current.userId !== request.userId) {
+          return;
+        }
+        setShowCancelConfirmDialog(false);
+      })
+      .catch(() => {
+        const identity = tutorialIdentityRef.current;
+        if (
+          identity.userId === request.userId &&
+          identity.tutorialStep === request.tutorialStep
+        ) {
+          setDisableTutorialError(
+            "We couldn't turn off the tutorial. Your progress is unchanged; please try again.",
+          );
+        }
+      })
+      .finally(() => {
+        disableTutorialLockRef.current = false;
+        setIsDisablingTutorial(false);
+      });
+  };
+  return {
+    isDisablingTutorial,
+    disableTutorialError,
+    showCancelConfirmDialog,
+    setShowCancelConfirmDialog,
+    handleDisableTutorial,
+  };
+};
+
 /** Include the Activity header when keeping highlighted controls clear of the dock. */
 const getAssistantPanelRect = (): DOMRect | null => {
   const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
@@ -1920,3 +1940,9 @@ interface TutorialAssistantProps {
   setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   rightSideBarRef: React.RefObject<HTMLDivElement | null>;
 }
+
+/** The account and step the assistant is showing, read when a disable request settles. */
+type TutorialIdentityRef = React.RefObject<{
+  userId: string | undefined;
+  tutorialStep: number | undefined;
+}>;
