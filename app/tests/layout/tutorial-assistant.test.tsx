@@ -73,31 +73,30 @@ vi.mock("@/hooks/useAbVariant", () => ({ useAbVariant: () => ({ variant: "A" }) 
 vi.mock("@/layout/Image", () => ({ default: () => null }));
 const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}</div>;
 const dialogMocks = { Dialog: ({ children, open }: { children: ReactNode; open: boolean }) => open ? <div role="dialog">{children}</div> : null, DialogContent: dialogContent, DialogDescription: dialogContent, DialogHeader: dialogContent, DialogTitle: dialogContent };
-const componentSpies: { mockRestore: () => void }[] = [];
 const dialogSpies: { mockRestore: () => void }[] = [];
 
 let close: (() => void) | undefined;
 beforeEach(() => {
-  componentSpies.push(vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({
+  vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({
     data: mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData,
-  }) as never));
-  componentSpies.push(vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
+  }) as never);
+  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
     const data = mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData;
     const selected = useMemo(() => data ? select(data) : undefined, [data]);
     return { data: selected, updateUser: mocks.updateUser } as never;
-  }));
+  });
   localStorage.clear();
   // The assistant re-places Lemu's portrait whenever its dock resizes.
   installBrowserGlobals({ resizeObserver: true, animationFrame: () => 0 });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   // Bun shares modules between suites; restore Objective after each test.
-  componentSpies.push(vi.spyOn(objective, "Objective").mockImplementation(() => null));
-  componentSpies.push(vi.spyOn(logbook, "QuestObjectives").mockImplementation(() => null));
-  componentSpies.push(vi.spyOn(logbook, "useCheckRewards").mockImplementation(() => {
+  vi.spyOn(objective, "Objective").mockImplementation(() => null);
+  vi.spyOn(logbook, "QuestObjectives").mockImplementation(() => null);
+  vi.spyOn(logbook, "useCheckRewards").mockImplementation(() => {
     mocks.rewardHook();
     return { checkRewards: vi.fn(), isCheckingRewards: false } as never;
-  }));
-  componentSpies.push(vi.spyOn(sortableList, "SortableList").mockImplementation(() => null));
+  });
+  vi.spyOn(sortableList, "SortableList").mockImplementation(() => null);
   for (const [name, implementation] of Object.entries(dialogMocks)) {
     dialogSpies.push(vi.spyOn(dialogComponents, name as keyof typeof dialogMocks).mockImplementation(implementation as never));
   }
@@ -143,7 +142,7 @@ describe("TutorialAssistant highlight activation", () => {
 
   it("keeps the highlighted tutorial control interactive above battle focus", async () => {
     for (const spy of dialogSpies.splice(0)) spy.mockRestore();
-    componentSpies.push(vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(false));
+    vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(false);
     mocks.step = { ...mocks.step, elementIds: ["lesson-control"], proceedOnHighlightClick: true };
     const view = render(highlightedAssistant());
     render(
@@ -168,8 +167,8 @@ describe("TutorialAssistant highlight activation", () => {
 afterEach(() => {
   cleanup();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
-  for (const spy of componentSpies.splice(0)) spy.mockRestore();
-  for (const spy of dialogSpies.splice(0)) spy.mockRestore();
+  vi.restoreAllMocks();
+  dialogSpies.length = 0;
   close?.();
   close = undefined;
   mocks.client.clear();

@@ -37,10 +37,6 @@ const EditorInput = ({ control, disabled }: { control: Control<MutateCommentSche
   return <><textarea aria-label="Edit message" {...field} disabled={disabled} /><button type="submit" disabled={disabled}>Save message</button></>;
 };
 
-let postSpy: { mockRestore: () => void };
-let confirmSpy: { mockRestore: () => void };
-let rowSpy: { mockRestore: () => void } | undefined;
-let parseSpy: { mockRestore: () => void } | undefined;
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(vi.spyOn(client, "api" as never), api);
@@ -50,17 +46,11 @@ beforeEach(() => {
   vi.spyOn(ModerationSummary, "ModerationSummary").mockImplementation(() => null);
   vi.spyOn(Report, "default").mockImplementation(() => null);
   vi.spyOn(EmojiPicker, "EmojiPicker").mockImplementation(() => null);
-  postSpy = vi.spyOn(PostModule, "default").mockImplementation(({ children, options }) => <div>{options}{children}</div>);
-  confirmSpy = vi.spyOn(Confirm, "default").mockImplementation(() => null);
+  vi.spyOn(PostModule, "default").mockImplementation(({ children, options }) => <div>{options}{children}</div>);
+  vi.spyOn(Confirm, "default").mockImplementation(() => null);
 });
 afterEach(() => {
   cleanup();
-  confirmSpy.mockRestore();
-  postSpy.mockRestore();
-  rowSpy?.mockRestore();
-  parseSpy?.mockRestore();
-  rowSpy = undefined;
-  parseSpy = undefined;
   vi.restoreAllMocks();
 });
 
@@ -204,8 +194,6 @@ describe("conversation comment row isolation", () => {
       </div>
     ));
     const parses = vi.spyOn(Parse, "parseHtml").mockImplementation((content) => [<span key="parsed">{content}</span>]);
-    rowSpy = renders;
-    parseSpy = parses;
     return { renders, parses };
   };
 

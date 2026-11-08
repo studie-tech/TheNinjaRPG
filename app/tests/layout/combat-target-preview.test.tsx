@@ -12,18 +12,16 @@ const createPreview = vi.fn(({ targeting }: { targeting: { width: number; height
   const canvas = document.createElement("canvas");
   return { canvas, grid: getBattleGrid(20, targeting as ReturnedBattle, { x: -10, y: -10 }), width: 300, height: 250, play: vi.fn(), setTargeting, dispose: () => { dispose(); canvas.remove(); } };
 });
-let modalSpy: { mockRestore: () => void };
-let rendererSpy: { mockRestore: () => void };
 beforeEach(() => {
-  rendererSpy = vi.spyOn(battlefield, "createBattlefieldPreview").mockImplementation(createPreview as never);
-  modalSpy = vi.spyOn(modal, "default").mockImplementation((props) => (
+  vi.spyOn(battlefield, "createBattlefieldPreview").mockImplementation(createPreview as never);
+  vi.spyOn(modal, "default").mockImplementation((props) => (
     <div role="dialog" aria-label={props.title}>
       {props.children}
       <button type="button" onClick={() => props.setIsOpen(false)}>Close</button>
     </div>
   ));
 });
-afterEach(() => { cleanup(); modalSpy.mockRestore(); rendererSpy.mockRestore(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.clearAllMocks(); });
 it("loads combat rendering only when requested and releases it when help closes", async () => {
   const view = render(<CombatTargetPreview action={{ method: "SINGLE", range: 2 }} />);
   const trigger = view.getByRole("button", { name: "Preview targeting" });
