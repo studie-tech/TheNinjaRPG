@@ -32,9 +32,10 @@ import { getClaimedVotesPatch } from "@/deltas/profile";
 import {
   ACTIVE_VOTING_SITES,
   MAX_LINK_PROMOTION_POINTS,
+  RECRUIT_PRESTIGE_SHARE,
   RECRUIT_RANK_MILESTONES,
-  RECRUIT_SHARE,
   RECRUITER_LEVEL_REWARD_FACTOR,
+  REFERRAL_REPUTATION_SHARE,
   type RecruitMilestoneRank,
   SITE_URL,
   VOTE_REWARD_REPUTATION,
@@ -298,14 +299,14 @@ const RecruitLinkTab: React.FC = () => {
           <strong>Reputation Points</strong>
           <br />
           Every time a recruited user buys reputation points, you will also receive an
-          amount of reputation points equal to {RECRUIT_SHARE * 100}% of what they
-          bought.
+          amount of reputation points equal to {REFERRAL_REPUTATION_SHARE * 100}% of
+          what they bought.
         </li>
         <li className="px-2 py-2">
           <strong>Village Prestige</strong>
           <br />
           Every time a recruited user earns village prestige from quests, you will
-          receive {RECRUIT_SHARE * 100}% of the prestige they earn.
+          receive {RECRUIT_PRESTIGE_SHARE * 100}% of the prestige they earn.
         </li>
         <li className="px-2 py-2">
           <strong>Rank Milestones</strong>

@@ -1541,8 +1541,8 @@ export const RECRUITMENT_REWARDS = [
 
 /** Recruiters earn this many ryo times their recruit's new level cubed on each level-up. */
 export const RECRUITER_LEVEL_REWARD_FACTOR = 10;
-/** Share of a recruit's purchased reputation and quest prestige passed to their recruiter. */
-export const RECRUIT_SHARE = 0.1;
+/** Share of a recruit's quest prestige passed to their recruiter. */
+export const RECRUIT_PRESTIGE_SHARE = 0.1;
 /** Most reputation a reviewer can grant for one promotion link. */
 export const MAX_LINK_PROMOTION_POINTS = 500;
 /** Largest experience amount staff can award to every player at once. */
