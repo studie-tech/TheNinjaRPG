@@ -42,8 +42,12 @@ import {
   insertDungeonRunForCreate,
   listBattleForGetState,
   listDungeonForGetAvailable,
+  listDungeonItemNames,
+  listDungeonJutsuNames,
   listDungeonMemberForAct,
   listDungeonMemberForGetState,
+  listDungeonRankingPlayers,
+  listDungeonRankings,
   listDungeonRewardHistory,
   listDungeonRunForGetState,
   listItemForSave,
@@ -94,6 +98,114 @@ import {
 
 /** Party state is versioned; active membership and completion receipts guard cross-run effects. */
 export const dungeonRouter = createTRPCRouter({
+  /** Keep published dungeon records discoverable after their entry period expires. */
+  getHallOfFameDungeons: protectedProcedure.query(async ({ ctx }) => {
+    const definitions = await listDungeonForGetAvailable(ctx.drizzle);
+    return definitions
+      .filter(({ content }) => !content.hidden)
+      .map(({ id, content }) => ({ id, name: content.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }),
+  /** Rank completed runs as squads, using final settlement rather than reward-claim time. */
+  getRankings: protectedProcedure
+    .input(
+      z.object({
+        dungeonId: z.string(),
+        mode: z.enum(["fastest", "completed"]),
+        page: z.number().int().min(0).max(10000),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const [definition, runs] = await Promise.all([
+        findDungeonForCreate(ctx.drizzle, { id: input.dungeonId }),
+        listDungeonRankings(ctx.drizzle, input),
+      ]);
+      if (!definition || definition.content.hidden)
+        return { entries: [], hasMore: false };
+      const page = runs.slice(0, 6);
+      const ids = [...new Set(page.flatMap((run) => run.state.memberIds))];
+      const players = ids.length
+        ? await listDungeonRankingPlayers(ctx.drizzle, ids)
+        : [];
+      const names = new Map(players.map((player) => [player.userId, player.username]));
+      return {
+        entries: page.map((run, index) => {
+          const { completedAt, entryPaidAt } = run.state;
+          if (typeof completedAt !== "number" || typeof entryPaidAt !== "number")
+            throw new Error("Ranked dungeon clear is missing its timestamps");
+          return {
+            id: run.id,
+            rank: input.page * 6 + index + 1,
+            completedAt,
+            durationMs: completedAt - entryPaidAt,
+            players: run.state.memberIds.map((id) => ({
+              id,
+              name: names.get(id) ?? "Deleted player",
+            })),
+          };
+        }),
+        hasMore: runs.length > 6,
+      };
+    }),
+  /** Discover published dungeons across Seichi without exposing encounters or staff drafts. */
+  getCatalogue: protectedProcedure.query(async ({ ctx }) => {
+    const definitions = await listDungeonForGetAvailable(ctx.drizzle);
+    const now = Date.now();
+    const visible = definitions.filter(
+      ({ content }) =>
+        !content.hidden &&
+        (!content.expiresAt || new Date(content.expiresAt).getTime() > now),
+    );
+    const drops = visible.flatMap(({ content }) => content.rewards.drops);
+    const itemIds = [
+      ...new Set(
+        drops
+          .filter((drop) => drop.type === "item" || drop.type === "cache")
+          .map((drop) => drop.id),
+      ),
+    ];
+    const jutsuIds = [
+      ...new Set(drops.filter((drop) => drop.type === "jutsu").map((drop) => drop.id)),
+    ];
+    const [items, jutsus] = await Promise.all([
+      itemIds.length ? listDungeonItemNames(ctx.drizzle, itemIds) : [],
+      jutsuIds.length ? listDungeonJutsuNames(ctx.drizzle, jutsuIds) : [],
+    ]);
+    const itemNames = new Map(items.map((entry) => [entry.id, entry.name]));
+    const jutsuNames = new Map(jutsus.map((entry) => [entry.id, entry.name]));
+    return visible
+      .map(({ id, content }) => ({
+        id,
+        name: content.name,
+        description: content.description,
+        sector: content.sector,
+        longitude: content.longitude,
+        latitude: content.latitude,
+        expiresAt: content.expiresAt,
+        requiredLevel: dungeonRequirements(content).requiredLevel,
+        rewards: {
+          ...content.rewards,
+          drops: content.rewards.drops.map((drop) => ({
+            type: drop.type,
+            id: drop.id,
+            name:
+              drop.type === "package"
+                ? (drop.package?.name ?? "Reward package")
+                : ((drop.type === "jutsu" ? jutsuNames : itemNames).get(drop.id) ??
+                  "Unavailable reward"),
+            quantity: drop.quantity ?? 1,
+            chance: drop.chance,
+            onlyOnce: drop.onlyOnce ?? false,
+          })),
+        },
+      }))
+      .sort(
+        (a, b) =>
+          (a.expiresAt ? new Date(a.expiresAt).getTime() : Infinity) -
+            (b.expiresAt ? new Date(b.expiresAt).getTime() : Infinity) ||
+          a.name.localeCompare(b.name),
+      );
+  }),
   /** List visible, unexpired definitions only for the player's current sector. */
   getAvailable: protectedProcedure
     .input(dungeonSectorSchema)

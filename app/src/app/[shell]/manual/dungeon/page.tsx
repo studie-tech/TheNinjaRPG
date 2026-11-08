@@ -26,6 +26,7 @@ import {
   RetryQuestDelays,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import { DungeonCatalogue } from "@/layout/DungeonCatalogue";
 import { LabeledField } from "@/layout/LabeledField";
 import Loader from "@/layout/Loader";
 import { MapLocationPreview } from "@/layout/MapLocationPreview";
@@ -42,8 +43,43 @@ import {
   dungeonRequirementsSchema,
 } from "@/validators/dungeon";
 
+/** Players browse published dungeons; content editors retain the authoring tools. */
+export default function DungeonManual() {
+  const { data: user } = useUserData();
+  const [isPlayerView, setIsPlayerView] = useState(false);
+  if (!user) return <Loader explanation="Loading dungeons" />;
+  if (!canChangeContent(user.role)) return <DungeonCatalogue />;
+  return (
+    <>
+      <section
+        aria-label="Dungeon view"
+        className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+      >
+        <div>
+          <p className="font-semibold">
+            {isPlayerView ? "Player view" : "Dungeon editor"}
+          </p>
+          <p className="text-muted-foreground text-sm">
+            {isPlayerView
+              ? "Browse published dungeons and squad rankings as players see them."
+              : "Preview the dungeon catalogue, rewards and Hall of Fame."}
+          </p>
+        </div>
+        <Button variant="secondary" onClick={() => setIsPlayerView(!isPlayerView)}>
+          {isPlayerView ? "Back to dungeon editor" : "View player dungeons"}
+        </Button>
+      </section>
+      {/* Keep the editor mounted so switching views preserves unsaved content and layout. */}
+      <div hidden={isPlayerView}>
+        <DungeonEditor />
+      </div>
+      {isPlayerView && <DungeonCatalogue />}
+    </>
+  );
+}
+
 /** Edit encounters, entry requirements and rewards using the shared server validator. */
-export default function DungeonEditor() {
+function DungeonEditor() {
   const { data: user } = useUserData();
   const utils = api.useUtils();
   const allowed = !!user && canChangeContent(user.role);

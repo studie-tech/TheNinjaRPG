@@ -420,6 +420,28 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     expect(await a.claim({id: "delivered-before"})).toMatchObject({success: true, reward: {jutsus: [], grantedDrops: []}});
     expect(await db.query.userJutsu.findMany()).toHaveLength(0);
   });
+  it("records the final settlement time once for the whole squad", async () => {
+    const db = await getTestDatabase();
+    const startedAt = Date.now() - 10_000;
+    const meta = dungeonBattleState();
+    meta.runState = { ...meta.runState, floor: 4, clearedFloors: [0,1,2,3], entryPaidAt: startedAt };
+    meta.roomKind = "boss";
+    await db.insert(dungeonRun).values({ id: "run", dungeonId: "definition", leaderId: "a", content: dungeonContent(), state: meta.runState, status: "FIGHTING", version: 1, battleId: "final", createdAt: new Date() });
+    const fight = makeCompleteBattle({ id: "final", version: 0, round: 0,
+      usersState: [makeUser({ userId: "a", direction: "left" }), makeUser({ userId: "enemy", direction: "right", isAi: true, curHealth: 0 })],
+      extraState: { dungeon: meta },
+    });
+    await db.insert(battle).values(fight);
+    const before = Date.now();
+    expect(await settleDungeonBattle(db, structuredClone(fight), 0)).toBe(true);
+    const run = await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, "run") });
+    expect(run?.status).toBe("COMPLETED");
+    expect(run?.state.entryPaidAt).toBe(startedAt);
+    expect(run?.state.completedAt).toBeGreaterThanOrEqual(before);
+    expect(run?.state.completedAt).toBeLessThanOrEqual(Date.now());
+    expect(await settleDungeonBattle(db, structuredClone(fight), 0)).toBe(false);
+    expect((await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, "run") }))?.state.completedAt).toBe(run?.state.completedAt);
+  });
   it("settles a party floor once, revives everyone and preserves incomplete reward gates", async () => {
     const db = await getTestDatabase();
     const meta = dungeonBattleState();

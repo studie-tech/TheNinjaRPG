@@ -49,6 +49,13 @@ it.each(["success", "error"])("keeps the saved draft selected until a pending sa
   expect(view.getByRole("tab", { name: "Rewards" }).getAttribute("aria-selected")).toBe("true");
   expect(view.getByRole("status").textContent).toBe("Please correct the highlighted number.");
   fireEvent.input(tokens, { target: { value: "5" } });
+  fireEvent.click(view.getByRole("button", { name: "View player dungeons" }));
+  expect(view.getByRole("tab", { name: "Current Dungeons" })).toBeTruthy();
+  expect(view.queryByRole("button", { name: "Save dungeon" })).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "Back to dungeon editor" }));
+  expect(select.value).toBe("A");
+  expect((view.getByLabelText("Tokens") as HTMLInputElement).value).toBe("5");
+  expect(view.getByRole("tab", { name: "Rewards" }).getAttribute("aria-selected")).toBe("true");
   fireEvent.click(view.getByRole("button", { name: "Save dungeon" }));
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   expect(save.mock.calls[0]?.[0]).toMatchObject({ id: "A", content: { name: "Dungeon A" } });
@@ -261,6 +268,7 @@ function mountEditor({
     useUtils: () => ({ coop: { dungeon: { getAvailable: { invalidate } } } }),
     coop: { dungeon: {
       getAll: { useQuery: () => ({ data: definitions, refetch }) },
+      getCatalogue: { useQuery: () => ({ data: [], isPending: false, isError: false, refetch: vi.fn() }) },
       save: { useMutation: (options: UseMutationOptions<SaveResult, Error, SaveInput>) => useMutation({ ...options, mutationFn: save }) },
     } },
     mapAsset: { getAll: { useQuery: () => ({ data: [] }) } },

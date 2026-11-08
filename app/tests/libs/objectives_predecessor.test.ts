@@ -122,6 +122,28 @@ describe("the selected objective path", () => {
     expect(getActiveObjective(quest, tracker)?.id).toBe("won");
   });
 
+  it("does not unlock a dialogue through an unfinished travel step's saved next link", () => {
+    const travelQuest = {
+      consecutiveObjectives: true,
+      content: {
+        objectives: [
+          { id: "travel", task: "move_to_location", nextObjectiveId: "dialog" },
+          { id: "dialog", task: "dialog" },
+        ],
+      },
+    } as unknown as Quest;
+    const pending = track([{ id: "travel", done: false, selected: "dialog" }]);
+    expect(isQuestObjectiveAvailable(travelQuest, pending, 0)).toBe(true);
+    expect(isQuestObjectiveAvailable(travelQuest, pending, 1)).toBe(false);
+    expect(getActiveObjective(travelQuest, pending)?.id).toBe("travel");
+    expect(isQuestComplete(travelQuest, pending)).toBe(false);
+
+    const arrived = track([{ id: "travel", done: true, selected: "dialog" }]);
+    expect(isQuestObjectiveAvailable(travelQuest, arrived, 1)).toBe(true);
+    expect(getActiveObjective(travelQuest, arrived)?.id).toBe("dialog");
+    expect(isQuestComplete(travelQuest, arrived)).toBe(false);
+  });
+
   it("completes once the last selected objective is done", () => {
     const pending = track([{ id: "battle", done: true, selected: "won" }]);
     expect(isQuestComplete(quest, pending)).toBe(false);

@@ -3,10 +3,12 @@
  */
 import {
   and,
+  asc,
   desc,
   eq,
   getTableColumns,
   gt,
+  gte,
   inArray,
   isNotNull,
   isNull,
@@ -54,6 +56,64 @@ export const findUserDataForGetAvailable = (
 /** Build the `dungeon` listing for `getAvailable`. */
 export const listDungeonForGetAvailable = (client: Pick<DrizzleClient, "query">) =>
   client.query.dungeon.findMany();
+
+/** Resolve player-facing dungeon item names without loading effects or inventory data. */
+export const listDungeonItemNames = (
+  client: Pick<DrizzleClient, "query">,
+  ids: string[],
+) =>
+  client.query.item.findMany({
+    columns: { id: true, name: true },
+    where: inArray(item.id, ids),
+  });
+
+/** Resolve player-facing dungeon jutsu names without loading combat definitions. */
+export const listDungeonJutsuNames = (
+  client: Pick<DrizzleClient, "query">,
+  ids: string[],
+) =>
+  client.query.jutsu.findMany({
+    columns: { id: true, name: true },
+    where: inArray(jutsu.id, ids),
+  });
+
+/** Page successful squad clears with measured entry and finish times, retaining stable ties. */
+export const listDungeonRankings = (
+  client: Pick<DrizzleClient, "query">,
+  input: { dungeonId: string; mode: "fastest" | "completed"; page: number },
+) => {
+  const completedAt = sql<number>`(JSON_EXTRACT(${dungeonRun.state}, '$.completedAt') + 0)`;
+  const startedAt = sql<number>`(JSON_EXTRACT(${dungeonRun.state}, '$.entryPaidAt') + 0)`;
+  return client.query.dungeonRun.findMany({
+    columns: { id: true, state: true },
+    where: and(
+      eq(dungeonRun.dungeonId, input.dungeonId),
+      eq(dungeonRun.status, "COMPLETED"),
+      gt(startedAt, 0),
+      gte(completedAt, startedAt),
+    ),
+    orderBy:
+      input.mode === "fastest"
+        ? [
+            asc(sql`${completedAt} - ${startedAt}`),
+            asc(completedAt),
+            asc(dungeonRun.id),
+          ]
+        : [asc(completedAt), asc(dungeonRun.id)],
+    limit: 7,
+    offset: input.page * 6,
+  });
+};
+
+/** Resolve only the public names of the members on the selected ranking page. */
+export const listDungeonRankingPlayers = (
+  client: Pick<DrizzleClient, "query">,
+  ids: string[],
+) =>
+  client.query.userData.findMany({
+    columns: { userId: true, username: true },
+    where: inArray(userData.userId, ids),
+  });
 
 /** Build the `dungeonMember` selection for `getState`, using predicates on `userId`, `state`, `status`. */
 export const selectDungeonMemberForGetState = (

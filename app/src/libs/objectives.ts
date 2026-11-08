@@ -98,6 +98,21 @@ export const findPredecessor = (
   targetId: string,
 ): AllObjectivesType | undefined => objectives.find((obj) => leadsTo(obj, targetId));
 
+/** Order prerequisites before successors, choosing ready objectives in authored order. */
+export const orderObjectivesByPrerequisites = (objectives: AllObjectivesType[]) => {
+  const remaining = [...objectives];
+  const ordered: AllObjectivesType[] = [];
+  while (remaining.length > 0) {
+    const index = remaining.findIndex(
+      (objective) => !findPredecessor(remaining, objective.id),
+    );
+    // Invalid cyclic content still passes through the runtime availability guards.
+    if (index === -1) return [...ordered, ...remaining];
+    ordered.push(...remaining.splice(index, 1));
+  }
+  return ordered;
+};
+
 /**
  * Finds the predecessor objective for a given target objective id, and checks if it is completed.
  * @param objectives - The list of all objectives.
@@ -150,7 +165,9 @@ export const isQuestComplete = (
 
 /**
  * Objective ids along the branch the tracker selected, from the starting objective (the one
- * without a predecessor). `cyclic` reports a selection that loops back on itself.
+ * without a predecessor), stopping at the first unfinished objective. A saved next link
+ * selects a branch but does not satisfy the objective that owns it. `cyclic` reports a
+ * selection that loops back on itself.
  */
 const selectedObjectivePath = (
   objectives: AllObjectivesType[],
@@ -161,7 +178,8 @@ const selectedObjectivePath = (
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId);
     const id = currentId;
-    currentId = tracker.goals.find((goal) => goal.id === id)?.selectedNextObjectiveId;
+    const goal = tracker.goals.find((goal) => goal.id === id);
+    currentId = goal?.done ? goal.selectedNextObjectiveId : undefined;
   }
   return { ids: [...visited], cyclic: !!currentId };
 };
