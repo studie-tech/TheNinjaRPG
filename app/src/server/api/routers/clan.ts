@@ -33,6 +33,7 @@ import {
   CLAN_POINT_RYO_RATE,
   CLAN_RANK_REQUIREMENT,
   CLANS_PER_STRUCTURE_LEVEL,
+  ClanBoostTypes,
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
   FACTION_MIN_MEMBERS_FOR_STRONGHOLD,
@@ -157,19 +158,30 @@ import {
   checkAssassin,
   checkClanLeadership,
   checkCoLeader,
-  clanBankDepositSchema,
-  clanBattleIdSchema,
-  clanBoostTypeSchema,
   clanCreateSchema,
-  clanGetRequestSchema,
   clanPointConversionSchema,
   factionColorEditSchema,
   factionEditSchema,
-  restoreStrongholdSchema,
   strictClanNameField,
 } from "@/validators/clan";
 import { idSchema } from "@/validators/misc";
 import { type UserCachePatch, userDeltaResponseSchema } from "@/validators/userCache";
+
+const clanBoostTypeSchema = z.enum(ClanBoostTypes);
+
+const clanBankDepositSchema = z.object({
+  amount: z.number().int().min(0),
+  clanId: z.string(),
+});
+
+/** Shared lobby identifier for clan battle membership, startup and deletion actions. */
+const clanBattleIdSchema = z.object({ clanBattleId: z.string() });
+
+const clanGetRequestSchema = z.object({
+  clanLeaderId: z.string(),
+});
+
+const restoreStrongholdSchema = z.object({ clanId: z.string() });
 
 const pusher = getServerPusher();
 

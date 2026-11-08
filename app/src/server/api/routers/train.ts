@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { eq, gte, isNull, sql } from "drizzle-orm";
 import { after } from "next/server";
+import { z } from "zod";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   getSavedTrainingQueueUserUpdate,
@@ -70,7 +71,6 @@ import { editTrainingQueue } from "@/server/utils/userQueue";
 import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
-import { selectTrainedElementSchema } from "@/validators/elementalMastery";
 import {
   startMasteryTrainingInputSchema,
   startTrainingInputSchema,
@@ -81,6 +81,10 @@ import {
   updateTrainingSpeedInputSchema,
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const selectTrainedElementSchema = z.object({
+  element: z.enum(BasicElementName).nullable(),
+});
 
 export const trainRouter = createTRPCRouter({
   selectTrainedElement: protectedProcedure

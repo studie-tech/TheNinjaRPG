@@ -121,15 +121,25 @@ import { getTimeLeftStr, secondsFromDate, secondsPassed } from "@/utils/time";
 import {
   type BloodlineFilteringSchema,
   bloodlineFilteringSchema,
-  bloodlineReskinCreateSchema,
   bloodlineReskinUpdateSchema,
-  removeBloodlineFromPoolSchema,
+  reskinBaseSchema,
 } from "@/validators/bloodline";
 
 import { BloodlineValidator, type ZodAllTags } from "@/validators/combat";
 
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+/** Schema for creating a bloodline reskin (staff only). */
+const bloodlineReskinCreateSchema = reskinBaseSchema.extend({
+  bloodlineId: z.string(),
+});
+
+const removeBloodlineFromPoolSchema = z.object({
+  userId: z.string(),
+  bloodlineId: z.string(),
+  reason: z.string().trim().min(10).max(500),
+});
 
 const ALREADY_HAS_BLOODLINE_ERROR = "Already have a bloodline, please remove it first";
 

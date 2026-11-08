@@ -19,6 +19,7 @@ import {
   updateDmgConfig,
   updateGameSetting,
 } from "@/libs/gamesettings";
+import { WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
 import {
   deleteEmailReminderForDeleteEmailReminder,
   fetchEmailReminder,
@@ -80,7 +81,6 @@ import {
   canSubmitNotification,
 } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
-import { trackVisitorSchema } from "@/validators/analytics";
 import { confSchema } from "@/validators/combat";
 import {
   equipLimitCategorySchema,
@@ -93,6 +93,12 @@ import {
   sharedCooldownTagSchema,
 } from "@/validators/sharedCooldown";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const trackVisitorSchema = z.object({
+  ref: z.string().max(191).optional(),
+  utmSource: z.string().max(191).optional(),
+  wallpaperVariant: z.enum(WALLPAPER_VARIANTS).optional(),
+});
 
 export const miscRouter = createTRPCRouter({
   trackVisitor: publicProcedure

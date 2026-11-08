@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   BOUNTY_MAX_HUNTERS,
   BOUNTY_MIN_AMOUNT,
+  BOUNTY_STATUSES,
   RANKS_RESTRICTED_FROM_PVP,
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
@@ -42,14 +43,26 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canSeeHiddenBountyInfo } from "@/utils/permissions";
-import {
-  addBountyMoneySchema,
-  bountyBoardFilterSchema,
-  collectBountySchema,
-  createBountySchema,
-  retractBountySchema,
-  signupBountySchema,
-} from "@/validators/bounty";
+import { addBountyMoneySchema, createBountySchema } from "@/validators/bounty";
+
+const signupBountySchema = z.object({
+  bountyId: z.string().min(1),
+  targetUserId: z.string().min(1),
+});
+
+const retractBountySchema = z.object({
+  bountyId: z.string().min(1),
+});
+
+const bountyBoardFilterSchema = z.object({
+  cursor: z.number().nullish(),
+  limit: z.number().min(1).max(100).prefault(30),
+  status: z.enum([...BOUNTY_STATUSES, "all"]).prefault("OPEN"),
+});
+
+const collectBountySchema = z.object({
+  bountyId: z.string().min(1),
+});
 
 export const bountyRouter = createTRPCRouter({
   // Get open bounty board

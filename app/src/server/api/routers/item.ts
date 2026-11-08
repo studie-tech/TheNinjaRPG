@@ -363,7 +363,6 @@ import {
   NonCombatQuestTag,
   type ZodAllTags,
 } from "@/validators/combat";
-import { consumeItemInputSchema } from "@/validators/cooking";
 import {
   type InventoryQuantityChange,
   inventoryQuantityChangeSchema,
@@ -398,6 +397,16 @@ import {
   type WeightedCache,
   weightedCacheSchema,
 } from "@/validators/weightedCache";
+
+/** Meals require a stack snapshot; collection grants and weighted caches require a retry ID. */
+const consumeItemInputSchema = z.object({
+  userItemId: z.string(),
+  expectedQuantity: z.int().positive().optional(),
+  requestId: z
+    .string()
+    .regex(/^[\w-]{10,64}$/)
+    .optional(),
+});
 
 export const itemRouter = createTRPCRouter({
   /** Content authoring needs source alpha bounds even for generated and historical uploads. */

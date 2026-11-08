@@ -84,10 +84,15 @@ import {
 } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import type { DatabasePromiseReturn } from "@/utils/typeutils";
-import { blackMarketOfferSchema, rerollElementSchema } from "@/validators/blackmarket";
+import { blackMarketOfferSchema } from "@/validators/blackmarket";
 import { statSchema } from "@/validators/combat";
 import { genders } from "@/validators/register";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+/** Selects a stored innate slot; the mutation checks whether it can be rerolled. */
+const rerollElementSchema = z.object({
+  elementType: z.enum(["primary", "secondary"]),
+});
 
 export const blackMarketRouter = createTRPCRouter({
   getRyoOffers: protectedProcedure

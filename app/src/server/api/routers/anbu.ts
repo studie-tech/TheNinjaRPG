@@ -76,10 +76,12 @@ import { secondsFromDate } from "@/utils/time";
 import { getEffectiveStructureLevel } from "@/utils/village";
 import {
   anbuCreateSchema,
-  anbuEditSchema,
+  anbuRenameSchema,
   strictAnbuNameField,
 } from "@/validators/anbu";
 import { idSchema } from "@/validators/misc";
+
+const anbuEditSchema = anbuRenameSchema.extend({ squadId: z.string() });
 
 const pusher = getServerPusher();
 

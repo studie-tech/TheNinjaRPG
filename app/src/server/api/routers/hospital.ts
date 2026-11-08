@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { gte, sql } from "drizzle-orm";
 import { after } from "next/server";
+import { z } from "zod";
 import { getHealerUserPatch } from "@/deltas/hospital";
 import {
   MEDNIN_EXP_CAP,
@@ -32,6 +33,7 @@ import { fetchUser } from "@/queries/profile";
 import { fetchAlliances, fetchStructures } from "@/queries/village";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
+  baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -52,12 +54,32 @@ import { flushSafe } from "@/server/utils/sentry";
 import { findRelationship, getAlliedVillageIds } from "@/utils/alliance";
 import { secondsFromDate } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
-import {
-  npcHealInputSchema,
-  npcHealOutputSchema,
-  userHealInputSchema,
-  userHealOutputSchema,
-} from "@/validators/hospital";
+import { healerAfterHealSchema } from "@/validators/hospital";
+
+const userHealInputSchema = z.object({
+  userId: z.string(),
+  healPercentage: z.int().min(1).max(100),
+});
+
+const userHealOutputSchema = baseServerResponse.extend({
+  chakraCost: z.number().optional(),
+  expGain: z.number().optional(),
+  healer: healerAfterHealSchema.optional(),
+});
+
+const npcHealInputSchema = z.object({ villageId: z.string().nullish() });
+
+const npcHealOutputSchema = baseServerResponse.extend({
+  data: z
+    .object({
+      curHealth: z.number(),
+      curEnergy: z.number(),
+      maxEnergy: z.number(),
+      money: z.number(),
+      regenAt: z.date(),
+    })
+    .optional(),
+});
 
 const pusher = getServerPusher();
 

@@ -3,9 +3,8 @@ import { join } from "node:path";
 import { waitFor } from "@testing-library/react";
 import { MutationObserver, type MutationObserverOptions, QueryClient, QueryObserver, type QueryObserverOptions } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "bun:test";
-import type { z } from "zod";
+import type { RouterInputs } from "@/app/_trpc/client";
 import { finishItemConsumeRequest, getItemConsumeErrorMessage } from "@/libs/itemConsumption";
-import type { consumeItemInputSchema } from "@/validators/cooking";
 import { getInventoryQuantities, getConsumedRaidBuffs } from "@/deltas/item";
 import { updateQueryCache, prepareQueryUpdate } from "@/utils/queryCache";
 
@@ -91,7 +90,7 @@ describe("inventory pages", () => {
       "user",
       getItemConsumeErrorMessage,
       () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, vi.fn(async () => undefined), "getUserItemsWithVariants",
-    ) as MutationObserverOptions<{ success: boolean; message: string }, Error, z.input<typeof consumeItemInputSchema>>;
+    ) as MutationObserverOptions<{ success: boolean; message: string }, Error, RouterInputs["item"]["consume"]>;
     const consume = new MutationObserver(client, { ...options, mutationFn: async () => ({ success: false, message: "Your meal stack changed. Refresh your inventory and try again" }) });
     try {
       await waitFor(() => expect(inventory.getCurrentResult().data).toBe(3));
@@ -135,7 +134,7 @@ describe("inventory pages", () => {
       const onSettled = settled ? new Function("setIsOpen", "setUserItem", "onDone", `return (${settled});`)(setIsOpen, setUserItem, onDone) : undefined;
       const options = new Function("showMutationToast", "getItemConsumeErrorMessage", "useritem", "onSettled", "setIsOpen", "setUserItem", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
         toast, getItemConsumeErrorMessage, selected, onSettled, setIsOpen, setUserItem, () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, vi.fn(async () => undefined),
-      ) as MutationObserverOptions<never, Error, z.input<typeof consumeItemInputSchema>>;
+      ) as MutationObserverOptions<never, Error, RouterInputs["item"]["consume"]>;
       const client = new QueryClient();
       const error = new Error(message);
       const consume = new MutationObserver(client, { ...options, mutationFn: async () => { throw error; } });

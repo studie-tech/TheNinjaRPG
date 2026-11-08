@@ -1,9 +1,15 @@
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import {
   getAuctionOfferCreditUserUpdate,
   getCreateAuctionOfferUserUpdate,
 } from "@/deltas/auctionOffers";
-import { AUCTION_HOUSE_MIN_LEVEL, auctionHouseLevelMessage } from "@/drizzle/constants";
+import {
+  AUCTION_HOUSE_MIN_LEVEL,
+  AUCTION_LISTING_STATES,
+  AUCTION_OFFER_TYPES,
+  auctionHouseLevelMessage,
+} from "@/drizzle/constants";
 import type { UserItemWithRelations, userData } from "@/drizzle/schema";
 import { isEquippableUserItem, isImbuing } from "@/libs/item";
 import { getAuctionPriceError } from "@/libs/itemEconomy";
@@ -31,16 +37,26 @@ import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { tradeUpdate } from "@/server/utils/push/messages";
-import {
-  acceptAuctionOfferSchema,
-  auctionOfferIdSchema,
-  createAuctionOfferSchema,
-  getAuctionOffersSchema,
-} from "@/validators/auction";
+import { createAuctionOfferSchema } from "@/validators/auction";
 import {
   type UserDeltaResponse,
   userDeltaResponseSchema,
 } from "@/validators/userCache";
+
+const getAuctionOffersSchema = z.object({
+  offerType: z.enum(AUCTION_OFFER_TYPES),
+  status: z.enum(AUCTION_LISTING_STATES).default("ACTIVE"),
+  onlyMine: z.boolean().default(false),
+  search: z.string().max(100).default(""),
+  limit: z.int().min(1).max(100).default(10),
+  cursor: z.int().min(0).nullish(),
+});
+
+const auctionOfferIdSchema = z.object({ offerId: z.string().min(1) });
+
+const acceptAuctionOfferSchema = auctionOfferIdSchema.extend({
+  userItemId: z.string().min(1),
+});
 
 export const auctionOfferProcedures = {
   getAuctionOfferItems: protectedProcedure.query(({ ctx }) =>

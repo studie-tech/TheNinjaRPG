@@ -2,7 +2,11 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { StaffApprovalGroup } from "@/drizzle/constants";
-import { StaffApprovalGroups } from "@/drizzle/constants";
+import {
+  StaffApplicationStates,
+  StaffApplicationTargetRoles,
+  StaffApprovalGroups,
+} from "@/drizzle/constants";
 import { staffApplication } from "@/drizzle/schema";
 import {
   deleteStaffApplicationForDelete,
@@ -21,7 +25,6 @@ import {
 } from "@/queries/applications";
 import { fetchUser } from "@/queries/profile";
 import { createConvo } from "@/routers/comments";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -35,11 +38,18 @@ import {
   getApprovalGroup,
   getBanOrSilenceRestriction,
 } from "@/utils/permissions";
-import {
-  createApplicationSchema,
-  listApplicationsInfiniteSchema,
-} from "@/validators/applications";
+import { createApplicationSchema } from "@/validators/applications";
 import { idSchema } from "@/validators/misc";
+
+// Infinite filtering for applications list
+const listApplicationsInfiniteSchema = z.object({
+  cursor: z.number().nullish(),
+  limit: z.number().min(1).max(100).prefault(30),
+  onlyMine: z.boolean().optional(),
+  username: z.string().optional(),
+  targetRole: z.enum(StaffApplicationTargetRoles).optional(),
+  state: z.enum(StaffApplicationStates).optional(),
+});
 
 export const applicationsRouter = createTRPCRouter({
   create: protectedProcedure

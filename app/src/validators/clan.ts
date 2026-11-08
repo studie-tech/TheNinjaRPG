@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CLAN_ASSASSIN_SLOTS, ClanBoostTypes } from "@/drizzle/constants";
+import { CLAN_ASSASSIN_SLOTS } from "@/drizzle/constants";
 import type { Clan } from "@/drizzle/schema";
 import {
   createReservedNameField,
@@ -7,21 +7,11 @@ import {
   RESERVED_FACTION_NAMES,
 } from "@/validators/reservedName";
 
-export const clanBoostTypeSchema = z.enum(ClanBoostTypes);
-
-export const clanBankDepositSchema = z.object({
-  amount: z.number().int().min(0),
-  clanId: z.string(),
-});
-
 /** Whole, positive points within the signed SQL integer range stored by the clan. */
 export const clanPointConversionSchema = z.object({
   clanId: z.string(),
   points: z.number().int().positive().max(2147483647),
 });
-
-/** Shared lobby identifier for clan battle membership, startup and deletion actions. */
-export const clanBattleIdSchema = z.object({ clanBattleId: z.string() });
 
 export const strictClanNameField = createReservedNameField({
   reserved: RESERVED_FACTION_NAMES,
@@ -51,10 +41,6 @@ export const factionColorEditSchema = z.object({
 });
 
 export type FactionColorEditSchema = z.infer<typeof factionColorEditSchema>;
-
-export const clanGetRequestSchema = z.object({
-  clanLeaderId: z.string(),
-});
 
 /**
  * Checks if a user is a clan co-leader.
@@ -98,5 +84,3 @@ export const getClanSearchSchema = (maxClans: number) =>
       .max(maxClans),
   });
 export type ClanSearchSchema = z.infer<ReturnType<typeof getClanSearchSchema>>;
-
-export const restoreStrongholdSchema = z.object({ clanId: z.string() });

@@ -67,11 +67,15 @@ import {
   activityStreakConfigSchema,
   activityStreakConfigUpdateSchema,
   claimStreakDaySchema,
-  purchaseEventPassSchema,
 } from "@/validators/activityStreak";
 import { idSchema } from "@/validators/misc";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+// Schema for purchasing an event pass
+const purchaseEventPassSchema = z.object({
+  configId: z.string(),
+});
 
 export const activityStreakRouter = createTRPCRouter({
   // ===== Player Endpoints =====

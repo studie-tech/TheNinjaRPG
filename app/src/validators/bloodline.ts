@@ -22,19 +22,8 @@ export const reskinBaseSchema = z.object({
   image: z.string().min(1).max(191).optional(),
 });
 
-/** Schema for creating a bloodline reskin (staff only). */
-export const bloodlineReskinCreateSchema = reskinBaseSchema.extend({
-  bloodlineId: z.string(),
-});
-
 /** Schema for updating a bloodline reskin (staff only, includes reason). */
 export const bloodlineReskinUpdateSchema = reskinBaseSchema.extend({
   reason: z.string().min(5).max(500),
 });
 export type BloodlineReskinUpdateSchema = z.infer<typeof bloodlineReskinUpdateSchema>;
-
-export const removeBloodlineFromPoolSchema = z.object({
-  userId: z.string(),
-  bloodlineId: z.string(),
-  reason: z.string().trim().min(10).max(500),
-});

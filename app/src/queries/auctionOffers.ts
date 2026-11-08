@@ -1,14 +1,16 @@
-import { AUCTION_HOUSE_MIN_LEVEL } from "@/drizzle/constants";
+import {
+  AUCTION_HOUSE_MIN_LEVEL,
+  type AUCTION_OFFER_TYPES,
+  type AuctionListingState,
+} from "@/drizzle/constants";
 /**
  * Database access for auction offers; authorization and transaction scopes stay in callers.
  */
 
 import { and, eq } from "drizzle-orm";
-import type { z } from "zod";
 import { userItem } from "@/drizzle/schema";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
-import type { getAuctionOffersSchema } from "@/validators/auction";
 
 /** Build the offered-item lookup with its item and imbuement relations for offer validation. */
 export const fetchOfferItem = (database: DrizzleClient, id: string, userId: string) =>
@@ -46,7 +48,14 @@ export const listItemForGetAuctionOfferItems = (client: Pick<DrizzleClient, "que
 /** Build the `auctionOffer` listing for `getAuctionOffers`, including predicates on `offerType`, `status`, `ownerId`. */
 export const listAuctionOfferForGetAuctionOffers = (
   client: Pick<DrizzleClient, "query">,
-  input: z.infer<typeof getAuctionOffersSchema>,
+  input: {
+    offerType: (typeof AUCTION_OFFER_TYPES)[number];
+    status: AuctionListingState;
+    onlyMine: boolean;
+    search: string;
+    limit: number;
+    cursor?: number | null | undefined;
+  },
   ctx: { userId: string },
 ) =>
   client.query.auctionOffer.findMany({

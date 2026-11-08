@@ -77,11 +77,6 @@ export type ActivityStreakConfigUpdateInput = z.infer<
   typeof activityStreakConfigUpdateSchema
 >;
 
-// Schema for purchasing an event pass
-export const purchaseEventPassSchema = z.object({
-  configId: z.string(),
-});
-
 // Schema for claiming a streak day
 export const claimStreakDaySchema = z.object({
   configId: z.string(),
