@@ -153,7 +153,7 @@ const buttonTexts = (view: ReturnType<typeof render>) => Array.from(view.contain
 describe("combat lobby", () => {
   it("shows initiative and readiness, then confirms the player is ready", async () => {
     const battle = makeBattle({}, true);
-    const { view } = mount({ battle, result: null, isPending: false });
+    const { view, rerender } = mount({ battle, result: null, isPending: false });
     expect(view.getByText("Waiting for opponent")).toBeTruthy();
     expect(view.getByText("Initiative Winner: Rival", { exact: false })).toBeTruthy();
     expect(view.getByText("Player")).toBeTruthy();
@@ -180,6 +180,15 @@ describe("combat lobby", () => {
     expect(state.setBattleState).toHaveBeenCalledWith({ battle: readyBattle, result: null, isPending: false });
     expect(state.invalidateBattle).toHaveBeenCalledTimes(1);
     expect(toasts).not.toHaveBeenCalled();
+    // An older snapshot of the same lobby cannot offer the action again. The battle
+    // ref follows props after a commit, so the second render is the one that reads it.
+    const stale = { ...battle };
+    rerender({ battle: stale, result: null, isPending: false });
+    rerender({ battle: stale, result: null, isPending: false });
+    expect(view.getByRole("button", { name: "Ready" }).hasAttribute("disabled")).toBe(true);
+    expect(view.getByText("Player (✓)")).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "Item loadout Item-current" }));
+    expect(state.loadout).not.toHaveBeenCalled();
   });
 
   it("reports an expired lobby and lets the player try again", async () => {
