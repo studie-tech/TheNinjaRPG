@@ -34,16 +34,10 @@ export const MobileNavSettings: React.FC = () => {
   // Get all selected IDs to filter duplicates
   const selectedIds = [...normalizedConfig.left, ...normalizedConfig.right];
 
-  const handleLeftChange = (index: number, newId: string) => {
-    const newLeft = [...normalizedConfig.left];
-    newLeft[index] = newId;
-    setConfig({ ...normalizedConfig, left: newLeft });
-  };
-
-  const handleRightChange = (index: number, newId: string) => {
-    const newRight = [...normalizedConfig.right];
-    newRight[index] = newId;
-    setConfig({ ...normalizedConfig, right: newRight });
+  const handleSlotChange = (side: "left" | "right", index: number, newId: string) => {
+    const newSide = [...normalizedConfig[side]];
+    newSide[index] = newId;
+    setConfig({ ...normalizedConfig, [side]: newSide });
   };
 
   const handleReset = () => {
@@ -103,7 +97,7 @@ export const MobileNavSettings: React.FC = () => {
           <div key={`left-${index}`}>
             {renderSlotSelector(
               id,
-              (newId) => handleLeftChange(index, newId),
+              (newId) => handleSlotChange("left", index, newId),
               `Slot ${index + 1}`,
             )}
           </div>
@@ -116,7 +110,7 @@ export const MobileNavSettings: React.FC = () => {
           <div key={`right-${index}`}>
             {renderSlotSelector(
               id,
-              (newId) => handleRightChange(index, newId),
+              (newId) => handleSlotChange("right", index, newId),
               `Slot ${index + 1}`,
             )}
           </div>

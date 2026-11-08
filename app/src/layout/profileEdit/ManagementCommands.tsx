@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldOff, Trash2, Zap } from "lucide-react";
+import { type LucideIcon, ShieldOff, Trash2, Zap } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -122,16 +122,11 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
         <Confirm
           title="Confirm Unequip All Gear"
           button={
-            <Button variant="destructive" disabled={isUnequipping} className="w-full">
-              {isUnequipping ? (
-                <Loader size={5} />
-              ) : (
-                <>
-                  <ShieldOff className="mr-2 h-4 w-4" />
-                  Unequip All Gear
-                </>
-              )}
-            </Button>
+            <StaffCommandButton
+              icon={ShieldOff}
+              label="Unequip All Gear"
+              isPending={isUnequipping}
+            />
           }
           onAccept={(e) => {
             e.preventDefault();
@@ -147,20 +142,11 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
         <Confirm
           title="Confirm Unequip All Jutsus"
           button={
-            <Button
-              variant="destructive"
-              disabled={isUnequippingJutsus}
-              className="w-full"
-            >
-              {isUnequippingJutsus ? (
-                <Loader size={5} />
-              ) : (
-                <>
-                  <ShieldOff className="mr-2 h-4 w-4" />
-                  Unequip All Jutsus
-                </>
-              )}
-            </Button>
+            <StaffCommandButton
+              icon={ShieldOff}
+              label="Unequip All Jutsus"
+              isPending={isUnequippingJutsus}
+            />
           }
           onAccept={(e) => {
             e.preventDefault();
@@ -176,20 +162,11 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
         <Confirm
           title="Confirm Reset All Skill Trees"
           button={
-            <Button
-              variant="destructive"
-              disabled={isResettingSkillTrees}
-              className="w-full"
-            >
-              {isResettingSkillTrees ? (
-                <Loader size={5} />
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Reset All Skill Trees
-                </>
-              )}
-            </Button>
+            <StaffCommandButton
+              icon={Trash2}
+              label="Reset All Skill Trees"
+              isPending={isResettingSkillTrees}
+            />
           }
           onAccept={(e) => {
             e.preventDefault();
@@ -204,20 +181,13 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
         <Confirm
           title="Confirm Mass Experience Award"
           button={
-            <Button
+            <StaffCommandButton
+              icon={Zap}
+              label="Award Experience to All"
+              isPending={isAwardingExperience}
               variant="default"
-              disabled={isAwardingExperience}
               className="w-full bg-green-500"
-            >
-              {isAwardingExperience ? (
-                <Loader size={5} />
-              ) : (
-                <>
-                  <Zap className="mr-2 h-4 w-4" />
-                  Award Experience to All
-                </>
-              )}
-            </Button>
+            />
           }
           onAccept={(e) => {
             e.preventDefault();
@@ -251,20 +221,11 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
         <Confirm
           title="Confirm Clear Sector"
           button={
-            <Button
-              variant="destructive"
-              disabled={isReleasingSector}
-              className="w-full"
-            >
-              {isReleasingSector ? (
-                <Loader size={5} />
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Clear Sector
-                </>
-              )}
-            </Button>
+            <StaffCommandButton
+              icon={Trash2}
+              label="Clear Sector"
+              isPending={isReleasingSector}
+            />
           }
           onAccept={(e) => {
             e.preventDefault();
@@ -317,3 +278,29 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
     </div>
   );
 };
+
+/** A staff command's Confirm trigger, showing a loader while its mutation runs. */
+const StaffCommandButton: React.FC<{
+  icon: LucideIcon;
+  label: string;
+  isPending: boolean;
+  variant?: "destructive" | "default";
+  className?: string;
+}> = ({
+  icon: Icon,
+  label,
+  isPending,
+  variant = "destructive",
+  className = "w-full",
+}) => (
+  <Button variant={variant} disabled={isPending} className={className}>
+    {isPending ? (
+      <Loader size={5} />
+    ) : (
+      <>
+        <Icon className="mr-2 h-4 w-4" />
+        {label}
+      </>
+    )}
+  </Button>
+);
