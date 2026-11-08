@@ -36,7 +36,7 @@ const grantMastery = async (gains: Parameters<typeof masteryGainUpdates>[0]) =>
     .set(masteryGainUpdates(gains))
     .where(eq(userData.userId, USER_ID));
 
-describeWithDatabase("atomic mastery caps", () => {
+describeWithDatabase("atomic mastery caps and promotion discovery", () => {
   beforeEach(async () => {
     await resetTables(userData, quest, questHistory);
   });
