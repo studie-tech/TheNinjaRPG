@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { noindexMetadata } from "@/libs/seo";
-export const metadata = noindexMetadata("Rewards");
-/** Keep the staff catalog out of search indexes while inheriting the manual layout. */
+
+export const metadata: Metadata = noindexMetadata("Rewards");
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   return children;
 }
