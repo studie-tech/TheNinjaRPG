@@ -4178,6 +4178,8 @@ export const STORE_FEDERAL_PRODUCTS = [
 /** Tax-inclusive USD monthly prices shared by Stripe validation and federal support UI. */
 export const FEDERAL_MONTHLY_USD_CENTS = { NORMAL: 500, SILVER: 1000, GOLD: 1500 } as const;
 export const SkillTreePathTypes = ["SKILL", "BLOODRIGHT"] as const;
+/** Highest tier a skill tree entry can sit on. */
+export const SKILL_TREE_MAX_TIER = 10;
 export const MAX_BLOODRIGHT_TIERS = 5;
 
 /** Defaults are snapshotted when an objective village war is approved. */

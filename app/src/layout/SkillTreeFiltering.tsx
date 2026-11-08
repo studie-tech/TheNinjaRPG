@@ -1,3 +1,4 @@
+import { SKILL_TREE_MAX_TIER } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -30,7 +31,7 @@ const SKILL_TREE_FILTERING_SCHEMA = defineFilteringSchema({
       noneOption: { value: "ANY", label: "ANY" },
       defaultValue: "ANY",
       emptyValues: ["ANY"],
-      options: Array.from({ length: 10 }, (_, i) => ({
+      options: Array.from({ length: SKILL_TREE_MAX_TIER }, (_, i) => ({
         value: (i + 1).toString(),
         label: `Tier ${i + 1}`,
       })),
