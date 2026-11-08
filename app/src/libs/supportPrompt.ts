@@ -16,6 +16,7 @@ import {
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
   MEDNIN_REQUIRED_EXP,
+  RYO_FOR_REP_RESERVE,
 } from "@/drizzle/constants";
 
 /** System instructions for the Seichi AI support chat: a player-facing guide to the game. */
@@ -350,7 +351,7 @@ This document outlines various screens, menus, and gameplay systems available in
   - **Bloodline Purchase:** Buy bloodlines directly.  
   - **Items Tab:** Purchase items associated with a random bloodline of a specific rank (more cost-effective than direct purchase).  
   - **Ryo Tab:**  
-    - Exchange reputation points for ryo (cannot sell below 5 rep).
+    - Exchange reputation points for ryo (you must keep at least ${RYO_FOR_REP_RESERVE} rep).
 - **Points Page:**  
   - **Reputation Purchase:** Buy reputation using real money.  
   - **Federal Support Purchase:**  

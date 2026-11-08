@@ -524,8 +524,8 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
             <b>{userData.money.toLocaleString()} ryo</b> in your pocket. You may list
             reputation points here for sale, so that other users may buy them for a
             pre-determined amount of ryo. Once listed, your sale cannot be delisted for{" "}
-            {RYO_FOR_REP_DAYS_FROZEN} days. You can not trade the first 10 reputation
-            points given on your account.
+            {RYO_FOR_REP_DAYS_FROZEN} days. You must keep at least {RYO_FOR_REP_RESERVE}{" "}
+            reputation points on your account.
           </p>
           {!showActive && (
             <div className="flex flex-row gap-2 px-3">
