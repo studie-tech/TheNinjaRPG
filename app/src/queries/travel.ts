@@ -311,7 +311,7 @@ export const findUserDataForCreatorBody = (client: Pick<DrizzleClient, "query">)
     columns: { avatar: true },
     with: {
       spriteAnimationBindings: {
-        where: (binding) => eq(binding.actionKey, "idle"),
+        where: (binding) => inArray(binding.actionKey, ["idle", "move"]),
         with: { animation: true },
       },
     },

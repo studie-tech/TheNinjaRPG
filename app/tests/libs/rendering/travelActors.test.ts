@@ -58,17 +58,14 @@ describe("travel actor snapshots", () => {
       expect(body?.loop).toBeUndefined();
     }
   });
-  it("loops the body art's idle sheet from its full-size cells", () => {
-    const bodyIdle = { id: "idle", name: "Idle", url: "https://example.com/idle.png", smallUrl: "https://example.com/idle-small.png", columns: 8, rows: 3, frameCount: 24, fps: 12.5, facing: "left" as const };
-    const [recipe] = recipes([player({ username: CREATOR_USERNAME, bodyArt: "robot.webp", bodyIdle })]);
-    expect(recipe?.parts.find((part) => part.kind === "avatar")?.loop).toEqual({
-      images: ["https://example.com/idle.png"],
-      columns: 8,
-      rows: 3,
-      frameCount: 24,
-      frameDurationMs: 80,
-      loop: true,
-    });
+  it("loops the body art's idle sheet, and its walk while moving, from full-size cells", () => {
+    const sheet = (id: string, rows: number, facing: "left" | "right") => ({ id, name: id, url: `https://example.com/${id}.png`, smallUrl: `https://example.com/${id}-small.png`, columns: 8, rows, frameCount: rows * 8, fps: 12.5, facing });
+    const [recipe] = recipes([player({ username: CREATOR_USERNAME, bodyArt: "robot.webp", bodyIdle: sheet("idle", 3, "left"), bodyMove: sheet("move", 2, "right") })]);
+    const body = recipe?.parts.find((part) => part.kind === "avatar");
+    const clip = (id: string, rows: number) => ({ images: [`https://example.com/${id}.png`], columns: 8, rows, frameCount: rows * 8, frameDurationMs: 80, loop: true });
+    expect(body?.loop).toEqual({ clip: clip("idle", 3), facing: "left" });
+    // The walk keeps its own facing, so it mirrors independently of the idle sheet.
+    expect(body?.walk).toEqual({ clip: clip("move", 2), facing: "right" });
   });
   it("still pins a battle beside an ordinary player, and once the creator has left the tile", () => {
     const challenger = player({ userId: "challenger", status: "BATTLE", battleId: "fight" });

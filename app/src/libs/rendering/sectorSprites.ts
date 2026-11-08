@@ -1,6 +1,6 @@
 import alea from "alea";
 import { type Grid, ring } from "honeycomb-grid";
-import { IMG_SECTOR_USER_MARKER } from "@/drizzle/constants";
+import { type AvatarFacing, IMG_SECTOR_USER_MARKER } from "@/drizzle/constants";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { groupMapLocations } from "@/libs/mapLocations";
@@ -987,7 +987,9 @@ export type WorldSpriteDescription = {
   /** Pixel rectangle in a shared atlas; the scene owns only the texture view. */
   frame?: { x: number; y: number; width: number; height: number };
   /** Artwork looped from the scene clock in place of the still image, e.g. an idle pose. */
-  loop?: AnimationClip;
+  loop?: WorldLoop;
+  /** Artwork looped in place of `loop` while its owner walks, mirrored to their heading. */
+  walk?: WorldLoop;
   /** Movement-only artwork shares the scene clock and returns to the original texture when stopped. */
   motion?: {
     clip: AnimationClip;
@@ -1037,3 +1039,6 @@ export type WorldSpriteDescription = {
 };
 
 export type WorldMotionDirection = "horizontal" | "north" | "south";
+
+/** A looping sheet and the way its art faces, so it can be mirrored to a heading. */
+export type WorldLoop = { clip: AnimationClip; facing: AvatarFacing };
