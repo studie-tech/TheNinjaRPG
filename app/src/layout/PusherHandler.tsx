@@ -47,6 +47,7 @@ export type UserEvent = {
   route?: string;
   routeText?: string;
   battleId?: string;
+  /** Human defenders receive attack alerts; initiators stay silent in every tab. */
   isDefender?: boolean;
   dungeonRunId?: string;
   alertType?: string;
@@ -55,7 +56,10 @@ export type UserEvent = {
   isPublic?: boolean;
 };
 
-/** Subscribe to the player's live game events and reconcile their notifications and caches. */
+/**
+ * Reconcile live game events with notifications and cached game state.
+ * Alert hidden defenders with their current sound-effect preference and volume.
+ */
 export const usePusherHandler = (
   userId?: string | null,
   userData?: Pick<NonNullable<UserWithRelations>, "clanId" | "villageId">,
@@ -81,6 +85,7 @@ export const usePusherHandler = (
 
   // Pending chat events belong to the account, including across membership-channel rebinding.
   const notificationSession = useRef<symbol | undefined>(undefined);
+  // Retain battle deduplication through membership rebinding, but reset it on account changes.
   const lastBattleNotification = useRef<string | undefined>(undefined);
   useEffect(() => {
     notificationSession.current = Symbol();
@@ -193,6 +198,7 @@ export const usePusherHandler = (
             user?.userId === userId &&
             lastBattleNotification.current !== battleId
           ) {
+            // Record silent admissions too, so a duplicate cannot sound after the tab is hidden.
             lastBattleNotification.current = battleId;
             if (
               data.isDefender &&

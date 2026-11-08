@@ -7,7 +7,8 @@ import * as Pusher from "pusher-js";
 import type { PropsWithChildren } from "react";
 import * as client from "@/app/_trpc/client";
 import { BATTLE_ALERT_SFX_URL } from "@/drizzle/constants";
-import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
+import type { UserEvent } from "@/layout/PusherHandler";
+import { usePusherHandler } from "@/layout/PusherHandler";
 import * as preferences from "@/libs/audioPreferences";
 import * as audio from "@/utils/audio";
 import * as routing from "@/utils/routing";
@@ -101,6 +102,7 @@ it.each(["unmount", "account switch"])("ignores stale admissions after %s", asyn
   expect(test.play).not.toHaveBeenCalled();
 });
 
+/** Exercise live-event guards with an isolated profile cache and mocked transport/playback. */
 function mount(sfxOn = true) {
   let receive!: (data: UserEvent) => Promise<void>;
   vi.spyOn(Pusher, "default").mockImplementation((() => ({
@@ -115,6 +117,7 @@ function mount(sfxOn = true) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(qc);
   const key = getQueryKey(testApi.profile.getUser, undefined, "query");
+  /** Seed the current account snapshot read by notification guards at delivery time. */
   const setProfile = (sfxOn: boolean, userId = "player") => qc.setQueryData(key, {
     userData: { userId, sfxOn, status: "AWAKE", battleId: null, rank: "JONIN", titles: [], items: [] },
     notifications: [],
