@@ -175,6 +175,29 @@ describe("hidden skill-tree permissions", () => {
     },
   );
 
+  it.each([
+    ["create", undefined],
+    ["update", { id: "public", data: { requiredSkillIds: [], pathType: "SKILL" } }],
+    ["delete", { id: "public" }],
+    ["createFolder", { name: "Folder", hidden: false }],
+    ["updateFolder", { id: "visible", data: { name: "Folder", hidden: false } }],
+    ["deleteFolder", { id: "visible" }],
+    ["reorderFolders", { folderOrders: [{ id: "visible", order: 1 }] }],
+  ] as const)("rejects %s for players before writing", async (name, input) => {
+    const { drizzle, write } = setup("USER");
+    Object.assign(drizzle.query, {
+      item: { findMany: vi.fn().mockResolvedValue([]) },
+      jutsu: { findMany: vi.fn().mockResolvedValue([]) },
+    });
+    await expect(invoke(name, drizzle, input)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(drizzle.insert).not.toHaveBeenCalled();
+    expect(drizzle.update).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+    expect(socials.callDiscordContent).not.toHaveBeenCalled();
+  });
+
   it("rejects hidden skill creation by moderator-admins before writing", async () => {
     const { drizzle, write } = setup("MODERATOR-ADMIN");
 

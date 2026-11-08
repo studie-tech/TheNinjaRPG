@@ -67,4 +67,20 @@ describeWithDatabase("damage simulation history", () => {
       .where(eq(damageSimulation.userId, "other-user"));
     expect(other).toHaveLength(1);
   });
+
+  it("deletes only the caller's own simulation", async () => {
+    const db = await seed(1);
+    const caller = await callerFor(simulatorRouter, "simulator-user");
+    expect(await caller.deleteDamageSimulation({ id: "sim-00" })).toMatchObject({
+      success: true,
+    });
+    await expect(caller.deleteDamageSimulation({ id: "other-user-sim" })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    await expect(caller.deleteDamageSimulation({ id: "missing-sim" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    const rows = await db.select({ id: damageSimulation.id }).from(damageSimulation);
+    expect(rows.map((row) => row.id)).toEqual(["other-user-sim"]);
+  });
 });

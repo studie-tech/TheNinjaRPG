@@ -63,6 +63,18 @@ describe("sage removal cache response", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(db.insert).not.toHaveBeenCalled();
   });
+  it("does not charge a player who has no sage mode", async () => {
+    const db = {
+      query: { userData: { findFirst: async () => ({ ...snapshot, sageModeId: null }) } },
+      update: vi.fn(),
+      insert: vi.fn(),
+    };
+    await expect(
+      callerForDatabase(sageModeRouter, userId, db as never).removeSageMode(),
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+  });
 });
 
 describeWithDatabase("sage removal committed balances", () => {
