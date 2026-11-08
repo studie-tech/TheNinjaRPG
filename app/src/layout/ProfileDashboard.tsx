@@ -285,6 +285,12 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
   );
   const craftTimer = craftingTimers.find((timer) => timer.kind === "crafting");
   const trainingAction = dashboardTrainingAction(userData, !!training, sectorVillage);
+  const trainingRestrictionLabel =
+    trainingAction.href === "/travel"
+      ? trainingAction.disabled
+        ? "Must be awake"
+        : "Return to village"
+      : undefined;
   const bankBlockMessage = bankAccessBlockMessage(userData);
   const levelStatus = dashboardLevelProgress(userData);
   const raidTitle =
@@ -513,13 +519,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                 action={
                   <RowAction
                     restriction={isLoadingSector ? null : trainingAction.reason}
-                    restrictionLabel={
-                      trainingAction.href === "/travel"
-                        ? trainingAction.disabled
-                          ? "Must be awake"
-                          : "Return to village"
-                        : undefined
-                    }
+                    restrictionLabel={trainingRestrictionLabel}
                     href={trainingAction.href}
                     icon={trainingAction.href === "/travel" ? MapPin : Eye}
                     disabled={isLoadingSector || trainingAction.disabled}
@@ -535,13 +535,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                 action={
                   <RowAction
                     restriction={isLoadingSector ? null : trainingAction.reason}
-                    restrictionLabel={
-                      trainingAction.href === "/travel"
-                        ? trainingAction.disabled
-                          ? "Must be awake"
-                          : "Return to village"
-                        : undefined
-                    }
+                    restrictionLabel={trainingRestrictionLabel}
                     href={trainingAction.href}
                     icon={trainingAction.href === "/travel" ? MapPin : Dumbbell}
                     disabled={
