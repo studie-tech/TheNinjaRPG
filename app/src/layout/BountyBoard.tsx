@@ -65,7 +65,6 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
   const [bountyStatus, setBountyStatus] = useState<BountyStatus | "all">("OPEN");
   const [addingMoneyTo, setAddingMoneyTo] = useState<string | null>(null);
   const [addMoneyAmount, setAddMoneyAmount] = useState<number>(0);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const isStaff = canSeeHiddenBountyInfo(userData.role);
 
@@ -108,6 +107,11 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
 
   // Use infinite pagination hook
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
+
+  const closeAddMoney = () => {
+    setAddingMoneyTo(null);
+    setAddMoneyAmount(0);
+  };
 
   // Mutations
   const { mutate: createBounty, isPending: isCreating } = api.bounty.create.useMutation(
@@ -159,9 +163,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
       onSuccess: async (data, variables) => {
         showMutationToast(data);
         if (data.success) {
-          setAddingMoneyTo(null);
-          setAddMoneyAmount(0);
-          setIsModalOpen(false);
+          closeAddMoney();
           await util.bounty.board.invalidate();
           await updateUser({ money: userData.money - variables.amountRyo });
         }
@@ -339,23 +341,16 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               <span>{b.amountRyo.toLocaleString()}</span>
               {b.status === "OPEN" && (
                 <Dialog
-                  open={isModalOpen && addingMoneyTo === b.id}
+                  open={addingMoneyTo === b.id}
                   onOpenChange={(open) => {
-                    setIsModalOpen(open);
-                    if (!open) {
-                      setAddingMoneyTo(null);
-                      setAddMoneyAmount(0);
-                    }
+                    if (!open) closeAddMoney();
                   }}
                 >
                   <DialogTrigger asChild>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        setAddingMoneyTo(b.id);
-                        setIsModalOpen(true);
-                      }}
+                      onClick={() => setAddingMoneyTo(b.id)}
                       disabled={isAddingMoney}
                     >
                       <Plus className="h-3 w-3" />
@@ -382,14 +377,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                         />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setIsModalOpen(false);
-                            setAddingMoneyTo(null);
-                            setAddMoneyAmount(0);
-                          }}
-                        >
+                        <Button variant="outline" onClick={closeAddMoney}>
                           Cancel
                         </Button>
                         <Button
