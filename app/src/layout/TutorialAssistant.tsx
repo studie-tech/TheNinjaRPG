@@ -192,14 +192,6 @@ const PlayerTutorialAssistant: React.FC<
     handleDisableTutorial,
   } = useDisableTutorial(userData, updateUser, tutorialIdentityRef);
 
-  const [highlight, setHighlight] = useState<{
-    stepId: string;
-    isPrimaryElement: boolean;
-    top: number;
-    left: number;
-    width: number;
-    height: number;
-  } | null>(null);
   const [gameMenuHighlight, setGameMenuHighlight] = useState<{
     top: number;
     left: number;
@@ -225,20 +217,6 @@ const PlayerTutorialAssistant: React.FC<
 
   // State to track if we should show the special game menu tutorial
   const [showGameMenuTutorial, setShowGameMenuTutorial] = useState<boolean>(false);
-
-  // Placement of the current highlight, keyed by step and element. One owner
-  // decides where a highlight belongs, so scrolling never fights itself.
-  const placementRef = React.useRef<{
-    key: string;
-    attempts: number;
-    settled: boolean;
-    /** Page scroll when the placement latched, to tell layout shifts from the player. */
-    settledScrollY: number;
-  }>({ key: "", attempts: 0, settled: false, settledScrollY: 0 });
-  // Set while the panel would otherwise be sitting on top of the highlight, so
-  // it can step aside. Latched per target: recomputing it from the moved panel
-  // would say "no longer covered" and send it straight back.
-  const [panelDodgesHighlight, setPanelDodgesHighlight] = useState(false);
 
   // Tutorial management hook
   const {
@@ -338,134 +316,6 @@ const PlayerTutorialAssistant: React.FC<
     }
   }, [userData, currentStep, pathname, router, rightSideBarOpen, isMobile]);
 
-  // Helper function to update the highlight position
-  const updateHighlightPosition = (currentStepConfig: TutorialStepConfig) => {
-    const highlightInfo = findElementToHighlight(
-      currentStepConfig,
-      rightSideBarRef,
-      rightSideBarOpen,
-    );
-
-    if (highlightInfo) {
-      // Put the highlight where the player can actually see and press it. Three
-      // things can be wrong with where it is: off screen, underneath the fixed
-      // assistant panel, or just awkwardly far from where the eye expects it.
-      // All three are the same correction, so one pass owns the scrolling.
-      //
-      // It keeps correcting until the placement is good rather than firing once:
-      // a page still fetching its data lays out short, and content landing
-      // underneath the target afterwards would otherwise strand it. Once the
-      // placement is good it latches, so a player who then scrolls the highlight
-      // away is never fought. The attempt cap stops a target that can never be
-      // placed well from scrolling on every tick.
-      const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
-      if (placementRef.current.key !== targetKey) {
-        placementRef.current = {
-          key: targetKey,
-          attempts: 0,
-          settled: false,
-          settledScrollY: 0,
-        };
-        setPanelDodgesHighlight(false);
-      }
-      const placement = placementRef.current;
-      const before = highlightInfo.element.getBoundingClientRect();
-      const panel = getAssistantPanelRect();
-      // Content that renders after the latch (a fight's jutsu row, say) can push a
-      // placed target under the panel without the player scrolling; place it again.
-      if (
-        placement.settled &&
-        window.scrollY === placement.settledScrollY &&
-        panel &&
-        rectsOverlap(before, panel)
-      ) {
-        placement.settled = false;
-      }
-      if (
-        !placement.settled &&
-        placement.attempts < 5 &&
-        canPositionTutorialHighlight(before.height, window.innerHeight, panel?.top)
-      ) {
-        const preferredCentre = getPreferredHighlightCentre(before.height);
-        const centre = before.top + before.height / 2;
-        const isOffscreen =
-          before.bottom < 80 ||
-          before.top > window.innerHeight - 80 ||
-          before.right < 0 ||
-          before.left > window.innerWidth;
-        const isCovered = !!panel && rectsOverlap(before, panel);
-        // In a fight the field and the action bar must stay in view together,
-        // so there a visible, uncovered target is left where it is.
-        const isMisplaced =
-          isOffscreen ||
-          isCovered ||
-          (pathname !== "/combat" && Math.abs(centre - preferredCentre) > 100);
-        if (!isMisplaced) {
-          placement.settled = true;
-          placement.settledScrollY = window.scrollY;
-        } else {
-          placement.attempts += 1;
-          const scroller = highlightInfo.element.ownerDocument.scrollingElement;
-          // In a fight a target only moves far enough to come into view clear of
-          // the panel, so as much of the field as possible stays visible with it.
-          const floor =
-            panel && before.left < panel.right && before.right > panel.left
-              ? Math.min(panel.top, window.innerHeight)
-              : window.innerHeight;
-          const offset =
-            pathname !== "/combat"
-              ? centre - preferredCentre
-              : before.top < 80
-                ? before.top - 80
-                : before.bottom + 16 - floor;
-          scroller?.scrollBy({ top: offset, behavior: "auto" });
-          // Scrolling cannot always win: on a short page the document may already
-          // be as far down as it goes, leaving the target stuck under the panel
-          // with nothing left to scroll. Rather than stretch the page to make
-          // room, the panel gives way -- a step whose only advance action is
-          // pressing the highlight has to be pressable. It only moves when the
-          // target is clear of where it lands, or it would cover it from above.
-          if (isCovered) {
-            const after = highlightInfo.element.getBoundingClientRect();
-            const panelAfter = getAssistantPanelRect();
-            if (
-              panelAfter &&
-              rectsOverlap(after, panelAfter) &&
-              after.top >
-                DODGED_PANEL_TOP_REM *
-                  Number.parseFloat(
-                    getComputedStyle(document.documentElement).fontSize,
-                  ) +
-                  panelAfter.height
-            ) {
-              setPanelDodgesHighlight(true);
-            }
-          }
-        }
-      }
-      const rect = highlightInfo.element.getBoundingClientRect();
-      const next = {
-        stepId: currentStepConfig.id,
-        isPrimaryElement: highlightInfo.isPrimaryElement,
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-      };
-      setHighlight((prev) =>
-        prev &&
-        prev.stepId === next.stepId &&
-        prev.isPrimaryElement === next.isPrimaryElement &&
-        isSameBox(prev, next)
-          ? prev
-          : next,
-      );
-    } else {
-      setHighlight(null);
-      setPanelDodgesHighlight(false);
-    }
-  };
-
   // Skip steps that have nothing to do: spending experience the player does
   // not have, adopting a companion when they already formed a bond, or
   // travelling somewhere the player already is.
@@ -486,29 +336,14 @@ const PlayerTutorialAssistant: React.FC<
     if (nothingToAssign || alreadyBonded || alreadyThere) void handleNextStepAsync();
   }, [currentStep, userData, pathname]);
 
-  // Update highlight position based on current step and element
-  useEffect(() => {
-    // Early exit if tutorial is disabled
-    if (userData && userData?.tutorialOn === false) return;
-    if (!isAssistantVisible) return;
-
-    // Determine which step to use - hospitalized overrides everything
-    const isHospitalized = userData?.status === "HOSPITALIZED";
-    const step = isHospitalized ? TUTORIAL_HOSPITALIZED_STEP : currentStep;
-
-    // Guard against undefined step
-    if (!step) {
-      setHighlight(null);
-      return;
-    }
-
-    // If we're not on the correct page for this step, don't try to highlight
-    if (!isTutorialPageMatch(step.page, pathname)) {
-      return;
-    }
-
-    return trackLayout(() => updateHighlightPosition(step));
-  }, [currentStep, isAssistantVisible, pathname, userData?.status]);
+  const { highlight, panelDodgesHighlight } = useHighlightPlacement({
+    currentStep,
+    isAssistantVisible,
+    pathname,
+    userData,
+    rightSideBarRef,
+    rightSideBarOpen,
+  });
 
   // Update game menu highlight position when showing game menu tutorial
   useEffect(() => {
@@ -1774,6 +1609,202 @@ const useDisableTutorial = (
     setShowCancelConfirmDialog,
     handleDisableTutorial,
   };
+};
+
+/**
+ * Measures the current step's highlight and keeps it placed: scrolled into view clear of
+ * the lesson, or with the lesson moved aside when scrolling cannot uncover it.
+ */
+const useHighlightPlacement = ({
+  currentStep,
+  isAssistantVisible,
+  pathname,
+  userData,
+  rightSideBarRef,
+  rightSideBarOpen,
+}: {
+  currentStep: TutorialStepConfig | undefined;
+  isAssistantVisible: boolean;
+  pathname: string;
+  userData: { tutorialOn: boolean; status: string } | undefined;
+  rightSideBarRef: React.RefObject<HTMLDivElement | null>;
+  rightSideBarOpen: boolean;
+}) => {
+  const [highlight, setHighlight] = useState<{
+    stepId: string;
+    isPrimaryElement: boolean;
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  // Placement of the current highlight, keyed by step and element. One owner
+  // decides where a highlight belongs, so scrolling never fights itself.
+  const placementRef = React.useRef<{
+    key: string;
+    attempts: number;
+    settled: boolean;
+    /** Page scroll when the placement latched, to tell layout shifts from the player. */
+    settledScrollY: number;
+  }>({ key: "", attempts: 0, settled: false, settledScrollY: 0 });
+  // Set while the panel would otherwise be sitting on top of the highlight, so
+  // it can step aside. Latched per target: recomputing it from the moved panel
+  // would say "no longer covered" and send it straight back.
+  const [panelDodgesHighlight, setPanelDodgesHighlight] = useState(false);
+
+  // Helper function to update the highlight position
+  const updateHighlightPosition = (currentStepConfig: TutorialStepConfig) => {
+    const highlightInfo = findElementToHighlight(
+      currentStepConfig,
+      rightSideBarRef,
+      rightSideBarOpen,
+    );
+
+    if (highlightInfo) {
+      // Put the highlight where the player can actually see and press it. Three
+      // things can be wrong with where it is: off screen, underneath the fixed
+      // assistant panel, or just awkwardly far from where the eye expects it.
+      // All three are the same correction, so one pass owns the scrolling.
+      //
+      // It keeps correcting until the placement is good rather than firing once:
+      // a page still fetching its data lays out short, and content landing
+      // underneath the target afterwards would otherwise strand it. Once the
+      // placement is good it latches, so a player who then scrolls the highlight
+      // away is never fought. The attempt cap stops a target that can never be
+      // placed well from scrolling on every tick.
+      const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
+      if (placementRef.current.key !== targetKey) {
+        placementRef.current = {
+          key: targetKey,
+          attempts: 0,
+          settled: false,
+          settledScrollY: 0,
+        };
+        setPanelDodgesHighlight(false);
+      }
+      const placement = placementRef.current;
+      const before = highlightInfo.element.getBoundingClientRect();
+      const panel = getAssistantPanelRect();
+      // Content that renders after the latch (a fight's jutsu row, say) can push a
+      // placed target under the panel without the player scrolling; place it again.
+      if (
+        placement.settled &&
+        window.scrollY === placement.settledScrollY &&
+        panel &&
+        rectsOverlap(before, panel)
+      ) {
+        placement.settled = false;
+      }
+      if (
+        !placement.settled &&
+        placement.attempts < 5 &&
+        canPositionTutorialHighlight(before.height, window.innerHeight, panel?.top)
+      ) {
+        const preferredCentre = getPreferredHighlightCentre(before.height);
+        const centre = before.top + before.height / 2;
+        const isOffscreen =
+          before.bottom < 80 ||
+          before.top > window.innerHeight - 80 ||
+          before.right < 0 ||
+          before.left > window.innerWidth;
+        const isCovered = !!panel && rectsOverlap(before, panel);
+        // In a fight the field and the action bar must stay in view together,
+        // so there a visible, uncovered target is left where it is.
+        const isMisplaced =
+          isOffscreen ||
+          isCovered ||
+          (pathname !== "/combat" && Math.abs(centre - preferredCentre) > 100);
+        if (!isMisplaced) {
+          placement.settled = true;
+          placement.settledScrollY = window.scrollY;
+        } else {
+          placement.attempts += 1;
+          const scroller = highlightInfo.element.ownerDocument.scrollingElement;
+          // In a fight a target only moves far enough to come into view clear of
+          // the panel, so as much of the field as possible stays visible with it.
+          const floor =
+            panel && before.left < panel.right && before.right > panel.left
+              ? Math.min(panel.top, window.innerHeight)
+              : window.innerHeight;
+          const offset =
+            pathname !== "/combat"
+              ? centre - preferredCentre
+              : before.top < 80
+                ? before.top - 80
+                : before.bottom + 16 - floor;
+          scroller?.scrollBy({ top: offset, behavior: "auto" });
+          // Scrolling cannot always win: on a short page the document may already
+          // be as far down as it goes, leaving the target stuck under the panel
+          // with nothing left to scroll. Rather than stretch the page to make
+          // room, the panel gives way -- a step whose only advance action is
+          // pressing the highlight has to be pressable. It only moves when the
+          // target is clear of where it lands, or it would cover it from above.
+          if (isCovered) {
+            const after = highlightInfo.element.getBoundingClientRect();
+            const panelAfter = getAssistantPanelRect();
+            if (
+              panelAfter &&
+              rectsOverlap(after, panelAfter) &&
+              after.top >
+                DODGED_PANEL_TOP_REM *
+                  Number.parseFloat(
+                    getComputedStyle(document.documentElement).fontSize,
+                  ) +
+                  panelAfter.height
+            ) {
+              setPanelDodgesHighlight(true);
+            }
+          }
+        }
+      }
+      const rect = highlightInfo.element.getBoundingClientRect();
+      const next = {
+        stepId: currentStepConfig.id,
+        isPrimaryElement: highlightInfo.isPrimaryElement,
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      };
+      setHighlight((prev) =>
+        prev &&
+        prev.stepId === next.stepId &&
+        prev.isPrimaryElement === next.isPrimaryElement &&
+        isSameBox(prev, next)
+          ? prev
+          : next,
+      );
+    } else {
+      setHighlight(null);
+      setPanelDodgesHighlight(false);
+    }
+  };
+
+  // Update highlight position based on current step and element
+  useEffect(() => {
+    // Early exit if tutorial is disabled
+    if (userData && userData?.tutorialOn === false) return;
+    if (!isAssistantVisible) return;
+
+    // Determine which step to use - hospitalized overrides everything
+    const isHospitalized = userData?.status === "HOSPITALIZED";
+    const step = isHospitalized ? TUTORIAL_HOSPITALIZED_STEP : currentStep;
+
+    // Guard against undefined step
+    if (!step) {
+      setHighlight(null);
+      return;
+    }
+
+    // If we're not on the correct page for this step, don't try to highlight
+    if (!isTutorialPageMatch(step.page, pathname)) {
+      return;
+    }
+
+    return trackLayout(() => updateHighlightPosition(step));
+  }, [currentStep, isAssistantVisible, pathname, userData?.status]);
+
+  return { highlight, panelDodgesHighlight };
 };
 
 /** Include the Activity header when keeping highlighted controls clear of the dock. */
