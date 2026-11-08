@@ -46,7 +46,10 @@ import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
 /** Queue rows with no live battle: open, or held by a start claim. */
-const battleOpenOrClaimed = sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE ${BATTLE_CLAIM_LIKE_PATTERN})`;
+const battleOpenOrClaimed = or(
+  isNull(mpvpBattleQueue.battleId),
+  like(mpvpBattleQueue.battleId, BATTLE_CLAIM_LIKE_PATTERN),
+);
 
 /** A start claim left behind by a battle setup that never finished. */
 const staleBattleClaim = () =>
@@ -66,7 +69,7 @@ export const listQuestForGetCompletedRaids = (
     where: and(
       eq(quest.questType, "raid"),
       eq(quest.hidden, false),
-      sql`(${quest.raidEndsAt} < ${now} OR ${quest.raidBossCurrentHealth} <= 0)`,
+      or(lt(quest.raidEndsAt, now), lte(quest.raidBossCurrentHealth, 0)),
     ),
     with: {
       raidParticipations: {

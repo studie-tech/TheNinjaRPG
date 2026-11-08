@@ -171,7 +171,7 @@ export const auctionRouter = createTRPCRouter({
       }
 
       if (maxPrice) {
-        whereConditions.push(sql`${auctionListing.currentPrice} <= ${maxPrice}`);
+        whereConditions.push(lte(auctionListing.currentPrice, maxPrice));
       }
 
       // Add item name filter if provided
