@@ -588,7 +588,7 @@ const PixelWelcome: React.FC = () => {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               [
-                "1,000,000+ Players",
+                `${TOTAL_PLAYERS_MILESTONE.toLocaleString("en-US")}+ Players`,
                 "A large shinobi community has entered The Ninja RPG across years of village conflict, combat, and progression.",
               ],
               [
