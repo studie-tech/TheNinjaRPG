@@ -459,34 +459,16 @@ export const insertFarmExtractionForExtractSeeds = (
   now: Date,
   finishAt: Date,
 ) =>
-  client
-    .insert(farmExtraction)
-    .values({
-      id: extractionId,
-      userId: ctx.userId,
-      extractorSlot: input.extractorSlot,
-      cropItemId: cropStack.itemId,
-      seedItemId: seedItem.id,
-      cropQuantity: input.quantity,
-      seedQuantity: seedsToGrant,
-      startedAt: now,
-      finishAt,
-    })
-    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-
-/** Build the `farmExtraction` lookup for `extractSeeds`, using predicates on `id`, `userId`, `extractorSlot`. */
-export const findFarmExtractionForExtractSeeds = (
-  client: Pick<DrizzleClient, "query">,
-  extractionId: string,
-  ctx: { userId: string },
-  input: { extractorSlot: number },
-) =>
-  client.query.farmExtraction.findFirst({
-    where: and(
-      eq(farmExtraction.id, extractionId),
-      eq(farmExtraction.userId, ctx.userId),
-      eq(farmExtraction.extractorSlot, input.extractorSlot),
-    ),
+  client.insert(farmExtraction).values({
+    id: extractionId,
+    userId: ctx.userId,
+    extractorSlot: input.extractorSlot,
+    cropItemId: cropStack.itemId,
+    seedItemId: seedItem.id,
+    cropQuantity: input.quantity,
+    seedQuantity: seedsToGrant,
+    startedAt: now,
+    finishAt,
   });
 
 /** Build the `farmExtraction` deletion for `extractSeeds`, using predicates on `id` and `userId`. */

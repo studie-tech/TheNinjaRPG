@@ -66,7 +66,6 @@ import {
   fetchFarmSeedAndYield,
   fetchFarmShopItems,
   fetchUserExtractions,
-  findFarmExtractionForExtractSeeds,
   findFarmPlotForPlantSeed,
   findUserItemForAwardItemToUser,
   insertFarmExtractionForExtractSeeds,
@@ -115,6 +114,7 @@ import {
   getFarmCollectionState,
   recordFirstFarmHarvests,
 } from "@/server/utils/farming";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
 import { getNextUserSnapshotAt } from "@/utils/time";
 import {
@@ -1324,24 +1324,21 @@ export const farmingRouter = createTRPCRouter({
       const extractionId = nanoid();
       const extractionSeconds = getSeedExtractionDurationSeconds(input.quantity);
       const finishAt = new Date(now.getTime() + extractionSeconds * 1000);
-      await insertFarmExtractionForExtractSeeds(
-        ctx.drizzle,
-        extractionId,
-        ctx,
-        input,
-        cropStack,
-        seedItem,
-        seedsToGrant,
-        now,
-        finishAt,
-      );
-      const extractionCreated = await findFarmExtractionForExtractSeeds(
-        ctx.drizzle,
-        extractionId,
-        ctx,
-        input,
-      );
-      if (!extractionCreated) {
+      // The user/slot unique key decides a race for the same extractor.
+      try {
+        await insertFarmExtractionForExtractSeeds(
+          ctx.drizzle,
+          extractionId,
+          ctx,
+          input,
+          cropStack,
+          seedItem,
+          seedsToGrant,
+          now,
+          finishAt,
+        );
+      } catch (error) {
+        if (!isMysqlDuplicateKeyError(error)) throw error;
         return actionReadinessResponse(
           {
             ...errorResponse(
