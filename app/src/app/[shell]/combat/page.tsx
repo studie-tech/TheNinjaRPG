@@ -351,9 +351,6 @@ export default function CombatPage() {
           showMutationToast(data);
         }
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
       onSettled: () => {
         arenaHealInFlightRef.current = false;
       },
@@ -376,9 +373,6 @@ export default function CombatPage() {
             await updateUser(result, { revision, refetch: false });
           showMutationToast(result);
         }
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
       },
       onSettled: () => {
         arenaStartInFlightRef.current = false;

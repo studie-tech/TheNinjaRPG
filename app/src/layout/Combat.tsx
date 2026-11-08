@@ -600,9 +600,6 @@ const Combat: React.FC<CombatProps> = (props) => {
           });
         }
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
       onSettled: (_data, _error, variables) => {
         if (readyInFlightBattleIdRef.current === variables.battleId) {
           readyInFlightBattleIdRef.current = null;
@@ -664,9 +661,6 @@ const Combat: React.FC<CombatProps> = (props) => {
             "The combat lobby changed before this loadout could be saved.",
         });
       }
-    },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
     },
     onSettled: (_data, _error, variables) => {
       const kind = variables.itemLoadoutId ? "item" : "jutsu";

@@ -227,9 +227,6 @@ export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
         showMutationToast(data);
         if (data.success) void utils.clan.get.invalidate();
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
     });
 
   return (
@@ -368,9 +365,6 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
           void updateUser(data, { revision, refetch: false });
         showMutationToast(data);
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
     });
 
   const { mutateAsync: join } = api.clan.joinClanBattle.useMutation({
@@ -379,9 +373,6 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       if (data.success || data.userPatch || data.userRecovery)
         await updateUser(data, { revision });
       showMutationToast(data);
-    },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
     },
   });
 
@@ -412,9 +403,6 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       if (data.success || data.userPatch) await updateUser(data, { revision });
       showMutationToast(data);
     },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
-    },
   });
 
   const onLeave = async (clanBattleId: string) => {
@@ -440,9 +428,6 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     onSuccess: async (data, _variables, revision) => {
       if (data.success || data.userPatch) await updateUser(data, { revision });
       showMutationToast(data);
-    },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
     },
   });
 
@@ -1135,9 +1120,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onSuccess: (data) => {
         showMutationToast(data);
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
     },
   );
 
@@ -1151,9 +1133,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             () => undefined,
           );
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
     });
 
   const { mutateAsync: leave, isPending: isLeavingClan } =
@@ -1163,9 +1142,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
         showMutationToast(data);
         if (data.success || data.userPatch || data.userRecovery)
           await updateUser(data, { revision });
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
       },
     });
 
@@ -1197,9 +1173,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onSuccess: async (data, _variables, revision) => {
         if (data.success || data.userPatch) await updateUser(data, { revision });
         showMutationToast(data);
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
       },
     });
 
@@ -1241,9 +1214,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
         showMutationToast(data);
         if (data.success) void updateUser(data, { revision, delta: data.userDelta });
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
     });
 
   const onDonateReputation = async () => {
@@ -1274,9 +1244,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     onSuccess: async (data, _variables, revision) => {
       if (data.success || data.userPatch) await updateUser(data, { revision });
       showMutationToast(data);
-    },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
     },
   });
 
@@ -1332,9 +1299,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
         showMutationToast(data);
         if (data.success || data.userPatch) await updateUser(data, { revision });
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
     });
 
   const onInstantJoinAndLead = async () => {
@@ -1368,9 +1332,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     api.clan.clearLeadership.useMutation({
       onSuccess: (data) => {
         showMutationToast(data);
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
       },
     });
 
@@ -2312,10 +2273,6 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
   // Mutations
   const { mutateAsync: kick } = api.clan.kickMember.useMutation({
     onMutate: prepareUserUpdate,
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
-    },
-
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success || data.userPatch) await updateUser(data, { revision });
@@ -2323,20 +2280,12 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
   });
   const { mutateAsync: promote } = api.clan.promoteMember.useMutation({
     onMutate: prepareUserUpdate,
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
-    },
-
     onSuccess: async (data, _variables, revision) => {
       if (data.success || data.userPatch) await updateUser(data, { revision });
     },
   });
   const { mutateAsync: demote } = api.clan.demoteMember.useMutation({
     onMutate: prepareUserUpdate,
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
-    },
-
     onSuccess: async (data, _variables, revision) => {
       if (data.success || data.userPatch) await updateUser(data, { revision });
     },
