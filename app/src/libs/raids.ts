@@ -220,14 +220,13 @@ export const prepareExclusiveRaidActivation = (
   const raidEndsAt = new Date(
     now.getTime() + EXCLUSIVE_RAID_DURATION_HOURS * 60 * 60 * 1000,
   );
-  const raidCaptureDeadline = raidEndsAt;
 
   return {
     activated: true,
     mutations: sectorExclusiveRaids.map((raid) => ({
       raidId: raid.id,
       raidEndsAt,
-      raidCaptureDeadline,
+      raidCaptureDeadline: raidEndsAt,
       raidBossCurrentHealth: raid.raidBossMaxHealth ?? 0,
     })),
   };

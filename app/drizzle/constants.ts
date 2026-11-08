@@ -2572,6 +2572,17 @@ export const RANKED_STREAK_BONUS = 2;
 export const RANKED_QUEUE_MAX_WAIT_SECS = 300;
 // Minimum LP a player gains from a ranked win, regardless of the Elo delta.
 export const RANKED_MIN_LP_GAIN = 18;
+// LP added to a win per rank the opponent stands above the winner.
+export const RANKED_UPSET_BONUS_PER_RANK = 10;
+// A loss shrinks by RANKED_LOSS_PROTECTION_FACTOR when the ranks differ by at least
+// RANKED_LOSS_PROTECTION_RANK_GAP (opponent below the loser).
+export const RANKED_LOSS_PROTECTION_RANK_GAP = 2;
+export const RANKED_LOSS_PROTECTION_FACTOR = 0.5;
+// Matchmaking LP radius: RANKED_RADIUS_STEP_LP to start, one more step every
+// RANKED_RADIUS_STEP_SECS in queue, capped at RANKED_RADIUS_MAX_LP.
+export const RANKED_RADIUS_STEP_LP = 50;
+export const RANKED_RADIUS_STEP_SECS = 60;
+export const RANKED_RADIUS_MAX_LP = 250;
 export const RANKED_SANNIN_TOP_PLAYERS = 10;
 export const RANKED_RANKS = [
   "Unranked",
