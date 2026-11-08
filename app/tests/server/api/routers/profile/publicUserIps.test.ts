@@ -27,7 +27,7 @@ const lastIpsSeenBy = async (userId: string | undefined) => {
   return result.data.map((u) => u.lastIp);
 };
 
-describeWithDatabase("fetchPublicUsers IP visibility", () => {
+describeWithDatabase("fetchPublicUsers ordering and IP visibility", () => {
   beforeEach(async () => {
     await resetTables(userData);
     await insertUsers([

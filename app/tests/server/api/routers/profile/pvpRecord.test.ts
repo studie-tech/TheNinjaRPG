@@ -11,7 +11,7 @@ import {
   resetTables,
 } from "../../../../setup/testDatabase";
 
-describeWithDatabase("public PvP record visibility", () => {
+describeWithDatabase("public profile privacy", () => {
   beforeEach(async () => {
     stubRateLimitTransport();
     await resetTables(userItem, item, userData);

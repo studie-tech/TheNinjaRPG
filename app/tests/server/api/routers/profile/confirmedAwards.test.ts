@@ -106,29 +106,31 @@ describe("confirmed self awards", () => {
   });
 });
 
-it.each([
-  { rowsAffected: 1, queued: false },
-  { rowsAffected: 0, queued: false },
-  { rowsAffected: 1, queued: true },
-])("reconciles faction color from confirmed writes (rows=$rowsAffected queue=$queued)", async ({ rowsAffected, queued }) => {
-  const database = databaseFor();
-  let updates = 0;
-  const update = vi.fn(() => {
-    const changedRows = updates++ === 0 ? 1 : rowsAffected;
-    return { set: () => Object.assign(Promise.resolve({ rowsAffected: changedRows }), {
-      where: async () => ({ rowsAffected: changedRows }),
-    }) };
+describe("confirmed faction color changes", () => {
+  it.each([
+    { rowsAffected: 1, queued: false },
+    { rowsAffected: 0, queued: false },
+    { rowsAffected: 1, queued: true },
+  ])("reconciles faction color from confirmed writes (rows=$rowsAffected queue=$queued)", async ({ rowsAffected, queued }) => {
+    const database = databaseFor();
+    let updates = 0;
+    const update = vi.fn(() => {
+      const changedRows = updates++ === 0 ? 1 : rowsAffected;
+      return { set: () => Object.assign(Promise.resolve({ rowsAffected: changedRows }), {
+        where: async () => ({ rowsAffected: changedRows }),
+      }) };
+    });
+    const findFirst = vi.fn(async () => ({ ...actor, isOutlaw: true, clanId: "color-clan", energyQueueTail: queued ? 1 : 0 }));
+    const withClan = { ...database, update, query: { ...database.query, userData: { ...database.query.userData, findFirst }, clan: {
+      findFirst: vi.fn(async () => ({ id: "color-clan", leaderId: actor.userId, villageId: "color-village", hasHideout: true })),
+    } } };
+    const result = await callerForDatabase(clanRouter, actor.userId, withClan as never)
+      .editClanColor({ clanId: "color-clan", color: "#ABCDEF" });
+    expect(result).toMatchObject({ success: true, userPatch: { village: { id: "color-village", hexColor: "#ABCDEF" } } });
+    expect(result.userDelta).toEqual(rowsAffected && !queued
+      ? { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST } : undefined);
+    expect(findFirst).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(withClan.query.clan.findFirst).toHaveBeenCalledTimes(1);
   });
-  const findFirst = vi.fn(async () => ({ ...actor, isOutlaw: true, clanId: "color-clan", energyQueueTail: queued ? 1 : 0 }));
-  const withClan = { ...database, update, query: { ...database.query, userData: { ...database.query.userData, findFirst }, clan: {
-    findFirst: vi.fn(async () => ({ id: "color-clan", leaderId: actor.userId, villageId: "color-village", hasHideout: true })),
-  } } };
-  const result = await callerForDatabase(clanRouter, actor.userId, withClan as never)
-    .editClanColor({ clanId: "color-clan", color: "#ABCDEF" });
-  expect(result).toMatchObject({ success: true, userPatch: { village: { id: "color-village", hexColor: "#ABCDEF" } } });
-  expect(result.userDelta).toEqual(rowsAffected && !queued
-    ? { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST } : undefined);
-  expect(findFirst).toHaveBeenCalledTimes(1);
-  expect(update).toHaveBeenCalledTimes(2);
-  expect(withClan.query.clan.findFirst).toHaveBeenCalledTimes(1);
 });
