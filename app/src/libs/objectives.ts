@@ -98,6 +98,21 @@ export const findPredecessor = (
   targetId: string,
 ): AllObjectivesType | undefined => objectives.find((obj) => leadsTo(obj, targetId));
 
+/** Order prerequisites before successors, choosing ready objectives in authored order. */
+export const orderObjectivesByPrerequisites = (objectives: AllObjectivesType[]) => {
+  const remaining = [...objectives];
+  const ordered: AllObjectivesType[] = [];
+  while (remaining.length > 0) {
+    const index = remaining.findIndex(
+      (objective) => !findPredecessor(remaining, objective.id),
+    );
+    // Invalid cyclic content still passes through the runtime availability guards.
+    if (index === -1) return [...ordered, ...remaining];
+    ordered.push(...remaining.splice(index, 1));
+  }
+  return ordered;
+};
+
 /**
  * Finds the predecessor objective for a given target objective id, and checks if it is completed.
  * @param objectives - The list of all objectives.

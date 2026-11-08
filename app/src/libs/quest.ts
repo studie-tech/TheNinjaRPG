@@ -14,6 +14,7 @@ import {
   findCompletedPredecessor,
   findPredecessor,
   isQuestObjectiveAvailable,
+  orderObjectivesByPrerequisites,
 } from "@/libs/objectives";
 import { getWarSide } from "@/libs/objectiveWar";
 import {
@@ -496,8 +497,14 @@ export const getNewTrackers = (
       )
         ? getPendingQuestItemEffects(quest, questTracker)
         : undefined;
-    // Update the goals of the quest
-    questTracker.goals = quest.content.objectives.map((objective, i) => {
+    // Evaluate each objective once, with predecessors first so their newly unlocked
+    // consequences are included in this update regardless of content storage order.
+    const objectives = quest.content.objectives;
+    const evaluationOrder = quest.consecutiveObjectives
+      ? orderObjectivesByPrerequisites(objectives)
+      : objectives;
+    questTracker.goals = evaluationOrder.map((objective) => {
+      const i = objectives.indexOf(objective);
       // Get the current goal, or create it
       const status =
         questTracker.goals.find((goal) => goal.id === objective.id) ??
@@ -1012,6 +1019,12 @@ export const getNewTrackers = (
       }
       return status;
     });
+    // Trackers retain the authored array order; only evaluation follows the links.
+    questTracker.goals.sort(
+      (a, b) =>
+        objectives.findIndex((objective) => objective.id === a.id) -
+        objectives.findIndex((objective) => objective.id === b.id),
+    );
     return questTracker;
   });
 
