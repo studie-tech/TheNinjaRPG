@@ -702,14 +702,8 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
           showMutationToast(result);
           setBattleDescriptionDraft(previousValue);
         }
-      } catch (error) {
-        showMutationToast({
-          success: false,
-          message:
-            error instanceof Error && error.message
-              ? error.message
-              : "Could not update the preference",
-        });
+      } catch {
+        // Mutation errors are surfaced by the shared tRPC error handler.
         setBattleDescriptionDraft(previousValue);
       }
     });
