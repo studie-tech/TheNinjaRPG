@@ -66,6 +66,8 @@ import {
   deleteWarForRemoveFromClan2,
   deleteWarKillForRemoveFromClan,
   deleteWarKillForRemoveFromClan2,
+  executeResultForClanDonate,
+  executeResultForToBank,
   executeResultForUpgradeHideoutToStronghold,
   fetchActiveUserMpvpBattles,
   fetchClan,
@@ -92,7 +94,6 @@ import {
   listClanForNominateElder,
   listClanForSearchClans,
   setClanVillageKage,
-  updateClanForClanDonate,
   updateClanForClearLeadership,
   updateClanForConvertPointsToRyo,
   updateClanForDemoteMember,
@@ -103,11 +104,9 @@ import {
   updateClanForPurchaseBoost,
   updateClanForPurchaseHideout,
   updateClanForRemoveFromClan,
-  updateClanForToBank,
   updateMpvpBattleQueueForInitiateClanBattle,
   updateUserDataForAcceptRequest,
   updateUserDataForChallengeClan,
-  updateUserDataForClanDonate,
   updateUserDataForCreateClan,
   updateUserDataForEditClanColor,
   updateUserDataForInitiateClanBattle,
@@ -119,14 +118,7 @@ import {
   updateVillageForEditClanColor,
   updateVillageForRemoveFromClan,
 } from "@/queries/clan";
-import {
-  debitUserMoney,
-  fetchAllGameSettings,
-  fetchUser,
-  findUserById,
-  incrementUserMoney,
-  refundUserReputationPoints,
-} from "@/queries/profile";
+import { fetchAllGameSettings, fetchUser, findUserById } from "@/queries/profile";
 import { findMembershipUserCache } from "@/queries/socialUserCache";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import { fetchStructures, fetchVillage, fetchVillages } from "@/queries/village";
@@ -350,30 +342,29 @@ export const clanRouter = createTRPCRouter({
           ...getUnchangedClanUserUpdate(),
         };
       }
-      // Mutate step 1 - update user
-      const result = await updateUserDataForClanDonate(ctx.drizzle, repsCost, ctx);
+      // Mutate
+      const result = await executeResultForClanDonate(
+        ctx.drizzle,
+        repsCost,
+        ctx,
+        fetchedClan.id,
+      );
       if (result.rowsAffected === 0) {
-        return errorResponse("Failed to deduct points from user");
+        return errorResponse(
+          "Reputation points were not donated; refresh the faction and check your reputation points, membership and the treasury limit",
+        );
       }
-      // Mutate step 2 - update the clan
-      const result2 = await updateClanForClanDonate(ctx.drizzle, repsCost, fetchedClan);
-      if (result2.rowsAffected === 0) {
-        await refundUserReputationPoints(ctx.drizzle, repsCost, ctx.userId);
-        return errorResponse("Failed to update the treasury");
-      } else {
-        // Create donation message
-        const message = `${user.username} donated ${repsCost} reputation points to faction`;
-        await insertActionLogForClanDonate(ctx.drizzle, ctx, message, fetchedClan);
-        return {
-          success: true,
-          message,
-          ...getClanDonationUserUpdate({
-            user,
-            repsCost,
-            fetchedClanId: fetchedClan.id,
-          }),
-        };
-      }
+      const message = `${user.username} donated ${repsCost} reputation points to faction`;
+      await insertActionLogForClanDonate(ctx.drizzle, ctx, message, fetchedClan);
+      return {
+        success: true,
+        message,
+        ...getClanDonationUserUpdate({
+          user,
+          repsCost,
+          fetchedClanId: fetchedClan.id,
+        }),
+      };
     }),
   get: protectedProcedure
     .meta({ mcp: { description: "Get clan/faction details" } })
@@ -1209,14 +1200,11 @@ export const clanRouter = createTRPCRouter({
           ...getUnchangedClanUserUpdate(),
         };
       }
-      const result = await debitUserMoney(ctx.drizzle, input.amount, ctx);
+      const result = await executeResultForToBank(ctx.drizzle, input, ctx);
       if (result.rowsAffected === 0) {
-        return errorResponse("Not enough money in pocket");
-      }
-      const creditResult = await updateClanForToBank(ctx.drizzle, input);
-      if (creditResult.rowsAffected === 0) {
-        await incrementUserMoney(ctx.drizzle, input.amount, ctx.userId);
-        return errorResponse("Clan bank no longer exists; your deposit was refunded");
+        return errorResponse(
+          "Ryo was not deposited; refresh the clan and check your pocket and membership",
+        );
       }
       return {
         success: true,

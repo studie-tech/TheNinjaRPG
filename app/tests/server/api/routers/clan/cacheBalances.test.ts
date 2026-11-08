@@ -39,9 +39,7 @@ describe("clan committed cache responses", () => {
           .mockResolvedValueOnce(clanUpdate),
       },
     },
-    update: vi.fn(() => ({
-      set: () => ({ where: async () => ({ rowsAffected: 1 }) }),
-    })),
+    execute: vi.fn(async () => ({ rowsAffected: 2 })),
     insert: vi.fn(() => ({ values: async () => ({ rowsAffected: 1 }) })),
   });
 
@@ -66,7 +64,7 @@ describe("clan committed cache responses", () => {
       ).rejects.toMatchObject({ code: "BAD_REQUEST" });
       expect(database.query.userData.findFirst).not.toHaveBeenCalled();
       expect(database.query.clan.findFirst).not.toHaveBeenCalled();
-      expect(database.update).not.toHaveBeenCalled();
+      expect(database.execute).not.toHaveBeenCalled();
       expect(database.insert).not.toHaveBeenCalled();
     });
   }
@@ -91,7 +89,7 @@ describe("clan committed cache responses", () => {
 });
 
 describe("clan missing bank rejection", () => {
-  it("refunds a debit when the clan credit did not commit", async () => {
+  it("returns no cache changes when the joined deposit moves nothing", async () => {
     const database = {
       query: {
         userData: {
@@ -104,20 +102,16 @@ describe("clan missing bank rejection", () => {
         },
         clan: { findFirst: vi.fn().mockResolvedValue({ id: "gone-bank" }) },
       },
-      update: vi.fn((table: unknown) => ({
-        set: () => ({ where: async () => ({ rowsAffected: table === clan ? 0 : 1 }) }),
-      })),
+      execute: vi.fn(async () => ({ rowsAffected: 0 })),
+      update: vi.fn(),
     };
     const caller = callerForDatabase(clanRouter, "gone-bank-user", database as never);
     const result = await caller.toBank({ clanId: "gone-bank", amount: 25 });
     expect(result.success).toBe(false);
     expect(result.userDelta).toBeUndefined();
     expect(result.userPatch?.clan).toBeUndefined();
-    expect(database.update.mock.calls.map(([table]) => table)).toEqual([
-      userData,
-      clan,
-      userData,
-    ]);
+    expect(database.execute).toHaveBeenCalledTimes(1);
+    expect(database.update).not.toHaveBeenCalled();
     expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
     expect(database.query.clan.findFirst).toHaveBeenCalledTimes(1);
   });
@@ -146,9 +140,7 @@ describe("clan zero-cost cache responses", () => {
       });
       const database = {
         query: { userData: { findFirst: userRead }, clan: { findFirst: clanRead } },
-        update: vi.fn(() => ({
-          set: () => ({ where: async () => ({ rowsAffected: 1 }) }),
-        })),
+        execute: vi.fn(async () => ({ rowsAffected: 2 })),
         insert: vi.fn(() => ({ values: async () => ({ rowsAffected: 1 }) })),
       };
       const caller = callerForDatabase(clanRouter, "clan-zero-user", database as never);
@@ -160,7 +152,7 @@ describe("clan zero-cost cache responses", () => {
       expect(result.userPatch).toEqual({});
       expect(userRead).toHaveBeenCalledTimes(1);
       expect(clanRead).toHaveBeenCalledTimes(1);
-      expect(database.update).not.toHaveBeenCalled();
+      expect(database.execute).not.toHaveBeenCalled();
       expect(database.insert).not.toHaveBeenCalled();
     });
   }
@@ -225,7 +217,7 @@ describeWithDatabase("clan mutation cache balances", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("refunds the deposit without erasing an independent currency grant", async () => {
+  it("moves nothing and keeps an independent currency grant when the clan is gone", async () => {
     const db = await getTestDatabase();
     const actualRead = db.query.clan.findFirst.bind(db.query.clan);
     const reads = vi.spyOn(db.query.clan, "findFirst").mockImplementation((async (
@@ -242,7 +234,9 @@ describeWithDatabase("clan mutation cache balances", () => {
     const caller = await callerFor(clanRouter, "clan-cache-user");
     const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 25 });
     expect(result.success).toBe(false);
-    expect(result.message).toContain("refunded");
+    expect(result.message).toBe(
+      "Ryo was not deposited; refresh the clan and check your pocket and membership",
+    );
     expect(result.userDelta).toBeUndefined();
     expect(result.userPatch?.clan).toBeUndefined();
     expect(reads).toHaveBeenCalledTimes(1);
