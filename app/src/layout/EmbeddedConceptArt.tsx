@@ -2,9 +2,9 @@
 
 import { ExternalLink, ImageOff } from "lucide-react";
 import type React from "react";
-import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { type ConceptEmotion, ConceptReactions } from "@/layout/ConceptReactions";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -22,8 +22,8 @@ interface EmbeddedConceptArtProps {
 const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
   const { data: user } = useUserData();
   const utils = api.useUtils();
-  const inFlightRef = useRef(false);
-  const [pendingEmotion, setPendingEmotion] = useState<ConceptEmotion | null>(null);
+  const emotionFlight = useSingleFlight<ConceptEmotion>();
+  const pendingEmotion = emotionFlight.pending;
 
   // Fetch the concept art image
   const {
@@ -38,10 +38,8 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
   const emotion = api.conceptart.toggleEmotion.useMutation();
 
   const toggleEmotion = async (type: ConceptEmotion) => {
-    if (!user || inFlightRef.current) return;
+    if (!user || !emotionFlight.claim(type)) return;
 
-    inFlightRef.current = true;
-    setPendingEmotion(type);
     try {
       const result = await emotion.mutateAsync({ imageId, type });
       showMutationToast(result);
@@ -52,8 +50,7 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
         message: error instanceof Error ? error.message : "Could not update reaction",
       });
     } finally {
-      inFlightRef.current = false;
-      setPendingEmotion(null);
+      emotionFlight.release();
     }
   };
 
