@@ -48,6 +48,7 @@ import {
   FACTION_RAID_TARGET_COOLDOWN_HOURS,
   MAP_RESERVED_SECTORS,
   VILLAGE_SYNDICATE_ID,
+  VILLAGE_WAR_TYPES,
   WAR_ALLY_OFFER_MIN,
   WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
   WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5,
@@ -1654,7 +1655,7 @@ export const VillageWar: React.FC<{
       {war.rules && <ObjectiveWarPanel warId={war.id} />}
       {/* Shrines Section */}
       {!war.rules &&
-        ["VILLAGE_WAR", "WAR_RAID"].includes(war.type) &&
+        VILLAGE_WAR_TYPES.includes(war.type) &&
         war.status === "ACTIVE" && (
           <div className="mt-4 rounded-lg border border-border p-4">
             <div className="grid grid-cols-2 gap-4">

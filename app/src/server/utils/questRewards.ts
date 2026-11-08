@@ -5,6 +5,7 @@ import {
   MEDNIN_EXP_CAP,
   RECRUIT_PRESTIGE_SHARE,
   SAGE_MASTERY_EXP_CAP,
+  VILLAGE_WAR_TYPES,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
 import { getGatheringItemDrops } from "@/libs/gathering";
@@ -388,7 +389,7 @@ export const updateRewards = async (info: {
       // Process each war the user is involved in (VILLAGE_WAR or WAR_RAID)
       for (const activeWar of activeWars) {
         const warSide = getWarSide(activeWar, user.villageId, user.userId);
-        if (!warSide || !["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) continue;
+        if (!warSide || !VILLAGE_WAR_TYPES.includes(activeWar.type)) continue;
         const onAttackerSide = warSide === activeWar.attackerVillageId;
 
         // War damage hits the opponent's war health

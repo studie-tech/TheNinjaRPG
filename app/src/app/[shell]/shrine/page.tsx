@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MAP_RESERVED_SECTORS,
   VILLAGE_SYNDICATE_ID,
+  VILLAGE_WAR_TYPES,
   WAR_SHRINE_IMAGE,
 } from "@/drizzle/constants";
 import type { War } from "@/drizzle/schema";
@@ -95,7 +96,7 @@ export default function Shrine() {
     if (war.type === "SECTOR_WAR") {
       return war.sector === userData.sector;
     }
-    if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
+    if (VILLAGE_WAR_TYPES.includes(war.type)) {
       return (
         war.attackerVillage?.sector === userData.sector ||
         war.defenderVillage?.sector === userData.sector
@@ -516,7 +517,7 @@ const WarCard = ({
 }) => {
   const isUserAttacker = sideVillageId === war.attackerVillageId;
   const isUserDefender = sideVillageId === war.defenderVillageId;
-  const isVillageWar = ["VILLAGE_WAR", "WAR_RAID"].includes(war.type);
+  const isVillageWar = VILLAGE_WAR_TYPES.includes(war.type);
 
   // Determine which village's shrine we're at
   const atAttackerVillage = war.attackerVillage?.sector === sector;

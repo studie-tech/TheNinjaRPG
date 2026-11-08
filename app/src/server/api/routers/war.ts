@@ -18,6 +18,7 @@ import {
   IMG_AVATAR_DEFAULT,
   MAP_RESERVED_SECTORS,
   VILLAGE_SYNDICATE_ID,
+  VILLAGE_WAR_TYPES,
   WAR_ALLY_MAX_PAYMENT_PERCENTAGE,
   WAR_DECLARATION_COOLDOWN_HOURS,
   WAR_DECLARATION_COST,
@@ -1406,7 +1407,7 @@ export const warRouter = createTRPCRouter({
       if (activeWar.status !== "ACTIVE") {
         return errorResponse("War is not active");
       }
-      if (!["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
+      if (!VILLAGE_WAR_TYPES.includes(activeWar.type)) {
         return errorResponse(
           "War ally offers only available for village wars and raids",
         );
@@ -1616,7 +1617,7 @@ export const warRouter = createTRPCRouter({
       if (activeWar.status !== "ACTIVE") {
         return errorResponse("War is not active");
       }
-      if (!["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
+      if (!VILLAGE_WAR_TYPES.includes(activeWar.type)) {
         return errorResponse(
           "War ally offers only available for village wars and raids",
         );
@@ -1685,7 +1686,7 @@ export const warRouter = createTRPCRouter({
       if (activeWar.status !== "ACTIVE") {
         return errorResponse("War is not active");
       }
-      if (!["WAR_RAID", "VILLAGE_WAR"].includes(activeWar.type)) {
+      if (!VILLAGE_WAR_TYPES.includes(activeWar.type)) {
         return errorResponse("Cannot surrender this type of war");
       }
       // Mutate

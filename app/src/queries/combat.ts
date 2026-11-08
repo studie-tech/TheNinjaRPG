@@ -44,7 +44,7 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
   MasteryNames,
   PoolTypes,
-  RankedBattleTypes,
+  PRACTICE_BATTLE_TYPES,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   type TimedMasteryName,
@@ -2548,8 +2548,7 @@ export const updateUserDataForUpdateUser2 = (
             weeklyPvpKillsAt: settledAt,
           }
         : {}),
-      ...(curBattle.battleType !== "SPARRING" &&
-      !RankedBattleTypes.includes(curBattle.battleType)
+      ...(!PRACTICE_BATTLE_TYPES.includes(curBattle.battleType)
         ? {
             curHealth: result.curHealth,
             curStamina: result.curStamina,
