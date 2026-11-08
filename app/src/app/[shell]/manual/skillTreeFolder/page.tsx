@@ -11,7 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { nanoid } from "nanoid";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,15 +116,14 @@ export default function ManualSkillTreeFolder() {
     setFormHidden(false);
   };
 
-  // Load form data when editing
-  useEffect(() => {
-    if (editFolder) {
-      setFormName(editFolder.name);
-      setFormImage(editFolder.image);
-      setFormDescription(editFolder.description || "");
-      setFormHidden(editFolder.hidden);
-    }
-  }, [editFolder]);
+  // Load the folder into the form when editing
+  const openEdit = (folder: SkillTreeFolder) => {
+    setEditFolder(folder);
+    setFormName(folder.name);
+    setFormImage(folder.image);
+    setFormDescription(folder.description || "");
+    setFormHidden(folder.hidden);
+  };
 
   // Handle create
   const handleCreate = () => {
@@ -158,21 +157,13 @@ export default function ManualSkillTreeFolder() {
     deleteFolderMutation({ id: deleteFolder.id });
   };
 
-  // Handle reorder
-  const handleMoveUp = (index: number) => {
-    if (!folders || index === 0) return;
+  // Handle reorder: one step past the neighbour's order puts the folder on its other side
+  const handleMove = (index: number, direction: -1 | 1) => {
+    const neighbour = folders?.[index + direction];
+    if (!folders || !neighbour) return;
     const newOrders = folders.map((f, i) => ({
       id: f.id,
-      order: i === index ? (folders[index - 1]?.order ?? 0) - 1 : f.order,
-    }));
-    reorderFolders({ folderOrders: newOrders });
-  };
-
-  const handleMoveDown = (index: number) => {
-    if (!folders || index === folders.length - 1) return;
-    const newOrders = folders.map((f, i) => ({
-      id: f.id,
-      order: i === index ? (folders[index + 1]?.order ?? 0) + 1 : f.order,
+      order: i === index ? neighbour.order + direction : f.order,
     }));
     reorderFolders({ folderOrders: newOrders });
   };
@@ -260,7 +251,7 @@ export default function ManualSkillTreeFolder() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleMoveUp(index)}
+                    onClick={() => handleMove(index, -1)}
                     disabled={index === 0 || reorderLoading}
                   >
                     {reorderLoading ? (
@@ -272,7 +263,7 @@ export default function ManualSkillTreeFolder() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleMoveDown(index)}
+                    onClick={() => handleMove(index, 1)}
                     disabled={index === folders.length - 1 || reorderLoading}
                   >
                     {reorderLoading ? (
@@ -281,14 +272,7 @@ export default function ManualSkillTreeFolder() {
                       <ChevronDown className="h-4 w-4" />
                     )}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      resetForm();
-                      setEditFolder(folder);
-                    }}
-                  >
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(folder)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
