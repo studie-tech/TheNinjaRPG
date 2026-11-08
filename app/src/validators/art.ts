@@ -47,6 +47,7 @@ export const conceptArtFilterSchema = z.object({
   time_frame: z.enum(timeFrame).prefault("Week"),
 });
 
+/** Convert an artwork ranking period to seconds, with null denoting all time. */
 export const getTimeFrameinSeconds = (
   timeString: (typeof timeFrame)[number],
 ): number | null => {
@@ -58,8 +59,6 @@ export const getTimeFrameinSeconds = (
     case "Year":
       return YEAR_S;
     case "All Time":
-      return null;
-    default:
       return null;
   }
 };

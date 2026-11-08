@@ -73,8 +73,7 @@ export const withKageDefense = async <T>(
   callback: (tx: DrizzleClient, hall: KageDefenseHall) => Promise<T>,
 ) =>
   retryOnDeadlock(() =>
-    client.transaction(async (transaction) => {
-      const tx = transaction as unknown as DrizzleClient;
+    client.transaction(async (tx) => {
       await incrementKageScheduleVersion(tx, villageId);
       const hall = await loadKageDefense(tx, villageId);
       if (hall?.village.type !== "VILLAGE") return null;
@@ -163,35 +162,9 @@ export const syncLockedKageDefense = async (
 ) => {
   const { now, state, village: v } = hall;
   const priorObservation = new Date(state.observedAt);
-  state.setupDueAt ??= initialKageSetupDeadline(v).toISOString();
   const missedObservation =
     now.getTime() - priorObservation.getTime() > KAGE_DEFENSE_GRACE_MINUTES * 60_000;
-  // The publication deadline freezes while war or service interruptions prevent participation.
-  if (
-    !state.publishedAt &&
-    (hall.paused || state.paused || hall.warInterrupted || missedObservation)
-  ) {
-    state.setupDueAt = new Date(
-      new Date(state.setupDueAt).getTime() +
-        Math.max(0, now.getTime() - priorObservation.getTime()),
-    ).toISOString();
-  }
-  // A war consumes the incumbent's attention, so a full setup window follows its end.
-  if (!state.publishedAt && hall.lastWarEndedAt) {
-    const postWarDeadline = secondsFromDate(
-      KAGE_DEFENSE_SETUP_HOURS * 3600,
-      hall.lastWarEndedAt,
-    );
-    if (postWarDeadline > new Date(state.setupDueAt))
-      state.setupDueAt = postWarDeadline.toISOString();
-  }
-  if (
-    v.kage &&
-    !v.kage.isAi &&
-    !state.publishedAt &&
-    now >= new Date(state.setupDueAt) &&
-    !hall.paused
-  ) {
+  if (advanceSetupDeadline(hall, priorObservation, missedObservation)) {
     await removeAbsentKage(client, hall);
     return false;
   }
@@ -309,8 +282,55 @@ export const syncLockedKageDefense = async (
   }
   state.paused = hall.paused;
   state.observedAt = now.toISOString();
-  // Revoke an invitation when its appointment or mode changes. Expiry never changes
-  // attendance, queue priority or the original match's reschedule allowance.
+  pruneInstantChallenge(hall);
+  if (!hall.paused && state.windows.length && v.kageId)
+    await assignKageMatches(client, hall);
+  await saveKageSchedule(client, hall);
+  return true;
+};
+
+/** Move the publication deadline for interruptions; true when the incumbent has missed it. */
+const advanceSetupDeadline = (
+  hall: KageDefenseHall,
+  priorObservation: Date,
+  missedObservation: boolean,
+) => {
+  const { now, state, village: v } = hall;
+  state.setupDueAt ??= initialKageSetupDeadline(v).toISOString();
+  // The publication deadline freezes while war or service interruptions prevent participation.
+  if (
+    !state.publishedAt &&
+    (hall.paused || state.paused || hall.warInterrupted || missedObservation)
+  ) {
+    state.setupDueAt = new Date(
+      new Date(state.setupDueAt).getTime() +
+        Math.max(0, now.getTime() - priorObservation.getTime()),
+    ).toISOString();
+  }
+  // A war consumes the incumbent's attention, so a full setup window follows its end.
+  if (!state.publishedAt && hall.lastWarEndedAt) {
+    const postWarDeadline = secondsFromDate(
+      KAGE_DEFENSE_SETUP_HOURS * 3600,
+      hall.lastWarEndedAt,
+    );
+    if (postWarDeadline > new Date(state.setupDueAt))
+      state.setupDueAt = postWarDeadline.toISOString();
+  }
+  return (
+    !!v.kage &&
+    !v.kage.isAi &&
+    !state.publishedAt &&
+    now >= new Date(state.setupDueAt) &&
+    !hall.paused
+  );
+};
+
+/**
+ * Revoke an invitation when its appointment or mode changes. Expiry never changes
+ * attendance, queue priority or the original match's reschedule allowance.
+ */
+const pruneInstantChallenge = (hall: KageDefenseHall) => {
+  const { now, state } = hall;
   const invitation = state.instantChallenge;
   if (
     invitation &&
@@ -326,10 +346,6 @@ export const syncLockedKageDefense = async (
       ))
   )
     delete state.instantChallenge;
-  if (!hall.paused && state.windows.length && v.kageId)
-    await assignKageMatches(client, hall);
-  await saveKageSchedule(client, hall);
-  return true;
 };
 
 /** Requeue with fresh notice and consent while retaining FIFO priority and reschedule usage. */

@@ -18,8 +18,8 @@ import {
   levelExperienceProgress,
   levelUpBlock,
 } from "@/libs/profile";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 import {
-  isAvailableUserQuests,
   isQuestRankAllowed,
   isWarMissionAvailable,
   questAlreadyActiveBlockMessage,
@@ -27,7 +27,7 @@ import {
   questRequiresTravel,
   questStructureRoute,
   questTypeConcurrentBlockMessage,
-} from "@/libs/quest";
+} from "@/libs/quest/missionHall";
 import { canStartStatTraining, statTrainingBlockMessage } from "@/libs/train";
 import type { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -130,33 +130,35 @@ export type DashboardContentSummary = {
 const missionGroupDefinitions = [
   {
     key: "missions",
-    name: "Missions & crimes",
     description: "Take on a mission or crime suited to your rank.",
     questType: "mission",
     includedTypes: ["mission", "crime"],
   },
   {
     key: "errands",
-    name: "Errands",
     description: "Complete quick assignments for daily rewards.",
     questType: "errand",
     includedTypes: ["errand"],
   },
   {
     key: "medical",
-    name: "Medical missions",
     description: "Put your medical skills to work on specialist assignments.",
     questType: "medical",
     includedTypes: ["medical"],
   },
   {
     key: "pvp",
-    name: "PvP missions",
     description: "Challenge other players through PvP assignments.",
     questType: "pvp",
     includedTypes: ["pvp"],
   },
 ] as const;
+
+/** Match a quest type to the dashboard group's configured mission types. */
+const isInMissionGroup = (
+  group: (typeof missionGroupDefinitions)[number],
+  questType?: string,
+) => group.includedTypes.some((included) => included === questType);
 
 interface DashboardMissionDailyCounts {
   dailyMissions: number;
@@ -184,15 +186,16 @@ export const getDashboardContentPriority = (
   return parsed.success ? parsed.data : [...dashboardContentGroups];
 };
 
+/** Map a discovery entry to its dashboard group, defaulting unclassified mission types to missions. */
 const contentGroup = (entry: {
   category: string;
   questType?: string;
 }): DashboardContentGroup => {
   if (entry.category === "missions") {
-    if (entry.questType === "errand") return "errands";
-    if (entry.questType === "medical" || entry.questType === "pvp")
-      return entry.questType;
-    return "missions";
+    return (
+      missionGroupDefinitions.find((group) => isInMissionGroup(group, entry.questType))
+        ?.key ?? "missions"
+    );
   }
   return entry.category as DashboardContentGroup;
 };
@@ -245,7 +248,7 @@ export const condenseDashboardMissionContent = (
     (entry) =>
       entry.category !== "missions" ||
       !missionGroupDefinitions.some((group) =>
-        group.includedTypes.some((questType) => questType === entry.questType),
+        isInMissionGroup(group, entry.questType),
       ),
   );
 
@@ -257,9 +260,7 @@ export const condenseDashboardMissionContent = (
     if (quota && quota.current >= quota.limit) return [];
 
     const entries = missionContent
-      .filter((entry) =>
-        group.includedTypes.some((questType) => questType === entry.questType),
-      )
+      .filter((entry) => isInMissionGroup(group, entry.questType))
       .sort(
         (left, right) =>
           availabilityPriority[left.availability] -
@@ -272,7 +273,7 @@ export const condenseDashboardMissionContent = (
       {
         ...representative,
         id: `dashboard-mission-group:${group.key}`,
-        name: group.name,
+        name: dashboardContentGroupLabels[group.key],
         description: group.description,
         image: entries.find((entry) => entry.image)?.image ?? null,
         questType: group.questType,
@@ -708,17 +709,17 @@ export const buildDashboardCatalogue = (
     },
   );
   const categoryOrder = ["missions", "events", "story", "battlePyramids", "raids"];
-  const missionOrder: Record<string, number> = {
-    mission: 0,
-    errand: 1,
-    medical: 2,
-    pvp: 3,
+  const missionOrder = (questType: string) => {
+    const index = missionGroupDefinitions.findIndex(
+      (group) => group.questType === questType,
+    );
+    return index === -1 ? missionGroupDefinitions.length : index;
   };
   return [...quests, ...raidEntries].sort(
     (left, right) =>
       categoryOrder.indexOf(left.category) - categoryOrder.indexOf(right.category) ||
       (left.category === "missions" && right.category === "missions"
-        ? (missionOrder[left.questType] ?? 99) - (missionOrder[right.questType] ?? 99)
+        ? missionOrder(left.questType) - missionOrder(right.questType)
         : 0) ||
       availabilityPriority[left.availability] -
         availabilityPriority[right.availability] ||

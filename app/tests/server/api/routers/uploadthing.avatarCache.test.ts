@@ -1,10 +1,10 @@
 import * as clerk from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { UploadThingError } from "uploadthing/server";
+import { extractRouterConfig, UploadThingError } from "uploadthing/server";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
 import { AVATAR_UPLOAD_DAILY_LIMIT } from "@/drizzle/constants";
-import { historicalAvatar, userData } from "@/drizzle/schema";
+import { historicalAvatar, historicalSoundEffect, userData } from "@/drizzle/schema";
 import * as tavernUploads from "@/server/utils/tavernUploads";
 import * as moderator from "@/libs/moderator";
 import * as replicate from "@/libs/replicate";
@@ -48,7 +48,7 @@ describeWithDatabase("uploaded avatar cache responses", () => {
         regions: ["fra1"],
       }),
     ).toString("base64");
-    await resetTables(historicalAvatar, userData);
+    await resetTables(historicalAvatar, historicalSoundEffect, userData);
     await insertUsers([{ userId, username: "UploadAvatarCache", staffAccount: false, federalStatus: "NORMAL" }]);
     vi.spyOn(clerk, "auth").mockResolvedValue({ userId } as never);
     vi.spyOn(moderator, "classifyNsfwImage").mockResolvedValue({
@@ -97,6 +97,101 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     await expect(rejection).rejects.toThrow(`Can only upload ${AVATAR_UPLOAD_DAILY_LIMIT} files per day`);
     // UploadThing replaces any other middleware error with a generic message.
     await expect(rejection).rejects.toBeInstanceOf(UploadThingError);
+  });
+
+  const repeatedRoutes = [
+    ["anbuUploader", "image", "512KB"],
+    ["clanUploader", "image", "512KB"],
+    ["tournamentUploader", "image", "512KB"],
+    ["avatarNormalUploader", "image", "512KB"],
+    ["avatarSilverUploader", "image", "1MB"],
+    ["avatarGoldUploader", "image", "2MB"],
+    ["audioSfxUploader", "audio", "64KB"],
+    ["audioMusicUploader", "audio", "4MB"],
+  ] as const;
+
+  it.each(repeatedRoutes)("%s accepts %s files up to %s", (endpoint, kind, maxFileSize) => {
+    const [route] = extractRouterConfig({ [endpoint]: ourFileRouter[endpoint] });
+    expect(route?.config).toMatchObject({ [kind]: { maxFileSize } });
+  });
+
+  const middlewareArgs = {
+    files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }],
+    input: { relationId: "relation" },
+  } as never;
+  const runMiddleware = (endpoint: (typeof repeatedRoutes)[number][0]) =>
+    (ourFileRouter[endpoint].middleware as (args: never) => Promise<unknown>)(middlewareArgs);
+
+  it.each(repeatedRoutes)("%s rejects signed-out and banned users", async (endpoint) => {
+    const database = await getTestDatabase();
+    stubDatabase(database);
+    vi.spyOn(clerk, "auth").mockResolvedValue({ userId: null } as never);
+    await expect(runMiddleware(endpoint)).rejects.toThrow("Unauthorized");
+    vi.spyOn(clerk, "auth").mockResolvedValue({ userId } as never);
+    await database.update(userData).set({ isBanned: true }).where(eq(userData.userId, userId));
+    await expect(runMiddleware(endpoint)).rejects.toThrow("You are banned");
+  });
+
+  it("gates each avatar size on its own federal tier", async () => {
+    const database = await getTestDatabase();
+    stubDatabase(database);
+    for (const [federalStatus, allowed] of [
+      ["NORMAL", "avatarNormalUploader"],
+      ["SILVER", "avatarSilverUploader"],
+      ["GOLD", "avatarGoldUploader"],
+    ] as const) {
+      await database.update(userData).set({ federalStatus }).where(eq(userData.userId, userId));
+      for (const [endpoint, tier] of [
+        ["avatarNormalUploader", "NORMAL"],
+        ["avatarSilverUploader", "SILVER"],
+        ["avatarGoldUploader", "GOLD"],
+      ] as const) {
+        if (endpoint === allowed) expect(await runMiddleware(endpoint)).toMatchObject({ userId });
+        else await expect(runMiddleware(endpoint)).rejects.toThrow(`You must be ${tier} to upload this avatar`);
+      }
+    }
+  });
+
+  it.each(["anbuUploader", "clanUploader", "tournamentUploader"] as const)(
+    "%s applies the avatar allowance without a federal requirement",
+    async (endpoint) => {
+      const database = await getTestDatabase();
+      stubDatabase(database);
+      await database.update(userData).set({ federalStatus: "NONE" }).where(eq(userData.userId, userId));
+      expect(await runMiddleware(endpoint)).toMatchObject({ userId });
+      await database.insert(historicalAvatar).values(Array.from({ length: 51 }, (_, index) => ({
+        userId, avatar: `https://example.com/limit-${index}.png`, done: true, status: "succeeded",
+      })));
+      await expect(runMiddleware(endpoint)).rejects.toThrow(`Can only upload ${AVATAR_UPLOAD_DAILY_LIMIT} files per day`);
+    },
+  );
+
+  it.each(["audioSfxUploader", "audioMusicUploader"] as const)(
+    "%s is reserved for content staff and records the uploaded sound",
+    async (endpoint) => {
+      const database = await getTestDatabase();
+      stubDatabase(database);
+      await expect(runMiddleware(endpoint)).rejects.toThrow("You do not have permission to upload content files");
+      await database.update(userData).set({ role: "CONTENT-ADMIN" }).where(eq(userData.userId, userId));
+      expect(await runMiddleware(endpoint)).toMatchObject({ userId, relationId: "relation" });
+      const complete = ourFileRouter[endpoint].onUploadComplete as (args: never) => Promise<unknown>;
+      const result = await complete({ file, metadata: { userId, relationId: "relation" } } as never);
+      expect(result).toEqual({ fileUrl: servedUfsUrl(file), userId });
+      const [sound] = await database.select().from(historicalSoundEffect);
+      expect(sound).toMatchObject({ userId, relationId: "relation", url: servedUfsUrl(file) });
+    },
+  );
+
+  it.each([
+    ["anbuUploader", "anbu-image"],
+    ["clanUploader", "clan-image"],
+    ["tournamentUploader", "tournament-image"],
+  ] as const)("%s files its history under %s", async (endpoint, historyUserId) => {
+    const database = await getTestDatabase();
+    stubDatabase(database);
+    await callback(endpoint);
+    const [saved] = await database.query.historicalAvatar.findMany();
+    expect(saved?.userId).toBe(historyUserId);
   });
 
   it.each([

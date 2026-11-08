@@ -5,8 +5,7 @@ import type { ItemRarity } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
-import { applyActiveVariant } from "@/libs/combat/util";
-import { showsItemLevelBadge } from "@/libs/item";
+import { applyActiveVariant, showsItemLevelBadge } from "@/libs/item";
 import { cn } from "@/libs/shadui";
 import { capitalizeFirstLetter } from "@/utils/string";
 

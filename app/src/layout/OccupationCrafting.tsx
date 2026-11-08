@@ -373,9 +373,9 @@ export default function OccupationCrafting() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Experience: {craftingStatus?.craftingExperience || 0}</span>
-                {rankProgress.nextRank && craftingStatus?.nextRankExperience && (
+                {rankProgress.nextRankExperience && (
                   <span>
-                    Next rank: {craftingStatus.nextRankExperience.toLocaleString()} exp
+                    Next rank: {rankProgress.nextRankExperience.toLocaleString()} exp
                   </span>
                 )}
               </div>

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import type { Bloodline, Quest, UserQuest } from "@/drizzle/schema";
 import { availableUserActions } from "@/libs/combat/actions";
-import { maskBattle } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
 import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 
 describe("masked battle payload", () => {

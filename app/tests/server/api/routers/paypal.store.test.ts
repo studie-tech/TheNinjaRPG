@@ -1,10 +1,12 @@
 import { releaseDeclinedStoreCapture } from "@/queries/paypal";
 import { beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { DrizzleQueryError, eq } from "drizzle-orm";
-import { actionLog, item, quest, questHistory, paypalTransaction, recruitmentRewards, userData, userItem, webStoreBundle, webStoreOrder, storeUserIdAlias } from "@/drizzle/schema";
+import { actionLog, item, quest, questHistory, paypalTransaction, recruitmentRewards, stripeCheckout, stripePayment, userData, userItem, webStoreBundle, webStoreOrder, storeUserIdAlias } from "@/drizzle/schema";
 import * as purchaseQueries from "@/queries/purchases";
-import { staffRouter, deleteUser } from "@/server/api/routers/staff";
-import { paypalRouter, syncTransactions } from "@/server/api/routers/paypal";
+import { staffRouter } from "@/server/api/routers/staff";
+import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
+import { paypalRouter } from "@/server/api/routers/paypal";
+import { syncTransactions } from "@/server/utils/paypal/fulfillment";
 import { itemRouter } from "@/server/api/routers/item";
 import { authorizeStoreCapture, deliverStoreOrder, reserveStoreOrder } from "@/server/utils/webStore";
 import * as sentry from "@/server/utils/sentry";
@@ -81,6 +83,16 @@ describeWithDatabase("web store payments", () => {
     await resetTables(questHistory, quest, webStoreOrder, webStoreBundle, paypalTransaction, recruitmentRewards, userItem, item, userData, actionLog, storeUserIdAlias);
     await insertUsers([{userId:"buyer",username:"Buyer",role:"OWNER", reputationPoints:0, money:0}, {userId:"recipient",username:"Recipient",reputationPoints:0,reputationPointsTotal:0,money:0}]);
     await insertItems([{id:"store-item",name:"Supplies",canStack:true,stackSize:3}]);
+  });
+  it("does not count a checkout against its own reputation allowance at capture", async () => {
+    const db = await getTestDatabase();
+    await resetTables(stripePayment, stripeCheckout);
+    const buyer = await db.query.userData.findFirst({ where: eq(userData.userId, "buyer") });
+    const reputationPoints = dynamicMonthlyRepCap(buyer);
+    const full = { ...offer, priceCents: reputationPoints * 100, contents: { reputationPoints, money: 0, items: [] } };
+    const reserved = await reserveStoreOrder(db, "buyer", "recipient", full);
+    if (!reserved.success) throw new Error(reserved.message);
+    expect(await authorizeStoreCapture(db, reserved.order.id, "buyer")).toBeNull();
   });
   it("reconciles completed orders without capturing payment and grants each snapshot once", async () => {
     const db = await getTestDatabase();

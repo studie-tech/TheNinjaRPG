@@ -15,12 +15,6 @@ import { showMutationToast } from "@/libs/toast";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 import { useUserData } from "@/utils/UserContext";
 
-export type { BattleMaps } from "@/libs/combat/battleMaps";
-export {
-  computeBattleMaps,
-  shouldInvalidateEndedBattleCaches,
-} from "@/libs/combat/battleMaps";
-
 /**
  * Hook to precompute maps for ground effects, user effects, and user positions.
  * Only recomputes when battle id or version changes — a new battle object with
@@ -325,13 +319,8 @@ export const COMBAT_LAYOUT_COMPONENTS = [
 
 export type CombatLayoutComponentId = (typeof COMBAT_LAYOUT_COMPONENTS)[number]["id"];
 
-export const DEFAULT_LAYOUT_ORDER: CombatLayoutComponentId[] = [
-  "timer",
-  "battlefield",
-  "actions",
-  "timeline",
-  "battlelog",
-];
+export const DEFAULT_LAYOUT_ORDER: CombatLayoutComponentId[] =
+  COMBAT_LAYOUT_COMPONENTS.map((component) => component.id);
 
 export type CombatResourceBarsVisibility = "mobile-only" | "on" | "off";
 
@@ -339,11 +328,11 @@ export type CombatResourceBarsVisibility = "mobile-only" | "on" | "off";
  * Combat UI preferences persisted in localStorage
  */
 export const useCombatPreferences = () => {
-  const [showGridNumbers, setShowGridNumbers] = useLocalStorage<boolean>(
+  const [showGridNumbers, toggleGridNumbers] = useStoredToggle(
     "showGridNumbers",
     false,
   );
-  const [useSmallActions, setUseSmallActions] = useLocalStorage<boolean>(
+  const [useSmallActions, toggleSmallActions] = useStoredToggle(
     "combatSmallActions",
     false,
   );
@@ -352,16 +341,13 @@ export const useCombatPreferences = () => {
       "combatResourceBarsVisibility",
       "mobile-only",
     );
-  const [showBattleLog, setShowBattleLog] = useLocalStorage<boolean>(
+  const [showBattleLog, toggleBattleLog] = useStoredToggle(
     "combatShowBattleLog",
     false,
   );
-  const [showTimeline, setShowTimeline] = useLocalStorage<boolean>(
-    "combatShowTimeline",
-    true,
-  );
-  const [showAggro, setShowAggro] = useLocalStorage<boolean>("combatShowAggro", true);
-  const [showBasicActions, setShowBasicActions] = useLocalStorage<boolean>(
+  const [showTimeline, toggleTimeline] = useStoredToggle("combatShowTimeline", true);
+  const [showAggro, toggleAggro] = useStoredToggle("combatShowAggro", true);
+  const [showBasicActions, toggleBasicActions] = useStoredToggle(
     "combatShowBasicActions",
     true,
   );
@@ -369,7 +355,7 @@ export const useCombatPreferences = () => {
     "combatLayoutOrder",
     DEFAULT_LAYOUT_ORDER,
   );
-  const [useTabs, setUseTabs] = useLocalStorage<boolean>("combatUseTabs", false);
+  const [useTabs, toggleUseTabs] = useStoredToggle("combatUseTabs", false);
   // The battle dialog is opt-in; keep the game layout until explicitly enabled.
   const [battleFocus, setBattleFocus] = useLocalStorage<boolean>(
     "combatBattleFocus",
@@ -380,102 +366,37 @@ export const useCombatPreferences = () => {
     false,
   );
 
-  const toggleGridNumbers = useCallback(
-    () => setShowGridNumbers(!showGridNumbers),
-    [showGridNumbers, setShowGridNumbers],
-  );
-  const toggleSmallActions = useCallback(
-    () => setUseSmallActions(!useSmallActions),
-    [useSmallActions, setUseSmallActions],
-  );
-  const toggleBattleLog = useCallback(
-    () => setShowBattleLog(!showBattleLog),
-    [showBattleLog, setShowBattleLog],
-  );
-  const toggleTimeline = useCallback(
-    () => setShowTimeline(!showTimeline),
-    [showTimeline, setShowTimeline],
-  );
-  const toggleAggro = useCallback(
-    () => setShowAggro(!showAggro),
-    [showAggro, setShowAggro],
-  );
-  const toggleBasicActions = useCallback(
-    () => setShowBasicActions(!showBasicActions),
-    [showBasicActions, setShowBasicActions],
-  );
-  const toggleUseTabs = useCallback(() => setUseTabs(!useTabs), [useTabs, setUseTabs]);
-  const resetLayoutOrder = useCallback(
-    () => setLayoutOrder([...DEFAULT_LAYOUT_ORDER]),
-    [setLayoutOrder],
-  );
+  return {
+    battleFocus,
+    setBattleFocus,
+    swapFocusPanels,
+    setSwapFocusPanels,
+    showGridNumbers,
+    toggleGridNumbers,
+    useSmallActions,
+    toggleSmallActions,
+    resourceBarsVisibility,
+    setResourceBarsVisibility,
+    showBattleLog,
+    toggleBattleLog,
+    showTimeline,
+    toggleTimeline,
+    showAggro,
+    toggleAggro,
+    showBasicActions,
+    toggleBasicActions,
+    layoutOrder,
+    setLayoutOrder,
+    useTabs,
+    toggleUseTabs,
+    resetLayoutOrder: () => setLayoutOrder([...DEFAULT_LAYOUT_ORDER]),
+  };
+};
 
-  return useMemo(
-    () => ({
-      battleFocus,
-      setBattleFocus,
-      swapFocusPanels,
-      setSwapFocusPanels,
-      showGridNumbers,
-      setShowGridNumbers,
-      toggleGridNumbers,
-      useSmallActions,
-      setUseSmallActions,
-      toggleSmallActions,
-      resourceBarsVisibility,
-      setResourceBarsVisibility,
-      showBattleLog,
-      setShowBattleLog,
-      toggleBattleLog,
-      showTimeline,
-      setShowTimeline,
-      toggleTimeline,
-      showAggro,
-      setShowAggro,
-      toggleAggro,
-      showBasicActions,
-      setShowBasicActions,
-      toggleBasicActions,
-      layoutOrder,
-      setLayoutOrder,
-      useTabs,
-      setUseTabs,
-      toggleUseTabs,
-      resetLayoutOrder,
-    }),
-    [
-      battleFocus,
-      setBattleFocus,
-      swapFocusPanels,
-      setSwapFocusPanels,
-      showGridNumbers,
-      setShowGridNumbers,
-      toggleGridNumbers,
-      useSmallActions,
-      setUseSmallActions,
-      toggleSmallActions,
-      resourceBarsVisibility,
-      setResourceBarsVisibility,
-      showBattleLog,
-      setShowBattleLog,
-      toggleBattleLog,
-      showTimeline,
-      setShowTimeline,
-      toggleTimeline,
-      showAggro,
-      setShowAggro,
-      toggleAggro,
-      showBasicActions,
-      setShowBasicActions,
-      toggleBasicActions,
-      layoutOrder,
-      setLayoutOrder,
-      useTabs,
-      setUseTabs,
-      toggleUseTabs,
-      resetLayoutOrder,
-    ],
-  );
+/** A boolean preference persisted in localStorage, with its toggle. */
+const useStoredToggle = (key: string, initialValue: boolean) => {
+  const [value, setValue] = useLocalStorage<boolean>(key, initialValue);
+  return [value, () => setValue(!value)] as const;
 };
 
 export type CombatPreferences = ReturnType<typeof useCombatPreferences>;

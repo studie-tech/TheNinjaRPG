@@ -34,65 +34,27 @@ export const getAvatarPrompt = async (client: DrizzleClient, user: UserData) => 
     .map((attribute) => attribute.attribute)
     .join(", ");
 
-  const getPhenotype = (rank: UserRank, gender: string) => {
-    switch (rank) {
-      case "STUDENT":
-        switch (gender) {
-          case "Male":
-            return "teenage boy";
-          case "Female":
-            return "teenage girl";
-          default:
-            return "teenage";
-        }
-      case "GENIN":
-        switch (gender) {
-          case "Male":
-            return "teenage boy";
-          case "Female":
-            return "teenage girl";
-          default:
-            return "teenager";
-        }
-      case "CHUNIN":
-        switch (gender) {
-          case "Male":
-            return "man";
-          case "Female":
-            return "woman";
-          default:
-            return "person";
-        }
-      case "JONIN":
-        switch (gender) {
-          case "Male":
-            return "man";
-          case "Female":
-            return "woman";
-          default:
-            return "person";
-        }
-      case "ELITE JONIN":
-        switch (gender) {
-          case "Male":
-            return "old man";
-          case "Female":
-            return "old woman";
-          default:
-            return "old person";
-        }
-      default:
-        switch (gender) {
-          case "Male":
-            return "old man wrinkles";
-          case "Female":
-            return "old woman wrinkles";
-          default:
-            return "old person wrinkles";
-        }
-    }
-  };
   return `${getPhenotype(user.rank, user.gender)}, ${attributes}, fully clothed, wearing clothes, dressed, anime, rossdraws portrait, stanley artgerm lau, wlop, looking into camera, interesting background, sfw`;
+};
+
+/** Avatar subject by rank as [male, female, other]; unlisted ranks use the eldest look. */
+const PHENOTYPES: Partial<Record<UserRank, [string, string, string]>> = {
+  STUDENT: ["teenage boy", "teenage girl", "teenage"],
+  GENIN: ["teenage boy", "teenage girl", "teenager"],
+  CHUNIN: ["man", "woman", "person"],
+  JONIN: ["man", "woman", "person"],
+  "ELITE JONIN": ["old man", "old woman", "old person"],
+};
+const ELDEST_PHENOTYPE: [string, string, string] = [
+  "old man wrinkles",
+  "old woman wrinkles",
+  "old person wrinkles",
+];
+
+/** Select rank- and gender-appropriate avatar prompt wording, using the eldest fallback for unknown ranks. */
+const getPhenotype = (rank: UserRank, gender: string) => {
+  const [male, female, other] = PHENOTYPES[rank] ?? ELDEST_PHENOTYPE;
+  return gender === "Male" ? male : gender === "Female" ? female : other;
 };
 
 /**

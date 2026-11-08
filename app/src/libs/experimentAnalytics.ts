@@ -1,4 +1,9 @@
-import { WALLPAPER_EXPERIMENT, WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
+import { LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
+import {
+  parseWallpaperVariant,
+  WALLPAPER_EXPERIMENT,
+  WALLPAPER_VARIANTS,
+} from "@/libs/wallpaperExperiment";
 import { type DeviceType, getDeviceType } from "@/utils/hardware";
 
 /** SQL-counted exposures and matched completions for one exact user-agent cohort. */
@@ -45,4 +50,28 @@ export const aggregateExperiments = (
     experiment,
     variants: Array.from(variants, ([variant, counts]) => ({ variant, ...counts })),
   }));
+};
+
+export interface ExperimentAssignment {
+  experiment: string;
+  variant: string;
+}
+
+/** Normalize persisted experiment variants into valid assignments for exposure and completion attribution. */
+export const getExperimentAssignments = (variants: {
+  abLemuReplacementVariant?: string | null;
+  wallpaperVariant?: string | null;
+}): ExperimentAssignment[] => {
+  const assignments: ExperimentAssignment[] = [];
+  const variant = normalizeLemuVariant(variants.abLemuReplacementVariant);
+  if (variant) {
+    assignments.push({
+      experiment: LEMU_EXPERIMENT,
+      variant,
+    });
+  }
+  const wallpaper = parseWallpaperVariant(variants.wallpaperVariant);
+  if (wallpaper)
+    assignments.push({ experiment: WALLPAPER_EXPERIMENT, variant: wallpaper });
+  return assignments;
 };

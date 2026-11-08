@@ -27,6 +27,7 @@ import {
   splitIntoStacks,
 } from "@/libs/item";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
+import { checkJutsuBloodline, checkJutsuVillage } from "@/libs/jutsuRequirements";
 import { getPvpBoost } from "@/libs/pvpExperience";
 import {
   filterQuestTrackersForDbPersist,
@@ -45,8 +46,6 @@ import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import {
   calcJutsuTrainCost,
   calcJutsuTrainTime,
-  checkJutsuBloodline,
-  checkJutsuVillage,
   masteryTrainingFields,
 } from "@/libs/train";
 import { nextSnapshotSql } from "@/queries/concurrency";
@@ -104,8 +103,6 @@ import type {
  * `fetchUpdatedUser` and combat setup load the rows with the user in the same query, so
  * users without rows pay no extra query, and timed jobs only cost writes when one is due.
  */
-
-type QueueClient = DrizzleClient | DrizzleTransaction;
 
 type JobOutcome = { finishesAt: Date } | "dropped" | "conflict";
 
@@ -452,7 +449,7 @@ export const enqueueJutsuLevels = async (
 > => {
   if (entries.length === 0) return { success: true, cost: 0, queue: [] };
   const waiting = user.queue.filter((row) => row.kind === "JUTSU");
-  if (waiting.length + entries.length > getQueueTotalCapacity(user) - 1) {
+  if (!hasQueueRoom(user, waiting.length + entries.length - 1)) {
     return { success: false, message: "Your jutsu training queue is full" };
   }
   const cost = entries.reduce((sum, entry) => sum + entry.reservedRyo, 0);
@@ -493,10 +490,10 @@ export const enqueueJutsuLevels = async (
  * and (when a level may start) the sensei data are read in one parallel round trip;
  * pass `waiting` when the rows were just read to skip reading them again.
  */
-const settleJutsus = async (
+export const settleJutsuTrainingQueue = async (
   client: DrizzleClient,
   userId: string,
-  now: Date,
+  now = new Date(),
   preloaded?: QueuedJutsu[],
 ) => {
   const mayStart = !preloaded || hasDueTimedJob(preloaded, now);
@@ -522,10 +519,10 @@ const settleJutsus = async (
 };
 
 /** Start every waiting craft whose turn has come. Returns how many started. */
-const settleCrafts = async (
+export const settleCraftingQueue = async (
   client: DrizzleClient,
   userId: string,
-  now: Date,
+  now = new Date(),
   preloaded?: QueuedCraft[],
 ) => {
   const [waiting, crafting, average] = await Promise.all([
@@ -560,22 +557,13 @@ export const settleTimedQueue = (
   preloaded?: QueuedJutsu[] | QueuedCraft[],
 ) =>
   kind === "JUTSU"
-    ? settleJutsus(client, userId, now, preloaded as QueuedJutsu[] | undefined)
-    : settleCrafts(client, userId, now, preloaded as QueuedCraft[] | undefined);
-
-export const settleJutsuTrainingQueue = (
-  client: DrizzleClient,
-  userId: string,
-  now = new Date(),
-  preloaded?: QueuedJutsu[],
-) => settleJutsus(client, userId, now, preloaded);
-
-export const settleCraftingQueue = (
-  client: DrizzleClient,
-  userId: string,
-  now = new Date(),
-  preloaded?: QueuedCraft[],
-) => settleCrafts(client, userId, now, preloaded);
+    ? settleJutsuTrainingQueue(
+        client,
+        userId,
+        now,
+        preloaded as QueuedJutsu[] | undefined,
+      )
+    : settleCraftingQueue(client, userId, now, preloaded as QueuedCraft[] | undefined);
 
 /**
  * Settle the timed queues of every user whose loaded rows hold a due job. Users run in
@@ -626,7 +614,7 @@ export const cancelQueuedJob = async (
   if (entry.kind === "JUTSU") {
     await refundRyo(client, userId, entry.reservedRyo ?? 0);
   } else {
-    await returnMaterials(client, userId, entry.materials ?? []);
+    await returnCraftMaterials(client, userId, entry.materials ?? []);
   }
   const rest = waiting.filter((row) => row.id !== entry.id);
   const started = rest.length
@@ -727,8 +715,9 @@ const settleWaitingJobs = async <
   );
 };
 
+/** Persist only shifted queue timings in one statement using the computed schedule. */
 const rescheduleWaiting = async (
-  client: QueueClient,
+  client: DrizzleClient,
   entries: { id: string; startsAt: Date; finishesAt: Date; durationSeconds: number }[],
   startsAt: Date,
 ) => {
@@ -827,7 +816,7 @@ const startQueuedCraft = async (
   if (!(await claimQueueRow(client, entry.id))) return "conflict";
   const craftable = !!entry.item && !entry.item.hidden && entry.item.canBeCrafted;
   if (!entry.item || !craftable) {
-    await returnMaterials(client, entry.userId, entry.materials, true);
+    await returnCraftMaterials(client, entry.userId, entry.materials, true);
     return "dropped";
   }
   // Waiting durations are unboosted; eligibility is fixed when this job actually starts.
@@ -857,7 +846,7 @@ const startQueuedCraft = async (
         getInventoryBucket(row.item) === "cooking",
     ).length;
     if (carried + outputs.length > getInventoryBucketCapacity("cooking", user)) {
-      await returnMaterials(client, entry.userId, entry.materials, true);
+      await returnCraftMaterials(client, entry.userId, entry.materials, true);
       return "dropped";
     }
   }
@@ -890,7 +879,7 @@ const startQueuedCraft = async (
 };
 
 /** Deleting the row is the claim: only one settlement or cancellation can win it. */
-const claimQueueRow = async (client: QueueClient, id: string) => {
+const claimQueueRow = async (client: DrizzleClient, id: string) => {
   const result = await deleteUserQueueForClaimQueueRow(client, id);
   return result.rowsAffected === 1;
 };
@@ -910,7 +899,7 @@ const restoreQueueRow = async (
     if (!isMysqlDuplicateKeyError(error)) throw error;
     if (entry.kind === "JUTSU")
       await refundRyo(client, entry.userId, row.reservedRyo ?? 0);
-    else await returnMaterials(client, entry.userId, row.materials ?? [], true);
+    else await returnCraftMaterials(client, entry.userId, row.materials ?? [], true);
   }
 };
 
@@ -923,7 +912,7 @@ const QUEST_WRITE_ATTEMPTS = 3;
  * changed the owner first; after a few lost races the amounts are written without it.
  */
 const updateQueueOwner = async (
-  client: QueueClient,
+  client: DrizzleClient,
   owner: Awaited<ReturnType<typeof fetchQuestUser>>,
   changes: {
     refund?: number;
@@ -968,7 +957,8 @@ const updateQueueOwner = async (
   await updateUserDataForUpdateQueueOwner2(client, amounts, nextSnapshot, owner);
 };
 
-const refundRyo = async (client: QueueClient, userId: string, amount: number) => {
+/** Restore a positive Ryo refund with an atomic balance increment. */
+const refundRyo = async (client: DrizzleClient, userId: string, amount: number) => {
   if (amount <= 0) return;
   await incrementUserMoney(client, amount, userId);
 };
@@ -980,8 +970,8 @@ const refundRyo = async (client: QueueClient, userId: string, amount: number) =>
  * cannot execute concurrent statements. Per-stack results determine which materials
  * need new stacks; the rest go in one insert.
  */
-const returnMaterials = async (
-  client: QueueClient,
+export const returnCraftMaterials = async (
+  client: DrizzleClient,
   userId: string,
   materials: CraftingQueueMaterial[],
   inTransaction = false,
@@ -1003,16 +993,13 @@ const returnMaterials = async (
   await insertUserItemForReturnMaterials(client, unmerged, userId);
 };
 
-/** Return materials taken for a craft that did not get queued. */
-export const returnCraftMaterials = returnMaterials;
-
 /**
  * Quest context of a job's owner. Unlike a session refresh, settling a queue must not
  * regenerate pools, assign quests or mark the user online.
  * Include bonus history back to the queued job's logical start in the same read.
  */
 const fetchQuestUser = async (
-  client: QueueClient,
+  client: DrizzleClient,
   userId: string,
   jutsuId?: string,
   startsAt?: Date,

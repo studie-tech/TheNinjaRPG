@@ -34,7 +34,7 @@ import { petsRouter } from "@/server/api/routers/pets";
 import { wakeQueuedUser } from "@/queries/profile";
 import { updateUserDataForInitiateClanBattle } from "@/queries/clan";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
-import { runStaleShrineLobbyCleanup } from "@/app/api/shrine-maintenance/route";
+import { runStaleShrineLobbyCleanup } from "@/server/utils/shrineMaintenance";
 import { resumePendingWarSettlements } from "@/server/utils/war";
 import { cleanupTerritoryWarTeams } from "@/server/utils/territoryWar";
 import { Pusher } from "@/libs/pusher";

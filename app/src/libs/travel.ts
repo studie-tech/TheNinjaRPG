@@ -11,11 +11,7 @@ import {
   findNearestWalkableCoordinate,
   getSectorTile,
 } from "@/libs/sector-map/validation";
-import type {
-  GlobalMapData,
-  GlobalTile,
-  SectorPoint,
-} from "@/libs/sector-map/world-types";
+import type { GlobalMapData, SectorPoint } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { secondsFromNow } from "@/utils/time";
 import type { UserCachePatch } from "@/validators/userCache";
@@ -31,15 +27,6 @@ export const getBiomeFromTileType = (tileType: number): CombatBiome => {
       : tileType === 2
         ? "dessert"
         : "ice";
-};
-
-/**
- * Gets the biome of a tile from a global tile
- * @param tile - The tile to get the biome from
- * @returns The biome of the tile
- */
-export const getBiomeFromGlobalTile = (tile: GlobalTile): CombatBiome => {
-  return getBiomeFromTileType(tile.t);
 };
 
 /**

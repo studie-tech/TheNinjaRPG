@@ -30,6 +30,7 @@ import {
   DECORATION_ASSETS_BY_KEY,
   type DecorationAsset,
   resolveDecorationAsset,
+  SPRITE_GROUND_LIFT,
 } from "@/libs/sector-map/decorations";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import {
@@ -145,7 +146,7 @@ export const sectorSpriteDescriptions = (options: {
         isOnVillageRoad(
           {
             x: x + tile.width * (object.offsetX ?? 0),
-            y: y + h * (0.1 * scale - 0.5 + (object.offsetY ?? 0)),
+            y: y + h * (SPRITE_GROUND_LIFT * scale - 0.5 + (object.offsetY ?? 0)),
           },
           roadLayout,
           scale > 1 ? h * 0.12 : 0,
@@ -165,8 +166,11 @@ export const sectorSpriteDescriptions = (options: {
         preserveAspect: !!asset.frame,
         size: h * scale,
         x: x + tile.width * (object.offsetX ?? 0),
-        y: y + h * (scale / 2 - 0.5 + 0.1 * scale) + h * (object.offsetY ?? 0),
-        groundY: y + h * (0.1 * scale - 0.5 + (object.offsetY ?? 0)),
+        y:
+          y +
+          h * (scale / 2 - 0.5 + SPRITE_GROUND_LIFT * scale) +
+          h * (object.offsetY ?? 0),
+        groundY: y + h * (SPRITE_GROUND_LIFT * scale - 0.5 + (object.offsetY ?? 0)),
         small: asset.small === true,
         rendition: asset.small ? 50 : 128,
         nearest: true,
@@ -195,7 +199,7 @@ export const sectorSpriteDescriptions = (options: {
             palette: cover,
             seed: detailSeed,
             x: x + tile.width * ((object.offsetX ?? 0) + (detailSeed % 2 ? -0.4 : 0.4)),
-            y: y + h * (0.1 * scale - 0.7 + (object.offsetY ?? 0)),
+            y: y + h * (SPRITE_GROUND_LIFT * scale - 0.7 + (object.offsetY ?? 0)),
             count: detailSeed % 3 ? 3 : 4,
           }),
         );

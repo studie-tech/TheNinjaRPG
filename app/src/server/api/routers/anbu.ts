@@ -18,7 +18,7 @@ import type { AnbuSquad } from "@/drizzle/schema";
 import { anbuSquad } from "@/drizzle/schema";
 import { anbuEspionageChance } from "@/libs/anbu";
 import { getServerPusher } from "@/libs/pusher";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import {
   assignUserToAnbu,
   clearUserAnbuMembership,

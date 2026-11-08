@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { BasicElementName, ELEMENTAL_MASTERY_CAP, TavernColorPresets } from "@/drizzle/constants";
+import { BasicElementName, ELEMENTAL_MASTERY_CAP, GeneralTypes, TavernColorPresets } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 import { AllTags } from "@/validators/combat";
 import { getSearchValidator } from "@/validators/register";
@@ -8,6 +8,7 @@ import {
   getPublicUsersSchema,
   createAssignedExperienceSchema,
   tavernColorChangeSchema,
+  updateUserPreferencesSchema,
 } from "@/validators/user";
 
 describe("createAssignedExperienceSchema", () => {
@@ -142,5 +143,32 @@ describe("bloodline elemental damage tags", () => {
         bloodline: { effects },
       } as NonNullable<UserWithRelations>),
     ).toEqual(["Fire", "Water"]);
+  });
+});
+
+describe("updateUserPreferencesSchema", () => {
+  const [first, second] = GeneralTypes;
+
+  it("rejects the same preferred general twice", () => {
+    const result = updateUserPreferencesSchema.safeParse({
+      preferredGeneral1: first,
+      preferredGeneral2: first,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it.each([
+    [first, second],
+    [first, null],
+    [null, first],
+    [first, undefined],
+    [undefined, first],
+    [null, null],
+    [undefined, undefined],
+    [null, undefined],
+  ])("accepts %p and %p", (preferredGeneral1, preferredGeneral2) => {
+    expect(
+      updateUserPreferencesSchema.safeParse({ preferredGeneral1, preferredGeneral2 }).success,
+    ).toBe(true);
   });
 });

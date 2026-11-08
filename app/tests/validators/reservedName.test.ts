@@ -30,6 +30,11 @@ describe("isReservedCustomTitle", () => {
     expect(isReservedCustomTitle("custom_hamlet", ["Custom Hamlet"])).toBe(true);
   });
 
+  it("ignores titles and names that normalize to nothing", () => {
+    expect(isReservedCustomTitle("")).toBe(false);
+    expect(isReservedCustomTitle("---", ["***"])).toBe(false);
+  });
+
   it("allows unrelated titles", () => {
     expect(isReservedCustomTitle("Shadow Walker")).toBe(false);
     expect(isReservedCustomTitle("Chunin")).toBe(false);

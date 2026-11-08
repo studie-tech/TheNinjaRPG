@@ -1,6 +1,6 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
+import { getTimeLeftStr } from "@/utils/time";
 
 interface CountdownProps {
   targetDate: Date;
@@ -12,6 +12,7 @@ interface CountdownProps {
   format?: (msLeft: number) => string;
 }
 
+/** Display a server-adjusted countdown and notify completion once per target date. */
 const Countdown: React.FC<CountdownProps> = (props) => {
   const { targetDate, timeDiff, onFinish, onEndShow, className, format } = props;
 
@@ -39,8 +40,7 @@ const Countdown: React.FC<CountdownProps> = (props) => {
       return "Done";
     }
     if (format) return format(msLeft);
-    const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(msLeft);
-    return getTimeLeftStr(days, hours, minutes, seconds);
+    return getTimeLeftStr(msLeft);
   };
 
   const labelRef = useRef<HTMLSpanElement>(null);

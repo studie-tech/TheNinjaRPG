@@ -24,10 +24,5 @@ export const grantTitles = async (
     await insertUserTitleForGrant(database, userId, ids);
   };
   if (inTransaction) await grant(client);
-  else
-    await retryOnDeadlock(() =>
-      client.transaction((transaction) =>
-        grant(transaction as unknown as DrizzleClient),
-      ),
-    );
+  else await retryOnDeadlock(() => client.transaction(grant));
 };

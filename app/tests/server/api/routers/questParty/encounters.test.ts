@@ -6,6 +6,7 @@ import {
   battle,
   battleHistory,
   jutsu,
+  overworldAiPlacement,
   userJutsu,
   conversation,
   quest,
@@ -47,6 +48,7 @@ describeWithDatabase("quest team encounter location claims", () => {
     await resetTables(
       aiProfile,
       jutsu,
+      overworldAiPlacement,
       userJutsu,
       battle,
       battleHistory,
@@ -136,6 +138,42 @@ describeWithDatabase("quest team encounter location claims", () => {
       expect(player.curStamina).toBe(player.maxStamina / 4);
       expect(fight.usersEffects).toContainEqual(expect.objectContaining({ targetId: player.userId, type: "shield", power: 500, rounds: 3 }));
     }
+  });
+  const encounterLocation = async () =>
+    (await (await formQuestTeam()).leader.overview()).current?.encounterLocation;
+  const defeat = (overrides: Record<string, unknown>) =>
+    AllObjectives.parse({
+      id: "encounter",
+      task: "defeat_opponents",
+      opponentAIs: [{ ids: ["enemy"], number: 1 }],
+      sector: 50,
+      longitude: 5,
+      latitude: 6,
+      ...overrides,
+    });
+  it("gathers generic battles at the leader", async () => {
+    await insertTeamQuest([AllObjectives.parse({ id: "encounter", task: "start_battle", opponentAIs: [{ ids: ["enemy"], number: 1 }] })], { maxAttempts: 3 });
+    expect(await encounterLocation()).toEqual({ sector: 50, longitude: 12, latitude: 13 });
+  });
+  it("shows an authored location unless hiding it applies to another sector", async () => {
+    await insertTeamQuest([defeat({})], { maxAttempts: 3 });
+    expect(await encounterLocation()).toEqual({ sector: 50, longitude: 5, latitude: 6 });
+  });
+  it.each([
+    [50, { sector: 50, longitude: 5, latitude: 6 }],
+    [51, null],
+  ])("reveals a hidden objective in sector %i only to members standing there", async (sector, expected) => {
+    await insertTeamQuest([defeat({ sector, hideLocation: true })], { maxAttempts: 3 });
+    expect(await encounterLocation()).toEqual(expected);
+  });
+  it.each([
+    [true, { sector: 50, longitude: 7, latitude: 8 }],
+    [false, null],
+  ])("uses the live tile of a bound NPC, never stale coordinates: active=%p", async (isActive, expected) => {
+    const client = await getTestDatabase();
+    await client.insert(overworldAiPlacement).values({ id: "bound-npc", aiTemplateUserId: "enemy", interactionType: "HOSTILE", sectorList: [], sector: 50, longitude: 7, latitude: 8, positionVersion: 0, isActive });
+    await insertTeamQuest([defeat({ overworldPlacementId: "bound-npc" })], { maxAttempts: 3 });
+    expect(await encounterLocation()).toEqual(expected);
   });
   it("releases a settled team encounter when a member enters unrelated PvP", async () => {
     const client = await getTestDatabase();

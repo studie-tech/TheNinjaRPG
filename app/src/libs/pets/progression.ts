@@ -10,7 +10,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserData, UserPet } from "@/drizzle/schema";
 import { calcLevelRequirements } from "@/libs/profile";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import { getUserFederalStatus } from "@/utils/paypal";
 
 /** Tier loss reduces new-adoption capacity without removing permanent slots or owned pets. */

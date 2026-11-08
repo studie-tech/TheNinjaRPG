@@ -21,12 +21,14 @@ import {
   SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS,
   SENSORY_DETECT_CHANCE_PER_1000_POINTS,
   SENSORY_MAX_DETECT_CHANCE_PERC,
+  SENSORY_MIN_COOLDOWN_SECONDS,
   STEALTH_BASE_DURATION_SECONDS,
   STEALTH_BASE_KEEP_CHANCE_PERC,
   STEALTH_DURATION_PER_1000_POINTS,
   STEALTH_KEEP_CHANCE_PER_1000_POINTS,
   STEALTH_MAX_DURATION_SECONDS,
   STEALTH_SENSORY_CAP,
+  STEALTH_SENSORY_DEFAULT,
 } from "@/drizzle/constants";
 import { boostPvpGain } from "@/libs/pvpExperience";
 
@@ -36,12 +38,9 @@ import { boostPvpGain } from "@/libs/pvpExperience";
  * At default stat (1000), players get only the base duration
  */
 export const calcStealthDuration = (stealthStat: number): number => {
-  const clampedStat = Math.min(stealthStat, STEALTH_SENSORY_CAP);
-  // Calculate intervals above the default stat (1000)
-  // At 1000 stat: intervals = 0, at 2000 stat: intervals = 1, etc.
-  const intervals = Math.max(0, Math.floor((clampedStat - 1000) / 1000));
   const duration =
-    STEALTH_BASE_DURATION_SECONDS + intervals * STEALTH_DURATION_PER_1000_POINTS;
+    STEALTH_BASE_DURATION_SECONDS +
+    intervalsAboveDefault(stealthStat) * STEALTH_DURATION_PER_1000_POINTS;
   return Math.min(duration, STEALTH_MAX_DURATION_SECONDS);
 };
 
@@ -51,14 +50,9 @@ export const calcStealthDuration = (stealthStat: number): number => {
  * At default stat (1000), players get only the base chance
  * Returns a percentage (0-100)
  */
-export const calcStealthKeepChance = (stealthStat: number): number => {
-  const clampedStat = Math.min(stealthStat, STEALTH_SENSORY_CAP);
-  // Calculate intervals above the default stat (1000)
-  const intervals = Math.max(0, Math.floor((clampedStat - 1000) / 1000));
-  return (
-    STEALTH_BASE_KEEP_CHANCE_PERC + intervals * STEALTH_KEEP_CHANCE_PER_1000_POINTS
-  );
-};
+export const calcStealthKeepChance = (stealthStat: number): number =>
+  STEALTH_BASE_KEEP_CHANCE_PERC +
+  intervalsAboveDefault(stealthStat) * STEALTH_KEEP_CHANCE_PER_1000_POINTS;
 
 /**
  * Calculate the chance to detect a stealthed player
@@ -67,11 +61,9 @@ export const calcStealthKeepChance = (stealthStat: number): number => {
  * Returns a percentage (0-100)
  */
 export const calcSensoryDetectChance = (sensoryStat: number): number => {
-  const clampedStat = Math.min(sensoryStat, STEALTH_SENSORY_CAP);
-  // Calculate intervals above the default stat (1000)
-  const intervals = Math.max(0, Math.floor((clampedStat - 1000) / 1000));
   const chance =
-    SENSORY_BASE_DETECT_CHANCE_PERC + intervals * SENSORY_DETECT_CHANCE_PER_1000_POINTS;
+    SENSORY_BASE_DETECT_CHANCE_PERC +
+    intervalsAboveDefault(sensoryStat) * SENSORY_DETECT_CHANCE_PER_1000_POINTS;
   return Math.min(chance, SENSORY_MAX_DETECT_CHANCE_PERC);
 };
 
@@ -82,13 +74,10 @@ export const calcSensoryDetectChance = (sensoryStat: number): number => {
  * Minimum cooldown is 30 seconds
  */
 export const calcSensoryCooldown = (sensoryStat: number): number => {
-  const clampedStat = Math.min(sensoryStat, STEALTH_SENSORY_CAP);
-  // Calculate intervals above the default stat (1000)
-  const intervals = Math.max(0, Math.floor((clampedStat - 1000) / 1000));
   const cooldown =
     SENSORY_BASE_COOLDOWN_SECONDS -
-    intervals * SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS;
-  return Math.max(cooldown, 30); // Minimum 30 second cooldown
+    intervalsAboveDefault(sensoryStat) * SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS;
+  return Math.max(cooldown, SENSORY_MIN_COOLDOWN_SECONDS);
 };
 
 /**
@@ -99,15 +88,8 @@ export const isStealthExpired = (
   stealthActivatedAt: Date | null,
   stealthStat: number,
   timeDiff: number = 0,
-): boolean => {
-  if (!stealthActivatedAt) return true;
-
-  const maxDuration = calcStealthDuration(stealthStat);
-  const syncedNow = Date.now() - timeDiff;
-  const elapsedSeconds = (syncedNow - stealthActivatedAt.getTime()) / 1000;
-
-  return elapsedSeconds >= maxDuration;
-};
+): boolean =>
+  getRemainingStealthDuration(stealthActivatedAt, stealthStat, timeDiff) === 0;
 
 /**
  * Roll to determine if stealth should be broken when performing an action
@@ -137,15 +119,7 @@ export const isSensoryReady = (
   lastSensoryAt: Date | null,
   sensoryStat: number,
   timeDiff: number = 0,
-): boolean => {
-  if (!lastSensoryAt) return true;
-
-  const cooldown = calcSensoryCooldown(sensoryStat);
-  const syncedNow = Date.now() - timeDiff;
-  const elapsedSeconds = (syncedNow - lastSensoryAt.getTime()) / 1000;
-
-  return elapsedSeconds >= cooldown;
-};
+): boolean => getRemainingSensoryCooldown(lastSensoryAt, sensoryStat, timeDiff) === 0;
 
 /**
  * Check if stealth cooldown has expired (after combat)
@@ -154,11 +128,7 @@ export const isSensoryReady = (
 export const isStealthCooldownExpired = (
   stealthCooldownAt: Date | null,
   timeDiff: number = 0,
-): boolean => {
-  if (!stealthCooldownAt) return true;
-  const syncedNow = Date.now() - timeDiff;
-  return syncedNow >= stealthCooldownAt.getTime();
-};
+): boolean => getRemainingStealthCooldown(stealthCooldownAt, timeDiff) === 0;
 
 /**
  * Get remaining stealth duration in seconds
@@ -341,3 +311,10 @@ export const getStealthStatus = (
     covertTrainingGain,
   };
 };
+
+/** Whole 1000-point steps of a capped stat above the default: 1000 gives 0, 2000 gives 1. */
+const intervalsAboveDefault = (stat: number) =>
+  Math.max(
+    0,
+    Math.floor((Math.min(stat, STEALTH_SENSORY_CAP) - STEALTH_SENSORY_DEFAULT) / 1000),
+  );

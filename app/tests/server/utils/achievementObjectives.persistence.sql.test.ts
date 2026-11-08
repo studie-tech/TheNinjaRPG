@@ -17,7 +17,8 @@ import {
   userQueue,
 } from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
-import { getNewTrackers, mockAchievementHistoryEntries } from "@/libs/quest";
+import { getNewTrackers } from "@/libs/quest";
+import { mockAchievementHistoryEntries } from "@/libs/quest/projection";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { itemRouter } from "@/server/api/routers/item";

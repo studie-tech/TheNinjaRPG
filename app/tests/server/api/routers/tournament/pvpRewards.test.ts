@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { clan, tournament, tournamentMatch, tournamentRecord, userData, village } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
-import { updateRewards } from "@/server/api/routers/quests";
+import { updateRewards } from "@/server/utils/questRewards";
 import { syncTournamentState, tournamentRouter } from "@/server/api/routers/tournament";
 import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
 import { insertUsers, insertClans } from "../../../../setup/factories";

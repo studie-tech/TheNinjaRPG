@@ -51,23 +51,21 @@ import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import { JutsuLoadoutSharing } from "@/layout/JutsuLoadoutSharing";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
-import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
+import {
+  EVOLUTION_STAT_FIELDS,
+  meetsEvolutionStatRequirements,
+} from "@/libs/evolution";
 import {
   compareByLoadoutOrder,
   filterFreeJutsuTransfers,
   getFreeTransfers,
 } from "@/libs/jutsu";
 import { getJutsuMaxLevel, getJutsuXpToLevel } from "@/libs/jutsuProgression";
+import { calcJutsuEquipLimit, jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import type { MasterySources } from "@/libs/mastery";
 import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
-import {
-  calcJutsuEquipLimit,
-  canEvolveJutsu,
-  isJutsuInTraining,
-  jutsuRequirementWarning,
-  remainingXpToLevel,
-} from "@/libs/train";
+import { isJutsuInTraining, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { canReskinFreely, canTransferJutsu } from "@/utils/permissions";
 import { DAY_S, secondsFromDate } from "@/utils/time";
@@ -76,6 +74,7 @@ import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadt
 import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
 
+/** Manage learned jutsu, training and evolutions with shared requirement checks and cache updates. */
 export default function MyJutsu() {
   // tRPC utility
   const utils = api.useUtils();
@@ -882,7 +881,7 @@ export default function MyJutsu() {
                           undefined,
                           true,
                         ) ||
-                        (canEvolveJutsu(evo, userData)
+                        (meetsEvolutionStatRequirements(evo, userData)
                           ? ""
                           : "You do not meet the stat requirements for this evolution.");
                       const evolutionLevel = getJutsuMaxLevel(userjutsu.jutsu);

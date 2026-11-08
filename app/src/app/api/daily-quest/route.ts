@@ -2,18 +2,18 @@ import { and, eq, gte, or, sql } from "drizzle-orm";
 import { type UserRank, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { questHistory, userData } from "@/drizzle/schema";
 import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
-import { getQuestMaxLevel } from "@/libs/quest";
-import { availableQuestLetterRanks } from "@/libs/train";
+import { getQuestMaxLevel } from "@/libs/quest/availability";
+import { availableQuestLetterRanks } from "@/libs/rank";
 import {
   listQuestForGET,
   selectUserDataForGET,
   updateQuestHistoryForGET,
 } from "@/queries/quests";
 import { listVillagesWithStructures } from "@/queries/village";
-import { upsertQuestEntries } from "@/routers/quests";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { upsertQuestEntries } from "@/server/utils/questAssignment";
 import { shuffle } from "@/utils/array";
 import { periodStart, secondsFromNow } from "@/utils/time";
 

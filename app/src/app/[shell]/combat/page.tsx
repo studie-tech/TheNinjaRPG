@@ -44,8 +44,8 @@ import {
   getActionPointCost,
 } from "@/libs/combat/actions";
 import { isBattleHotkeyBlocked, toHotkey } from "@/libs/combat/hotkeys";
+import { resolveControlledActorId } from "@/libs/combat/turn";
 import type { BattleState } from "@/libs/combat/types";
-import { resolveControlledActorId } from "@/libs/combat/util";
 import { hexGridHeightRatio } from "@/libs/hexgrid";
 import { isBetweenPyramidBattles } from "@/libs/questRun";
 import { cn } from "@/libs/shadui";

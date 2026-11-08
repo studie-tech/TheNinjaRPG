@@ -400,7 +400,6 @@ describe("reservePityCredit", () => {
     const { client, where } = updateChain(1);
     const won = await reservePityCredit({
       client,
-      table: bloodlineRolls,
       rollId: "roll1",
       expectedPityRolls: 2,
     });
@@ -418,7 +417,6 @@ describe("reservePityCredit", () => {
     const { client, where } = updateChain(0);
     const won = await reservePityCredit({
       client,
-      table: bloodlineRolls,
       rollId: "roll1",
       expectedPityRolls: 2,
     });
@@ -433,7 +431,7 @@ describe("reservePityCredit", () => {
 describe("refundPityCredit", () => {
   it("issues a single decrement scoped to the roll id on the given table", async () => {
     const { client, update, set, where } = updateChain(1);
-    await refundPityCredit({ client, table: bloodlineRolls, rollId: "roll1" });
+    await refundPityCredit({ client, rollId: "roll1" });
     // Unconditional decrement (no expectedPityRolls guard): one update, one set, one where.
     expect(update).toHaveBeenCalledWith(bloodlineRolls);
     expect(set).toHaveBeenCalledTimes(1);
@@ -443,7 +441,7 @@ describe("refundPityCredit", () => {
   it("does not throw when the refund matches zero rows", async () => {
     const { client } = updateChain(0);
     await expect(
-      refundPityCredit({ client, table: bloodlineRolls, rollId: "roll1" }),
+      refundPityCredit({ client, rollId: "roll1" }),
     ).resolves.toBeUndefined();
   });
 });

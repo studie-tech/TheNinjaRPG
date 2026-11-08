@@ -57,6 +57,23 @@ describe("weekly timer period", () => {
   });
 });
 
+describe("period lock responses", () => {
+  it.each([
+    ["hour", lockWithHourlyTimer],
+    ["minute", lockWithMinuteTimer],
+    ["day", lockWithDailyTimer],
+    ["week", lockWithWeeklyTimer],
+    ["month", lockWithMonthlyTimer],
+  ] as const)("answers the %s winner with null and the loser with the wait", async (period, lock) => {
+    setSystemTime(now);
+    const store = timerStore();
+    const winner = await lock(store.client, "timer");
+    const loser = await lock(store.client, "timer");
+    expect(await winner.response.json()).toBeNull();
+    expect(await loser.response.json()).toBe(`Wait until the next ${period} to run this again`);
+  });
+});
+
 for (const [name, lock] of [
   ["hourly", lockWithHourlyTimer],
   ["minute", lockWithMinuteTimer],

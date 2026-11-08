@@ -1,14 +1,23 @@
-import type { WarType } from "@/drizzle/constants";
+import type { AllianceVillageType, WarState, WarType } from "@/drizzle/constants";
 import {
+  ALLIANCE_VILLAGE_TYPES,
   FACTION_RAID_MAX_DAYS,
+  FACTION_RAID_REWARD,
   FACTION_RAID_STRUCTURE_ROUTES,
   FACTION_VILLAGE_TYPES,
+  OBJECTIVE_WAR_ATTACKER_COOLDOWN_DAYS,
+  OBJECTIVE_WAR_DEFENDER_COOLDOWN_DAYS,
   SHRINE_HP_BY_LEVEL,
+  WAR_ATTACKER_EXHAUSTION_MULTIPLIER,
+  WAR_LOSING_COOLDOWN_DAYS,
+  WAR_VICTORY_TOKEN_BONUS,
+  WAR_WINNING_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
 import type { Village, VillageAlliance, VillageStructure, War } from "@/drizzle/schema";
 import { isObjectiveWarOpen } from "@/libs/objectiveWar";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { findRelationship } from "@/utils/alliance";
+import { DAY_S, secondsFromDate } from "@/utils/time";
 
 /**
  * The cover name a player wears for `viewer`, or null when their identity is public.
@@ -59,35 +68,36 @@ export const canJoinWar = (
     warringVillageId,
   );
   const status = relationship?.status || "NEUTRAL";
-  // Checks
-  const check1 = ![activeWar.attackerVillageId, activeWar.defenderVillageId].includes(
-    joiningVillageId,
-  );
-  const check2 = [activeWar.attackerVillageId, activeWar.defenderVillageId].includes(
-    warringVillageId,
-  );
-  const check3 = !activeWar.warAllies.some((f) => f.villageId === joiningVillageId);
-  const check4 = ["VILLAGE", "HIDEOUT", "STRONGHOLD"].includes(joiningVillage.type);
-  const check5 = ["NEUTRAL", "ALLY"].includes(status);
-  const check6 = joiningVillage.type !== "VILLAGE" || joiningVillage.allianceSystem;
-  const check =
-    activeWar.type !== "WAR_RAID" &&
-    check1 &&
-    check2 &&
-    check3 &&
-    check4 &&
-    check5 &&
-    check6;
-  // Derived message for each check failing
-  let message = activeWar.type === "WAR_RAID" ? "Raids do not accept war allies" : "";
-  if (!check1) message = "Cannot join war, already in it";
-  if (!check2) message = "Cannot join war, warring village is not in it";
-  if (!check3) message = "Cannot join war, faction already in war";
-  if (!check4) message = "Cannot join war, not a village/hideout/stronghold";
-  if (!check5) message = "Cannot join war with your enemy";
-  if (!check6) message = "Cannot join war, not a joinable village/hideout/stronghold";
-  // Return
-  return { check, message };
+  const warVillageIds = [activeWar.attackerVillageId, activeWar.defenderVillageId];
+  // The first failure is the message a player sees.
+  const failure = [
+    {
+      ok: joiningVillage.type !== "VILLAGE" || joiningVillage.allianceSystem,
+      message: "Cannot join war, not a joinable village/hideout/stronghold",
+    },
+    {
+      ok: ["NEUTRAL", "ALLY"].includes(status),
+      message: "Cannot join war with your enemy",
+    },
+    {
+      ok: ALLIANCE_VILLAGE_TYPES.includes(joiningVillage.type as AllianceVillageType),
+      message: "Cannot join war, not a village/hideout/stronghold",
+    },
+    {
+      ok: !activeWar.warAllies.some((f) => f.villageId === joiningVillageId),
+      message: "Cannot join war, faction already in war",
+    },
+    {
+      ok: warVillageIds.includes(warringVillageId),
+      message: "Cannot join war, warring village is not in it",
+    },
+    {
+      ok: !warVillageIds.includes(joiningVillageId),
+      message: "Cannot join war, already in it",
+    },
+    { ok: activeWar.type !== "WAR_RAID", message: "Raids do not accept war allies" },
+  ].find((requirement) => !requirement.ok);
+  return { check: !failure, message: failure?.message ?? "" };
 };
 
 /**
@@ -153,6 +163,113 @@ export const shouldEndRaid = (
   raid.attackerWarHealth <= 0 ||
   raid.defenderWarHealth <= 0 ||
   now.getTime() - raid.startedAt.getTime() >= FACTION_RAID_MAX_DAYS * 86400_000;
+
+/** Who won a closing war, what the winners earn and when each side may fight again. */
+export const computeWarOutcome = (
+  current: FetchActiveWarsReturnType,
+  losingVillageId: string | undefined,
+  options: { shrineBuilderId?: string },
+  endedAt: Date,
+) => {
+  const isRaid = current.type === "WAR_RAID";
+  const attackerLost =
+    losingVillageId === current.attackerVillageId ||
+    (!isRaid && !current.rules && current.attackerVillage.tokens <= 0) ||
+    current.attackerWarHealth <= 0;
+  const defenderLost =
+    !!options.shrineBuilderId ||
+    losingVillageId === current.defenderVillageId ||
+    (!isRaid && !current.rules && current.defenderVillage.tokens <= 0) ||
+    current.defenderWarHealth <= 0;
+  const isDraw =
+    !isRaid &&
+    ((attackerLost && defenderLost) ||
+      (!attackerLost &&
+        !defenderLost &&
+        current.attackerWarHealth === current.defenderWarHealth));
+  const winnerId = isRaid
+    ? defenderLost && !attackerLost
+      ? current.attackerVillageId
+      : current.defenderVillageId
+    : (attackerLost && !defenderLost) ||
+        (!attackerLost &&
+          !defenderLost &&
+          current.attackerWarHealth < current.defenderWarHealth)
+      ? current.defenderVillageId
+      : current.attackerVillageId;
+  const loserId =
+    winnerId === current.attackerVillageId
+      ? current.defenderVillageId
+      : current.attackerVillageId;
+  const status: WarState = isDraw
+    ? "DRAW"
+    : winnerId === current.attackerVillageId
+      ? "ATTACKER_VICTORY"
+      : "DEFENDER_VICTORY";
+  const winningVillageIds = isRaid
+    ? [winnerId]
+    : isDraw
+      ? []
+      : [
+          ...new Set([
+            winnerId,
+            ...current.warAllies
+              .filter((ally) => ally.supportVillageId === winnerId)
+              .map((ally) => ally.villageId),
+          ]),
+        ].sort();
+  const share = isRaid
+    ? winnerId === current.attackerVillageId
+      ? FACTION_RAID_REWARD
+      : 0
+    : winningVillageIds.length
+      ? Math.floor(WAR_VICTORY_TOKEN_BONUS / winningVillageIds.length)
+      : 0;
+  const winnerTokens =
+    share +
+    (!isRaid && winningVillageIds.length
+      ? WAR_VICTORY_TOKEN_BONUS % winningVillageIds.length
+      : 0);
+  const attackerCooldown = current.rules
+    ? secondsFromDate(
+        (status === "ATTACKER_VICTORY"
+          ? WAR_WINNING_COOLDOWN_DAYS
+          : OBJECTIVE_WAR_ATTACKER_COOLDOWN_DAYS) * DAY_S,
+        endedAt,
+      )
+    : secondsFromDate(
+        (status === "ATTACKER_VICTORY"
+          ? WAR_WINNING_COOLDOWN_DAYS
+          : WAR_LOSING_COOLDOWN_DAYS) *
+          DAY_S *
+          WAR_ATTACKER_EXHAUSTION_MULTIPLIER,
+        endedAt,
+      );
+  const defenderCooldown = current.rules
+    ? secondsFromDate(
+        (status === "DEFENDER_VICTORY"
+          ? WAR_WINNING_COOLDOWN_DAYS
+          : OBJECTIVE_WAR_DEFENDER_COOLDOWN_DAYS) * DAY_S,
+        endedAt,
+      )
+    : secondsFromDate(
+        (status === "DEFENDER_VICTORY"
+          ? WAR_WINNING_COOLDOWN_DAYS
+          : WAR_LOSING_COOLDOWN_DAYS) * DAY_S,
+        endedAt,
+      );
+  return {
+    isDraw,
+    winnerId,
+    loserId,
+    status,
+    winningVillageIds,
+    share,
+    winnerTokens,
+    attackerCooldown,
+    defenderCooldown,
+  };
+};
 
 /**
  * Return the first user-facing structure or cooldown rejection, or undefined if eligible.

@@ -82,7 +82,6 @@ import {
   COST_SWAP_BLOODLINE,
   COST_SWAP_VILLAGE,
   COST_TAVERN_COLOR_CHANGE,
-  getTavernColorChangeCost,
   MAX_ATTRIBUTES,
   TavernColorPresets,
 } from "@/drizzle/constants";
@@ -128,7 +127,6 @@ import { getFreeBloodlineSwaps } from "@/libs/bloodline";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import {
   DEFAULT_MOBILE_NAV_CONFIG,
-  getMobileNavIcon,
   getNavOptionById,
   MOBILE_NAV_OPTIONS,
   MOBILE_NAV_STORAGE_KEY,
@@ -2374,7 +2372,7 @@ const TavernColors: React.FC = () => {
     // Size pickers to the editor's width, including when the category sidebar is visible.
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-5">
       {controls.map((control) => {
-        const cost = getTavernColorChangeCost(control.value);
+        const cost = COST_TAVERN_COLOR_CHANGE;
         const unchanged = control.value === control.current;
         const canAfford = userData.reputationPoints >= cost;
         const isThisPending =
@@ -3100,7 +3098,8 @@ const MobileNavSettings: React.FC = () => {
     onChange: (newId: string) => void,
     label: string,
   ) => {
-    const Icon = getMobileNavIcon(currentId);
+    const current = getNavOptionById(currentId);
+    if (!current) return null;
     return (
       <div className="flex items-center gap-2">
         <Label className="w-16 text-sm">{label}</Label>
@@ -3108,20 +3107,19 @@ const MobileNavSettings: React.FC = () => {
           <SelectTrigger className="w-full">
             <SelectValue>
               <div className="flex items-center gap-2">
-                <Icon className="h-4 w-4" />
-                <span>{getNavOptionById(currentId)?.name}</span>
+                <current.icon className="h-4 w-4" />
+                <span>{current.name}</span>
               </div>
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {MOBILE_NAV_OPTIONS.map((option) => {
-              const OptionIcon = getMobileNavIcon(option.id);
               const isDisabled =
                 selectedIds.includes(option.id) && option.id !== currentId;
               return (
                 <SelectItem key={option.id} value={option.id} disabled={isDisabled}>
                   <div className="flex items-center gap-2">
-                    <OptionIcon className="h-4 w-4" />
+                    <option.icon className="h-4 w-4" />
                     <span>{option.name}</span>
                   </div>
                 </SelectItem>

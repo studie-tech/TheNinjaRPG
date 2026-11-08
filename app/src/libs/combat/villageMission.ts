@@ -1,14 +1,13 @@
-import type { VillageMissionTask } from "@/drizzle/constants";
 import { isHumanOpponent } from "@/libs/combat/participants";
+import { wasDefeated } from "@/libs/combat/settlement";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
-import { wasDefeated } from "@/libs/combat/util";
 
-/** Reserve shared PvP credit in battle state before its version-guarded settlement. */
-export const claimVillageMissionCombatEvents = (
+/** Reserve shared PvP kill credit in battle state before its version-guarded settlement. */
+export const claimVillageMissionPvpKills = (
   battle: CompleteBattle,
   userId: string,
   result: CombatResult,
-): Partial<Record<VillageMissionTask, number>> => {
+): number => {
   const user = battle.usersState.find((entry) => entry.userId === userId);
   if (
     !user ||
@@ -18,7 +17,7 @@ export const claimVillageMissionCombatEvents = (
     !result.didWin ||
     battle.battleType !== "COMBAT"
   )
-    return {};
+    return 0;
   // Settlement runs per participant. The persisted marker survives later pool
   // changes, so deferred damage cannot let another winner credit the same kills.
   const hasCreditedWinner = battle.usersState.some(
@@ -27,11 +26,11 @@ export const claimVillageMissionCombatEvents = (
       entry.direction === user.direction &&
       entry.villageMissionPvpCredited,
   );
-  if (hasCreditedWinner) return {};
+  if (hasCreditedWinner) return 0;
   const kills = battle.usersState.filter(
     (entry) => isHumanOpponent(user, entry) && wasDefeated(entry),
   ).length;
-  if (kills === 0) return {};
+  if (kills === 0) return 0;
   user.villageMissionPvpCredited = true;
-  return { pvp_kills: kills };
+  return kills;
 };

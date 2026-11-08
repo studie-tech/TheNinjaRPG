@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { BattleType } from "@/drizzle/constants";
 import { getRemainingCooldown } from "@/libs/combat/actions";
-import { sendsToHospital } from "@/libs/combat/util";
+import { sendsToHospital } from "@/libs/combat/settlement";
 
 describe("sendsToHospital", () => {
   const battle = (battleType: BattleType, forceKeepPools = false) => ({

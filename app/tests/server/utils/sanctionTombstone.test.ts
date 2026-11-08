@@ -17,9 +17,9 @@ import { Pusher } from "@/libs/pusher";
 import { profileRouter } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { reportsRouter } from "@/server/api/routers/reports";
-import { deleteUser } from "@/server/api/routers/staff";
+import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import { removeAccountIdentity } from "@/server/utils/accountDeletion/identity";
-import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
+import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
 import * as sanctions from "@/server/utils/sanctionTombstone";
 import {
   hashSanctionIdentifier,

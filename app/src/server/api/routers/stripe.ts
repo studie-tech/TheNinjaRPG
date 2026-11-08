@@ -65,7 +65,9 @@ export const stripeRouter = createTRPCRouter({
         findUserById(ctx.drizzle, ctx.userId),
         findUserById(ctx.drizzle, input.userId),
         findStripeCheckoutById(ctx.drizzle, input.requestId),
-        reputationAllowanceUsed(ctx.drizzle, ctx.userId, "", input.requestId),
+        reputationAllowanceUsed(ctx.drizzle, ctx.userId, {
+          excludeStripeCheckoutId: input.requestId,
+        }),
         listStripeCheckoutForCreateCheckout(ctx.drizzle, ctx, input),
       ]);
       if (!buyer || !recipient)
@@ -166,12 +168,9 @@ export const stripeRouter = createTRPCRouter({
             if (tier === "NONE") {
               // One statement sees a consistent receipt/reservation transition. Separate
               // upfront reads can miss a checkout that is being delivered between them.
-              const allowance = await reputationAllowanceUsed(
-                tx,
-                ctx.userId,
-                "",
-                input.requestId,
-              );
+              const allowance = await reputationAllowanceUsed(tx, ctx.userId, {
+                excludeStripeCheckoutId: input.requestId,
+              });
               if (reputationPoints + allowance > dynamicMonthlyRepCap(buyer))
                 return false;
             }

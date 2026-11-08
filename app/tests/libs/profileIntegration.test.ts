@@ -3,12 +3,7 @@ import { getUserCaps } from "@/drizzle/constants";
 import { isStreakContinuous, nextStreakRefreshAt } from "@/libs/activityStreak";
 import { bankAccessBlockMessage } from "@/libs/bank";
 import { calcLevelRequirements, levelUpBlockMessage } from "@/libs/profile";
-import {
-  questAlreadyActiveBlockMessage,
-  questRequiresTravel,
-  questTypeConcurrentBlockMessage,
-  questUiAccessBlockMessage,
-} from "@/libs/quest";
+import { questAlreadyActiveBlockMessage, questRequiresTravel, questTypeConcurrentBlockMessage, questUiAccessBlockMessage } from "@/libs/quest/missionHall";
 import { raidRewardBlockMessage } from "@/libs/raids";
 import { statTrainingBlockMessage } from "@/libs/train";
 import type { UserWithRelations } from "@/server/api/routers/profile";

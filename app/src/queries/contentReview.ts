@@ -18,6 +18,7 @@ import {
   type SQL,
   sum,
 } from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import type { z } from "zod";
 import type {
   ContentAuditFocus,
@@ -446,6 +447,31 @@ export const deleteContentProposalChangeForCleanupContentProposals = (
     )
     .limit(BATCH);
 
+/** Unique name column of each content type whose whole table takes part in name checks. */
+const NAME_COLUMNS = {
+  JUTSU: jutsu.name,
+  ITEM: item.name,
+  BLOODLINE: bloodline.name,
+  QUEST: quest.name,
+  BADGE: badge.name,
+  GAME_ASSET: gameAsset.name,
+  AI: userData.username,
+};
+
+/** Build the selection of the `names` a content type's rows already hold. */
+export const selectContentNames = (
+  client: Pick<DrizzleClient, "select">,
+  entityType: keyof typeof NAME_COLUMNS,
+  names: string[],
+) => {
+  const column: AnyMySqlColumn<{ data: string; notNull: true }> =
+    NAME_COLUMNS[entityType];
+  return client
+    .select({ name: column })
+    .from(column.table)
+    .where(inArray(column, names));
+};
+
 /** Build the `jutsu` selection for `load`, using predicates on `id`. */
 export const selectJutsuForLoad = (
   client: Pick<DrizzleClient, "select">,
@@ -455,12 +481,6 @@ export const selectJutsuForLoad = (
     .select()
     .from(jutsu)
     .where(ids ? inArray(jutsu.id, ids) : undefined);
-
-/** Build the `jutsu` selection for `findNames`, using predicates on `name`. */
-export const selectJutsuForFindNames = (
-  client: Pick<DrizzleClient, "select">,
-  names: string[],
-) => client.select({ name: jutsu.name }).from(jutsu).where(inArray(jutsu.name, names));
 
 /** Build the `item` listing for `load`, using predicates on `id`. */
 export const listItemForLoad = (
@@ -472,12 +492,6 @@ export const listItemForLoad = (
     with: { craftingRequirements: true },
   });
 
-/** Build the `item` selection for `findNames`, using predicates on `name`. */
-export const selectItemForFindNames = (
-  client: Pick<DrizzleClient, "select">,
-  names: string[],
-) => client.select({ name: item.name }).from(item).where(inArray(item.name, names));
-
 /** Build the `bloodline` selection for `load`, using predicates on `id`. */
 export const selectBloodlineForLoad = (
   client: Pick<DrizzleClient, "select">,
@@ -487,16 +501,6 @@ export const selectBloodlineForLoad = (
     .select()
     .from(bloodline)
     .where(ids ? inArray(bloodline.id, ids) : undefined);
-
-/** Build the `bloodline` selection for `findNames`, using predicates on `name`. */
-export const selectBloodlineForFindNames = (
-  client: Pick<DrizzleClient, "select">,
-  names: string[],
-) =>
-  client
-    .select({ name: bloodline.name })
-    .from(bloodline)
-    .where(inArray(bloodline.name, names));
 
 /** Build the `quest` selection for `load`, using predicates on `id`. */
 export const selectQuestForLoad = (
@@ -508,12 +512,6 @@ export const selectQuestForLoad = (
     .from(quest)
     .where(ids ? inArray(quest.id, ids) : undefined);
 
-/** Build the `quest` selection for `findNames`, using predicates on `name`. */
-export const selectQuestForFindNames = (
-  client: Pick<DrizzleClient, "select">,
-  names: string[],
-) => client.select({ name: quest.name }).from(quest).where(inArray(quest.name, names));
-
 /** Build the `badge` selection for `load`, using predicates on `id`. */
 export const selectBadgeForLoad = (
   client: Pick<DrizzleClient, "select">,
@@ -523,12 +521,6 @@ export const selectBadgeForLoad = (
     .select()
     .from(badge)
     .where(ids ? inArray(badge.id, ids) : undefined);
-
-/** Build the `badge` selection for `findNames`, using predicates on `name`. */
-export const selectBadgeForFindNames = (
-  client: Pick<DrizzleClient, "select">,
-  names: string[],
-) => client.select({ name: badge.name }).from(badge).where(inArray(badge.name, names));
 
 /** Build the `title` listing for `load`, using predicates on `legacyOwnerId` and `id`. */
 export const listTitleForLoad = (
@@ -559,16 +551,6 @@ export const selectGameAssetForLoad = (
     .from(gameAsset)
     .where(ids ? inArray(gameAsset.id, ids) : undefined);
 
-/** Build the `gameAsset` selection for `findNames`, using predicates on `name`. */
-export const selectGameAssetForFindNames = (
-  client: Pick<DrizzleClient, "select">,
-  names: string[],
-) =>
-  client
-    .select({ name: gameAsset.name })
-    .from(gameAsset)
-    .where(inArray(gameAsset.name, names));
-
 /** Build the `userData` listing for `load`, using predicates on `userId` and `isAi`. */
 export const listUserDataForLoad = (
   client: Pick<DrizzleClient, "query">,
@@ -585,16 +567,6 @@ export const listUserDataForLoad = (
       items: { with: { item: { columns: { id: true } } } },
     },
   });
-
-/** Build the `userData` selection for `findNames`, using predicates on `username`. */
-export const selectUserDataForFindNames = (
-  client: Pick<DrizzleClient, "select">,
-  names: string[],
-) =>
-  client
-    .select({ name: userData.username })
-    .from(userData)
-    .where(inArray(userData.username, names));
 
 /** Build the `gameAsset` selection for `collectCandidates`, using predicates on `id`. */
 export const selectGameAssetForCollectCandidates = (

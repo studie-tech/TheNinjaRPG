@@ -32,7 +32,7 @@ export const useTaverns = (userData: UserWithRelations | null | undefined) => {
     if (sectorVillage && userData) {
       const relationship = findVillageUserRelationship(
         sectorVillage,
-        userData.villageId ?? "syndicate",
+        userData.villageId,
       );
       if (relationship?.status === "ALLY") {
         tavern = sectorVillage.name;

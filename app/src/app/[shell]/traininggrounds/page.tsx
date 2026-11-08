@@ -116,28 +116,29 @@ import {
 } from "@/libs/actionReadiness";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { providedElements } from "@/libs/elementalMastery";
-import { effectiveMasteries } from "@/libs/mastery";
-import { getMasteryRank, masteryTotal } from "@/libs/masteryProgression";
-import { useInfinitePagination } from "@/libs/pagination";
-import { getEnergyQueue, getMasteryQueue } from "@/libs/queue";
-import { cn } from "@/libs/shadui";
-import { getStealthStatus } from "@/libs/stealth";
-import { showMutationToast } from "@/libs/toast";
 import {
-  availableRanks,
-  calcJutsuTrainCost,
-  calcJutsuTrainTime,
   canTrainJutsu,
   canUseJutsu,
   checkJutsuBloodline,
   checkJutsuRank,
   checkJutsuVillage,
+  isJutsuTrainToLearnRestricted,
+} from "@/libs/jutsuRequirements";
+import { effectiveMasteries } from "@/libs/mastery";
+import { getMasteryRank, masteryTotal } from "@/libs/masteryProgression";
+import { useInfinitePagination } from "@/libs/pagination";
+import { getEnergyQueue, getMasteryQueue } from "@/libs/queue";
+import { availableRanks, hasRequiredRank } from "@/libs/rank";
+import { cn } from "@/libs/shadui";
+import { getStealthStatus } from "@/libs/stealth";
+import { showMutationToast } from "@/libs/toast";
+import {
+  calcJutsuTrainCost,
+  calcJutsuTrainTime,
   findJutsuInTraining,
   getMasteryTrainingState,
   getTrainingSections,
-  hasRequiredRank,
   isJutsuInTraining,
-  isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,
   masteryTrainingBlockMessage,
   masteryTrainingGainRoom,
@@ -153,7 +154,7 @@ import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
+import { getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 
 const getJutsuLevelCap = (_jutsu: { parentJutsuId?: string | null }) => JUTSU_LEVEL_CAP;
@@ -1409,14 +1410,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const maxLevelCount = Math.max(1, Math.min(freeSlots, levelCap - level));
   const count = Math.min(levelCount || 1, maxLevelCount);
   const countLevels = Array.from({ length: count }, (_, i) => level + i);
-  const trainSeconds =
+  const trainTimeLabel =
     jutsu &&
     getTimeLeftStr(
-      ...getDaysHoursMinutesSeconds(
-        countLevels.reduce(
-          (sum, lvl) => sum + calcJutsuTrainTime(jutsu, lvl, userData),
-          0,
-        ),
+      countLevels.reduce(
+        (sum, lvl) => sum + calcJutsuTrainTime(jutsu, lvl, userData),
+        0,
       ),
     );
   const cost =
@@ -1457,8 +1456,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       proceed_label = `Wrong bloodline`;
     } else if (isQueueFull) {
       proceed_label = `Training queue full`;
-    } else if (trainSeconds && cost) {
-      proceed_label = `${isQueueing ? "Queue" : "Train"}${count > 1 ? ` ${count} levels` : ""} [${trainSeconds}, ${cost} ryo]`;
+    } else if (trainTimeLabel && cost) {
+      proceed_label = `${isQueueing ? "Queue" : "Train"}${count > 1 ? ` ${count} levels` : ""} [${trainTimeLabel}, ${cost} ryo]`;
     }
   }
 

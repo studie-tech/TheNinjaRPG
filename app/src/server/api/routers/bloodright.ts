@@ -5,6 +5,8 @@ import {
 } from "@/deltas/bloodright";
 import { COST_SKILL_RESET, MAX_BLOODRIGHT_TIERS } from "@/drizzle/constants";
 import { getBloodrightRefundIds } from "@/libs/bloodright";
+import { isSkillVisible } from "@/libs/skillRequirements";
+import { getResetAllowance } from "@/libs/skillReset";
 import {
   insertActionLogForReset,
   listSkillTreeForGet,
@@ -15,7 +17,6 @@ import {
 } from "@/queries/bloodright";
 import { findSkillWithFolderById } from "@/queries/skillTree";
 import { fetchUpdatedUser } from "@/routers/profile";
-import { getResetAllowance, isSkillVisible } from "@/routers/skillTree";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
 import { bloodrightTierSchema } from "@/validators/skillTree";

@@ -290,13 +290,15 @@ export const findSkillTreeForDelete = (
   input: { id: string },
 ) => client.query.skillTree.findFirst({ where: eq(skillTree.id, input.id) });
 
-/** Build the `userSkill` listing for `delete`, using predicates on `skillId`. */
+/** Build the `userSkill` listing for `delete`, selecting one `id` to test for any owner. */
 export const listUserSkillForDelete = (
   client: Pick<DrizzleClient, "query">,
   input: { id: string },
 ) =>
   client.query.userSkill.findMany({
+    columns: { id: true },
     where: eq(userSkill.skillId, input.id),
+    limit: 1,
   });
 
 /** Build the `skillTree` listing for `delete`, selecting only `id`, using predicates on `requiredSkillIds`. */

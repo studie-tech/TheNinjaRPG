@@ -8,48 +8,17 @@
 
 import * as Sentry from "@sentry/node";
 import {
-  and,
-  eq,
-  gt,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
-import { nanoid } from "nanoid";
-import {
   type FederalStatus,
-  FederalStatuses,
-  PAYPAL_PAID_PERIOD_DAYS,
   STORE_FEDERAL_PRODUCTS,
   STORE_PLATFORMS,
-  STORE_RECEIPT_FALLBACK_DAYS,
   STORE_REP_PRODUCTS,
   type StorePlatform,
 } from "@/drizzle/constants";
 import {
-  paypalSubscription,
-  storePurchase,
-  stripePayment,
-  userData,
-} from "@/drizzle/schema";
-import { env } from "@/env/server.mjs";
-import {
-  deleteStoreEntitlementRevocationForMigrateStoreEntitlementRevocations,
-  deleteStoreEntitlementStateForMigrateStoreEntitlementStates,
-  deleteStorePurchaseTransferForMigrateStorePurchaseTransfers,
-  deleteStorePurchaseTransferForMigrateStorePurchaseTransfers2,
   executeResultForApplyStorePurchase,
   executeResultForApplyStorePurchase2,
-  executeRowsForReconcileFederalStatuses,
-  findStoreEntitlementRevocationForMigrateStoreEntitlementRevocations,
   findStoreEntitlementRevocationForRetireIfExpired,
   findStoreEntitlementStateForApplyStoreTransfer,
-  findStoreEntitlementStateForMigrateStoreEntitlementStates,
   findStoreEntitlementStateForRetireIfExpired,
   findStorePurchaseForApplyFederalRevocation,
   findStorePurchaseForApplyFederalRevocation2,
@@ -58,40 +27,24 @@ import {
   findStorePurchaseForApplyStorePurchase,
   findStorePurchaseForApplyStorePurchase2,
   findStorePurchaseForApplyStorePurchase3,
-  findStorePurchaseTransferForMigrateStorePurchaseTransfers,
-  findStoreUserIdAlias,
   insertStoreEntitlementRevocationForApplyFederalRevocation,
   insertStoreEntitlementStateForApplyFederalRevocation,
   insertStorePurchaseForApplyStorePurchase,
   insertStorePurchaseTransferForApplyStoreTransfer,
-  insertStoreUserIdAlias,
-  listPaypalSubscriptionForPaypalFederalFloor,
-  listStoreEntitlementRevocationForMigrateStoreEntitlementRevocations,
   listStorePurchaseForApplyFederalRevocation,
   listStorePurchaseForApplyStoreExtension,
   listStorePurchaseForApplyStoreExtension2,
   listStorePurchaseForApplyStoreTransfer,
   listStorePurchaseForSettleRecordedLedger,
-  listStorePurchaseTransferForMigrateStorePurchaseTransfers,
   listStorePurchaseTransferForTransferChainUserIds,
   listStorePurchaseTransferForTransferPredecessorUserIds,
   listStorePurchaseTransferForTransferredUserId,
   selectStorePurchaseForReconcileStorePurchaseOwner,
   selectStoreUserIds,
-  selectUserDataForReconcileFederalStatuses,
-  updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations,
-  updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations2,
-  updateStoreEntitlementStateForMigrateStoreEntitlementStates,
-  updateStoreEntitlementStateForMigrateStoreEntitlementStates2,
   updateStorePurchaseForApplyFederalRevocation,
   updateStorePurchaseForApplyStoreExtension,
   updateStorePurchaseForReconcileStorePurchaseOwner,
   updateStorePurchaseForRetireIfExpired,
-  updateStorePurchaseTransferForMigrateStorePurchaseTransfers,
-  updateStorePurchaseTransferForMigrateStorePurchaseTransfers2,
-  updateStorePurchaseTransferForMigrateStorePurchaseTransfers3,
-  updateUserDataForSetFederalStatusWithStoreFloor,
-  userFederalRankSql,
 } from "@/queries/purchases";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -99,8 +52,16 @@ import {
   isMysqlDuplicateKeyError,
   retryOnDeadlock,
 } from "@/server/utils/mysqlErrors";
-
-import { DAY_S } from "@/utils/time";
+import {
+  isSandboxGrantee,
+  rankOf,
+  rederiveFederalStatus,
+} from "@/server/utils/purchases/federalStatus";
+import {
+  canonicalStoreUserId,
+  canonicalStoreUserIds,
+  isRetiredStoreUserId,
+} from "@/server/utils/purchases/storeIdentity";
 
 export interface StoreGrant {
   userId: string;
@@ -121,186 +82,6 @@ export type GrantOutcome =
   | { status: "granted" }
   | { status: "duplicate" }
   | { status: "ignored"; reason: string };
-
-/**
- * Whether sandbox receipts count for this account.
- *
- * Set STORE_SANDBOX_USER_IDS to the demo account App Review is given before submitting;
- * Set it as a release step. Unset, sandbox purchases grant
- * nothing at all, which is the safe default for an ordinary deployment.
- */
-const sandboxGranteeUserIds = (): string[] =>
-  (env.STORE_SANDBOX_USER_IDS ?? "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-
-export const isSandboxGrantee = (userId: string): boolean =>
-  sandboxGranteeUserIds().includes(userId);
-
-const repProduct = (productId: string) =>
-  STORE_REP_PRODUCTS.find((product) => product.productId === productId);
-
-const federalProduct = (productId: string) =>
-  STORE_FEDERAL_PRODUCTS.find(
-    (product) =>
-      product.productId === productId || product.androidProductId === productId,
-  );
-
-export const DELETED_STORE_USER_PREFIX = "__tnr_deleted_store_user__:";
-
-export const isDeletedStoreUserId = (userId: string): boolean =>
-  userId.startsWith(DELETED_STORE_USER_PREFIX);
-
-/** Whether deletion has retired this identity: a tombstone alias hangs off it. */
-export const isRetiredStoreUserId = async (
-  client: DrizzleClient,
-  userId: string,
-): Promise<boolean> => {
-  const alias = await findStoreUserIdAlias(client, userId);
-  return alias !== undefined && isDeletedStoreUserId(alias.newUserId);
-};
-
-/**
- * Follow staff-driven user-id renames so delayed webhooks cannot recreate the old id.
- *
- * A deletion tombstone is not followed. Deletion retires the character, not the ledger:
- * the receipts stay under the identity it retired, and so does everything the ledger
- * records while the character is gone, so that a returning identity finds its coverage.
- * Resolution therefore stops at that identity, and `isRetiredStoreUserId` answers the
- * separate question of whether there is a character to deliver to.
- */
-export const canonicalStoreUserId = async (
-  client: DrizzleClient,
-  userId: string,
-): Promise<string> => {
-  const visited = new Set<string>();
-  let current = userId;
-  while (true) {
-    if (visited.has(current))
-      throw new Error(`Store user-id alias cycle from ${userId}`);
-    visited.add(current);
-    const alias = await findStoreUserIdAlias(client, current);
-    if (
-      !alias ||
-      alias.newUserId === current ||
-      isDeletedStoreUserId(alias.newUserId)
-    ) {
-      return current;
-    }
-    current = alias.newUserId;
-  }
-};
-
-/** Resolve aliases for a RevenueCat id list, dropping blanks and repeats. */
-const canonicalStoreUserIds = async (client: DrizzleClient, userIds: string[]) => {
-  const canonical: string[] = [];
-  for (const id of userIds.filter(Boolean)) {
-    canonical.push(await canonicalStoreUserId(client, id));
-  }
-  return [...new Set(canonical)];
-};
-
-/**
- * Follow durable RevenueCat ownership redirects, including a partially-flattened chain.
- *
- * A transfer only owns receipts which already existed when it happened. Passing the
- * receipt/event time prevents a later purchase made by the old app user id from being
- * permanently captured by an earlier restore.
- */
-const transferredUserId = async (
-  client: DrizzleClient,
-  sourceUserId: string,
-  store: StorePlatform,
-  isSandbox: boolean,
-  asOf: Date,
-): Promise<string> => {
-  const visitedEdges = new Set<string>();
-  let current = sourceUserId;
-  let cursor = asOf;
-  let cursorKey: string | null = null;
-  while (true) {
-    const redirects = await listStorePurchaseTransferForTransferredUserId(
-      client,
-      current,
-      store,
-      isSandbox,
-      cursor,
-    );
-    const redirect = redirects.find((candidate) => {
-      if (candidate.transferredAt.getTime() > cursor.getTime()) return true;
-      return cursorKey === null || transferEdgeKey(candidate) > cursorKey;
-    });
-    if (!redirect || redirect.destinationUserId === current) return current;
-    if (visitedEdges.has(redirect.id)) {
-      throw new Error(
-        `RevenueCat transfer cycle from ${sourceUserId}/${store}/${isSandbox ? "sandbox" : "production"}`,
-      );
-    }
-    visitedEdges.add(redirect.id);
-    cursor = redirect.transferredAt;
-    cursorKey = transferEdgeKey(redirect);
-    current = redirect.destinationUserId;
-  }
-};
-
-/** Total order over transfers sharing a timestamp. */
-const transferEdgeKey = (edge: {
-  id: string;
-  eventId: string;
-  sourceUserId: string;
-  destinationUserId: string;
-}) => `${edge.eventId}\0${edge.sourceUserId}\0${edge.destinationUserId}\0${edge.id}`;
-
-/** Every original owner whose chronological transfer path could reach sourceUserId. */
-const transferPredecessorUserIds = (
-  client: DrizzleClient,
-  sourceUserId: string,
-  store: StorePlatform,
-  isSandbox: boolean,
-) =>
-  walkTransferGraph(sourceUserId, async (current) => {
-    const redirects = await listStorePurchaseTransferForTransferPredecessorUserIds(
-      client,
-      current,
-      store,
-      isSandbox,
-    );
-    return redirects.map((redirect) => redirect.sourceUserId);
-  });
-
-/** Every account which may currently hold a receipt originally attached to sourceUserId. */
-const transferChainUserIds = (
-  client: DrizzleClient,
-  sourceUserId: string,
-  store: StorePlatform,
-  isSandbox: boolean,
-) =>
-  walkTransferGraph(sourceUserId, async (current) => {
-    const redirects = await listStorePurchaseTransferForTransferChainUserIds(
-      client,
-      current,
-      store,
-      isSandbox,
-    );
-    return redirects.map((redirect) => redirect.destinationUserId);
-  });
-
-/** Breadth-first walk over transfer edges, one direction at a time. */
-const walkTransferGraph = async (
-  start: string,
-  neighbours: (userId: string) => Promise<string[]>,
-): Promise<string[]> => {
-  const visited = new Set<string>();
-  const pending = [start];
-  while (pending.length > 0) {
-    const current = pending.shift();
-    if (!current || visited.has(current)) continue;
-    visited.add(current);
-    pending.push(...(await neighbours(current)));
-  }
-  return [...visited];
-};
 
 type StorePurchaseOwnerSnapshot = {
   id: string;
@@ -887,135 +668,6 @@ export interface StoreTransfer {
 }
 
 /**
- * Rename an application user id inside durable transfer aliases.
- *
- * Destination ids are non-unique and can be changed directly. A source can have many
- * ownership epochs, so each historical redirect follows the rename independently.
- */
-export const migrateStorePurchaseTransfers = async (
-  client: DrizzleClient,
-  oldUserId: string,
-  newUserId: string,
-): Promise<void> => {
-  await updateStorePurchaseTransferForMigrateStorePurchaseTransfers(
-    client,
-    newUserId,
-    oldUserId,
-  );
-
-  const aliases = await listStorePurchaseTransferForMigrateStorePurchaseTransfers(
-    client,
-    oldUserId,
-  );
-  for (const alias of aliases) {
-    if (alias.destinationUserId === newUserId) {
-      await deleteStorePurchaseTransferForMigrateStorePurchaseTransfers(client, alias);
-      continue;
-    }
-    const collision = await findStorePurchaseTransferForMigrateStorePurchaseTransfers(
-      client,
-      newUserId,
-      alias,
-    );
-    if (collision) {
-      await updateStorePurchaseTransferForMigrateStorePurchaseTransfers2(
-        client,
-        alias,
-        collision,
-      );
-      await deleteStorePurchaseTransferForMigrateStorePurchaseTransfers(client, alias);
-    } else {
-      await updateStorePurchaseTransferForMigrateStorePurchaseTransfers3(
-        client,
-        newUserId,
-        alias,
-      );
-    }
-  }
-  await deleteStorePurchaseTransferForMigrateStorePurchaseTransfers2(client, newUserId);
-};
-
-/** Merge per-store revocation watermarks before an account id is renamed. */
-export const migrateStoreEntitlementStates = async (
-  client: DrizzleClient,
-  oldUserId: string,
-  newUserId: string,
-): Promise<void> => {
-  for (const store of STORE_PLATFORMS) {
-    for (const isSandbox of [false, true]) {
-      const oldState = await findStoreEntitlementStateForMigrateStoreEntitlementStates(
-        client,
-        oldUserId,
-        store,
-        isSandbox,
-      );
-      const newState = await findStoreEntitlementStateForMigrateStoreEntitlementStates(
-        client,
-        newUserId,
-        store,
-        isSandbox,
-      );
-      if (!oldState) continue;
-      if (newState) {
-        await updateStoreEntitlementStateForMigrateStoreEntitlementStates(
-          client,
-          oldState,
-          newState,
-        );
-        await deleteStoreEntitlementStateForMigrateStoreEntitlementStates(
-          client,
-          oldState,
-        );
-      } else {
-        await updateStoreEntitlementStateForMigrateStoreEntitlementStates2(
-          client,
-          newUserId,
-          oldState,
-        );
-      }
-    }
-  }
-};
-
-/** Move durable per-event expiry facts across a staff user-id rename. */
-export const migrateStoreEntitlementRevocations = async (
-  client: DrizzleClient,
-  oldUserId: string,
-  newUserId: string,
-): Promise<void> => {
-  const revocations =
-    await listStoreEntitlementRevocationForMigrateStoreEntitlementRevocations(
-      client,
-      oldUserId,
-    );
-  for (const revocation of revocations) {
-    const collision =
-      await findStoreEntitlementRevocationForMigrateStoreEntitlementRevocations(
-        client,
-        revocation,
-        newUserId,
-      );
-    if (collision) {
-      await updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations(
-        client,
-        collision,
-        revocation,
-      );
-      await deleteStoreEntitlementRevocationForMigrateStoreEntitlementRevocations(
-        client,
-        revocation,
-      );
-    } else {
-      await updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations2(
-        client,
-        newUserId,
-        revocation,
-      );
-    }
-  }
-};
-
-/**
  * Follow a RevenueCat receipt transfer between identified application users.
  *
  * Only live subscription receipts move. Consumable reputation was already delivered to
@@ -1135,246 +787,112 @@ const applyStoreTransfer = async (
   return { destinationUserId, rowsAffected };
 };
 
+const repProduct = (productId: string) =>
+  STORE_REP_PRODUCTS.find((product) => product.productId === productId);
+
+const federalProduct = (productId: string) =>
+  STORE_FEDERAL_PRODUCTS.find(
+    (product) =>
+      product.productId === productId || product.androidProductId === productId,
+  );
+
 /**
- * Tombstone a deleted store identity while retaining receipt idempotency history.
+ * Follow durable RevenueCat ownership redirects, including a partially-flattened chain.
  *
- * One alias row. Rename aliases pointing at this identity are left in place: resolution
- * stops at the identity a tombstone retires, so they still land here, and registration
- * removes exactly this row when the identity returns.
+ * A transfer only owns receipts which already existed when it happened. Passing the
+ * receipt/event time prevents a later purchase made by the old app user id from being
+ * permanently captured by an earlier restore.
  */
-export const retireStoreUserId = async (
+const transferredUserId = async (
   client: DrizzleClient,
-  userId: string,
-  beforeRetire?: (client: DrizzleClient) => Promise<void>,
-): Promise<void> => {
-  if (isDeletedStoreUserId(userId)) return;
-  const tombstone = `${DELETED_STORE_USER_PREFIX}${nanoid()}`;
-  // Idempotent statements rather than a transaction. Deletion is where this codebase has
-  // actually seen deadlocks -- deleteUser retries them with backoff -- and holding a lock
-  // across these while the cleanup runs is what made that likely. Re-running either
-  // converges on the same state, so a failure part-way is repaired by the retry
-  // deleteUser already performs.
-  // The tombstone goes down before the cleanup, not after. Identity-scoped writes check
-  // for it before they write, so once it exists none begins; the cleanup below removes
-  // whatever arrived before it, and a write already past its check when the tombstone
-  // landed leaves at most a row the fan-out never reads. Ordered the other way round, a
-  // registration slipping between the cleanup and the tombstone would outlive the account.
-  //
-  // Whoever wrote this row first keeps it. A retry therefore keeps its own marker, and --
-  // the reason this matters without a lock -- a rename that has already pointed this id
-  // somewhere real is not overwritten with a tombstone, which would strand every store
-  // lookup for the old id on a deleted identity. The row is read back rather than assumed:
-  // if a rename owns it, the identity is being moved, and this deletion stops here rather
-  // than shred what the rename is relocating.
-  await insertStoreUserIdAlias(client, userId, tombstone);
-  const claim = await findStoreUserIdAlias(client, userId);
-  if (claim && !isDeletedStoreUserId(claim.newUserId)) {
-    throw new Error(`User ${userId} is being renamed and cannot be deleted`);
-  }
-  // Whatever landed before the tombstone. Store receipts are deliberately left alone --
-  // they are an audit ledger and outlive the account by design -- so this reaches only the
-  // identity-scoped rows that must not.
-  await beforeRetire?.(client);
-};
-
-/** Where a status sits on the ladder, so two sources can be compared. */
-const rankOf = (status: FederalStatus): number => FederalStatuses.indexOf(status);
-
-/** How long an ACTIVE PayPal row vouches for its tier after its last payment. */
-const PAYPAL_WINDOW_MS = PAYPAL_PAID_PERIOD_DAYS * DAY_S * 1000;
-
-const highest = (statuses: FederalStatus[]): FederalStatus =>
-  statuses.reduce<FederalStatus>(
-    (best, status) => (rankOf(status) > rankOf(best) ? status : best),
-    "NONE",
-  );
-
-/**
- * The tier PayPal still vouches for, or `NONE`.
- *
- * ACTIVE and inside the window, because `/api/subscriptions` writes the plan's tier onto a
- * row whatever PayPal says its status is, and refreshes `updatedAt` while doing it — so a
- * cancelled subscription still looks current if you go by the tier and the timestamp
- * alone.
- *
- * The maximum rather than an arbitrary row: a player can hold more than one subscription,
- * and picking whichever the database returned first could hand back the cheaper tier and
- * strip what they are paying for.
- */
-const paypalFederalFloor = async (
-  client: DrizzleClient,
-  userId: string,
-): Promise<FederalStatus> => {
-  const rows = await listPaypalSubscriptionForPaypalFederalFloor(
-    client,
-    userId,
-    PAYPAL_WINDOW_MS,
-  );
-  return highest(rows.map((row) => row.federalStatus));
-};
-
-/** Recompute a player's tier from everything that vouches for it now. */
-const rederiveFederalStatus = async (client: DrizzleClient, userId: string) => {
-  const paypal = await paypalFederalFloor(client, userId);
-  await setFederalStatusWithStoreFloor(client, userId, paypal);
-};
-
-/**
- * Set the shared federal-status column without leaving a gap between reading the store
- * receipts and writing the user. Store grants update the receipt and user in one statement
- * too, so both writers serialize on the user row: whichever runs last sees the other's
- * committed source of truth instead of applying a stale pre-read value.
- */
-export const setFederalStatusWithStoreFloor = async (
-  client: Pick<DrizzleClient, "update">,
-  userId: string,
-  paypalStatus: FederalStatus,
-) => {
-  const sandboxRule = isSandboxGrantee(userId)
-    ? undefined
-    : eq(storePurchase.isSandbox, false);
-  // Only when the caller reports no PayPal tier at all. That is the case the grace exists
-  // for: paypalFederalFloor counts only ACTIVE rows, so a web cancellation reads as NONE
-  // while the period the player paid for is still running. A caller naming a real tier is
-  // asserting one; other current ACTIVE subscriptions are independently protected by
-  // tierEvidence, while this grace only preserves coverage when no PayPal tier was supplied.
-  // Without it, a store grant, revocation or transfer arriving inside that window writes
-  // NONE, and the reconcile deliberately never restores a cleared tier.
-  const paypalGrace = (tier: FederalStatus) =>
-    paypalStatus === "NONE" ? paidPaypalPeriodGrace(userId, tier) : sql`FALSE`;
-
-  return await updateUserDataForSetFederalStatusWithStoreFloor(
-    client,
-    rankOf(paypalStatus),
-    rankOf,
-    (tier) => tierEvidence(userId, tier, sandboxRule),
-    paypalGrace,
-    userId,
-  );
-};
-
-/**
- * Re-derive every non-NONE or currently subscribed player's tier in one correlated write.
- *
- * This is the bulk cleaner counterpart of `setFederalStatusWithStoreFloor`: GOLD wins over
- * SILVER, which wins over NORMAL, across active PayPal rows, paid Stripe periods and live store receipts.
- * It therefore performs downgrades as well as clearing or restoring a status.
- */
-export const reconcileFederalStatuses = async (
-  client: Pick<DrizzleClient, "select" | "execute">,
-) => {
-  const sandboxUserIds = sandboxGranteeUserIds();
-  const sandboxRule = or(
-    eq(storePurchase.isSandbox, false),
-    sandboxUserIds.length ? inArray(storePurchase.userId, sandboxUserIds) : undefined,
-  );
-  const tierCases = FederalStatuses.slice(1)
-    .reverse()
-    .map(
-      (tier) => sql`WHEN ${tierEvidence(userData.userId, tier, sandboxRule)}
-        OR ${paidPaypalPeriodGrace(userData.userId, tier)} THEN ${tier}`,
+  sourceUserId: string,
+  store: StorePlatform,
+  isSandbox: boolean,
+  asOf: Date,
+): Promise<string> => {
+  const visitedEdges = new Set<string>();
+  let current = sourceUserId;
+  let cursor = asOf;
+  let cursorKey: string | null = null;
+  while (true) {
+    const redirects = await listStorePurchaseTransferForTransferredUserId(
+      client,
+      current,
+      store,
+      isSandbox,
+      cursor,
     );
-  const federalStatus = sql`CASE ${sql.join(tierCases, sql` `)} ELSE 'NONE' END`;
-  const eligible = sql`(${userData.federalStatus} != 'NONE'
-      OR EXISTS (SELECT 1 FROM ${stripePayment} WHERE ${liveStripePeriod(userData.userId)})
-      OR EXISTS (SELECT 1 FROM ${paypalSubscription} WHERE ${activePaypalRow(userData.userId)})
-      OR EXISTS (
-        SELECT 1 FROM ${storePurchase}
-        WHERE ${liveStoreReceipt(userData.userId, sandboxRule)}
-          AND ${storePurchase.federalStatus} IS NOT NULL
-      ))`;
-  // Discover candidates with a consistent read, then evaluate the latest receipts
-  // and tier in each bounded write so concurrent grants/revocations still win.
-  const candidates = await selectUserDataForReconcileFederalStatuses(client, eligible);
-  for (let offset = 0; offset < candidates.length; offset += 1000) {
-    const ids = candidates.slice(offset, offset + 1000).map(({ userId }) => userId);
-    await retryOnDeadlock(() =>
-      executeRowsForReconcileFederalStatuses(client, federalStatus, ids, eligible),
-    );
+    const redirect = redirects.find((candidate) => {
+      if (candidate.transferredAt.getTime() > cursor.getTime()) return true;
+      return cursorKey === null || transferEdgeKey(candidate) > cursorKey;
+    });
+    if (!redirect || redirect.destinationUserId === current) return current;
+    if (visitedEdges.has(redirect.id)) {
+      throw new Error(
+        `RevenueCat transfer cycle from ${sourceUserId}/${store}/${isSandbox ? "sandbox" : "production"}`,
+      );
+    }
+    visitedEdges.add(redirect.id);
+    cursor = redirect.transferredAt;
+    cursorKey = transferEdgeKey(redirect);
+    current = redirect.destinationUserId;
   }
 };
 
-/** The player a tier predicate is about: one bound id, or the row of the enclosing UPDATE. */
-type UserReference = string | typeof userData.userId;
+/** Total order over transfers sharing a timestamp. */
+const transferEdgeKey = (edge: {
+  id: string;
+  eventId: string;
+  sourceUserId: string;
+  destinationUserId: string;
+}) => `${edge.eventId}\0${edge.sourceUserId}\0${edge.destinationUserId}\0${edge.id}`;
 
-const databaseNow = sql`CURRENT_TIMESTAMP(3)`;
-const paypalWindowStart = sql`${databaseNow} - INTERVAL ${PAYPAL_PAID_PERIOD_DAYS} DAY`;
+/** Every original owner whose chronological transfer path could reach sourceUserId. */
+const transferPredecessorUserIds = (
+  client: DrizzleClient,
+  sourceUserId: string,
+  store: StorePlatform,
+  isSandbox: boolean,
+) =>
+  walkTransferGraph(sourceUserId, async (current) => {
+    const redirects = await listStorePurchaseTransferForTransferPredecessorUserIds(
+      client,
+      current,
+      store,
+      isSandbox,
+    );
+    return redirects.map((redirect) => redirect.sourceUserId);
+  });
 
-/** Treat a recent active PayPal subscription row as tier evidence. */
-const activePaypalRow = (user: UserReference) =>
-  and(
-    eq(paypalSubscription.affectedUserId, user),
-    eq(paypalSubscription.status, "ACTIVE"),
-    gte(paypalSubscription.updatedAt, paypalWindowStart),
-  );
+/** Every account which may currently hold a receipt originally attached to sourceUserId. */
+const transferChainUserIds = (
+  client: DrizzleClient,
+  sourceUserId: string,
+  store: StorePlatform,
+  isSandbox: boolean,
+) =>
+  walkTransferGraph(sourceUserId, async (current) => {
+    const redirects = await listStorePurchaseTransferForTransferChainUserIds(
+      client,
+      current,
+      store,
+      isSandbox,
+    );
+    return redirects.map((redirect) => redirect.destinationUserId);
+  });
 
-/** Match granted Stripe periods that entitle the account on the database clock. */
-const liveStripePeriod = (user: UserReference) =>
-  and(
-    eq(stripePayment.affectedUserId, user),
-    isNotNull(stripePayment.grantedAt),
-    env.NODE_ENV === "production" ? eq(stripePayment.isSandbox, false) : undefined,
-    lte(stripePayment.purchasedAt, databaseNow),
-    gt(stripePayment.expiresAt, databaseNow),
-  );
-
-/**
- * A receipt with no expiry falls back to a window wider than PayPal's, because a receipt is
- * the only evidence there is and a subscription can go a long time without producing one. A
- * failed renewal opens a billing-retry grace period — up to 16 days on the App Store and 30
- * on Play — during which the player is still entitled and no RENEWAL arrives. A monthly
- * cycle plus that grace exceeds 31 days, so the narrower window would strip someone the
- * store still considers a subscriber. Revocation does not depend on this: EXPIRATION
- * revokes on the event, and this window is only the backstop for a webhook that never
- * arrived.
- */
-const liveStoreReceipt = (user: UserReference, sandboxRule: SQL | undefined) =>
-  and(
-    eq(storePurchase.userId, user),
-    isNotNull(storePurchase.acceptedAt),
-    sandboxRule,
-    isNull(storePurchase.revokedAt),
-    or(
-      gte(storePurchase.expiresAt, databaseNow),
-      and(
-        isNull(storePurchase.expiresAt),
-        gte(
-          storePurchase.createdAt,
-          sql`${databaseNow} - INTERVAL ${STORE_RECEIPT_FALLBACK_DAYS} DAY`,
-        ),
-      ),
-    ),
-  );
-
-/** Whether an active PayPal row, a live store receipt or a paid Stripe period vouches. */
-const tierEvidence = (
-  user: UserReference,
-  tier: FederalStatus,
-  sandboxRule: SQL | undefined,
-) => sql`EXISTS (
-    SELECT 1 FROM ${paypalSubscription}
-    WHERE ${activePaypalRow(user)} AND ${paypalSubscription.federalStatus} = ${tier}
-  ) OR EXISTS (
-    SELECT 1 FROM ${storePurchase}
-    WHERE ${liveStoreReceipt(user, sandboxRule)} AND ${storePurchase.federalStatus} = ${tier}
-  ) OR EXISTS (
-    SELECT 1 FROM ${stripePayment}
-    WHERE ${liveStripePeriod(user)}
-      AND COALESCE(${stripePayment.federalStatusOverride}, ${stripePayment.federalStatus}) = ${tier}
-  )`;
-
-/**
- * Cancelling on the web sets status without moving updatedAt, and the player has already
- * paid through the period. Bounded by the tier they currently hold, so it can only keep what
- * they have -- never hand a tier back to someone the reconcile has already cleared, which is
- * what the ACTIVE predicate above is guarding. "At least", not "exactly", so a store receipt
- * sitting above the PayPal tier does not hide the paid period underneath it when that
- * receipt ends.
- */
-const paidPaypalPeriodGrace = (user: UserReference, tier: FederalStatus) =>
-  sql`(${userFederalRankSql()} >= ${rankOf(tier) + 1} AND EXISTS (
-    SELECT 1 FROM ${paypalSubscription}
-    WHERE ${paypalSubscription.affectedUserId} = ${user}
-      AND ${paypalSubscription.updatedAt} >= ${paypalWindowStart}
-      AND ${paypalSubscription.federalStatus} = ${tier}
-  ))`;
+/** Breadth-first walk over transfer edges, one direction at a time. */
+const walkTransferGraph = async (
+  start: string,
+  neighbours: (userId: string) => Promise<string[]>,
+): Promise<string[]> => {
+  const visited = new Set<string>();
+  const pending = [start];
+  while (pending.length > 0) {
+    const current = pending.shift();
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
+    pending.push(...(await neighbours(current)));
+  }
+  return [...visited];
+};

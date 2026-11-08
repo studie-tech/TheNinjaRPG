@@ -26,22 +26,15 @@ export const particleOverlayStyle = (zIndex: number) =>
     zIndex,
   }) as const;
 
+/** Apply shared decorative-overlay positioning and hide the overlay from assistive technology. */
 export const applyParticleOverlayStyle = (
   element: HTMLElement,
   zIndex: number,
 ): void => {
-  const nextStyle = particleOverlayStyle(zIndex);
-  element.style.position = nextStyle.position;
-  element.style.inset = "0";
-  element.style.width = nextStyle.width;
-  element.style.height = nextStyle.height;
-  element.style.margin = "0";
-  element.style.padding = "0";
-  element.style.pointerEvents = nextStyle.pointerEvents;
-  element.style.overflow = nextStyle.overflow;
-  element.style.contain = nextStyle.contain;
-  element.style.display = nextStyle.display;
-  element.style.zIndex = String(nextStyle.zIndex);
+  Object.assign(element.style, {
+    ...particleOverlayStyle(zIndex),
+    zIndex: String(zIndex),
+  });
   element.setAttribute("aria-hidden", "true");
 };
 

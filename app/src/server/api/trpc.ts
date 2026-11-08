@@ -51,6 +51,7 @@ import {
  */
 import { type DrizzleClient, drizzleDB } from "@/server/db";
 import { enforceBotId } from "@/server/utils/botid";
+import { clientErrorMessage } from "@/server/utils/mysqlErrors";
 
 import { hasSensitiveTrpcInput } from "@/server/utils/trpcInput";
 import { measureTrpcCall } from "@/server/utils/trpcMetrics";
@@ -123,22 +124,9 @@ const t = initTRPC
   .create({
     transformer: superjson,
     errorFormatter({ shape, error }) {
-      // If a database error, extract & format error message better
-      if (error?.cause?.cause) {
-        const cause = error.cause.cause as { name?: string; body: unknown };
-        if (cause?.name === "DatabaseError" && cause?.body) {
-          const message = JSON.stringify(cause.body);
-          // Remove everything after (including) "sqlstate" from the error message
-          const cleanMessage =
-            typeof message === "string"
-              ? message.replace(/\s*\(sqlstate.*$/i, "")
-              : message;
-          shape.message = cleanMessage;
-        }
-      }
-
       return {
         ...shape,
+        message: clientErrorMessage(error),
         data: {
           ...shape.data,
           zodError: error.cause instanceof ZodError ? error.cause.issues : null,

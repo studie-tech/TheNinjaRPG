@@ -1,4 +1,4 @@
-import { getReward } from "@/libs/quest";
+import { getReward } from "@/libs/quest/rewards";
 import { QuestValidator } from "@/validators/objectives";
 import { describe, expect, it } from "bun:test";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";

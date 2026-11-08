@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { ENERGY_QUEST_REWARDS, TERMINAL_DIALOG_PREFIX } from "@/drizzle/constants";
 import { aiProfile, battle, battleHistory, quest, questHistory, userData } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { bankRouter } from "@/server/api/routers/bank";

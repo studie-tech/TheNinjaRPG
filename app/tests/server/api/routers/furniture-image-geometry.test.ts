@@ -3,7 +3,7 @@ import type { UserRole } from "@/drizzle/constants";
 import * as furnitureImage from "@/libs/furnitureImage";
 import { itemRouter } from "@/server/api/routers/item";
 import * as http from "@/utils/http";
-import * as ssrf from "@/utils/ssrf";
+import * as ssrf from "@/server/utils/ssrf";
 import type { FurnitureGeometry } from "@/validators/itemFurniture";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { callerForDatabase } from "../../../setup/testDatabase";
@@ -81,6 +81,34 @@ describe("content furniture image measurements", () => {
     expect(result.success).toBe(false);
     expect(result.geometry).toBeNull();
     expect(result.message).toContain("try again");
+  });
+
+  it("stops reading an oversized upload that declares no length", async () => {
+    const chunk = new Uint8Array(1024 * 1024);
+    let sent = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent += 1;
+        controller.enqueue(chunk);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    vi.spyOn(http, "fetchWithTimeout").mockResolvedValue(new Response(body));
+    const result = await api().getFurnitureImageGeometry({ image, useFullFootprint: false });
+    expect(result).toMatchObject({ success: false, message: "Furniture image is too large to measure", geometry: null });
+    expect(cancelled).toBe(true);
+    expect(sent).toBeLessThanOrEqual(13);
+    expect(furnitureImage.measureFurnitureImage).not.toHaveBeenCalled();
+  });
+
+  it("measures an upload of exactly the size cap", async () => {
+    const bytes = new Uint8Array(furnitureImage.FURNITURE_IMAGE_MAX_BYTES);
+    vi.spyOn(http, "fetchWithTimeout").mockResolvedValue(new Response(bytes));
+    expect((await api().getFurnitureImageGeometry({ image, useFullFootprint: false })).success).toBe(true);
+    expect(furnitureImage.measureFurnitureImage).toHaveBeenCalledTimes(1);
   });
 
   it("rejects oversized uploads before decoding", async () => {

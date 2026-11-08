@@ -95,7 +95,6 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
   const {
     src: sourceUrl,
     alt: alternativeText,
-    className,
     id: imageIdentifier,
     style,
     width,
@@ -115,7 +114,6 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
   const imageAttributes: React.ImgHTMLAttributes<HTMLImageElement> = {
     src: sourceUrl,
     alt: alternativeText || "Post image",
-    className,
     id: imageIdentifier,
     style: parsedStyle,
     width: reservedWidth,
@@ -127,11 +125,7 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
     },
   };
 
-  const filteredAttributes = Object.fromEntries(
-    Object.entries(imageAttributes).filter(([, value]) => value !== undefined),
-  ) as React.ImgHTMLAttributes<HTMLImageElement>;
-
-  const image = React.createElement("img", { ...filteredAttributes, key: sourceUrl });
+  const image = React.createElement("img", { ...imageAttributes, key: sourceUrl });
   let parent = imageNode.parent;
   while (parent) {
     if (parent.name === "a") return image;
@@ -204,14 +198,13 @@ const transformIframeNode = (iframeNode: HtmlNode): React.ReactElement | undefin
     width,
     height,
     title,
-    className,
     class: classAttribute,
     id: elementIdentifier,
     style,
     allow: allowAttribute,
     allowfullscreen,
     frameborder: frameBorder,
-  } = iframeNode.attribs as Record<string, string> & { class?: string };
+  } = iframeNode.attribs;
 
   if (!sourceUrl || !isAllowedIframeUrl(sourceUrl)) {
     return React.createElement("div", {
@@ -220,7 +213,6 @@ const transformIframeNode = (iframeNode: HtmlNode): React.ReactElement | undefin
   }
 
   const parsedStyle = parseStyleAttribute(style);
-  const finalClassName = className ?? classAttribute;
   const sanitizedAllowAttribute = sanitizeIframeAllow(allowAttribute);
   const allowFullScreen =
     typeof allowfullscreen !== "undefined" &&
@@ -228,13 +220,14 @@ const transformIframeNode = (iframeNode: HtmlNode): React.ReactElement | undefin
     allowfullscreen !== "0";
 
   const props: React.IframeHTMLAttributes<HTMLIFrameElement> & {
+    src: string;
     "data-user-iframe"?: string;
   } = {
     src: toPrivacyEnhancedEmbedUrl(sourceUrl),
     width,
     height,
     title,
-    className: finalClassName,
+    className: classAttribute,
     id: elementIdentifier,
     style: parsedStyle,
     allow: sanitizedAllowAttribute,
@@ -247,17 +240,7 @@ const transformIframeNode = (iframeNode: HtmlNode): React.ReactElement | undefin
     "data-user-iframe": "true",
   };
 
-  const filteredProperties = Object.fromEntries(
-    Object.entries(props).filter(([, value]) => value !== undefined),
-  ) as React.IframeHTMLAttributes<HTMLIFrameElement> & {
-    src: string;
-    "data-user-iframe"?: string;
-  };
-
-  return React.createElement(ConsentGatedIframe, {
-    ...filteredProperties,
-    key: sourceUrl,
-  });
+  return React.createElement(ConsentGatedIframe, { ...props, key: sourceUrl });
 };
 
 /**

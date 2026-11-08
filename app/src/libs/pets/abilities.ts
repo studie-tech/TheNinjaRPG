@@ -4,13 +4,12 @@ import {
   PET_ABILITY_SLOTS_BY_RARITY,
   PET_JUTSU_POWER_COST_BY_RANK,
   PET_MIN_SKILL_POWER_COST,
-  PET_RANKS,
   type UserRank,
 } from "@/drizzle/constants";
 import type { Jutsu, PetSpecies, SkillTree, UserPet } from "@/drizzle/schema";
 import type { CombatQueryUserSkill } from "@/libs/combat/types";
-import { getMaxPetRank, getPetLevel } from "@/libs/pets/progression";
-import { hasRequiredRank } from "@/libs/train";
+import { getMaxPetRank, getPetLevel, getPetRank } from "@/libs/pets/progression";
+import { hasRequiredRank } from "@/libs/rank";
 import type { ZodAllTags } from "@/validators/combat";
 
 /** Species rarity grants slots immediately; rank limits the combined ability power. */
@@ -153,11 +152,7 @@ export const validatePetAbilities = ({
     if (!jutsu) return "A selected companion jutsu is no longer available.";
     if (!isPetJutsuAllowed(jutsu)) return `${jutsu.name} is not compatible with pets.`;
     if (
-      !PET_RANKS.some(
-        (rank) =>
-          rank.rank <= pet.rank &&
-          hasRequiredRank(rank.minUserRank, jutsu.requiredRank),
-      ) ||
+      !hasRequiredRank(getPetRank(pet.rank).minUserRank, jutsu.requiredRank) ||
       jutsu.requiredLevel > getPetLevel(pet)
     )
       return `${jutsu.name} requires a higher pet rank or level.`;
@@ -196,29 +191,19 @@ export const selectPetBattleAbilities = ({
   const availableSkills = skills
     .filter((entry) => entry.activated)
     .map((entry) => entry.skill);
-  for (const id of pet.jutsuIds) {
-    const candidate = { ...selected, jutsuIds: [...selected.jutsuIds, id] };
-    if (
-      !validatePetAbilities({
-        pet: candidate,
-        owner,
-        jutsus,
-        skills: availableSkills,
-      })
-    )
-      selected.jutsuIds.push(id);
-  }
-  for (const id of pet.skillIds) {
-    const candidate = { ...selected, skillIds: [...selected.skillIds, id] };
-    if (
-      !validatePetAbilities({
-        pet: candidate,
-        owner,
-        jutsus,
-        skills: availableSkills,
-      })
-    )
-      selected.skillIds.push(id);
+  for (const field of ["jutsuIds", "skillIds"] as const) {
+    for (const id of pet[field]) {
+      const candidate = { ...selected, [field]: [...selected[field], id] };
+      if (
+        !validatePetAbilities({
+          pet: candidate,
+          owner,
+          jutsus,
+          skills: availableSkills,
+        })
+      )
+        selected[field].push(id);
+    }
   }
   return {
     jutsus: selected.jutsuIds.flatMap((id) => {

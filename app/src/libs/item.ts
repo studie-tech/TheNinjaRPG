@@ -2,19 +2,10 @@ import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   COOKING_BASE_SLOTS,
   DURABILITY_POINT_PRICE_PERCENT,
-  FED_COOKING_GOLD_SLOTS,
-  FED_COOKING_NORMAL_SLOTS,
-  FED_COOKING_SILVER_SLOTS,
-  FED_EVENT_ITEMS_DEFAULT,
-  FED_EVENT_ITEMS_GOLD,
-  FED_EVENT_ITEMS_NORMAL,
-  FED_EVENT_ITEMS_SILVER,
-  FED_GOLD_INVENTORY_SLOTS,
-  FED_MATERIALS_GOLD_SLOTS,
-  FED_MATERIALS_NORMAL_SLOTS,
-  FED_MATERIALS_SILVER_SLOTS,
-  FED_NORMAL_INVENTORY_SLOTS,
-  FED_SILVER_INVENTORY_SLOTS,
+  FED_COOKING_SLOTS,
+  FED_EVENT_ITEMS,
+  FED_INVENTORY_SLOTS,
+  FED_MATERIALS_SLOTS,
   HOME_FURNITURE_STORAGE_CAPACITY,
   type ItemSlot,
   ItemSlots,
@@ -40,6 +31,7 @@ import { healItemDiscountPerc } from "@/libs/shop";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { getStrucBoost } from "@/utils/village";
+import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
 
 /**
  * Checks if an item is consumable outside of combat.
@@ -54,35 +46,26 @@ export const nonCombatConsume = (item: Item, userData: UserData): boolean => {
   if (item.itemType !== "CONSUMABLE") {
     return false;
   }
-
-  for (const effect of item.effects) {
-    if (effect.type === "rollbloodline") {
-      return true;
-    } else if (effect.type === "rollsagemode" && !userData.sageModeId) {
-      return true;
-    } else if (effect.type === "removebloodline" && userData.bloodlineId) {
-      return true;
-    } else if (effect.type === "heal") {
-      return true;
-    } else if (effect.type === "marriageslotincrease") {
-      return true;
-    } else if (effect.type === "noncombatincreasereskins") {
-      return true;
-    } else if (effect.type === "increasejutsuslots") {
-      return true;
-    } else if (effect.type === "noncombatconsumereward") {
-      return true;
-    } else if (effect.type === "noncombatgainskill") {
-      return true;
-    } else if (effect.type === "noncombatquest") {
-      return true;
-    } else if (effect.type === "repair") {
-      return true;
-    }
-  }
-
-  return false;
+  return item.effects.some(
+    ({ type }) =>
+      NON_COMBAT_EFFECTS.has(type) ||
+      (type === "rollsagemode" && !userData.sageModeId) ||
+      (type === "removebloodline" && !!userData.bloodlineId),
+  );
 };
+
+/** Consumable effects usable outside combat whatever the user's state. */
+const NON_COMBAT_EFFECTS = new Set<string>([
+  "rollbloodline",
+  "heal",
+  "marriageslotincrease",
+  "noncombatincreasereskins",
+  "increasejutsuslots",
+  "noncombatconsumereward",
+  "noncombatgainskill",
+  "noncombatquest",
+  "repair",
+]);
 
 /**
  * Calculates the maximum number of event items for a user.
@@ -90,19 +73,8 @@ export const nonCombatConsume = (item: Item, userData: UserData): boolean => {
  * @param user - The user data.
  * @returns The maximum number of event items.
  */
-export const calcMaxEventItems = (user: UserData) => {
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return FED_EVENT_ITEMS_NORMAL + user.extraItemSlots;
-    case "SILVER":
-      return FED_EVENT_ITEMS_SILVER + user.extraItemSlots;
-    case "GOLD":
-      return FED_EVENT_ITEMS_GOLD + user.extraItemSlots;
-    default:
-      return FED_EVENT_ITEMS_DEFAULT + user.extraItemSlots;
-  }
-};
+export const calcMaxEventItems = (user: UserData) =>
+  FED_EVENT_ITEMS[getUserFederalStatus(user)] + user.extraItemSlots;
 
 /**
  * Calculates the maximum number of materials for a user.
@@ -110,19 +82,10 @@ export const calcMaxEventItems = (user: UserData) => {
  * @param user - The user data.
  * @returns The maximum number of materials.
  */
-export const calcMaxMaterials = (user: UserData) => {
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return MATERIALS_BASE_SLOTS + FED_MATERIALS_NORMAL_SLOTS + user.extraItemSlots;
-    case "SILVER":
-      return MATERIALS_BASE_SLOTS + FED_MATERIALS_SILVER_SLOTS + user.extraItemSlots;
-    case "GOLD":
-      return MATERIALS_BASE_SLOTS + FED_MATERIALS_GOLD_SLOTS + user.extraItemSlots;
-    default:
-      return MATERIALS_BASE_SLOTS + user.extraItemSlots;
-  }
-};
+export const calcMaxMaterials = (user: UserData) =>
+  MATERIALS_BASE_SLOTS +
+  FED_MATERIALS_SLOTS[getUserFederalStatus(user)] +
+  user.extraItemSlots;
 
 /** Home storage slots that do not extend the materials and cooking buckets. */
 const HOUSE_SPECIAL_ITEMS_OFFSET = 10;
@@ -138,19 +101,10 @@ export const calcMaxHouseSpecialItems = (homeStorage: number) =>
  * Calculates the maximum number of cooking items for a user:
  * base slots + federal bonus + purchased extra slots.
  */
-export const calcMaxCookingItems = (user: UserData) => {
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return COOKING_BASE_SLOTS + FED_COOKING_NORMAL_SLOTS + user.extraItemSlots;
-    case "SILVER":
-      return COOKING_BASE_SLOTS + FED_COOKING_SILVER_SLOTS + user.extraItemSlots;
-    case "GOLD":
-      return COOKING_BASE_SLOTS + FED_COOKING_GOLD_SLOTS + user.extraItemSlots;
-    default:
-      return COOKING_BASE_SLOTS + user.extraItemSlots;
-  }
-};
+export const calcMaxCookingItems = (user: UserData) =>
+  COOKING_BASE_SLOTS +
+  FED_COOKING_SLOTS[getUserFederalStatus(user)] +
+  user.extraItemSlots;
 
 /** Carried inventory backpack bucket. Dedicated types take priority over event. */
 export type InventoryBucket = "normal" | "event" | "materials" | "cooking";
@@ -262,19 +216,7 @@ export const getHomeStorageBucketFullMessage = (bucket: HomeStorageBucket): stri
  */
 export const calcMaxItems = (user: UserData) => {
   const base = 20;
-  const fedContrib = (user: UserData) => {
-    const status = getUserFederalStatus(user);
-    switch (status) {
-      case "NORMAL":
-        return FED_NORMAL_INVENTORY_SLOTS;
-      case "SILVER":
-        return FED_SILVER_INVENTORY_SLOTS;
-      case "GOLD":
-        return FED_GOLD_INVENTORY_SLOTS;
-    }
-    return 0;
-  };
-  return base + user.extraItemSlots + fedContrib(user);
+  return base + user.extraItemSlots + FED_INVENTORY_SLOTS[getUserFederalStatus(user)];
 };
 
 /**
@@ -419,6 +361,59 @@ export const userItemDisplay = <T, I>(
   level: ui.level,
   experience: ui.experience,
 });
+
+/**
+ * Resolve a user item's active variant into a display-ready item: returns the base
+ * item with image/name/description overridden by the active variant when one is
+ * selected (and the variant defines that field), falling back to the base item.
+ * Mirrors getReskinnedUserJutsu for the jutsu cosmetic system.
+ *
+ * Inventory and shop UI only. In combat, battle descriptions are pre-resolved into
+ * BattleUserItem.variantBattleDescription at initiateBattle time — do not call this
+ * during action processing.
+ */
+export const applyActiveVariant = <
+  TItem extends {
+    image: string;
+    name: string;
+    description: string;
+    furnitureData?: FurnitureData | null;
+    variants?: {
+      id: string;
+      image: string;
+      name?: string | null;
+      description?: string | null;
+      furnitureData?: FurnitureVariantData | null;
+    }[];
+  },
+>(userItem: {
+  activeVariantId?: string | null;
+  item: TItem;
+}): TItem & { image: string; name: string; description: string } => {
+  const variant = userItem.activeVariantId
+    ? userItem.item.variants?.find((v) => v.id === userItem.activeVariantId)
+    : undefined;
+  return {
+    ...userItem.item,
+    image: variant?.image ?? userItem.item.image,
+    name: variant?.name ?? userItem.item.name,
+    description: variant?.description ?? userItem.item.description,
+    // A skin's missing directions fall back to its own canonical image, never the base skin.
+    ...(variant && userItem.item.furnitureData
+      ? {
+          furnitureData: {
+            ...userItem.item.furnitureData,
+            width: variant.furnitureData?.width ?? userItem.item.furnitureData.width,
+            groundAnchor:
+              variant.furnitureData?.groundAnchor ??
+              userItem.item.furnitureData.groundAnchor,
+            geometry: variant.furnitureData?.geometry,
+            views: variant.furnitureData?.views ?? {},
+          },
+        }
+      : {}),
+  };
+};
 
 /**
  * Locale-aware comparator for displayed item names.

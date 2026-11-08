@@ -34,8 +34,7 @@ export const settleKageRemoval = async (
   if (initial?.type !== "KAGE_REMOVAL")
     return { success: false, message: "Removal vote not found" };
   return retryOnDeadlock(() =>
-    client.transaction(async (transaction) => {
-      const tx = transaction as unknown as DrizzleClient;
+    client.transaction(async (tx) => {
       // Use the same first lock as defense assignments and successor appointments.
       await incrementKageScheduleVersion(tx, initial.villageId);
       const [motion, v, elders] = await queryInTransaction([

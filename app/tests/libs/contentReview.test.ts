@@ -153,7 +153,7 @@ describe("audit rules", () => {
 
 describe("AI editable fields", () => {
   it("covers every field of the manual AI editor", () => {
-    const editor = readFileSync("src/libs/ais.ts", "utf8");
+    const editor = readFileSync("src/hooks/ai.ts", "utf8");
     const form = editor.slice(editor.indexOf("useAiEditForm"));
     const ids = [...form.matchAll(/\bid: "(\w+)"/g)].map((match) => match[1] as string);
     expect(ids.length).toBeGreaterThan(30);

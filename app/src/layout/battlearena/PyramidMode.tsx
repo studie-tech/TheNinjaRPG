@@ -13,7 +13,7 @@ import { LogbookEntry } from "@/layout/Logbook";
 import { QuestTeams } from "@/layout/QuestTeams";
 import { orderTowers, type TowerState, towerState } from "@/libs/battleArena";
 import { getRewardArray } from "@/libs/objectives";
-import { questTypeConcurrentBlockMessage } from "@/libs/quest";
+import { questTypeConcurrentBlockMessage } from "@/libs/quest/missionHall";
 import { formatQuestEntryCost, getPyramidRunTracker } from "@/libs/questRun";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";

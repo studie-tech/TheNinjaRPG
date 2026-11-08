@@ -15,16 +15,12 @@ import SupportTicketFiltering, {
   getFilter as getSupportTicketFilter,
   useFiltering as useSupportTicketFiltering,
 } from "@/layout/SupportTicketFiltering";
-import { getStatusIcon } from "@/libs/menus";
 import { useInfinitePagination } from "@/libs/pagination";
-import {
-  formatTimeAgo,
-  getCategoryColor,
-  getPriorityColor,
-  getStatusColor,
-} from "@/libs/support";
+import { getCategoryColor, getPriorityColor, getStatusColor } from "@/libs/support";
+import { getStatusIcon } from "@/libs/supportIcons";
 import { parseHtml } from "@/utils/parse";
 import { isStaffRole } from "@/utils/permissions";
+import { formatTimeAgo } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function SupportPage() {

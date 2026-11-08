@@ -536,14 +536,19 @@ export const battleObjectiveFields = {
   applyDebuffs: questStartingEffectsSchema(questDebuffTypes),
 };
 
+/** Scene shown behind a quest or objective. */
+const sceneFields = {
+  sceneBackground: z.string().prefault(""),
+  sceneCharacters: z.array(z.string()).prefault([]),
+};
+
 export const baseObjectiveFields = {
   ...mapLocationFields,
   id: z.string(),
   description: z.string().prefault(""),
   successDescription: z.string().prefault(""),
   nextObjectiveId: z.string().optional(),
-  sceneBackground: z.string().prefault(""),
-  sceneCharacters: z.array(z.string()).prefault([]),
+  ...sceneFields,
   // Default not set, but used for e.g. dialog objectives
   sector: z.coerce.number().optional(),
   longitude: z.coerce.number().optional(),
@@ -923,29 +928,29 @@ export type QuestTrackerType = z.infer<typeof QuestTracker>;
 export const QuestValidatorRawSchema = z.object({
   ...masteryRequirementFields,
   name: z.string().min(1).max(191),
-  image: z.url().optional().nullish(),
+  image: z.url().nullish(),
   description: z.string().min(1).max(5000).nullable(),
   successDescription: z.string().min(1).max(5000).nullable(),
   questRank: z.enum(LetterRanks).optional(),
-  medicalRank: z.enum(MEDNIN_RANKS).optional().nullish(),
-  huntingRank: z.enum(HUNTING_RANKS).optional().nullish(),
-  gatheringRank: z.enum(GATHERING_RANKS).optional().nullish(),
+  medicalRank: z.enum(MEDNIN_RANKS).nullish(),
+  huntingRank: z.enum(HUNTING_RANKS).nullish(),
+  gatheringRank: z.enum(GATHERING_RANKS).nullish(),
   petTaskMinutes: petTaskMinutesSchema,
   requiredLevel: z.coerce.number().int().min(0).max(MAX_PLAYER_LEVEL).optional(),
   requiredFarmingLevel: z.coerce.number().min(0).max(FARMING_MAX_LEVEL).optional(),
   maxLevel: z.coerce.number().int().min(0).max(MAX_PLAYER_LEVEL).optional(),
   maxAttempts: z.coerce.number().min(0).max(100).prefault(1),
   maxCompletes: z.coerce.number().min(0).max(100).prefault(1),
-  requiredVillage: z.string().min(0).max(30).optional().nullish(),
-  requiredBloodlineId: z.string().min(0).max(191).optional().nullish(),
+  requiredVillage: z.string().max(30).nullish(),
+  requiredBloodlineId: z.string().max(191).nullish(),
   /** Exact equipped sage mode required to take the quest; unset = no mode gate. */
-  requiredSageModeId: z.string().min(0).max(191).optional().nullish(),
+  requiredSageModeId: z.string().max(191).nullish(),
   /** Minimum mastery rank (`NONE`…`LEGENDARY`); unset / empty = no rank gate. */
   requiredSageRank: z.preprocess(
     (v) => (v === "" ? null : v),
     z.enum(SAGE_MASTERY_RANKS).nullish(),
   ),
-  prerequisiteQuestId: z.string().min(0).max(191).optional().nullish(),
+  prerequisiteQuestId: z.string().max(191).nullish(),
   tierLevel: z.coerce.number().min(0).max(100).nullable(),
   questType: z.enum(QuestTypes),
   content: z.object({
@@ -954,8 +959,7 @@ export const QuestValidatorRawSchema = z.object({
     objectives: z.array(AllObjectives),
     reward: QuestReward,
     ...questRewardModeFields,
-    sceneBackground: z.string().prefault(""),
-    sceneCharacters: z.array(z.string()).prefault([]),
+    ...sceneFields,
   }),
   hidden: z.coerce.boolean(),
   teamEnabled: z.boolean().prefault(false),
@@ -966,10 +970,10 @@ export const QuestValidatorRawSchema = z.object({
   endsAt: z.string().regex(DateTimeRegExp, "Must be of format YYYY-MM-DD").nullable(),
   startsAt: z.string().regex(DateTimeRegExp, "Must be of format YYYY-MM-DD").nullable(),
   // Raid-specific fields (only persisted data, AI and sector come from objective)
-  raidBossMaxHealth: z.coerce.number().min(1).optional().nullish(),
-  raidBossCurrentHealth: z.coerce.number().min(0).optional().nullish(),
+  raidBossMaxHealth: z.coerce.number().min(1).nullish(),
+  raidBossCurrentHealth: z.coerce.number().min(0).nullish(),
 });
-// Shared superRefine logic for quest validation
+/** Validate cross-field quest and objective constraints with errors attached to their form paths. */
 const questSuperRefine = (
   val: z.infer<typeof QuestValidatorRawSchema>,
   ctx: z.RefinementCtx,
@@ -1180,7 +1184,7 @@ const questSuperRefine = (
       path: ["maxCompletes"],
     });
   }
-  if (["daily"].includes(val.questType)) {
+  if (val.questType === "daily") {
     if (val.content.objectives.length < 3 || val.content.objectives.length > 7) {
       ctx.addIssue({
         code: "custom",
@@ -1219,10 +1223,8 @@ const questSuperRefine = (
     }
     // Validate that raidBossCurrentHealth doesn't exceed raidBossMaxHealth
     if (
-      val.raidBossCurrentHealth !== undefined &&
-      val.raidBossCurrentHealth !== null &&
-      val.raidBossMaxHealth !== undefined &&
-      val.raidBossMaxHealth !== null &&
+      val.raidBossCurrentHealth != null &&
+      val.raidBossMaxHealth != null &&
       val.raidBossCurrentHealth > val.raidBossMaxHealth
     ) {
       ctx.addIssue({
@@ -1242,16 +1244,12 @@ export type ZodQuestType = z.infer<typeof QuestValidator>;
 // - Reward fields at top level (for easy form binding)
 // - Scene fields at top level (for easy form binding)
 // - The superRefine validations
-export const QuestFormRawSchema = QuestValidatorRawSchema.extend(
-  QuestReward.shape,
-).extend(
-  z.object({
-    ...questRunFields,
-    ...questRewardModeFields,
-    sceneBackground: z.string().prefault(""),
-    sceneCharacters: z.array(z.string()).prefault([]),
-  }).shape,
-);
+export const QuestFormRawSchema = QuestValidatorRawSchema.extend({
+  ...QuestReward.shape,
+  ...questRunFields,
+  ...questRewardModeFields,
+  ...sceneFields,
+});
 /**
  * Normalize flattened run settings and milestone-relevant rewards before shared validation.
  * Clear run settings hidden by a quest-type change.
@@ -1276,49 +1274,11 @@ export const QuestFormSchema = QuestFormRawSchema.transform((val) => ({
 export type ZodQuestFormType = z.output<typeof QuestFormSchema>;
 export type ZodQuestFormInput = z.input<typeof QuestFormSchema>;
 
+/** Resolve the schema for a supported objective task and reject unknown task names. */
 export const getObjectiveSchema = (type: string) => {
-  if (SimpleTasks.includes(type as SimpleTask)) {
-    return SimpleObjective;
-  } else if (["fail_quest", "win_quest"].includes(type)) {
-    return InstantWinLoseObjective;
-  } else if (type === "reset_quest") {
-    return ResetQuestObjective;
-  } else if (type === "new_quest") {
-    return InstantNewQuestObjective;
-  } else if (type === "start_battle") {
-    return InstantStartBattleObjective;
-  } else if (type === "move_to_location") {
-    return MoveToObjective;
-  } else if (type === "collect_item") {
-    return CollectItem;
-  } else if (type === "deliver_item") {
-    return DeliverItem;
-  } else if (type === "defeat_opponents") {
-    return DefeatOpponents;
-  } else if (type === "dialog") {
-    return DialogObjective;
-  } else if (type === "win_encounter_at_location") {
-    return EncountersAtLocation;
-  } else if (type === "open_raid" || type === "exclusive_raid") {
-    return RaidObjective;
-  } else if (type === "craft_specific_item") {
-    return CraftSpecificItem;
-  } else if (type === "train_specific_jutsu") {
-    return TrainSpecificJutsu;
-  } else if (type === "complete_specific_quest") {
-    return CompleteSpecificQuest;
-  } else if (type === "buy_item") {
-    return BuyItem;
-  } else if (type === "use_specific_item_combat") {
-    return UseSpecificItemCombat;
-  } else if (type === "use_specific_jutsu_combat") {
-    return UseSpecificJutsuCombat;
-  } else if (type === "tag_usage_win") {
-    return TagUsageWin;
-  } else if (type === "damage_dealt") {
-    return DamageDealt;
-  } else if (type === "bloodline_collection") {
-    return BloodlineCollection;
-  }
-  throw new Error(`Unknown objective task ${type}`);
+  const schema = AllObjectives.options.find(
+    (option) => option.shape.task.safeParse(type).success,
+  );
+  if (!schema) throw new Error(`Unknown objective task ${type}`);
+  return schema;
 };

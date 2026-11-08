@@ -12,7 +12,7 @@ import {
   MEDNIN_REQUIRED_EXP,
 } from "@/drizzle/constants";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
-import { hasRequiredRank } from "@/libs/train";
+import { hasRequiredRank } from "@/libs/rank";
 import { secondsFromDate } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 
@@ -150,7 +150,6 @@ export const calcUserHealFactor = (healer: Healer) => {
 export const calcCombatHealPercentage = (healer?: Partial<Healer>) => {
   switch (calcMedninRank(healer)) {
     case "NONE":
-      return 30;
     case "NOVICE":
       return 30;
     case "APPRENTICE":
@@ -167,20 +166,8 @@ export const calcCombatHealPercentage = (healer?: Partial<Healer>) => {
  * @param healer - The healer's user data.
  * @returns The pools that a mednin can heal.
  */
-export const calcMedninHealablePool = (healer?: Healer): PoolType[] => {
-  switch (calcMedninRank(healer)) {
-    case "NONE":
-      return ["Health"];
-    case "NOVICE":
-      return ["Health"];
-    case "APPRENTICE":
-      return ["Health"];
-    case "MASTER":
-      return ["Health"];
-    case "LEGENDARY":
-      return ["Health", "Chakra", "Stamina"];
-  }
-};
+export const calcMedninHealablePool = (healer?: Healer): PoolType[] =>
+  calcMedninRank(healer) === "LEGENDARY" ? ["Health", "Chakra", "Stamina"] : ["Health"];
 
 /**
  * Pools a hospital heal may restore. A heal is paid in chakra, so a self-heal never
@@ -217,42 +204,29 @@ export const calcHealthToChakra = (healer: Healer, health: number) => {
 };
 
 /**
- * Calculates the amount of health to heal based on the healer's healing factor and the target's health.
- * @param healer - The healer's user data.
+ * The amount to heal: the largest share of `percentage` any of `pools` can still take.
  * @param target - The target's user data.
- * @param percentage - The percentage of the target's health to heal.
- * @param pools - The pools the heal restores; defaults to everything the healer can heal.
- * @returns The amount of health to heal.
+ * @param percentage - The percentage of each pool to heal.
+ * @param pools - The pools the heal restores.
+ * @returns The amount to heal.
  */
 export const calcHowMuchToHeal = (
-  healer: Healer,
   target: UserData,
   percentage: number,
-  pools: PoolType[] = calcMedninHealablePool(healer),
-) => {
-  const poolHealReqs = pools.map((pool) => {
-    if (pool === "Health") {
-      return Math.min(
-        target.maxHealth * (percentage / 100),
-        target.maxHealth - target.curHealth,
-      );
-    } else if (pool === "Chakra") {
-      return Math.min(
-        target.maxChakra * (percentage / 100),
-        target.maxChakra - target.curChakra,
-      );
-    } else if (pool === "Stamina") {
-      return Math.min(
-        target.maxStamina * (percentage / 100),
-        target.maxStamina - target.curStamina,
-      );
-    } else {
-      throw new Error(`Invalid pool`);
-    }
-  });
-  const toHeal = Math.max(...poolHealReqs);
-  return { toHeal, pools };
-};
+  pools: PoolType[],
+) =>
+  Math.max(
+    ...pools.map((pool) => {
+      const [max, cur] = POOL_FIELDS[pool];
+      return Math.min(target[max] * (percentage / 100), target[max] - target[cur]);
+    }),
+  );
+
+const POOL_FIELDS = {
+  Health: ["maxHealth", "curHealth"],
+  Chakra: ["maxChakra", "curChakra"],
+  Stamina: ["maxStamina", "curStamina"],
+} as const;
 
 /**
  * Snaps a healing capacity down to the largest value in `thresholds` that it still covers.

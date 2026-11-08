@@ -1,9 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { CREATOR_USERNAME } from "@/drizzle/constants";
-import type { VillageAlliance } from "@/drizzle/schema";
+import { CREATOR_USERNAME, VILLAGE_SYNDICATE_ID, WAR_FUNDS_COST } from "@/drizzle/constants";
+import type { Village, VillageAlliance } from "@/drizzle/schema";
 import { getWarRelationship } from "@/libs/objectiveWar";
 import {
+  canEnemy,
   canShowMapAttack,
+  findRelationship,
+  findVillageUserRelationship,
+  getAllyStatus,
   getAlliedVillageIds,
   isAutoAttackTarget,
   mapAttackRelation,
@@ -217,5 +221,85 @@ describe("isAutoAttackTarget", () => {
     expect(isAutoAttackTarget(viewer, enemy, null, 41)).toBe(false);
     expect(isAutoAttackTarget(viewer, enemy, null, 40)).toBe(true);
     expect(isAutoAttackTarget(viewer, { ...enemy, villageId: "a" }, null, 1)).toBe(false);
+  });
+});
+
+describe("findVillageUserRelationship", () => {
+  const relations = [relation("a", "b", "ENEMY")];
+
+  it("finds the relationship in either direction and on either side", () => {
+    const expected = relations[0];
+    expect(findRelationship(relations, "b", "a")).toBe(expected);
+    expect(findVillageUserRelationship({ id: "a", relationshipA: relations }, "b")).toBe(expected);
+    expect(findVillageUserRelationship({ id: "b", relationshipB: relations }, "a")).toBe(expected);
+  });
+
+  it("finds nothing for a user without a village", () => {
+    for (const village of [{ id: "a", relationshipA: relations }, { id: null, relationshipA: relations }]) {
+      expect(findVillageUserRelationship(village, null)).toBeUndefined();
+      expect(findVillageUserRelationship(village, undefined)).toBeUndefined();
+      expect(findVillageUserRelationship(village)).toBeUndefined();
+    }
+  });
+});
+
+describe("getAllyStatus", () => {
+  const village = { id: "a", relationshipA: [relation("a", "b", "ENEMY")], relationshipB: [] };
+
+  it("reads the stored relationship once both sides are known", () => {
+    expect(getAllyStatus(village, "b")).toBe("ENEMY");
+    expect(getAllyStatus(village, "c")).toBe("NEUTRAL");
+  });
+
+  it("settles own village, outlaws and missing data before diplomacy", () => {
+    expect(getAllyStatus(undefined, "b")).toBe("NEUTRAL");
+    expect(getAllyStatus(village, "a")).toBe("ALLY");
+    expect(getAllyStatus(village, VILLAGE_SYNDICATE_ID)).toBe("ENEMY");
+    expect(getAllyStatus({ ...village, id: VILLAGE_SYNDICATE_ID }, "b")).toBe("ENEMY");
+    expect(getAllyStatus({ id: "a", relationshipB: [] }, "b")).toBe("NEUTRAL");
+    expect(getAllyStatus({ id: "a", relationshipA: [] }, "b")).toBe("NEUTRAL");
+    expect(getAllyStatus(village, null)).toBe("NEUTRAL");
+  });
+});
+
+describe("canEnemy", () => {
+  const village = (id: string, tokens = WAR_FUNDS_COST) => ({ id, tokens }) as Village;
+  const villages = [village("a"), village("b"), village("c"), village("d"), village("e")];
+  const rejected = (message: string) => ({
+    success: false,
+    message,
+    newNeutrals: [],
+    newEnemies: [],
+  });
+
+  it("rejects in guard order with no consequences", () => {
+    expect(canEnemy([], villages, "missing", "missing")).toEqual(rejected("Village not found"));
+    expect(canEnemy([], villages, "a", "a")).toEqual(
+      rejected("Cannot be enemy with yourself"),
+    );
+    expect(canEnemy([relation("a", "b", "ENEMY")], [village("a", 0)], "a", "b")).toEqual(
+      rejected("Already an enemy"),
+    );
+    expect(canEnemy([relation("b", "a", "ALLY")], [village("a", 0)], "a", "b")).toEqual(
+      rejected("Cannot be enemy with an ally"),
+    );
+    expect(canEnemy([], [village("a", WAR_FUNDS_COST - 1)], "a", "b")).toEqual(
+      rejected("Insufficient funds"),
+    );
+  });
+
+  it("neutralizes shared allies and turns the target's other allies into enemies", () => {
+    const relations = [
+      relation("c", "b", "ALLY"),
+      relation("c", "a", "ALLY"),
+      relation("d", "b", "ALLY"),
+      relation("e", "a", "ALLY"),
+    ];
+    expect(canEnemy(relations, villages, "a", "b")).toEqual({
+      success: true,
+      message: "OK",
+      newNeutrals: ["c"],
+      newEnemies: ["d"],
+    });
   });
 });

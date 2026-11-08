@@ -1,6 +1,7 @@
 import { SECTOR_WIDTH, SECTOR_HEIGHT } from "@/drizzle/constants";
 import { describe, expect, it } from "bun:test";
-import { getNewTrackers, getPublicQuestUser } from "@/libs/quest";
+import { getNewTrackers } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import type { UserWithRelations } from "@/routers/profile";
 
 const makeUser = (sector = 1, role = "USER") =>

@@ -9,13 +9,15 @@ import {
   expandAiCopies,
   getActiveObjectives,
   getNewTrackers,
-  isAvailableUserQuests,
   isObjectiveLocationSatisfied,
-  isQuestRankAllowed,
   type QuestConsequence,
+} from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
+import {
+  isQuestRankAllowed,
   questTypeConcurrentBlockMessage,
   questUiAccessBlockMessage,
-} from "@/libs/quest";
+} from "@/libs/quest/missionHall";
 import { createPartyClaimId, questPartyHelperAttemptId } from "@/libs/questParty";
 import { deleteConversationMembership } from "@/queries/comments";
 import {
@@ -47,7 +49,6 @@ import { fetchQuest, fetchUserQuestByQuestId } from "@/queries/quests";
 import { fetchSectorVillage } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
-import { assignQuestToUser } from "@/routers/quests";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -61,6 +62,7 @@ import {
   joinCoopChat,
   launchCoopEncounter,
 } from "@/server/utils/coop";
+import { assignQuestToUser } from "@/server/utils/questAssignment";
 import {
   saveQuestPartyMember,
   synchronizeExistingQuestParty,
@@ -93,6 +95,7 @@ export const questPartyRouter = createTRPCRouter({
       if (!transition.success) return errorResponse(transition.message);
       // Include attached members whose roster removal still awaits personal detachment.
       const members = [...(loaded?.members ?? []), ...party.members];
+      const memberIds = [...new Set(members.map((member) => member.userId))];
       if (members.some((member) => member.status === "BATTLE"))
         return errorResponse("Finish all members' battles before disbanding the team");
       const claimId = createPartyClaimId(nanoid());
@@ -103,7 +106,7 @@ export const questPartyRouter = createTRPCRouter({
       // A concurrent update to another quest retries from that member's fresh snapshot.
       try {
         const detached = await Promise.all(
-          [...new Set(members.map((member) => member.userId))].map((userId) =>
+          memberIds.map((userId) =>
             saveQuestPartyMember(ctx.drizzle, party, userId, true),
           ),
         );
@@ -121,7 +124,7 @@ export const questPartyRouter = createTRPCRouter({
       }
       // Notifications are best effort once personal progress and membership have saved.
       await Promise.allSettled(
-        [...new Set(members.map((member) => member.userId))].map((userId) =>
+        memberIds.map((userId) =>
           getServerPusher().trigger(userId, "event", {
             type: "questTeam",
             message:
@@ -182,21 +185,7 @@ export const questPartyRouter = createTRPCRouter({
             overworldPlacementId: encounter.overworldPlacementId,
           })
         : undefined;
-    // Generic battles gather at the leader; hidden map objectives reveal their tile in-sector.
-    // An unavailable bound NPC has no fallback to potentially stale authored coordinates.
-    const encounterLocation =
-      encounter?.task === "start_battle"
-        ? user?.questParty?.members.find(
-            (member) => member.userId === user.questParty?.leaderId,
-          )
-        : encounter &&
-            (!("hideLocation" in encounter && encounter.hideLocation) ||
-              (placement?.sector ?? encounter.sector) === user?.sector)
-          ? (placement ??
-            ("sector" in encounter && !encounter.overworldPlacementId
-              ? encounter
-              : undefined))
-          : undefined;
+    const encounterLocation = resolveEncounterLocation(user, encounter, placement);
     return {
       current: user?.questParty
         ? {
@@ -391,7 +380,7 @@ export const questPartyRouter = createTRPCRouter({
       try {
         const result = await acceptTeamQuest(ctx.drizzle, user, party.quest, history);
         if (!result.success) {
-          await removeMember(ctx.drizzle, party.id, ctx.userId, joinClaimId);
+          await removeMember(ctx.drizzle, party.id, ctx.userId, { joinClaimId });
           return actionReadinessResponse(result, readiness, ctx.drizzle);
         }
         await Promise.all([
@@ -413,7 +402,7 @@ export const questPartyRouter = createTRPCRouter({
           ctx.drizzle,
         );
       } catch (error) {
-        await removeMember(ctx.drizzle, party.id, ctx.userId, joinClaimId);
+        await removeMember(ctx.drizzle, party.id, ctx.userId, { joinClaimId });
         throw error;
       }
     }),
@@ -477,13 +466,9 @@ export const questPartyRouter = createTRPCRouter({
       const party = await synchronizeExistingQuestParty(ctx.drizzle, loaded);
       if (party.battleId)
         return errorResponse("Finish the team's encounter before removing members");
-      const result = await removeMember(
-        ctx.drizzle,
-        party.id,
-        input.userId,
-        undefined,
-        ctx.userId,
-      );
+      const result = await removeMember(ctx.drizzle, party.id, input.userId, {
+        removingLeaderId: ctx.userId,
+      });
       if (result.success)
         await Promise.allSettled([
           getServerPusher().trigger(input.userId, "event", {
@@ -529,6 +514,30 @@ export const questPartyRouter = createTRPCRouter({
       return removeMember(ctx.drizzle, input.partyId, ctx.userId);
     }),
 });
+
+/**
+ * Locate the team's encounter. Generic battles gather at the leader; hidden map objectives
+ * reveal their tile in-sector. An unavailable bound NPC has no fallback to potentially stale
+ * authored coordinates.
+ */
+const resolveEncounterLocation = (
+  user: UserWithRelations,
+  encounter: ReturnType<typeof getActiveObjectives>[number] | undefined,
+  placement: { sector: number; longitude: number; latitude: number } | undefined,
+) => {
+  if (!encounter) return undefined;
+  if (encounter.task === "start_battle") {
+    const leaderId = user?.questParty?.leaderId;
+    return user?.questParty?.members.find((member) => member.userId === leaderId);
+  }
+  const isHidden = "hideLocation" in encounter && encounter.hideLocation;
+  if (isHidden && (placement?.sector ?? encounter.sector) !== user?.sector)
+    return undefined;
+  if (placement) return placement;
+  return "sector" in encounter && !encounter.overworldPlacementId
+    ? encounter
+    : undefined;
+};
 
 /** Return an expected rejection for characters or quest types that cannot use teams. */
 const teamQuestBlock = (
@@ -616,8 +625,10 @@ const removeMember = async (
   client: DrizzleClient,
   partyId: string,
   userId: string,
-  joinClaimId?: string,
-  removingLeaderId?: string,
+  {
+    joinClaimId,
+    removingLeaderId,
+  }: { joinClaimId?: string; removingLeaderId?: string } = {},
 ) => {
   // The roster and leader move in one CAS; no missing-row locks or transactions.
   for (let attempt = 0; attempt < 5; attempt++) {

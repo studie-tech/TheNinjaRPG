@@ -45,7 +45,6 @@ import {
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_EXTRA_RESKIN_SLOTS,
   MAX_ITEM_VARIANTS,
-  MAX_MARRIAGE_SLOTS,
   PET_MAX_CONSUME_PETS,
   TUTORIAL_ITEM_ID,
   VARIANT_CURRENCY_FIELD,
@@ -79,7 +78,11 @@ import {
   validateEvolutionGraph,
 } from "@/libs/evolution";
 import { canDropFarmSeed } from "@/libs/farming";
-import { measureFurnitureImage } from "@/libs/furnitureImage";
+import {
+  FURNITURE_IMAGE_MAX_BYTES,
+  measureFurnitureImage,
+  readFurnitureImageBody,
+} from "@/libs/furnitureImage";
 import {
   buildItemLoadoutData,
   calcItemRepairCost,
@@ -122,18 +125,19 @@ import {
 import { createPetFromSpecies } from "@/libs/pets/creation";
 import { getMaxPetRank, getPetCollectionCapacity } from "@/libs/pets/progression";
 import {
-  collapseRewards,
   filterQuestTrackersForDbPersist,
   getNewTrackers,
   objectiveContentIds,
-  postProcessRewards,
 } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
+import { hasRequiredLevel } from "@/libs/rank";
 import {
   calcRepairAllCost,
   calculateKitsToUse,
   getRepairKits,
   needsInventoryRepair,
 } from "@/libs/repair";
+import { collapseRewards } from "@/libs/rewards";
 import { filterRollableSageModes } from "@/libs/sageMode";
 import {
   getShopDiscounts,
@@ -143,7 +147,6 @@ import {
 } from "@/libs/shop";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
-import { hasRequiredLevel } from "@/libs/train";
 import { getVillageLoyaltyShopCost } from "@/libs/villageLoyalty";
 import {
   CACHE_RESTRICTED_REWARD_MESSAGE,
@@ -181,8 +184,6 @@ import {
   fetchItemLoadouts,
   fetchItemWithCraftingRequirements,
   fetchPurchaseCounters,
-  fetchSageModeRolls,
-  fetchSageModes,
   fetchUserEquipmentSnapshot,
   fetchUserItem,
   fetchUserItemWithVariants,
@@ -203,7 +204,6 @@ import {
   insertActionLogForEvolveItem,
   insertActionLogForSellUserItem,
   insertActionLogForUpdate,
-  insertBloodlineRollsForConsume,
   insertCraftingRequirementForClone,
   insertCraftingRequirementForUpdate,
   insertItemForClone,
@@ -211,12 +211,10 @@ import {
   insertItemLoadoutForInsertMissing,
   insertItemPurchaseCounterForBuy,
   insertItemVariantForUpsertItemVariant,
-  insertSageModeRollsForConsume,
   insertUserItemForEvolveItem,
   insertUserItemForSplitItemStack,
   insertUserItems,
   insertUserItemVariantForPurchaseVariant,
-  insertUserSkillForConsume,
   listItemForDelete,
   listItemForGetAll,
   listItemForGetAllNames,
@@ -251,7 +249,6 @@ import {
   selectUserItemVariantForGetUserUnlockedVariants,
   selectVillageStructureForSellUserItem,
   sellUserItemAtomically,
-  updateBloodlineRollsForConsume,
   updateItemForUpdate,
   updateItemLoadoutForEvolveItem,
   updateItemLoadoutForRenameLoadout,
@@ -299,6 +296,7 @@ import {
   fetchQuestTrackerState,
   fetchUserQuestByQuestId,
 } from "@/queries/quests";
+import { fetchSageModeRolls, fetchSageModes } from "@/queries/sageMode";
 import {
   fetchMasterySources,
   fetchUserSkills,
@@ -334,14 +332,18 @@ import {
   runRewardTasks,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
+import { planConsumeEffects } from "@/server/utils/consumeEffects";
 import { consumeMeal } from "@/server/utils/cooking";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
+import { assignQuestToUser } from "@/server/utils/questAssignment";
+import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
+import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
-import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
+import { groupBy } from "@/utils/grouping";
 import { fetchWithTimeout } from "@/utils/http";
 import { isBunnyCdnUrl, transformImageUrl } from "@/utils/image";
 import { fedItemLoadouts } from "@/utils/paypal";
@@ -352,15 +354,12 @@ import {
   canOnlyEditSelf,
 } from "@/utils/permissions";
 import { sanitizeVariantText } from "@/utils/sanitize";
-import { validateUrlForSsrf } from "@/utils/ssrf";
 import { getNextUserSnapshotAt, getUtcDayKey } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import {
-  HealTag,
   IncreaseJutsuSlots,
   ItemValidator,
   NonCombatConsumeRewardTag,
-  NonCombatGainSkill,
   NonCombatQuestTag,
   type ZodAllTags,
 } from "@/validators/combat";
@@ -388,7 +387,6 @@ import { renameLoadoutSchema, setLoadoutHotkeysSchema } from "@/validators/loado
 import { idSchema } from "@/validators/misc";
 import {
   ObjectiveReward,
-  type ObjectiveRewardType,
   PostProcessedRewardSchema,
   type PostProcessedRewards,
 } from "@/validators/rewards";
@@ -400,7 +398,6 @@ import {
   type WeightedCache,
   weightedCacheSchema,
 } from "@/validators/weightedCache";
-import { assignQuestToUser, nameGrantedRewards, updateRewards } from "./quests";
 
 export const itemRouter = createTRPCRouter({
   /** Content authoring needs source alpha bounds even for generated and historical uploads. */
@@ -437,14 +434,14 @@ export const itemRouter = createTRPCRouter({
         const response = await fetchWithTimeout(url.toString(), { redirect: "error" });
         if (
           !response.ok ||
-          Number(response.headers.get("content-length")) > 10 * 1024 * 1024
+          Number(response.headers.get("content-length")) > FURNITURE_IMAGE_MAX_BYTES
         )
           return {
             ...errorResponse("Furniture image could not be measured"),
             geometry: null,
           };
-        const bytes = Buffer.from(await response.arrayBuffer());
-        if (bytes.length > 10 * 1024 * 1024)
+        const bytes = await readFurnitureImageBody(response);
+        if (!bytes)
           return {
             ...errorResponse("Furniture image is too large to measure"),
             geometry: null,
@@ -824,45 +821,7 @@ export const itemRouter = createTRPCRouter({
       // Server-side enforcement: preserve existing reward_reputation for users without permission
       // Match effects by content (excluding reward_reputation) to handle reordering
       if (!canAwardReputation(user.role)) {
-        type EffectWithReputation = Record<string, unknown> & {
-          type: string;
-          reward_reputation?: number;
-        };
-        const existingEffects = entry.effects as EffectWithReputation[];
-        const existingReputationEffects = existingEffects.filter(
-          (e) => e.type === "noncombatconsumereward" && (e.reward_reputation ?? 0) > 0,
-        );
-
-        // Create signature for matching (all properties except reward_reputation)
-        const getEffectSignature = (effect: EffectWithReputation): string => {
-          const { reward_reputation: _unused, ...rest } = effect;
-          void _unused; // Explicitly mark as intentionally unused
-          return JSON.stringify(rest, Object.keys(rest).sort());
-        };
-
-        // Build lookup map from existing effects' signatures to their reward_reputation
-        // Use an array to track multiple identical effects and prevent reputation multiplication
-        const signatureToReputations = new Map<string, number[]>();
-        for (const existing of existingReputationEffects) {
-          const sig = getEffectSignature(existing);
-          const reputations = signatureToReputations.get(sig) ?? [];
-          reputations.push(existing.reward_reputation ?? 0);
-          signatureToReputations.set(sig, reputations);
-        }
-
-        // Preserve reputation for matching effects, set to 0 for new/modified effects
-        // Each reputation value can only be used once (prevents duplication exploit)
-        input.data.effects.forEach((effect) => {
-          if (effect.type === "noncombatconsumereward") {
-            const typedEffect = effect as EffectWithReputation;
-            const sig = getEffectSignature(typedEffect);
-            const reputations = signatureToReputations.get(sig);
-            // Pop the first available reputation value to prevent reuse
-            const existingReputation = reputations?.shift() ?? 0;
-            (effect as { reward_reputation?: number }).reward_reputation =
-              existingReputation;
-          }
-        });
+        preserveEffectReputation(entry.effects, input.data.effects);
       }
       // Calculate diff
       const diff = calculateContentDiff(entry, {
@@ -1756,58 +1715,19 @@ export const itemRouter = createTRPCRouter({
         ctx,
         storedAtHome,
       );
-      const itemIds = [
-        ...new Set(
-          userItemsAll
-            .filter((r) => r.item && r.item.stackSize > 1)
-            .map((r) => r.itemId),
-        ),
-      ];
-      if (itemIds.length === 0) {
-        const recovery = await updateUserForActionReadiness(
-          ctx.drizzle,
-          readiness,
-          recoveredAt,
-        );
-        if (!recovery.rowsAffected)
-          return errorResponse("Your status changed. Please try again.");
-        return actionReadinessResponse(
-          {
-            success: true,
-            message: "Nothing to merge",
-            inventoryChanges: recovered ? undefined : [],
-            ...getMergedStacksUserUpdate(user, recovered ? undefined : []),
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
-      const itemById = new Map<string, ItemRowForMerge>();
-      for (const row of userItemsAll) {
-        if (row.item) {
-          itemById.set(row.itemId, row.item);
-        }
-      }
-      const userItemsByItemId = new Map<string, typeof userItemsAll>();
-      for (const row of userItemsAll) {
-        const list = userItemsByItemId.get(row.itemId);
-        if (list) {
-          list.push(row);
-        } else {
-          userItemsByItemId.set(row.itemId, [row]);
-        }
-      }
+      // The item relation has no foreign key, so an orphaned stack can have no item.
+      const stacksByItemId = groupBy(
+        userItemsAll.filter((r) => r.item && r.item.stackSize > 1),
+        "itemId",
+      );
       const [results, recovery] = await Promise.all([
         Promise.all(
-          itemIds.map((itemId) =>
+          [...stacksByItemId].map(([itemId, rows]) =>
             executeMergeStacksForItem(
               ctx.drizzle,
               ctx.userId,
               itemId,
-              {
-                userItems: userItemsByItemId.get(itemId) ?? [],
-                item: itemById.get(itemId) ?? undefined,
-              },
+              { userItems: rows, item: rows[0]?.item },
               ownerWhere,
             ),
           ),
@@ -2085,13 +2005,9 @@ export const itemRouter = createTRPCRouter({
         input.slot,
       );
       // If anything happened
-      if (result.success && "promises" in result && result.promises.length > 0) {
-        const outcomes = await Promise.all(
-          result.promises.map((write) => retryOnDeadlock(async () => write)),
-        );
-        if (
-          outcomes.some((saved) => saved.rowsAffected !== result.expectedRowsAffected)
-        )
+      if (result.success && "write" in result) {
+        const saved = await retryOnDeadlock(async () => result.write);
+        if (saved.rowsAffected !== result.expectedRowsAffected)
           return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
         // Save only committed equipment. A hunt starting afterward must not leave
         // its template stale; this write cannot alter the encounter's equipment.
@@ -2143,15 +2059,10 @@ export const itemRouter = createTRPCRouter({
       if (equippedItems.length === 0) {
         if (shouldClearLoadout && currentLoadout) {
           await updateItemLoadoutForUnequipAllItems(ctx.drizzle, currentLoadout, ctx);
-          return {
-            success: true,
-            message: "Cleared active loadout",
-            ...getUnchangedEquipmentUserUpdate({ user }),
-          };
         }
         return {
           success: true,
-          message: "Nothing equipped",
+          message: shouldClearLoadout ? "Cleared active loadout" : "Nothing equipped",
           ...getUnchangedEquipmentUserUpdate({ user }),
         };
       }
@@ -2460,50 +2371,37 @@ export const itemRouter = createTRPCRouter({
         })),
       }));
 
-      // Validate the same snapshot used below before consuming any quantity.
-      const hasUnavailableBloodlineRoll = useritem.item.effects.some(
-        (effect) =>
-          effect.type === "rollbloodline" &&
-          filterRollableBloodlines({
-            bloodlines: allBloodlines,
-            user,
-            previousRolls,
-            rank: effect.rank,
-          }).length === 0,
+      // Reject an empty pool before consuming any quantity; the rolls below draw from these.
+      const bloodlinePools = new Map(
+        useritem.item.effects
+          .filter((effect) => effect.type === "rollbloodline")
+          .map(({ rank }) => [
+            rank,
+            filterRollableBloodlines({
+              bloodlines: allBloodlines,
+              user,
+              previousRolls,
+              rank,
+            }),
+          ]),
       );
-      if (hasUnavailableBloodlineRoll) {
+      if ([...bloodlinePools.values()].some((pool) => pool.length === 0)) {
         return errorResponse("No bloodline is available to roll");
       }
 
-      const hasSageRoll = useritem.item.effects.some((e) => e.type === "rollsagemode");
-      if (hasSageRoll && !user.sageModeId) {
-        const sageModePool = filterRollableSageModes({
-          sageModes: allSageModes,
-          user,
-          previousRolls: previousSageRolls,
-        });
-        if (sageModePool.length === 0) {
-          return errorResponse("No sage mode is available to roll");
-        }
+      const canRollSageMode =
+        !user.sageModeId &&
+        useritem.item.effects.some((e) => e.type === "rollsagemode");
+      const sageModePool = canRollSageMode
+        ? filterRollableSageModes({
+            sageModes: allSageModes,
+            user,
+            previousRolls: previousSageRolls,
+          })
+        : [];
+      if (canRollSageMode && sageModePool.length === 0) {
+        return errorResponse("No sage mode is available to roll");
       }
-
-      // Bookkeeping
-      const messages: string[] = [];
-      if (petReward)
-        messages.push(
-          `${petReward.name} joined your companion collection. Generate its appearance from your companion profile.`,
-        );
-      const updates = {
-        sageModeId: user.sageModeId,
-        curHealth: user.curHealth,
-        curStamina: user.curStamina,
-        curChakra: user.curChakra,
-        marriageSlots: user.marriageSlots,
-        extraReskinSlots: user.extraReskinSlots,
-      };
-
-      // Rewards
-      const rewards: ObjectiveRewardType[] = [];
 
       // Check if item would increase reskin slots beyond max
       const reskinIncreaseEffect = useritem.item.effects.find(
@@ -2519,177 +2417,26 @@ export const itemRouter = createTRPCRouter({
       }
 
       // Calculations
-      const mutations: ((client: DrizzleClient) => PromiseLike<unknown>)[] = [];
-      // Only set when THIS request rolls a new sage mode; used as the COALESCE fallback at the
-      // flush below so the snapshot write never resurrects a mode a concurrent removal cleared.
-      let grantedSageModeId: string | null = null;
-      let changedBloodlineId: string | null | undefined;
-      useritem.item.effects.forEach((effect) => {
-        if (effect.type === "rollbloodline") {
-          const bloodlinePool = filterRollableBloodlines({
-            bloodlines: allBloodlines,
-            user,
-            previousRolls,
-            rank: effect.rank,
-          });
-          const randomBloodline = getRandomElement(bloodlinePool);
-          if (!randomBloodline) {
-            throw serverError("NOT_FOUND", "No bloodline found");
-          }
-          // Success?
-          const roll = Math.random() * 100;
-          const success = roll < effect.power;
-          // Log action
-          const previousRoll = previousRolls.find((r) =>
-            success
-              ? r.bloodlineId === randomBloodline.id
-              : r.goal === effect.rank && !r.bloodlineId,
-          );
-          if (previousRoll) {
-            mutations.push((client) =>
-              updateBloodlineRollsForConsume(client, previousRoll),
-            );
-          } else {
-            mutations.push((client) =>
-              insertBloodlineRollsForConsume(
-                client,
-                ctx,
-                success,
-                randomBloodline,
-                effect,
-              ),
-            );
-          }
-          // Message
-          if (success) {
-            changedBloodlineId = randomBloodline.id;
-            messages.push(`You rolled a new bloodline: ${randomBloodline.name}. `);
-          } else {
-            messages.push(`You rolled for a new bloodline, but none was found. `);
-          }
-        } else if (effect.type === "rollsagemode") {
-          // `updates.sageModeId` guards against a second `rollsagemode` effect on the same item
-          // clobbering a grant an earlier effect in this loop already made; `user.sageModeId`
-          // guards against overwriting a mode the player already owns.
-          if (user.sageModeId || updates.sageModeId) {
-            messages.push(
-              "You already channel a sage mode; the natural energies find no room for another. ",
-            );
-            return;
-          }
-          const sageModePool = filterRollableSageModes({
-            sageModes: allSageModes,
-            user,
-            previousRolls: previousSageRolls,
-          });
-          const randomSageMode = getRandomElement(sageModePool);
-          if (!randomSageMode) {
-            messages.push(
-              "You reach for a new sage mode, but the natural energies reveal none to you. ",
-            );
-            return;
-          }
-          const roll = Math.random() * 100;
-          const success = roll < effect.power;
-          if (success) {
-            mutations.push((client) =>
-              insertSageModeRollsForConsume(client, ctx, randomSageMode),
-            );
-            updates.sageModeId = randomSageMode.id;
-            grantedSageModeId = randomSageMode.id;
-            messages.push(`You rolled a new sage mode: ${randomSageMode.name}. `);
-          } else {
-            messages.push(`You rolled for a new sage mode, but none was found. `);
-          }
-        } else if (effect.type === "noncombatconsumereward") {
-          if (effect.rewardMode !== "weightedCache")
-            rewards.push(ObjectiveReward.parse(effect));
-        } else if (effect.type === "noncombatgainskill") {
-          const parsedEffect = NonCombatGainSkill.parse(effect);
-          if (parsedEffect.skillId) {
-            const skill = userSkills.find((s) => s.skill.id === parsedEffect.skillId);
-            if (!skill) {
-              mutations.push((client) =>
-                insertUserSkillForConsume(client, ctx, parsedEffect),
-              );
-              messages.push("You unlocked a special skill!");
-            } else {
-              messages.push(`You already have the skill ${skill.skill.name}.`);
-            }
-          }
-        } else if (effect.type === "removebloodline") {
-          if (Math.random() * 100 < effect.power) {
-            changedBloodlineId = null;
-            messages.push(`Your bloodline was removed. `);
-          } else {
-            messages.push(`Your bloodline could not be removed successfully.`);
-          }
-        } else if (effect.type === "marriageslotincrease") {
-          if (updates.marriageSlots < MAX_MARRIAGE_SLOTS) {
-            updates.marriageSlots += effect.power;
-            if (updates.marriageSlots > MAX_MARRIAGE_SLOTS) {
-              updates.marriageSlots = MAX_MARRIAGE_SLOTS;
-            }
-            messages.push(`Your marriage slots were increased! `);
-          } else {
-            messages.push(
-              `Your marriage slots are already at max! Current Slots: ${updates.marriageSlots}`,
-            );
-          }
-        } else if (effect.type === "noncombatincreasereskins") {
-          updates.extraReskinSlots += effect.power;
-          messages.push(
-            `Your number of allowed reskins was increased by ${effect.power}! `,
-          );
-        } else if (effect.type === "increasejutsuslots") {
-          messages.push(
-            `You gained ${effect.power} extra jutsu slot${effect.power === 1 ? "" : "s"}!`,
-          );
-        } else if (effect.type === "heal") {
-          const parsedEffect = HealTag.parse(effect);
-          const poolsAffects = parsedEffect.poolsAffected || ["Health"];
-          poolsAffects.forEach((pool) => {
-            switch (pool) {
-              case "Health": {
-                const oldHp = updates.curHealth;
-                updates.curHealth = Math.min(
-                  user.curHealth +
-                    (effect.calculation === "percentage"
-                      ? user.maxHealth * (effect.power / 100)
-                      : effect.power),
-                  user.maxHealth,
-                );
-                messages.push(`You healed ${Math.ceil(updates.curHealth - oldHp)} HP`);
-                break;
-              }
-              case "Chakra": {
-                const oldCp = updates.curChakra;
-                updates.curChakra = Math.min(
-                  user.curChakra +
-                    (effect.calculation === "percentage"
-                      ? user.maxChakra * (effect.power / 100)
-                      : effect.power),
-                  user.maxChakra,
-                );
-                messages.push(`You healed ${Math.ceil(updates.curChakra - oldCp)} CP`);
-                break;
-              }
-              case "Stamina": {
-                const oldSp = updates.curStamina;
-                updates.curStamina = Math.min(
-                  user.curStamina +
-                    (effect.calculation === "percentage"
-                      ? user.maxStamina * (effect.power / 100)
-                      : effect.power),
-                  user.maxStamina,
-                );
-                messages.push(`You healed ${Math.ceil(updates.curStamina - oldSp)} SP`);
-                break;
-              }
-            }
-          });
-        }
+      const {
+        updates,
+        messages,
+        rewards,
+        mutations,
+        grantedSageModeId,
+        changedBloodlineId,
+      } = planConsumeEffects({
+        effects: useritem.item.effects,
+        user,
+        ctx,
+        bloodlinePools,
+        sageModePool,
+        previousRolls,
+        userSkills,
       });
+      if (petReward)
+        messages.unshift(
+          `${petReward.name} joined your companion collection. Generate its appearance from your companion profile.`,
+        );
       // Parse rewards
       let processedRewards: PostProcessedRewards | null = null;
       if (rewards.length > 0) {
@@ -3272,7 +3019,6 @@ export const itemRouter = createTRPCRouter({
       const { kitsToUse, totalDurabilityNeeded, canRepairAll } = calculateKitsToUse(
         itemsNeedingRepair,
         repairKits,
-        useritems,
       );
       if (!canRepairAll) {
         const coveredDurability = kitsToUse.reduce((sum, kit) => {
@@ -3885,6 +3631,54 @@ export const itemRouter = createTRPCRouter({
     }),
 });
 
+type EffectWithReputation = Record<string, unknown> & {
+  type: string;
+  reward_reputation?: number;
+};
+
+/**
+ * Keep stored `reward_reputation` on incoming effects that match by content, so reordering
+ * survives while editors without award permission cannot add or move reputation.
+ */
+const preserveEffectReputation = (
+  existing: Item["effects"],
+  incoming: Item["effects"],
+) => {
+  const existingEffects = existing as EffectWithReputation[];
+  const existingReputationEffects = existingEffects.filter(
+    (e) => e.type === "noncombatconsumereward" && (e.reward_reputation ?? 0) > 0,
+  );
+
+  // Create signature for matching (all properties except reward_reputation)
+  const getEffectSignature = (effect: EffectWithReputation): string => {
+    const { reward_reputation: _reputation, ...rest } = effect;
+    return JSON.stringify(rest, Object.keys(rest).sort());
+  };
+
+  // Build lookup map from existing effects' signatures to their reward_reputation
+  // Use an array to track multiple identical effects and prevent reputation multiplication
+  const signatureToReputations = new Map<string, number[]>();
+  for (const effect of existingReputationEffects) {
+    const sig = getEffectSignature(effect);
+    const reputations = signatureToReputations.get(sig) ?? [];
+    reputations.push(effect.reward_reputation ?? 0);
+    signatureToReputations.set(sig, reputations);
+  }
+
+  // Preserve reputation for matching effects, set to 0 for new/modified effects
+  // Each reputation value can only be used once (prevents duplication exploit)
+  incoming.forEach((effect) => {
+    if (effect.type === "noncombatconsumereward") {
+      const typedEffect = effect as EffectWithReputation;
+      const sig = getEffectSignature(typedEffect);
+      const reputations = signatureToReputations.get(sig);
+      // Pop the first available reputation value to prevent reuse
+      const existingReputation = reputations?.shift() ?? 0;
+      (effect as { reward_reputation?: number }).reward_reputation = existingReputation;
+    }
+  });
+};
+
 /** Pet rewards address authored species, while each delivery creates a new owned individual. */
 const rewardPetSpeciesIds = (effects: Item["effects"]) =>
   effects.flatMap((effect) =>
@@ -4230,15 +4024,12 @@ export const toggleEquipItem = async (
     useritem.equipped = "NONE";
     message = `Unequipped ${info.name}`;
   }
-  // Swap both rows together so hunting cannot preload two items in the same slot.
-  const promises = [
-    updateUserItemForToggleEquipItem(client, useritem, changedIds, user),
-  ];
   // Return information
   return {
     success: true,
     message,
-    promises,
+    // Swap both rows together so hunting cannot preload two items in the same slot.
+    write: updateUserItemForToggleEquipItem(client, useritem, changedIds, user),
     expectedRowsAffected: changedIds.length,
     newUserItems,
   };
@@ -4521,15 +4312,13 @@ const refundUserMoney = async (
 
 // --- Stack merge (used by mergeStacks / mergeAllStacks; kept at bottom with other helpers)
 
-type ItemRowForMerge = NonNullable<Awaited<ReturnType<typeof fetchItem>>>;
-
 type MergeEligibleUserItemForStackMerge = UserItem & {
   imbuements: readonly unknown[];
 };
 
 type PreloadedStackMergePayload = {
   userItems: MergeEligibleUserItemForStackMerge[];
-  item: ItemRowForMerge | undefined;
+  item: Item | undefined;
 };
 
 type MergeStacksExecutionResult = (
@@ -4716,8 +4505,8 @@ async function executeMergeStacksForItemBucket(
  * `executeMergeStacksForItemBucket`) so concurrent store/retrieve cannot leave a
  * partial merge that duplicates quantities.
  *
- * **mergeAllStacks** passes `preloaded` rows already limited to the requested scope
- * (carried or home), non-auction stacks.
+ * **mergeAllStacks** passes `preloaded` rows of this item, already limited to the
+ * requested scope (carried or home) and to positive, non-auction stacks.
  */
 async function executeMergeStacksForItem(
   drizzle: DrizzleClient,
@@ -4727,14 +4516,12 @@ async function executeMergeStacksForItem(
   ownerWhere?: SQL,
 ): Promise<MergeStacksExecutionResult> {
   let canProject = true;
-  let info: ItemRowForMerge | undefined;
+  let info: Item | undefined;
   let userItems: MergeEligibleUserItemForStackMerge[];
 
   if (preloaded) {
     info = preloaded.item;
-    userItems = preloaded.userItems.filter(
-      (r) => r.userId === userId && r.itemId === itemId && r.quantity > 0,
-    );
+    userItems = preloaded.userItems;
   } else {
     // fetchItem is independent of the user's claim state, so it runs in parallel with the
     // reaper → items chain instead of serializing behind it.
@@ -4745,14 +4532,13 @@ async function executeMergeStacksForItem(
         return listUserItemForExecuteMergeStacksForItem(drizzle, userId, itemId);
       }),
     ]);
-    info = fetchedInfo ?? undefined;
+    info = fetchedInfo;
     userItems = fetchedUserItems;
   }
   const filteredUserItems = userItems.filter(
     (i) =>
       i.imbuements.length === 0 &&
-      (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()) &&
-      !i.isInAuction,
+      (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()),
   );
   if (!info || filteredUserItems.length === 0) {
     return {

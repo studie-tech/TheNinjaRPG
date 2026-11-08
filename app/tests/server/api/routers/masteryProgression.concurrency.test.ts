@@ -3,7 +3,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { MasteryNames, TOTAL_MASTERY_CAP } from "@/drizzle/constants";
 import { userData, quest, questHistory } from "@/drizzle/schema";
 import { masteryQuestTemplates } from "../../../setup/mastery";
-import { isAvailableUserQuests } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { QuestReward } from "@/validators/rewardPackages";
 import { ObjectiveReward } from "@/validators/rewards";
 import {

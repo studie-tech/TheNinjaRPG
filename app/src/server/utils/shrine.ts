@@ -1,6 +1,11 @@
 import { sql } from "drizzle-orm";
 import type { SHRINE_BOOST_TYPE } from "@/drizzle/constants";
+import {
+  SHRINE_BATTLE_LOBBY_SECONDS,
+  SHRINE_BATTLE_STALE_LOBBY_SECONDS,
+} from "@/drizzle/constants";
 import { village } from "@/drizzle/schema";
+import { secondsFromDate } from "@/utils/time";
 
 /**
  * Builds a JSON expression that surgically upserts entries under
@@ -87,4 +92,12 @@ export function boostInactivePredicate(
 ): ReturnType<typeof sql> {
   const path = `$.activeBoosts.${boostType}`;
   return sql`(JSON_EXTRACT(${village.shrineSettings}, ${path}) IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(${village.shrineSettings}, ${path})) <= ${nowIso})`;
+}
+
+/** Returns a Date before which shrine battle lobbies are considered stale/expired. */
+export function shrineLobbyFreshAfter(now: Date = new Date()): Date {
+  return secondsFromDate(
+    -(SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS),
+    now,
+  );
 }

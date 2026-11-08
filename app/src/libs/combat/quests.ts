@@ -1,6 +1,7 @@
 import type { UserQuest } from "@/drizzle/schema";
 import type { ObjectiveTrackerTaskInput } from "@/libs/quest";
-import { isMockQuestHistoryRow, questHasOverworldObjectives } from "@/libs/quest";
+import { isMockQuestHistoryRow } from "@/libs/quest";
+import { questHasOverworldObjectives } from "@/libs/quest/projection";
 import { CombatActivityTasks } from "@/validators/objectives";
 
 /** Tasks emitted by combat settlement; the emitters use this union to keep preload complete. */

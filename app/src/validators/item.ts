@@ -12,9 +12,9 @@ import {
   MAX_ITEM_VARIANTS,
   VARIANT_COST_TYPES,
 } from "@/drizzle/constants";
-import { statFilters } from "@/libs/train";
 import { furnitureVariantDataSchema } from "@/validators/itemFurniture";
 import { lpcItemFields } from "@/validators/lpc";
+import { statFilters } from "@/validators/statFilters";
 
 export const itemCreateSchema = z.object({ type: z.enum(ItemTypes) });
 

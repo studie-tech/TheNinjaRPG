@@ -18,7 +18,7 @@ export const mapTerrainValidator = z.object({
     ),
   name: z.string().trim().min(1).max(191),
   colors: z.tuple([hexColor, hexColor, hexColor]),
-  textureUrl: z.string().url().nullable(),
+  textureUrl: z.url().nullable(),
   swatchColor: hexColor,
   battleBiome: z.enum(COMBAT_BIOMES),
   isWater: z.boolean(),

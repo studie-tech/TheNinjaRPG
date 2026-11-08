@@ -42,7 +42,11 @@ import {
   editedReason,
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
-import { filterVisibleEvolutions, validateEvolutionGraph } from "@/libs/evolution";
+import {
+  filterVisibleEvolutions,
+  meetsEvolutionStatRequirements,
+  validateEvolutionGraph,
+} from "@/libs/evolution";
 import type { JutsuEquipCap } from "@/libs/jutsu";
 import {
   type ComputedJutsuLoadout,
@@ -65,6 +69,13 @@ import {
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import { getJutsuMaxLevel } from "@/libs/jutsuProgression";
 import {
+  calcJutsuEquipLimit,
+  canTrainJutsu,
+  canUseJutsu,
+  checkJutsuBloodlineItem,
+  isJutsuTrainToLearnRestricted,
+} from "@/libs/jutsuRequirements";
+import {
   buildMissingLoadouts,
   decideRename,
   resolveSelectableLoadout,
@@ -75,24 +86,17 @@ import {
   filterQuestTrackersForDbPersist,
   getJutsuLearnedTrackerTasks,
   getNewTrackers,
-  getPublicQuestUser,
 } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import { liveQueueRows } from "@/libs/queue";
+import { hasRequiredLevel, hasRequiredRank } from "@/libs/rank";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
 import {
-  calcJutsuEquipLimit,
   calcJutsuTrainCost,
   calcJutsuTrainTime,
-  canEvolveJutsu,
-  canTrainJutsu,
-  canUseJutsu,
-  checkJutsuBloodlineItem,
   findJutsuInTraining,
-  hasRequiredLevel,
-  hasRequiredRank,
   isJutsuInTraining,
-  isJutsuTrainToLearnRestricted,
 } from "@/libs/train";
 import { fetchItemLoadouts } from "@/queries/item";
 import {
@@ -879,7 +883,7 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("You don't meet the rank requirement for this evolution");
       if (!hasRequiredLevel(user.level, evolutionJutsu.requiredLevel))
         return errorResponse("You don't meet the level requirement for this evolution");
-      if (!canEvolveJutsu(evolutionJutsu, user))
+      if (!meetsEvolutionStatRequirements(evolutionJutsu, user))
         return errorResponse("You don't meet the stat requirements for this evolution");
       if (!canUseJutsu(evolutionJutsu, user, true, undefined, true))
         return errorResponse(

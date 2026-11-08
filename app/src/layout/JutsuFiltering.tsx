@@ -18,15 +18,15 @@ import {
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import NavTabs from "@/layout/NavTabs";
+import { formatBattleUsageType } from "@/utils/string";
+import { tagTypes } from "@/validators/combat";
 import {
   getJutsuStatQuickFilter,
   jutsuStatQuickFilterSelection,
   jutsuStatQuickFilters,
   rarities,
   statFilters,
-} from "@/libs/train";
-import { formatBattleUsageType } from "@/utils/string";
-import { tagTypes } from "@/validators/combat";
+} from "@/validators/statFilters";
 
 // Single-source schema
 const makeJutsuFilteringSchema = (defaultRank: UserRank[] = []) =>

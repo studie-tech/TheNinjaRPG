@@ -4,7 +4,7 @@ import {
   getFreeResetAmount,
   getMonthlyResetState,
   getResetAllowance,
-} from "@/server/api/routers/skillTree";
+} from "@/libs/skillReset";
 import type { UserData } from "@/drizzle/schema";
 
 const tiers = [

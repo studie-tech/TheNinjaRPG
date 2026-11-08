@@ -1,32 +1,17 @@
-import { jutsuEquipLimit } from "@/drizzle/schema";
+import { jutsuEquipLimit, aiProfile, battle, bloodlineReskin, item, itemLoadout, jutsu, jutsuLoadout, jutsuReskin, title, userData, userItem, userJutsu, userTitle } from "@/drizzle/schema";
 import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { fetchBattleEssentials } from "@/queries/combat";
 import { eq } from "drizzle-orm";
 import { type BattleType, MAX_PLAYER_LEVEL, RANKED_PVP_STATS, REGEN_SECONDS } from "@/drizzle/constants";
 import { userJutsuToAction } from "@/libs/combat/actions";
 import { applyEffects } from "@/libs/combat/process";
-import { refreshMasteries } from "@/libs/combat/util";
+import { refreshMasteries } from "@/libs/combat/mastery";
 import { effectiveMasteries } from "@/libs/mastery";
-import { jutsuRequirementWarning } from "@/libs/train";
+import { jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import type { UserWithRelations } from "@/routers/profile";
 import { calcCP, calcHP, calcSP, manuallyAssignUserStats } from "@/libs/profile";
 import { validateItemLoadout } from "@/libs/ranked_pvp";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import {
-  aiProfile,
-  battle,
-  bloodlineReskin,
-  item,
-  itemLoadout,
-  jutsu,
-  jutsuLoadout,
-  jutsuReskin,
-  title,
-  userData,
-  userItem,
-  userJutsu,
-  userTitle,
-} from "@/drizzle/schema";
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";

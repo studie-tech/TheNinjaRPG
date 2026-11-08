@@ -166,13 +166,7 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
         // combine the guarded payout UPDATE with the announcement INSERT/counters.
         // Use the deadline so delayed ticks retain the event's actual end/boost window.
         await retryOnDeadlock(() =>
-          client.transaction((tx) =>
-            resolveTerritoryWar(
-              tx as unknown as DrizzleClient,
-              latest.id,
-              latest.endsAt,
-            ),
-          ),
+          client.transaction((tx) => resolveTerritoryWar(tx, latest.id, latest.endsAt)),
         );
       }
     }
@@ -197,8 +191,7 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
   // its predecessor is unique, so creation needs this short mixed-DML transaction.
   // Deadlocks roll back all three writes; the same id/predecessor makes retries safe.
   await retryOnDeadlock(() =>
-    client.transaction(async (tx) => {
-      const db = tx as unknown as DrizzleClient;
+    client.transaction(async (db) => {
       const inserted = await executeInsertedForSyncTerritoryWars(
         db,
         id,

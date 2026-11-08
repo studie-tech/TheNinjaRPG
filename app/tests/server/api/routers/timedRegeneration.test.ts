@@ -18,7 +18,8 @@ import { calcCurrent } from "@/layout/StatusBar";
 import { Pusher } from "@/libs/pusher";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
-import { questsRouter, upsertQuestEntry } from "@/server/api/routers/quests";
+import { questsRouter } from "@/server/api/routers/quests";
+import { upsertQuestEntry } from "@/server/utils/questAssignment";
 import { createTRPCRouter } from "@/server/api/trpc";
 import {
   getUserRegenerationGain,

@@ -42,3 +42,19 @@ describe("item quantity limits", () => {
     ).toBe(false);
   });
 });
+
+describe("item crafting requirements", () => {
+  const schema = ItemValidatorRawSchema.shape.craftingRequirements;
+  const entry = { ids: ["a"], number: 1 };
+
+  it("defaults a missing list, keeps null and rejects anything else", () => {
+    expect(schema.parse(undefined)).toEqual([]);
+    expect(schema.parse(null)).toBeNull();
+    expect(schema.parse([entry])).toEqual([entry]);
+    expect(schema.isOptional()).toBe(true);
+    expect(schema.isNullable()).toBe(true);
+    expect(schema.safeParse("a").error?.issues[0]?.message).toBe(
+      "Invalid input: expected array, received string",
+    );
+  });
+});

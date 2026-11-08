@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { quest, questHistory, recruitmentRewards, userData, userVote } from "@/drizzle/schema";
 import { profileRouter } from "@/server/api/routers/profile";
-import { updateRewards } from "@/server/api/routers/quests";
+import { updateRewards } from "@/server/utils/questRewards";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";

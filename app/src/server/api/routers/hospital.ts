@@ -1,4 +1,3 @@
-import type { ExecutedQuery } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
 import { gte, sql } from "drizzle-orm";
 import { after } from "next/server";
@@ -21,13 +20,12 @@ import {
 } from "@/libs/hospital";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { hasRequiredRank } from "@/libs/rank";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import { hasRequiredRank } from "@/libs/train";
 import {
   executeResultForUserHeal,
   listUserDataForGetHospitalizedUsers,
   updateUserDataForNpcHeal,
-  updateUserDataForNpcHeal2,
   updateUserDataForUserHeal,
 } from "@/queries/hospital";
 import { fetchUser } from "@/queries/profile";
@@ -118,7 +116,7 @@ export const hospitalRouter = createTRPCRouter({
       if (isSelfHeal) t = u;
       // Derived
       const pools = calcHospitalHealPools(u, isSelfHeal);
-      const { toHeal } = calcHowMuchToHeal(u, t, input.healPercentage, pools);
+      const toHeal = calcHowMuchToHeal(t, input.healPercentage, pools);
       const chakraCost = calcHealthToChakra(u, toHeal);
       // Calculate experience gain, capped at 4 million. Self-heals award half.
       const baseExpGain = calcHospitalHealExperience({
@@ -311,31 +309,19 @@ export const hospitalRouter = createTRPCRouter({
       const healedAt = new Date();
       const energyRecovery = userRegenerationGainSql(user, userData.regenAt, healedAt);
       // Mutate w. validation
-      let result: ExecutedQuery;
-      let cost: number;
-      if (finishAt <= healedAt) {
-        cost = 0;
-        result = await updateUserDataForNpcHeal(
-          ctx.drizzle,
-          user,
-          energyRecovery,
-          healedAt,
-          ctx,
-        );
-      } else {
-        cost = calcHealCost(user);
-        if (user.money < cost) {
-          return errorResponse("You don't have enough money");
-        }
-        result = await updateUserDataForNpcHeal2(
-          ctx.drizzle,
-          user,
-          cost,
-          energyRecovery,
-          healedAt,
-          ctx,
-        );
+      const isFree = finishAt <= healedAt;
+      const cost = isFree ? 0 : calcHealCost(user);
+      if (!isFree && user.money < cost) {
+        return errorResponse("You don't have enough money");
       }
+      const result = await updateUserDataForNpcHeal(
+        ctx.drizzle,
+        user,
+        isFree ? undefined : cost,
+        energyRecovery,
+        healedAt,
+        ctx,
+      );
       if (result.rowsAffected === 1) {
         after(() =>
           updateUserOnMap(pusher, user.sector, {

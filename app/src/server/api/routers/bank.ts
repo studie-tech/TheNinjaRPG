@@ -97,11 +97,10 @@ export const bankRouter = createTRPCRouter({
           minAmount: z.number().min(1).prefault(100),
           dayLimit: z.number().min(1).max(365).prefault(30),
         })
-        .optional()
         .prefault({}),
     )
     .query(async ({ ctx, input }) => {
-      const { minAmount = 100, dayLimit = 30 } = input ?? {};
+      const { minAmount, dayLimit } = input;
       const cutoffDate = new Date(Date.now() - dayLimit * 24 * 60 * 60 * 1000);
 
       const transfers = await selectBankTransfersForGetGraph(
@@ -117,8 +116,8 @@ export const bankRouter = createTRPCRouter({
     })
     .input(
       z.object({
-        senderId: z.string().optional().nullish(),
-        receiverId: z.string().optional().nullish(),
+        senderId: z.string().nullish(),
+        receiverId: z.string().nullish(),
         cursor: z.number().nullish(),
         limit: z.number().min(1).max(100),
       }),

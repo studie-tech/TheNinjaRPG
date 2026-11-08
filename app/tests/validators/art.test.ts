@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { conceptArtPromptSchema, conceptVideoPromptSchema } from "@/validators/art";
+import { MONTH_S, WEEK_S, YEAR_S } from "@/utils/time";
+import {
+  conceptArtPromptSchema,
+  conceptVideoPromptSchema,
+  getTimeFrameinSeconds,
+} from "@/validators/art";
 
 describe.each([
   ["image", conceptArtPromptSchema],
@@ -21,4 +26,13 @@ it("bounds video negative prompts and preserves the optional default", () => {
   expect(conceptVideoPromptSchema.parse({ prompt: "A ninja" }).negative_prompt).toBe("");
   expect(conceptVideoPromptSchema.safeParse({ prompt: "A ninja", negative_prompt: "a".repeat(5000) }).success).toBe(true);
   expect(conceptVideoPromptSchema.safeParse({ prompt: "A ninja", negative_prompt: "a".repeat(5001) }).success).toBe(false);
+});
+
+describe("getTimeFrameinSeconds", () => {
+  it("maps each time frame to its window, with no limit for all time", () => {
+    expect(getTimeFrameinSeconds("Week")).toBe(WEEK_S);
+    expect(getTimeFrameinSeconds("Month")).toBe(MONTH_S);
+    expect(getTimeFrameinSeconds("Year")).toBe(YEAR_S);
+    expect(getTimeFrameinSeconds("All Time")).toBeNull();
+  });
 });

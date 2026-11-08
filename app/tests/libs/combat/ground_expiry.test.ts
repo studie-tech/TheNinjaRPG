@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
-import { alignBattle } from "@/libs/combat/util";
+import { alignBattle } from "@/libs/combat/turn";
 import type { GroundEffect } from "@/libs/combat/types";
 import { makeBattleUser, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
 

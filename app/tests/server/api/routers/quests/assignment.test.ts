@@ -2,11 +2,7 @@
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { describe, expect, it, vi } from "bun:test";
-import {
-  assignQuestToUser,
-  upsertQuestEntries,
-  upsertQuestEntry,
-} from "../../../../../src/server/api/routers/quests";
+import { assignQuestToUser, upsertQuestEntries, upsertQuestEntry } from "@/server/utils/questAssignment";
 import { trackerQuest } from "../../../../setup/quest";
 
 const quest = trackerQuest("mission-1", [], "mission", {

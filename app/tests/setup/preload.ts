@@ -4,7 +4,7 @@
  *
  * The schema is left in place afterwards. `prepareTestDatabase` reconciles it on the next run
  * and truncates every table, so a leftover database makes the next run cheaper without letting
- * its rows leak into it.
+ * its rows or triggers leak into it.
  */
 import { afterAll, beforeAll, beforeEach } from "bun:test";
 import Link from "@/layout/Link";

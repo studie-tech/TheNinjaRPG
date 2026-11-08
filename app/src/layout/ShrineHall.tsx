@@ -51,7 +51,6 @@ import { getShrineHpByLevel } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import {
   formatDateTimeShort,
-  getDaysHoursMinutesSeconds,
   getSlotIndex,
   getTimeLeftStr,
   isNewSlotDue,
@@ -295,6 +294,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 /*                               Boosts Tab                                   */
 /* -------------------------------------------------------------------------- */
 
+/** Manage timed village boosts, refreshing the slot clock only while this tab is active. */
 const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
   const { updateUser } = useRequiredUserData();
@@ -395,7 +395,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
           {activeBoosts.length > 0 ? (
             <div className="space-y-2">
               {activeBoosts.map(({ boostType, msLeft }, i) => {
-                const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
+                const timeLeft = getTimeLeftStr(msLeft);
 
                 return (
                   <div
@@ -691,6 +691,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
 /*                              Maintenance Tab                               */
 /* -------------------------------------------------------------------------- */
 
+/** Pay shrine upkeep and reconcile confirmed account and village changes through the shared cache hooks. */
 const MaintenanceTab = ({ user }: TabProps) => {
   const utils = api.useUtils();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
@@ -760,9 +761,7 @@ const MaintenanceTab = ({ user }: TabProps) => {
 
                   const msToNextPayment = dueDate.getTime() - Date.now();
 
-                  const nextPaymentAt = getTimeLeftStr(
-                    ...getDaysHoursMinutesSeconds(msToNextPayment),
-                  );
+                  const nextPaymentAt = getTimeLeftStr(msToNextPayment);
 
                   return (
                     <div

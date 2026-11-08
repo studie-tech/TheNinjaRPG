@@ -21,9 +21,8 @@ export const jutsuMasteryTypes = (
   const types = new Set<MasteryType>();
   if (MasteryTypes.includes(jutsu.statClassification as MasteryType))
     types.add(jutsu.statClassification as MasteryType);
-  for (const [field, , label] of MASTERY_REQUIREMENT_FIELDS)
-    if ((jutsu[field] ?? 0) > 0)
-      types.add(label.replace(" Mastery", "") as MasteryType);
+  for (const [field, , , type] of MASTERY_REQUIREMENT_FIELDS)
+    if ((jutsu[field] ?? 0) > 0) types.add(type);
   if (jutsu.bloodlineId || jutsu.jutsuType === "BLOODLINE") types.add("Bloodline");
   return [...types];
 };

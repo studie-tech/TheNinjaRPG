@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import {
   DMG_SETTING_DEFAULTS,
   DMG_SETTING_NAMES,
+  type DmgSettingName,
   PET_ART_PROVIDER_SETTING,
   PetArtProviders,
 } from "@/drizzle/constants";
@@ -18,13 +19,7 @@ import {
   updateGameSettingForUpdateGameSetting,
 } from "@/queries/gamesettings";
 import type { DrizzleClient } from "@/server/db";
-import {
-  addDays,
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  isDifferentDay,
-  periodStart,
-} from "@/utils/time";
+import { addDays, getTimeLeftStr, isDifferentDay, periodStart } from "@/utils/time";
 
 /**
  * Retrieves the game setting for the specified timer name.
@@ -95,13 +90,16 @@ const claimGameTimer = async (
   };
 };
 
+/** Share of a rolling duration that must pass, so a scheduler firing early still claims it. */
+const ROLLING_TIMER_TOLERANCE = 0.9999;
+
 /** Atomically claim a rolling duration, retaining the persisted timer name. */
 export const lockWithGameTimer = async (
   client: DrizzleClient,
   timerName: string,
   durationMs: number,
 ) => {
-  const deltaTime = durationMs * 0.9999;
+  const deltaTime = durationMs * ROLLING_TIMER_TOLERANCE;
   const claim = await claimGameTimer(
     client,
     timerName,
@@ -125,9 +123,7 @@ export const lockWithHourlyTimer = async (client: DrizzleClient, name: string) =
   return {
     ...claim,
     isNewHour: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next hour to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "hour"),
   };
 };
 
@@ -144,9 +140,7 @@ export const lockWithMinuteTimer = async (client: DrizzleClient, name: string) =
   return {
     ...claim,
     isNewMinute: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next minute to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "minute"),
   };
 };
 
@@ -156,9 +150,7 @@ export const lockWithDailyTimer = async (client: DrizzleClient, name: string) =>
   return {
     ...claim,
     isNewDay: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next day to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "day"),
   };
 };
 
@@ -168,9 +160,7 @@ export const lockWithWeeklyTimer = async (client: DrizzleClient, name: string) =
   return {
     ...claim,
     isNewWeek: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next week to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "week"),
   };
 };
 
@@ -180,11 +170,13 @@ export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) 
   return {
     ...claim,
     isNewMonth: claim.isClaimed,
-    response: Response.json(
-      claim.isClaimed ? null : "Wait until the next month to run this again",
-    ),
+    response: periodWaitResponse(claim.isClaimed, "month"),
   };
 };
+
+/** A period lock's response: nothing for the winner, the wait message for everyone else. */
+const periodWaitResponse = (isClaimed: boolean, period: string) =>
+  Response.json(isClaimed ? null : `Wait until the next ${period} to run this again`);
 
 /** Whether a new UTC calendar period began after the timer's last claim. */
 const startedSince =
@@ -217,13 +209,11 @@ export const runClaimedCron = async (
   }
 };
 
+/** Describe the remaining claimed timer window without issuing another database query. */
 const gameTimerWaitResponse = (previous: Date, durationMs: number) => {
   const remaining = previous.getTime() + durationMs - Date.now();
   if (remaining <= 0) return Response.json("Timer already claimed; try again later");
-  const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(remaining);
-  return Response.json(
-    `Wait ${getTimeLeftStr(days, hours, minutes, seconds)} before running again`,
-  );
+  return Response.json(`Wait ${getTimeLeftStr(remaining)} before running again`);
 };
 
 /**
@@ -251,14 +241,15 @@ export const fetchDmgConfig = async (client: DrizzleClient): Promise<DmgConfig> 
       id: nanoid(),
       name,
       time: addDays(new Date(), -30),
-      value: DMG_SETTING_DEFAULTS[name] ?? 0,
+      value: DMG_SETTING_DEFAULTS[name],
     }));
     await insertGameSettings(client, newSettings);
     settings.push(...newSettings);
   }
 
   // Missing settings were inserted above, so every name resolves to a row
-  const get = (name: string) => settings.find((s) => s.name === name)?.value ?? 0;
+  const get = (name: DmgSettingName) =>
+    settings.find((s) => s.name === name)?.value ?? 0;
 
   return Object.fromEntries(
     dmgConfigSettings().map(([key, name]) => [key, get(name)]),
@@ -274,7 +265,7 @@ export const updateDmgConfig = (client: DrizzleClient, config: DmgConfig) =>
   );
 
 /** GameSetting row behind each DmgConfig field. */
-const DMG_CONFIG_SETTINGS: Record<keyof DmgConfig, string> = {
+const DMG_CONFIG_SETTINGS: Record<keyof DmgConfig, DmgSettingName> = {
   stats_scaling: "DMG_STATS_SCALING",
   base_hits: "DMG_BASE_HITS",
   curve: "DMG_CURVE",
@@ -287,7 +278,7 @@ const DMG_CONFIG_SETTINGS: Record<keyof DmgConfig, string> = {
 
 /** Keep config keys typed when enumerating their persisted setting names. */
 const dmgConfigSettings = () =>
-  Object.entries(DMG_CONFIG_SETTINGS) as [keyof DmgConfig, string][];
+  Object.entries(DMG_CONFIG_SETTINGS) as [keyof DmgConfig, DmgSettingName][];
 
 /**
  * Handles errors that occur during endpoint processing.

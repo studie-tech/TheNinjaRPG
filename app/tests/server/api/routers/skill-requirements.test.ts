@@ -2,7 +2,8 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
 import { item, itemLoadout, jutsu, jutsuLoadout, skillTree, userData, userItem, userJutsu, userSkill } from "@/drizzle/schema";
-import { canEvolveJutsu, jutsuRequirementWarning } from "@/libs/train";
+import { meetsEvolutionStatRequirements } from "@/libs/evolution";
+import { jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import { itemRouter } from "@/server/api/routers/item";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
@@ -80,7 +81,7 @@ describeWithDatabase("skill requirements against MySQL", () => {
     const evolution = (await db.query.jutsu.findFirst({ where: eq(jutsu.id, "jutsu") }))!;
     expect(jutsuRequirementWarning(evolution, user!)).toContain("Activate the required skill");
     expect(jutsuRequirementWarning(evolution, user!, undefined, undefined, true)).toBe("");
-    expect(canEvolveJutsu(evolution, user!)).toBe(true);
+    expect(meetsEvolutionStatRequirements(evolution, user!)).toBe(true);
     const caller = await callerFor(jutsuRouter, USER);
     expect((await caller.evolveJutsu({ userJutsuId: "owned-parent", evolutionJutsuId: "jutsu" })).success).toBe(true);
     const evolved = await db.query.userJutsu.findFirst({ where: eq(userJutsu.id, "owned-parent") });

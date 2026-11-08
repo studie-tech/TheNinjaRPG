@@ -64,26 +64,14 @@ export const canAccessStructure = (
   structureRoute?: StructureRoute,
   sectorVillage?: SectorVillage | null,
 ) => {
-  let structureAccess = true;
-  const ownVillage = userData?.village?.sector === sectorVillage?.sector;
-  const safeZone = sectorVillage?.type === "SAFEZONE";
-  if (structureRoute && sectorVillage) {
-    const relationship = findVillageUserRelationship(
-      sectorVillage,
-      userData.villageId ?? "syndicate",
-    );
-    const isAlly = relationship?.status === "ALLY";
-    const structure = sectorVillage?.structures.find((s) => s.route === structureRoute);
-    if (
-      !structure ||
-      (!ownVillage && !safeZone && (!isAlly || structure.allyAccess === 0))
-    ) {
-      structureAccess = false;
-    }
-  } else if (structureRoute && !sectorVillage) {
-    structureAccess = false;
-  }
-  return structureAccess;
+  if (!structureRoute) return true;
+  if (!sectorVillage) return false;
+  const structure = sectorVillage.structures.find((s) => s.route === structureRoute);
+  if (!structure) return false;
+  const ownVillage = userData.village?.sector === sectorVillage.sector;
+  if (ownVillage || sectorVillage.type === "SAFEZONE") return true;
+  const relationship = findVillageUserRelationship(sectorVillage, userData.villageId);
+  return relationship?.status === "ALLY" && structure.allyAccess !== 0;
 };
 
 export type StructureAttribute = Extract<keyof VillageStructure, `${string}PerLvl`>;

@@ -3,7 +3,8 @@ import { addQuestStartingEffects } from "@/libs/combat/questEffects";
 import { applyEffects } from "@/libs/combat/process";
 import { flee, realizeTag } from "@/libs/combat/tags";
 import type { UserEffect } from "@/libs/combat/types";
-import { calcApReduction, getEffectiveMaxPool } from "@/libs/combat/util";
+import { getEffectiveMaxPool } from "@/libs/combat/util";
+import { calcApReduction } from "@/libs/combat/turn";
 import {
   getTagSchema,
   PreventTagTypes,

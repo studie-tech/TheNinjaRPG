@@ -3,7 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
 import { questHistory, userData } from "@/drizzle/schema";
 import { QuestTracker } from "@/validators/objectives";
-import { upsertQuestEntries } from "../../../../../src/server/api/routers/quests";
+import { upsertQuestEntries } from "@/server/utils/questAssignment";
 import { insertQuestHistory, insertUsers } from "../../../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 

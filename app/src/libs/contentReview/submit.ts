@@ -157,9 +157,7 @@ export const reviseAgentProposal = async (
       reason: "Explain how this revision addresses the staff rejection",
     };
   }
-  const targets = (
-    changes: { entityType: string; entityId: string | null; operation: string }[],
-  ) =>
+  const targets = (changes: ChangeTarget[]) =>
     changes
       .map((change) =>
         JSON.stringify([change.entityType, change.entityId, change.operation]),
@@ -172,55 +170,14 @@ export const reviseAgentProposal = async (
       reason: "A revision must preserve every target and operation",
     };
   }
-  // Retain only candidates from this exact revision and field. Their bytes have already
-  // been inspected; a rationale-only refinement must not silently generate a new image.
-  const retained = new Map<string, typeof existing.media>();
-  for (const mediaId of new Set(input.retainMediaIds ?? [])) {
-    const candidate = existing.media.find((media) => media.id === mediaId);
-    const change = existing.changes.find((change) => change.id === candidate?.changeId);
-    // CREATE targets have no entity id. Match repeated target tuples by occurrence,
-    // so separate drafts of the same type keep their own inspected candidates.
-    const matchesTarget = (next: {
-      entityType: string;
-      entityId: string | null;
-      operation: string;
-    }) =>
-      next.entityType === change?.entityType &&
-      next.entityId === change?.entityId &&
-      next.operation === change?.operation;
-    const occurrence = existing.changes
-      .filter(matchesTarget)
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .findIndex((next) => next.id === change?.id);
-    const replacementIndex = input.proposal.changes
-      .map((next, index) => ({ next, index }))
-      .filter(({ next }) => matchesTarget(next))[occurrence]?.index;
-    const replacement =
-      replacementIndex === undefined
-        ? undefined
-        : input.proposal.changes[replacementIndex];
-    const request = replacement?.media.find(
-      (request) => request.path === candidate?.path && request.kind === candidate?.kind,
-    );
-    if (
-      !candidate ||
-      !change ||
-      replacementIndex === undefined ||
-      !request ||
-      candidate.source === "CATALOG" ||
-      request.catalogIds.length ||
-      request.search ||
-      request.generate
-    ) {
-      return {
-        ok: false,
-        status: 400,
-        reason:
-          "Retained media must belong to this proposal and use the same target, kind and path with no new search or generation",
-      };
-    }
-    const key = mediaRequestKey(replacementIndex, change, candidate.path);
-    retained.set(key, [...(retained.get(key) ?? []), candidate]);
+  const retained = retainedMediaFor(existing, input);
+  if (!retained) {
+    return {
+      ok: false,
+      status: 400,
+      reason:
+        "Retained media must belong to this proposal and use the same target, kind and path with no new search or generation",
+    };
   }
   const proposal = {
     ...input.proposal,
@@ -765,6 +722,67 @@ const firstIssue = (error: z.ZodError) => {
   return issue ? `${issue.path.join(".") || "value"}: ${issue.message}` : "invalid";
 };
 
+/**
+ * The candidates a revision keeps, by media request, or null when one does not match. Retain
+ * only candidates from this exact revision and field. Their bytes have already been
+ * inspected; a rationale-only refinement must not silently generate a new image.
+ */
+const retainedMediaFor = (existing: ExistingProposal, input: AgentProposalRevision) => {
+  const retained = new Map<string, ExistingProposal["media"]>();
+  for (const mediaId of new Set(input.retainMediaIds ?? [])) {
+    const candidate = existing.media.find((media) => media.id === mediaId);
+    const change = existing.changes.find((change) => change.id === candidate?.changeId);
+    // CREATE targets have no entity id. Match repeated target tuples by occurrence,
+    // so separate drafts of the same type keep their own inspected candidates.
+    const matchesTarget = (next: ChangeTarget) =>
+      next.entityType === change?.entityType &&
+      next.entityId === change?.entityId &&
+      next.operation === change?.operation;
+    const occurrence = existing.changes
+      .filter(matchesTarget)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .findIndex((next) => next.id === change?.id);
+    const replacementIndex = input.proposal.changes
+      .map((next, index) => ({ next, index }))
+      .filter(({ next }) => matchesTarget(next))[occurrence]?.index;
+    const replacement =
+      replacementIndex === undefined
+        ? undefined
+        : input.proposal.changes[replacementIndex];
+    const request = replacement?.media.find(
+      (request) => request.path === candidate?.path && request.kind === candidate?.kind,
+    );
+    if (
+      !candidate ||
+      !change ||
+      replacementIndex === undefined ||
+      !request ||
+      candidate.source === "CATALOG" ||
+      request.catalogIds.length ||
+      request.search ||
+      request.generate
+    ) {
+      return null;
+    }
+    const key = mediaRequestKey(replacementIndex, change, candidate.path);
+    retained.set(key, [...(retained.get(key) ?? []), candidate]);
+  }
+  return retained;
+};
+
+/** A candidate is tied to its original target and field when refining the same draft. */
+const mediaRequestKey = (order: number, change: ChangeTarget, path: string) =>
+  JSON.stringify([order, change.entityType, change.entityId, change.operation, path]);
+
+/** The fields that identify what a change targets. */
+type ChangeTarget = {
+  entityType: string;
+  entityId: string | null;
+  operation: string;
+};
+
+type ExistingProposal = NonNullable<Awaited<ReturnType<typeof readAgentProposal>>>;
+
 /** Outcome of an audit submission: suggestions by their index, and a markdown summary. */
 type SubmissionResult = {
   accepted: { index: number; id: string; title: string }[];
@@ -783,11 +801,3 @@ type Guards = {
   /** Names new content cannot take, from `takenNames` and the drafts accepted so far. */
   names: Set<string>;
 };
-
-/** A candidate is tied to its original target and field when refining the same draft. */
-const mediaRequestKey = (
-  order: number,
-  change: { entityType: string; entityId: string | null; operation: string },
-  path: string,
-) =>
-  JSON.stringify([order, change.entityType, change.entityId, change.operation, path]);

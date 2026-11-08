@@ -33,7 +33,8 @@ import {
   isQuestObjectiveAvailable,
 } from "@/libs/objectives";
 import { useInfinitePagination } from "@/libs/pagination";
-import { isReducedMissionReward, questProgressBlockedMessage } from "@/libs/quest";
+import { questProgressBlockedMessage } from "@/libs/quest/missionHall";
+import { isReducedMissionReward } from "@/libs/quest/rewards";
 import {
   getIsolatedPyramid,
   hasQuestContentChanged,

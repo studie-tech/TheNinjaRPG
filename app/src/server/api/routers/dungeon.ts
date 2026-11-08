@@ -65,7 +65,6 @@ import {
   findUserRoleById,
 } from "@/queries/profile";
 import { initiateBattle } from "@/routers/combat";
-import { updateRewards } from "@/routers/quests";
 import {
   createTRPCRouter,
   errorResponse,
@@ -82,6 +81,7 @@ import { expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import { dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
 import { notifyMapLocationsChanged } from "@/server/utils/mapLocations";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { updateRewards } from "@/server/utils/questRewards";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
 import {
@@ -680,7 +680,7 @@ export const dungeonRouter = createTRPCRouter({
           if (claim.rowsAffected === 0) return null;
           // Reward tasks execute serially inside the driver's rotating transaction session.
           const delivered = await updateRewards({
-            client: tx as unknown as DrizzleClient,
+            client: tx,
             user,
             rewards: rolled,
             reason: `Dungeon: ${run.content.name}`,

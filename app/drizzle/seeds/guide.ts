@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { GUIDE_SYSTEM_COVERS } from "@/drizzle/constants";
 import { bloodline, guideArticle, item } from "@/drizzle/schema";
 import { SYSTEM_GUIDE_ARTICLES } from "@/libs/guide/articles";
 import {
@@ -11,7 +10,7 @@ import {
 import { isReservedGuideSlug } from "@/libs/guide/html";
 import type { DrizzleClient } from "@/server/db";
 
-const upsertArticle = async (
+const insertMissingArticle = async (
   client: DrizzleClient,
   article: (typeof SYSTEM_GUIDE_ARTICLES)[number] & {
     relatedBloodlineId?: string | null;
@@ -20,7 +19,13 @@ const upsertArticle = async (
   },
 ) => {
   if (isReservedGuideSlug(article.slug)) return;
-  const values = {
+  const existing = await client.query.guideArticle.findFirst({
+    columns: { id: true },
+    where: eq(guideArticle.slug, article.slug),
+  });
+  if (existing) return;
+  await client.insert(guideArticle).values({
+    id: nanoid(),
     slug: article.slug,
     title: article.title,
     subtitle: article.subtitle,
@@ -29,7 +34,7 @@ const upsertArticle = async (
     seoDescription: article.seoDescription,
     category: article.category,
     content: article.content,
-    image: GUIDE_SYSTEM_COVERS[article.slug] ?? article.image ?? null,
+    image: article.image ?? null,
     faq: article.faq ?? null,
     sortOrder: article.sortOrder,
     published: article.published,
@@ -38,16 +43,7 @@ const upsertArticle = async (
     relatedBloodlineId: article.relatedBloodlineId ?? null,
     relatedItemId: article.relatedItemId ?? null,
     relatedJutsuId: article.relatedJutsuId ?? null,
-  };
-
-  const existing = await client.query.guideArticle.findFirst({
-    columns: { id: true },
-    where: eq(guideArticle.slug, article.slug),
   });
-  if (existing) {
-    return;
-  }
-  await client.insert(guideArticle).values({ id: nanoid(), ...values });
 };
 
 const SYSTEM_SLUGS = new Set(SYSTEM_GUIDE_ARTICLES.map((article) => article.slug));
@@ -55,7 +51,7 @@ const SYSTEM_SLUGS = new Set(SYSTEM_GUIDE_ARTICLES.map((article) => article.slug
 export const seedGuides = async (client: DrizzleClient) => {
   console.log("\nSyncing player guide articles...\n");
   for (const article of SYSTEM_GUIDE_ARTICLES) {
-    await upsertArticle(client, article);
+    await insertMissingArticle(client, article);
   }
 
   const [bloodlines, items] = await Promise.all([
@@ -88,7 +84,7 @@ export const seedGuides = async (client: DrizzleClient) => {
     if (!isGuideworthyEntityName(row.name)) continue;
     const generated = generateBloodlineGuide(row);
     if (SYSTEM_SLUGS.has(generated.slug)) continue;
-    await upsertArticle(client, {
+    await insertMissingArticle(client, {
       ...generated,
       relatedBloodlineId: row.id,
     });
@@ -107,7 +103,7 @@ export const seedGuides = async (client: DrizzleClient) => {
   for (const row of herbs) {
     const generated = generateItemGuide(row);
     if (SYSTEM_SLUGS.has(generated.slug)) continue;
-    await upsertArticle(client, {
+    await insertMissingArticle(client, {
       ...generated,
       relatedItemId: row.id,
     });

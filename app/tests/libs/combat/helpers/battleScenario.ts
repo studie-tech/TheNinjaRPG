@@ -2,7 +2,7 @@ import { getTableColumns, type Table } from "drizzle-orm";
 import { z } from "zod";
 import type { Item, Jutsu } from "@/drizzle/schema";
 import { GenNames, StatNames } from "@/libs/combat/constants";
-import { emptyPreBattleGearModifiers, computeDamagePacket } from "@/libs/combat/process";
+import { emptyPreBattleGearModifiers, computeDamagePacket } from "@/libs/combat/damagePipeline";
 import { clear, cleanse } from "@/libs/combat/tags";
 import type {
   ActionEffect,

@@ -37,10 +37,8 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import {
-  isDeletedStoreUserId,
-  settleRecordedLedger,
-} from "@/server/utils/purchases/grant";
+import { settleRecordedLedger } from "@/server/utils/purchases/grant";
+import { isDeletedStoreUserId } from "@/server/utils/purchases/storeIdentity";
 import { checkRecruitSignupEligibility, isKnownIp } from "@/server/utils/recruitment";
 import {
   carryoverReportId,

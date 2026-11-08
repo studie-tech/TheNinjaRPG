@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
+import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import { isFetchOriginError } from "@/utils/error";
 import { fetchWithTimeout } from "@/utils/http";
-import { validateUrlForSsrf } from "@/utils/ssrf";
 
 /**
  * Check if a URL is accessible by making a HEAD request.

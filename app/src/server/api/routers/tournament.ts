@@ -4,7 +4,7 @@ import type { TournamentMatchState } from "@/drizzle/constants";
 import { TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
-import { postProcessRewards } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchClan } from "@/queries/clan";
 import { fetchAllGameSettings, fetchUser, findUserById } from "@/queries/profile";
@@ -30,7 +30,6 @@ import {
   updateUserDataForJoinMatch,
 } from "@/queries/tournament";
 import { initiateBattle } from "@/routers/combat";
-import { updateRewards } from "@/routers/quests";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import {
   baseServerResponse,
@@ -44,6 +43,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { updateRewards } from "@/server/utils/questRewards";
 import { secondsFromDate } from "@/utils/time";
 import { checkCoLeader } from "@/validators/clan";
 import { ObjectiveReward } from "@/validators/rewards";

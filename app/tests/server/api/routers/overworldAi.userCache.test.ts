@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import { OVERWORLD_QUEST_ROLLS_PER_DAY } from "@/drizzle/constants";
 import { aiProfile, anbuSquad, battle, battleHistory, trainingLog, userCookingJob, userQueue, overworldAiPlacement, overworldAiPlacementQuest, quest, questHistory, userData, userQuestAttempt } from "@/drizzle/schema";
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
@@ -125,6 +126,20 @@ describeWithDatabase("overworld interaction profile updates", () => {
     const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") });
     expect(result.userDelta?.dailyOverworldQuestRolls).toBe(saved?.dailyOverworldQuestRolls);
     if (chance) expect(result.userPatch?.activeNpcQuestId).toBe(saved?.activeNpcQuestId);
+  });
+
+  it("grants nothing when the daily allowance ran out after the profile read", async () => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "cache-npc-quest", questType: "overworld", hidden: false, maxAttempts: 10, maxCompletes: 10, content: {
+      objectives: [AllObjectives.parse({ id: "train", task: "stats_trained", value: 50 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    await db.insert(overworldAiPlacementQuest).values({ placementId: "cache-giver", questId: "cache-npc-quest", chance: 100 });
+    const { caller } = await prepared();
+    await db.update(userData).set({ dailyOverworldQuestRolls: OVERWORLD_QUEST_ROLLS_PER_DAY }).where(eq(userData.userId, "npc-cache-actor"));
+    expect(await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 })).toEqual({ success: false, message: "You've reached your daily mission allowance." });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") })).toMatchObject({ activeNpcQuestId: null, dailyOverworldQuestRolls: OVERWORLD_QUEST_ROLLS_PER_DAY });
+    expect(await db.select().from(questHistory)).toEqual([]);
   });
 
   it("returns the committed assignment without a cache confirmation SELECT", async () => {

@@ -8,7 +8,16 @@ const resolve = (battle: CompleteBattle, effect: UserEffect, resolved: UserEffec
   const consequences = new Map<string, Consequence>();
   const actionEffects: ActionEffect[] = [];
   const groundEffects: GroundEffect[] = [];
-  applySingleEffect(consequences, users, resolved, groundEffects, actionEffects, new Set(), battle, "defender", effect);
+  applySingleEffect({
+    consequences,
+    newUsersState: users,
+    newUsersEffects: resolved,
+    newGroundEffects: groundEffects,
+    actionEffects,
+    appliedEffects: new Set(),
+    battle,
+    actorId: "defender",
+  }, effect);
   return { users, consequences, actionEffects, resolved };
 };
 

@@ -19,7 +19,6 @@ import {
   type Bloodline,
   type BloodlineRank,
   bloodline,
-  bloodlineRolls,
   type UserData,
   userData,
 } from "@/drizzle/schema";
@@ -65,7 +64,6 @@ import {
   insertBloodlineForCreate,
   insertBloodlineReskinForCreateReskin,
   insertBloodlineRollsForDoRoll,
-  insertBloodlineRollsForDoRoll2,
   insertBloodlineRollsForPityRoll,
   insertBloodlineRollsForPurchaseBloodline,
   listBloodlineForGetAll,
@@ -119,12 +117,7 @@ import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent, canRemoveBloodlineFromPool } from "@/utils/permissions";
-import {
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  secondsFromDate,
-  secondsPassed,
-} from "@/utils/time";
+import { getTimeLeftStr, secondsFromDate, secondsPassed } from "@/utils/time";
 import {
   type BloodlineFilteringSchema,
   bloodlineFilteringSchema,
@@ -303,7 +296,7 @@ export const bloodlineRouter = createTRPCRouter({
         );
         if (canTransferAgainDate > new Date()) {
           const msLeft = -secondsPassed(canTransferAgainDate) * 1000;
-          const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
+          const timeLeft = getTimeLeftStr(msLeft);
           return errorResponse(`You can swap again in ${timeLeft}`);
         }
       }
@@ -748,78 +741,65 @@ export const bloodlineRouter = createTRPCRouter({
         return errorResponse("You have already rolled a bloodline");
       }
 
-      /**
-       * Roll a bloodline. Defined like this to make testing of many rolls easier
-       * @returns {Promise<{success: boolean, message: string}>}
-       */
-      const doRoll = async () => {
-        const rand = randomInt(0, 1_000_000) / 1_000_000;
-        let bloodlineRank: BloodlineRank | undefined;
-        if (rand < ROLL_CHANCE.S) {
-          bloodlineRank = "S";
-        } else if (rand < ROLL_CHANCE.A) {
-          bloodlineRank = "A";
-        } else if (rand < ROLL_CHANCE.B) {
-          bloodlineRank = "B";
-        } else if (rand < ROLL_CHANCE.C) {
-          bloodlineRank = "C";
-        }
-        // If a rank was determined, use filterRollableBloodlines to select a bloodline
-        if (bloodlineRank) {
-          const bloodlinePool = filterRollableBloodlines({
-            bloodlines: allBloodlines,
-            rank: bloodlineRank,
-            user,
-            previousRolls: [], // No previous rolls to consider for this standard roll
-          });
-          const randomBloodline = getRandomElement(bloodlinePool);
-          if (randomBloodline) {
-            const bloodlineUpdateResult = await updateUserDataForDoRoll(
-              ctx.drizzle,
-              randomBloodline,
-              ctx,
-              starterBloodlineId,
-            );
-            if (bloodlineUpdateResult.rowsAffected === 0) {
-              return errorResponse("You have already rolled a bloodline");
-            }
-            try {
-              await insertBloodlineRollsForDoRoll(ctx.drizzle, ctx, randomBloodline);
-            } catch (error) {
-              if (isMysqlDuplicateKeyError(error)) {
-                return errorResponse("You have already rolled a bloodline");
-              }
-              throw error;
-            }
-            const userPatch = bloodlineCachePatch(
-              user,
-              randomBloodline,
-              settings,
-              progression,
-            );
-            return {
-              success: true,
-              userPatch,
-              message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
-            };
-          }
-        }
-        // If no bloodline was found, proceed with the normal "no bloodline" case
-        try {
-          await insertBloodlineRollsForDoRoll2(ctx.drizzle, ctx);
-        } catch (error) {
-          if (isMysqlDuplicateKeyError(error)) {
-            return errorResponse("You have already rolled a bloodline");
-          }
-          throw error;
-        }
-        return {
-          success: false,
-          message:
-            "After thorough examination, the doctors conclude you have no bloodline",
-        };
-      };
-      return actionReadinessResponse(await doRoll(), readiness, ctx.drizzle);
+      const rand = randomInt(0, 1_000_000) / 1_000_000;
+      const bloodlineRank = (["S", "A", "B", "C"] as const).find(
+        (rank) => rand < ROLL_CHANCE[rank],
+      );
+      const randomBloodline = getRandomElement(
+        filterRollableBloodlines({
+          bloodlines: allBloodlines,
+          rank: bloodlineRank,
+          user,
+          previousRolls: [], // No previous rolls to consider for this standard roll
+        }),
+      );
+      const alreadyRolled = () =>
+        actionReadinessResponse(
+          errorResponse("You have already rolled a bloodline"),
+          readiness,
+          ctx.drizzle,
+        );
+      if (randomBloodline) {
+        const bloodlineUpdateResult = await updateUserDataForDoRoll(
+          ctx.drizzle,
+          randomBloodline,
+          ctx,
+          starterBloodlineId,
+        );
+        if (bloodlineUpdateResult.rowsAffected === 0) return alreadyRolled();
+      }
+      try {
+        await insertBloodlineRollsForDoRoll(ctx.drizzle, ctx, randomBloodline?.id);
+      } catch (error) {
+        if (isMysqlDuplicateKeyError(error)) return alreadyRolled();
+        throw error;
+      }
+      if (!randomBloodline) {
+        return actionReadinessResponse(
+          {
+            success: false,
+            message:
+              "After thorough examination, the doctors conclude you have no bloodline",
+          },
+          readiness,
+          ctx.drizzle,
+        );
+      }
+      const userPatch = bloodlineCachePatch(
+        user,
+        randomBloodline,
+        settings,
+        progression,
+      );
+      return actionReadinessResponse(
+        {
+          success: true,
+          userPatch,
+          message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   // Pity Roll a bloodline
   pityRoll: protectedProcedure
@@ -864,7 +844,6 @@ export const bloodlineRouter = createTRPCRouter({
       // loser stops before touching userData.bloodlineId at all.
       const reserved = await reservePityCredit({
         client: ctx.drizzle,
-        table: bloodlineRolls,
         rollId: prevRoll.id,
         expectedPityRolls: prevRoll.pityRolls,
       });
@@ -895,7 +874,6 @@ export const bloodlineRouter = createTRPCRouter({
           try {
             await refundPityCredit({
               client: ctx.drizzle,
-              table: bloodlineRolls,
               rollId: prevRoll.id,
             });
           } catch (refundError) {

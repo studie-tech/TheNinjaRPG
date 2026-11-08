@@ -4,11 +4,15 @@ import type Stripe from "stripe";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { paypalSubscription, paypalTransaction, stripeCheckout, stripePayment, storeUserIdAlias, userData, webStoreOrder } from "@/drizzle/schema";
 import { MAX_REPS_PER_MONTH } from "@/drizzle/constants";
-import { paypalRouter, reconcilePaypalSubscription, syncTransactions, updateReps, updateSubscription } from "@/server/api/routers/paypal";
+import { paypalRouter } from "@/server/api/routers/paypal";
+import { deliverPaypalReputation, reconcilePaypalSubscription, syncTransactions, updateSubscription } from "@/server/utils/paypal/fulfillment";
 import { reserveStoreOrder, deliverStoreOrder } from "@/server/utils/webStore";
 import { stripeRouter } from "@/server/api/routers/stripe";
 import * as stripeClient from "@/server/utils/stripe/client";
-import { reconcileFederalStatuses, setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+import {
+  reconcileFederalStatuses,
+  setFederalStatusWithStoreFloor,
+} from "@/server/utils/purchases/federalStatus";
 import { fulfillStripeInvoice, fulfillStripeSession } from "@/server/utils/stripe/fulfillment";
 import { calcFedUgradeCost, dollars2reps, fedStatusRepsCost, reps2dollars } from "@/utils/paypal";
 import { beforeStatements, failStatements } from "../../setup/statements";
@@ -57,7 +61,7 @@ const stripeApi = { checkout: { sessions: {
   create: vi.fn(async (params: Stripe.Checkout.SessionCreateParams) => { const session = { id: `cs_test_${params.client_reference_id}`, url: "https://checkout.stripe.com/test", metadata: params.metadata } as Stripe.Checkout.Session; stripeSessions.set(session.id, session); return session; }),
   retrieve: vi.fn(async (id: string) => stripeSessions.get(id)),
 } } } as unknown as Stripe;
-const paid = async (points = 20, overrides: Partial<Parameters<typeof updateReps>[0]> = {}) => { const value = reps2dollars(points); return updateReps({ client: await getTestDatabase(), createdById: BUYER, affectedUserId: TARGET, transactionId: "legacy_capture", transactionUpdatedDate: new Date().toISOString(), value, currency: "USD", status: "COMPLETED", reps: dollars2reps(value), type: "REP_PURCHASE", raw: {}, ...overrides }); };
+const paid = async (points = 20, overrides: Partial<Parameters<typeof deliverPaypalReputation>[0]> = {}) => { const value = reps2dollars(points); return deliverPaypalReputation({ client: await getTestDatabase(), createdById: BUYER, affectedUserId: TARGET, transactionId: "legacy_capture", transactionUpdatedDate: new Date().toISOString(), value, currency: "USD", status: "COMPLETED", reps: dollars2reps(value), type: "REP_PURCHASE", raw: {}, ...overrides }); };
 const target = async () => (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, TARGET) });
 
 describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
@@ -237,6 +241,27 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     expect((await (await callerFor(stripeRouter, BUYER)).createCheckout(stripeRequest(2000))).success).toBe(false);
     await db.update(paypalTransaction).set({ createdAt: new Date(Date.now() - 4 * 3600000) });
     expect(await paypal.getRecentRepsCount({ userId: BUYER })).toBe(status === "RESERVED" ? 0 : MAX_REPS_PER_MONTH - 500);
+  });
+  const receipt = { id: "reserved_receipt", createdById: BUYER, affectedUserId: TARGET, transactionId: "legacy_capture", transactionUpdatedDate: new Date().toISOString(), orderId: "reserved_order", amount: reps2dollars(20), reputationPoints: 20, currency: "USD", status: "RESERVED", type: "REP_PURCHASE" as const, rawData: {} };
+  it.each([
+    ["buyer", { createdById: OTHER }, "PayPal payment does not match receipt ownership or amount"],
+    ["recipient", { affectedUserId: OTHER }, "PayPal payment does not match receipt ownership or amount"],
+    ["amount", { amount: receipt.amount + 1 }, "PayPal payment does not match receipt ownership or amount"],
+    ["currency", { currency: "EUR" }, "PayPal payment does not match receipt ownership or amount"],
+    ["reputation", { reputationPoints: 21 }, "PayPal payment does not match reserved terms"],
+    ["order", { orderId: "other_order" }, "PayPal payment does not match reserved terms"],
+  ])("refuses a payment whose %s differs from its reserved receipt", async (_, terms, message) => {
+    await (await getTestDatabase()).insert(paypalTransaction).values({ ...receipt, ...terms });
+    await expect(paid(20, { orderId: "reserved_order" })).rejects.toThrow(message);
+    expect((await target())?.reputationPoints).toBe(0);
+  });
+  it("answers delivered receipts before comparing their reserved terms, but never before ownership", async () => {
+    const db = await getTestDatabase();
+    await db.insert(paypalTransaction).values({ ...receipt, status: "COMPLETED", reputationPoints: 21 });
+    expect(await paid(20, { orderId: "reserved_order" })).toEqual({ success: true, message: "Reputation points already delivered" });
+    await db.update(paypalTransaction).set({ affectedUserId: OTHER });
+    await expect(paid(20, { orderId: "reserved_order" })).rejects.toThrow("receipt ownership or amount");
+    expect((await target())?.reputationPoints).toBe(0);
   });
   it("recovery of an unreserved legacy payment cannot exceed Stripe's reservation", async () => {
     expect((await (await callerFor(stripeRouter, BUYER)).createCheckout(stripeRequest(3000))).success).toBe(true);

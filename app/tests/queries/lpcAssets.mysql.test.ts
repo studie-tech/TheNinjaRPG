@@ -13,7 +13,7 @@ import { deleteUnreferencedLpcAsset, listLpcAssets } from "@/queries/asset";
 import { gameAssetRouter } from "@/routers/asset";
 import { gameAssetValidator } from "@/validators/asset";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
-import * as ssrf from "@/utils/ssrf";
+import * as ssrf from "@/server/utils/ssrf";
 import { insertItems, insertUsers } from "../setup/factories";
 import { rateLimitResponse, stubRateLimitTransport } from "../setup/rateLimit";
 import { beforeStatements, failStatements } from "../setup/statements";

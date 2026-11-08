@@ -32,7 +32,7 @@ import {
   userQueue,
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { getServerPusher, Pusher } from "@/libs/pusher";
 import * as pusherModule from "@/libs/pusher";
 import {

@@ -6,11 +6,11 @@ import {
   userQueue, userVote,
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
-import { calcBattleResult } from "@/libs/combat/util";
+import { calcBattleResult } from "@/libs/combat/settlement";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import type { PusherClient } from "@/libs/pusher";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
-import { updateRewards } from "@/server/api/routers/quests";
+import { updateRewards } from "@/server/utils/questRewards";
 import { trainRouter } from "@/server/api/routers/train";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { createAssignedExperienceSchema } from "@/validators/user";

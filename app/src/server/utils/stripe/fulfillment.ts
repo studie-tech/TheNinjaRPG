@@ -25,11 +25,11 @@ import {
   fetchPurchaseUserCacheInputs,
   getKnownPurchaseUserUpdate,
 } from "@/server/utils/purchases/cache";
+import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/federalStatus";
 import {
   canonicalStoreUserId,
   isRetiredStoreUserId,
-  setFederalStatusWithStoreFloor,
-} from "@/server/utils/purchases/grant";
+} from "@/server/utils/purchases/storeIdentity";
 import { logError } from "@/server/utils/sentry";
 import { calcFedUgradeCost, dynamicMonthlyRepCap } from "@/utils/paypal";
 import { getStripe, stripeIsLive } from "./client";
@@ -81,7 +81,9 @@ export const grantStripeReceipt = async (
         if (current?.grantedAt) return;
         if (current?.reviewRequired) return "review_required" as const;
         if (
-          (await reputationAllowanceUsed(client, buyerId, "", stored.checkoutId)) +
+          (await reputationAllowanceUsed(client, buyerId, {
+            excludeStripeCheckoutId: stored.checkoutId,
+          })) +
             stored.reputationPoints >
           dynamicMonthlyRepCap(buyer)
         ) {

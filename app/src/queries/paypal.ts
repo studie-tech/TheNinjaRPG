@@ -371,8 +371,8 @@ export const insertPaypalSubscriptionForUpdateSubscription = (
     updatedAt: paidAt,
   });
 
-/** Build the `paypalTransaction` insert for `updateReps`. */
-export const insertPaypalTransactionForUpdateReps = (
+/** Build the `paypalTransaction` insert for `awardPaypalReferral`. */
+export const insertPaypalTransactionForAwardPaypalReferral = (
   client: Pick<DrizzleClient, "insert">,
   input: {
     createdById: string;
@@ -405,8 +405,8 @@ export const insertPaypalTransactionForUpdateReps = (
     rawData: input.raw,
   });
 
-/** Build the `recruitmentRewards` insert for `updateReps`. */
-export const insertRecruitmentRewardsForUpdateReps = (
+/** Build the `recruitmentRewards` insert for `awardPaypalReferral`. */
+export const insertRecruitmentRewardsForAwardPaypalReferral = (
   client: Pick<DrizzleClient, "insert">,
   input: { affectedUserId: string; createdById: string; reps: number },
 ) =>
@@ -419,10 +419,10 @@ export const insertRecruitmentRewardsForUpdateReps = (
   });
 
 /**
- * Build the `userData` update for `updateReps`, setting `reputationPointsTotal` and
- * `reputationPoints`, using predicates on `userId`.
+ * Build the `userData` update crediting PayPal reputation, setting `reputationPointsTotal`
+ * and `reputationPoints`, using predicates on `userId`.
  */
-export const updateUserDataForUpdateReps = (
+export const creditPaypalReputation = (
   client: Pick<DrizzleClient, "update">,
   input: { reps: number; affectedUserId: string },
 ) =>

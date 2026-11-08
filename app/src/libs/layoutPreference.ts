@@ -1,9 +1,5 @@
 import { type GameLayoutId, toGameLayoutId } from "@/libs/gameLayouts";
-import { LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
-import {
-  parseWallpaperVariant,
-  WALLPAPER_EXPERIMENT,
-} from "@/libs/wallpaperExperiment";
+import { readDocumentCookie } from "@/utils/cookies";
 export const LAYOUT_PREFERENCE_COOKIE = "tnr_layout_preference";
 
 /**
@@ -50,33 +46,8 @@ export const toFontScale = (value?: unknown): FontScaleValue | undefined => {
   return FONT_SCALE_VALUES.find((scale) => scale === parsed);
 };
 
-export type EffectiveLayout = GameLayoutId;
-
-export interface LayoutExperimentAssignment {
-  experiment: string;
-  variant: string;
-}
-
-export const getLayoutExperimentAssignments = (variants: {
-  abLemuReplacementVariant?: string | null;
-  wallpaperVariant?: string | null;
-}): LayoutExperimentAssignment[] => {
-  const assignments: LayoutExperimentAssignment[] = [];
-  const variant = normalizeLemuVariant(variants.abLemuReplacementVariant);
-  if (variant) {
-    assignments.push({
-      experiment: LEMU_EXPERIMENT,
-      variant,
-    });
-  }
-  const wallpaper = parseWallpaperVariant(variants.wallpaperVariant);
-  if (wallpaper)
-    assignments.push({ experiment: WALLPAPER_EXPERIMENT, variant: wallpaper });
-  return assignments;
-};
-
 /** Persist the validated layout synchronously so the next document selects its shell. */
-export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
+export const persistLayoutPreferenceCookie = (layout: GameLayoutId) => {
   writeYearCookie(LAYOUT_PREFERENCE_COOKIE, layout);
 };
 
@@ -98,10 +69,7 @@ export const persistFontScaleCookie = (scale: FontScaleValue) => {
  */
 export const applyFontScaleCookie = () => {
   if (typeof document === "undefined") return;
-  const match = document.cookie.match(
-    new RegExp(`(?:^|; )${FONT_SCALE_COOKIE}=([^;]*)`),
-  );
-  const scale = toFontScale(match ? decodeURIComponent(match[1] ?? "") : undefined);
+  const scale = toFontScale(readDocumentCookie(FONT_SCALE_COOKIE));
   if (scale === undefined || scale === DEFAULT_FONT_SCALE) {
     document.documentElement.style.removeProperty("--font-scale");
   } else {
@@ -112,7 +80,7 @@ export const applyFontScaleCookie = () => {
 /** Accept supported layout IDs stored either directly or as JSON-encoded strings. */
 export const storedValueToLayout = (
   value?: string | null,
-): EffectiveLayout | undefined => {
+): GameLayoutId | undefined => {
   const direct = toGameLayoutId(value);
   if (direct) return direct;
   if (!value) return undefined;

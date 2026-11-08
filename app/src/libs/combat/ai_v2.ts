@@ -419,18 +419,9 @@ export const performAIaction = (
             // Same predicate as the one-per-controller cap in summon(), so the
             // AI's re-summon gate can never drift from what blocks the cast.
             return !hasLiveSummon(nextBattle.usersState, user.userId);
-          case "has_effect": {
+          case "has_effect":
             if (condition.threshold === 0) return true;
-            const userEffects = nextBattle.usersEffects.filter(
-              (e) => e.targetId === user.userId && e.type === condition.effectType,
-            );
-            if (userEffects.length === 0) return false;
-            const totalUserPower = userEffects.reduce(
-              (sum, effect) => sum + effect.power,
-              0,
-            );
-            return totalUserPower >= condition.threshold;
-          }
+            return reachesEffectPower(nextBattle.usersEffects, user.userId, condition);
           case "target_has_effect": {
             if (condition.threshold === 0) return true;
             const targetUser = target
@@ -440,16 +431,11 @@ export const performAIaction = (
                 )
               : null;
             if (!targetUser) return false;
-            const targetEffects = nextBattle.usersEffects.filter(
-              (e) =>
-                e.targetId === targetUser.userId && e.type === condition.effectType,
+            return reachesEffectPower(
+              nextBattle.usersEffects,
+              targetUser.userId,
+              condition,
             );
-            if (targetEffects.length === 0) return false;
-            const totalTargetPower = targetEffects.reduce(
-              (sum, effect) => sum + effect.power,
-              0,
-            );
-            return totalTargetPower >= condition.threshold;
           }
           default:
             return true;
@@ -472,6 +458,13 @@ export const performAIaction = (
               return prev && current ? current.power - prev.power : 0;
             })[0];
         };
+        // Aim a selected action at the rule's target, when both exist
+        const aimAction = (action?: CombatAction) => {
+          const target = getTarget(rule.action, action);
+          return action && target
+            ? { action, long: target.longitude, lat: target.latitude }
+            : undefined;
+        };
         // Go through different actions
         if (rule.action.type === "move_towards_opponent") {
           const target = getTarget(rule.action);
@@ -486,70 +479,42 @@ export const performAIaction = (
             }
           }
         } else if (rule.action.type === "use_specific_jutsu") {
-          const action = availActions.find(
-            (a) => "jutsuId" in rule.action && a.id === rule.action.jutsuId,
+          nextAction = aimAction(
+            availActions.find(
+              (a) => "jutsuId" in rule.action && a.id === rule.action.jutsuId,
+            ),
           );
-          const target = getTarget(rule.action, action);
-          if (action && target) {
-            nextAction = { action, long: target.longitude, lat: target.latitude };
-          }
         } else if (rule.action.type === "use_specific_item") {
-          const action = availActions.find(
-            (a) => "itemId" in rule.action && a.id === rule.action.itemId,
+          nextAction = aimAction(
+            availActions.find(
+              (a) => "itemId" in rule.action && a.id === rule.action.itemId,
+            ),
           );
-          const target = getTarget(rule.action, action);
-          if (action && target) {
-            nextAction = { action, long: target.longitude, lat: target.latitude };
-          }
         } else if (rule.action.type === "use_random_jutsu") {
           const jutsus = availActions.filter((a) => a.type === "jutsu");
-          const action = jutsus.length
-            ? jutsus[secureRandomInt(jutsus.length)]
-            : undefined;
-          const target = getTarget(rule.action, action);
-          if (action && target) {
-            nextAction = { action, long: target.longitude, lat: target.latitude };
-          }
+          nextAction = aimAction(
+            jutsus.length ? jutsus[secureRandomInt(jutsus.length)] : undefined,
+          );
         } else if (rule.action.type === "use_random_item") {
           const items = availActions.filter((a) => a.type === "item");
-          const action = items.length
-            ? items[secureRandomInt(items.length)]
-            : undefined;
-          const target = getTarget(rule.action, action);
-          if (action && target) {
-            nextAction = { action, long: target.longitude, lat: target.latitude };
-          }
+          nextAction = aimAction(
+            items.length ? items[secureRandomInt(items.length)] : undefined,
+          );
         } else if (rule.action.type === "use_highest_power_action") {
-          const action = getHighestPowerAction(availActions);
-          const target = getTarget(rule.action, action);
-          if (target && action) {
-            nextAction = { action, long: target.longitude, lat: target.latitude };
-          }
+          nextAction = aimAction(getHighestPowerAction(availActions));
         } else if (rule.action.type === "use_highest_power_jutsu") {
-          const action = getHighestPowerAction(
-            availActions.filter((a) => a.type === "jutsu"),
+          nextAction = aimAction(
+            getHighestPowerAction(availActions.filter((a) => a.type === "jutsu")),
           );
-          const target = getTarget(rule.action, action);
-          if (target && action) {
-            nextAction = { action, long: target.longitude, lat: target.latitude };
-          }
         } else if (rule.action.type === "use_highest_power_item") {
-          const action = getHighestPowerAction(
-            availActions.filter((a) => a.type === "item"),
+          nextAction = aimAction(
+            getHighestPowerAction(availActions.filter((a) => a.type === "item")),
           );
-          const target = getTarget(rule.action, action);
-          if (target && action) {
-            nextAction = { action, long: target.longitude, lat: target.latitude };
-          }
         } else if (rule.action.type === "use_combo_action") {
           const userActions = user.usedActions.map((a) => a.id);
           const nextId = getNextComboId(rule.action.comboIds, userActions);
           if (nextId) {
-            const action = availActions.find((a) => a.id === nextId);
-            const target = getTarget(rule.action, action);
-            if (action && target) {
-              nextAction = { action, long: target.longitude, lat: target.latitude };
-            }
+            nextAction = aimAction(availActions.find((a) => a.id === nextId));
           }
         } else if (rule.action.type === "end_turn") {
           // An auto-combat human about to idle on drained pools meditates back
@@ -647,6 +612,19 @@ const attemptBattleAction = (props: Parameters<typeof performBattleAction>[0]) =
     if (error instanceof ActionNotPossibleError) return undefined;
     throw error;
   }
+};
+
+/** Whether a user's effects of one type carry at least the condition's summed power. */
+const reachesEffectPower = (
+  effects: CompleteBattle["usersEffects"],
+  userId: string,
+  { effectType, threshold }: { effectType: string; threshold: number },
+) => {
+  const matching = effects.filter(
+    (e) => e.targetId === userId && e.type === effectType,
+  );
+  if (matching.length === 0) return false;
+  return matching.reduce((sum, effect) => sum + effect.power, 0) >= threshold;
 };
 
 const getBarriers = (

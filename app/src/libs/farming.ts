@@ -307,19 +307,15 @@ export const canDropFarmSeed = (
 export const patchFarmPlot = (plots: FarmPlotState[], updatedPlot: FarmPlotState) =>
   plots.map((plot) => (plot.id === updatedPlot.id ? updatedPlot : plot));
 
-export const applyWaterReduction = (finishAt: Date, now = new Date()) =>
-  new Date(
-    Math.max(
-      now.getTime(),
-      finishAt.getTime() - FARM_WATER_TIME_REDUCTION_SECONDS * 1000,
-    ),
-  );
-
 export const applyFertilizerReduction = (
   finishAt: Date,
   reductionSeconds: number,
   now = new Date(),
 ) => new Date(Math.max(now.getTime(), finishAt.getTime() - reductionSeconds * 1000));
+
+/** Shorten the remaining grow time by the configured watering reduction without moving it before now. */
+export const applyWaterReduction = (finishAt: Date, now = new Date()) =>
+  applyFertilizerReduction(finishAt, FARM_WATER_TIME_REDUCTION_SECONDS, now);
 
 export type FarmPlotWithSeed = FarmPlot & {
   seedItem?: Item | null;
@@ -374,24 +370,22 @@ export const mapPlotToState = (
   };
 };
 
-export const getFarmPlantExperience = (seedItem: Pick<Item, "farmPlantExperience">) => {
-  const plantXp = Number(seedItem.farmPlantExperience) || 0;
-  return plantXp > 0 ? plantXp : 0;
-};
+/** Read non-negative planting XP from seed data, including values supplied by item forms. */
+export const getFarmPlantExperience = (seedItem: Pick<Item, "farmPlantExperience">) =>
+  positiveExperience(seedItem.farmPlantExperience);
 
+/** Read non-negative harvesting XP from yield data, including values supplied by item forms. */
 export const getFarmHarvestExperience = (
   yieldItem: Pick<Item, "farmHarvestExperience">,
-) => {
-  const harvestXp = Number(yieldItem.farmHarvestExperience) || 0;
-  return harvestXp > 0 ? harvestXp : 0;
-};
+) => positiveExperience(yieldItem.farmHarvestExperience);
 
+/** Read non-negative application XP from fertilizer data, including values supplied by item forms. */
 export const getFertilizerExperience = (
   fertilizerItem: Pick<Item, "farmFertilizerExperience">,
-) => {
-  const applyXp = Number(fertilizerItem.farmFertilizerExperience) || 0;
-  return applyXp > 0 ? applyXp : 0;
-};
+) => positiveExperience(fertilizerItem.farmFertilizerExperience);
+
+/** Item forms pass unvalidated values, so anything but a positive number counts as none. */
+const positiveExperience = (value: unknown) => Math.max(0, Number(value) || 0);
 
 /** Columns of a plot with nothing planted on it. */
 export const EMPTY_PLOT = {

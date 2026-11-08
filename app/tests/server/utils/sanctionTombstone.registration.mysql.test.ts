@@ -30,7 +30,7 @@ import * as sanctions from "@/server/utils/sanctionTombstone";
 import { hashSanctionIdentifier, type SanctionIdentity } from "@/server/utils/sanctionTombstone";
 import * as sanctionQueries from "@/queries/reports";
 import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
-import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
+import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
 
 import { insertUsers } from "../../setup/factories";
 import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
@@ -44,7 +44,7 @@ import {
   resetTables,
 } from "../../setup/testDatabase";
 import { deferred } from "../../setup/deferred";
-import { interceptExecute, sqlText, overrideQuery } from "../../setup/statements";
+import { aroundStatements, interceptExecute, sqlText, overrideQuery } from "../../setup/statements";
 
 const DAY = 86_400_000;
 const EMAIL = "registration-appeal@example.com";
@@ -324,16 +324,17 @@ describeWithDatabase("registration claims current sanction sources", () => {
 
       const { promise: entered, resolve: enter } = deferred<void>();
       const { promise: paused, resolve: release } = deferred<void>();
-      let reads = 0;
-      const delayed = overrideQuery(database, "userReport", {
-        findMany: async (read, ...args) => {
-          const reports = await read(...args);
-          expect(reports).toHaveLength(0);
-          if (++reads === 3) enter();
+      // Hold every restriction reset until the replacement character is sanctioned.
+      const delayed = aroundStatements(
+        database,
+        userData,
+        async (run) => {
+          enter();
           await paused;
-          return reports;
+          return run();
         },
-      });
+        { operations: ["update"] },
+      );
       const clearing = callerForDatabase(reportsRouter, "staff", delayed).clear(input);
       const flag = decision === "ban" ? "isBanned" : "isSilenced";
       const message = "You cannot remove this post";

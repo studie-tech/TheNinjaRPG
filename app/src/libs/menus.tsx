@@ -1,29 +1,23 @@
 import { useAtomValue } from "jotai";
 import {
-  AlertCircle,
   Atom,
   BookOpenText,
   Briefcase,
   Bug,
-  CheckCircle,
-  Clock,
   Database,
   Flag,
   Gavel,
   Globe2,
   Inbox,
   LifeBuoy,
-  MessageSquare,
   MessagesSquare,
   Newspaper,
   Paintbrush,
   Receipt,
   ShieldHalf,
   User,
-  XCircle,
 } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
-import type { SupportTicketStatus } from "@/drizzle/constants";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import Image from "@/layout/Image";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
@@ -249,8 +243,7 @@ export const useGameMenu = () => {
   const ownSector = userData?.sector === userData?.village?.sector;
   const isAllied =
     !!sector &&
-    findVillageUserRelationship(sector, userData?.villageId ?? "syndicate")?.status ===
-      "ALLY";
+    findVillageUserRelationship(sector, userData?.villageId)?.status === "ALLY";
   // Position matters only when it changes the structure offered by the menu.
   const { data: arrival } = useUserDataSelector((user) => ({
     canVisit:
@@ -295,24 +288,4 @@ export const useGameMenu = () => {
   }, [canVisit, structure, sector]);
 
   return { systems, location };
-};
-
-/** Status icons for tickets */
-export const getStatusIcon = (status: SupportTicketStatus) => {
-  switch (status) {
-    case "OPEN":
-      return <AlertCircle className="h-4 w-4" />;
-    case "IN_PROGRESS":
-      return <Clock className="h-4 w-4" />;
-    case "WAITING_FOR_USER":
-      return <MessageSquare className="h-4 w-4" />;
-    case "WAITING_FOR_STAFF":
-      return <MessageSquare className="h-4 w-4" />;
-    case "RESOLVED":
-      return <CheckCircle className="h-4 w-4" />;
-    case "CLOSED":
-      return <XCircle className="h-4 w-4" />;
-    default:
-      return <AlertCircle className="h-4 w-4" />;
-  }
 };

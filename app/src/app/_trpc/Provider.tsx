@@ -77,6 +77,7 @@ const getBaseUrl = () => {
   return `http://127.0.0.1:${process.env.PORT ?? 3000}`;
 };
 
+/** Keep query clients stable through hydration while observing session changes and request failures. */
 const TrpcClientProvider = (props: {
   cdnCachedQueryPaths: readonly string[];
   children: React.ReactNode;
@@ -145,30 +146,22 @@ const TrpcClientProvider = (props: {
         trpcSessionLink(session),
         removedProcedureReloadLink,
         retryLink({
-          retry(options) {
+          retry({ error, op, attempts }) {
+            // Only retry queries, up to 3 times
+            if (op.type !== "query" || attempts > 3) return false;
             if (
-              options.error.message === SESSION_CHANGED_MESSAGE ||
-              options.error.message === SESSION_EXPIRED_MESSAGE
+              error.message === SESSION_CHANGED_MESSAGE ||
+              error.message === SESSION_EXPIRED_MESSAGE
             ) {
               return false;
             }
-            // Retry transient network/CDN errors (network failures, offline, invalid JSON responses)
-            if (isRetryableTrpcError(options.error) && options.op.type === "query") {
-              return options.attempts <= 3;
-            }
-            // Don't retry on non-500s
-            if (
-              options.error.data &&
-              (options.error.data as { code?: string }).code !== "INTERNAL_SERVER_ERROR"
-            ) {
-              return false;
-            }
-            // Only retry queries
-            if (options.op.type !== "query") {
-              return false;
-            }
-            // Retry up to 3 times
-            return options.attempts <= 3;
+            // Retry transient network/CDN errors (network failures, offline, invalid JSON
+            // responses) and server failures, but no other answer from the server.
+            return (
+              isRetryableTrpcError(error) ||
+              !error.data ||
+              (error.data as { code?: string }).code === "INTERNAL_SERVER_ERROR"
+            );
           },
           // Double every attempt, with max of 30 seconds (starting at 1 second)
           retryDelayMs: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
@@ -217,6 +210,7 @@ const isRateLimitedTrpcError = (error: unknown) =>
   error instanceof TRPCClientError &&
   (error.data as { code?: string } | undefined)?.code === "TOO_MANY_REQUESTS";
 
+/** Route actionable request failures to existing recovery dialogs or toasts after settling pending work. */
 const handleTrpcError = (
   error: unknown,
   operation: "query" | "mutation",
@@ -256,7 +250,6 @@ const handleTrpcError = (
   // HTML error pages can surface as JSON parse errors. Classify them through the
   // specific auth and transient-error checks; other server failures must reach
   // error reporting and user feedback.
-
   // Cache/default error callbacks run after retries finish; failed requests clear pending state.
   // Transport failures need recovery feedback even though they are not Sentry defects.
   // Mutations are never retried: losing the response does not imply a rollback.
@@ -295,9 +288,8 @@ const handleTrpcError = (
   }
   console.error("onerror", error);
   if (error instanceof TRPCClientError) {
-    const errorCode = trpcErrorCode;
     // Handle rate limiting errors with a softer toast (not logged to Sentry, not destructive)
-    if (errorCode === "TOO_MANY_REQUESTS") {
+    if (trpcErrorCode === "TOO_MANY_REQUESTS") {
       showMutationToast({ success: false, message: error.message });
       return;
     }
@@ -306,8 +298,8 @@ const handleTrpcError = (
     // loads the current bundle and a fresh challenge. The mutation settles as failed, so
     // its pending state clears like any other rejection.
     if (
-      (errorCode === "FORBIDDEN" && error.message === BOTID_BLOCKED_MESSAGE) ||
-      (errorCode === "PRECONDITION_FAILED" &&
+      (trpcErrorCode === "FORBIDDEN" && error.message === BOTID_BLOCKED_MESSAGE) ||
+      (trpcErrorCode === "PRECONDITION_FAILED" &&
         error.message === BOTID_RELOAD_REQUIRED_MESSAGE)
     ) {
       showMutationToast({
@@ -326,7 +318,7 @@ const handleTrpcError = (
     }
     // Expected authorization result. The screen that issued the query is responsible
     // for its empty state; this toast is the feedback, and it is not a defect to report.
-    if (errorCode === "UNAUTHORIZED") {
+    if (trpcErrorCode === "UNAUTHORIZED") {
       toast({
         variant: "destructive",
         title: "Unauthorized",
@@ -337,7 +329,7 @@ const handleTrpcError = (
     Sentry.captureException(error, { extra: { message: "TRPC Client Error" } });
     toast({
       variant: "destructive",
-      title: error?.data?.code ?? "Unknown",
+      title: trpcErrorCode ?? "Unknown",
       description: error.message,
     });
   } else if (error instanceof Error) {

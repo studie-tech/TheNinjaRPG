@@ -42,6 +42,7 @@ const redirect = (
     battle,
     effect,
     [],
+    caster,
     target,
     [caster, target, ...bystanders],
     groundEffects,
@@ -125,5 +126,18 @@ describe("redirection", () => {
       user("far", { col: 0, row: 5 }),
     ]);
     expect(moved).toMatchObject({ col: 0, row: 7 });
+  });
+
+  it("carries ground entry timers to the landing tile", () => {
+    const ground = (col: number, row: number, timeTracker: Record<string, number>) =>
+      ({ ...makeEffect("damage", { rounds: 3 }), longitude: col, latitude: row, timeTracker }) as GroundEffect;
+    const casterTile = { col: 0, row: 4 };
+    const start = { col: 6, row: 4 };
+    const { col, row } = redirect(casterTile, start, 2, "pull");
+    const left = ground(start.col, start.row, { defender: 1, attacker: 1 });
+    const entered = ground(col, row, {});
+    redirect(casterTile, start, 2, "pull", [], [left, entered]);
+    expect(left.timeTracker).toEqual({ attacker: 1 });
+    expect(Object.keys(entered.timeTracker ?? {})).toEqual(["defender"]);
   });
 });

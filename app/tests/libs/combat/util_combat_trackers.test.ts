@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildCombatTrackerTasks } from "@/libs/combat/util";
+import { buildCombatTrackerTasks } from "@/libs/combat/settlement";
 import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 

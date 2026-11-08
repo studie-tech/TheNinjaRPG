@@ -12,14 +12,15 @@ import {
   RANKED_REQUIRED_RANK,
   RANKED_SANNIN_TOP_PLAYERS,
 } from "@/drizzle/constants";
-import { collapseRewards, postProcessRewards } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
+import { hasRequiredRank } from "@/libs/rank";
 import {
   getRankedRadius,
   getRankedRank,
   validateItemLoadout,
   validateJutsuLoadout,
 } from "@/libs/ranked_pvp";
-import { hasRequiredRank } from "@/libs/train";
+import { collapseRewards } from "@/libs/rewards";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { listJutsuByIds } from "@/queries/jutsu";
 import { fetchJutsuEquipCaps, fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
@@ -57,7 +58,6 @@ import {
   updateUserDataForGetRankedPvpQueue,
 } from "@/queries/pvprank";
 import { initiateBattle } from "@/routers/combat";
-import { updateRewards } from "@/server/api/routers/quests";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -71,6 +71,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { updateRewards } from "@/server/utils/questRewards";
 import {
   cleanRankedProhibitedSelections,
   fetchSanninRankedPlayers,
@@ -677,44 +678,7 @@ export const pvpRankRouter = createTRPCRouter({
       );
 
       if (result.success && result.battleId) {
-        const rankedPickRows = [
-          ...userEffective.loadout.loadout.jutsuIds.map((jutsuId) => ({
-            type: "jutsu" as const,
-            contentId: jutsuId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...userEffective.loadout.loadout.weaponIds.map((weaponId) => ({
-            type: "item" as const,
-            contentId: weaponId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...userEffective.loadout.loadout.consumableIds.map((consumableId) => ({
-            type: "consumable" as const,
-            contentId: consumableId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...opponentEffective.loadout.loadout.jutsuIds.map((jutsuId) => ({
-            type: "jutsu" as const,
-            contentId: jutsuId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...opponentEffective.loadout.loadout.weaponIds.map((weaponId) => ({
-            type: "item" as const,
-            contentId: weaponId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-          ...opponentEffective.loadout.loadout.consumableIds.map((consumableId) => ({
-            type: "consumable" as const,
-            contentId: consumableId,
-            battleType: "RANKED_PVP" as const,
-            count: 1,
-          })),
-        ];
+        const rankedPickRows = [userEffective, opponentEffective].flatMap(rankedPicks);
         const postMatchTasks: PromiseLike<unknown>[] = [
           deleteRankedPvpQueueForCheckRankedPvpMatches(
             ctx.drizzle,
@@ -856,3 +820,16 @@ const keepStoredReputation = (
           ?.reward_reputation ?? 0,
     },
   }));
+
+/** One pick-log row per selection of a ranked loadout: jutsu, weapons, then consumables. */
+const rankedPicks = ({
+  loadout: { loadout },
+}: Awaited<ReturnType<typeof cleanRankedProhibitedSelections>>) =>
+  [
+    ...loadout.jutsuIds.map((contentId) => ({ type: "jutsu" as const, contentId })),
+    ...loadout.weaponIds.map((contentId) => ({ type: "item" as const, contentId })),
+    ...loadout.consumableIds.map((contentId) => ({
+      type: "consumable" as const,
+      contentId,
+    })),
+  ].map((pick) => ({ ...pick, battleType: "RANKED_PVP" as const, count: 1 }));

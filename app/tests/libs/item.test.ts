@@ -1,9 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import {
   COOKING_BASE_SLOTS,
-  FED_COOKING_GOLD_SLOTS,
-  FED_COOKING_NORMAL_SLOTS,
-  FED_COOKING_SILVER_SLOTS,
+  FED_COOKING_SLOTS,
   ItemTypes,
   ItemSlots,
   MATERIALS_BASE_SLOTS,
@@ -1033,13 +1031,13 @@ describe("cooking capacity", () => {
   it("mirrors materials base, federal, and purchased extras", () => {
     expect(calcMaxCookingItems(user())).toBe(COOKING_BASE_SLOTS);
     expect(calcMaxCookingItems(user({ federalStatus: "NORMAL" }))).toBe(
-      COOKING_BASE_SLOTS + FED_COOKING_NORMAL_SLOTS,
+      COOKING_BASE_SLOTS + FED_COOKING_SLOTS.NORMAL,
     );
     expect(calcMaxCookingItems(user({ federalStatus: "SILVER" }))).toBe(
-      COOKING_BASE_SLOTS + FED_COOKING_SILVER_SLOTS,
+      COOKING_BASE_SLOTS + FED_COOKING_SLOTS.SILVER,
     );
     expect(calcMaxCookingItems(user({ federalStatus: "GOLD" }))).toBe(
-      COOKING_BASE_SLOTS + FED_COOKING_GOLD_SLOTS,
+      COOKING_BASE_SLOTS + FED_COOKING_SLOTS.GOLD,
     );
     expect(calcMaxCookingItems(user({ extraItemSlots: 3 }))).toBe(
       COOKING_BASE_SLOTS + 3,
@@ -1058,7 +1056,7 @@ describe("cooking capacity", () => {
       "Cooking inventory is full",
     );
     expect(getInventoryBucketCapacity("cooking", user({ federalStatus: "GOLD" }))).toBe(
-      COOKING_BASE_SLOTS + FED_COOKING_GOLD_SLOTS,
+      COOKING_BASE_SLOTS + FED_COOKING_SLOTS.GOLD,
     );
     expect(getHomeStorageBucketFullMessage("cooking")).toBe(
       "Your home cooking storage is full",

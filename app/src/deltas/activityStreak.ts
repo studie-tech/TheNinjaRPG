@@ -4,7 +4,7 @@ import { getRewardUserDelta } from "@/deltas/quests";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import type { UserStreakProgress } from "@/drizzle/schema";
 import { getStreakTheoreticalMaxDay, isStreakContinuous } from "@/libs/activityStreak";
-import type { postProcessRewards } from "@/libs/quest";
+import type { postProcessRewards } from "@/libs/quest/rewards";
 import { hasEnergyQueue } from "@/libs/queue";
 import type { findActivityStreakConfigForClaimStreakDay } from "@/queries/activityStreak";
 import { isSameDay } from "@/utils/time";

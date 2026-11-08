@@ -67,6 +67,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import { clientErrorMessage } from "@/server/utils/mysqlErrors";
 import { canChangeContent, canSuggestContent, isStaffRole } from "@/utils/permissions";
 import type { insertAiSchema } from "@/validators/aiInput";
 import type { gameAssetValidator } from "@/validators/asset";
@@ -924,7 +925,7 @@ const discardPlaceholder = async (
 const settleOutcome = (outcome: Promise<Outcome>): Promise<Outcome> =>
   outcome.catch((error: unknown) => ({
     success: false,
-    message: error instanceof Error ? error.message : String(error),
+    message: error instanceof Error ? clientErrorMessage(error) : String(error),
   }));
 
 /** Delete an entity through its own delete procedure. */

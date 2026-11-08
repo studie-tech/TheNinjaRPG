@@ -10,15 +10,12 @@ import {
   COST_SKILL_RESET,
   IMG_AVATAR_DEFAULT,
   SKILL_RESET_STAFF_RELATED_MSG,
-  SKILL_TREE_RESET_FREE_GOLD,
-  SKILL_TREE_RESET_FREE_NORMAL,
-  SKILL_TREE_RESET_FREE_SILVER,
 } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
 import { skillTree } from "@/drizzle/schema";
-
+import { isSkillVisible } from "@/libs/skillRequirements";
+import { getResetAllowance } from "@/libs/skillReset";
 import { callDiscordContent } from "@/libs/socials";
-import { fetchViewerRole } from "@/queries/profile";
+import { fetchViewerRole, findUserById } from "@/queries/profile";
 import {
   deleteSkillTreeFolderForDeleteFolder,
   deleteSkillTreeForDelete,
@@ -74,9 +71,7 @@ import {
   canAccessHiddenSkillTree,
   canChangeContent,
   canUnequipAllUsers,
-  isStaffMember,
 } from "@/utils/permissions";
-import { getUtcMonthKey } from "@/utils/time";
 import { SkillTreeValidator } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
 import {
@@ -209,12 +204,10 @@ export const skillTreeRouter = createTRPCRouter({
         return errorResponse("Skill not found");
       }
 
-      // Get activated skill IDs (shared logic)
-      const activatedSkillIds = userSkills
-        .filter((us) => us.activated)
-        .map((us) => us.skillId);
+      const activatedRows = userSkills.filter((us) => us.activated);
 
-      // Check prerequisites (shared logic)
+      // Check prerequisites
+      const activatedSkillIds = activatedRows.map((us) => us.skillId);
       const hasAllPrereqs = skill.requiredSkillIds.every((reqId) =>
         activatedSkillIds.includes(reqId),
       );
@@ -223,9 +216,10 @@ export const skillTreeRouter = createTRPCRouter({
       }
 
       // Calculate total used skill points (only activated skills count)
-      const totalUsedSkillPoints = userSkills
-        .filter((us) => us.activated)
-        .reduce((total, userSkill) => total + userSkill.skill.costSkillPoints, 0);
+      const totalUsedSkillPoints = activatedRows.reduce(
+        (total, userSkill) => total + userSkill.skill.costSkillPoints,
+        0,
+      );
 
       // Check if user has enough skill points (available = total - used)
       const availableSkillPoints = user.skillPoints - totalUsedSkillPoints;
@@ -296,8 +290,8 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions
-      const [{ user }, line] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+      const [user, line] = await Promise.all([
+        findUserById(ctx.drizzle, ctx.userId),
         input?.bloodlineId
           ? findBloodlineIdentityById(ctx.drizzle, input.bloodlineId)
           : Promise.resolve(null),
@@ -328,8 +322,9 @@ export const skillTreeRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Check permissions
       const requestedFolderId = input.data.folderId || null;
+      const nextBloodlineId = input.data.bloodlineId || null;
       const [
-        { user },
+        user,
         skill,
         skillWithName,
         targetFolder,
@@ -338,10 +333,7 @@ export const skillTreeRouter = createTRPCRouter({
         purchased,
         dependents,
       ] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+        findUserById(ctx.drizzle, ctx.userId),
         findSkillWithFolderById(ctx.drizzle, input.id),
         findSkillTreeForUpdate(ctx.drizzle, input),
         requestedFolderId
@@ -390,7 +382,7 @@ export const skillTreeRouter = createTRPCRouter({
         return errorResponse("Bloodline not found");
       const changesHierarchy =
         skill.tier !== input.data.tier ||
-        (skill.bloodlineId ?? null) !== (input.data.bloodlineId || null) ||
+        (skill.bloodlineId ?? null) !== nextBloodlineId ||
         JSON.stringify(skill.requiredSkillIds) !==
           JSON.stringify(input.data.requiredSkillIds);
       if (
@@ -401,7 +393,7 @@ export const skillTreeRouter = createTRPCRouter({
               tier.id === skill.id ||
               tier.tier >= input.data.tier ||
               tier.pathType !== input.data.pathType ||
-              (tier.bloodlineId ?? null) !== (input.data.bloodlineId || null),
+              (tier.bloodlineId ?? null) !== nextBloodlineId,
           ))
       ) {
         return errorResponse(
@@ -420,7 +412,7 @@ export const skillTreeRouter = createTRPCRouter({
         dependents.some(
           (tier) =>
             tier.pathType !== input.data.pathType ||
-            tier.bloodlineId !== (input.data.bloodlineId || null) ||
+            tier.bloodlineId !== nextBloodlineId ||
             tier.tier <= input.data.tier,
         )
       )
@@ -442,7 +434,7 @@ export const skillTreeRouter = createTRPCRouter({
         requiredSkillIds: input.data.requiredSkillIds,
         costSkillPoints: input.data.costSkillPoints,
         pathType: input.data.pathType,
-        bloodlineId: input.data.bloodlineId || null,
+        bloodlineId: nextBloodlineId,
         seichiSilverCost: input.data.seichiSilverCost,
         hidden: input.data.hidden,
         skillType: input.data.skillType,
@@ -481,7 +473,7 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [
-        { user },
+        user,
         skill,
         usersWithSkill,
         bloodrightOwner,
@@ -489,7 +481,7 @@ export const skillTreeRouter = createTRPCRouter({
         requiredItems,
         requiredJutsus,
       ] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        findUserById(ctx.drizzle, ctx.userId),
         findSkillTreeForDelete(ctx.drizzle, input),
         listUserSkillForDelete(ctx.drizzle, input),
         findUserDataForUpdate(ctx.drizzle, input),
@@ -588,7 +580,7 @@ export const skillTreeRouter = createTRPCRouter({
             };
 
       // Perform the reset
-      const writes: Promise<unknown>[] = [
+      await Promise.all([
         deleteUserSkills(ctx.drizzle, ctx.userId),
         insertActionLogForResetSkillPoints(
           ctx.drizzle,
@@ -596,9 +588,7 @@ export const skillTreeRouter = createTRPCRouter({
           user,
           resetActionLogDetails,
         ),
-      ];
-
-      await Promise.all(writes);
+      ]);
 
       return {
         success: true,
@@ -620,10 +610,7 @@ export const skillTreeRouter = createTRPCRouter({
     })
     .query(async ({ ctx }) => {
       // Query
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const user = await findUserById(ctx.drizzle, ctx.userId);
       // Guard
       if (!user) return { isFree: false, freeResetsUsed: 0, freeResetsRemaining: 0 };
       // Derived
@@ -637,10 +624,7 @@ export const skillTreeRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user data to check permissions
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const user = await findUserById(ctx.drizzle, ctx.userId);
       if (!user) return errorResponse("User not found");
 
       // Check if user has permission to unequip all users
@@ -787,10 +771,7 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const user = await findUserById(ctx.drizzle, ctx.userId);
       if (!user || !canChangeContent(user.role)) {
         throw serverError("UNAUTHORIZED", "You are not authorized to create folders");
       }
@@ -810,11 +791,8 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions and fetch folder in parallel
-      const [{ user }, folder] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [user, folder] = await Promise.all([
+        findUserById(ctx.drizzle, ctx.userId),
         findSkillTreeFolderForUpdateFolder(ctx.drizzle, input),
       ]);
       if (!user || !canChangeContent(user.role)) {
@@ -836,11 +814,8 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions, fetch folder, and fetch skills in folder in parallel
-      const [{ user }, folder, skillsInFolder] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [user, folder, skillsInFolder] = await Promise.all([
+        findUserById(ctx.drizzle, ctx.userId),
         findSkillTreeFolderForDeleteFolder(ctx.drizzle, input),
         listSkillTreeForDeleteFolder(ctx.drizzle, input),
       ]);
@@ -871,10 +846,7 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const user = await findUserById(ctx.drizzle, ctx.userId);
       if (!user || !canChangeContent(user.role)) {
         throw serverError("UNAUTHORIZED", "You are not authorized to reorder folders");
       }
@@ -936,54 +908,4 @@ export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
   }
 
   return filters;
-};
-
-/**
- * Get the free reset amount for a user
- * @param user - The user
- * @returns The free reset amount
- */
-export const getFreeResetAmount = (user: UserData) => {
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return SKILL_TREE_RESET_FREE_NORMAL;
-    case "SILVER":
-      return SKILL_TREE_RESET_FREE_SILVER;
-    case "GOLD":
-      return SKILL_TREE_RESET_FREE_GOLD;
-    default:
-      return SKILL_TREE_RESET_FREE_NORMAL;
-  }
-};
-
-export const isSkillVisible = (
-  skill: { hidden: boolean; folder: { hidden: boolean } | null },
-  includeHidden: boolean,
-) => includeHidden || (!skill.hidden && !skill.folder?.hidden);
-
-/**
- * The monthly allowance skill and Bloodright resets share. Staff reset for free without
- * drawing on it; `next` is the state a reset persists.
- */
-export const getResetAllowance = (user: UserData) => {
-  const state = getMonthlyResetState(user);
-  const isStaff = isStaffMember(user);
-  const remaining = Math.max(0, getFreeResetAmount(user) - state.count);
-  return {
-    isStaff,
-    isFree: remaining > 0 || isStaff,
-    used: state.count,
-    remaining,
-    next: { ...state, count: state.count + (isStaff ? 0 : 1) },
-  };
-};
-
-/** Free resets claimed this UTC month, persisted by the guarded reset UPDATE. */
-export const getMonthlyResetState = (user: UserData) => {
-  const month = getUtcMonthKey();
-  return {
-    month,
-    count: user.monthlySkillResets?.month === month ? user.monthlySkillResets.count : 0,
-  };
 };

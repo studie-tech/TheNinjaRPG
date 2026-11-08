@@ -28,12 +28,15 @@ import type {
   Quest,
   SageMode,
   SkillTree,
+  SpriteAnimation,
   UserData,
   UserItem,
   UserItemImbuement,
   UserJutsu,
   UserQuest,
+  UserRaidBuff,
   UserSkill,
+  UserTitle,
   Village,
   VillageAlliance,
   VillageStructure,
@@ -41,16 +44,28 @@ import type {
   WarCamp,
 } from "@/drizzle/schema";
 import type { BattleItem, BattleJutsu, BattleVillage } from "@/libs/combat/catalog";
-import type { GenNames, publicState, StatNames } from "@/libs/combat/constants";
+import type {
+  GenNames,
+  HP_DAMAGE_KEYS,
+  publicState,
+  StatNames,
+} from "@/libs/combat/constants";
+import type { CreatorTrialState } from "@/libs/combat/creatorTrial";
+import type { EncounterWaveState } from "@/libs/combat/encounters";
+import type { DungeonBattleState } from "@/libs/dungeon";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type {
   CharacterAnimations,
   SpriteAnimationEvent,
 } from "@/libs/spriteAnimations";
+import type { TerritoryBattleState } from "@/libs/territoryWar";
+import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import type { ActivityCompletions } from "@/server/utils/achievementObjectives";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
 import type { BossArrival } from "@/validators/coop";
 import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
+import type { HuntingBattleState, HuntingReceipt } from "@/validators/hunting";
+import type { SpriteAction, SpriteAppearance, SpriteLayer } from "@/validators/lpc";
 import type { MethodSize } from "@/validators/methodSize";
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { DmgConfig } from "./constants";
@@ -133,11 +148,11 @@ export type CombatQueryUser = UserData &
     /** Initiation-only relation; stripped after projecting rendering metadata into battle state. */
     spriteAnimationBindings?: {
       actionKey: string;
-      animation: import("@/drizzle/schema").SpriteAnimation | null;
+      animation: SpriteAnimation | null;
     }[];
-    titles?: import("@/drizzle/schema").UserTitle[];
+    titles?: UserTitle[];
     /** Loaded at initiation and realized into battle effects; never fetched during an action. */
-    raidBuffs?: import("@/drizzle/schema").UserRaidBuff[];
+    raidBuffs?: UserRaidBuff[];
     /** Completion receipts loaded only for settlement before entering combat. */
     cookingJobs?: { id: string; experience: number; finishesAt: Date }[];
     bloodline: (Bloodline & { bloodrightTiers?: SkillTree[] }) | null;
@@ -184,13 +199,13 @@ export type ProcessedItem = CombatQueryUserItem & {
  */
 export type CombatUserFields = {
   /** Private creation/clothing snapshot captured at initiation and retained across loadout edits. */
-  spriteBaseAppearance?: import("@/validators/lpc").SpriteAppearance;
+  spriteBaseAppearance?: SpriteAppearance;
   /** Private item-instance lookup permits in-memory recomposition after consumption or breakage. */
-  spriteEquipment?: Record<string, import("@/validators/lpc").SpriteLayer>;
+  spriteEquipment?: Record<string, SpriteLayer>;
   /** Public resolved artwork, replaced with a uniform when identity is masked. */
-  spriteAppearance?: import("@/validators/lpc").SpriteAppearance;
+  spriteAppearance?: SpriteAppearance;
   /** Public presentation cue, distinct from the authoritative action/content identifier. */
-  spriteAction?: import("@/validators/lpc").SpriteAction;
+  spriteAction?: SpriteAction;
   /** Identity masking captured with the combatant's battle snapshot. */
   isMasked?: boolean;
   /** Rendering-only snapshots remain stable when staff change the AI's live assignments. */
@@ -440,7 +455,7 @@ export type PreBattleGearModifiers = {
  * Static data is stored once at battle initiation and looked up by ID.
  */
 export type ExtraState = {
-  hunting?: import("@/validators/hunting").HuntingBattleState;
+  hunting?: HuntingBattleState;
   /** Durable scheduled defense and tenure; settlement never needs another fetch. */
   kageMatch?: {
     id: string;
@@ -455,15 +470,15 @@ export type ExtraState = {
   /** Event AI rules cannot be disabled by participants. */
   tournamentAiOnly?: boolean;
   /** Preloaded enemy waves shared by authored co-op encounters. */
-  encounter?: import("@/libs/combat/encounters").EncounterWaveState;
+  encounter?: EncounterWaveState;
   /** The attacked creator's identity for the trial's achievement credit and log. */
-  creatorTrial?: import("@/libs/combat/creatorTrial").CreatorTrialState;
+  creatorTrial?: CreatorTrialState;
   /** Private run/wave snapshot used by combat actions and atomic party settlement. */
-  dungeon?: import("@/libs/dungeon").DungeonBattleState;
+  dungeon?: DungeonBattleState;
   /** Encounter snapshot for strategic settlement without an intermediate combat read. */
   warCamp?: WarCamp;
   /** Private event/competitor snapshot frozen at initiation for write-only strategic settlement. */
-  territoryWar?: import("@/libs/territoryWar").TerritoryBattleState;
+  territoryWar?: TerritoryBattleState;
   /** Definitions of publicly performed actions, retained after their caster despawns. */
   revealedActions?: { jutsuIds: string[]; itemIds: string[] };
   /** Persisted, unscaled player state for confirmed completion responses; never sent to opponents. */
@@ -475,10 +490,7 @@ export type ExtraState = {
   energyCapacity?: Record<string, number>;
   energyRegeneration?: Record<string, number>;
   /** Preloaded timed bonuses for fractional Energy settlement and the matching client cache. */
-  energyRegenerationPeriods?: Record<
-    string,
-    import("@/libs/timedBuffs").RegenerationPeriod[]
-  >;
+  energyRegenerationPeriods?: Record<string, RegenerationPeriod[]>;
   /** Accompanying pet identities frozen at initiation, including pets that later retreat. */
   petIdsByOwner?: Record<string, string>;
   // Static data - never changes during battle (looked up by ID)
@@ -554,9 +566,9 @@ export type ReturnedExtraState = Omit<
   ExtraState,
   "villages" | "clans" | "dungeon" | "encounter" | "creatorTrial"
 > & {
-  encounter?: Pick<import("@/libs/combat/encounters").EncounterWaveState, "wave">;
+  encounter?: Pick<EncounterWaveState, "wave">;
   /** Public progress only; authored future enemies and their loadouts stay server-side. */
-  dungeon?: Pick<import("@/libs/dungeon").DungeonBattleState, "runId" | "expiresAt">;
+  dungeon?: Pick<DungeonBattleState, "runId" | "expiresAt">;
   villages: Record<string, Pick<CombatQueryVillage, "id" | "hexColor">>;
   clans: Record<string, Pick<Clan, "id" | "image">>;
   textureAssets?: string[];
@@ -584,7 +596,7 @@ export type DroppedItem = {
  * Result type for users when battle is ended
  */
 export type CombatResult = {
-  hunting?: import("@/validators/hunting").HuntingReceipt;
+  hunting?: HuntingReceipt;
   pvpExperience?: number;
   weeklyPvpKills?: number;
   profileUpdate?: CombatProfileUpdate;
@@ -663,13 +675,7 @@ export interface BattleState {
   isPending: boolean;
 }
 
-export type EnmityDamageKey =
-  | "damage"
-  | "residual"
-  | "wound"
-  | "afterburn"
-  | "drain_hp"
-  | "poison";
+export type EnmityDamageKey = (typeof HP_DAMAGE_KEYS)[number];
 
 /**
  * Battle Consequence, i.e. the permanent things that happen to a user as a result of an action

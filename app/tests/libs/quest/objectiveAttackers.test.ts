@@ -24,6 +24,15 @@ describe("rollObjectiveAttackers", () => {
     });
   });
 
+  it("attributes the encounter to the quest resolved for its objective", () => {
+    expect(
+      rollObjectiveAttackers([ambushMove], 1, fixedRandom(0.05), () => "team-quest"),
+    ).toMatchObject({ questId: "team-quest" });
+    expect(
+      rollObjectiveAttackers([ambushMove], 1, fixedRandom(0.05), () => undefined),
+    ).not.toHaveProperty("questId");
+  });
+
   it("does not attack when the roll is outside the attacker chance", () => {
     expect(rollObjectiveAttackers([ambushMove], 1, fixedRandom(0.5))).toBeUndefined();
   });

@@ -3,7 +3,7 @@
  */
 
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { SupportTicketStatus, UserRole } from "@/drizzle/constants";
@@ -30,24 +30,20 @@ import sanitize from "@/utils/sanitize";
  * @param ids - An array of comment IDs to fetch.
  * @returns An array of comments.
  */
-export const fetchComments = async (client: DrizzleClient, ids: string[]) => {
-  if (ids.length > 0) {
-    const comments = await client.query.conversationComment.findMany({
-      where: inArray(conversationComment.id, ids),
-      with: {
-        user: {
-          columns: {
-            userId: true,
-            username: true,
+export const fetchComments = async (client: DrizzleClient, ids: string[]) =>
+  ids.length > 0
+    ? await client.query.conversationComment.findMany({
+        where: inArray(conversationComment.id, ids),
+        with: {
+          user: {
+            columns: {
+              userId: true,
+              username: true,
+            },
           },
         },
-      },
-    });
-    return comments;
-  } else {
-    return [];
-  }
-};
+      })
+    : [];
 
 /**
  * Retained senders must stay subject to approval after leaving a private conversation.
@@ -467,13 +463,14 @@ export const findConversationForGetConvo = (
     with: { users: true },
   });
 
-/** Build the `conversation` lookup for `getConvo`, using predicates on `title` and `isPublic`. */
-export const findConversationForGetConvo2 = (
+/** Build the `conversation` lookup by title: public first, then lowest id among equals. */
+export const findConversationByTitle = (
   client: Pick<DrizzleClient, "query">,
   title: string,
 ) =>
   client.query.conversation.findFirst({
-    where: and(eq(conversation.title, title), eq(conversation.isPublic, true)),
+    where: eq(conversation.title, title),
+    orderBy: [desc(conversation.isPublic), asc(conversation.id)],
     with: { users: true },
   });
 
@@ -486,16 +483,6 @@ export const listPublicConversationsByTitle = (
     .select({ id: conversation.id, title: conversation.title })
     .from(conversation)
     .where(and(inArray(conversation.title, titles), eq(conversation.isPublic, true)));
-
-/** Build the `conversation` lookup for `getConvo`, using predicates on `title`. */
-export const findConversationForGetConvo3 = (
-  client: Pick<DrizzleClient, "query">,
-  title: string,
-) =>
-  client.query.conversation.findFirst({
-    where: eq(conversation.title, title),
-    with: { users: true },
-  });
 
 /**
  * Build the `supportTicket` update for `updateSupportTicketStatusAfterComment`,
@@ -558,12 +545,11 @@ export const insertConversationForCreateConvo = (
 export const insertUser2conversationForCreateConvo = (
   client: Pick<DrizzleClient, "insert">,
   insertId: string,
-  user: string,
+  userIds: string[],
 ) =>
-  client.insert(user2conversation).values({
-    conversationId: insertId,
-    userId: user,
-  });
+  client
+    .insert(user2conversation)
+    .values(userIds.map((userId) => ({ conversationId: insertId, userId })));
 
 /** Build conversation membership insertion, retaining existing membership on duplicate keys. */
 export const insertConversationMember = (

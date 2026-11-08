@@ -1,75 +1,19 @@
-import { nanoid } from "nanoid";
 import {
-  ADDITIONAL_MISSION_REWARD_MULTIPLIER,
-  ERRANDS_PER_DAY,
-  type GATHERING_RANK,
-  GATHERING_RANKS,
-  type HUNTING_RANK,
-  HUNTING_RANKS,
-  IMG_MISSION_A,
-  IMG_MISSION_B,
-  IMG_MISSION_C,
-  IMG_MISSION_D,
-  IMG_MISSION_E,
-  IMG_MISSION_M,
-  IMG_MISSION_PVP,
-  IMG_MISSION_S,
   type LetterRank,
-  MAX_EXPERIENCE_LEVEL,
-  MAX_PLAYER_LEVEL,
   type MasteryType,
-  MEDICAL_MISSIONS_PER_DAY,
-  type MEDNIN_RANK,
-  MEDNIN_RANKS,
-  MISSION_HALL_QUEST_TYPES,
-  MISSION_HALL_SOLO_QUEST_TYPES,
-  MISSIONS_FULL_REWARD_COUNT,
-  MISSIONS_PER_DAY,
-  PVP_MISSIONS_PER_DAY,
-  QUESTS_CONCURRENT_LIMIT,
   type QuestType,
-  QuestTypesWithMaxAttempts,
-  type RetryQuestDelay,
-  type SAGE_MASTERY_RANK,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
-  SENSEI_MAX_STUDENT_LEVEL,
-  SENSEI_STUDENT_MISSION_EXP_BOOST_PERC,
   TERMINAL_DIALOG_PREFIX,
-  type UserStatus,
-  VILLAGE_SYNDICATE_ID,
-  WAR_MISSION_REQUIRED_RANK,
-  WAR_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
-import type {
-  GameSetting,
-  Quest,
-  UserData,
-  UserItem,
-  UserQuest,
-} from "@/drizzle/schema";
-import { actionStatusMessage } from "@/libs/actionReadiness";
+import type { Quest, UserData, UserItem, UserQuest } from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import type { BloodlineCollectionProgress } from "@/libs/bloodline";
-import { getClanBoost } from "@/libs/clanBoost";
-import { eliteJoninMilestoneBlockMessage } from "@/libs/eliteJonin";
 import { getFarmingLevel } from "@/libs/farming";
-import { getGameSettingBoost } from "@/libs/gameSettingBoost";
-import { getGatheringRank } from "@/libs/gathering";
-import { calcMedninRank } from "@/libs/hospital";
-import { getHuntingRank } from "@/libs/hunting";
-import {
-  MASTERY_REQUIREMENT_FIELDS,
-  type MasteryRequirementFields,
-  missingMasteryRequirement,
-} from "@/libs/mastery";
-import { canPromoteMastery } from "@/libs/masteryProgression";
 import {
   findCompletedPredecessor,
   findPredecessor,
-  isQuestComplete,
   isQuestObjectiveAvailable,
-  objectiveLinks,
 } from "@/libs/objectives";
 import { getWarSide } from "@/libs/objectiveWar";
 import {
@@ -77,81 +21,37 @@ import {
   isSupportedOverworldBindingTask,
   pickPlaceableSector,
 } from "@/libs/overworldAi";
-import { eliteJoninExamBlockMessage } from "@/libs/profile";
-import { boostPvpGain, boostPvpRewards, getPvpBoost } from "@/libs/pvpExperience";
-import { isQuestPartyHelperAttempt, recordPartyContributions } from "@/libs/questParty";
+import { getUnscaledLevel, isAvailableUserQuests } from "@/libs/quest/availability";
+import { recordPartyContributions } from "@/libs/questParty";
 import {
   getIsolatedPyramid,
   hasQuestContentChanged,
   isBetweenPyramidBattles,
-  isOpenPyramidRun,
 } from "@/libs/questRun";
-import {
-  buildRewardChoiceCards,
-  getFixedChoiceRewards,
-  getRewardPickCount,
-  isRewardChoiceQuest,
-} from "@/libs/rewardChoice";
-import { collapseRewards, mergeMaterialDrops } from "@/libs/rewards";
-import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
-import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import { availableQuestLetterRanks, hasRequiredRank } from "@/libs/train";
-import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
-import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { getRandomElement, isInArray, shuffle } from "@/utils/array";
 import { getUnique } from "@/utils/grouping";
-import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
-import { capitalizeFirstLetter } from "@/utils/string";
 import {
   formatSecondsToTimeDisplay,
   getCollectDeadline,
-  hasEndDatePassed,
-  periodStart,
   reduceActivitySeconds,
   secondsPassed,
 } from "@/utils/time";
-import {
-  canAccessStructure,
-  countBoostingShrines,
-  getShrineBoost,
-  getStrucBoost,
-  type SectorVillage,
-} from "@/utils/village";
 import type { ZodAllTags } from "@/validators/combat";
-import type {
-  AllObjectivesType,
-  AllObjectiveTask,
-  ObjectiveTrackerType,
-  QuestContentType,
-  QuestTrackerType,
-} from "@/validators/objectives";
 import {
+  type AllObjectivesType,
+  type AllObjectiveTask,
   CombatActivityTasks,
   CompletionTasks,
   ObjectiveTracker,
+  type ObjectiveTrackerType,
   QuestCompletionTasks,
   QuestTracker,
+  type QuestTrackerType,
 } from "@/validators/objectives";
-import {
-  QuestReward,
-  type QuestRewardType,
-  rewardPayloads,
-} from "@/validators/rewardPackages";
-import type { ObjectiveRewardType, PendingRewardChoice } from "@/validators/rewards";
-import {
-  hasMasteryPromotion,
-  MASTERY_EXPERIENCE_FIELDS,
-  type PostProcessedRewards,
-  REWARD_CHOICE_AMOUNT_FIELDS,
-} from "@/validators/rewards";
-import { getQuestCounterFieldName } from "@/validators/user";
 
-/**
- * Get currently active quests for a user
- */
 /** Select playable definitions; raw history remains available for isolation and recovery controls. */
 export const getUserQuests = (
   user: UserData & {
@@ -337,11 +237,10 @@ export const rollObjectiveAttackers = (
       );
     }
     if (opponents.length > 0) {
+      const questId = questForObjective?.(objective);
       return {
         type: "random_encounter",
-        ...(questForObjective?.(objective)
-          ? { questId: questForObjective(objective) }
-          : {}),
+        ...(questId ? { questId } : {}),
         ids: opponents,
         scaleStats: objective.attackers_scaled_to_user,
         scaleGains: objective.attackers_scale_gains,
@@ -398,330 +297,6 @@ export const isObjectiveLocationSatisfied = (
   return isLocationObjective(location, objective);
 };
 
-/**
- * Whether the current daily-mission count pays the reduced reward multiplier.
- * `pre-start` is the Mission Hall picker (counter not yet incremented).
- * `in-progress` is claim / Logbook (counter already incremented at start).
- */
-export const isReducedMissionReward = (
-  dailyMissions: number,
-  { phase }: { phase: "pre-start" | "in-progress" },
-) =>
-  phase === "pre-start"
-    ? dailyMissions >= MISSIONS_FULL_REWARD_COUNT
-    : dailyMissions > MISSIONS_FULL_REWARD_COUNT;
-
-/**
- * Go through current user quests, and return updated list of questData &
- * list of rewards to award the user
- * @param user - User with questData
- * @param questId - Quest ID
- * @param dialogNextObjectiveId - Requested next objective ID.
- * @param settings - Game settings used while calculating quest rewards.
- * @param atPlacementIds - Overworld placement ids the user is interacting with now.
- * @param completionOnly - A validated companion task pays the final reward without running objectives.
- * @returns Rewards, trackers, userQuest, resolved, successDescriptions
- */
-export const getReward = (
-  user: NonNullable<UserWithRelations>,
-  questId: string,
-  dialogNextObjectiveId?: string,
-  settings?: GameSetting[],
-  atPlacementIds?: ReadonlySet<string>,
-  completionOnly = false,
-) => {
-  // Derived
-  let rawRewards: QuestRewardType = QuestReward.parse({});
-  // Completion reward of a "choose" quest, offered as cards instead of granted outright.
-  let choiceRewards: QuestRewardType | null = null;
-  let rewardChoice: PendingRewardChoice | null = null;
-  const { trackers, notifications, consequences } = completionOnly
-    ? {
-        trackers: structuredClone(user.questData ?? []),
-        notifications: [] as string[],
-        consequences: [] as QuestConsequence[],
-      }
-    : getNewTrackers(
-        user,
-        [
-          { task: "any" },
-          { task: "collect_item" },
-          { task: "dialog", contentId: dialogNextObjectiveId },
-        ],
-        undefined, // combatContext
-        undefined, // boundPlacementStatus (getReward binds via atPlacementIds instead)
-        atPlacementIds,
-        true,
-      );
-  const userQuest = user.userQuests.find((uq) => uq.questId === questId);
-  const isCompletedHelper = isQuestPartyHelperAttempt(userQuest, user.questPartyId);
-  let resolved = false;
-  // Start mutating
-  if (isCompletedHelper && userQuest) {
-    const tracker = trackers.find((entry) => entry.id === questId);
-    resolved =
-      !!tracker && !tracker.failed && isQuestComplete(userQuest.quest, tracker);
-    tracker?.goals.forEach((goal) => {
-      if (goal.done) goal.collected = true;
-    });
-  }
-  if (userQuest && !userQuest.completed && userQuest?.quest && !isCompletedHelper) {
-    // See if we have a shrine boost
-    const sectors = countBoostingShrines(user.village?.sectors);
-    const errandsBoost = getShrineBoost(sectors, "Errands", user.village);
-    const missionBoost = getShrineBoost(sectors, "Mission", user.village);
-    // Village mission hall boost (percentage as decimal), applies to missions and errands
-    const villageMissionBoost =
-      getStrucBoost("missionRewardPerLvl", user.village?.structures) / 100;
-    const clanMissionBoost = getClanBoost(user, "missionRewardBoost");
-    const loyalty = getVillageLoyaltyBonuses(user);
-    let boostFactor = 1;
-    if (userQuest?.quest.questType) {
-      if (["mission", "crime", "medical"].includes(userQuest.quest.questType)) {
-        boostFactor = 1 + missionBoost + clanMissionBoost + villageMissionBoost;
-      } else if (userQuest.quest.questType === "errand") {
-        // clanMissionBoost intentionally excluded from errands; only shrine + village hall apply
-        boostFactor = 1 + errandsBoost + villageMissionBoost;
-      }
-    }
-    const missionLoyalty = ["mission", "errand"].includes(userQuest.quest.questType)
-      ? loyalty.missionRewards
-      : 0;
-    // Get rewards
-    const tracker = trackers.find((q) => q.id === userQuest.quest.id);
-    const goals = tracker?.goals ?? [];
-    resolved =
-      completionOnly ||
-      !tracker ||
-      (!tracker.failed && isQuestComplete(userQuest.quest, tracker));
-    if (resolved) {
-      const questReward = QuestReward.parse(userQuest.quest.content.reward);
-      if (isRewardChoiceQuest(userQuest.quest.content)) {
-        // Only the structural part pays now; the rest becomes a frozen pick offer below.
-        rawRewards = getFixedChoiceRewards(questReward);
-        choiceRewards = questReward;
-      } else {
-        rawRewards = collapseRewards(rewardPayloads(questReward));
-      }
-    }
-    (completionOnly ? [] : userQuest.quest.content.objectives).forEach((objective) => {
-      const status = goals.find((g) => g.id === objective.id);
-      if (status?.done && !status.collected) {
-        status.collected = true;
-        if (objective.successDescription) {
-          notifications.push(objective.successDescription);
-        }
-        // Compose packages with their objective's direct rewards before merging the payout.
-        if (objective.reward_packages?.length) {
-          const objectiveReward = collapseRewards(rewardPayloads(objective));
-          rawRewards = collapseRewards([rawRewards, objectiveReward]);
-          return;
-        }
-        // Direct-only objectives retain their ordered structural overrides below.
-        for (const field of REWARD_CHOICE_AMOUNT_FIELDS)
-          if (objective[field])
-            rawRewards[field] = (rawRewards[field] ?? 0) + (objective[field] ?? 0);
-        if (objective.reward_jutsus) {
-          rawRewards.reward_jutsus.push(...objective.reward_jutsus);
-        }
-        rawRewards.reward_titles.push(...(objective.reward_titles ?? []));
-        if (objective.reward_badges) {
-          rawRewards.reward_badges.push(...objective.reward_badges);
-        }
-        if (objective.reward_items) {
-          rawRewards.reward_items.push(...objective.reward_items);
-        }
-        if (objective.reward_bloodlines) {
-          rawRewards.reward_bloodlines.push(...objective.reward_bloodlines);
-        }
-        if (objective.reward_sage_modes) {
-          rawRewards.reward_sage_modes.push(...objective.reward_sage_modes);
-        }
-        mergeMaterialDrops(rawRewards, objective);
-        if (objective.reward_rank !== "NONE") {
-          rawRewards.reward_rank = objective.reward_rank;
-        }
-        if (objective.reward_village_membership !== "NONE") {
-          rawRewards.reward_village_membership = objective.reward_village_membership;
-        }
-      }
-    });
-    // Scale rewards
-    const missionLike = ["mission", "crime"].includes(userQuest.quest.questType);
-    const reducedRewardFactor =
-      missionLike &&
-      isReducedMissionReward(user.dailyMissions, { phase: "in-progress" })
-        ? ADDITIONAL_MISSION_REWARD_MULTIPLIER
-        : 1;
-    const factor = boostFactor * reducedRewardFactor;
-    /** Preserve the floored base reward; only positive gains receive rounded additive loyalty. */
-    const scaleReward = (value: number, loyaltyPercent = 0) =>
-      Math.floor(value * factor) +
-      (value > 0
-        ? Math.round((value * loyaltyPercent * reducedRewardFactor) / 100)
-        : 0);
-
-    /** Apply the same scaling once to immediate rewards, packages and frozen choice offers. */
-    const scaleRewards = (target: ObjectiveRewardType) => {
-      // Apply only the listed gain categories, including frozen reward-choice offers.
-      const pvpPercent = getPvpBoost(user, settings).totalPercent;
-      boostPvpRewards(target, pvpPercent);
-      target.reward_money = scaleReward(target.reward_money, missionLoyalty);
-      target.reward_clanpoints = Math.floor(target.reward_clanpoints * factor);
-      target.reward_anbupoints = Math.floor(target.reward_anbupoints * factor);
-      target.reward_exp = scaleReward(target.reward_exp, missionLoyalty);
-      if (target.reward_pet_experience !== undefined)
-        target.reward_pet_experience = scaleReward(
-          target.reward_pet_experience,
-          missionLoyalty,
-        );
-      target.reward_tokens = scaleReward(
-        target.reward_tokens,
-        missionLoyalty + loyalty.villageRewards,
-      );
-      target.reward_prestige = scaleReward(
-        target.reward_prestige,
-        missionLoyalty + loyalty.villageRewards,
-      );
-      target.reward_reputation = Math.floor(target.reward_reputation * factor);
-      target.reward_medical_experience = Math.floor(
-        target.reward_medical_experience * factor,
-      );
-      target.reward_hunting_experience = Math.floor(
-        target.reward_hunting_experience * factor,
-      );
-      target.reward_crafting_experience = Math.floor(
-        target.reward_crafting_experience * factor,
-      );
-      target.reward_gathering_experience = Math.floor(
-        target.reward_gathering_experience * factor,
-      );
-      for (const field of MASTERY_EXPERIENCE_FIELDS)
-        if (target[field] !== undefined)
-          target[field] = scaleReward(target[field] ?? 0, missionLoyalty);
-      target.reward_sage_mastery_experience = scaleReward(
-        target.reward_sage_mastery_experience,
-        missionLoyalty,
-      );
-      target.reward_seichi_silver = Math.floor(target.reward_seichi_silver * factor);
-
-      // Apply clan experience boosts
-      const territoryBoost = getTerritoryWarBoost(user);
-      target.reward_medical_experience = Math.floor(
-        target.reward_medical_experience * (1 + territoryBoost),
-      );
-      const clanHunterExpBoost = getClanBoost(user, "hunterExpBoost") + territoryBoost;
-      const clanGathererExpBoost =
-        getClanBoost(user, "gathererExpBoost") + territoryBoost;
-      const clanCraftingExpBoost =
-        getClanBoost(user, "craftingExpBoost") + territoryBoost;
-      if (clanHunterExpBoost > 0 && target.reward_hunting_experience > 0) {
-        target.reward_hunting_experience = Math.floor(
-          target.reward_hunting_experience * (1 + clanHunterExpBoost),
-        );
-      }
-      if (clanGathererExpBoost > 0 && target.reward_gathering_experience > 0) {
-        target.reward_gathering_experience = Math.floor(
-          target.reward_gathering_experience * (1 + clanGathererExpBoost),
-        );
-      }
-      if (clanCraftingExpBoost > 0 && target.reward_crafting_experience > 0) {
-        target.reward_crafting_experience = Math.floor(
-          target.reward_crafting_experience * (1 + clanCraftingExpBoost),
-        );
-      }
-
-      // Chunin mission experience bonus (≤ level 40)
-      if (
-        user.senseiId &&
-        user.level <= SENSEI_MAX_STUDENT_LEVEL &&
-        userQuest.quest.questType === "mission"
-      ) {
-        target.reward_exp = Math.floor(
-          target.reward_exp * (1 + SENSEI_STUDENT_MISSION_EXP_BOOST_PERC / 100),
-        );
-      }
-
-      // Apply mission experience multiplier if available (for missions, crimes, and medical missions)
-      if (settings && (missionLike || userQuest.quest.questType === "medical")) {
-        const boost = getGameSettingBoost("missionExpMultiplier", settings);
-        if (boost) target.reward_exp = Math.floor(target.reward_exp * boost.value);
-      }
-    };
-    scaleRewards(rawRewards);
-    if (choiceRewards) {
-      scaleRewards(choiceRewards);
-      for (const pack of choiceRewards.reward_packages ?? [])
-        scaleRewards(pack.rewards);
-      const cards = buildRewardChoiceCards(choiceRewards);
-      if (cards.length > 0) {
-        rewardChoice = {
-          id: nanoid(),
-          pickCount: getRewardPickCount(userQuest.quest.content),
-          cards,
-        };
-      }
-    }
-  }
-  // Milestone fields are completion-only and must survive ordinary package aggregation.
-  if (resolved && userQuest && !isCompletedHelper) {
-    rawRewards = {
-      ...rawRewards,
-      reward_level: userQuest.quest.content.reward.reward_level,
-      reward_stats: userQuest.quest.content.reward.reward_stats,
-    };
-  }
-  // Final rewards (some need a bit pose-processing)
-  const rewards = postProcessRewards(rawRewards);
-
-  // Update trackers for experience gained from quest rewards
-  const experienceTrackerTasks = getExperienceTrackerTasks(rewards);
-  // Fold follow-up trackers onto the already-updated questData so progress from the
-  // first getNewTrackers call is preserved (single authoritative questData write).
-  // complete_specific_quest fires once on the active -> completed transition: `resolved`
-  // is only true the moment this quest resolves and false once it is already completed,
-  // so other quests that list this questId are credited exactly once. Single-level only
-  // — a chained A -> B -> C will not fully resolve in one request (B's own completion
-  // emits on its next checkRewards).
-  const followupTrackerTasks: Parameters<typeof getNewTrackers>[1] = [
-    ...experienceTrackerTasks,
-  ];
-  if (resolved && userQuest && !isCompletedHelper) {
-    followupTrackerTasks.push({
-      task: "complete_specific_quest",
-      increment: 1,
-      contentId: userQuest.questId,
-    });
-    // Credit this claim before its completion history has been persisted.
-    const completionTask =
-      QuestCompletionTasks[
-        userQuest.quest.questType as keyof typeof QuestCompletionTasks
-      ];
-    if (completionTask)
-      followupTrackerTasks.push({ task: completionTask, increment: 1 });
-  }
-  if (followupTrackerTasks.length > 0) {
-    const { trackers: updatedTrackers } = getNewTrackers(
-      { ...user, questData: trackers },
-      followupTrackerTasks,
-    );
-    // Replace in-place to keep the original `trackers` array reference.
-    trackers.length = 0;
-    trackers.push(...updatedTrackers);
-  }
-
-  // Return results
-  return {
-    rewards,
-    trackers,
-    userQuest,
-    resolved,
-    notifications,
-    consequences,
-    rewardChoice,
-  };
-};
-
 /** One id per spawned copy of each authored `{ ids, number }` AI entry. */
 export const expandAiCopies = (entries: { ids: string[]; number: number }[]) =>
   entries.flatMap((entry) => Array(entry.number).fill(entry.ids).flat() as string[]);
@@ -751,133 +326,7 @@ export const getJutsuLearnedTrackerTasks = (
   },
 ];
 
-/**
- * `*_experience_gained` tracker increments for the profession experience in a reward. Emitted
- * when a completion pays out, and again when a reward-choice pick grants experience later.
- */
-export const getExperienceTrackerTasks = (
-  rewards: Pick<
-    ObjectiveRewardType,
-    | "reward_medical_experience"
-    | "reward_crafting_experience"
-    | "reward_hunting_experience"
-    | "reward_gathering_experience"
-  >,
-) => {
-  const tasks: {
-    task:
-      | "medical_experience_gained"
-      | "crafting_experience_gained"
-      | "hunting_experience_gained"
-      | "gathering_experience_gained";
-    increment: number;
-  }[] = [];
-  if (rewards.reward_medical_experience > 0) {
-    tasks.push({
-      task: "medical_experience_gained",
-      increment: rewards.reward_medical_experience,
-    });
-  }
-  if (rewards.reward_crafting_experience > 0) {
-    tasks.push({
-      task: "crafting_experience_gained",
-      increment: rewards.reward_crafting_experience,
-    });
-  }
-  if (rewards.reward_hunting_experience > 0) {
-    tasks.push({
-      task: "hunting_experience_gained",
-      increment: rewards.reward_hunting_experience,
-    });
-  }
-  if (rewards.reward_gathering_experience > 0) {
-    tasks.push({
-      task: "gathering_experience_gained",
-      increment: rewards.reward_gathering_experience,
-    });
-  }
-  return tasks;
-};
-
-export type GetRewardResult = ReturnType<typeof getReward>["rewards"];
-
-/**
- * Post-process rewards to ensure that the rewards are valid
- * @param rewards - Rewards to post-process
- * @param user - Recipient of an unscaled configured payout; omit for getReward outputs
- * @returns Post-processed rewards with item IDs as flat string array
- *
- * NOTE: Return type is explicitly annotated with PostProcessedRewards from
- * @/validators/rewards to ensure type safety. If this function's return value
- * changes, TypeScript will error, alerting us to update the schema.
- */
-export const postProcessRewards = (
-  rewards: ObjectiveRewardType,
-  user?: Parameters<typeof getVillageLoyaltyBonuses>[0],
-): PostProcessedRewards => {
-  // Defensive check: ensure reward_items is an array (handles malformed DB data)
-  const rewardItems = Array.isArray(rewards?.reward_items) ? rewards.reward_items : [];
-  // Pass user for unscaled configured payouts; getReward already applies its quest factors.
-  const villageRewardBonus = user ? getVillageLoyaltyBonuses(user).villageRewards : 0;
-  return {
-    ...rewards,
-    ...(villageRewardBonus > 0
-      ? {
-          reward_tokens:
-            rewards.reward_tokens > 0
-              ? Math.round(boostPvpGain(rewards.reward_tokens, villageRewardBonus))
-              : rewards.reward_tokens,
-          reward_prestige:
-            rewards.reward_prestige > 0
-              ? Math.round(boostPvpGain(rewards.reward_prestige, villageRewardBonus))
-              : rewards.reward_prestige,
-        }
-      : {}),
-    reward_items: rewardItems
-      .filter((reward) => {
-        // Use 'number' as drop chance (default 100 = guaranteed)
-        const dropChance = reward.number ?? 100;
-        return Math.random() * 100 < dropChance;
-      })
-      .flatMap((reward) => {
-        // Use 'quantity' to repeat each item ID
-        const qty = Math.max(1, Math.floor(reward.quantity ?? 1));
-        // Defensive: handle malformed data where ids might be undefined
-        const ids = Array.isArray(reward.ids) ? reward.ids : [];
-        return ids.flatMap((id) => Array(qty).fill(id) as string[]);
-      }),
-  };
-};
-
-export { collapseRewards } from "@/libs/rewards";
-
 export const GATHERING_CANCEL_PREFIX = "Gathering cancelled";
-
-export type QuestConsequence = {
-  type:
-    | "add_item"
-    | "remove_item"
-    | "combat"
-    | "random_encounter"
-    | "fail_quest"
-    | "start_quest"
-    | "reset_quest"
-    | "update_user";
-  ids: string[];
-  info?: string;
-  scaleStats?: boolean;
-  scaleGains?: number;
-  forceKeepPools?: boolean;
-  /** Owning battle objective, carried through consequences into battle progress attribution. */
-  questId?: string;
-  objectiveId?: string;
-  /** Optional shared HP/CP/SP starting percentage; absence preserves carried pools. */
-  givePools?: number;
-  /** Fully configured player tags whose duration includes the opening round. */
-  startingEffects?: ZodAllTags[];
-  /** Expanded NPC template IDs for combat consequences; duplicates request separate allies. */
-  allyAiIds?: string[];
-};
 
 /**
  * Applies `reset_quest` consequences to the user's trackers. Without an objective id the whole
@@ -922,22 +371,6 @@ export const applyQuestResets = <T extends QuestTrackerType[] | null | undefined
 };
 
 /**
- * Combat-only context for war kill eligibility, managed-run attribution and shared settlement.
- * The battle ID groups teammates' damage within one battle; a team still fighting
- * defers defeat/retry handling until the remaining participants have settled.
- */
-export type CombatQuestContext = {
-  battleId?: string;
-  questTeamStillFighting?: boolean;
-  inWarTornSector: boolean;
-  /** Human PvP in a Territory War captured at initiation; excludes guardian fights. */
-  inTerritoryWar?: boolean;
-  isWarParticipant: boolean;
-  /** Prevent unrelated fights from advancing ticketed or versioned run objectives. */
-  questBattleSource?: { questId: string; objectiveId: string };
-};
-
-/**
  * Decide whether a war-context kill objective (`pvp_kills` / `defeat_opponents`) should advance
  * for a given quest type and battle context:
  * - `pvp` quests count in the war-torn sector or human PvP in a Territory War.
@@ -959,42 +392,6 @@ export const killObjectiveCountsForQuest = (
     return warFoe !== undefined ? warFoe : context?.isWarParticipant === true;
   }
   return true;
-};
-
-/**
- * True when a retryDelay != none quest already hit `maxCompletes` completions in the
- * current calendar period. retryDelay "none" is never capped. Invalid persisted content with a
- * real retry delay and maxCompletes <= 0 fails closed so it cannot silently become unlimited.
- */
-export const periodCapReached = (
-  args: {
-    retryDelay: RetryQuestDelay;
-    maxCompletes: number;
-    periodCompletes?: number | null;
-    periodStartAt?: Date | string | null;
-  },
-  now: Date = new Date(),
-): boolean => {
-  if (args.retryDelay === "none") return false;
-  if (args.maxCompletes <= 0) return true;
-  const cps = periodStart(args.retryDelay, now);
-  const startedAt = args.periodStartAt ? new Date(args.periodStartAt) : null;
-  // Counts from a prior period don't count toward this period.
-  const effective = startedAt && startedAt >= cps ? (args.periodCompletes ?? 0) : 0;
-  return effective >= args.maxCompletes;
-};
-
-/**
- * True when this quest was already attempted within the current attemptDelay period. attemptDelay
- * "none" or no prior attempt is never capped. Sibling of periodCapReached, but keyed off attempts
- * (every overworld roll) rather than completions.
- */
-export const attemptCapReached = (
-  args: { attemptDelay: RetryQuestDelay; lastAttemptAt?: Date | string | null },
-  now: Date = new Date(),
-): boolean => {
-  if (args.attemptDelay === "none" || !args.lastAttemptAt) return false;
-  return new Date(args.lastAttemptAt) >= periodStart(args.attemptDelay, now);
 };
 
 /**
@@ -1040,19 +437,6 @@ export const objectiveContentIds = (objective: AllObjectivesType): string[] => {
   return typeof raw === "string" ? [raw] : [];
 };
 
-export type ObjectiveTrackerTaskInput = {
-  task: AllObjectiveTask | "any";
-  increment?: number;
-  value?: number;
-  text?: string;
-  contentId?: string;
-  /** Distinct jutsu disciplines captured when training starts or an action is performed. */
-  masteryTypes?: MasteryType[];
-  /** Opponent classification for combat-use filters, independent of the battle outcome. */
-  combatType?: "PVP" | "PVE";
-  warFoe?: boolean;
-};
-
 /**
  * Updates active quest trackers for emitted objective tasks and returns any resulting
  * notifications, consequences, and changed quest ids.
@@ -1069,12 +453,7 @@ export type ObjectiveTrackerTaskInput = {
  * This function returns consequences without executing their database writes.
  */
 export const getNewTrackers = (
-  user: NonNullable<UserWithRelations> & {
-    useritems?: UserItem[];
-    farmingCollectionCount?: number;
-    bloodlineCollectionProgress?: BloodlineCollectionProgress;
-    ownedObjectiveJutsus?: { jutsuId: string; masteryTypes: MasteryType[] }[];
-  },
+  user: TrackerUser,
   tasks: ObjectiveTrackerTaskInput[],
   combatContext?: CombatQuestContext,
   boundPlacementStatus?: ReadonlyMap<string, boolean>,
@@ -1092,844 +471,549 @@ export const getNewTrackers = (
   const notifications: string[] = [];
   const questIdsUpdated: string[] = [];
   const consequences: QuestConsequence[] = [];
-  const trackers = activeQuests
-    .map((quest) => {
-      if (quest) {
-        const isInMemoryOnlyAchievement =
-          quest.questType === "achievement" &&
-          user.userQuests.some(
-            (entry) => entry.questId === quest.id && isMockQuestHistoryRow(entry),
-          ) &&
-          !questData.some((tracker) => tracker.id === quest.id);
-        // Get the quest tracker for this quest, or create it
-        let questTracker = questData.find((q) => q.id === quest.id);
-        if (!questTracker) {
-          questTracker = QuestTracker.parse({ id: quest.id });
-        }
-        if (questTracker.party && questTracker.failed) {
-          consequences.push({ type: "fail_quest", ids: [quest.id] });
-          notifications.push(`Your quest team failed: ${quest.name}`);
-          return questTracker;
-        }
-        const pendingItemEffects =
+  const trackers = activeQuests.map((quest) => {
+    const isInMemoryOnlyAchievement =
+      quest.questType === "achievement" &&
+      user.userQuests.some(
+        (entry) => entry.questId === quest.id && isMockQuestHistoryRow(entry),
+      ) &&
+      !questData.some((tracker) => tracker.id === quest.id);
+    // Get the quest tracker for this quest, or create it
+    const questTracker =
+      questData.find((q) => q.id === quest.id) ?? QuestTracker.parse({ id: quest.id });
+    if (questTracker.party && questTracker.failed) {
+      consequences.push({ type: "fail_quest", ids: [quest.id] });
+      notifications.push(`Your quest team failed: ${quest.name}`);
+      return questTracker;
+    }
+    const pendingItemEffects =
+      applyPartyEffects &&
+      questTracker.goals.some(
+        (goal) =>
+          goal.done &&
+          !goal.partyEffectsApplied &&
+          (questTracker.party || goal.partyEffectsApplied === false),
+      )
+        ? getPendingQuestItemEffects(quest, questTracker)
+        : undefined;
+    // Update the goals of the quest
+    questTracker.goals = quest.content.objectives.map((objective, i) => {
+      // Get the current goal, or create it
+      const status =
+        questTracker.goals.find((goal) => goal.id === objective.id) ??
+        ObjectiveTracker.parse({ id: objective.id });
+
+      // Self-healing: if a selectedNextObjectiveId is set, but this ID does not exist anymore, reset the objective
+      if (
+        status.selectedNextObjectiveId &&
+        !quest.content.objectives.find((o) => o.id === status.selectedNextObjectiveId)
+      ) {
+        status.selectedNextObjectiveId = undefined;
+        status.done = false;
+      }
+
+      instantiateGoalLocation(
+        user,
+        quest,
+        questTracker,
+        objective,
+        status,
+        consequences,
+      );
+
+      // Departure retains personal receipts, so completed shared goals can still
+      // deliver their pending effects through the guarded consequence handler.
+      if (status.done) {
+        if (
           applyPartyEffects &&
-          questTracker.goals.some(
-            (goal) =>
-              goal.done &&
-              !goal.partyEffectsApplied &&
-              (questTracker.party || goal.partyEffectsApplied === false),
-          )
-            ? getPendingQuestItemEffects(quest, questTracker)
-            : undefined;
-        // Update the goals of the quest
-        questTracker.goals = quest.content.objectives.map((objective, i) => {
-          // Get the current goal, or create it
-          let status = questTracker?.goals.find((goal) => goal.id === objective.id);
-          if (!status) {
-            status = ObjectiveTracker.parse({ id: objective.id });
-          }
+          (questTracker.party || status.partyEffectsApplied === false) &&
+          !status.partyEffectsApplied
+        ) {
+          if (objective.task === "new_quest") {
+            consequences.push({ type: "start_quest", ids: objective.newQuestIds });
+          } else if (objective.task === "collect_item") {
+            // Each member carries undelivered quest items, so a collector leaving cannot
+            // strand the team. Replacements never receive already-delivered items.
+            const outstanding = pendingItemEffects?.collections.get(objective.id) ?? [];
+            if (outstanding.length > 0)
+              consequences.push({ type: "add_item", ids: outstanding });
+          } else if (objective.task === "deliver_item") {
+            const removed = pendingItemEffects?.deliveries.get(objective.id) ?? [];
+            if (removed.length > 0)
+              consequences.push({ type: "remove_item", ids: removed });
+          } else return status;
+          status.partyEffectsApplied = true;
+          consequences.push({ type: "update_user", ids: [quest.id] });
+        }
+        return status;
+      }
 
-          // Self-healing: if a selectedNextObjectiveId is set, but this ID does not exist anymore, reset the objective
-          if (
-            status.selectedNextObjectiveId &&
-            !quest.content.objectives.find(
-              (o) => o.id === status.selectedNextObjectiveId,
-            )
-          ) {
-            status.selectedNextObjectiveId = undefined;
-            status.done = false;
-          }
+      // If not available yet, just skip. This must run before the bound-placement
+      // check below: for a consecutiveObjectives quest, an objective the player has
+      // not reached yet must not fail (or freeze) the quest just because an admin
+      // deleted or deactivated its bound placement — the player never got there.
+      if (!isQuestObjectiveAvailable(quest, questTracker, i)) {
+        return status;
+      }
 
-          // Older masked snapshots could persist the public placeholder as a real target.
-          // Recover only those fields; valid rolls and completion/progress stay authoritative.
-          const hasMaskedLocation =
-            status.sector === 1337 ||
-            status.longitude === 1337 ||
-            status.latitude === 1337;
-          if (hasMaskedLocation) {
-            if (status.sector === 1337) {
-              delete status.sector;
-              if (!("sectorType" in objective) && "sector" in objective) {
-                status.sector = objective.sector;
-              }
-            }
-            if (status.longitude === 1337) {
-              delete status.longitude;
-              if (!("locationType" in objective) && "longitude" in objective) {
-                status.longitude = objective.longitude;
-              }
-            }
-            if (status.latitude === 1337) {
-              delete status.latitude;
-              if (!("locationType" in objective) && "latitude" in objective) {
-                status.latitude = objective.latitude;
-              }
-            }
-            delete status.locationChecked;
-            consequences.push({ type: "update_user", ids: ["location_update"] });
-          }
-
-          if ("sectorType" in objective && status.sector === undefined) {
-            if (objective.sectorType === "specific") {
-              status.sector = objective.sector;
-            } else if (objective.sectorType === "random") {
-              status.sector = pickPlaceableSector();
-            } else if (objective.sectorType === "from_list") {
-              if (objective.sectorList.length === 0) {
-                status.sector = pickPlaceableSector();
-              } else {
-                status.sector = Number(getRandomElement(objective.sectorList));
-              }
-            } else if (objective.sectorType === "user_village") {
-              status.sector = user?.village?.sector || user.sector;
-            } else if (objective.sectorType === "current_sector") {
-              status.sector = user.sector;
-            } else if (objective.sectorType === "enemy_village") {
-              // Find an active war and get the enemy village sector
-              for (const w of user.activeWars ?? []) {
-                const side = getWarSide(w, user.villageId);
-                if (side) {
-                  status.sector =
-                    side === w.attackerVillageId
-                      ? w.defenderVillage.sector
-                      : w.attackerVillage.sector;
-                  break;
-                }
-              }
-
-              // Fallback to random sector if no war found
-              if (status.sector === undefined) {
-                status.sector = pickPlaceableSector();
-              }
-            }
-            if (status.sector !== undefined) {
-              consequences.push({ type: "update_user", ids: ["location_update"] });
-            }
-          }
-
-          // Public landmarks share one canonical entrance across all accepted attempts.
-          if (
-            quest.publicLocations &&
-            objective.structureAssetId &&
-            "sectorType" in objective &&
-            objective.sectorType === "specific" &&
-            "locationType" in objective &&
-            objective.locationType === "specific" &&
-            (status.sector !== objective.sector ||
-              status.longitude !== objective.longitude ||
-              status.latitude !== objective.latitude)
-          ) {
-            status.sector = objective.sector;
-            status.longitude = objective.longitude;
-            status.latitude = objective.latitude;
-            status.locationChecked = false;
-            consequences.push({ type: "update_user", ids: ["location_update"] });
-          }
-
-          // If locationType is not specific, update the location accordingly
-          if (
-            "locationType" in objective &&
-            (status.longitude === undefined || status.latitude === undefined)
-          ) {
-            if (objective.locationType === "specific") {
-              status.longitude = objective.longitude;
-              status.latitude = objective.latitude;
-            } else if (objective.locationType === "random") {
-              status.longitude = Math.ceil(Math.random() * (SECTOR_WIDTH - 1));
-              status.latitude = Math.ceil(Math.random() * (SECTOR_HEIGHT - 1));
-            }
-            if (status.longitude !== undefined && status.latitude !== undefined) {
-              consequences.push({ type: "update_user", ids: ["location_update"] });
-            }
-          }
-
-          // If a dialog, find any previous objective pointing to this one, and set the location to the same location
-          const previousObjective = findCompletedPredecessor(
-            quest.content.objectives,
-            objective.id,
-            questTracker,
-          );
-
-          // Implicit dialogs follow live NPC positions, never a bound objective's fallback coordinates.
-          let locationPredecessor = previousObjective;
-          const visited = new Set([objective.id]);
-          while (
-            locationPredecessor?.task === "dialog" &&
-            !locationPredecessor.overworldPlacementId &&
-            locationPredecessor.sector === undefined &&
-            locationPredecessor.longitude === undefined &&
-            locationPredecessor.latitude === undefined &&
-            !visited.has(locationPredecessor.id)
-          ) {
-            visited.add(locationPredecessor.id);
-            locationPredecessor = findCompletedPredecessor(
-              quest.content.objectives,
-              locationPredecessor.id,
-              questTracker,
-            );
-          }
-          const hasBoundLocation =
-            objective.task === "dialog" &&
-            !objective.overworldPlacementId &&
-            !!locationPredecessor?.overworldPlacementId &&
-            isSupportedOverworldBindingTask(locationPredecessor.task);
-          if (hasBoundLocation) {
-            for (const field of ["sector", "longitude", "latitude"] as const) {
-              if (objective[field] === undefined && status[field] !== undefined) {
-                delete status[field];
-                delete status.locationChecked;
-                consequences.push({ type: "update_user", ids: ["location_update"] });
-              }
-            }
-          }
-
-          if (previousObjective && !hasBoundLocation) {
-            if (status.sector === undefined && "sector" in previousObjective) {
-              status.sector = previousObjective.sector;
-              consequences.push({ type: "update_user", ids: [`sector_update`] });
-            }
-            if (status.longitude === undefined && "longitude" in previousObjective) {
-              status.longitude = previousObjective.longitude;
-              consequences.push({ type: "update_user", ids: [`longitude_update`] });
-            }
-            if (status.latitude === undefined && "latitude" in previousObjective) {
-              status.latitude = previousObjective.latitude;
-              consequences.push({ type: "update_user", ids: [`latitude_update`] });
-            }
-          }
-
-          // If we have a location on the status (i.e. instantiated for the user, overwrite objective)
-          if ("sector" in objective) {
-            if (status.longitude !== undefined) objective.longitude = status.longitude;
-            if (status.latitude !== undefined) objective.latitude = status.latitude;
-            if (status.sector !== undefined) objective.sector = status.sector;
-            if ("locationType" in objective) {
-              objective.locationType = "specific";
-            }
-          }
-
-          // Departure retains personal receipts, so completed shared goals can still
-          // deliver their pending effects through the guarded consequence handler.
-          if (status.done) {
-            if (
-              applyPartyEffects &&
-              (questTracker?.party || status.partyEffectsApplied === false) &&
-              !status.partyEffectsApplied
-            ) {
-              if (objective.task === "new_quest") {
-                consequences.push({ type: "start_quest", ids: objective.newQuestIds });
-              } else if (objective.task === "collect_item") {
-                // Each member carries undelivered quest items, so a collector leaving cannot
-                // strand the team. Replacements never receive already-delivered items.
-                const outstanding =
-                  pendingItemEffects?.collections.get(objective.id) ?? [];
-                if (outstanding.length > 0)
-                  consequences.push({ type: "add_item", ids: outstanding });
-              } else if (objective.task === "deliver_item") {
-                const removed = pendingItemEffects?.deliveries.get(objective.id) ?? [];
-                if (removed.length > 0)
-                  consequences.push({ type: "remove_item", ids: removed });
-              } else return status;
-              status.partyEffectsApplied = true;
-              consequences.push({ type: "update_user", ids: [quest.id] });
-            }
-            return status;
-          }
-
-          // If not available yet, just skip. This must run before the bound-placement
-          // check below: for a consecutiveObjectives quest, an objective the player has
-          // not reached yet must not fail (or freeze) the quest just because an admin
-          // deleted or deactivated its bound placement — the player never got there.
-          if (questTracker && !isQuestObjectiveAvailable(quest, questTracker, i)) {
-            return status;
-          }
-
-          // Missing map entry means deleted; false means present but deactivated; true means active.
-          // Omitting the map preserves the pre-overworld behavior for callers that do not load it.
-          const boundPlacementId = objective.overworldPlacementId;
-          if (
-            boundPlacementStatus &&
-            boundPlacementId &&
-            isSupportedOverworldBindingTask(objective.task)
-          ) {
-            if (!boundPlacementStatus.has(boundPlacementId)) {
-              // Placement was hard-deleted → auto-fail the objective.
-              if ("failObjectiveId" in objective && objective.failObjectiveId) {
-                status.selectedNextObjectiveId = objective.failObjectiveId;
-              } else {
-                if (questTracker?.party) questTracker.failed = true;
-                consequences.push({ type: "fail_quest", ids: [quest.id] });
-              }
-              status.done = true;
-              notifications.push(
-                `An objective for "${quest.name}" could not be completed because its destination was removed.`,
-              );
-              questIdsUpdated.push(quest.id);
-              return status;
-            }
-            if (!boundPlacementStatus.get(boundPlacementId)) {
-              // Placement exists but is deactivated → freeze: skip without failing.
-              return status;
-            }
-            // else: placement is active → fall through to normal matching.
-          }
-
-          // Convenience
-          const task = objective.task;
-          // Kill objectives whose counting is gated by battle context per quest type
-          const isWarContextKillTask =
-            task === "pvp_kills" || task === "defeat_opponents";
-          const isKage = user.village?.kageId === user.userId;
-
-          // General updates we want to apply every time. Team progress treats these
-          // overwrites as snapshots: keep PassiveSnapshotTasks in step with them.
-          if (objective.task === "bloodline_collection") {
-            // Sum the selected rank snapshots; no rank has an implicit exemption.
-            const progress = user.bloodlineCollectionProgress
-              ?.filter((entry) => objective.bloodlineRanks.includes(entry.rank))
-              .reduce(
-                (total, entry) => ({
-                  collected: total.collected + entry.collected,
-                  total: total.total + entry.total,
-                }),
-                { collected: 0, total: 0 },
-              );
-            if (progress) {
-              const isComplete =
-                progress.total > 0 && progress.collected === progress.total;
-              if (
-                (isComplete || !isInMemoryOnlyAchievement) &&
-                (status.value !== progress.collected ||
-                  status.target !== progress.total ||
-                  status.done !== isComplete)
-              ) {
-                consequences.push({
-                  type: "update_user",
-                  ids: ["bloodline_collection_update"],
-                });
-              }
-              status.value = progress.collected;
-              status.target = progress.total;
-              // An empty catalogue cannot award a collection achievement. Done goals are
-              // retained above, so catalogue growth never revokes a recorded completion.
-              status.done = isComplete;
-            }
-          } else if (
-            task === "dungeons_completed" &&
-            user.dungeonsCompleted !== undefined
-          ) {
-            status.value = Number(user.dungeonsCompleted);
-          } else if (task === "raids_completed" && user.raidsCompleted !== undefined) {
-            status.value = Number(user.raidsCompleted);
-          } else if (isInArray(task, Object.values(QuestCompletionTasks))) {
-            // Repeatable quests reset completed; retain lifetime totals and legacy completions.
-            status.value = user.completedQuests.reduce(
-              (total, history) =>
-                history.questType &&
-                QuestCompletionTasks[
-                  history.questType as keyof typeof QuestCompletionTasks
-                ] === task
-                  ? total + Math.max(history.completed, history.previousCompletes ?? 0)
-                  : total,
-              0,
-            );
-          } else if (task === "user_level") {
-            // Use originalLevel if available (for combat-scaled users), otherwise use current level
-            const userLevel =
-              "originalLevel" in user && typeof user.originalLevel === "number"
-                ? user.originalLevel
-                : (user.level ?? 1);
-            status.value = userLevel;
-          } else if (task === "farming_level") {
-            status.value = getFarmingLevel(user.farmingExperience);
-          } else if (
-            task === "farming_collection_log" &&
-            typeof user.farmingCollectionCount === "number"
-          ) {
-            status.value = user.farmingCollectionCount;
-          } else if (
-            task === "train_specific_jutsu" &&
-            user.ownedObjectiveJutsus &&
-            objectiveContentIds(objective).length > 0
-          ) {
-            // Learning emits once, and is lost if this objective was not reached yet. A
-            // named jutsu cannot be learned twice, so owning it has to count as well.
-            const owned = user.ownedObjectiveJutsus.filter(
-              ({ jutsuId, masteryTypes }) =>
-                matchesContentObjective(objective, {
-                  task,
-                  contentId: jutsuId,
-                  masteryTypes,
-                }),
-            ).length;
-            if (owned > status.value) {
-              status.value = owned;
-              consequences.push({ type: "update_user", ids: ["owned_jutsu_update"] });
-            }
-          } else if (task === "days_in_village") {
-            const days = Math.floor(secondsPassed(user.joinedVillageAt) / 60 / 60 / 24);
-            status.value = days;
-          } else if (task === "days_as_kage" && isKage && user.village) {
-            const seconds = secondsPassed(user.village.leaderUpdatedAt);
-            const days = Math.floor(seconds / 60 / 60 / 24);
-            status.value = days;
-          } else if (task === "reputation_points") {
-            status.value = user.reputationPointsTotal;
-          } else if (task === "minutes_passed" && questTracker) {
-            const minutes = Math.floor(
-              secondsPassed(new Date(questTracker.startAt)) / 60,
-            );
-            status.value = minutes;
-          } else if (task.includes("missions_total") || task.includes("crimes_total")) {
-            const type = task.includes("missions") ? "mission" : "crime";
-            const rank = task.split("_")[0]?.toUpperCase() as LetterRank;
-            const field = getQuestCounterFieldName(type, rank);
-            if (field) status.value = user[field];
-          } else if (task === "errands_total") {
-            const field = getQuestCounterFieldName("errand", "D");
-            if (field) status.value = user[field];
-          } else if (task === "medical_experience") {
-            status.value = user.medicalExperience;
-          } else if (task === "crafting_experience") {
-            status.value = user.craftingExperience;
-          } else if (task === "hunting_experience") {
-            status.value = user.huntingExperience;
-          } else if (task === "gathering_experience") {
-            status.value = user.gatheringExperience;
-          }
-
-          // If opponentAIs is in objective, get the ids
-          let opponentIds: string[] = [];
-          if ("opponentAIs" in objective) {
-            opponentIds = expandAiCopies(objective.opponentAIs).filter(
-              (id): id is string => id !== undefined,
-            );
-          }
-
-          /** Helper function to put the user in combat */
-          const putInCombat = () => {
-            // Quest teams explicitly assemble through their leader's encounter action.
-            if (questTracker?.party) return;
-            if (
-              opponentIds.length > 0 &&
-              "opponentAIs" in objective &&
-              (user.status === "AWAKE" ||
-                (isBetweenPyramidBattles(user) &&
-                  getIsolatedPyramid(user)?.questId === quest.id))
-            ) {
-              notifications.push(
-                `Attacking ${opponentIds.length} target${opponentIds.length > 1 ? "s" : ""} for ${quest.name}.`,
-              );
-              consequences.push({
-                type: "combat",
-                ids: opponentIds,
-                // Each selected template contributes the authored number of allied copies.
-                allyAiIds:
-                  "allyAIs" in objective ? expandAiCopies(objective.allyAIs) : [],
-                scaleStats: objective.opponent_scaled_to_user,
-                scaleGains: objective.scaleGains,
-                forceKeepPools: objective.keepOriginalPools ?? false,
-                questId: quest.id,
-                objectiveId: objective.id,
-                givePools: objective.givePools,
-                startingEffects: [
-                  ...(objective.applyBuffs ?? []),
-                  ...(objective.applyDebuffs ?? []),
-                ],
-              });
-            }
-          };
-
-          // Instant objectives
-          if (task === "win_quest") {
-            status.done = true;
-          } else if (task === "reset_quest") {
-            consequences.push({
-              type: "reset_quest",
-              ids: [quest.id],
-              info: objective.resetObjectiveId,
-            });
-          } else if (task === "fail_quest") {
-            if (questTracker?.party) questTracker.failed = true;
+      // Missing map entry means deleted; false means present but deactivated; true means active.
+      // Omitting the map preserves the pre-overworld behavior for callers that do not load it.
+      const boundPlacementId = objective.overworldPlacementId;
+      if (
+        boundPlacementStatus &&
+        boundPlacementId &&
+        isSupportedOverworldBindingTask(objective.task)
+      ) {
+        if (!boundPlacementStatus.has(boundPlacementId)) {
+          // Placement was hard-deleted → auto-fail the objective.
+          if ("failObjectiveId" in objective && objective.failObjectiveId) {
+            status.selectedNextObjectiveId = objective.failObjectiveId;
+          } else {
+            if (questTracker.party) questTracker.failed = true;
             consequences.push({ type: "fail_quest", ids: [quest.id] });
-            notifications.push(objective.description || `Failed: ${quest.name}`);
-          } else if (task === "new_quest" && "newQuestIds" in objective) {
-            status.done = true;
-            if (!questTracker?.party || applyPartyEffects) {
-              if (questTracker?.party || status.partyEffectsApplied === false)
-                status.partyEffectsApplied = true;
-              consequences.push({ type: "start_quest", ids: objective.newQuestIds });
+          }
+          status.done = true;
+          notifications.push(
+            `An objective for "${quest.name}" could not be completed because its destination was removed.`,
+          );
+          questIdsUpdated.push(quest.id);
+          return status;
+        }
+        if (!boundPlacementStatus.get(boundPlacementId)) {
+          // Placement exists but is deactivated → freeze: skip without failing.
+          return status;
+        }
+        // else: placement is active → fall through to normal matching.
+      }
+
+      // Convenience
+      const task = objective.task;
+      // Kill objectives whose counting is gated by battle context per quest type
+      const isWarContextKillTask = task === "pvp_kills" || task === "defeat_opponents";
+
+      evaluatePassiveGoalValue(
+        user,
+        questTracker,
+        objective,
+        status,
+        isInMemoryOnlyAchievement,
+        consequences,
+      );
+
+      // If opponentAIs is in objective, get the ids
+      let opponentIds: string[] = [];
+      if ("opponentAIs" in objective) {
+        opponentIds = expandAiCopies(objective.opponentAIs).filter(
+          (id): id is string => id !== undefined,
+        );
+      }
+
+      /** Helper function to put the user in combat */
+      const putInCombat = () => {
+        // Quest teams explicitly assemble through their leader's encounter action.
+        if (questTracker.party) return;
+        if (
+          opponentIds.length > 0 &&
+          "opponentAIs" in objective &&
+          (user.status === "AWAKE" ||
+            (isBetweenPyramidBattles(user) &&
+              getIsolatedPyramid(user)?.questId === quest.id))
+        ) {
+          notifications.push(
+            `Attacking ${opponentIds.length} target${opponentIds.length > 1 ? "s" : ""} for ${quest.name}.`,
+          );
+          consequences.push({
+            type: "combat",
+            ids: opponentIds,
+            // Each selected template contributes the authored number of allied copies.
+            allyAiIds: "allyAIs" in objective ? expandAiCopies(objective.allyAIs) : [],
+            scaleStats: objective.opponent_scaled_to_user,
+            scaleGains: objective.scaleGains,
+            forceKeepPools: objective.keepOriginalPools ?? false,
+            questId: quest.id,
+            objectiveId: objective.id,
+            givePools: objective.givePools,
+            startingEffects: [
+              ...(objective.applyBuffs ?? []),
+              ...(objective.applyDebuffs ?? []),
+            ],
+          });
+        }
+      };
+
+      // Instant objectives
+      if (task === "win_quest") {
+        status.done = true;
+      } else if (task === "reset_quest") {
+        consequences.push({
+          type: "reset_quest",
+          ids: [quest.id],
+          info: objective.resetObjectiveId,
+        });
+      } else if (task === "fail_quest") {
+        if (questTracker.party) questTracker.failed = true;
+        consequences.push({ type: "fail_quest", ids: [quest.id] });
+        notifications.push(objective.description || `Failed: ${quest.name}`);
+      } else if (task === "new_quest" && "newQuestIds" in objective) {
+        status.done = true;
+        if (!questTracker.party || applyPartyEffects) {
+          if (questTracker.party || status.partyEffectsApplied === false)
+            status.partyEffectsApplied = true;
+          consequences.push({ type: "start_quest", ids: objective.newQuestIds });
+        }
+      } else if (task === "start_battle") {
+        if (!status.recentlyDied) {
+          putInCombat();
+        }
+      }
+
+      // Specific updates requested by the caller
+      tasks
+        .filter((taskUpdate) => taskUpdate.task === task || taskUpdate.task === "any")
+        .forEach((taskUpdate) => {
+          // A location action can match both `any` and its explicit task in one
+          // pass. Once it completes, its inventory side effects must run only once.
+          if (status.done && (task === "collect_item" || task === "deliver_item"))
+            return;
+          // War-context kill objectives only advance in their required context (pvp →
+          // war-torn sector; war → active-war kill). All other tasks always count.
+          // `defeat_opponents` is per-opponent, so a missing `warFoe` must deny rather than
+          // fall back to the battle-global flag (which would credit a non-war target in a
+          // mixed war battle); `pvp_kills` keeps the battle-global fallback by design.
+          const taskWarFoe =
+            task === "defeat_opponents"
+              ? (taskUpdate.warFoe ?? false)
+              : taskUpdate.warFoe;
+          const killCounts =
+            !isWarContextKillTask ||
+            killObjectiveCountsForQuest(quest.questType, combatContext, taskWarFoe);
+          // Generic counter objectives: increment/set on task-name match. Requires an exact
+          // `taskUpdate.task === task` (not the `"any"` re-evaluation trigger, which carries
+          // no increment/value) so a future `"any"` update can't inflate counters. Content-
+          // gated (specific-X + tag_usage_win) and damage_dealt tasks own the gated branches
+          // below and must NOT also run this path, or they would double-count.
+          if (
+            "value" in objective &&
+            taskUpdate.task === task &&
+            !CONTENT_GATED_TASKS.has(task) &&
+            task !== "damage_dealt"
+          ) {
+            if (taskUpdate.increment && killCounts) {
+              status.value += taskUpdate.increment;
             }
-          } else if (task === "start_battle") {
-            if (!status.recentlyDied) {
-              putInCombat();
+            if (taskUpdate.value !== undefined && killCounts) {
+              status.value = taskUpdate.value;
             }
           }
-
-          // Specific updates requested by the caller
-          tasks
-            .filter(
-              (taskUpdate) => taskUpdate.task === task || taskUpdate.task === "any",
-            )
-            .forEach((taskUpdate) => {
-              // A location action can match both `any` and its explicit task in one
-              // pass. Once it completes, its inventory side effects must run only once.
-              if (status.done && (task === "collect_item" || task === "deliver_item"))
-                return;
-              // War-context kill objectives only advance in their required context (pvp →
-              // war-torn sector; war → active-war kill). All other tasks always count.
-              // `defeat_opponents` is per-opponent, so a missing `warFoe` must deny rather than
-              // fall back to the battle-global flag (which would credit a non-war target in a
-              // mixed war battle); `pvp_kills` keeps the battle-global fallback by design.
-              const taskWarFoe =
-                task === "defeat_opponents"
-                  ? (taskUpdate.warFoe ?? false)
-                  : taskUpdate.warFoe;
-              const killCounts =
-                !isWarContextKillTask ||
-                killObjectiveCountsForQuest(quest.questType, combatContext, taskWarFoe);
-              // Generic counter objectives: increment/set on task-name match. Requires an exact
-              // `taskUpdate.task === task` (not the `"any"` re-evaluation trigger, which carries
-              // no increment/value) so a future `"any"` update can't inflate counters. Content-
-              // gated (specific-X + tag_usage_win) and damage_dealt tasks own the gated branches
-              // below and must NOT also run this path, or they would double-count.
-              if (
-                status &&
-                "value" in objective &&
-                taskUpdate.task === task &&
-                !CONTENT_GATED_TASKS.has(task) &&
-                task !== "damage_dealt"
-              ) {
-                if (taskUpdate.increment && killCounts) {
-                  status.value += taskUpdate.increment;
-                }
-                if (taskUpdate.value !== undefined && killCounts) {
-                  status.value = taskUpdate.value;
-                }
-              }
-              // Content objectives use their ID filter and, for jutsu, optional discipline
-              // and combat filters. The matcher rejects unconfigured and "any" events.
-              if (
-                status &&
-                "value" in objective &&
-                CONTENT_GATED_TASKS.has(task) &&
-                matchesContentObjective(objective, taskUpdate) &&
-                // A quest can never satisfy its own complete_specific_quest objective: the
-                // resolving quest is still active in getUserQuests when getReward emits this
-                // (its `completed` flag flips later in checkRewards), so guard the self-tick.
-                !(
-                  task === "complete_specific_quest" &&
-                  quest.id === taskUpdate.contentId
-                )
-              ) {
-                status.value += taskUpdate.increment ?? 1;
-              }
-              // Damage dealt: cumulative across the quest, or single-battle max when toggled.
-              // Requires an exact `taskUpdate.task === "damage_dealt"` (not the `"any"` re-
-              // evaluation trigger) so a future `"any"` update carrying an increment can't
-              // inflate progress toward the damage threshold. The stored counter is not reset
-              // when a designer flips singleBattle on a live quest, so an accumulated sum would
-              // be re-read as a single-battle max (and vice versa) — content edits that flip the
-              // flag must ship with a user-tracker reset.
-              if (
-                status &&
-                task === "damage_dealt" &&
-                taskUpdate.task === "damage_dealt" &&
-                "value" in objective
-              ) {
-                const dealt = taskUpdate.increment ?? 0;
-                if ("singleBattle" in objective && objective.singleBattle) {
-                  status.value = Math.max(status.value, dealt);
-                  if (questTracker?.party && combatContext?.battleId) {
-                    status.battleValues ??= {};
-                    status.battleValues[combatContext.battleId] = Math.max(
-                      status.battleValues[combatContext.battleId] ?? 0,
-                      dealt,
-                    );
-                  }
-                } else {
-                  status.value += dealt;
-                }
-              }
-              // Dialog objective
-              if (
-                task === "dialog" &&
-                taskUpdate.contentId &&
-                // A placement-bound dialog can only advance through the authoritative NPC
-                // interaction path. This blocks direct Logbook/API completion from anywhere.
-                (!questTracker?.party || user.questParty?.leaderId === user.userId) &&
-                (!objective.overworldPlacementId ||
-                  isObjectiveLocationSatisfied(user, objective, atPlacementIds))
-              ) {
-                // A terminal branch carries no follow-up objective, so the client sends an
-                // objective-scoped sentinel (prefix + this objective's id) instead of a next id.
-                // Complete this objective without routing onward — but only if it genuinely owns
-                // a terminal branch, so a spoofed sentinel can't finish an arbitrary dialog
-                // objective (parity with the routing branch, which requires a matching branch id).
-                const isTerminalForThis =
-                  taskUpdate.contentId === `${TERMINAL_DIALOG_PREFIX}${objective.id}` &&
-                  objective.nextObjectiveId?.some(
-                    (next) => next.nextObjectiveId === undefined,
-                  );
-                if (isTerminalForThis) {
-                  status.done = true;
-                } else {
-                  const objectiveHasNext = objective.nextObjectiveId?.find(
-                    (next) => next.nextObjectiveId === taskUpdate.contentId,
-                  );
-                  if (objectiveHasNext) {
-                    status.done = true;
-                    status.selectedNextObjectiveId = taskUpdate.contentId;
-                  }
-                }
-              } else if (
-                quest.consecutiveObjectives &&
-                "nextObjectiveId" in objective &&
-                typeof objective.nextObjectiveId === "string" &&
-                !status.selectedNextObjectiveId
-              ) {
-                status.selectedNextObjectiveId = objective.nextObjectiveId;
-              }
-
-              // If objective has a location (sector & longitude/latitude), set to completed.
-              // A placement-bound objective is also satisfied when the player is interacting
-              // with that placement (atPlacementIds), since the placement is authoritative
-              // over the objective's stored coordinates.
-              if (
-                status &&
-                isObjectiveLocationSatisfied(user, objective, atPlacementIds)
-              ) {
-                if (task === "move_to_location") {
-                  notifications.push(`You arrived at destination for ${quest.name}.`);
-                  status.done = true;
-                } else if (
-                  status.partyEffectsApplied &&
-                  (task === "collect_item" || task === "deliver_item")
-                ) {
-                  // Joining can copy an earlier shared goal over a completed personal one.
-                  // Its inventory receipt still proves completion for this attempt.
-                  status.done = true;
-                } else if (
-                  task === "collect_item" &&
-                  (!questTracker?.party || applyPartyEffects) &&
-                  "item_name" in objective &&
-                  "collectItemIds" in objective &&
-                  objective.collectItemIds
-                ) {
-                  let doCollect = true;
-                  if (
-                    "collect_time_minutes" in objective &&
-                    objective.collect_time_minutes
-                  ) {
-                    if ("timestamp" in status && status.timestamp) {
-                      if (
-                        Date.now() <
-                        getCollectDeadline(
-                          status,
-                          objective.collect_time_minutes,
-                        )!.getTime()
-                      ) {
-                        doCollect = false;
-                      }
-                    } else {
-                      // Snapshot once so later passive changes cannot alter a running collection.
-                      const bonuses =
-                        quest.questType === "gathering"
-                          ? getActivityBonuses(user)
-                          : undefined;
-                      const seconds = reduceActivitySeconds(
-                        objective.collect_time_minutes * 60,
-                        bonuses?.gatheringReductionPercent ?? 0,
-                      );
-                      const startedAt = Date.now();
-                      status.timestamp = new Date(startedAt).toISOString();
-                      status.collectDeadline = new Date(
-                        startedAt + seconds * 1000,
-                      ).toISOString();
-                      status.gatheringBonusQuantity = bonuses?.gatheringBonusQuantity;
-                      notifications.push(
-                        `You started collecting. This will take ${formatSecondsToTimeDisplay(seconds)}.`,
-                      );
-                      doCollect = false;
-                    }
-                  }
-                  if (doCollect) {
-                    // An untimed collection starts and completes in this same evaluation.
-                    if (
-                      quest.questType === "gathering" &&
-                      !(
-                        "collect_time_minutes" in objective &&
-                        objective.collect_time_minutes
-                      )
-                    )
-                      status.gatheringBonusQuantity =
-                        getActivityBonuses(user).gatheringBonusQuantity;
-                    consequences.push({
-                      type: "add_item",
-                      ids: objective.collectItemIds,
-                    });
-                    if (questTracker?.party || status.partyEffectsApplied === false)
-                      status.partyEffectsApplied = true;
-                    status.done = true;
-                  } else {
-                    questIdsUpdated.push(quest.id);
-                  }
-                } else if (
-                  task === "deliver_item" &&
-                  (!questTracker?.party || applyPartyEffects) &&
-                  "item_name" in objective &&
-                  "deliverItemIds" in objective &&
-                  objective.deliverItemIds
-                ) {
-                  // Verify user has these items
-                  const check = objective.deliverItemIds.every((id) =>
-                    user.useritems?.some((ui) => ui.itemId === id),
-                  );
-                  if (!check) {
-                    notifications.push(
-                      `You don't have ${objective.item_name} to deliver for ${quest.name}.`,
-                    );
-                    return;
-                  }
-                  // Remove items & complete objective
-                  notifications.push(
-                    `Delivered ${objective.item_name} for ${quest.name}.`,
-                  );
-                  consequences.push({
-                    type: "remove_item",
-                    ids: objective.deliverItemIds,
-                  });
-                  if (questTracker?.party || status.partyEffectsApplied === false)
-                    status.partyEffectsApplied = true;
-                  status.done = true;
-                } else if (task === "defeat_opponents" && opponentIds.length > 0) {
-                  if (!opponentIds.includes(taskUpdate.contentId || "1337")) {
-                    putInCombat();
-                  }
-                }
-              }
-
-              // If user has a pending collect timer but left the location, reset the timer
-              else if (
-                task === "collect_item" &&
-                "collect_time_minutes" in objective &&
-                objective.collect_time_minutes &&
-                status?.timestamp &&
-                !status.done
-              ) {
-                status.timestamp = undefined;
-                status.collectDeadline = undefined;
-                status.gatheringBonusQuantity = undefined;
-                notifications.push(
-                  `${GATHERING_CANCEL_PREFIX} for ${quest.name}: you left the collection area.`,
+          // Content objectives use their ID filter and, for jutsu, optional discipline
+          // and combat filters. The matcher rejects unconfigured and "any" events.
+          if (
+            "value" in objective &&
+            CONTENT_GATED_TASKS.has(task) &&
+            matchesContentObjective(objective, taskUpdate) &&
+            // A quest can never satisfy its own complete_specific_quest objective: the
+            // resolving quest is still active in getUserQuests when getReward emits this
+            // (its `completed` flag flips later in checkRewards), so guard the self-tick.
+            !(task === "complete_specific_quest" && quest.id === taskUpdate.contentId)
+          ) {
+            status.value += taskUpdate.increment ?? 1;
+          }
+          // Damage dealt: cumulative across the quest, or single-battle max when toggled.
+          // Requires an exact `taskUpdate.task === "damage_dealt"` (not the `"any"` re-
+          // evaluation trigger) so a future `"any"` update carrying an increment can't
+          // inflate progress toward the damage threshold. The stored counter is not reset
+          // when a designer flips singleBattle on a live quest, so an accumulated sum would
+          // be re-read as a single-battle max (and vice versa) — content edits that flip the
+          // flag must ship with a user-tracker reset.
+          if (
+            task === "damage_dealt" &&
+            taskUpdate.task === "damage_dealt" &&
+            "value" in objective
+          ) {
+            const dealt = taskUpdate.increment ?? 0;
+            if ("singleBattle" in objective && objective.singleBattle) {
+              status.value = Math.max(status.value, dealt);
+              if (questTracker.party && combatContext?.battleId) {
+                status.battleValues ??= {};
+                status.battleValues[combatContext.battleId] = Math.max(
+                  status.battleValues[combatContext.battleId] ?? 0,
+                  dealt,
                 );
               }
+            } else {
+              status.value += dealt;
+            }
+          }
+          // Dialog objective
+          if (
+            task === "dialog" &&
+            taskUpdate.contentId &&
+            // A placement-bound dialog can only advance through the authoritative NPC
+            // interaction path. This blocks direct Logbook/API completion from anywhere.
+            (!questTracker.party || user.questParty?.leaderId === user.userId) &&
+            (!objective.overworldPlacementId ||
+              isObjectiveLocationSatisfied(user, objective, atPlacementIds))
+          ) {
+            // A terminal branch carries no follow-up objective, so the client sends an
+            // objective-scoped sentinel (prefix + this objective's id) instead of a next id.
+            // Complete this objective without routing onward — but only if it genuinely owns
+            // a terminal branch, so a spoofed sentinel can't finish an arbitrary dialog
+            // objective (parity with the routing branch, which requires a matching branch id).
+            const isTerminalForThis =
+              taskUpdate.contentId === `${TERMINAL_DIALOG_PREFIX}${objective.id}` &&
+              objective.nextObjectiveId?.some(
+                (next) => next.nextObjectiveId === undefined,
+              );
+            if (isTerminalForThis) {
+              status.done = true;
+            } else {
+              const objectiveHasNext = objective.nextObjectiveId?.find(
+                (next) => next.nextObjectiveId === taskUpdate.contentId,
+              );
+              if (objectiveHasNext) {
+                status.done = true;
+                status.selectedNextObjectiveId = taskUpdate.contentId;
+              }
+            }
+          } else if (
+            quest.consecutiveObjectives &&
+            "nextObjectiveId" in objective &&
+            typeof objective.nextObjectiveId === "string" &&
+            !status.selectedNextObjectiveId
+          ) {
+            status.selectedNextObjectiveId = objective.nextObjectiveId;
+          }
 
-              // If we're at a win_encounter_at_location objective, set to completed if we won
-              else if (task === "win_encounter_at_location") {
-                if (taskUpdate.text === "Won" && user.sector === objective.sector) {
+          // If objective has a location (sector & longitude/latitude), set to completed.
+          // A placement-bound objective is also satisfied when the player is interacting
+          // with that placement (atPlacementIds), since the placement is authoritative
+          // over the objective's stored coordinates.
+          if (isObjectiveLocationSatisfied(user, objective, atPlacementIds)) {
+            if (task === "move_to_location") {
+              notifications.push(`You arrived at destination for ${quest.name}.`);
+              status.done = true;
+            } else if (
+              status.partyEffectsApplied &&
+              (task === "collect_item" || task === "deliver_item")
+            ) {
+              // Joining can copy an earlier shared goal over a completed personal one.
+              // Its inventory receipt still proves completion for this attempt.
+              status.done = true;
+            } else if (
+              task === "collect_item" &&
+              (!questTracker.party || applyPartyEffects) &&
+              "item_name" in objective &&
+              "collectItemIds" in objective &&
+              objective.collectItemIds
+            ) {
+              let doCollect = true;
+              if (
+                "collect_time_minutes" in objective &&
+                objective.collect_time_minutes
+              ) {
+                if ("timestamp" in status && status.timestamp) {
+                  if (
+                    Date.now() <
+                    getCollectDeadline(
+                      status,
+                      objective.collect_time_minutes,
+                    )!.getTime()
+                  ) {
+                    doCollect = false;
+                  }
+                } else {
+                  // Snapshot once so later passive changes cannot alter a running collection.
+                  const bonuses =
+                    quest.questType === "gathering"
+                      ? getActivityBonuses(user)
+                      : undefined;
+                  const seconds = reduceActivitySeconds(
+                    objective.collect_time_minutes * 60,
+                    bonuses?.gatheringReductionPercent ?? 0,
+                  );
+                  const startedAt = Date.now();
+                  status.timestamp = new Date(startedAt).toISOString();
+                  status.collectDeadline = new Date(
+                    startedAt + seconds * 1000,
+                  ).toISOString();
+                  status.gatheringBonusQuantity = bonuses?.gatheringBonusQuantity;
+                  notifications.push(
+                    `You started collecting. This will take ${formatSecondsToTimeDisplay(seconds)}.`,
+                  );
+                  doCollect = false;
+                }
+              }
+              if (doCollect) {
+                // An untimed collection starts and completes in this same evaluation.
+                if (
+                  quest.questType === "gathering" &&
+                  !(
+                    "collect_time_minutes" in objective &&
+                    objective.collect_time_minutes
+                  )
+                )
+                  status.gatheringBonusQuantity =
+                    getActivityBonuses(user).gatheringBonusQuantity;
+                consequences.push({
+                  type: "add_item",
+                  ids: objective.collectItemIds,
+                });
+                if (questTracker.party || status.partyEffectsApplied === false)
+                  status.partyEffectsApplied = true;
+                status.done = true;
+              } else {
+                questIdsUpdated.push(quest.id);
+              }
+            } else if (
+              task === "deliver_item" &&
+              (!questTracker.party || applyPartyEffects) &&
+              "item_name" in objective &&
+              "deliverItemIds" in objective &&
+              objective.deliverItemIds
+            ) {
+              // Verify user has these items
+              const check = objective.deliverItemIds.every((id) =>
+                user.useritems?.some((ui) => ui.itemId === id),
+              );
+              if (!check) {
+                notifications.push(
+                  `You don't have ${objective.item_name} to deliver for ${quest.name}.`,
+                );
+                return;
+              }
+              // Remove items & complete objective
+              notifications.push(`Delivered ${objective.item_name} for ${quest.name}.`);
+              consequences.push({
+                type: "remove_item",
+                ids: objective.deliverItemIds,
+              });
+              if (questTracker.party || status.partyEffectsApplied === false)
+                status.partyEffectsApplied = true;
+              status.done = true;
+            } else if (task === "defeat_opponents" && opponentIds.length > 0) {
+              if (!opponentIds.includes(taskUpdate.contentId || "1337")) {
+                putInCombat();
+              }
+            }
+          }
+
+          // If user has a pending collect timer but left the location, reset the timer
+          else if (
+            task === "collect_item" &&
+            "collect_time_minutes" in objective &&
+            objective.collect_time_minutes &&
+            status.timestamp &&
+            !status.done
+          ) {
+            status.timestamp = undefined;
+            status.collectDeadline = undefined;
+            status.gatheringBonusQuantity = undefined;
+            notifications.push(
+              `${GATHERING_CANCEL_PREFIX} for ${quest.name}: you left the collection area.`,
+            );
+          }
+
+          // If we're at a win_encounter_at_location objective, set to completed if we won
+          else if (task === "win_encounter_at_location") {
+            if (taskUpdate.text === "Won" && user.sector === objective.sector) {
+              status.done = true;
+            }
+          }
+
+          // Defeating specific opponents
+          if (
+            ["start_battle", "defeat_opponents"].includes(task) &&
+            "opponentAIs" in objective &&
+            opponentIds.length > 0
+          ) {
+            if (
+              questTracker.party &&
+              combatContext?.questTeamStillFighting &&
+              taskUpdate.text !== "Won"
+            )
+              return;
+            if (
+              killCounts &&
+              (!(
+                quest.content.entryItems?.length ||
+                quest.content.isolated ||
+                (quest.questType === "battlepyramid" && quest.questVersion)
+              ) ||
+                (combatContext?.questBattleSource?.questId === quest.id &&
+                  combatContext.questBattleSource.objectiveId === objective.id)) &&
+              taskUpdate.text &&
+              opponentIds.includes(taskUpdate.contentId || "1337")
+            ) {
+              const completionOutcome = objective.completionOutcome || "Win";
+              if (completionOutcome === "Any") {
+                status.done = true;
+              }
+              if (taskUpdate.text === "Won") {
+                if (objective.successDescription) {
+                  notifications.push(objective.successDescription);
+                }
+                if (completionOutcome === "Win") {
+                  status.done = true;
+                }
+              } else if (taskUpdate.text === "Lost") {
+                if (objective.failDescription) {
+                  notifications.push(objective.failDescription);
+                }
+                if (completionOutcome === "Lose") {
+                  status.done = true;
+                }
+                if (task === "start_battle") {
+                  status.recentlyDied = true;
+                }
+              } else if (taskUpdate.text === "Draw") {
+                if (objective.drawDescription) {
+                  notifications.push(objective.drawDescription);
+                }
+                if (completionOutcome === "Draw") {
+                  status.done = true;
+                }
+              } else if (taskUpdate.text === "Fled") {
+                if (objective.fleeDescription) {
+                  notifications.push(objective.fleeDescription);
+                }
+                if (completionOutcome === "Flee") {
                   status.done = true;
                 }
               }
-
-              // Defeating specific opponents
               if (
-                status &&
-                ["start_battle", "defeat_opponents"].includes(task) &&
-                "opponentAIs" in objective &&
-                opponentIds.length > 0
+                !status.done &&
+                "failObjectiveId" in objective &&
+                objective.failObjectiveId
               ) {
-                if (
-                  questTracker?.party &&
-                  combatContext?.questTeamStillFighting &&
-                  taskUpdate.text !== "Won"
-                )
-                  return;
-                if (
-                  killCounts &&
-                  (!(
-                    quest.content.entryItems?.length ||
-                    quest.content.isolated ||
-                    (quest.questType === "battlepyramid" && quest.questVersion)
-                  ) ||
-                    (combatContext?.questBattleSource?.questId === quest.id &&
-                      combatContext.questBattleSource.objectiveId === objective.id)) &&
-                  taskUpdate.text &&
-                  opponentIds.includes(taskUpdate.contentId || "1337")
-                ) {
-                  const completionOutcome = objective.completionOutcome || "Win";
-                  if (completionOutcome === "Any") {
-                    status.done = true;
-                  }
-                  if (taskUpdate.text === "Won") {
-                    if (objective.successDescription) {
-                      notifications.push(objective.successDescription);
-                    }
-                    if (completionOutcome === "Win") {
-                      status.done = true;
-                    }
-                  } else if (taskUpdate.text === "Lost") {
-                    if (objective.failDescription) {
-                      notifications.push(objective.failDescription);
-                    }
-                    if (completionOutcome === "Lose") {
-                      status.done = true;
-                    }
-                    if (task === "start_battle") {
-                      status.recentlyDied = true;
-                    }
-                  } else if (taskUpdate.text === "Draw") {
-                    if (objective.drawDescription) {
-                      notifications.push(objective.drawDescription);
-                    }
-                    if (completionOutcome === "Draw") {
-                      status.done = true;
-                    }
-                  } else if (taskUpdate.text === "Fled") {
-                    if (objective.fleeDescription) {
-                      notifications.push(objective.fleeDescription);
-                    }
-                    if (completionOutcome === "Flee") {
-                      status.done = true;
-                    }
-                  }
-                  if (
-                    !status.done &&
-                    "failObjectiveId" in objective &&
-                    objective.failObjectiveId
-                  ) {
-                    status.selectedNextObjectiveId = objective.failObjectiveId;
-                    status.done = true;
-                  }
-                }
+                status.selectedNextObjectiveId = objective.failObjectiveId;
+                status.done = true;
               }
-
-              // Handle manual retriggering of start_battle objectives
-              if (task === "start_battle" && taskUpdate.text === "retry") {
-                status.recentlyDied = false;
-                putInCombat();
-                return;
-              }
-            });
-          if ("value" in objective && status.value >= objective.value) {
-            status.done = true;
-            // Latch an earned completion before its source content can be retired.
-            // Goals already done return above, so passive reads request this write once.
-            if (isInArray(task, CompletionTasks))
-              consequences.push({ type: "update_user", ids: ["activity_completion"] });
+            }
           }
 
-          // If status is now done, then add quest id to list of updated quests
-          if (status.done) {
-            questIdsUpdated.push(quest.id);
+          // Handle manual retriggering of start_battle objectives
+          if (task === "start_battle" && taskUpdate.text === "retry") {
+            status.recentlyDied = false;
+            putInCombat();
+            return;
           }
-          return status;
         });
-        return questTracker;
+      if ("value" in objective && status.value >= objective.value) {
+        status.done = true;
+        // Latch an earned completion before its source content can be retired.
+        // Goals already done return above, so passive reads request this write once.
+        if (isInArray(task, CompletionTasks))
+          consequences.push({ type: "update_user", ids: ["activity_completion"] });
       }
-      return undefined;
-    })
-    .filter((q): q is QuestTrackerType => !!q);
+
+      // If status is now done, then add quest id to list of updated quests
+      if (status.done) {
+        questIdsUpdated.push(quest.id);
+      }
+      return status;
+    });
+    return questTracker;
+  });
 
   // Hidden Pyramids pause without losing their checkpoint; never evaluate their objectives.
   trackers.push(
@@ -1953,6 +1037,303 @@ export const getNewTrackers = (
     consequences,
     questIdsUpdated,
   };
+};
+
+/**
+ * Resolve a goal's map location: recover masked placeholders, roll sector and coordinates,
+ * follow public landmarks and completed predecessors. The result is written onto the shared
+ * objective, which every later reader of this quest expects to see instantiated.
+ */
+const instantiateGoalLocation = (
+  user: TrackerUser,
+  quest: Pick<Quest, "content" | "publicLocations">,
+  questTracker: QuestTrackerType,
+  objective: AllObjectivesType,
+  status: ObjectiveTrackerType,
+  consequences: QuestConsequence[],
+) => {
+  // Older masked snapshots could persist the public placeholder as a real target.
+  // Recover only those fields; valid rolls and completion/progress stay authoritative.
+  const hasMaskedLocation =
+    status.sector === 1337 || status.longitude === 1337 || status.latitude === 1337;
+  if (hasMaskedLocation) {
+    if (status.sector === 1337) {
+      delete status.sector;
+      if (!("sectorType" in objective) && "sector" in objective) {
+        status.sector = objective.sector;
+      }
+    }
+    if (status.longitude === 1337) {
+      delete status.longitude;
+      if (!("locationType" in objective) && "longitude" in objective) {
+        status.longitude = objective.longitude;
+      }
+    }
+    if (status.latitude === 1337) {
+      delete status.latitude;
+      if (!("locationType" in objective) && "latitude" in objective) {
+        status.latitude = objective.latitude;
+      }
+    }
+    delete status.locationChecked;
+    consequences.push({ type: "update_user", ids: ["location_update"] });
+  }
+
+  if ("sectorType" in objective && status.sector === undefined) {
+    if (objective.sectorType === "specific") {
+      status.sector = objective.sector;
+    } else if (objective.sectorType === "random") {
+      status.sector = pickPlaceableSector();
+    } else if (objective.sectorType === "from_list") {
+      if (objective.sectorList.length === 0) {
+        status.sector = pickPlaceableSector();
+      } else {
+        status.sector = Number(getRandomElement(objective.sectorList));
+      }
+    } else if (objective.sectorType === "user_village") {
+      status.sector = user?.village?.sector || user.sector;
+    } else if (objective.sectorType === "current_sector") {
+      status.sector = user.sector;
+    } else if (objective.sectorType === "enemy_village") {
+      // Find an active war and get the enemy village sector
+      for (const w of user.activeWars ?? []) {
+        const side = getWarSide(w, user.villageId);
+        if (side) {
+          status.sector =
+            side === w.attackerVillageId
+              ? w.defenderVillage.sector
+              : w.attackerVillage.sector;
+          break;
+        }
+      }
+
+      // Fallback to random sector if no war found
+      if (status.sector === undefined) {
+        status.sector = pickPlaceableSector();
+      }
+    }
+    if (status.sector !== undefined) {
+      consequences.push({ type: "update_user", ids: ["location_update"] });
+    }
+  }
+
+  // Public landmarks share one canonical entrance across all accepted attempts.
+  if (
+    quest.publicLocations &&
+    objective.structureAssetId &&
+    "sectorType" in objective &&
+    objective.sectorType === "specific" &&
+    "locationType" in objective &&
+    objective.locationType === "specific" &&
+    (status.sector !== objective.sector ||
+      status.longitude !== objective.longitude ||
+      status.latitude !== objective.latitude)
+  ) {
+    status.sector = objective.sector;
+    status.longitude = objective.longitude;
+    status.latitude = objective.latitude;
+    status.locationChecked = false;
+    consequences.push({ type: "update_user", ids: ["location_update"] });
+  }
+
+  // If locationType is not specific, update the location accordingly
+  if (
+    "locationType" in objective &&
+    (status.longitude === undefined || status.latitude === undefined)
+  ) {
+    if (objective.locationType === "specific") {
+      status.longitude = objective.longitude;
+      status.latitude = objective.latitude;
+    } else if (objective.locationType === "random") {
+      status.longitude = Math.ceil(Math.random() * (SECTOR_WIDTH - 1));
+      status.latitude = Math.ceil(Math.random() * (SECTOR_HEIGHT - 1));
+    }
+    if (status.longitude !== undefined && status.latitude !== undefined) {
+      consequences.push({ type: "update_user", ids: ["location_update"] });
+    }
+  }
+
+  // If a dialog, find any previous objective pointing to this one, and set the location to the same location
+  const previousObjective = findCompletedPredecessor(
+    quest.content.objectives,
+    objective.id,
+    questTracker,
+  );
+
+  // Implicit dialogs follow live NPC positions, never a bound objective's fallback coordinates.
+  let locationPredecessor = previousObjective;
+  const visited = new Set([objective.id]);
+  while (
+    locationPredecessor?.task === "dialog" &&
+    !locationPredecessor.overworldPlacementId &&
+    locationPredecessor.sector === undefined &&
+    locationPredecessor.longitude === undefined &&
+    locationPredecessor.latitude === undefined &&
+    !visited.has(locationPredecessor.id)
+  ) {
+    visited.add(locationPredecessor.id);
+    locationPredecessor = findCompletedPredecessor(
+      quest.content.objectives,
+      locationPredecessor.id,
+      questTracker,
+    );
+  }
+  const hasBoundLocation =
+    objective.task === "dialog" &&
+    !objective.overworldPlacementId &&
+    !!locationPredecessor?.overworldPlacementId &&
+    isSupportedOverworldBindingTask(locationPredecessor.task);
+  if (hasBoundLocation) {
+    for (const field of ["sector", "longitude", "latitude"] as const) {
+      if (objective[field] === undefined && status[field] !== undefined) {
+        delete status[field];
+        delete status.locationChecked;
+        consequences.push({ type: "update_user", ids: ["location_update"] });
+      }
+    }
+  }
+
+  if (previousObjective && !hasBoundLocation) {
+    if (status.sector === undefined && "sector" in previousObjective) {
+      status.sector = previousObjective.sector;
+      consequences.push({ type: "update_user", ids: [`sector_update`] });
+    }
+    if (status.longitude === undefined && "longitude" in previousObjective) {
+      status.longitude = previousObjective.longitude;
+      consequences.push({ type: "update_user", ids: [`longitude_update`] });
+    }
+    if (status.latitude === undefined && "latitude" in previousObjective) {
+      status.latitude = previousObjective.latitude;
+      consequences.push({ type: "update_user", ids: [`latitude_update`] });
+    }
+  }
+
+  // If we have a location on the status (i.e. instantiated for the user, overwrite objective)
+  if ("sector" in objective) {
+    if (status.longitude !== undefined) objective.longitude = status.longitude;
+    if (status.latitude !== undefined) objective.latitude = status.latitude;
+    if (status.sector !== undefined) objective.sector = status.sector;
+    if ("locationType" in objective) {
+      objective.locationType = "specific";
+    }
+  }
+};
+
+/** Overwrite a goal's value from player state on every evaluation. */
+const evaluatePassiveGoalValue = (
+  user: TrackerUser,
+  questTracker: QuestTrackerType,
+  objective: AllObjectivesType,
+  status: ObjectiveTrackerType,
+  isInMemoryOnlyAchievement: boolean,
+  consequences: QuestConsequence[],
+) => {
+  const task = objective.task;
+  const isKage = user.village?.kageId === user.userId;
+
+  // General updates we want to apply every time. Team progress treats these
+  // overwrites as snapshots: keep PassiveSnapshotTasks in step with them.
+  if (objective.task === "bloodline_collection") {
+    // Sum the selected rank snapshots; no rank has an implicit exemption.
+    const progress = user.bloodlineCollectionProgress
+      ?.filter((entry) => objective.bloodlineRanks.includes(entry.rank))
+      .reduce(
+        (total, entry) => ({
+          collected: total.collected + entry.collected,
+          total: total.total + entry.total,
+        }),
+        { collected: 0, total: 0 },
+      );
+    if (progress) {
+      const isComplete = progress.total > 0 && progress.collected === progress.total;
+      if (
+        (isComplete || !isInMemoryOnlyAchievement) &&
+        (status.value !== progress.collected ||
+          status.target !== progress.total ||
+          status.done !== isComplete)
+      ) {
+        consequences.push({
+          type: "update_user",
+          ids: ["bloodline_collection_update"],
+        });
+      }
+      status.value = progress.collected;
+      status.target = progress.total;
+      // An empty catalogue cannot award a collection achievement. Done goals are
+      // retained above, so catalogue growth never revokes a recorded completion.
+      status.done = isComplete;
+    }
+  } else if (task === "dungeons_completed" && user.dungeonsCompleted !== undefined) {
+    status.value = Number(user.dungeonsCompleted);
+  } else if (task === "raids_completed" && user.raidsCompleted !== undefined) {
+    status.value = Number(user.raidsCompleted);
+  } else if (isInArray(task, Object.values(QuestCompletionTasks))) {
+    // Repeatable quests reset completed; retain lifetime totals and legacy completions.
+    status.value = user.completedQuests.reduce(
+      (total, history) =>
+        history.questType &&
+        QuestCompletionTasks[history.questType as keyof typeof QuestCompletionTasks] ===
+          task
+          ? total + Math.max(history.completed, history.previousCompletes ?? 0)
+          : total,
+      0,
+    );
+  } else if (task === "user_level") {
+    status.value = getUnscaledLevel(user);
+  } else if (task === "farming_level") {
+    status.value = getFarmingLevel(user.farmingExperience);
+  } else if (
+    task === "farming_collection_log" &&
+    typeof user.farmingCollectionCount === "number"
+  ) {
+    status.value = user.farmingCollectionCount;
+  } else if (
+    task === "train_specific_jutsu" &&
+    user.ownedObjectiveJutsus &&
+    objectiveContentIds(objective).length > 0
+  ) {
+    // Learning emits once, and is lost if this objective was not reached yet. A
+    // named jutsu cannot be learned twice, so owning it has to count as well.
+    const owned = user.ownedObjectiveJutsus.filter(({ jutsuId, masteryTypes }) =>
+      matchesContentObjective(objective, {
+        task,
+        contentId: jutsuId,
+        masteryTypes,
+      }),
+    ).length;
+    if (owned > status.value) {
+      status.value = owned;
+      consequences.push({ type: "update_user", ids: ["owned_jutsu_update"] });
+    }
+  } else if (task === "days_in_village") {
+    const days = Math.floor(secondsPassed(user.joinedVillageAt) / 60 / 60 / 24);
+    status.value = days;
+  } else if (task === "days_as_kage" && isKage && user.village) {
+    const seconds = secondsPassed(user.village.leaderUpdatedAt);
+    const days = Math.floor(seconds / 60 / 60 / 24);
+    status.value = days;
+  } else if (task === "reputation_points") {
+    status.value = user.reputationPointsTotal;
+  } else if (task === "minutes_passed") {
+    const minutes = Math.floor(secondsPassed(new Date(questTracker.startAt)) / 60);
+    status.value = minutes;
+  } else if (task.includes("missions_total") || task.includes("crimes_total")) {
+    const type = task.includes("missions") ? "mission" : "crime";
+    const rank = task.split("_")[0]?.toUpperCase() as LetterRank;
+    const field = getQuestCounterFieldName(type, rank);
+    if (field) status.value = user[field];
+  } else if (task === "errands_total") {
+    const field = getQuestCounterFieldName("errand", "D");
+    if (field) status.value = user[field];
+  } else if (task === "medical_experience") {
+    status.value = user.medicalExperience;
+  } else if (task === "crafting_experience") {
+    status.value = user.craftingExperience;
+  } else if (task === "hunting_experience") {
+    status.value = user.huntingExperience;
+  } else if (task === "gathering_experience") {
+    status.value = user.gatheringExperience;
+  }
 };
 
 /**
@@ -2130,1165 +1511,6 @@ export const snapQuestTargetsToReachable = (
   return changed;
 };
 
-/** Build mission-hall categories and copy for village missions or outlaw crimes. */
-export const getMissionHallSettings = (isOutlaw: boolean) => {
-  const type = isOutlaw ? "crime" : "mission";
-  return [
-    {
-      type: "errand",
-      rank: "D",
-      name: "Errand",
-      image: IMG_MISSION_E,
-      description: `Errands typically involve simple tasks such as fetching an item somewhere in the village, delivering groceries, etc.`,
-    },
-    {
-      type: type,
-      rank: "D",
-      name: "D-rank",
-      image: IMG_MISSION_D,
-      description: `D-rank ${type}s are the lowest rank of ${type}s. They are usually simple ${type}s that have a low chance of danger, finding & retrieving items, doing manual labor, or fetching a lost cat`,
-    },
-    {
-      type: type,
-      rank: "C",
-      name: "C-rank",
-      image: IMG_MISSION_C,
-      description: `C-rank ${type}s are the second lowest rank of ${type}s. They are usually ${type}s that have a chance of danger, e.g. escorting a client through friendly territory, etc.`,
-    },
-    {
-      type: type,
-      rank: "B",
-      name: "B-rank",
-      image: IMG_MISSION_B,
-      description: `B-rank ${type}s are the third highest rank of ${type}s. They are usually ${type}s that have a decent chance of danger, e.g. escorting a client through neutral or enemy territory.`,
-    },
-    {
-      type: type,
-      rank: "A",
-      name: "A-rank",
-      image: IMG_MISSION_A,
-      description: `A-rank ${type}s are the second highest rank of ${type}s. They usually have a high chance of danger and are considered to be very difficult, e.g. assassinating a target, etc.`,
-    },
-    ...(isOutlaw
-      ? [
-          {
-            type: "crime" as const,
-            rank: "S" as const,
-            name: "S-rank",
-            image: IMG_MISSION_S,
-            description:
-              "S-rank crimes are dangerous assignments for the strongest outlaws.",
-          },
-        ]
-      : []),
-    {
-      type: "medical",
-      rank: "D",
-      name: "Medical",
-      image: IMG_MISSION_M,
-      description: `Medical quests are specialized missions for medical ninja. These quests focus on healing, medical research, and providing medical assistance to the village.`,
-    },
-    {
-      type: "pvp",
-      rank: "S",
-      name: "PvP",
-      image: IMG_MISSION_PVP,
-      description: `PvP missions involve combat against other players. Test your skills in player versus player battles.`,
-    },
-  ] as const;
-};
-
-/**
- * Quests offered by a Mission Hall tile. PvP and medical tiles list every rank the player can
- * take; the others match their type and rank, so random tiles count what startRandom draws from.
- * The A-rank picker also keeps the village-locked quests of the other classifier, which no other
- * tile can start.
- */
-export const getMissionHallTileQuests = <
-  T extends Pick<Quest, "questType" | "questRank" | "requiredVillage">,
->(
-  setting: Pick<ReturnType<typeof getMissionHallSettings>[number], "type" | "rank">,
-  quests: T[],
-  userRanks: LetterRank[],
-) => {
-  const { type, rank } = setting;
-  if (type === "pvp" || type === "medical") {
-    return quests.filter(
-      (q) => q.questType === type && userRanks.includes(q.questRank),
-    );
-  }
-  return quests.filter(
-    (q) =>
-      q.questRank === rank &&
-      (q.questType === type ||
-        (rank === "A" &&
-          ["mission", "crime"].includes(q.questType) &&
-          !!q.requiredVillage)),
-  );
-};
-
-export const mockAchievementHistoryEntries = (
-  achievements: Quest[],
-  user: Pick<NonNullable<UserWithRelations>, "userId" | "role" | "userQuests">,
-) => {
-  return achievements
-    .filter((q) => !q.hidden || canChangeContent(user.role))
-    .filter((q) => !user.userQuests?.find((uq) => uq.questId === q.id))
-    .map((a) => ({
-      id: a.id,
-      userId: user.userId,
-      questId: a.id,
-      questType: a.questType,
-      completed: 0,
-      previousCompletes: 0,
-      previousAttempts: 0,
-      periodCompletes: 0,
-      periodStartAt: null,
-      pendingRewardChoice: null,
-      entryPaid: false,
-      isolated: false,
-      questVersion: null,
-      quest: a,
-      endAt: null,
-      startedAt: new Date(),
-      /** `id` is the quest id here (placeholder); real `QuestHistory.id` is a nanoid ≠ `questId`. */
-    }));
-};
-
-/**
- * Whether any of a quest's objectives is something the overworld has to draw or act on: a map
- * location, an ambush, a bound NPC placement, or a dialog. The sector view, the world map and
- * `getActiveObjectives` scan `userQuests[].quest.content.objectives` for exactly these.
- *
- * Achievements are lifetime counters and normally carry none of it, which is what lets
- * `quests.getAchievementCatalogue` publish them for the client to cache instead of `getUser`
- * re-sending them. An authored exception is withheld from the catalogue and keeps travelling on
- * the user object, so the overworld still sees it.
- *
- * A stored coordinate counts even when it is zero. Sector 0 is a real sector
- * (`MAP_SECTOR_ID_MIN`) and (0, 0) is a real tile, so the test is whether the objective carries
- * the field at all - a counter objective has no coordinate keys whatsoever. `attackers` and
- * `opponentAIs` are the other way round: nearly every objective serialises them as empty arrays,
- * so only a populated one means anything.
- */
-/**
- * The achievements whose definitions `quests.getAchievementCatalogue` publishes for the client to
- * cache, and therefore exactly the ones `profile.getUser` may send as progress alone.
- *
- * Both sides read this one list, cut from the raw catalogue, rather than re-deciding on their own
- * copy: `fetchUpdatedUser` rewrites the objectives of its quests - trackers write resolved
- * coordinates back onto them, and location hiding rewrites them again - so a predicate applied
- * after that and one applied to the raw row can disagree, and a progress row whose definition the
- * catalogue withholds renders nothing at all.
- */
-export const publishedAchievementsOf = <T extends Quest>(catalogue: T[]) =>
-  catalogue.filter((achievement) => !questHasOverworldObjectives(achievement));
-
-export const questHasOverworldObjectives = (quest: Quest) =>
-  quest.content.objectives.some(
-    (objective) =>
-      "sector" in objective ||
-      "longitude" in objective ||
-      "latitude" in objective ||
-      "hideLocation" in objective ||
-      ("overworldPlacementId" in objective && !!objective.overworldPlacementId) ||
-      ("attackers" in objective && (objective.attackers?.length ?? 0) > 0) ||
-      ("opponentAIs" in objective && (objective.opponentAIs?.length ?? 0) > 0) ||
-      objective.task === "dialog",
-  );
-
-/** Projects private quest state for client responses without changing server-owned trackers. */
-export const getPublicQuestUser = <
-  T extends Pick<UserData, "questData" | "sector" | "role"> & {
-    userQuests: { quest?: Pick<Quest, "id" | "content"> | null }[];
-    questParty?: unknown;
-  },
->(
-  user: T,
-): T => {
-  const responseUser = {
-    ...user,
-    userQuests: structuredClone(user.userQuests),
-    questData: structuredClone(user.questData),
-  };
-  // Party members' private trackers and invitation lists are never part of profile responses.
-  delete responseUser.questParty;
-  responseUser.userQuests.forEach((entry) => {
-    controlShownQuestLocationInformation(entry.quest, responseUser);
-  });
-  return responseUser;
-};
-
-/**
- * Hides the location information of quest objectives if certain conditions are met.
- *
- * @param quest - The quest object containing objectives.
- * @param user - Optional user data to check against objective sectors.
- *
- * This function iterates over each objective in the quest's content. If an objective has the
- * `hideLocation` property set to true and the user's sector does not match the objective's sector,
- * it will obfuscate the objective's location by setting its latitude, longitude, and sector to 1337.
- */
-export const controlShownQuestLocationInformation = (
-  quest?: Pick<Quest, "id" | "content"> | null,
-  user?: Pick<UserData, "questData" | "sector" | "role">,
-) => {
-  const tracker = user?.questData?.find((q) => q.id === quest?.id);
-  quest?.content.objectives.forEach((objective) => {
-    // If we have a tracker which specifies the location, use that (e.g. from random sectors etc)
-    const status = tracker?.goals.find((goal) => goal.id === objective.id);
-    if (tracker && status) {
-      if ("sector" in status) {
-        objective.sector = status.sector;
-      }
-      if ("longitude" in status && status.longitude !== undefined) {
-        objective.longitude = status.longitude;
-      }
-      if ("latitude" in status && status.latitude !== undefined) {
-        objective.latitude = status.latitude;
-      }
-    }
-
-    // If we should hide the location, hide it when the user is not in the sector
-    if (
-      "hideLocation" in objective &&
-      objective.hideLocation &&
-      user?.sector !== objective.sector &&
-      !canChangeContent(user?.role || "USER")
-    ) {
-      if (status) {
-        delete status.sector;
-        delete status.longitude;
-        delete status.latitude;
-      }
-      objective.latitude = 1337;
-      objective.longitude = 1337;
-      objective.sector = 1337;
-      objective.sectorType = "specific";
-      objective.sectorList = ["1337"];
-      objective.locationType = "specific";
-    }
-  });
-};
-
-/**
- * Extend only legacy quests capped at the XP ceiling; milestone and other explicit caps
- * retain their authored level bounds.
- */
-export const getQuestMaxLevel = (quest: {
-  maxLevel: number;
-  content?: { reward?: { reward_level?: number } } | null;
-}) =>
-  quest.maxLevel === MAX_EXPERIENCE_LEVEL && !quest.content?.reward?.reward_level
-    ? MAX_PLAYER_LEVEL
-    : quest.maxLevel;
-
-/**
- * Checks whether a quest is currently available to a user, including sage mode
- * (`requiredSageModeId`) and minimum sage mastery rank (`requiredSageRank`).
- *
- * @param questAndUserQuestInfo - The quest object to be checked.
- * @param user - User whose permissions, progression, and completed prerequisites are checked.
- * @param ignorePreviousAttempts - Whether to ignore the lifetime attempt cap.
- * @returns The combined availability decision and user-facing reasons for failed checks.
- */
-export const isAvailableUserQuests = (
-  questAndUserQuestInfo: MasteryRequirementFields & {
-    content?: Pick<QuestContentType, "reward" | "rewardMode"> &
-      Partial<Pick<QuestContentType, "objectives">>;
-    hidden: boolean;
-    maxAttempts: number;
-    maxCompletes: number;
-    questType: QuestType;
-    startsAt?: string | null;
-    endsAt?: string | null;
-    requiredVillage: string | null;
-    requiredBloodlineId?: string | null;
-    requiredSageModeId?: string | null;
-    requiredSageRank?: SAGE_MASTERY_RANK | null;
-    prerequisiteQuestId?: string | null;
-    previousAttempts?: number | null;
-    previousCompletes?: number | null;
-    completed?: number | null;
-    endAt?: Date | string | null;
-    retryDelay: RetryQuestDelay;
-    periodCompletes?: number | null;
-    periodStartAt?: Date | string | null;
-    medicalRank?: MEDNIN_RANK | null;
-    huntingRank?: HUNTING_RANK | null;
-    gatheringRank?: GATHERING_RANK | null;
-    requiredLevel?: number | null;
-    requiredFarmingLevel?: number | null;
-    maxLevel?: number | null;
-  },
-  user: UserData & {
-    completedQuests: { id: string; questId: string; completed?: number }[];
-  },
-  ignorePreviousAttempts = false,
-  isConcurrentWarMission = false,
-) => {
-  if (
-    questAndUserQuestInfo.questType === "war" &&
-    !hasRequiredRank(user.rank, WAR_MISSION_REQUIRED_RANK)
-  )
-    return {
-      check: false,
-      message: `War missions require ${capitalizeFirstLetter(WAR_MISSION_REQUIRED_RANK)} rank or higher`,
-    };
-  if (
-    !isConcurrentWarMission &&
-    questAndUserQuestInfo.content?.objectives?.some(
-      (o) => o.task === "espionage" || o.task === "sabotage",
-    )
-  )
-    return {
-      check: false,
-      message: "Start this concurrent war mission from the townhall war objectives",
-    };
-  // Derived Data
-  const maxAttempts = questAndUserQuestInfo.maxAttempts;
-  const maxCompletes = questAndUserQuestInfo.maxCompletes;
-  const questMedRank = questAndUserQuestInfo.medicalRank;
-  const userMedRank = calcMedninRank({
-    medicalExperience: user.medicalExperience,
-    rank: user.rank,
-  });
-  const reqMedRankIdx = questMedRank ? MEDNIN_RANKS.indexOf(questMedRank) : null;
-  const userMedRankIdx = MEDNIN_RANKS.indexOf(userMedRank);
-  const questHuntRank = questAndUserQuestInfo.huntingRank;
-  const userHuntRank = getHuntingRank(user.huntingExperience);
-  const reqHuntRankIdx = questHuntRank ? HUNTING_RANKS.indexOf(questHuntRank) : null;
-  const userHuntRankIdx = HUNTING_RANKS.indexOf(userHuntRank);
-  const questGatherRank = questAndUserQuestInfo.gatheringRank;
-  const userGatherRank = getGatheringRank(user.gatheringExperience);
-  const reqGatherRankIdx = questGatherRank
-    ? GATHERING_RANKS.indexOf(questGatherRank)
-    : null;
-  const userGatherRankIdx = GATHERING_RANKS.indexOf(userGatherRank);
-
-  // Exams read stored mastery only; temporary combat and equipment modifiers cannot qualify.
-  const baseMasteries = {
-    ...user,
-    ...("baseStatsForModifiers" in user
-      ? (user.baseStatsForModifiers as Partial<UserData>)
-      : {}),
-  };
-  const masteryCheck = MASTERY_REQUIREMENT_FIELDS.every(
-    ([field, stat]) =>
-      !questAndUserQuestInfo[field] ||
-      (baseMasteries[stat] ?? 0) >= (questAndUserQuestInfo[field] ?? 0),
-  );
-  const completionReward = questAndUserQuestInfo.content?.reward;
-  // Choice packages promote only when picked; the direct promotion pays at completion.
-  const promotion =
-    !isRewardChoiceQuest(questAndUserQuestInfo.content) &&
-    completionReward?.reward_packages?.length
-      ? collapseRewards(rewardPayloads(completionReward))
-      : completionReward;
-  const promotionCheck =
-    !promotion ||
-    !hasMasteryPromotion(promotion) ||
-    canPromoteMastery(
-      baseMasteries,
-      promotion.reward_mastery_stat,
-      promotion.reward_mastery_rank,
-    );
-  // Any possible promotion path must satisfy the exam, including objectives and choices.
-  const hasEliteExamReward =
-    promotion?.reward_rank === "ELITE JONIN" ||
-    completionReward?.reward_packages?.some(
-      (pack) => pack.rewards.reward_rank === "ELITE JONIN",
-    ) ||
-    questAndUserQuestInfo.content?.objectives?.some(
-      (objective) =>
-        objective.reward_rank === "ELITE JONIN" ||
-        objective.reward_packages?.some(
-          (pack) => pack.rewards.reward_rank === "ELITE JONIN",
-        ),
-    );
-  const examBlock = hasEliteExamReward
-    ? eliteJoninExamBlockMessage(baseMasteries)
-    : null;
-  const milestoneBlock = completionReward?.reward_level
-    ? eliteJoninMilestoneBlockMessage(user, completionReward.reward_level)
-    : null;
-  // Checks
-  const now = new Date();
-  const hideCheck = !questAndUserQuestInfo.hidden || canPlayHiddenQuests(user.role);
-  const startsCheck =
-    !questAndUserQuestInfo.startsAt || new Date(questAndUserQuestInfo.startsAt) <= now;
-  const expiresCheck = !hasEndDatePassed(questAndUserQuestInfo.endsAt, now);
-  const villageCheck =
-    !questAndUserQuestInfo.requiredVillage ||
-    questAndUserQuestInfo.requiredVillage === user.villageId ||
-    (questAndUserQuestInfo.requiredVillage === VILLAGE_SYNDICATE_ID && user.isOutlaw);
-  const bloodlineCheck =
-    !questAndUserQuestInfo.requiredBloodlineId ||
-    questAndUserQuestInfo.requiredBloodlineId === user.bloodlineId;
-  const sageModeCheck =
-    !questAndUserQuestInfo.requiredSageModeId ||
-    questAndUserQuestInfo.requiredSageModeId === user.sageModeId;
-  const sageRankCheck =
-    !questAndUserQuestInfo.requiredSageRank ||
-    isSageRankAtLeast(
-      getSageMasteryDisplayRank(user.sageMasteryExperience, !!user.sageModeId),
-      questAndUserQuestInfo.requiredSageRank,
-    );
-
-  // Medical rank check for quests that require it
-  const medicalRankCheck = !reqMedRankIdx || userMedRankIdx >= reqMedRankIdx;
-  const huntingRankCheck = !reqHuntRankIdx || userHuntRankIdx >= reqHuntRankIdx;
-  const gatheringRankCheck = !reqGatherRankIdx || userGatherRankIdx >= reqGatherRankIdx;
-  const farmingLevelCheck =
-    questAndUserQuestInfo.questType === "daily" ||
-    !questAndUserQuestInfo.requiredFarmingLevel ||
-    getFarmingLevel(user.farmingExperience) >=
-      questAndUserQuestInfo.requiredFarmingLevel;
-
-  // Level check - user must be >= requiredLevel and <= maxLevel
-  // Use originalLevel if available (for combat-scaled users), otherwise use current level
-  const userLevel =
-    "originalLevel" in user && typeof user.originalLevel === "number"
-      ? user.originalLevel
-      : (user.level ?? 1);
-  // The cap gates entering a Pyramid; a run's own fights can carry the player past it.
-  const maxLevel = isOpenPyramidRun(questAndUserQuestInfo)
-    ? null
-    : questAndUserQuestInfo.maxLevel;
-  const levelCheck =
-    (!questAndUserQuestInfo.requiredLevel ||
-      userLevel >= questAndUserQuestInfo.requiredLevel) &&
-    (!maxLevel ||
-      userLevel <=
-        getQuestMaxLevel({
-          maxLevel,
-          content: questAndUserQuestInfo.content,
-        }));
-
-  // Lifetime completion cap. Period-capped quests (retryDelay != "none") are gated solely by
-  // periodCapCheck below; applying the lifetime cap to them as well would permanently block a
-  // repeatable quest once its lifetime completions reached maxCompletes.
-  const eventCompletedCheck =
-    !QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType) ||
-    questAndUserQuestInfo.retryDelay !== "none" ||
-    !questAndUserQuestInfo.previousCompletes ||
-    questAndUserQuestInfo.previousCompletes < maxCompletes;
-  const eventAttemptsCheck =
-    ignorePreviousAttempts ||
-    !QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType) ||
-    !questAndUserQuestInfo.previousAttempts ||
-    questAndUserQuestInfo.previousAttempts < maxAttempts;
-
-  // Per-period completion cap (only meaningful when retryDelay != none). Special
-  // quests consume another item for each attempt, so completion caps do not apply.
-  const periodCapCheck =
-    questAndUserQuestInfo.questType === "special" ||
-    !periodCapReached({
-      retryDelay: questAndUserQuestInfo.retryDelay,
-      maxCompletes,
-      periodCompletes: questAndUserQuestInfo.periodCompletes,
-      periodStartAt: questAndUserQuestInfo.periodStartAt,
-    });
-
-  // Check if prerequisite quest is completed
-  const prerequisiteCheck =
-    !questAndUserQuestInfo.prerequisiteQuestId ||
-    user.completedQuests?.some((q) => {
-      return (
-        q.questId === questAndUserQuestInfo.prerequisiteQuestId && q.completed === 1
-      );
-    });
-
-  // Check if quest is available
-  const check =
-    hideCheck &&
-    startsCheck &&
-    expiresCheck &&
-    eventCompletedCheck &&
-    eventAttemptsCheck &&
-    periodCapCheck &&
-    villageCheck &&
-    bloodlineCheck &&
-    sageModeCheck &&
-    sageRankCheck &&
-    masteryCheck &&
-    promotionCheck &&
-    !examBlock &&
-    !milestoneBlock &&
-    prerequisiteCheck &&
-    medicalRankCheck &&
-    huntingRankCheck &&
-    gatheringRankCheck &&
-    farmingLevelCheck &&
-    levelCheck;
-
-  // If quest is not available, return the reason
-  let message = "";
-  if (!hideCheck) message += "Quest is hidden\n";
-  if (!startsCheck) message += "Quest starts in the future\n";
-  if (!expiresCheck) message += "Quest has expired\n";
-  if (!eventCompletedCheck) message += "Quest has been completed too many times\n";
-  if (!eventAttemptsCheck) message += "Quest has been attempted too many times\n";
-  if (!periodCapCheck) message += "Quest limit for this period reached\n";
-  if (!villageCheck) message += "Quest is not available in your village\n";
-  if (!bloodlineCheck) message += "Quest requires a specific bloodline\n";
-  if (!sageModeCheck) message += "Quest requires a specific sage mode\n";
-  if (!sageRankCheck) message += "Quest requires a higher sage mode rank\n";
-  if (!masteryCheck)
-    message +=
-      "Quest requires more earned mastery (equipment and bloodline bonuses do not count)\n";
-  if (!promotionCheck) message += "Quest requires the previous mastery rank\n";
-  if (examBlock) message += `${examBlock}\n`;
-  if (milestoneBlock) message += `${milestoneBlock}\n`;
-  if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
-  if (!medicalRankCheck)
-    message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;
-  if (!huntingRankCheck)
-    message += `Quest requires hunting rank ${capitalizeFirstLetter(questHuntRank ?? "NONE")}\n`;
-  if (!gatheringRankCheck)
-    message += `Quest requires gathering rank ${capitalizeFirstLetter(questGatherRank ?? "NONE")}\n`;
-  if (!farmingLevelCheck)
-    message += `Quest requires farming level ${questAndUserQuestInfo.requiredFarmingLevel}\n`;
-  if (!levelCheck) {
-    if (
-      questAndUserQuestInfo.requiredLevel &&
-      userLevel < questAndUserQuestInfo.requiredLevel
-    ) {
-      message += `Quest requires level ${questAndUserQuestInfo.requiredLevel}\n`;
-    }
-    if (maxLevel && userLevel > maxLevel) {
-      message += `Quest is only available up to level ${maxLevel}\n`;
-    }
-  }
-  // Returned detailed info on all the checks
-  return { check, message };
-};
-
-/** Why a quest is not open yet, when the player can work towards it. */
-export type UpcomingBlock =
-  | { kind: "level"; required: number; current: number }
-  | { kind: "mastery"; label: string; required: number; current: number };
-
-/**
- * The level or mastery a quest still needs, or null when it is open now, hidden, or blocked by
- * any other rule. Re-runs `isAvailableUserQuests` with those requirements met, so every other
- * availability rule stays in one place.
- */
-export const getUpcomingQuestBlock = (
-  questInfo: Parameters<typeof isAvailableUserQuests>[0] & MasteryRequirementFields,
-  user: Parameters<typeof isAvailableUserQuests>[1],
-): UpcomingBlock | null => {
-  if (questInfo.hidden) return null;
-  if (isAvailableUserQuests(questInfo, user, true).check) return null;
-  const requiredLevel = questInfo.requiredLevel ?? 1;
-  const relaxed = { ...user, level: Math.max(user.level, requiredLevel) };
-  for (const [field, stat] of MASTERY_REQUIREMENT_FIELDS) {
-    const required = questInfo[field];
-    if (required) relaxed[stat] = Math.max(user[stat] ?? 0, required);
-  }
-  if (!isAvailableUserQuests(questInfo, relaxed, true).check) return null;
-  if (user.level < requiredLevel) {
-    return { kind: "level", required: requiredLevel, current: user.level };
-  }
-  const mastery = missingMasteryRequirement(user, questInfo);
-  return mastery ? { kind: "mastery", ...mastery } : null;
-};
-
-/**
- * Quests a player is close to unlocking, with the requirement each still needs, sorted by
- * required level and then name.
- */
-export const listUpcomingQuests = <
-  T extends Parameters<typeof getUpcomingQuestBlock>[0] & {
-    id: string;
-    name: string;
-    image: string | null;
-    description: string | null;
-    requiredLevel: number;
-    maxLevel: number;
-  },
->(
-  quests: T[],
-  user: Parameters<typeof isAvailableUserQuests>[1],
-) =>
-  quests
-    .flatMap((entry) => {
-      const block = getUpcomingQuestBlock(entry, user);
-      return block
-        ? [
-            {
-              id: entry.id,
-              name: entry.name,
-              image: entry.image,
-              description: entry.description,
-              requiredLevel: entry.requiredLevel,
-              maxLevel: entry.maxLevel,
-              block,
-            },
-          ]
-        : [];
-    })
-    .sort((a, b) => a.requiredLevel - b.requiredLevel || a.name.localeCompare(b.name));
-
-/**
- * Validates that every newly authored dialog option routes to an existing objective. Legacy
- * terminal branches still complete through the runtime sentinel, but new content must express
- * its flow explicitly. This rule applies to every quest, independent of `consecutiveObjectives`.
- */
-export const verifyDialogBranches = (
-  objectives: AllObjectivesType[],
-): { check: boolean; message: string } => {
-  const objectiveIds = new Set(objectives.map((o) => o.id));
-  for (const obj of objectives) {
-    if (obj.task !== "dialog") continue;
-    const nextRef = (obj as { nextObjectiveId?: unknown }).nextObjectiveId;
-    if (!Array.isArray(nextRef) || nextRef.length === 0) {
-      return {
-        check: false,
-        message: `Dialog objective '${obj.id}' must have at least one option`,
-      };
-    }
-    for (const branch of nextRef) {
-      const branchNext = (branch as { nextObjectiveId?: unknown })?.nextObjectiveId;
-      if (typeof branchNext !== "string" || branchNext.length === 0) {
-        return {
-          check: false,
-          message: `Dialog objective '${obj.id}' has an option with no nextObjectiveId`,
-        };
-      }
-      if (!objectiveIds.has(branchNext)) {
-        return {
-          check: false,
-          message: `Dialog objective '${obj.id}' has an option pointing to unknown objective '${branchNext}'`,
-        };
-      }
-    }
-  }
-  return { check: true, message: "" };
-};
-
-/**
- * Verifies that the objective flow is valid according to the following rules:
- * - There can only be one starting objective, i.e. an objective where no other objectives point to it
- * - All objectives must be connected to the starting objective via a chain of nextObjectiveId
- * - All defined nextObjectiveId must be valid, i.e. point to an existing objective
- *
- * @param objectives - The objectives to verify.
- * @returns A boolean indicating whether the objective flow is valid.
- */
-export const verifyQuestObjectiveFlow = (
-  objectives: AllObjectivesType[],
-): { check: boolean; message: string } => {
-  const collectNextIds = (obj: AllObjectivesType) =>
-    objectiveLinks(obj).flatMap((link) => (link.kind === "reset" ? [] : [link.target]));
-
-  try {
-    // ------------------------------------------------------------------
-    // 0. Basic presence check
-    // ------------------------------------------------------------------
-    if (!objectives || objectives.length === 0) {
-      throw new Error("No objectives provided");
-    }
-
-    // Newly authored dialog branches must each route to a next objective.
-    const dialogCheck = verifyDialogBranches(objectives);
-    if (!dialogCheck.check) {
-      throw new Error(dialogCheck.message);
-    }
-
-    // ------------------------------------------------------------------
-    // 1. Build quick lookup map & guard against duplicate ids
-    // ------------------------------------------------------------------
-    const idToObj = new Map<string, AllObjectivesType>();
-    for (const obj of objectives) {
-      if (idToObj.has(obj.id)) {
-        throw new Error(`Duplicate objective id '${obj.id}'`);
-      }
-      idToObj.set(obj.id, obj);
-    }
-
-    // ------------------------------------------------------------------
-    // 2. Build adjacency list while validating references & special rules
-    // ------------------------------------------------------------------
-    const adjacency = new Map<string, string[]>();
-    const referencedIds = new Set<string>();
-
-    for (const obj of objectives) {
-      const neighbours = collectNextIds(obj);
-      if (neighbours.length === 0) {
-        adjacency.set(obj.id, adjacency.get(obj.id) ?? []);
-      }
-
-      for (const nextId of neighbours) {
-        // Self-reference
-        if (nextId === obj.id) {
-          throw new Error(
-            `Objective '${obj.id}' has a self-referencing nextObjectiveId`,
-          );
-        }
-        // Unknown reference
-        if (!idToObj.has(nextId)) {
-          throw new Error(
-            `Objective '${obj.id}' references unknown nextObjectiveId '${nextId}'`,
-          );
-        }
-        referencedIds.add(nextId);
-        const list = adjacency.get(obj.id) ?? [];
-        list.push(nextId);
-        adjacency.set(obj.id, list);
-      }
-    }
-
-    // ------------------------------------------------------------------
-    // 3. Determine unique starting objective (never referenced by others)
-    // ------------------------------------------------------------------
-    const startingIds = objectives
-      .map((o) => o.id)
-      .filter((id) => !referencedIds.has(id));
-
-    if (startingIds.length === 0) {
-      throw new Error("No starting objective found");
-    }
-    if (startingIds.length > 1) {
-      throw new Error(`Multiple starting objectives found: ${startingIds.join(", ")}`);
-    }
-    const startId = startingIds[0];
-    if (!startId) {
-      throw new Error("No starting objective found");
-    }
-
-    // ------------------------------------------------------------------
-    // 4. DFS to detect cycles & ensure reachability
-    // ------------------------------------------------------------------
-    const visited = new Set<string>();
-    const recursionStack = new Set<string>();
-
-    const dfs = (currentId: string): void => {
-      if (recursionStack.has(currentId)) {
-        throw new Error("Cycle detected in objective chain");
-      }
-      if (visited.has(currentId)) return;
-
-      visited.add(currentId);
-      recursionStack.add(currentId);
-
-      const neighbours = adjacency.get(currentId) ?? [];
-      for (const next of neighbours) dfs(next);
-
-      recursionStack.delete(currentId);
-    };
-
-    dfs(startId);
-
-    // All objectives must be reachable from the start
-    if (visited.size !== objectives.length) {
-      const unreachable = objectives.filter((o) => !visited.has(o.id)).map((o) => o.id);
-      throw new Error(`Unreachable objectives detected: ${unreachable.join(", ")}`);
-    }
-
-    return { check: true, message: "" };
-  } catch (err) {
-    return { check: false, message: (err as Error).message };
-  }
-};
-
-/**
- * Validation a quest's objective content must pass before it is persisted (used by both
- * the `update` and `clone` quest mutations). Dialog branches are always validated; the full
- * chain/reachability flow is validated only for consecutive quests, since a
- * non-consecutive quest legitimately has multiple independent objectives that
- * {@link verifyQuestObjectiveFlow} would otherwise reject.
- *
- * Guardrail for overworld-bound objectives: a placement-bound objective completes the moment the
- * player stands on its NPC, so a non-consecutive quest binding two objectives to different NPCs can
- * be completed out of narrative order (the runtime overworld gate blocks the interaction, but the
- * intended ordering still can't be expressed). Ordering intent lives in the `nextObjectiveId` chain,
- * which only consecutive quests carry, so reject the save and let the author make the quest
- * consecutive rather than silently coercing the flag onto a chainless quest (which
- * {@link verifyQuestObjectiveFlow} would then reject anyway).
- */
-export const verifyQuestContentForSave = (
-  objectives: AllObjectivesType[],
-  consecutiveObjectives: boolean,
-): { check: boolean; message: string } => {
-  const unsupportedBinding = objectives.find(
-    (objective) =>
-      !!objective.overworldPlacementId &&
-      !isSupportedOverworldBindingTask(objective.task),
-  );
-  if (unsupportedBinding) {
-    return {
-      check: false,
-      message: `Objective task ${unsupportedBinding.task} cannot bind to an overworld placement. Only defeat_opponents, deliver_item, and dialog are supported.`,
-    };
-  }
-  // Consecutive quests run the full flow check, whose first step is the same dialog-branch scan —
-  // so only the non-consecutive branch needs the standalone dialog check here (avoids scanning twice).
-  if (consecutiveObjectives) return verifyQuestObjectiveFlow(objectives);
-  const dialogCheck = verifyDialogBranches(objectives);
-  if (!dialogCheck.check) return dialogCheck;
-  const boundObjectiveCount = objectives.filter((o) => !!o.overworldPlacementId).length;
-  if (boundObjectiveCount >= 2) {
-    return {
-      check: false,
-      message:
-        "A quest with more than one overworld NPC-bound objective must use consecutive objectives so they complete in a defined order.",
-    };
-  }
-  return { check: true, message: "" };
-};
-
-/**
- * Filters out medical quests that are not available to the user.
- *
- * @param quests - The quests to filter.
- * @param user - The user to filter for.
- * @returns The filtered quests and the medical rank that was used.
- */
-export const fallbackQuestsFilter = (
-  quests: Quest[],
-  user: NonNullable<UserWithRelations>,
-  questType: QuestType,
-) => {
-  // Calculate user's medical rank
-  const userMedicalRank = calcMedninRank({
-    medicalExperience: user.medicalExperience,
-    rank: user.rank,
-  });
-  let filtered: Quest[] = [];
-  let rankInfo = "";
-
-  if (questType === "medical") {
-    const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
-    // Collect all missions from user's rank down to NONE (dedup by id)
-    const allQualifyingMissions: Quest[] = [];
-    const seen = new Set<string>();
-    for (let i = userMedicalRankIndex; i >= 0; i--) {
-      const currentRank = MEDNIN_RANKS[i];
-      if (!currentRank) continue;
-
-      // Filter for available quests at this rank
-      const availableMissions = quests.filter(
-        (e) =>
-          e.questType === questType &&
-          (!e.medicalRank || e.medicalRank === currentRank) &&
-          isAvailableUserQuests(e, user).check,
-      );
-
-      for (const q of availableMissions) {
-        if (!seen.has(q.id)) {
-          seen.add(q.id);
-          allQualifyingMissions.push(q);
-        }
-      }
-    }
-
-    filtered = allQualifyingMissions;
-    // Set rank info if we're showing missions from lower ranks
-    if (filtered.length > 0) {
-      const highestRankShown = filtered.reduce((highest, mission) => {
-        if (!mission.medicalRank) return highest;
-        const missionRankIndex = MEDNIN_RANKS.indexOf(mission.medicalRank);
-        const highestIndex = MEDNIN_RANKS.indexOf(highest);
-        return missionRankIndex > highestIndex ? mission.medicalRank : highest;
-      }, "NONE" as MEDNIN_RANK);
-
-      if (highestRankShown !== userMedicalRank) {
-        rankInfo = ` (showing missions up to ${capitalizeFirstLetter(highestRankShown)} rank)`;
-      }
-    }
-  } else {
-    filtered = quests;
-  }
-  return { filtered, rankInfo };
-};
-
-/** A player can have multiple events, but cannot start the same quest twice. */
-export const questAlreadyActiveBlockMessage = (
-  quest: Pick<Quest, "id" | "name">,
-  user: Pick<NonNullable<UserWithRelations>, "userQuests">,
-): string | null =>
-  user.userQuests?.some((active) => active.questId === quest.id && !active.endAt)
-    ? `You are already on this quest: ${quest.name}`
-    : null;
-
-/** Returns a rejection message when the quest's concurrency slot is occupied. */
-export const questTypeConcurrentBlockMessage = (
-  quest: Pick<Quest, "questType" | "name">,
-  user: NonNullable<UserWithRelations>,
-): string | null => {
-  /** Returns the user's unfinished quests for a specific quest type. */
-  const activeOfType = (type: string) =>
-    user.userQuests?.filter((q) => q.quest.questType === type && !q.endAt) ?? [];
-  switch (quest.questType) {
-    case "story":
-    case "hunting":
-    case "gathering":
-    case "anbu":
-    case "event": {
-      const cur = activeOfType(quest.questType);
-      if (cur.length >= QUESTS_CONCURRENT_LIMIT) {
-        return `Already ${QUESTS_CONCURRENT_LIMIT} active ${quest.questType} quests; ${cur
-          .map((c) => c.quest.name)
-          .join(", ")}. Abandon one to start this quest.`;
-      }
-      return null;
-    }
-    case "battlepyramid": {
-      const [activePyramid] = activeOfType("battlepyramid");
-      if (activePyramid) {
-        return `You have an unfinished Battle Pyramid run (${activePyramid.quest.name}). Go to Battle Arena → Battle Pyramid and abandon it to start this quest.`;
-      }
-      return null;
-    }
-    case "starter": {
-      if (activeOfType("starter").length >= 1) {
-        return `Already in active starter quest. Abandon if you want to restart.`;
-      }
-      return null;
-    }
-    case "war": {
-      const found = user.userQuests?.find(
-        (q) => MISSION_HALL_QUEST_TYPES.includes(q.quest.questType) && !q.endAt,
-      );
-      return found ? `Already have an active ${found.quest.questType}` : null;
-    }
-    case "mission":
-    case "crime":
-    case "medical":
-    case "pvp":
-    case "errand": {
-      const found = user.userQuests?.find(
-        (q) => MISSION_HALL_SOLO_QUEST_TYPES.includes(q.quest.questType) && !q.endAt,
-      );
-      return found ? `Already active ${found.quest.questType}` : null;
-    }
-    default:
-      return null;
-  }
-};
-
-/**
- * Explains why a player cannot act on quest steps right now. Dialog choices and reward
- * claims require an awake player, so the UI must say so instead of hiding every action.
- */
-export const questProgressBlockedMessage = (
-  status: UserStatus | undefined,
-): string | null => {
-  switch (status) {
-    case undefined:
-    case "AWAKE":
-      return null;
-    case "ASLEEP":
-      return "You are asleep. Wake up at your home to continue this quest.";
-    case "HOSPITALIZED":
-      return "You are hospitalized. Heal at the hospital to continue this quest.";
-    case "TRAVEL":
-      return "You are travelling. Arrive at your destination to continue this quest.";
-    case "BATTLE":
-      return "You are in battle. Finish the battle to continue this quest.";
-    case "QUEUED":
-      return "You are queued for battle. Leave the queue to continue this quest.";
-  }
-};
-
-/**
- * Mission Hall starts consume a daily slot (and single-attempt missions forever), but their
- * steps can only be progressed while awake. Reject the start instead of stranding the player.
- */
-export const missionHallStartBlockedMessage = (
-  questType: QuestType,
-  status: UserStatus,
-): string | null =>
-  MISSION_HALL_QUEST_TYPES.includes(questType) && status !== "AWAKE"
-    ? actionStatusMessage(status)
-    : null;
-
-/**
- * Structure and occupation guards that only apply when a player starts a quest
- * through the UI (Mission Hall, Anbu page, etc.). NPC-initiated quests skip these.
- * Returns a rejection message, or null to allow proceeding.
- */
-export const questUiAccessBlockMessage = (
-  quest: Pick<Quest, "questType" | "questRank">,
-  user: NonNullable<UserWithRelations>,
-  sectorVillage: SectorVillage | null,
-): string | null => {
-  const hasStructureAccess = canAccessStructure(
-    user,
-    questStructureRoute(quest.questType),
-    sectorVillage,
-  );
-  if (quest.questType === "story") {
-    if (!hasStructureAccess) {
-      return "Must be in the Global Anbu HQ to start story quests";
-    }
-  } else if (quest.questType === "hunting") {
-    if (user.occupation !== "HUNTER") {
-      return "You are not a hunter";
-    }
-  } else if (quest.questType === "gathering") {
-    if (user.occupation !== "GATHERING") {
-      return "You are not a gatherer";
-    }
-  } else if (quest.questType === "anbu") {
-    if (!hasStructureAccess) {
-      return "Must be in the Anbu page to start anbu quests";
-    }
-    if (!user.anbuId) {
-      return "You are not in an anbu squad";
-    }
-  } else if (quest.questType === "event") {
-    if (!hasStructureAccess) {
-      return "Must be in your allied village to start quest";
-    }
-  } else if (quest.questType === "war") {
-    if (!user.villageId) {
-      return "You must be in a village to accept war missions";
-    }
-    if (!user.isOutlaw && !hasStructureAccess) {
-      return "Must be in your allied village to start quest";
-    }
-    if (user.dailyWarMissions >= WAR_MISSIONS_PER_DAY) {
-      return questDailyLimitMessage("war", WAR_MISSIONS_PER_DAY);
-    }
-  } else if (["mission", "crime", "medical", "pvp"].includes(quest.questType)) {
-    if (["mission", "crime"].includes(quest.questType) && quest.questRank !== "A") {
-      return `Only A rank missions/crimes are allowed`;
-    }
-    if (!user.isOutlaw && !hasStructureAccess) {
-      return "Must be in your allied village to start quest";
-    }
-  }
-  return null;
-};
-
-/** Daily assignment counters used by the mission hall, discovery and acquisition guards. */
-export const questDailyQuota = (
-  questType: string,
-  user: Pick<
-    UserData,
-    | "dailyMissions"
-    | "dailyErrands"
-    | "dailyMedicalMissions"
-    | "dailyPvpMissions"
-    | "dailyWarMissions"
-  >,
-) => {
-  switch (questType) {
-    case "mission":
-    case "crime":
-      return {
-        field: "dailyMissions" as const,
-        current: user.dailyMissions,
-        limit: MISSIONS_PER_DAY,
-      };
-    case "errand":
-      return {
-        field: "dailyErrands" as const,
-        current: user.dailyErrands,
-        limit: ERRANDS_PER_DAY,
-      };
-    case "medical":
-      return {
-        field: "dailyMedicalMissions" as const,
-        current: user.dailyMedicalMissions,
-        limit: MEDICAL_MISSIONS_PER_DAY,
-      };
-    case "pvp":
-      return {
-        field: "dailyPvpMissions" as const,
-        current: user.dailyPvpMissions,
-        limit: PVP_MISSIONS_PER_DAY,
-      };
-    case "war":
-      return {
-        field: "dailyWarMissions" as const,
-        current: user.dailyWarMissions,
-        limit: WAR_MISSIONS_PER_DAY,
-      };
-    default:
-      return null;
-  }
-};
-
-/** Shared feedback when an assignment's daily quota is exhausted. */
-export const questDailyLimitMessage = (questType: string, limit: number) => {
-  const label =
-    questType === "medical"
-      ? "medical mission"
-      : questType === "pvp"
-        ? "PvP mission"
-        : questType === "war"
-          ? "war mission"
-          : questType;
-  return `You have reached your daily ${label} limit of ${limit}${
-    questType === "war" ? "" : ". Please try again tomorrow."
-  }`;
-};
-
-/** Structure used by the quest's normal UI entry point. */
-export const questStructureRoute = (questType: string) => {
-  switch (questType) {
-    case "mastery":
-      return "/traininggrounds" as const;
-    case "event":
-      return "/adminbuilding" as const;
-    case "story":
-      return "/globalanbuhq" as const;
-    case "battlepyramid":
-      return "/battlearena" as const;
-    case "anbu":
-      return "/anbu" as const;
-    default:
-      return "/missionhall" as const;
-  }
-};
-
-export const questRequiresTravel = (
-  questType: string,
-  user: NonNullable<UserWithRelations>,
-  sectorVillage?: SectorVillage | null,
-) => {
-  if (user.isOutlaw && !["event", "story", "anbu"].includes(questType)) return false;
-  return !canAccessStructure(user, questStructureRoute(questType), sectorVillage);
-};
-
-interface QuestWarSummary {
-  attackerVillageId: string;
-  defenderVillageId: string;
-  warAllies: { villageId: string }[];
-}
-
-/** War missions follow the mission hall: an involved village, including allies, and the daily cap. */
-export const isWarMissionAvailable = ({
-  questType,
-  villageId,
-  dailyWarMissions,
-  activeWars,
-}: {
-  questType: string;
-  villageId: string | null;
-  dailyWarMissions: number;
-  activeWars: QuestWarSummary[];
-}) => {
-  if (questType !== "war") return true;
-  if (!villageId || dailyWarMissions >= WAR_MISSIONS_PER_DAY) return false;
-  return isVillageInvolvedInAnyWar(activeWars, villageId);
-};
-
-export const isQuestRankAllowed = (
-  quest: Pick<Quest, "questType" | "questRank">,
-  user: Pick<UserData, "rank">,
-  source: "ui" | "random_assignment" = "ui",
-) =>
-  quest.questType === "village_mission" ||
-  (quest.questType === "mission" && quest.questRank === "S")
-    ? false
-    : source === "random_assignment" && quest.questType !== "mission"
-      ? true
-      : availableQuestLetterRanks(user.rank).includes(quest.questRank);
-
 /**
  * Match one content event against an objective's configured filters.
  * Jutsu IDs and mastery filters intersect when both are set; a mastery-only objective
@@ -3320,4 +1542,85 @@ const matchesContentObjective = (
     objective.combatType === "Any" ||
     objective.combatType === event.combatType
   );
+};
+
+/** Select the persistent errand, mission or crime counter for a quest type and letter rank. */
+export const getQuestCounterFieldName = (
+  type: QuestType | undefined,
+  rank: LetterRank | undefined,
+) => {
+  if (type === undefined || rank === undefined) return undefined;
+  switch (type) {
+    case "errand":
+      return "errands";
+    case "mission":
+      return `missions${rank}` as const;
+    case "crime":
+      return `crimes${rank}` as const;
+    default:
+      return undefined;
+  }
+};
+export type QuestCounterFieldName = ReturnType<typeof getQuestCounterFieldName>;
+export type QuestConsequence = {
+  type:
+    | "add_item"
+    | "remove_item"
+    | "combat"
+    | "random_encounter"
+    | "fail_quest"
+    | "start_quest"
+    | "reset_quest"
+    | "update_user";
+  ids: string[];
+  info?: string;
+  scaleStats?: boolean;
+  scaleGains?: number;
+  forceKeepPools?: boolean;
+  /** Owning battle objective, carried through consequences into battle progress attribution. */
+  questId?: string;
+  objectiveId?: string;
+  /** Optional shared HP/CP/SP starting percentage; absence preserves carried pools. */
+  givePools?: number;
+  /** Fully configured player tags whose duration includes the opening round. */
+  startingEffects?: ZodAllTags[];
+  /** Expanded NPC template IDs for combat consequences; duplicates request separate allies. */
+  allyAiIds?: string[];
+};
+
+/**
+ * Combat-only context for war kill eligibility, managed-run attribution and shared settlement.
+ * The battle ID groups teammates' damage within one battle; a team still fighting
+ * defers defeat/retry handling until the remaining participants have settled.
+ */
+export type CombatQuestContext = {
+  battleId?: string;
+  questTeamStillFighting?: boolean;
+  inWarTornSector: boolean;
+  /** Human PvP in a Territory War captured at initiation; excludes guardian fights. */
+  inTerritoryWar?: boolean;
+  isWarParticipant: boolean;
+  /** Prevent unrelated fights from advancing ticketed or versioned run objectives. */
+  questBattleSource?: { questId: string; objectiveId: string };
+};
+
+/** Fully hydrated user, with the optional collections objectives read as snapshots. */
+type TrackerUser = NonNullable<UserWithRelations> & {
+  useritems?: UserItem[];
+  farmingCollectionCount?: number;
+  bloodlineCollectionProgress?: BloodlineCollectionProgress;
+  ownedObjectiveJutsus?: { jutsuId: string; masteryTypes: MasteryType[] }[];
+};
+
+export type ObjectiveTrackerTaskInput = {
+  task: AllObjectiveTask | "any";
+  increment?: number;
+  value?: number;
+  text?: string;
+  contentId?: string;
+  /** Distinct jutsu disciplines captured when training starts or an action is performed. */
+  masteryTypes?: MasteryType[];
+  /** Opponent classification for combat-use filters, independent of the battle outcome. */
+  combatType?: "PVP" | "PVE";
+  warFoe?: boolean;
 };

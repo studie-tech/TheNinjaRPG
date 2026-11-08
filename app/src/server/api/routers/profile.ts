@@ -23,9 +23,9 @@ import {
   CHARACTER_DELETION_CONFIRMATION,
   CHARACTER_DELETION_DELAY_DAYS,
   COST_CHANGE_USERNAME,
+  COST_TAVERN_COLOR_CHANGE,
   type CombatStatName,
   CombatStatNames,
-  getTavernColorChangeCost,
   getUserCaps,
   KAGE_MIN_PRESTIGE,
   MAX_ATTRIBUTES,
@@ -38,7 +38,6 @@ import {
   SKILL_POINT_MAX_LEVEL,
   SKILL_POINT_MIN_LEVEL,
   SKILL_TREE_REQUIRED_RANK,
-  shrineLobbyFreshAfter,
   TERRITORY_WAR_BOOST_PERCENT,
   TUTORIAL_STEPS_COUNT,
   UserRanks,
@@ -73,12 +72,12 @@ import {
 import { getWorldCyclePosition } from "@/libs/dayNight";
 import { activeDungeonNotification } from "@/libs/dungeon";
 import { elementalGainRoom } from "@/libs/elementalMastery";
+import { getExperimentAssignments } from "@/libs/experimentAnalytics";
 import {
   getGameSettingBoost,
   getGlobalGameSettingNotifications,
 } from "@/libs/gameSettingBoost";
 import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
-import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import {
   effectiveMasteries,
   type MasterySources,
@@ -112,13 +111,15 @@ import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
 import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
-  getPublicQuestUser,
   getQuestTargetSectorsToCheck,
-  isAvailableUserQuests,
-  mockAchievementHistoryEntries,
-  publishedAchievementsOf,
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
+import { isAvailableUserQuests } from "@/libs/quest/availability";
+import {
+  getPublicQuestUser,
+  mockAchievementHistoryEntries,
+  publishedAchievementsOf,
+} from "@/libs/quest/projection";
 import { isQuestPartyHelperAttempt } from "@/libs/questParty";
 import { getIsolatedPyramid } from "@/libs/questRun";
 import {
@@ -126,6 +127,7 @@ import {
   isRaidListedForVillage,
   raidRewardBlockMessage,
 } from "@/libs/raids";
+import { hasRequiredRank } from "@/libs/rank";
 import { createThumbnail } from "@/libs/replicate";
 import { callDiscordContent } from "@/libs/socials";
 import { getTerritoryWarBoost, getTerritoryWarBoostUntil } from "@/libs/territoryWar";
@@ -138,7 +140,6 @@ import { regenerationBuffs } from "@/libs/titles";
 import {
   applyMasteryTrainingGains,
   getReducedGainsDays,
-  hasRequiredRank,
   inferJutsuTrainingStartedAt,
   settleQueuedTraining,
 } from "@/libs/train";
@@ -268,8 +269,6 @@ import { fetchJutsuQueueSummary } from "@/queries/train";
 import { fetchVillage, fetchVillages } from "@/queries/village";
 import { removeFromSquad } from "@/routers/anbu";
 import { removeFromClan } from "@/routers/clan";
-import { handleQuestConsequences, insertNextQuest } from "@/routers/quests";
-import { deleteUser } from "@/server/api/routers/staff";
 import {
   baseServerResponse,
   cdnCachedProcedure,
@@ -281,6 +280,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
+import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import {
   actionReadinessResponse,
   prepareActionReadiness,
@@ -303,10 +303,12 @@ import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { offsetPage } from "@/server/utils/pagination";
 import { consumeUserAnnouncements, fetchPublicUsers } from "@/server/utils/profile";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
+import { insertNextQuest } from "@/server/utils/questAssignment";
 import {
   fetchBloodlineCollectionCatalogue,
   hydrateQuestCollections,
 } from "@/server/utils/questCollections";
+import { handleQuestConsequences } from "@/server/utils/questConsequences";
 import {
   applyQuestParty,
   type LoadedQuestParty,
@@ -322,6 +324,7 @@ import {
 } from "@/server/utils/regeneration";
 import { retainSanctionIps } from "@/server/utils/sanctionTombstone";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
+import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
 import {
   hasDueTimedJob,
   settleDueTimedQueues,
@@ -563,7 +566,7 @@ export const profileRouter = createTRPCRouter({
       const ipHash =
         ctx.userIp && ctx.userIp !== "unknown" ? hashIp(ctx.userIp) : undefined;
       if (input.step === TUTORIAL_STEPS_COUNT && ipHash) {
-        const experiments = getLayoutExperimentAssignments({
+        const experiments = getExperimentAssignments({
           abLemuReplacementVariant: ctx.abLemuReplacementVariant,
           wallpaperVariant: ctx.wallpaperVariant,
         });
@@ -866,18 +869,8 @@ export const profileRouter = createTRPCRouter({
           !party.tracker.failed &&
           !isQuestComplete(party.quest, party.tracker),
       );
+      const { hasActiveTeamQuest, completedTeamQuests } = summarizeTeamQuests(user);
       // Keep team navigation available while a team-enabled quest is active and unfinished.
-      const hasActiveTeamQuest = user?.userQuests.some((entry) => {
-        const tracker = user.questData?.find((tracker) => tracker.id === entry.questId);
-        return (
-          entry.quest.teamEnabled &&
-          !entry.endAt &&
-          !entry.completed &&
-          !!tracker &&
-          !tracker.failed &&
-          !isQuestComplete(entry.quest, tracker)
-        );
-      });
       if (hasActiveTeamQuest)
         notifications.push({
           href: "/questteams",
@@ -899,29 +892,13 @@ export const profileRouter = createTRPCRouter({
         });
 
       // Keep collection discoverable after disbanding, even before a reward choice exists.
-      // Synthetic helpers keep closed receipts and must not advertise another payout.
-      const completedTeamQuests =
-        user?.userQuests.filter((entry) => {
-          const tracker = user.questData?.find(
-            (tracker) => tracker.id === entry.questId,
-          );
-          return (
-            entry.quest.teamEnabled &&
-            !isQuestPartyHelperAttempt(entry, user.questPartyId) &&
-            !entry.endAt &&
-            !entry.completed &&
-            tracker &&
-            !tracker.failed &&
-            isQuestComplete(entry.quest, tracker)
-          );
-        }) ?? [];
-      if (completedTeamQuests.length)
+      if (completedTeamQuests > 0)
         notifications.push({
           href: "/profile?tab=dashboard#progress-heading",
           name: "Quest rewards waiting: open your Logbook",
           color: "green",
           alwaysShow: true,
-          notificationCount: completedTeamQuests.length,
+          notificationCount: completedTeamQuests,
         });
 
       // Add any notifications from fetching user to toasts
@@ -967,13 +944,7 @@ export const profileRouter = createTRPCRouter({
         });
       }
       // Add a voting link
-      let hasVoted = true;
-      ACTIVE_VOTING_SITES.forEach((site) => {
-        if (user?.votes?.[site] !== true) {
-          hasVoted = false;
-        }
-      });
-      if (!hasVoted) {
+      if (!ACTIVE_VOTING_SITES.every((site) => user?.votes?.[site] === true)) {
         notifications.push({
           href: "/profile/recruit",
           name: `Vote for Us`,
@@ -1125,8 +1096,8 @@ export const profileRouter = createTRPCRouter({
           });
         }
         // Add deletion timer to notifications
-        if (user?.deletionAt) {
-          notifications?.push({
+        if (user.deletionAt) {
+          notifications.push({
             href: "/profile?tab=edit&settings=deletion&setting=character",
             name: "Deletion requested",
             color: "red",
@@ -1134,7 +1105,7 @@ export const profileRouter = createTRPCRouter({
         }
         // Is in combat
         if (user.status === "BATTLE") {
-          notifications?.push({
+          notifications.push({
             href: "/combat",
             name: "In combat",
             color: "red",
@@ -1142,7 +1113,7 @@ export const profileRouter = createTRPCRouter({
         }
         // Is in hospital
         if (user.status === "HOSPITALIZED") {
-          notifications?.push({
+          notifications.push({
             href: "/hospital",
             name: "In hospital",
             color: "red",
@@ -1150,7 +1121,7 @@ export const profileRouter = createTRPCRouter({
         }
         // Stuff in inbox
         if (user.inboxNews > 0) {
-          notifications?.push({
+          notifications.push({
             href: "/inbox",
             name: `${user.inboxNews} messages`,
             color: "hidden",
@@ -1159,7 +1130,7 @@ export const profileRouter = createTRPCRouter({
         }
         // Stuff in news
         if (user.unreadNews > 0) {
-          notifications?.push({
+          notifications.push({
             href: "/news",
             name: `${user.unreadNews} news`,
             color: "hidden",
@@ -1707,7 +1678,7 @@ export const profileRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const storedColor =
         input.target === "username" ? user.tavernUsernameColor : user.tavernTitleColor;
-      const cost = getTavernColorChangeCost(input.color);
+      const cost = COST_TAVERN_COLOR_CHANGE;
 
       if (user.isBanned) return errorResponse("You are banned");
       if (storedColor !== input.currentColor) {
@@ -2856,69 +2827,25 @@ const fetchUpdatedUserOnce = async (
     applyQuestParty(user, user.questParty);
   }
 
-  // Filter and attach active wars for enemy_village sector type resolution
+  // Filter and attach active wars (for enemy_village sector type resolution) and shrine battles
   if (user?.villageId) {
-    const userActiveWars = allActiveWars.filter(
-      (w) =>
-        (!mercenaryWarId || w.id === mercenaryWarId) && !!getWarSide(w, user.villageId),
+    const { villageId } = user;
+    (user as NonNullable<UserWithRelations>).activeWars = allActiveWars.filter(
+      (w) => (!mercenaryWarId || w.id === mercenaryWarId) && !!getWarSide(w, villageId),
     );
-    (user as NonNullable<UserWithRelations>).activeWars = userActiveWars;
-  }
-
-  // Filter and attach active shrine battles
-  if (user?.villageId) {
-    const userActiveShrineBattles = activeShrineBattles.filter(
-      (b) =>
-        b.defenderEntityId === user.villageId || b.attackerEntityId === user.villageId,
+    (user as NonNullable<UserWithRelations>).shrineBattles = activeShrineBattles.filter(
+      (b) => b.defenderEntityId === villageId || b.attackerEntityId === villageId,
     );
-    (user as NonNullable<UserWithRelations>).shrineBattles = userActiveShrineBattles;
   }
 
   // Filter and attach active raids
   if (user) {
-    // Get village-owned sectors for exclusive raid filtering
-    const ownedSectorNumbers = new Set(
-      user.village?.sectors?.map((s) => s.sector) ?? [],
+    (user as NonNullable<UserWithRelations>).activeRaids = listVillageRaids(
+      user,
+      activeRaids,
+      allActiveWars,
+      now,
     );
-
-    const attackerDefeatedShrineSectors = new Set(
-      allActiveWars
-        .filter(
-          (w) =>
-            w.type === "SECTOR_WAR" &&
-            w.defenderShrineHp <= 0 &&
-            getWarSide(w, user.villageId) === w.attackerVillageId,
-        )
-        .map((w) => w.sector),
-    );
-    const userActiveRaids = activeRaids
-      .filter((raid) =>
-        isRaidListedForVillage(
-          raid,
-          user.villageId,
-          ownedSectorNumbers,
-          attackerDefeatedShrineSectors,
-          now,
-        ),
-      )
-      .flatMap((raid) => {
-        const raidData = getRaidObjectiveData(raid);
-        return raidData
-          ? [
-              {
-                id: raid.id,
-                name: raid.name,
-                description: raid.description,
-                image: raid.image,
-                sector: raidData.sector,
-                raidType: raidData.raidType,
-                raidEndsAt: raid.raidEndsAt,
-              },
-            ]
-          : [];
-      });
-
-    (user as NonNullable<UserWithRelations>).activeRaids = userActiveRaids;
   }
 
   // Retain the stored base rate separately from the derived rate for accrued ticks.
@@ -3380,6 +3307,75 @@ const fetchUpdatedUserOnce = async (
       craftingItemsChanged: settlement.craftingItemsChanged,
     };
   }
+};
+
+/** Project the raids listed for the user's village, as attached to the profile. */
+const listVillageRaids = (
+  user: Pick<NonNullable<UserWithRelations>, "villageId" | "village">,
+  activeRaids: Awaited<ReturnType<typeof fetchActiveRaids>>,
+  allActiveWars: Awaited<ReturnType<typeof fetchAllActiveWars>>,
+  now: Date,
+) => {
+  // Get village-owned sectors for exclusive raid filtering
+  const ownedSectorNumbers = new Set(user.village?.sectors?.map((s) => s.sector) ?? []);
+
+  const attackerDefeatedShrineSectors = new Set(
+    allActiveWars
+      .filter(
+        (w) =>
+          w.type === "SECTOR_WAR" &&
+          w.defenderShrineHp <= 0 &&
+          getWarSide(w, user.villageId) === w.attackerVillageId,
+      )
+      .map((w) => w.sector),
+  );
+  return activeRaids
+    .filter((raid) =>
+      isRaidListedForVillage(
+        raid,
+        user.villageId,
+        ownedSectorNumbers,
+        attackerDefeatedShrineSectors,
+        now,
+      ),
+    )
+    .flatMap((raid) => {
+      const raidData = getRaidObjectiveData(raid);
+      return raidData
+        ? [
+            {
+              id: raid.id,
+              name: raid.name,
+              description: raid.description,
+              image: raid.image,
+              sector: raidData.sector,
+              raidType: raidData.raidType,
+              raidEndsAt: raid.raidEndsAt,
+            },
+          ]
+        : [];
+    });
+};
+
+/**
+ * Summarize the team-enabled quests a profile is still running: whether any is unfinished, and
+ * how many await collection. Synthetic helpers keep closed receipts and advertise no payout.
+ */
+const summarizeTeamQuests = (
+  user:
+    | Pick<NonNullable<UserWithRelations>, "userQuests" | "questData" | "questPartyId">
+    | undefined,
+) => {
+  const summary = { hasActiveTeamQuest: false, completedTeamQuests: 0 };
+  for (const entry of user?.userQuests ?? []) {
+    const tracker = user?.questData?.find((tracker) => tracker.id === entry.questId);
+    if (!entry.quest.teamEnabled || entry.endAt || entry.completed) continue;
+    if (!tracker || tracker.failed) continue;
+    if (!isQuestComplete(entry.quest, tracker)) summary.hasActiveTeamQuest = true;
+    else if (!isQuestPartyHelperAttempt(entry, user?.questPartyId ?? null))
+      summary.completedTeamQuests += 1;
+  }
+  return summary;
 };
 
 /** Writes passive regen fields only while the hydrated user snapshot still matches. */

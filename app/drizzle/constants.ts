@@ -151,31 +151,6 @@ export const GUIDE_HUB_CATEGORY_ORDER: GuideCategory[] = [
 
 export const GUIDE_RESERVED_SLUGS = ["edit", "new"] as const;
 
-/** Hosted cover URLs for first-party system guides. */
-export const GUIDE_SYSTEM_COVERS: Record<string, string> = {
-  "getting-started": "https://ui0arpl8sm.ufs.sh/f/guide-getting-started-v3.webp",
-  combat: "https://ui0arpl8sm.ufs.sh/f/guide-combat-v3.webp",
-  "combat-tags": "https://ui0arpl8sm.ufs.sh/f/guide-combat-tags-v3.webp",
-  "prevent-tags": "https://ui0arpl8sm.ufs.sh/f/guide-prevent-tags-v3.webp",
-  "cleansable-tags": "https://ui0arpl8sm.ufs.sh/f/guide-cleansable-tags-v3.webp",
-  "clearable-tags": "https://ui0arpl8sm.ufs.sh/f/guide-clearable-tags-v3.webp",
-  "combat-tag-priority":
-    "https://ui0arpl8sm.ufs.sh/f/guide-combat-tag-priority-v3.webp",
-  "loadout-building": "https://ui0arpl8sm.ufs.sh/f/guide-loadout-building-v3.webp",
-  "ai-rules": "https://ui0arpl8sm.ufs.sh/f/guide-ai-rules-v3.webp",
-  raids: "https://ui0arpl8sm.ufs.sh/f/guide-raids-v3.webp",
-  "bracket-system": "https://ui0arpl8sm.ufs.sh/f/guide-bracket-system-v3.webp",
-  farming: "https://ui0arpl8sm.ufs.sh/f/guide-farming-v3.webp",
-  villages: "https://ui0arpl8sm.ufs.sh/f/guide-villages-v3.webp",
-  world: "https://ui0arpl8sm.ufs.sh/f/guide-world-v3.webp",
-  "wake-island": "https://ui0arpl8sm.ufs.sh/f/guide-wake-island-v3.webp",
-  bloodlines: "https://ui0arpl8sm.ufs.sh/f/guide-bloodlines-v3.webp",
-  ranks: "https://ui0arpl8sm.ufs.sh/f/guide-ranks-v3.webp",
-  economy: "https://ui0arpl8sm.ufs.sh/f/guide-economy-v3.webp",
-  "auction-house": "https://ui0arpl8sm.ufs.sh/f/guide-auction-house-v3.webp",
-  "item-variants": "https://ui0arpl8sm.ufs.sh/f/guide-item-variants-v3.webp",
-};
-
 // Worldgen also keeps reserved sectors on land, so changing this list requires
 // regenerating src/data/hexasphere.json (see getWorldProtectedLandSectors).
 export const MAP_RESERVED_SECTORS = [
@@ -998,7 +973,7 @@ export const ALLIANCEHALL_LAT = 7;
 export const HOSPITAL_LONG = 13;
 export const HOSPITAL_LAT = 8;
 
-// Structure adjacent positions
+// The structure's own tile plus its neighbours under either hex column parity
 export const STRUCTURE_ADJACENTS = [
   { dCol: -1, dRow: 0 },
   { dCol: -1, dRow: 1 },
@@ -1009,9 +984,6 @@ export const STRUCTURE_ADJACENTS = [
   { dCol: 0, dRow: 0 },
   { dCol: 0, dRow: 1 },
   { dCol: 0, dRow: -1 },
-  { dCol: 0, dRow: -1 },
-  { dCol: 0, dRow: 1 },
-  { dCol: 0, dRow: 0 },
 ];
 
 export const TournamentTypes = ["CLAN", "EVENT"] as const;
@@ -1658,8 +1630,6 @@ export const TavernColorPresets = [
   "LIME",
 ] as const;
 export type TavernColorPreset = (typeof TavernColorPresets)[number];
-export const getTavernColorChangeCost = (_color: TavernColorPreset) =>
-  COST_TAVERN_COLOR_CHANGE;
 export const BLOODLINE_ROLL_TYPES = [
   "NATURAL",
   "ITEM",
@@ -1734,10 +1704,9 @@ export const JUTSU_TRANSFER_DAYS = 20;
 export const JUTSU_TRANSFER_COST = 20;
 export const JUTSU_TRANSFER_MAX_LEVEL = 25;
 export const JUTSU_TRANSFER_MINIMUM_LEVEL = 10;
-export const JUTSU_TRANSFER_FREE_AMOUNT = 2;
-export const JUTSU_TRANSFER_FREE_NORMAL = 3;
-export const JUTSU_TRANSFER_FREE_SILVER = 4;
-export const JUTSU_TRANSFER_FREE_GOLD = 5;
+export const JUTSU_TRANSFER_FREE: Record<FederalStatus, number> = {
+  NONE: 2, NORMAL: 3, SILVER: 4, GOLD: 5,
+};
 
 // Jutsu reskin config
 export const RESKIN_LIMIT = 2;
@@ -2157,12 +2126,12 @@ export const FED_GOLD_REPS_COST = 50;
 export const FED_NORMAL_BANK_INTEREST = 2;
 export const FED_SILVER_BANK_INTEREST = 5;
 export const FED_GOLD_BANK_INTEREST = 8;
-export const FED_NORMAL_INVENTORY_SLOTS = 2;
-export const FED_SILVER_INVENTORY_SLOTS = 5;
-export const FED_GOLD_INVENTORY_SLOTS = 10;
-export const FED_NORMAL_JUTSU_SLOTS = 1;
-export const FED_SILVER_JUTSU_SLOTS = 2;
-export const FED_GOLD_JUTSU_SLOTS = 3;
+export const FED_INVENTORY_SLOTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 2, SILVER: 5, GOLD: 10,
+};
+export const FED_JUTSU_SLOTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 1, SILVER: 2, GOLD: 3,
+};
 export const FED_JUTSU_LOADOUTS_BASE = 2;
 export const FED_NORMAL_JUTSU_LOADOUTS = 1;
 export const FED_SILVER_JUTSU_LOADOUTS = 2;
@@ -2179,10 +2148,9 @@ export const ACTION_LOG_RELATED_MSG_MAX_LENGTH = 191;
 // Max magnitude of a single staff Seichi Silver adjustment (shared by the zod
 // schema and the client-side form validation so the bounds stay in sync).
 export const SEICHI_SILVER_ADJUST_LIMIT = 1_000_000;
-export const FED_EVENT_ITEMS_NORMAL = 15;
-export const FED_EVENT_ITEMS_SILVER = 20;
-export const FED_EVENT_ITEMS_GOLD = 25;
-export const FED_EVENT_ITEMS_DEFAULT = 10;
+export const FED_EVENT_ITEMS: Record<FederalStatus, number> = {
+  NONE: 10, NORMAL: 15, SILVER: 20, GOLD: 25,
+};
 
 // Missions config
 export const ERRANDS_PER_DAY = 50;
@@ -2400,13 +2368,6 @@ export const SHRINE_BATTLE_MIN_ATTACKERS = 2;
 export const SHRINE_BATTLE_MAX_USERS_PER_SIDE = 3;
 export const SHRINE_BATTLE_LOBBY_SECONDS = 60;
 export const SHRINE_BATTLE_STALE_LOBBY_SECONDS = 300; // 5 min grace past lobby window
-
-/** Returns a Date before which shrine battle lobbies are considered stale/expired. */
-export function shrineLobbyFreshAfter(now: Date = new Date()): Date {
-  return new Date(
-    now.getTime() - (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
-  );
-}
 
 // Raid Battle Config
 export const RAID_BATTLE_MAX_USERS_PER_TEAM = 3;
@@ -3671,15 +3632,15 @@ export const SUPPORT_TICKET_PRIORITY_DESCRIPTIONS: Record<
 
 // Materials inventory config
 export const MATERIALS_BASE_SLOTS = 25;
-export const FED_MATERIALS_NORMAL_SLOTS = 5;
-export const FED_MATERIALS_SILVER_SLOTS = 10;
-export const FED_MATERIALS_GOLD_SLOTS = 15;
+export const FED_MATERIALS_SLOTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 5, SILVER: 10, GOLD: 15,
+};
 
 // Cooking inventory config (mirrors materials)
 export const COOKING_BASE_SLOTS = 25;
-export const FED_COOKING_NORMAL_SLOTS = 5;
-export const FED_COOKING_SILVER_SLOTS = 10;
-export const FED_COOKING_GOLD_SLOTS = 15;
+export const FED_COOKING_SLOTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 5, SILVER: 10, GOLD: 15,
+};
 
 /**
  * Return rank-specific caps, or global ceilings when no rank is available.
@@ -3821,6 +3782,7 @@ export const SENSORY_DETECT_CHANCE_PER_1000_POINTS = 2.75; // +2.75% per 1000 po
 export const SENSORY_MAX_DETECT_CHANCE_PERC = 60; // 60% max detection chance
 export const SENSORY_BASE_COOLDOWN_SECONDS = 120; // 2 minute base cooldown
 export const SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS = 5; // -5 seconds per 1000 points
+export const SENSORY_MIN_COOLDOWN_SECONDS = 30;
 export const STEALTH_TRAIN_GAIN_PER_MINUTE = 50; // Training gain per minute
 
 // Covert training types enum
@@ -3967,7 +3929,7 @@ export const COPY_PRIORITY_RANK = buildTagPriorityRank(COPY_PRIORITY_TIERS);
 export const MIRROR_PRIORITY_RANK = buildTagPriorityRank(MIRROR_PRIORITY_TIERS);
 
 // Map of DMG setting names to their default values (for gameSetting table storage)
-export const DMG_SETTING_DEFAULTS: Record<string, number> = {
+export const DMG_SETTING_DEFAULTS = {
   DMG_STATS_SCALING,
   DMG_BASE_HITS,
   DMG_CURVE,
@@ -3977,7 +3939,8 @@ export const DMG_SETTING_DEFAULTS: Record<string, number> = {
   DMG_ADVANTAGE_MIN,
   DMG_ADVANTAGE_MAX,
 };
-export const DMG_SETTING_NAMES = Object.keys(DMG_SETTING_DEFAULTS);
+export type DmgSettingName = keyof typeof DMG_SETTING_DEFAULTS;
+export const DMG_SETTING_NAMES = Object.keys(DMG_SETTING_DEFAULTS) as DmgSettingName[];
 
 // ---------------------------------------------------------------------------
 // Native apps (iOS / Android)

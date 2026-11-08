@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isPrivateIp, validateUrlForSsrf } from "@/utils/ssrf";
+import { isPrivateIp, validateUrlForSsrf } from "@/server/utils/ssrf";
 
 describe("isPrivateIp", () => {
   it.each([

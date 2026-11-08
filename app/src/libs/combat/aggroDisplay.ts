@@ -1,6 +1,6 @@
 import { stillInBattle } from "./actions";
+import { wantsHumanActionSet } from "./turn";
 import type { ReturnedUserState } from "./types";
-import { wantsHumanActionSet } from "./util";
 
 /** Compare a side's threat only when an active opposing NPC can act on it. */
 export const getAggroDisplay = (users: ReturnedUserState[]) => {

@@ -1,5 +1,4 @@
 import type { CombatBiome } from "@/drizzle/constants";
-import { COMBAT_BIOMES } from "@/drizzle/constants";
 import type { TerrainHex } from "@/libs/hexgrid";
 import {
   decorationShadowShape,
@@ -13,8 +12,6 @@ import {
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
-import type { GlobalTile } from "@/libs/sector-map/world-types";
-import { getBiomeFromGlobalTile } from "@/libs/travel";
 
 /** Resolve atlas views without changing seeded scenery selection. */
 const decorationArt = (key: string, biome?: CombatBiome) => {
@@ -36,87 +33,76 @@ const terrain = (key: string, variant: number) => {
   return { spec: resolveWorldTerrain(spec), variant };
 };
 
+/** A terrain and shade: the look of one level band. */
+type TerrainLook = [key: string, variant: number];
+
+/** A biome's looks by rising level: each `below` band, then `top` for everything higher. */
+type LevelBands = { below: [limit: number, ...TerrainLook][]; top: TerrainLook };
+
+const LOWLAND_BANDS: LevelBands = {
+  below: [
+    [0.05, "ocean", 0],
+    [0.1, "ocean", 1],
+    [0.15, "ocean", 2],
+    [0.2, "ground", 2],
+    [0.5, "ground", 1],
+    [0.8, "ground", 0],
+    [0.9, "dessert", 0],
+    [0.95, "dessert", 1],
+  ],
+  top: ["dessert", 2],
+};
+
+const FROZEN_BANDS: LevelBands = {
+  below: [
+    [0.05, "ocean", 2],
+    [0.1, "ice", 0],
+    [0.2, "ice", 1],
+    [0.25, "ice", 2],
+    [0.3, "snow", 0],
+    [0.6, "snow", 1],
+  ],
+  top: ["snow", 2],
+};
+
+const BIOME_LEVEL_BANDS: Record<CombatBiome, LevelBands> = {
+  ocean: {
+    below: [
+      [0.3, "ocean", 0],
+      [0.6, "ocean", 1],
+      [0.8, "ocean", 2],
+      [0.85, "dessert", 0],
+      [0.9, "dessert", 1],
+      [0.95, "dessert", 2],
+    ],
+    top: ["ground", 2],
+  },
+  ground: LOWLAND_BANDS,
+  default: LOWLAND_BANDS,
+  arena: LOWLAND_BANDS,
+  dessert: {
+    below: [
+      [0.05, "ocean", 2],
+      [0.1, "ground", 2],
+      [0.3, "dessert", 0],
+      [0.6, "dessert", 1],
+    ],
+    top: ["dessert", 2],
+  },
+  ice: FROZEN_BANDS,
+  snow: FROZEN_BANDS,
+};
+
 /** Retained procedural biome bands shared by combat and tower-defense renderers. */
 export const getProceduralTerrain = (
   hex: Pick<TerrainHex, "level">,
-  tile: GlobalTile | CombatBiome,
+  biome: CombatBiome,
 ) => {
-  const biome: CombatBiome =
-    typeof tile === "object"
-      ? getBiomeFromGlobalTile(tile)
-      : COMBAT_BIOMES.find((entry) => entry === tile)
-        ? tile
-        : "default";
-  // Handle material choice based on levels
-  switch (biome) {
-    case "ocean":
-      if (hex.level < 0.3) {
-        return terrain("ocean", 0);
-      } else if (hex.level < 0.6) {
-        return terrain("ocean", 1);
-      } else if (hex.level < 0.8) {
-        return terrain("ocean", 2);
-      } else if (hex.level < 0.85) {
-        return terrain("dessert", 0);
-      } else if (hex.level < 0.9) {
-        return terrain("dessert", 1);
-      } else if (hex.level < 0.95) {
-        return terrain("dessert", 2);
-      } else {
-        return terrain("ground", 2);
-      }
-    case "ground":
-    case "default":
-    case "arena":
-      if (hex.level < 0.05) {
-        return terrain("ocean", 0);
-      } else if (hex.level < 0.1) {
-        return terrain("ocean", 1);
-      } else if (hex.level < 0.15) {
-        return terrain("ocean", 2);
-      } else if (hex.level < 0.2) {
-        return terrain("ground", 2);
-      } else if (hex.level < 0.5) {
-        return terrain("ground", 1);
-      } else if (hex.level < 0.8) {
-        return terrain("ground", 0);
-      } else if (hex.level < 0.9) {
-        return terrain("dessert", 0);
-      } else if (hex.level < 0.95) {
-        return terrain("dessert", 1);
-      } else {
-        return terrain("dessert", 2);
-      }
-    case "dessert":
-      if (hex.level < 0.05) {
-        return terrain("ocean", 2);
-      } else if (hex.level < 0.1) {
-        return terrain("ground", 2);
-      } else if (hex.level < 0.3) {
-        return terrain("dessert", 0);
-      } else if (hex.level < 0.6) {
-        return terrain("dessert", 1);
-      } else {
-        return terrain("dessert", 2);
-      }
-    case "ice":
-    case "snow":
-      if (hex.level < 0.05) {
-        return terrain("ocean", 2);
-      } else if (hex.level < 0.1) {
-        return terrain("ice", 0);
-      } else if (hex.level < 0.2) {
-        return terrain("ice", 1);
-      } else if (hex.level < 0.25) {
-        return terrain("ice", 2);
-      } else if (hex.level < 0.3) {
-        return terrain("snow", 0);
-      } else if (hex.level < 0.6) {
-        return terrain("snow", 1);
-      } else {
-        return terrain("snow", 2);
-      }
-  }
+  // A battle without a biome renders as the default.
+  const { below, top } = BIOME_LEVEL_BANDS[biome] ?? BIOME_LEVEL_BANDS.default;
+  const band = below.find(([limit]) => hex.level < limit);
+  const [key, variant] = band ? [band[1], band[2]] : top;
+  return terrain(key, variant);
 };
 
 export type AssetType = {

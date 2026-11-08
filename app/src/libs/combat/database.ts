@@ -1,12 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import {
-  canCacheCombatCompletion,
-  combatCacheDerived,
-  combatCacheEnergy,
-  combatCacheIntegerDelta,
-  combatCacheItems,
-} from "@/deltas/combat";
+import { buildCombatProfileUpdate, canCacheCombatCompletion } from "@/deltas/combat";
+import type { BattleType } from "@/drizzle/constants";
 import {
   ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL,
   ELITE_JONIN_JUTSU_LEVEL_CAP,
@@ -26,29 +21,28 @@ import { stillInBattle } from "@/libs/combat/actions";
 import { settleObjectiveWarCombat } from "@/libs/combat/objectiveWar";
 import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
-import type {
-  ActionEffect,
-  BattleWar,
-  CombatResult,
-  CompleteBattle,
-} from "@/libs/combat/types";
 import {
   buildCombatTrackerTasks,
   calcBattleResult,
   didKageChallengerWin,
   didUserTakeKageSeat,
   getBattleTeamWars,
-  getItem,
-  getJutsu,
   getKageChallengeParticipants,
   getOpposingBattleWars,
   hydrateUserForQuests,
   isPvpEnergyRewardBattle,
-} from "@/libs/combat/util";
-import { claimVillageMissionCombatEvents } from "@/libs/combat/villageMission";
+} from "@/libs/combat/settlement";
+import type {
+  ActionEffect,
+  BattleUserState,
+  BattleWar,
+  CombatResult,
+  CompleteBattle,
+} from "@/libs/combat/types";
+import { getItem, getJutsu } from "@/libs/combat/util";
+import { claimVillageMissionPvpKills } from "@/libs/combat/villageMission";
 import { getPvpFarmActivityReductionSeconds } from "@/libs/farming";
 import { getJutsuMaxLevel } from "@/libs/jutsuProgression";
-import { allocateMasteryGains } from "@/libs/masteryProgression";
 import { isQuestComplete } from "@/libs/objectives";
 import { getWarSide } from "@/libs/objectiveWar";
 import {
@@ -57,11 +51,8 @@ import {
   updateUserOnMap,
 } from "@/libs/pusher";
 import { boostPvpGain } from "@/libs/pvpExperience";
-import {
-  filterQuestTrackersForDbPersist,
-  getNewTrackers,
-  getPublicQuestUser,
-} from "@/libs/quest";
+import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import { getIsolatedPyramid } from "@/libs/questRun";
 import {
   getRaidChatConversationId,
@@ -109,8 +100,7 @@ import {
   updateWarForRecoverWarShrine2,
   updateWarForRecoverWarShrine3,
   updateWarForUpdateWars,
-  updateWarForUpdateWars2,
-  updateWarForUpdateWars3,
+  updateWarHealthForUpdateWars,
 } from "@/queries/combat";
 import { reduceActiveFarmPlotTimers } from "@/queries/farming";
 import { deleteUserItemsWithPositiveQuantity } from "@/queries/item";
@@ -132,7 +122,6 @@ import {
   applyVillageMissionShrineDamage,
   recordVillageMissionProgress,
 } from "@/server/utils/villageMission";
-import { postCombatStealthCooldownAt } from "@/utils/time";
 
 /**
  * A raid is "boss defeated" when the boss AI exists in the battle and no
@@ -191,8 +180,11 @@ export const updateBattle = async (
       : null;
   }
   if (result) {
-    result.villageMissionPvpKills =
-      claimVillageMissionCombatEvents(newBattle, userId, result).pvp_kills ?? 0;
+    result.villageMissionPvpKills = claimVillageMissionPvpKills(
+      newBattle,
+      userId,
+      result,
+    );
   }
   // Calculations
   // raidBossDefeated: the boss specifically died (kill).
@@ -236,10 +228,10 @@ export const updateBattle = async (
   // Non-summon humans in this raid battle. Used to purge raid-chat memberships
   // on any raid battle-over (boss kill OR team wipe) and to release/notify
   // teammates when the raid boss is defeated.
-  const humanTeammates = raidEnded
-    ? newBattle.usersState.filter((u) => !u.isAi && !u.isSummon)
-    : [];
+  const humanTeammates = raidEnded ? humanFighters : [];
   const humanUserIds = humanTeammates.map((u) => u.userId);
+  const needsHospital = (teammate: BattleUserState) =>
+    !newBattle.forceKeepPools && teammate.curHealth <= 0;
 
   // Only the successful version claim may proceed to rewards and cleanup.
   // Ordinary settlement writes are not atomic with this claim; failures can leave partial settlement.
@@ -250,8 +242,7 @@ export const updateBattle = async (
       newBattle.extraState.tournamentGameId ||
       newBattle.extraState.kageMatch ||
       territoryWarAwards(newBattle).length > 0
-        ? client.transaction(async (tx) => {
-            const database = tx as unknown as DrizzleClient;
+        ? client.transaction(async (database) => {
             const deleted = await deleteBattle(database);
             // The version DELETE and match UPDATE must commit together: a single-row CAS
             // cannot prevent recovery treating a deleted battle as an interrupted launch.
@@ -280,8 +271,7 @@ export const updateBattle = async (
       updateBattleForUpdateBattleState(database, newBattle, fetchedVersion);
     const updated = await retryOnDeadlock(() =>
       result && territoryWarAwards(newBattle).length > 0
-        ? client.transaction(async (tx) => {
-            const database = tx as unknown as DrizzleClient;
+        ? client.transaction(async (database) => {
             const updated = await updateBattleState(database);
             // A decided PvP win must score before the opponent collects their result.
             // MySQL cannot UPDATE Battle and INSERT missing receipt/score rows in one
@@ -334,13 +324,12 @@ export const updateBattle = async (
         )
           .filter((u) => u.userId !== userId)
           .map(async (teammate) => {
-            const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
             const released = await updateUserDataForFinishBattle(
               client,
               combatEnergyRecoverySql,
               newBattle,
               teammate,
-              sendToHospital,
+              needsHospital(teammate),
             );
             // Raid deletion prevents teammates from polling their own settlement.
             // The battle claim and guarded release exclude stale or prior claims.
@@ -377,8 +366,7 @@ export const updateBattle = async (
         humanTeammates
           .filter((u) => u.userId !== userId && !u.fledBattle)
           .forEach((teammate) => {
-            const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
-            if (sendToHospital) return;
+            if (needsHospital(teammate)) return;
             void updateUserOnMap(pusher, teammate.sector, {
               ...teammate,
               longitude: teammate.originalLongitude,
@@ -751,10 +739,8 @@ export const updateWars = async (
       // Skip if we've already scheduled an update for this war (prevents double-counting when multiple targets share a war)
       // Use the per-war shrine HP changes (separate for attacker and defender shrines)
       const shrineChanges = result.villageWarShrineInfo[w.id];
-      const hasAttackerChange = shrineChanges?.attacker !== 0;
-      const hasDefenderChange = shrineChanges?.defender !== 0;
       if (
-        (hasAttackerChange || hasDefenderChange) &&
+        hasShrineChange(shrineChanges) &&
         ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
         !processedShrineWarIds.has(w.id)
       ) {
@@ -770,10 +756,7 @@ export const updateWars = async (
               if (change === 0) return;
 
               const { hp: hpCol } = shrineColumnsBySide[shrineType];
-              const villageName =
-                shrineType === "attacker"
-                  ? (w.attackerVillage?.name ?? "Attacker")
-                  : (w.defenderVillage?.name ?? "Defender");
+              const villageName = shrineVillageName(w, shrineType);
 
               if (change < 0) {
                 const ownerVillageId =
@@ -808,12 +791,10 @@ export const updateWars = async (
             };
 
             // Process both shrines
-            if (shrineChanges) {
-              await Promise.all([
-                processShrine("attacker", shrineChanges.attacker),
-                processShrine("defender", shrineChanges.defender),
-              ]);
-            }
+            await Promise.all([
+              processShrine("attacker", shrineChanges.attacker),
+              processShrine("defender", shrineChanges.defender),
+            ]);
           })(),
         );
       }
@@ -826,18 +807,18 @@ export const updateWars = async (
         !processedWarHealthIds.has(w.id)
       ) {
         processedWarHealthIds.add(w.id);
-        if (killerSideVillageId === w.attackerVillageId) {
-          otherPromises.push(updateWarForUpdateWars2(client, result, w));
-        } else {
-          otherPromises.push(updateWarForUpdateWars3(client, result, w));
-        }
+        const side =
+          killerSideVillageId === w.attackerVillageId ? "attacker" : "defender";
+        otherPromises.push(
+          updateWarHealthForUpdateWars(client, shrineColumnsBySide[side], result, w),
+        );
       }
     });
   });
 
   // Handle SHRINE_WAR defend scenarios where user and AI share same villageId
   // In these cases, both teams have the same faction, so warResults is empty
-  // but villageWarShrineInfo may still have data from the defend scenario handler in util.ts
+  // but villageWarShrineInfo may still have data from `calcWarDamage`
   if (curBattle.battleType === "SHRINE_WAR") {
     const userWars = getBattleTeamWars(curBattle, user).map(({ war }) => war);
     for (const warId of Object.keys(result.villageWarShrineInfo)) {
@@ -845,10 +826,7 @@ export const updateWars = async (
       if (processedShrineWarIds.has(warId)) continue;
 
       const shrineChanges = result.villageWarShrineInfo[warId];
-      const hasAttackerChange = shrineChanges?.attacker !== 0;
-      const hasDefenderChange = shrineChanges?.defender !== 0;
-
-      if (!hasAttackerChange && !hasDefenderChange) continue;
+      if (!hasShrineChange(shrineChanges)) continue;
 
       // Find the war from user's wars
       const w = userWars.find((war) => war.id === warId);
@@ -856,26 +834,24 @@ export const updateWars = async (
 
       processedShrineWarIds.add(warId);
 
-      if (shrineChanges) {
-        shrineUpdatePromises.push(
-          Promise.all([
-            recoverWarShrine(
-              client,
-              w,
-              "attacker",
-              shrineChanges.attacker,
-              result.notifications,
-            ),
-            recoverWarShrine(
-              client,
-              w,
-              "defender",
-              shrineChanges.defender,
-              result.notifications,
-            ),
-          ]),
-        );
-      }
+      shrineUpdatePromises.push(
+        Promise.all([
+          recoverWarShrine(
+            client,
+            w,
+            "attacker",
+            shrineChanges.attacker,
+            result.notifications,
+          ),
+          recoverWarShrine(
+            client,
+            w,
+            "defender",
+            shrineChanges.defender,
+            result.notifications,
+          ),
+        ]),
+      );
     }
   }
 
@@ -924,6 +900,18 @@ const shrineColumnsBySide = {
   },
 } as const;
 
+/** Whether a battle recorded any shrine change on this war. */
+const hasShrineChange = (
+  changes: CombatResult["villageWarShrineInfo"][string] | undefined,
+): changes is CombatResult["villageWarShrineInfo"][string] =>
+  !!changes && (changes.attacker !== 0 || changes.defender !== 0);
+
+/** Display name of the village holding one side of a war. */
+const shrineVillageName = (w: BattleWar, side: keyof typeof shrineColumnsBySide) =>
+  side === "attacker"
+    ? (w.attackerVillage?.name ?? "Attacker")
+    : (w.defenderVillage?.name ?? "Defender");
+
 /** Recover shrine HP and award recapture healing only to the battle that claims it. */
 const recoverWarShrine = async (
   client: DrizzleClient,
@@ -955,10 +943,7 @@ const recoverWarShrine = async (
 
   if (recaptureResult.rowsAffected > 0) {
     await updateWarForRecoverWarShrine2(client, columns, activeWar);
-    const villageName =
-      side === "attacker"
-        ? (w.attackerVillage?.name ?? "Attacker")
-        : (w.defenderVillage?.name ?? "Defender");
+    const villageName = shrineVillageName(w, side);
     notifications.push(
       `${villageName}'s shrine recaptured! ${villageName} gained ${WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL} war HP!`,
     );
@@ -1256,20 +1241,9 @@ export const updateUser = async (
 
     // Update quest tracker with battle result. pvp_kills is emitted on every COMBAT win; the
     // War-torn/Territory War (pvp quests) and active-war gating is applied per quest in getNewTrackers.
-    if (result.didWin > 0) {
-      if (curBattle.battleType === "COMBAT") {
-        trackerTasks.push({ task: "pvp_kills", increment: 1 });
-      }
-      if (curBattle.battleType === "ARENA") {
-        trackerTasks.push({ task: "arena_kills", increment: 1 });
-      }
-      if (curBattle.battleType === "RANDOM_ENCOUNTER") {
-        trackerTasks.push({ task: "random_encounter_wins", increment: 1 });
-      }
-      if (curBattle.battleType === "SPARRING") {
-        trackerTasks.push({ task: "spars_won", increment: 1 });
-      }
-    }
+    const winTask = WIN_TRACKER_TASKS[curBattle.battleType];
+    if (result.didWin > 0 && winTask)
+      trackerTasks.push({ task: winTask, increment: 1 });
 
     // Shared opponent credit follows the battle team, excluding summons and allies.
     const trackerEvents = [
@@ -1328,8 +1302,8 @@ export const updateUser = async (
     // Single call to getNewTrackers with all tasks
     const hydratedUser = hydrateUserForQuests(curBattle, user);
     // An isolated defeat stays in the run so its authored checkpoint remains playable.
-    if (getIsolatedPyramid(hydratedUser))
-      result.curHealth = Math.max(1, result.curHealth);
+    const isIsolated = !!getIsolatedPyramid(hydratedUser);
+    if (isIsolated) result.curHealth = Math.max(1, result.curHealth);
     // Tracker processing mutates the preloaded objects, so retain contribution receipts first.
     const previousPartyContributions = new Map(
       hydratedUser.questData.map((tracker) => [
@@ -1375,69 +1349,13 @@ export const updateUser = async (
     const deleteItems = user.items.filter((ui) => ui.quantity <= 0).map((i) => i.id);
     const updateItems = user.items.filter((ui) => ui.quantity > 0);
     if (isInWarTornSector && result.didWin === 0 && result.outcome === "Lost") {
-      updateItems.forEach((ui) => {
-        const item = getItem(curBattle, ui.itemId);
-        // Only reduce durability for equipped items (not "NONE") that are not consumables
-        if (
-          ui.equipped !== "NONE" &&
-          item?.itemType !== "CONSUMABLE" &&
-          item?.maxDurability &&
-          item.maxDurability > 0
-        ) {
-          // Reduce durability by 50, ensuring it doesn't go below 0
-          ui.durability = Math.max(0, ui.durability - 50);
-        }
-      });
+      applyWarTornDurabilityPenalty(curBattle, updateItems);
     }
-
-    // Check for low durability warnings (percent-based: <=50% and <=25%) and for broken items
-    const initialDurability = curBattle.extraState.initialDurability;
-    if (initialDurability?.[userId]) {
-      const userInitialDurability = initialDurability[userId];
-      user.items.forEach((battleItem) => {
-        const item = getItem(curBattle, battleItem.itemId);
-        if (item?.maxDurability && item.maxDurability > 0) {
-          const initial = userInitialDurability[battleItem.id];
-          const final = battleItem.durability;
-          const max = item.maxDurability;
-          if (initial === undefined) return;
-          const initialPct = Math.round((initial / max) * 100);
-          const finalPct = Math.round((final / max) * 100);
-          // Broken: now at 0
-          if (initial > 0 && final <= 0) {
-            result.notifications.push(
-              `${item.name} has broken and cannot be used until repaired!`,
-            );
-          } else if (
-            // Urgent warning: crossed down to <=25%
-            initialPct > 25 &&
-            finalPct <= 25 &&
-            final > 0
-          ) {
-            result.notifications.push(
-              `${item.name} durability is critically low at ${finalPct}%! Repair it soon to prevent it from breaking!`,
-            );
-          } else if (
-            // Regular warning: crossed down to <=50% (but still above 25%)
-            initialPct > 50 &&
-            finalPct <= 50 &&
-            finalPct > 25 &&
-            final > 0
-          ) {
-            result.notifications.push(
-              `${item.name} durability is now ${finalPct}%. Consider repairing it soon!`,
-            );
-          }
-        }
-      });
-    }
+    result.notifications.push(...durabilityNotifications(curBattle, user));
 
     // A kage cannot also be an elder, so only the winning challenger loses ELDER
     const tookKageSeat = didUserTakeKageSeat(curBattle, userId);
 
-    // Any jutsus to be updated
-    const jUsage = user.usedActions.filter((a) => a.type === "jutsu").map((a) => a.id);
-    const jUnique = [...new Set(jUsage)];
     const jExp = Math.floor(
       boostPvpGain(
         battleJutsuExp(
@@ -1448,16 +1366,7 @@ export const updateUser = async (
         user.pvpBoostPercent ?? 0,
       ),
     );
-    // Definitions are already preloaded in battle state; group by progression cap.
-    const jutsuXpGroups = new Map<number, string[]>();
-    for (const id of jUnique) {
-      const definition = getJutsu(curBattle, id);
-      if (!definition) continue;
-      const cap = getJutsuMaxLevel(definition);
-      const ids = jutsuXpGroups.get(cap) ?? [];
-      ids.push(id);
-      jutsuXpGroups.set(cap, ids);
-    }
+    const jutsuXpGroups = groupJutsuXp(curBattle, user);
     // Equipped items gain XP from eligible PvP battles (win vs loss amounts + event multiplier)
     const iExp = Math.floor(
       boostPvpGain(
@@ -1469,43 +1378,13 @@ export const updateUser = async (
         user.pvpBoostPercent ?? 0,
       ),
     );
-    // Group equipped items by their definition's xpToLevel for batched updates.
-    // Forced-loadout entries are synthetic rows; XP is credited to the real
-    // UserItem row they were seeded from (progressionRowId).
-    const equippedXpGroups = new Map<number, Set<string>>();
-    if (iExp > 0) {
-      for (const ui of user.items) {
-        if (ui.equipped === "NONE" || ui.quantity <= 0) continue;
-        const rowId = ui.progressionRowId ?? ui.id;
-        const def = getItem(curBattle, ui.itemId);
-        const xpToLevel = def?.xpToLevel ?? ITEM_XP_TO_LEVEL;
-        const ids = equippedXpGroups.get(xpToLevel) ?? new Set<string>();
-        ids.add(rowId);
-        equippedXpGroups.set(xpToLevel, ids);
-      }
-    }
     // If new prestige goes below 0, set allyVillage to false
     if (user.villagePrestige + result.villagePrestige < 0) {
       user.allyVillage = false;
     }
 
-    // Check for ranked win streak reward (every 3 wins) and total wins reward (every 3 wins)
-    // Use the user's rankedStreak and rankedWins from battle state (loaded at battle initiation)
-    let streakSeichiSilverBonus = 0;
     if (curBattle.battleType === "RANKED_PVP" && result.didWin) {
-      // Check win streak reward (every 3 consecutive wins)
-      const newStreak = user.rankedStreak + 1;
-      if (newStreak > 0 && newStreak % 3 === 0) {
-        streakSeichiSilverBonus += 1;
-      }
-      // Check total wins reward (every 3 total wins)
-      const newWins = user.rankedWins + 1;
-      if (newWins > 0 && newWins % 3 === 0) {
-        streakSeichiSilverBonus += 1;
-      }
-      if (streakSeichiSilverBonus > 0) {
-        result.seichiSilver += streakSeichiSilverBonus;
-      }
+      result.seichiSilver += rankedSeichiBonus(user);
     }
 
     const baseline = curBattle.extraState.profileCacheSnapshots?.[userId];
@@ -1628,7 +1507,7 @@ export const updateUser = async (
         : []),
       // Item experience & level from PvP (equipped items only; per-item xpToLevel)
       ...(iExp > 0
-        ? [...equippedXpGroups.entries()].map(
+        ? [...groupEquippedItemXp(curBattle, user).entries()].map(
             ([xpToLevel, ids]) =>
               () =>
                 updateUserItemForUpdateUser2(
@@ -1655,7 +1534,7 @@ export const updateUser = async (
             user,
             updatedQuestData,
             tookKageSeat,
-            hydratedUser,
+            isIsolated,
             confirmPet,
           );
         let saved = await save(confirmPetReward);
@@ -1689,51 +1568,22 @@ export const updateUser = async (
         // Only loaded definitions can project private targets; retain their display-only trackers.
         questData: trackers,
       } as NonNullable<UserWithRelations>);
-      const { masterySources: _privateSources, ...cacheBaseline } = baseline;
-      const settledItems = combatCacheItems(baseline, user.items);
-      const userDelta = {
-        ...combatCacheIntegerDelta(baseline, result),
-        ...(rewardPetId ? { petExperience } : {}),
-        offence: result.offence,
-        defence: result.defence,
-        strength: result.strength,
-        intelligence: result.intelligence,
-        willpower: result.willpower,
-        speed: result.speed,
-        dailyArenaFights: curBattle.battleType === "ARENA" ? 1 : 0,
-        dailySageActivations: user.sageModeUsedThisBattle ? 1 : 0,
-        ...allocateMasteryGains({ ...user, ...baseline }, result.masteryGains ?? {}),
-      };
-      result.profileUpdate = {
-        userId,
-        battleId: curBattle.id,
-        baseline: cacheBaseline,
-        userDelta,
+      result.profileUpdate = buildCombatProfileUpdate({
+        battle: curBattle,
+        result,
+        user,
+        baseline,
+        capacity,
+        regeneration,
+        settledAt,
+        questData: publicUser.questData,
         removedQuestIds: hydratedUser.userQuests
           .filter((entry) => !trackers.some((tracker) => tracker.id === entry.questId))
           .map((entry) => entry.questId),
-        userPatch: {
-          status: getIsolatedPyramid(hydratedUser) ? "BATTLE" : "AWAKE",
-          curHealth: Math.round(result.curHealth),
-          curStamina: Math.round(result.curStamina),
-          curChakra: Math.round(result.curChakra),
-          curEnergy: combatCacheEnergy(
-            baseline,
-            capacity,
-            regeneration,
-            settledAt,
-            result.energyReward ?? 0,
-            curBattle.extraState.energyRegenerationPeriods?.[userId],
-          ),
-          regenAt: settledAt,
-          stealthCooldownAt: postCombatStealthCooldownAt(settledAt),
-          pvpStreak: result.pvpStreak,
-          questData: publicUser.questData,
-          pveFights: baseline.pveFights + 1,
-          ...combatCacheDerived(baseline, settledItems, userDelta),
-        },
-        items: settledItems,
-      };
+        rewardPetId,
+        petExperience,
+        isIsolated,
+      });
     }
     // Update map status
     if (
@@ -1748,6 +1598,125 @@ export const updateUser = async (
     }
   }
   return { updatedQuestIds };
+};
+
+/** The win counter each battle type advances. */
+const WIN_TRACKER_TASKS: Partial<Record<BattleType, CombatQuestTrackerTask["task"]>> = {
+  COMBAT: "pvp_kills",
+  ARENA: "arena_kills",
+  RANDOM_ENCOUNTER: "random_encounter_wins",
+  SPARRING: "spars_won",
+};
+
+/** Charge the war-torn death penalty to equipped, durable non-consumables. */
+const applyWarTornDurabilityPenalty = (
+  battle: CompleteBattle,
+  items: BattleUserState["items"],
+) => {
+  items.forEach((ui) => {
+    const item = getItem(battle, ui.itemId);
+    // Only reduce durability for equipped items (not "NONE") that are not consumables
+    if (
+      ui.equipped !== "NONE" &&
+      item?.itemType !== "CONSUMABLE" &&
+      item?.maxDurability &&
+      item.maxDurability > 0
+    ) {
+      // Reduce durability by 50, ensuring it doesn't go below 0
+      ui.durability = Math.max(0, ui.durability - 50);
+    }
+  });
+};
+
+/** Percent-based low durability warnings (<=50% and <=25%) and broken-item notices. */
+const durabilityNotifications = (battle: CompleteBattle, user: BattleUserState) => {
+  const notifications: string[] = [];
+  const userInitialDurability = battle.extraState.initialDurability?.[user.userId];
+  if (!userInitialDurability) return notifications;
+  user.items.forEach((battleItem) => {
+    const item = getItem(battle, battleItem.itemId);
+    if (item?.maxDurability && item.maxDurability > 0) {
+      const initial = userInitialDurability[battleItem.id];
+      const final = battleItem.durability;
+      const max = item.maxDurability;
+      if (initial === undefined) return;
+      const initialPct = Math.round((initial / max) * 100);
+      const finalPct = Math.round((final / max) * 100);
+      // Broken: now at 0
+      if (initial > 0 && final <= 0) {
+        notifications.push(
+          `${item.name} has broken and cannot be used until repaired!`,
+        );
+      } else if (
+        // Urgent warning: crossed down to <=25%
+        initialPct > 25 &&
+        finalPct <= 25 &&
+        final > 0
+      ) {
+        notifications.push(
+          `${item.name} durability is critically low at ${finalPct}%! Repair it soon to prevent it from breaking!`,
+        );
+      } else if (
+        // Regular warning: crossed down to <=50% (but still above 25%)
+        initialPct > 50 &&
+        finalPct <= 50 &&
+        finalPct > 25 &&
+        final > 0
+      ) {
+        notifications.push(
+          `${item.name} durability is now ${finalPct}%. Consider repairing it soon!`,
+        );
+      }
+    }
+  });
+  return notifications;
+};
+
+/** Group a user's used jutsu by progression cap from the preloaded definitions. */
+const groupJutsuXp = (battle: CompleteBattle, user: BattleUserState) => {
+  const jUsage = user.usedActions.filter((a) => a.type === "jutsu").map((a) => a.id);
+  const groups = new Map<number, string[]>();
+  for (const id of new Set(jUsage)) {
+    const definition = getJutsu(battle, id);
+    if (!definition) continue;
+    const cap = getJutsuMaxLevel(definition);
+    const ids = groups.get(cap) ?? [];
+    ids.push(id);
+    groups.set(cap, ids);
+  }
+  return groups;
+};
+
+/**
+ * Group equipped items by their definition's xpToLevel for batched updates.
+ * Forced-loadout entries are synthetic rows; XP is credited to the real
+ * UserItem row they were seeded from (progressionRowId).
+ */
+const groupEquippedItemXp = (battle: CompleteBattle, user: BattleUserState) => {
+  const groups = new Map<number, Set<string>>();
+  for (const ui of user.items) {
+    if (ui.equipped === "NONE" || ui.quantity <= 0) continue;
+    const rowId = ui.progressionRowId ?? ui.id;
+    const def = getItem(battle, ui.itemId);
+    const xpToLevel = def?.xpToLevel ?? ITEM_XP_TO_LEVEL;
+    const ids = groups.get(xpToLevel) ?? new Set<string>();
+    ids.add(rowId);
+    groups.set(xpToLevel, ids);
+  }
+  return groups;
+};
+
+/**
+ * Seichi silver for ranked milestones: one per third consecutive win and one per third
+ * total win, from the rankedStreak and rankedWins loaded at battle initiation.
+ */
+const rankedSeichiBonus = (user: BattleUserState) => {
+  const newStreak = user.rankedStreak + 1;
+  const newWins = user.rankedWins + 1;
+  return (
+    (newStreak > 0 && newStreak % 3 === 0 ? 1 : 0) +
+    (newWins > 0 && newWins % 3 === 0 ? 1 : 0)
+  );
 };
 
 /**

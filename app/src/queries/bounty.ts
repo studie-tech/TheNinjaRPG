@@ -12,6 +12,16 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
+/** Public card of a user shown on a bounty. */
+const bountyUserColumns = {
+  username: true,
+  avatar: true,
+  level: true,
+  rank: true,
+  isOutlaw: true,
+  villageId: true,
+} as const;
+
 /** Build the `bounty` listing for `board`, using predicates on `status` and `collectedAt`. */
 export const listBountyForBoard = (
   client: Pick<DrizzleClient, "query">,
@@ -43,14 +53,7 @@ export const listBountyForBoard = (
     },
     with: {
       target: {
-        columns: {
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          villageId: true,
-        },
+        columns: bountyUserColumns,
       },
       hunters: {
         columns: {
@@ -58,36 +61,15 @@ export const listBountyForBoard = (
         },
         with: {
           hunter: {
-            columns: {
-              username: true,
-              avatar: true,
-              level: true,
-              rank: true,
-              isOutlaw: true,
-              villageId: true,
-            },
+            columns: bountyUserColumns,
           },
         },
       },
       creator: {
-        columns: {
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          villageId: true,
-        },
+        columns: bountyUserColumns,
       },
       claimedBy: {
-        columns: {
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          villageId: true,
-        },
+        columns: bountyUserColumns,
       },
     },
     orderBy: desc(bounty.createdAt),
@@ -290,36 +272,23 @@ export const findBountyForRemoveAllTrackers = (
 ) =>
   client.query.bounty.findFirst({
     where: eq(bounty.id, input.bountyId),
-    with: {
-      hunters: {
-        with: {
-          hunter: {
-            columns: {
-              userId: true,
-              username: true,
-            },
-          },
-        },
-      },
-    },
+    with: { hunters: { columns: { id: true } } },
   });
 
 /** Build the `actionLog` insert for `removeAllTrackers`. */
 export const insertActionLogForRemoveAllTrackers = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
-  hunters: (import("@/drizzle/schema").BountySignup & {
-    hunter: Pick<import("@/drizzle/schema").UserData, "userId" | "username">;
-  })[],
+  hunterCount: number,
   input: { bountyId: string },
 ) =>
   client.insert(actionLog).values({
     id: nanoid(),
     userId: ctx.userId,
     tableName: "bounty",
-    changes: [`Removed ${hunters.length} hunters from bounty tracking`],
+    changes: [`Removed ${hunterCount} hunters from bounty tracking`],
     relatedId: input.bountyId,
-    relatedMsg: `Staff removed all trackers from bounty: ${hunters.length} hunters removed`,
+    relatedMsg: `Staff removed all trackers from bounty: ${hunterCount} hunters removed`,
   });
 
 /** Build the `bountySignup` listing for `getTrackedBounties`, using predicates on `hunterUserId`. */

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { BasicElement, LetterRank, QuestType } from "@/drizzle/constants";
+import type { BasicElement } from "@/drizzle/constants";
 import {
   BasicElementName,
   ELEMENTAL_MASTERY_CAP,
@@ -12,11 +12,7 @@ import {
   UserRoles,
 } from "@/drizzle/constants";
 
-import {
-  activeTrainedElement,
-  elementalGainRoom,
-  providedElements,
-} from "@/libs/elementalMastery";
+import { elementalGainRoom } from "@/libs/elementalMastery";
 import { masteryGainRoom } from "@/libs/masteryProgression";
 import type { UserWithRelations } from "@/routers/profile";
 import { createStatSchema } from "@/validators/combat";
@@ -77,34 +73,6 @@ export const updateUserSchema = z.object({
 
 export type UpdateUserSchema = z.output<typeof updateUserSchema>;
 export type UpdateUserInput = z.input<typeof updateUserSchema>;
-
-export const getQuestCounterFieldName = (
-  type: QuestType | undefined,
-  rank: LetterRank | undefined,
-) => {
-  if (type === undefined || rank === undefined) return undefined;
-  switch (type) {
-    case "errand":
-      return "errands";
-    case "mission":
-      return `missions${rank}` as const;
-    case "crime":
-      return `crimes${rank}` as const;
-    default:
-      return undefined;
-  }
-};
-export type QuestCounterFieldName = ReturnType<typeof getQuestCounterFieldName>;
-
-/** Returns usable elements, including an optional active trained element and "None". */
-export const getUserElements = (user: UserWithRelations) => {
-  const finalElements = user ? providedElements(user) : [];
-  const trained = user && activeTrainedElement(user);
-  if (trained) finalElements.push(trained);
-  finalElements.push("None");
-  // A bloodline may already supply "None"; neutral access stays available only once.
-  return Array.from(new Set(finalElements));
-};
 
 export const getPublicUsersSchema = z.object({
   cursor: z.number().nullish(),
@@ -171,17 +139,9 @@ export const updateUserPreferencesSchema = z
     showPvpRecord: z.boolean().optional(),
   })
   .refine(
-    (data) => {
-      if (
-        data.preferredGeneral1 !== undefined &&
-        data.preferredGeneral2 !== undefined &&
-        data.preferredGeneral1 !== null &&
-        data.preferredGeneral2 !== null
-      ) {
-        return data.preferredGeneral1 !== data.preferredGeneral2;
-      }
-      return true;
-    },
+    (data) =>
+      data.preferredGeneral1 == null ||
+      data.preferredGeneral1 !== data.preferredGeneral2,
     {
       error: "General preferences must be different",
     },

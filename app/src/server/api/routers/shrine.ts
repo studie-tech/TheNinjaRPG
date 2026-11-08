@@ -28,7 +28,6 @@ import {
   SHRINE_MAX_LEVEL,
   SHRINE_UPGRADE_COST,
   SHRINE_WEEKLY_MAINTENANCE_COST,
-  shrineLobbyFreshAfter,
   VILLAGE_PROTECTOR_AI_ID,
   VILLAGE_SYNDICATE_ID,
   WAR_SHRINE_MAINTENANCE_DAYS,
@@ -110,6 +109,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
 // Pusher instance
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";

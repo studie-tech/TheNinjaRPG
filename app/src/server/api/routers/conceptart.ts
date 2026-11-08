@@ -45,8 +45,9 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { clientErrorMessage, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
+import { logDatabaseFailure } from "@/server/utils/sentry";
 import { canDeleteConceptArt, getBanOrSilenceRestriction } from "@/utils/permissions";
 import {
   conceptArtFilterSchema,
@@ -206,10 +207,11 @@ export const conceptartRouter = createTRPCRouter({
           ...getCreateVideoUserUpdate({ user }),
         };
       } catch (error) {
+        logDatabaseFailure(error, "Could not create a concept video");
         // Restore reputation points on failure
         await updateUserDataForCreateVideo2(ctx.drizzle, ctx);
         const message =
-          error instanceof Error ? error.message : "Failed to create video";
+          error instanceof Error ? clientErrorMessage(error) : "Failed to create video";
         return errorResponse(message);
       }
     }),

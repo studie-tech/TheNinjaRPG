@@ -11,7 +11,7 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import { getExpBracket, getPvpWinRate } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
-import { postProcessRewards } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
 import {
   advanceEvent,
   beginEventRound,
@@ -55,7 +55,6 @@ import {
   updateTournamentMatchForSyncEventTournament,
 } from "@/queries/tournamentEvents";
 import { initiateBattle } from "@/routers/combat";
-import { updateRewards } from "@/routers/quests";
 import {
   baseServerResponse,
   errorResponse,
@@ -68,6 +67,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { updateRewards } from "@/server/utils/questRewards";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { shuffle } from "@/utils/array";
@@ -93,33 +93,29 @@ export const eventTournamentProcedures = {
       listTournamentForListEvents(ctx.drizzle),
       findUserRoleById(ctx.drizzle, ctx.userId),
     ]);
-    return events
-      .filter(
-        (e) =>
-          e.eventData &&
-          (e.eventData.status !== "DRAFT" ||
-            canManageTournaments(user?.role ?? "USER")),
-      )
-      .map((e) => {
-        const state = e.eventData;
-        return {
+    return events.flatMap((e) => {
+      const state = e.eventData;
+      if (!state) return [];
+      if (state.status === "DRAFT" && !canManageTournaments(user?.role ?? "USER"))
+        return [];
+      return [
+        {
           id: e.id,
-          eventData: state
-            ? {
-                status: state.status,
-                participantCount: state.participants.filter((p) => !p.withdrawn).length,
-                config: {
-                  name: state.config.name,
-                  description: state.config.description,
-                  format: state.config.format,
-                  rules: state.config.rules,
-                  capacity: state.config.capacity,
-                  registrationClosesAt: state.config.registrationClosesAt,
-                },
-              }
-            : null,
-        };
-      });
+          eventData: {
+            status: state.status,
+            participantCount: state.participants.filter((p) => !p.withdrawn).length,
+            config: {
+              name: state.config.name,
+              description: state.config.description,
+              format: state.config.format,
+              rules: state.config.rules,
+              capacity: state.config.capacity,
+              registrationClosesAt: state.config.registrationClosesAt,
+            },
+          },
+        },
+      ];
+    });
   }),
   /** Synchronize authorized event reads before returning the bracket and player eligibility. */
   getEvent: protectedProcedure
@@ -197,6 +193,7 @@ export const eventTournamentProcedures = {
       await syncEventTournament(ctx.drizzle, input.tournamentId);
       const result = await editEvent(ctx.drizzle, input.tournamentId, (event) => {
         const now = Date.now();
+        // A cancelled, unpaid event may switch to paying rewards once; nothing else reopens it.
         if (
           event.status === "COMPLETED" ||
           (event.status === "CANCELLED" &&
@@ -820,8 +817,7 @@ const payEventRewards = async (client: DrizzleClient, row: EventRow) => {
   for (const userId of unpaid) {
     try {
       await retryOnDeadlock(() =>
-        client.transaction(async (tx) => {
-          const database = tx as unknown as DrizzleClient;
+        client.transaction(async (database) => {
           // Claim the still-retained terminal event, preventing cleanup from removing receipts
           // while a delayed payer is in flight. The version increment also fences deletion.
           const retained = await updateTournamentForPayEventRewards(database, row);

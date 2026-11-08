@@ -6,7 +6,7 @@ import { type BattleAction, aiProfile, battle, battleAction, battleHistory, user
 import { Pusher } from "@/libs/pusher";
 import type { BattleUpdate } from "@/libs/combat/log";
 import { buildCombatStateUpdate, captureCombatStateUpdate, getCombatEventUpdate, type CombatStateUpdate } from "@/deltas/combat";
-import { maskBattle } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { makeEffect } from "../../../../libs/combat/helpers/battleScenario";
 import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";

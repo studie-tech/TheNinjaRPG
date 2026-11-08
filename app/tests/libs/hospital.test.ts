@@ -6,9 +6,11 @@ import {
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import {
+  calcCombatHealPercentage,
   calcHospitalHealExperience,
   calcHospitalHealPools,
   calcHowMuchToHeal,
+  calcMedninHealablePool,
 } from "@/libs/hospital";
 
 describe("calcHospitalHealExperience", () => {
@@ -89,10 +91,33 @@ describe("calcHospitalHealPools", () => {
       curStamina: 100,
       maxStamina: 100,
     } as UserData;
-    expect(calcHowMuchToHeal(legendary, target, 100).toHeal).toBe(4000);
+    expect(calcHowMuchToHeal(target, 100, calcMedninHealablePool(legendary))).toBe(4000);
     expect(
-      calcHowMuchToHeal(legendary, target, 100, calcHospitalHealPools(legendary, true))
-        .toHeal,
+      calcHowMuchToHeal(target, 100, calcHospitalHealPools(legendary, true)),
     ).toBe(0);
+  });
+});
+
+describe("mednin rank tables", () => {
+  const healer = (rank: keyof typeof MEDNIN_REQUIRED_EXP) =>
+    ({
+      rank: rank === "NONE" ? "STUDENT" : "GENIN",
+      medicalExperience: MEDNIN_REQUIRED_EXP[rank],
+    }) as Parameters<typeof calcMedninHealablePool>[0];
+
+  it.each([
+    ["NONE", 30, ["Health"]],
+    ["NOVICE", 30, ["Health"]],
+    ["APPRENTICE", 40, ["Health"]],
+    ["MASTER", 50, ["Health"]],
+    ["LEGENDARY", 60, ["Health", "Chakra", "Stamina"]],
+  ] as const)("gives a %s healer %d%% and its pools", (rank, percentage, pools) => {
+    expect(calcCombatHealPercentage(healer(rank))).toBe(percentage);
+    expect(calcMedninHealablePool(healer(rank))).toEqual([...pools]);
+  });
+
+  it("treats a missing healer as unranked", () => {
+    expect(calcCombatHealPercentage(undefined)).toBe(30);
+    expect(calcMedninHealablePool(undefined)).toEqual(["Health"]);
   });
 });

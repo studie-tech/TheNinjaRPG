@@ -39,9 +39,9 @@ import {
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
 import Loader from "@/layout/Loader";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
-import { applyActiveVariant } from "@/libs/combat/util";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
+  applyActiveVariant,
   calcItemSellingPrice,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
@@ -50,9 +50,10 @@ import {
 } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
 import { fittingSlots, slotName } from "@/libs/itemsPage";
+import { hasRequiredLevel } from "@/libs/rank";
 import { getRepairKits } from "@/libs/repair";
 import { cn } from "@/libs/shadui";
-import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
+import { remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 

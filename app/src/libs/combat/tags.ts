@@ -27,6 +27,7 @@ import {
   getPreferredDamageElement,
   resolveElementalDamage,
 } from "@/libs/combat/elementalDamage";
+import { storeMasteryBases } from "@/libs/combat/mastery";
 import { getPotencyDescription } from "@/libs/combat/potency";
 import { getEffectPower } from "@/libs/combat/power";
 import {
@@ -51,7 +52,6 @@ import {
   sealCheck,
   selectTransferEffects,
   sortEffects,
-  storeMasteryBases,
 } from "@/libs/combat/util";
 import { oddQHexDistance, oddQLineStep } from "@/libs/hexgrid";
 import { MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
@@ -102,9 +102,8 @@ export const realizeTag = <T extends BattleEffect>(props: {
   level: number | undefined;
   round?: number;
   barrierAbsorb?: number;
-  battle?: Battle; // Make battle optional since it's not always needed
 }): T => {
-  const { user, level, round, barrierAbsorb, battle } = props;
+  const { user, level, round, barrierAbsorb } = props;
   // Passive effects also enter here without passing through action selection or insertion.
   const tag = resolveElementalDamage(props.tag, user) as T;
   if ("rounds" in tag || tag.type === "increaseaggro" || tag.type === "decreaseaggro") {
@@ -131,9 +130,6 @@ export const realizeTag = <T extends BattleEffect>(props: {
     if (tag.curHealth > tag.maxHealth) {
       tag.curHealth = tag.maxHealth;
     }
-  }
-  if (battle && "rounds" in tag) {
-    tag.createdRound = battle.round; // Use battle round if available
   }
   return structuredClone(tag);
 };
@@ -1104,20 +1100,7 @@ const removeEffects = (
   instantConsumeIds?: Set<string>,
 ) => {
   const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-
-  let text =
-    effect.isNew && effect.rounds && effect.rounds > 0
-      ? `All ${type} status effects may be cleared from ${target.username} during the next ${effect.rounds} rounds. `
-      : "";
-
-  if (mainCheck) {
-    text = `${target.username} will be cleared of ${type} status effects on their next round. `;
-    effect.rounds = 2;
-    effect.power = 100;
-  } else {
-    text += `${target.username} could not be cleared of ${type} status effects this round. `;
-  }
+  if (Math.random() < power / 100) effect.power = 100;
 
   if (effect.power === 100) {
     // Remove user effects
@@ -1144,10 +1127,20 @@ const removeEffects = (
         e.rounds = 0;
       });
 
-    text = `${target.username} was cleared of all ${type} status effects. `;
     effect.rounds = 0;
+    return {
+      txt: `${target.username} was cleared of all ${type} status effects. `,
+      color: "blue",
+    } as ActionEffect;
   }
-  return { txt: text, color: "blue" } as ActionEffect;
+  const upcoming =
+    effect.isNew && effect.rounds && effect.rounds > 0
+      ? `All ${type} status effects may be cleared from ${target.username} during the next ${effect.rounds} rounds. `
+      : "";
+  return {
+    txt: `${upcoming}${target.username} could not be cleared of ${type} status effects this round. `,
+    color: "blue",
+  } as ActionEffect;
 };
 
 /**
@@ -1576,15 +1569,8 @@ export const heal = (
   applyTimes: number,
 ) => {
   // Prevent?
-  const { pass, preventTag } = preventCheck(
-    usersEffects,
-    "healprevent",
-    target,
-    effect,
-  );
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be healed");
-  }
+  const { pass } = preventCheck(usersEffects, "healprevent", target, effect);
+  if (!pass) return preventResponse(effect, target, "cannot be healed");
   // Calculate healing
   const { power } = getPower(effect);
   // Battles persisted before the counter was floored can still carry a negative round,
@@ -1675,11 +1661,8 @@ export const curse = (
   round: number,
 ) => {
   if (!isEffectActive(effect) || effect.curseState) return;
-  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound && !pass) {
-    effect.rounds = 0;
-    return preventResponse(effect, target, "cannot be buffed");
-  }
+  const prevented = olderPreventResponse(effect, usersEffects, "buffprevent", target);
+  if (prevented) return prevented;
   effect.curseState = {
     storedHealing: 0,
     activatedRound: effect.isNew ? round : effect.createdRound,
@@ -1832,39 +1815,29 @@ export const wound = (
   const woundDamage =
     originalDamage > 0 ? Math.floor(originalDamage * (power / 100)) : 0;
 
-  if (shouldApply) {
-    // Only create wound damage when the target is the one taking an action
-    // This is the same logic used by other tags like residual damage
-    const isTargetsTurn = target.userId === effect.targetId;
+  if (shouldApply && woundDamage > 0) {
+    // Find or create a consequence for this target
+    let targetConsequence = Array.from(consequences.values()).find(
+      (c) => c.targetId === effect.targetId && c.userId === effect.creatorId,
+    );
 
-    if (isTargetsTurn) {
-      if (originalDamage > 0) {
-        if (woundDamage > 0) {
-          // Find or create a consequence for this target
-          let targetConsequence = Array.from(consequences.values()).find(
-            (c) => c.targetId === effect.targetId && c.userId === effect.creatorId,
-          );
-
-          if (!targetConsequence) {
-            targetConsequence = {
-              userId: effect.creatorId,
-              targetId: effect.targetId,
-              types: [
-                "wound",
-                ...("generalTypes" in effect && effect.generalTypes
-                  ? effect.generalTypes
-                  : []),
-                ...("elements" in effect && effect.elements ? effect.elements : []),
-              ],
-            };
-            consequences.set(`wound-${effect.id}`, targetConsequence);
-          }
-
-          // Add to existing wound damage or create new
-          targetConsequence.wound = (targetConsequence.wound || 0) + woundDamage;
-        }
-      }
+    if (!targetConsequence) {
+      targetConsequence = {
+        userId: effect.creatorId,
+        targetId: effect.targetId,
+        types: [
+          "wound",
+          ...("generalTypes" in effect && effect.generalTypes
+            ? effect.generalTypes
+            : []),
+          ...("elements" in effect && effect.elements ? effect.elements : []),
+        ],
+      };
+      consequences.set(`wound-${effect.id}`, targetConsequence);
     }
+
+    // Add to existing wound damage or create new
+    targetConsequence.wound = (targetConsequence.wound || 0) + woundDamage;
   }
 
   // Only show the message when the effect is first applied
@@ -2301,24 +2274,36 @@ export const move = (
       effect.rounds = 0;
       return;
     }
-    // This is related to users stepping into/out of ground effects
-    groundEffects.forEach((g) => {
-      if (g.timeTracker && user.userId in g.timeTracker) {
-        delete g.timeTracker[user.userId];
-      }
-    });
-    groundEffects.forEach((g) => {
-      if (
-        g.timeTracker &&
-        g.longitude === effect.longitude &&
-        g.latitude === effect.latitude
-      ) {
-        g.timeTracker[user.userId] = effect.createdRound;
-      }
-    });
-    user.longitude = effect.longitude;
-    user.latitude = effect.latitude;
+    relocateUser(
+      user,
+      effect.longitude,
+      effect.latitude,
+      groundEffects,
+      effect.createdRound,
+    );
   }
+};
+
+/** Place a user on a tile and move their ground-effect entry timers along with them. */
+const relocateUser = (
+  user: BattleUserState,
+  longitude: number,
+  latitude: number,
+  groundEffects: GroundEffect[],
+  round: number,
+) => {
+  groundEffects.forEach((g) => {
+    if (g.timeTracker && user.userId in g.timeTracker) {
+      delete g.timeTracker[user.userId];
+    }
+  });
+  groundEffects.forEach((g) => {
+    if (g.timeTracker && g.longitude === longitude && g.latitude === latitude) {
+      g.timeTracker[user.userId] = round;
+    }
+  });
+  user.longitude = longitude;
+  user.latitude = latitude;
 };
 
 /** One-hit-kill target with a given static chance */
@@ -2562,6 +2547,7 @@ export const redirection = (
   battle: ReturnedBattle,
   effect: UserEffect,
   usersEffects: UserEffect[],
+  caster: BattleUserState,
   target: BattleUserState,
   usersState: BattleUserState[],
   groundEffects: GroundEffect[],
@@ -2579,29 +2565,8 @@ export const redirection = (
     return;
   }
 
-  // Find the user who cast the effect
-  const caster = usersState.find((u) => u.userId === effect.creatorId);
-  if (!caster) {
-    return {
-      txt: `${target.username} cannot be pulled - caster not found`,
-      color: "red",
-    };
-  }
-
-  // Find the actual target user in the usersState array to update their position
-  const actualTarget = usersState.find((u) => u.userId === target.userId);
-  if (!actualTarget) {
-    return {
-      txt: `${target.username} cannot be redirected - target not found in battle state`,
-      color: "red",
-    };
-  }
-
   // Check if target and caster are at the same position
-  if (
-    actualTarget.longitude === caster.longitude &&
-    actualTarget.latitude === caster.latitude
-  ) {
+  if (target.longitude === caster.longitude && target.latitude === caster.latitude) {
     return {
       txt: `${target.username} is already at the caster's location`,
       color: "blue",
@@ -2609,7 +2574,7 @@ export const redirection = (
   }
 
   // A pull stops next to the caster; a push travels its full power.
-  const origin = { col: actualTarget.longitude, row: actualTarget.latitude };
+  const origin = { col: target.longitude, row: target.latitude };
   const casterTile = { col: caster.longitude, row: caster.latitude };
   const casterDistance = oddQHexDistance(
     origin.col,
@@ -2644,8 +2609,7 @@ export const redirection = (
     row < battle.height &&
     !(col === caster.longitude && row === caster.latitude) &&
     !usersState.some(
-      (u) =>
-        u.userId !== actualTarget.userId && u.longitude === col && u.latitude === row,
+      (u) => u.userId !== target.userId && u.longitude === col && u.latitude === row,
     ) &&
     !groundEffects.some(
       (g) => g.longitude === col && g.latitude === row && "curHealth" in g,
@@ -2663,25 +2627,13 @@ export const redirection = (
       oddQLineStep(landing, origin, steps),
     ).find(isOpenTile) ?? origin;
 
-  // Update the actual target's position in the battle state
-  actualTarget.longitude = destination.col;
-  actualTarget.latitude = destination.row;
-
-  // Handle ground effect timeTracker updates (mirroring the move function logic)
-  groundEffects.forEach((g) => {
-    if (g.timeTracker && actualTarget.userId in g.timeTracker) {
-      delete g.timeTracker[actualTarget.userId];
-    }
-  });
-  groundEffects.forEach((g) => {
-    if (
-      g.timeTracker &&
-      g.longitude === destination.col &&
-      g.latitude === destination.row
-    ) {
-      g.timeTracker[actualTarget.userId] = effect.createdRound;
-    }
-  });
+  relocateUser(
+    target,
+    destination.col,
+    destination.row,
+    groundEffects,
+    effect.createdRound,
+  );
 
   const actualDistance = oddQHexDistance(
     origin.col,
@@ -2775,7 +2727,6 @@ export const summon = (
             actionId: "initial",
             level: newAi.level,
             round: battle.round,
-            battle,
           }) as UserEffect;
           realizedEffect.targetId = newAi.userId;
           realizedEffect.fromType = fromType;
@@ -2864,10 +2815,7 @@ export const preventResponse = (
   } as ActionEffect;
 };
 
-/**
- * Prevention from a buff/debuff prevent tag older than the effect. The prevent roll
- * runs for any active tag, whatever its age.
- */
+/** Prevention from a buff/debuff prevent tag older than the effect. */
 const olderPreventResponse = (
   effect: UserEffect,
   usersEffects: UserEffect[],
@@ -2875,11 +2823,8 @@ const olderPreventResponse = (
   target: BattleUserState,
   message = kind === "buffprevent" ? "cannot be buffed" : "cannot be debuffed",
 ) => {
-  const { pass, preventTag } = preventCheck(usersEffects, kind, target);
-  if (preventTag && preventTag.createdRound < effect.createdRound && !pass) {
-    return preventResponse(effect, target, message);
-  }
-  return undefined;
+  const { pass } = preventCheck(usersEffects, kind, target, effect);
+  return pass ? undefined : preventResponse(effect, target, message);
 };
 
 /**
@@ -3042,13 +2987,8 @@ const preventCheck = (
 ) => {
   const preventTag = getActiveTargetEffects(usersEffects, target.userId, type)[0];
 
-  if (preventTag && (preventTag.rounds === undefined || preventTag.rounds > 0)) {
-    // Only prevent if the effect being checked was created after the prevent effect
-    if (effect && preventTag.createdRound >= effect.createdRound) {
-      return { pass: true, preventTag: preventTag };
-    }
-    const power = preventTag.power + preventTag.level * preventTag.powerPerLevel;
-    return { pass: Math.random() > power / 100, preventTag: preventTag };
-  }
-  return { pass: true, preventTag: preventTag };
+  if (!preventTag) return { pass: true };
+  // Only prevent if the effect being checked was created after the prevent effect
+  if (effect && preventTag.createdRound >= effect.createdRound) return { pass: true };
+  return { pass: Math.random() > getEffectPower(preventTag) / 100 };
 };

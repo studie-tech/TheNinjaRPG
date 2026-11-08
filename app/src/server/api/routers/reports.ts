@@ -1,5 +1,4 @@
 import { gt } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   ActiveBanStates,
@@ -30,12 +29,9 @@ import {
   insertHistoricalAvatarForUpdateUserAvatar,
   insertReportLogForClearNindo,
   insertReportLogForUpdateUserAvatar,
+  insertUserReport,
   insertUserReportDecisionComment,
-  insertUserReportForInsertUserReport,
   insertUserReviewForUpsertStaffReview,
-  listUserReportForClear,
-  listUserReportForClear2,
-  listUserReportForClear3,
   listUserReportForGetUserReports,
   listUserReportForLoadReports,
   listUserReviewForGetUserStaffReviews,
@@ -89,7 +85,7 @@ import {
 } from "@/utils/permissions";
 import { getMillisecondsFromTimeUnit, getUtcDayWindowStart } from "@/utils/time";
 import { idSchema } from "@/validators/misc";
-import type { AdditionalContext, ReportCommentSchema } from "@/validators/reports";
+import type { ReportCommentSchema } from "@/validators/reports";
 import {
   modBotPerformanceSchema,
   reportCommentSchema,
@@ -586,43 +582,17 @@ export const reportsRouter = createTRPCRouter({
       const mutations: PromiseLike<unknown>[] = [];
       // If someone was reported
       if (report.reportedUserId) {
-        const reportedUserId = report.reportedUserId;
-        const [bans, activeSilenceOrTimeout, activeTradeBans] = await Promise.all([
-          listUserReportForClear(ctx.drizzle, reportedUserId, report),
-          listUserReportForClear2(ctx.drizzle, reportedUserId, report),
-          listUserReportForClear3(ctx.drizzle, reportedUserId, report),
-        ]);
-        // A character can be recreated after these reads; only reset flags while
-        // no current report still enforces that restriction.
-        const noActiveReport = noActiveReportGuard(ctx.drizzle, reportedUserId, gt);
+        const targetIds = [report.reportedUserId];
+        // Each reset applies only while no current report enforces that restriction.
+        const noActiveReport = noActiveReportGuard(
+          ctx.drizzle,
+          report.reportedUserId,
+          gt,
+        );
         mutations.push(
-          ...(bans.length === 0
-            ? [
-                clearUserBanWithoutActiveReport(
-                  ctx.drizzle,
-                  [reportedUserId],
-                  noActiveReport,
-                ),
-              ]
-            : []),
-          ...(activeSilenceOrTimeout.length === 0
-            ? [
-                clearUserSilenceWithoutActiveReport(
-                  ctx.drizzle,
-                  [reportedUserId],
-                  noActiveReport,
-                ),
-              ]
-            : []),
-          ...(activeTradeBans.length === 0
-            ? [
-                clearUserTradeBanWithoutActiveReport(
-                  ctx.drizzle,
-                  [reportedUserId],
-                  noActiveReport,
-                ),
-              ]
-            : []),
+          clearUserBanWithoutActiveReport(ctx.drizzle, targetIds, noActiveReport),
+          clearUserSilenceWithoutActiveReport(ctx.drizzle, targetIds, noActiveReport),
+          clearUserTradeBanWithoutActiveReport(ctx.drizzle, targetIds, noActiveReport),
         );
       }
       mutations.push(
@@ -802,22 +772,4 @@ export const getBanEndDate = (input: ReportCommentSchema) => {
         Date.now() + input.banTime * getMillisecondsFromTimeUnit(input.banTimeUnit),
       )
     : null;
-};
-
-export const insertUserReport = async (
-  client: DrizzleClient,
-  info: {
-    userId: string;
-    reportedUserId: string;
-    system: string;
-    infraction: unknown;
-    additionalContext: AdditionalContext[];
-    reason: string;
-    aiInterpretation: string;
-    predictedStatus: BanState | null;
-  },
-) => {
-  const id = nanoid();
-  await insertUserReportForInsertUserReport(client, id, info);
-  return id;
 };

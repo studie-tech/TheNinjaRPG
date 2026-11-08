@@ -99,11 +99,7 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   const isRepairAllPending = isRepairingAll || isRepairingAllRyo;
 
   // Calculate which kits will be used (shared with item.useRepairAll)
-  const repairKitCalculation = calculateKitsToUse(
-    itemsNeedingRepair,
-    repairKits,
-    userItems,
-  );
+  const repairKitCalculation = calculateKitsToUse(itemsNeedingRepair, repairKits);
 
   const repairAllInfo = repairKitCalculation;
   const canRepairWithKits = repairKits.length > 0 && repairAllInfo.canRepairAll;

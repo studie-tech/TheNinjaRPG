@@ -4,7 +4,7 @@ import {
   trackerGoalValue,
 } from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
-import { getReward } from "@/libs/quest";
+import { getReward } from "@/libs/quest/rewards";
 
 const winQuestObjective = (id: string) => ({
   id,

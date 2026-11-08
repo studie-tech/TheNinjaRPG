@@ -2,7 +2,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { battle } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
-import { maskBattle } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 import { makeCompleteBattle } from "./helpers/battleScenario";
 

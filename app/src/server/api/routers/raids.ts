@@ -19,7 +19,7 @@ import {
 import type { Quest } from "@/drizzle/schema";
 import { getWarSide } from "@/libs/objectiveWar";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
-import { postProcessRewards } from "@/libs/quest";
+import { postProcessRewards } from "@/libs/quest/rewards";
 import {
   createBattleClaimId,
   getRaidChatConversationId,
@@ -106,7 +106,6 @@ import {
 import { deleteSectorByNumber } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser } from "@/routers/profile";
-import { updateRewards } from "@/routers/quests";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -121,6 +120,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { raidBattleStarted } from "@/server/utils/push/messages";
+import { updateRewards } from "@/server/utils/questRewards";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
 import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
@@ -379,10 +379,7 @@ export const raidsRouter = createTRPCRouter({
           id: queue.clanBattle.id,
           questId: queue.clanBattle.attackerEntityId,
           createdAt: queue.clanBattle.createdAt,
-          members: queue.clanBattle.queue.map((m) => ({
-            ...m,
-            user: m.user,
-          })),
+          members: queue.clanBattle.queue,
         },
       };
     }),

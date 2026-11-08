@@ -1686,27 +1686,14 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
       ctx,
       `All cache effects together may grant at most ${CACHE_MAX_GRANTED_ITEMS} items per opening`,
     );
-  if (hasNonCombatConsumeReward) {
-    if (data.itemType !== "CONSUMABLE") {
-      addIssue(ctx, "Non-combat consume reward must be consumable.");
-    }
-    if (data.target !== "SELF") {
-      addIssue(ctx, "Non-combat consume reward must target self");
-    }
-    if (data.method !== "SINGLE") {
-      addIssue(ctx, "Non-combat consume reward must have single method");
-    }
-  }
+  const requireSelfConsumable = (label: string) => {
+    if (data.itemType !== "CONSUMABLE") addIssue(ctx, `${label} must be consumable.`);
+    if (data.target !== "SELF") addIssue(ctx, `${label} must target self`);
+    if (data.method !== "SINGLE") addIssue(ctx, `${label} must have single method`);
+  };
+  if (hasNonCombatConsumeReward) requireSelfConsumable("Non-combat consume reward");
   if (hasBloodlineRoll || hasRemoveBloodline || hasSageModeRoll) {
-    if (data.itemType !== "CONSUMABLE") {
-      addIssue(ctx, "Items with bloodline/sage roll must be consumable.");
-    }
-    if (data.target !== "SELF") {
-      addIssue(ctx, "Items with bloodline/sage roll must target self");
-    }
-    if (data.method !== "SINGLE") {
-      addIssue(ctx, "Items with bloodline/sage roll must have single method");
-    }
+    requireSelfConsumable("Items with bloodline/sage roll");
   }
   if (hasSageModeActivation) {
     addIssue(
@@ -1715,15 +1702,7 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
     );
   }
   if (hasUnlockItemVariant) {
-    if (data.itemType !== "CONSUMABLE") {
-      addIssue(ctx, "Items with unlockitemvariant must be consumable.");
-    }
-    if (data.target !== "SELF") {
-      addIssue(ctx, "Items with unlockitemvariant must target self");
-    }
-    if (data.method !== "SINGLE") {
-      addIssue(ctx, "Items with unlockitemvariant must have single method");
-    }
+    requireSelfConsumable("Items with unlockitemvariant");
     if (!data.destroyOnUse) {
       addIssue(ctx, "Items with unlockitemvariant must be destroyed on use");
     }
@@ -2145,7 +2124,6 @@ export const ItemValidatorRawSchema = z.object({
       }),
     )
     .prefault([])
-    .optional()
     .nullish(),
 });
 export const ItemValidator = ItemValidatorRawSchema.superRefine(SuperRefineBase)
@@ -2193,43 +2171,15 @@ export const createStatSchema = (
     willpower: roomFor("willpower"),
   };
 
+  const statField = (max: number) =>
+    z.coerce.number().min(min).max(max).transform(roundStat).prefault(start);
   const schema = z.object({
-    offence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.offence)
-      .transform(roundStat)
-      .prefault(start),
-    defence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.defence)
-      .transform(roundStat)
-      .prefault(start),
-    strength: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.strength)
-      .transform(roundStat)
-      .prefault(start),
-    speed: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.speed)
-      .transform(roundStat)
-      .prefault(start),
-    intelligence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.intelligence)
-      .transform(roundStat)
-      .prefault(start),
-    willpower: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.willpower)
-      .transform(roundStat)
-      .prefault(start),
+    offence: statField(maxValues.offence),
+    defence: statField(maxValues.defence),
+    strength: statField(maxValues.strength),
+    speed: statField(maxValues.speed),
+    intelligence: statField(maxValues.intelligence),
+    willpower: statField(maxValues.willpower),
   });
 
   return { schema, maxValues };

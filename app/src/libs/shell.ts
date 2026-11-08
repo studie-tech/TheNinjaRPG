@@ -1,8 +1,10 @@
-import { GAME_LAYOUTS, getWelcomeLayout, toGameLayoutId } from "@/libs/gameLayouts";
 import {
-  type EffectiveLayout,
-  LAYOUT_PREFERENCE_COOKIE,
-} from "@/libs/layoutPreference";
+  GAME_LAYOUTS,
+  type GameLayoutId,
+  getWelcomeLayout,
+  toGameLayoutId,
+} from "@/libs/gameLayouts";
+import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import {
   LEMU_EXPERIMENT,
   type LemuVariant,
@@ -31,7 +33,7 @@ import { getRandomElement } from "@/utils/array";
  */
 export interface ShellVariant {
   client: "web" | "ios" | "android";
-  layout: EffectiveLayout;
+  layout: GameLayoutId;
   signedIn: boolean;
   wallpaper?: WallpaperVariant;
 }
@@ -55,7 +57,7 @@ export const parseShellParam = (param: string): ShellVariant | null => {
 
   return {
     client: client as ShellVariant["client"],
-    layout: layout as EffectiveLayout,
+    layout: layout as GameLayoutId,
     signedIn: session === "in",
     ...(wallpaper ? { wallpaper: parseWallpaperVariant(wallpaper) } : {}),
   };

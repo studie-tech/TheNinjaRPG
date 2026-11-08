@@ -97,7 +97,7 @@ import type {
   ZodQuestType,
 } from "@/validators/objectives";
 import type { PetTask } from "@/validators/petTasks";
-import type { RewardChoiceCard } from "@/validators/rewards";
+import { ObjectiveReward, type RewardChoiceCard } from "@/validators/rewards";
 
 /** Build the `quest` listing for `GET`, using predicates on `questType`, `content`, `hidden`. */
 export const listQuestForGET = (client: Pick<DrizzleClient, "query">) =>
@@ -374,8 +374,8 @@ export const listQuestForGetAll = (
   client.query.quest.findMany({
     with: { village: true },
     where: and(
-      ...(input?.name ? [like(quest.name, `%${input.name}%`)] : []),
-      ...(input?.objectives && input.objectives.length > 0
+      ...(input.name ? [like(quest.name, `%${input.name}%`)] : []),
+      ...(input.objectives && input.objectives.length > 0
         ? [
             or(
               ...input.objectives.map(
@@ -384,17 +384,17 @@ export const listQuestForGetAll = (
             ),
           ]
         : []),
-      ...(input?.questType ? [eq(quest.questType, input.questType)] : []),
-      ...(input?.rank ? [eq(quest.questRank, input.rank)] : []),
-      ...(input?.village ? [eq(quest.requiredVillage, input.village)] : []),
-      ...(input?.bloodline ? [eq(quest.requiredBloodlineId, input.bloodline)] : []),
-      ...(input?.sageMode ? [eq(quest.requiredSageModeId, input.sageMode)] : []),
-      ...(input?.userLevel ? [...questLevelFilters(input.userLevel)] : []),
-      ...(input?.hidden !== undefined ? [eq(quest.hidden, !!input.hidden)] : []),
+      ...(input.questType ? [eq(quest.questType, input.questType)] : []),
+      ...(input.rank ? [eq(quest.questRank, input.rank)] : []),
+      ...(input.village ? [eq(quest.requiredVillage, input.village)] : []),
+      ...(input.bloodline ? [eq(quest.requiredBloodlineId, input.bloodline)] : []),
+      ...(input.sageMode ? [eq(quest.requiredSageModeId, input.sageMode)] : []),
+      ...(input.userLevel ? [...questLevelFilters(input.userLevel)] : []),
+      ...(input.hidden !== undefined ? [eq(quest.hidden, !!input.hidden)] : []),
     ),
     offset: skip,
     limit: input.limit,
-    ...(input?.questType === "tier" ? { orderBy: asc(quest.tierLevel) } : {}),
+    ...(input.questType === "tier" ? { orderBy: asc(quest.tierLevel) } : {}),
   });
 
 /** Build the `userData` lookup for `get`, using predicates on `userId`. */
@@ -438,18 +438,9 @@ export const selectQuestForStartRandom = (
       completed: questHistory.completed,
       periodCompletes: questHistory.periodCompletes,
       periodStartAt: questHistory.periodStartAt,
-      // Extra history columns, aliased so they do NOT feed isAvailableUserQuests's flat
-      // reads (esp. `previousCompletes`, which would change mission-hall availability).
-      // Used only to reconstruct a prevEntry for upsertQuestEntry below, so it skips its
-      // internal questHistory.findFirst on every random mission start.
-      questHistoryId: questHistory.id,
-      historyPreviousCompletes: questHistory.previousCompletes,
-      historyStartedAt: questHistory.startedAt,
-      historyEndAt: questHistory.endAt,
-      historyPendingRewardChoice: questHistory.pendingRewardChoice,
-      historyEntryPaid: questHistory.entryPaid,
-      historyIsolated: questHistory.isolated,
-      historyQuestVersion: questHistory.questVersion,
+      // Nested so it does NOT feed isAvailableUserQuests's flat reads (esp. `previousCompletes`,
+      // which would change mission-hall availability). Null for a never-attempted quest.
+      history: getTableColumns(questHistory),
     })
     .from(quest)
     .leftJoin(
@@ -699,36 +690,7 @@ export const insertQuestForCreate = (
       sceneBackground: "",
       sceneCharacters: [],
       objectives: [],
-      reward: {
-        reward_medical_experience: 0,
-        reward_hunting_experience: 0,
-        reward_crafting_experience: 0,
-        reward_gathering_experience: 0,
-        reward_sage_mastery_experience: 0,
-        reward_seichi_silver: 0,
-        reward_money: 0,
-        reward_clanpoints: 0,
-        reward_anbupoints: 0,
-        reward_exp: 0,
-        reward_tokens: 0,
-        reward_prestige: 0,
-        reward_reputation: 0,
-        reward_skillpoints: 0,
-        reward_jutsus: [],
-        reward_bloodlines: [],
-        reward_sage_modes: [],
-        reward_badges: [],
-        reward_titles: [],
-        reward_items: [],
-        reward_rank: "NONE",
-        reward_village_membership: "NONE",
-        reward_hunter_items: false,
-        reward_gathering_items: false,
-        reward_hunter_items_ids: [],
-        reward_gathering_items_ids: [],
-        reward_war_damage: 0,
-        reward_war_healing: 0,
-      },
+      reward: ObjectiveReward.parse({}),
     },
   });
 
@@ -1283,57 +1245,41 @@ export const insertUserBadgeForUpdateRewards = (
     })),
   );
 
-/** Build the `war` update for `updateRewards`, setting `defenderWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateRewards = (
+/** Build the `war` update applying reward damage to one side, using predicates on `id` and `endedAt`. */
+export const updateWarDamageForUpdateRewards = (
   client: Pick<DrizzleClient, "update">,
-  rewards: { reward_war_damage: number },
-  activeWar: { id: string },
+  warId: string,
+  side: "attacker" | "defender",
+  damage: number,
 ) =>
   client
     .update(war)
-    .set({
-      defenderWarHealth: sql`GREATEST(defenderWarHealth - ${rewards.reward_war_damage}, 0)`,
-    })
-    .where(and(eq(war.id, activeWar.id), isNull(war.endedAt), warRaidCombatGuard()));
+    .set(
+      side === "attacker"
+        ? { attackerWarHealth: sql`GREATEST(attackerWarHealth - ${damage}, 0)` }
+        : { defenderWarHealth: sql`GREATEST(defenderWarHealth - ${damage}, 0)` },
+    )
+    .where(and(eq(war.id, warId), isNull(war.endedAt), warRaidCombatGuard()));
 
-/** Build the `war` update for `updateRewards`, setting `attackerWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateRewards2 = (
+/** Build the `war` update applying reward healing to one side, using predicates on `id` and `endedAt`. */
+export const updateWarHealingForUpdateRewards = (
   client: Pick<DrizzleClient, "update">,
-  rewards: { reward_war_damage: number },
-  activeWar: { id: string },
+  warId: string,
+  side: "attacker" | "defender",
+  healing: number,
 ) =>
   client
     .update(war)
-    .set({
-      attackerWarHealth: sql`GREATEST(attackerWarHealth - ${rewards.reward_war_damage}, 0)`,
-    })
-    .where(and(eq(war.id, activeWar.id), isNull(war.endedAt), warRaidCombatGuard()));
-
-/** Build the `war` update for `updateRewards`, setting `attackerWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateRewards3 = (
-  client: Pick<DrizzleClient, "update">,
-  rewards: { reward_war_healing: number },
-  activeWar: { id: string },
-) =>
-  client
-    .update(war)
-    .set({
-      attackerWarHealth: sql`LEAST(attackerWarHealth + ${rewards.reward_war_healing}, attackerWarHealthMax)`,
-    })
-    .where(and(eq(war.id, activeWar.id), isNull(war.endedAt), warRaidCombatGuard()));
-
-/** Build the `war` update for `updateRewards`, setting `defenderWarHealth`, using predicates on `id` and `endedAt`. */
-export const updateWarForUpdateRewards4 = (
-  client: Pick<DrizzleClient, "update">,
-  rewards: { reward_war_healing: number },
-  activeWar: { id: string },
-) =>
-  client
-    .update(war)
-    .set({
-      defenderWarHealth: sql`LEAST(defenderWarHealth + ${rewards.reward_war_healing}, defenderWarHealthMax)`,
-    })
-    .where(and(eq(war.id, activeWar.id), isNull(war.endedAt), warRaidCombatGuard()));
+    .set(
+      side === "attacker"
+        ? {
+            attackerWarHealth: sql`LEAST(attackerWarHealth + ${healing}, attackerWarHealthMax)`,
+          }
+        : {
+            defenderWarHealth: sql`LEAST(defenderWarHealth + ${healing}, defenderWarHealthMax)`,
+          },
+    )
+    .where(and(eq(war.id, warId), isNull(war.endedAt), warRaidCombatGuard()));
 
 /**
  * Build the `quest` selection for `fetchUncompletedQuests`, including predicates on
@@ -1553,9 +1499,14 @@ export const findQuestHistoryForUpsertQuestEntry = (
 /** Build the `questHistory` update for `upsertQuestEntry`, using predicates on `id`. */
 export const updateQuestHistoryForUpsertQuestEntry = (
   client: Pick<DrizzleClient, "update">,
-  startedAt: Date,
-  isOpenAttempt: false | true,
-  quest: { content: { isolated?: undefined | false | true }; updatedAt: Date },
+  reopened: {
+    startedAt: Date;
+    endAt: null;
+    completed: number;
+    entryPaid?: boolean;
+    isolated?: boolean;
+    questVersion?: Date;
+  },
   entry: { id: string },
   professionContract: false | true,
   noDelegatedAttempt: SQL<unknown>,
@@ -1563,19 +1514,10 @@ export const updateQuestHistoryForUpsertQuestEntry = (
   client
     .update(questHistory)
     .set({
-      startedAt,
-      endAt: null,
-      completed: 0,
+      ...reopened,
       // Atomic increment so a concurrent restart of the same row can't lose a count to a
       // stale JS-side base; matches the insert branch's onDuplicateKeyUpdate below.
       previousAttempts: sql`${questHistory.previousAttempts} + 1`,
-      ...(!isOpenAttempt
-        ? {
-            entryPaid: false,
-            isolated: quest.content.isolated ?? false,
-            questVersion: quest.updatedAt,
-          }
-        : {}),
     })
     .where(
       and(

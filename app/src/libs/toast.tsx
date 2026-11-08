@@ -63,16 +63,14 @@ const loadConfetti = (): Promise<FireConfetti | null> => {
   return confettiLoader;
 };
 
+const CONFETTI_DURATION_MS = 1000;
+const CONFETTI_COLORS = ["#FFD700", "#FFA500", "#FF6347", "#4169E1", "#32CD32"];
+
 /**
  * Trigger a confetti animation
- * @param duration - Duration of the animation in milliseconds (default: 1000)
- * @param colors - Array of colors for the confetti (default: gold, orange, red, blue, green)
  * @returns Promise that resolves when animation is complete (or immediately if running on server)
  */
-export const triggerConfetti = async (
-  duration = 1000,
-  colors = ["#FFD700", "#FFA500", "#FF6347", "#4169E1", "#32CD32"],
-): Promise<void> => {
+export const triggerConfetti = async (): Promise<void> => {
   // Start the celebration sound before particle imports can delay playback.
   // Autoplay restrictions are handled by the shared player without blocking confetti.
   if (CONFETTI_SFX_URL && getAudioPreference("sfxOn")) {
@@ -84,12 +82,12 @@ export const triggerConfetti = async (
     return;
   }
 
-  const animationEnd = Date.now() + duration;
+  const animationEnd = Date.now() + CONFETTI_DURATION_MS;
   const defaults = {
     startVelocity: 30,
     spread: 360,
     ticks: 60,
-    colors,
+    colors: CONFETTI_COLORS,
     disableForReducedMotion: true,
   };
 
@@ -104,7 +102,7 @@ export const triggerConfetti = async (
       return clearInterval(interval);
     }
 
-    const particleCount = 50 * (timeLeft / duration);
+    const particleCount = 50 * (timeLeft / CONFETTI_DURATION_MS);
 
     // Shoot confetti from left and right sides
     void fire({
@@ -175,41 +173,27 @@ export const showMutationToast = (data: {
     // native shells feedback everywhere. It no-ops in a browser and when the player has
     // haptics switched off.
     void haptics.notify(data.success ? "SUCCESS" : "ERROR");
-    if (data.success) {
-      toast({
-        title: data?.title ?? "Success",
-        description: data.message,
-        duration: data.duration,
-        id: data.id,
-        variant: data.variant ?? "default",
-        action: data.action ?? (
-          <ToastAction
-            altText="OK"
-            className="h-5 bg-green-600 md:h-10"
-            onClick={() => toast.dismiss()}
-          >
+    const { success } = data;
+    toast({
+      title: data.title ?? (success ? "Success" : "Error"),
+      description: data.message,
+      duration: data.duration,
+      id: data.id ?? (success ? undefined : getSessionErrorToastId(data.message)),
+      variant: data.variant ?? "default",
+      action: data.action ?? (
+        <ToastAction
+          altText="OK"
+          className={success ? "h-5 bg-green-600 md:h-10" : "h-5 bg-red-600 md:h-10"}
+          onClick={() => toast.dismiss()}
+        >
+          {success ? (
             <CheckCircle className="my-4 h-4 w-4 text-white md:h-6 md:w-6" />
-          </ToastAction>
-        ),
-      });
-    } else {
-      toast({
-        title: data?.title ?? "Error",
-        description: data.message,
-        duration: data.duration,
-        id: data.id ?? getSessionErrorToastId(data.message),
-        variant: data.variant ?? "default",
-        action: data.action ?? (
-          <ToastAction
-            altText="OK"
-            className="h-5 bg-red-600 md:h-10"
-            onClick={() => toast.dismiss()}
-          >
+          ) : (
             <XOctagon className="my-4 h-4 w-4 text-white md:h-6 md:w-6" />
-          </ToastAction>
-        ),
-      });
-    }
+          )}
+        </ToastAction>
+      ),
+    });
   }
   // Deliver consumed feedback before any caller awaits profile reconciliation.
   data.announcements?.forEach((message) => {

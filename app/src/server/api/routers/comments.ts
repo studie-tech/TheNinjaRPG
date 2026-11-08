@@ -33,11 +33,10 @@ import {
   deleteConversationMembership,
   fetchComments,
   fetchPrivateConversationSenders,
+  findConversationByTitle,
   findConversationCommentById,
   findConversationCommentForEditConversationComment,
   findConversationForGetConvo,
-  findConversationForGetConvo2,
-  findConversationForGetConvo3,
   findSupportTicketForConversation,
   findUserDataForGetUserConversations,
   findUserDataForSendTypingIndicator,
@@ -558,10 +557,9 @@ export const commentsRouter = createTRPCRouter({
       const skipInboxNotifications = isRaidChatConversationId(convo.id);
 
       // Extract quoted user IDs - filter out null/undefined values
-      const quotedUserIds = quotes
-        .filter((q) => q.user?.userId)
-        .map((q) => q.user?.userId)
-        .filter((id): id is string => !!id);
+      const quotedUserIds = quotes.flatMap((q) =>
+        q.user?.userId ? [q.user.userId] : [],
+      );
 
       const [notifiedUserIds] = await Promise.all([
         fetchUsersToNotify(
@@ -852,11 +850,7 @@ export const fetchConversation = async (params: FetchConvoOptions) => {
     if (id) {
       return await findConversationForGetConvo(client, id);
     } else if (title) {
-      // First try to find a public conversation with this title
-      const publicConvo = await findConversationForGetConvo2(client, title);
-      if (publicConvo) return publicConvo;
-      // Fallback to any conversation with this title (for private convos)
-      return await findConversationForGetConvo3(client, title);
+      return await findConversationByTitle(client, title);
     } else {
       throw serverError("BAD_REQUEST", "Invalid request");
     }
@@ -984,9 +978,7 @@ export const createConvo = async (info: {
       isPublic,
       isStaffAvailable,
     ),
-    ...uniqueUserIds.map((user) =>
-      insertUser2conversationForCreateConvo(client, insertId, user),
-    ),
+    insertUser2conversationForCreateConvo(client, insertId, uniqueUserIds),
     ...(receiverUserIds.length > 0
       ? [updateUserDataForCreateConversationComment(client, receiverUserIds, insertId)]
       : []),
@@ -1037,21 +1029,13 @@ export const fetchUsersToNotify = async (
     return notifiedUserIds;
   }
 
-  // Build the query for fetching users
-  const whereClause =
-    hasQuotes && hasMentions
-      ? or(
-          inArray(userData.username, mentionedUserNames),
-          inArray(userData.userId, quotedUserIds),
-        )
-      : hasMentions
-        ? inArray(userData.username, mentionedUserNames)
-        : inArray(userData.userId, quotedUserIds);
-
   // Execute the query with the appropriate where conditions
   const usersWithBlacklist = await listNotificationUserCandidates(
     client,
-    whereClause,
+    or(
+      hasMentions ? inArray(userData.username, mentionedUserNames) : undefined,
+      hasQuotes ? inArray(userData.userId, quotedUserIds) : undefined,
+    ),
     currentUserId,
   );
 

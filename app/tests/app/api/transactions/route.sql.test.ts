@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { GET } from "@/app/api/transactions/route";
 import { paypalTransaction, recruitmentRewards, stripePayment, userData, webStoreOrder } from "@/drizzle/schema";
 import * as gamesettings from "@/libs/gamesettings";
-import type { syncTransactions } from "@/server/api/routers/paypal";
+import type { syncTransactions } from "@/server/utils/paypal/fulfillment";
 import * as stripeClient from "@/server/utils/stripe/client";
 import { reserveStoreOrder } from "@/server/utils/webStore";
 import { dollars2reps } from "@/utils/paypal";

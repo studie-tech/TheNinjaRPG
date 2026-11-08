@@ -34,17 +34,17 @@ import { LogbookEntry } from "@/layout/Logbook";
 import MissionPicker from "@/layout/MissionPicker";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
-  fallbackQuestsFilter,
+  filterMissionHallQuests,
   getMissionHallSettings,
   getMissionHallTileQuests,
-  isReducedMissionReward,
   missionHallStartBlockedMessage,
   questDailyQuota,
-} from "@/libs/quest";
+} from "@/libs/quest/missionHall";
+import { isReducedMissionReward } from "@/libs/quest/rewards";
+import { availableQuestLetterRanks } from "@/libs/rank";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { availableQuestLetterRanks } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
@@ -258,7 +258,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
       {!currentQuest && !isPending && (
         <div className="grid grid-cols-3 gap-4 p-3 text-center italic">
           {getMissionHallSettings(userData.isOutlaw).map((setting) => {
-            const { filtered, rankInfo } = fallbackQuestsFilter(
+            const { filtered, rankInfo } = filterMissionHallQuests(
               regularMissions,
               userData,
               setting.type,

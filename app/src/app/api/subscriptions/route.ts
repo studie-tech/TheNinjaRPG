@@ -4,14 +4,14 @@ import {
   listPaypalSubscriptionForGET,
   updatePaypalSubscriptionForGET,
 } from "@/queries/paypal";
+import { drizzleDB } from "@/server/db";
+import { authenticateCronRequest } from "@/server/utils/cron";
 import {
   getPaypalAccessToken,
   getPaypalSubscription,
-  reconcilePaypalSubscription,
-} from "@/server/api/routers/paypal";
-import { drizzleDB } from "@/server/db";
-import { authenticateCronRequest } from "@/server/utils/cron";
-import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+} from "@/server/utils/paypal/client";
+import { reconcilePaypalSubscription } from "@/server/utils/paypal/fulfillment";
+import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/federalStatus";
 import { DAY_S, secondsFromNow } from "@/utils/time";
 
 export async function GET(request: Request) {

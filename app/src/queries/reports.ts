@@ -56,7 +56,7 @@ import {
 import { insertValuesWhere } from "@/queries/concurrency";
 import { userCardColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
-import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
+import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
 import sanitize from "@/utils/sanitize";
 import { secondsFromNow } from "@/utils/time";
 import type { AdditionalContext } from "@/validators/reports";
@@ -87,16 +87,16 @@ export const listUserReportForGET = (client: Pick<DrizzleClient, "query">) =>
 /** Build the `userReport` listing for `GET`, using predicates on `reportedUserId`, `status`, `banEnd`. */
 export const listUserReportForGET2 = (
   client: Pick<DrizzleClient, "query">,
-  bannedUsers: Map<string, boolean>,
-  silencedUsers: Map<string, boolean>,
-  tradeBannedUsers: Map<string, boolean>,
+  bannedUsers: Set<string>,
+  silencedUsers: Set<string>,
+  tradeBannedUsers: Set<string>,
 ) =>
   client.query.userReport.findMany({
     where: and(
       inArray(userReport.reportedUserId, [
-        ...bannedUsers.keys(),
-        ...silencedUsers.keys(),
-        ...tradeBannedUsers.keys(),
+        ...bannedUsers,
+        ...silencedUsers,
+        ...tradeBannedUsers,
       ]),
       inArray(userReport.status, [
         ...ActiveBanStates,
@@ -542,8 +542,8 @@ export const selectUserReportForGetAll = (
   const { reporterUserId, ...rest } = getTableColumns(userReport);
   return client
     .select({
-      UserReport: !staffUser ? { ...rest } : getTableColumns(userReport),
-      reportedUser: { ...getTableColumns(reportedUser) },
+      UserReport: staffUser ? getTableColumns(userReport) : rest,
+      reportedUser: getTableColumns(reportedUser),
     })
     .from(userReport)
     .where(
@@ -750,51 +750,6 @@ export const updateUserReportForEscalate = (
         gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`),
       ),
     );
-
-/** Build the `userReport` listing for `clear`, including predicates on `reportedUserId`, `status`, `banEnd`. */
-export const listUserReportForClear = (
-  client: Pick<DrizzleClient, "query">,
-  reportedUserId: string,
-  report: { id: string },
-) =>
-  client.query.userReport.findMany({
-    where: and(
-      eq(userReport.reportedUserId, reportedUserId),
-      inArray(userReport.status, ActiveBanStates),
-      gt(userReport.banEnd, new Date()),
-      ne(userReport.id, report.id),
-    ),
-  });
-
-/** Build the `userReport` listing for `clear`, including predicates on `reportedUserId`, `status`, `banEnd`. */
-export const listUserReportForClear2 = (
-  client: Pick<DrizzleClient, "query">,
-  reportedUserId: string,
-  report: { id: string },
-) =>
-  client.query.userReport.findMany({
-    where: and(
-      eq(userReport.reportedUserId, reportedUserId),
-      inArray(userReport.status, ActiveSilenceStates),
-      gt(userReport.banEnd, new Date()),
-      ne(userReport.id, report.id),
-    ),
-  });
-
-/** Build the `userReport` listing for `clear`, including predicates on `reportedUserId`, `status`, `banEnd`. */
-export const listUserReportForClear3 = (
-  client: Pick<DrizzleClient, "query">,
-  reportedUserId: string,
-  report: { id: string },
-) =>
-  client.query.userReport.findMany({
-    where: and(
-      eq(userReport.reportedUserId, reportedUserId),
-      eq(userReport.status, "TRADE_BAN_ACTIVATED"),
-      gt(userReport.banEnd, new Date()),
-      ne(userReport.id, report.id),
-    ),
-  });
 
 /** Build a ban reset guarded by the caller’s active-report predicate. */
 export const clearUserBanWithoutActiveReport = (
@@ -1039,6 +994,25 @@ export const insertUserReportForInsertUserReport = (
     additionalContext: info.additionalContext,
   });
 
+/** Persist a moderation report with a generated ID and return that ID after the insert completes. */
+export const insertUserReport = async (
+  client: DrizzleClient,
+  info: {
+    userId: string;
+    reportedUserId: string;
+    system: string;
+    infraction: unknown;
+    additionalContext: AdditionalContext[];
+    reason: string;
+    aiInterpretation: string;
+    predictedStatus: BanState | null;
+  },
+) => {
+  const id = nanoid();
+  await insertUserReportForInsertUserReport(client, id, info);
+  return id;
+};
+
 /**
  * Insert an automated moderation report
  * @param client - The database client
@@ -1072,19 +1046,7 @@ export const insertAutomatedModeration = async (
     userId: info.userId,
     content: info.content,
     relationType: info.relationType,
-    sexual: info.categories.sexual,
-    sexual_minors: info.categories.sexual_minors,
-    harassment: info.categories.harassment,
-    harassment_threatening: info.categories.harassment_threatening,
-    hate: info.categories.hate,
-    hate_threatening: info.categories.hate_threatening,
-    illicit: info.categories.illicit,
-    illicit_violent: info.categories.illicit_violent,
-    self_harm: info.categories.self_harm,
-    self_harm_intent: info.categories.self_harm_intent,
-    self_harm_instructions: info.categories.self_harm_instructions,
-    violence: info.categories.violence,
-    violence_graphic: info.categories.violence_graphic,
+    ...info.categories,
   });
 };
 
@@ -1302,7 +1264,7 @@ export const executeRowsForRemoveExpiredSanctionTombstones = (
       UPDATE ${userReport}
       INNER JOIN ${sanctionTombstone} ON ${and(eq(userReport.id, sanctionTombstone.sourceId), eq(userReport.reportedUserId, sanctionTombstone.userId))}
       SET ${userReport.status} = 'REPORT_CLEARED', ${userReport.adminResolved} = TRUE, ${userReport.updatedAt} = CURRENT_TIMESTAMP(3)
-      WHERE ${and(expired, inArray(userReport.status, [...ActiveBanStates, "SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"]), gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`))}
+      WHERE ${and(expired, inArray(userReport.status, [...ActiveBanStates, ...ActiveSilenceStates]), gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`))}
     `);
 
 /** Build the `sanctionTombstone` deletion for `removeExpiredSanctionTombstones`, using the configured predicates. */
@@ -1315,11 +1277,7 @@ export const deleteSanctionTombstoneForRemoveExpiredSanctionTombstones = (
 const activeSanctionReportsWhere = (userId: string) =>
   and(
     eq(userReport.reportedUserId, userId),
-    inArray(userReport.status, [
-      ...ActiveBanStates,
-      "SILENCE_ACTIVATED",
-      "TIMEOUT_ACTIVATED",
-    ]),
+    inArray(userReport.status, [...ActiveBanStates, ...ActiveSilenceStates]),
     gt(userReport.banEnd, new Date()),
   );
 

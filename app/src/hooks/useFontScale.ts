@@ -22,8 +22,6 @@ export const FONT_SCALE_OPTIONS = FONT_SCALE_VALUES.map((value) => ({
   label: FONT_SCALE_LABELS[value],
 }));
 
-export type { FontScaleValue };
-
 export const FONT_SCALE_STORAGE_KEY = "fontScale";
 
 export const useFontScale = () => {

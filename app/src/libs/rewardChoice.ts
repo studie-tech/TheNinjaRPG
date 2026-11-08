@@ -1,9 +1,11 @@
-import { QUEST_REWARD_PICK_MAX } from "@/drizzle/constants";
+import { QUEST_REWARD_PICK_MAX, type UserRole } from "@/drizzle/constants";
+import type { rewardPackage } from "@/drizzle/schema";
 import {
   canPromoteMastery,
   type MasteryProgressionSource,
 } from "@/libs/masteryProgression";
 import { collapseRewards } from "@/libs/rewards";
+import { canAwardReputation } from "@/utils/permissions";
 import type { QuestContentType } from "@/validators/objectives";
 import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
 import {
@@ -427,3 +429,55 @@ export const REWARD_CHOICE_CATEGORY_LABELS: Record<RewardChoiceCard["field"], st
     reward_titles: "Title",
     reward_package: "Reward Package",
   } as Record<RewardChoiceCard["field"], string>;
+
+/**
+ * Validate attachment identities, source approval and whole-bundle choice restrictions.
+ * Restricted reputation amounts must match the saved snapshot or approved catalog source;
+ * copied attachments can retain saved approval under fresh ids after catalog edits or deletion.
+ * Independent nodes without a catalog source retain approval only under their own saved id.
+ * @returns A recoverable save rejection, or null when every attachment is permitted.
+ */
+export const validateQuestRewardPackages = (
+  content: QuestContentType,
+  existing: QuestContentType,
+  packages: (typeof rewardPackage.$inferSelect)[],
+  role: UserRole,
+): string | null => {
+  const rewards = [content.reward, ...content.objectives];
+  const oldRewards = [existing.reward, ...existing.objectives];
+  const snapshots = rewards.flatMap((reward) => reward.reward_packages ?? []);
+  const oldSnapshots = oldRewards.flatMap((reward) => reward.reward_packages ?? []);
+  if (new Set(snapshots.map((pack) => pack.id)).size !== snapshots.length)
+    return "Each package snapshot must have a unique id";
+  for (const pack of snapshots) {
+    // Catalog copies can match their source; independent nodes must match their exact saved identity.
+    const old =
+      oldSnapshots.find(
+        (saved) => saved.id === pack.id && saved.packageId === pack.packageId,
+      ) ??
+      (pack.packageId
+        ? oldSnapshots.find(
+            (saved) =>
+              saved.packageId === pack.packageId &&
+              (canAwardReputation(role) ||
+                saved.rewards.reward_reputation === pack.rewards.reward_reputation),
+          )
+        : undefined);
+    const source = packages.find((source) => source.id === pack.packageId);
+    if (pack.packageId && !source && !old)
+      return "Reward package no longer exists. Select another package.";
+    if (
+      !canAwardReputation(role) &&
+      pack.rewards.reward_reputation !==
+        (old?.rewards.reward_reputation ?? source?.rewards.reward_reputation ?? 0)
+    )
+      return "Package reputation must match its approved snapshot";
+    if (
+      pack.rewards.reward_sage_modes.length > 1 &&
+      content.rewardMode === "choose" &&
+      content.reward.reward_packages?.includes(pack)
+    )
+      return "A reward choice package can contain at most one sage mode";
+  }
+  return null;
+};

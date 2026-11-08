@@ -5,7 +5,7 @@ import { Grid, rectangle } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { ActionEndTurn, ActionUseSpecificJutsu } from "@/validators/ai";
 import type { BattleUserState, CompleteBattle, ExtraState } from "@/libs/combat/types";
-import { maskBattle } from "@/libs/combat/util";
+import { maskBattle } from "@/libs/combat/masking";
 
 /**
  * Integration cover for auto combat at the ai_v2 CALL SITE: a human with

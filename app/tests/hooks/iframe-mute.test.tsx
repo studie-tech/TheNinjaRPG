@@ -82,6 +82,56 @@ it("shares a saved iframe mute preference with mounted and newly opened audio co
   await waitFor(() => expect(new URL(iframe.src).searchParams.get("mute")).toBe("1"));
 });
 
+it("rewrites an existing iframe once per toggle", async () => {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("data-user-iframe", "true");
+  iframe.src = "https://www.youtube-nocookie.com/embed/video";
+  document.body.append(iframe);
+  const { get, set } = Object.getOwnPropertyDescriptor(
+    Object.getPrototypeOf(iframe),
+    "src",
+  ) as PropertyDescriptor;
+  let writes = 0;
+  Object.defineProperty(iframe, "src", {
+    configurable: true,
+    get() {
+      return get?.call(this);
+    },
+    set(value: string) {
+      writes += 1;
+      set?.call(this, value);
+    },
+  });
+
+  const panel = renderHook(() => useIframeMute(), { wrapper });
+  await act(async () => {});
+  expect(writes).toBe(0);
+  act(() => panel.result.current.setIframesMuted(true));
+
+  expect(writes).toBe(1);
+  expect(new URL(iframe.src).searchParams.get("mute")).toBe("1");
+});
+
+it("falls back to the saved preference, then unmuted, without a profile value", async () => {
+  client.setQueryData(key, { userData: { userId: "iframe-listener" } });
+  localStorage.setItem("iframesMuted", "true");
+  const saved = renderHook(() => useIframeMute(), { wrapper });
+  await waitFor(() => expect(saved.result.current.isIframesMuted).toBe(true));
+
+  saved.unmount();
+  localStorage.removeItem("iframesMuted");
+  const unset = renderHook(() => useIframeMute(), { wrapper });
+  await waitFor(() => expect(unset.result.current.isIframesMuted).toBe(false));
+});
+
+it("prefers the profile value over the saved preference", async () => {
+  localStorage.setItem("iframesMuted", "true");
+  const panel = renderHook(() => useIframeMute(), { wrapper });
+  await act(async () => {});
+  expect(panel.result.current.isIframesMuted).toBe(false);
+  localStorage.removeItem("iframesMuted");
+});
+
 it("reports rejected saves without applying a successful profile patch", async () => {
   success = false;
   const panel = renderHook(() => useIframeMute(), { wrapper });

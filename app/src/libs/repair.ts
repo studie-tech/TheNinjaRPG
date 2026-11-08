@@ -95,14 +95,13 @@ export const getRepairKits = (
  * Shared by the inventory UI and `item.useRepairAll`.
  *
  * @param itemsNeedingRepair - Items that need repair
- * @param repairKits - Available stacks with unique inventory IDs and positive integer repair amounts
- * @param userItems - All user items (used to look up kit names)
+ * @param repairKits - Available stacks with unique inventory IDs and positive integer repair
+ * amounts, in any order
  * @returns Calculation result with kits to use, total durability needed, and whether all items can be repaired
  */
 export const calculateKitsToUse = (
   itemsNeedingRepair: UserItemWithRelations[],
   repairKits: RepairKit[],
-  userItems: UserItemWithRelations[] | undefined,
 ): RepairKitCalculationResult => {
   // If nothing needs repair, all items are already repaired (vacuously true)
   if (itemsNeedingRepair.length === 0) {
@@ -119,7 +118,6 @@ export const calculateKitsToUse = (
     return { kitsToUse: [], totalDurabilityNeeded, canRepairAll: false };
   }
 
-  const kitNames = new Map(userItems?.map((ui) => [ui.id, ui.item.name]));
   const kitsToUse: RepairKitCalculationResult["kitsToUse"] = [];
   // Stable sorting preserves inventory order among stacks with equal power.
   const sortedKits = [...repairKits].sort((a, b) => a.repairAmount - b.repairAmount);
@@ -134,7 +132,7 @@ export const calculateKitsToUse = (
     if (quantityUsed > 0) {
       kitsToUse.push({
         repairItemId: userItem.id,
-        repairItemName: kitNames.get(userItem.id) ?? "Unknown Repair Kit",
+        repairItemName: userItem.item.name,
         quantityUsed,
       });
       remainingDurability -= quantityUsed * repairAmount;

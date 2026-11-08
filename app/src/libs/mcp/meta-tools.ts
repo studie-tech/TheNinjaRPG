@@ -2,6 +2,7 @@ import type { CallToolResult, Tool } from "@modelcontextprotocol/server";
 import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import type { z } from "zod";
+import { clientErrorMessage } from "@/server/utils/mysqlErrors";
 import { truncateString } from "@/utils/string";
 import type { ModelContextProtocolTool } from "./types";
 
@@ -324,37 +325,8 @@ export const parseResponseFilters = (
     filters.maxLength = Math.min(procedureArguments.maxLength, MAXIMUM_RESPONSE_LENGTH);
   }
 
-  const hasActiveFilters =
-    (Array.isArray(filters.select) && filters.select.length > 0) ||
-    filters.search !== undefined ||
-    filters.maxLength !== undefined;
-  return hasActiveFilters ? filters : undefined;
+  return Object.keys(filters).length > 0 ? filters : undefined;
 };
-
-/**
- * Expand a wildcard segment by extracting array elements or object values.
- */
-function expandWildcard(arrayOrObject: unknown): unknown[] | undefined {
-  if (Array.isArray(arrayOrObject)) {
-    return arrayOrObject;
-  }
-  if (typeof arrayOrObject === "object" && arrayOrObject !== null) {
-    return Object.values(arrayOrObject as Record<string, unknown>);
-  }
-  return undefined;
-}
-
-/**
- * Apply remaining path segments to each expanded item and filter out undefined results.
- */
-function applyRemainingPath(
-  expandedItems: unknown[],
-  remainingSegments: string[],
-): unknown[] {
-  return expandedItems
-    .map((item) => resolvePathWithWildcards(item, remainingSegments))
-    .filter((result) => result !== undefined);
-}
 
 /**
  * Security constants for path segment validation
@@ -385,36 +357,6 @@ function validatePathSegment(segment: string | undefined): string | undefined {
 }
 
 /**
- * Handle wildcard expansion in a path.
- * Returns the resolved value after applying the wildcard and remaining path segments.
- */
-function handleWildcardSegment(current: unknown, remainingSegments: string[]): unknown {
-  const expandedArrayElements = expandWildcard(current);
-  if (!expandedArrayElements) return undefined;
-
-  // If no remaining path, return the expanded items directly
-  if (remainingSegments.length === 0) return expandedArrayElements;
-
-  // Otherwise, recursively apply remaining path to each item
-  return applyRemainingPath(expandedArrayElements, remainingSegments);
-}
-
-/**
- * Safely access a property on an object.
- * Returns the property value or undefined if not accessible.
- */
-function accessObjectProperty(current: unknown, normalizedSegment: string): unknown {
-  if (typeof current !== "object" || current === null) return undefined;
-
-  // Safe property access using Object.hasOwn to prevent prototype chain vulnerabilities
-  if (Object.hasOwn(current as Record<string, unknown>, normalizedSegment)) {
-    return (current as Record<string, unknown>)[normalizedSegment];
-  }
-
-  return undefined;
-}
-
-/**
  * Traverse a nested object/array following dot-notation path segments with wildcard support.
  * The `*` wildcard maps over array elements (or object values).
  *
@@ -441,14 +383,22 @@ const resolvePathWithWildcards = (
     const normalized = validatePathSegment(segment);
     if (normalized === undefined) return undefined;
 
-    // Handle wildcard expansion
+    // Everything else below reads an array or object
+    if (typeof current !== "object") return undefined;
+
+    // Expand a wildcard over array elements or object values, resolving the rest per item
     if (segment === "*") {
+      const items = Array.isArray(current) ? current : Object.values(current);
       const remainingSegments = pathSegments.slice(segmentIndex + 1);
-      return handleWildcardSegment(current, remainingSegments);
+      if (remainingSegments.length === 0) return items;
+      return items
+        .map((item) => resolvePathWithWildcards(item, remainingSegments))
+        .filter((result) => result !== undefined);
     }
 
-    // Access regular property
-    current = accessObjectProperty(current, normalized);
+    // Safe property access using Object.hasOwn to prevent prototype chain vulnerabilities
+    if (!Object.hasOwn(current, normalized)) return undefined;
+    current = (current as Record<string, unknown>)[normalized];
     if (current === undefined) return undefined;
   }
 
@@ -477,13 +427,10 @@ function extractFieldsFromResponse(
  * Check if a primitive value matches the search pattern.
  */
 function matchesPrimitive(value: unknown, lowerCasePattern: string): boolean {
-  if (typeof value === "string") {
-    return value.toLowerCase().includes(lowerCasePattern);
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value).toLowerCase().includes(lowerCasePattern);
-  }
-  return false;
+  return (
+    ["string", "number", "boolean"].includes(typeof value) &&
+    String(value).toLowerCase().includes(lowerCasePattern)
+  );
 }
 
 /**
@@ -491,19 +438,18 @@ function matchesPrimitive(value: unknown, lowerCasePattern: string): boolean {
  */
 function filterObjectEntries(
   sourceObject: Record<string, unknown>,
-  lowercasePattern: string,
-  pattern: string,
+  lowerCasePattern: string,
 ): { result: Record<string, unknown>; hasMatch: boolean } {
   const matchingEntries: Record<string, unknown> = {};
   let hasMatch = false;
 
   for (const [key, value] of Object.entries(sourceObject)) {
-    if (key.toLowerCase().includes(lowercasePattern)) {
+    if (key.toLowerCase().includes(lowerCasePattern)) {
       matchingEntries[key] = value;
       hasMatch = true;
       continue;
     }
-    const filtered = searchObject(value, pattern);
+    const filtered = searchObject(value, lowerCasePattern);
     if (filtered !== undefined) {
       matchingEntries[key] = filtered;
       hasMatch = true;
@@ -525,9 +471,7 @@ function filterObjectEntries(
  *   2. The value contains matches when recursively filtered (only includes matching subtree)
  * - Returns undefined if no matches found at any level, preserving the nested structure for matches
  */
-function searchObject(value: unknown, pattern: string): unknown {
-  const lowerCasePattern = pattern.toLowerCase();
-
+function searchObject(value: unknown, lowerCasePattern: string): unknown {
   if (value === null || value === undefined) return undefined;
 
   if (matchesPrimitive(value, lowerCasePattern)) {
@@ -536,7 +480,7 @@ function searchObject(value: unknown, pattern: string): unknown {
 
   if (Array.isArray(value)) {
     const filteredElements = value
-      .map((element) => searchObject(element, pattern))
+      .map((element) => searchObject(element, lowerCasePattern))
       .filter((filtered) => filtered !== undefined);
     return filteredElements.length > 0 ? filteredElements : undefined;
   }
@@ -545,7 +489,6 @@ function searchObject(value: unknown, pattern: string): unknown {
     const { result, hasMatch } = filterObjectEntries(
       value as Record<string, unknown>,
       lowerCasePattern,
-      pattern,
     );
     return hasMatch ? result : undefined;
   }
@@ -570,7 +513,7 @@ function applyFilters(result: unknown, filters?: ResponseFilters): string {
   }
 
   if (filters?.search) {
-    const searched = searchObject(data, filters.search);
+    const searched = searchObject(data, filters.search.toLowerCase());
     data = searched !== undefined ? searched : {};
   }
 
@@ -696,7 +639,7 @@ async function executeProcedure(
         content: [
           {
             type: "text" as const,
-            text: `Error calling ${endpointName}: ${error.message}`,
+            text: `Error calling ${endpointName}: ${clientErrorMessage(error)}`,
           },
         ],
       };

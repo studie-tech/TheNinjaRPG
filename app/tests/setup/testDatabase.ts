@@ -99,6 +99,7 @@ export const prepareTestDatabase = async () => {
   );
   // Rows a previous run left behind would leak into any suite that does not reset that table.
   await truncateEveryTable();
+  await dropEveryTrigger();
 };
 
 const truncateEveryTable = async () => {
@@ -210,6 +211,23 @@ export const resetTables = async (...tables: Table[]) => {
 export const runRawSql = async (statement: string) => {
   await getTestDatabase();
   await pool?.query(statement);
+};
+
+/** Triggers present in the test database, sorted by name. */
+export const triggerNames = async () => {
+  await getTestDatabase();
+  const [rows] = (await pool?.query(
+    "SELECT trigger_name AS name FROM information_schema.triggers WHERE trigger_schema = DATABASE()",
+  )) as [mysql.RowDataPacket[], unknown];
+  return rows.map((row) => row.name as string).sort();
+};
+
+/**
+ * The schema defines no triggers, so any trigger here is a fault injection from a run killed
+ * before its cleanup. Truncation leaves them in place, and they fail unrelated suites.
+ */
+export const dropEveryTrigger = async () => {
+  for (const name of await triggerNames()) await runRawSql(`DROP TRIGGER \`${name}\``);
 };
 
 /** Current index columns for a table, so a suite can assert on constraints. */

@@ -1,4 +1,10 @@
+import { DatabaseError } from "@planetscale/database";
+import { DrizzleQueryError } from "drizzle-orm";
 import { sleep } from "@/utils/time";
+
+/** What a client sees for a failed statement; Sentry and server logs keep the full error. */
+export const DATABASE_FAILURE_MESSAGE =
+  "The database could not complete this request. Please try again.";
 
 /**
  * Whether any error on the `.cause` chain passes `test`. Drizzle rethrows driver errors as
@@ -16,6 +22,35 @@ export const someErrorInChain = (
   }
   return false;
 };
+
+/** Whether a failed statement or a driver error is on the `.cause` chain. */
+export const isDatabaseFailure = (error: unknown): boolean =>
+  someErrorInChain(
+    error,
+    (current) =>
+      current instanceof DrizzleQueryError ||
+      current instanceof DatabaseError ||
+      // Next's runtime bundles can share a cached client but have separate error classes.
+      ("query" in current &&
+        typeof current.query === "string" &&
+        "params" in current &&
+        Array.isArray(current.params)) ||
+      // Driver transaction-control failures have no Drizzle query wrapper.
+      ((current.name === "DatabaseError" || current.name === "UnknownError") &&
+        "status" in current &&
+        typeof current.status === "number" &&
+        "body" in current &&
+        typeof current.body === "object" &&
+        current.body !== null),
+  );
+
+/**
+ * The text of `error` that may leave the server. A failed statement's Drizzle message is the
+ * SQL and params, a TRPCError or wrapper built on it repeats them, and the driver's own text
+ * echoes statements, values and tablet names, so a database failure is reported generically.
+ */
+export const clientErrorMessage = (error: Error): string =>
+  isDatabaseFailure(error) ? DATABASE_FAILURE_MESSAGE : error.message;
 
 const hasDuplicateKeyText = (text: string) =>
   text.includes("Duplicate entry") ||
