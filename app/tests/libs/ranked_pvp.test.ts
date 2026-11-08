@@ -86,6 +86,17 @@ describe("calculateLpEloChange", () => {
     expect(withoutSanninContext).toBe(RANKED_MIN_LP_GAIN);
     expect(withSanninContext).toBeGreaterThan(withoutSanninContext);
   });
+
+  it("adds the upset bonus per rank when a lower rank wins", () => {
+    // Wood beats Master: Elo 37.2 plus two ranks of upset bonus
+    expect(calculateLpEloChange({ rankedLp: 150, rankedStreak: 0 }, { rankedLp: 600 }, true, [])).toBe(57);
+  });
+
+  it("halves the loss only at the loss-protection rank gap", () => {
+    // Master loses to Adept (one rank apart) and to Wood (two ranks apart, Elo -22.3 halved)
+    expect(calculateLpEloChange({ rankedLp: 600, rankedStreak: 0 }, { rankedLp: 300 }, false, [])).toBe(-20);
+    expect(calculateLpEloChange({ rankedLp: 600, rankedStreak: 0 }, { rankedLp: 150 }, false, [])).toBe(-11);
+  });
 });
 
 describe("getRankedRadius", () => {
@@ -97,6 +108,13 @@ describe("getRankedRadius", () => {
     expect(getRankedRadius(180)).toBe(200);
     expect(getRankedRadius(240)).toBe(250);
     expect(getRankedRadius(RANKED_QUEUE_MAX_WAIT_SECS - 1)).toBe(250);
+  });
+
+  it("keeps step boundaries and the smallest radius for a skewed negative wait", () => {
+    expect(getRankedRadius(119)).toBe(100);
+    expect(getRankedRadius(239)).toBe(200);
+    expect(getRankedRadius(-1)).toBe(50);
+    expect(getRankedRadius(-120)).toBe(50);
   });
 
   it("ignores rank (Infinity radius) once the max wait is reached", () => {
