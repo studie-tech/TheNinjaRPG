@@ -270,6 +270,46 @@ describe("routing", () => {
   });
 });
 
+describe("highlight placement", () => {
+  const index = TUTORIAL_STEPS.findIndex((step) => step.id === "student-academy-building");
+  const target = () => TUTORIAL_STEPS[index]!.elementIds![0]!;
+
+  it("scrolls an off-screen target towards the middle, a bounded number of times", async () => {
+    const scrollBy = vi.fn();
+    Object.defineProperty(document, "scrollingElement", { configurable: true, value: { scrollBy } });
+    try {
+      show(index, {}, "/village", <Target id={target()} box={new DOMRect(40, 2000, 160, 48)} />);
+      expect(scrollBy).toHaveBeenCalledWith({ top: 2024 - (80 + window.innerHeight) / 2, behavior: "auto" });
+      await waitFor(() => expect(scrollBy).toHaveBeenCalledTimes(5), { timeout: 3000 });
+      await new Promise((done) => setTimeout(done, 600));
+      expect(scrollBy).toHaveBeenCalledTimes(5);
+    } finally {
+      Reflect.deleteProperty(document, "scrollingElement");
+    }
+  });
+
+  it("leaves a visible, well-placed target alone", async () => {
+    const scrollBy = vi.fn();
+    Object.defineProperty(document, "scrollingElement", { configurable: true, value: { scrollBy } });
+    try {
+      const middle = (80 + window.innerHeight) / 2;
+      const view = show(index, {}, "/village", <Target id={target()} box={new DOMRect(40, middle - 24, 160, 48)} />);
+      await new Promise((done) => setTimeout(done, 600));
+      expect(scrollBy).not.toHaveBeenCalled();
+      expect(lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute("data-dodge-highlight")).toBeNull();
+    } finally {
+      Reflect.deleteProperty(document, "scrollingElement");
+    }
+  });
+
+  it("moves the lesson aside when scrolling cannot uncover the target", async () => {
+    const view = show(index, {}, "/village", <Target id={target()} box={new DOMRect(40, 600, 160, 48)} />);
+    const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+    dock.getBoundingClientRect = () => new DOMRect(0, 500, 420, 300);
+    await waitFor(() => expect(lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute("data-dodge-highlight")).toBe("true"), { timeout: 3000 });
+  });
+});
+
 describe("mobile game menu", () => {
   const index = TUTORIAL_STEPS.findIndex((step) => step.requiresGameMenu);
 
