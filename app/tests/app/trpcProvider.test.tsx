@@ -380,21 +380,7 @@ it("sends captured profile causes through the provider without replacing session
 });
 
 it("coalesces a retired account's late batch while every query and mutation settles as failed", async () => {
-  const releases: Array<() => void> = [];
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    const count = new URL(String(input), "http://localhost").pathname
-      .split("/")
-      .at(-1)!
-      .split(",").length;
-    await new Promise<void>((resolve) => releases.push(resolve));
-    return Response.json(
-      Array.from({ length: count }, () => ({
-        result: {
-          data: superjson.serialize({ success: true, newStatus: "ASLEEP" }),
-        },
-      })),
-    );
-  });
+  const releases = holdBatchedFetch({ success: true, newStatus: "ASLEEP" });
   const { auth, trpc } = mountProvider(session("a"));
   const queries = [
     () => trpc.war.getWarPointClaims.query(),
@@ -461,19 +447,7 @@ it("coalesces expired-session failures before dispatch", async () => {
 });
 
 it("coalesces a local mutation error after unmount with a retired account's late query batch", async () => {
-  const releases: Array<() => void> = [];
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    const count = new URL(String(input), "http://localhost").pathname
-      .split("/")
-      .at(-1)!
-      .split(",").length;
-    await new Promise<void>((resolve) => releases.push(resolve));
-    return Response.json(
-      Array.from({ length: count }, () => ({
-        result: { data: superjson.serialize({ success: true, battleId: "battle-a" }) },
-      })),
-    );
-  });
+  const releases = holdBatchedFetch({ success: true, battleId: "battle-a" });
   const { auth, trpc, unmount, attack, onSuccess, onError } = mountArenaMutation(
     session("a"),
   );
@@ -654,6 +628,25 @@ it("keeps imperative reads free of React Query retries", async () => {
   await expect(read("z", 1)).rejects.toThrow("Bad input");
   expect(fetch).toHaveBeenCalledTimes(3);
 });
+
+/**
+ * Holds every batched fetch until the test calls its release, then answers each
+ * procedure in the batch with `data`. Returns the pending releases in arrival order.
+ */
+const holdBatchedFetch = (data: unknown) => {
+  const releases: Array<() => void> = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const count = new URL(String(input), "http://localhost").pathname
+      .split("/")
+      .at(-1)!
+      .split(",").length;
+    await new Promise<void>((resolve) => releases.push(resolve));
+    return Response.json(
+      Array.from({ length: count }, () => ({ result: { data: superjson.serialize(data) } })),
+    );
+  });
+  return releases;
+};
 
 const fetchFailure = (message = "Failed to fetch") => {
   const error = new TypeError(message);

@@ -53,17 +53,7 @@ const seedHappyPath = () => {
   mocks.findVillages.mockResolvedValue([
     { id: "village-1", type: "VILLAGE", sector: 1, structures: [] },
   ]);
-  mocks.select.mockReturnValueOnce({
-    from: vi.fn(() => ({
-      where: vi.fn(() => ({
-        groupBy: vi
-          .fn()
-          .mockResolvedValue([
-            { rank: "GENIN", villageId: "village-1", level: 10, count: 1 },
-          ]),
-      })),
-    })),
-  });
+  seedCombos([{ rank: "GENIN", villageId: "village-1", level: 10, count: 1 }]);
   mocks.update.mockImplementation(() => ({
     set: (value: Record<string, unknown>) => {
       mocks.updateSets.push(value);
@@ -211,17 +201,10 @@ describe("daily-quest cron", () => {
     const second = { ...daily, id: "daily-2" };
     seedHappyPath();
     mocks.findQuests.mockResolvedValue([daily, second]);
-    mocks.select.mockReset();
-    mocks.select.mockReturnValueOnce({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          groupBy: vi.fn().mockResolvedValue([
-            { rank: "GENIN", villageId: "village-1", level: 10, count: 1 },
-            { rank: "GENIN", villageId: "village-1", level: 12, count: 1 },
-          ]),
-        })),
-      })),
-    });
+    seedCombos([
+      { rank: "GENIN", villageId: "village-1", level: 10, count: 1 },
+      { rank: "GENIN", villageId: "village-1", level: 12, count: 1 },
+    ]);
 
     await GET(cronRequest());
 

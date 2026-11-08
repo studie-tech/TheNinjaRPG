@@ -48,15 +48,13 @@ describeWithDatabase("expired elder kage removal protection", () => {
       db.query.villageElderVote.findFirst(), db.query.notification.findMany(),
     ]);
     expect(vote?.status).toBe(isProtected ? "REJECTED" : "APPROVED");
+    expect(storedKage?.villagePrestige).toBe(KAGE_PRESTIGE_REQUIREMENT);
+    expect(notices.length).toBeGreaterThan(0);
     if (isProtected) {
       expect(storedVillage?.kageId).toBe("expired-kage");
-      expect(storedKage?.villagePrestige).toBe(KAGE_PRESTIGE_REQUIREMENT);
-      expect(notices.length).toBeGreaterThan(0);
     } else {
       expect(storedVillage?.kageId).not.toBe("expired-kage");
       expect(storedVillage?.leaderUpdatedAt).toEqual(now);
-      expect(storedKage?.villagePrestige).toBe(KAGE_PRESTIGE_REQUIREMENT);
-      expect(notices.length).toBeGreaterThan(0);
     }
   });
 });
