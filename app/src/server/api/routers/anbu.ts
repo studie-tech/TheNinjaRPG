@@ -552,7 +552,7 @@ export const anbuRouter = createTRPCRouter({
       }
 
       if (!success) {
-        return { success: false, message: "Espionage mission failed" };
+        return errorResponse("Espionage mission failed");
       }
 
       // Gather intelligence on target village

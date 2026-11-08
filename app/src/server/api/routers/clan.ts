@@ -1211,7 +1211,7 @@ export const clanRouter = createTRPCRouter({
       }
       const result = await debitUserMoney(ctx.drizzle, input.amount, ctx);
       if (result.rowsAffected === 0) {
-        return { success: false, message: "Not enough money in pocket" };
+        return errorResponse("Not enough money in pocket");
       }
       const creditResult = await updateClanForToBank(ctx.drizzle, input);
       if (creditResult.rowsAffected === 0) {
