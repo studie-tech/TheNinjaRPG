@@ -62,7 +62,6 @@ import {
   type UserPetInsert,
   userData,
   userItem,
-  userItemImbuement,
 } from "@/drizzle/schema";
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import { findLoadoutHotkeyConflict } from "@/libs/combat/hotkeys";
@@ -279,6 +278,7 @@ import {
   updateUserItemForTryRepairUserItemDurability,
   updateUserItemForUnequipAllItems,
   updateUserItemForUpdate,
+  userItemAvailableAt,
 } from "@/queries/item";
 import { fetchJutsuLoadouts } from "@/queries/jutsu";
 import { findActionLogById } from "@/queries/logs";
@@ -3788,7 +3788,7 @@ export const selectItemLoadout = async (
 
   // Apply atomically: a single statement equips the loadout and unequips
   // everything else, so there is no wipe-then-partial-fail window.
-  let equipped: ItemSlot = "NONE";
+  let equipped: ItemSlot | SQL = "NONE";
   if (assignments.length > 0) {
     const sqlChunks: SQL[] = [sql`(case`];
     for (const a of assignments) {
@@ -3796,15 +3796,12 @@ export const selectItemLoadout = async (
       // getEquipBlockReason + isImbuing): if a row was moved home/auction/crafting
       // or began imbuing between the snapshot and now, its arm no longer matches
       // and it falls to 'NONE' instead of being equipped while ineligible.
-      // Imbuement lives on a separate table, so it needs a correlated NOT EXISTS.
       sqlChunks.push(
-        sql`when ${userItem.id} = ${a.userItemId} and ${userItem.storedAtHome} = false and ${userItem.isInAuction} = false and (${userItem.craftingFinishedAt} is null or ${userItem.craftingFinishedAt} <= ${now}) and not exists (select 1 from ${userItemImbuement} where ${userItemImbuement.userItemId} = ${a.userItemId} and ${userItemImbuement.craftingFinishedAt} > ${now}) then ${a.slot}`,
+        sql`when ${and(eq(userItem.id, a.userItemId), userItemAvailableAt(client, a.userItemId, now))} then ${a.slot}`,
       );
     }
     sqlChunks.push(sql`else 'NONE' end)`);
-    // Drizzle narrows `equipped` to the enum union in set(); cast the raw CASE
-    // expression to that type so it is accepted as the column value.
-    equipped = sql.join(sqlChunks, sql.raw(" ")) as unknown as ItemSlot;
+    equipped = sql.join(sqlChunks, sql` `);
   }
   const equippedRows = await retryOnDeadlock(async () =>
     updateUserItemForSelectItemLoadout(client, equipped, user),
