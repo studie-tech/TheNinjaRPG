@@ -2,13 +2,15 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as client from "@/app/_trpc/client";
 import { getUserCaps } from "@/drizzle/constants";
+import * as ContentBox from "@/layout/ContentBox";
 import { EnergyTrainingQueue, useEnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
 import type { UserWithRelations } from "@/routers/profile";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import * as userContext from "@/utils/UserContext";
-import { createToastMock } from "../setup/toastMock";
+import { spyOnToasts } from "../setup/toastMock";
 
 type Result = UserDeltaResponse;
 type QueueCallbacks = {
@@ -30,54 +32,46 @@ type QueueMocks = {
   client?: QueryClient;
   timeDiff?: number;
 };
-function testMocks(): QueueMocks {
-  const globals = globalThis as typeof globalThis & { __energyQueueMocks?: QueueMocks };
-  globals.__energyQueueMocks ??= {
-    invalidate: vi.fn(async () => undefined),
-    mutate: vi.fn(),
-    updateUser: vi.fn(async (patch: unknown) => {
-      if (!patch || (typeof patch === "object" && "success" in patch && !("userPatch" in patch))) await testMocks().invalidate();
-    }),
-    callbacks: null,
-  };
-  return globals.__energyQueueMocks;
-}
-const mocks = testMocks();
+const mocks: QueueMocks = {
+  invalidate: vi.fn(async () => undefined),
+  mutate: vi.fn(),
+  updateUser: vi.fn(async (patch: unknown) => {
+    if (!patch || (typeof patch === "object" && "success" in patch && !("userPatch" in patch))) await mocks.invalidate();
+  }),
+  callbacks: null,
+};
 const profileKey = [["profile", "getUser"], { type: "query" }];
 const utils = {
   profile: { getUser: {
-    invalidate: (...args: Parameters<QueueMocks["invalidate"]>) => testMocks().invalidate(...args),
-    getData: () => testMocks().client?.getQueryData<{ serverTime: number }>(profileKey),
+    invalidate: (...args: Parameters<QueueMocks["invalidate"]>) => mocks.invalidate(...args),
+    getData: () => mocks.client?.getQueryData<{ serverTime: number }>(profileKey),
   } },
 };
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    useUtils: () => utils,
-    train: {
-      updateEnergyTrainingQueue: {
-        useMutation: (callbacks: QueueCallbacks) => {
-          testMocks().callbacks = callbacks;
-          return { mutate: testMocks().mutate, isPending: false };
-        },
+const api = {
+  useUtils: () => utils,
+  train: {
+    updateEnergyTrainingQueue: {
+      useMutation: (callbacks: QueueCallbacks) => {
+        mocks.callbacks = callbacks;
+        return { mutate: mocks.mutate, isPending: false };
       },
     },
   },
-}));
-vi.mock("@/layout/ContentBox", () => ({
-  default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-vi.mock("@/libs/toast", createToastMock);
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.invalidate.mockImplementation(async () => undefined);
   mocks.client = undefined;
   mocks.timeDiff = 0;
+  Object.assign(vi.spyOn(client, "api" as never), api);
+  vi.spyOn(ContentBox, "default").mockImplementation((({ children }: { children: ReactNode }) => <div>{children}</div>) as never);
+  spyOnToasts();
   vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({
     prepareUserUpdate: () => 7,
-    updateUser: testMocks().updateUser,
+    updateUser: mocks.updateUser,
   }) as never);
-  vi.spyOn(userContext, "useUserInfo").mockImplementation(() => ({ timeDiff: testMocks().timeDiff ?? 0 }) as never);
+  vi.spyOn(userContext, "useUserInfo").mockImplementation(() => ({ timeDiff: mocks.timeDiff ?? 0 }) as never);
 });
 afterEach(() => {
   cleanup();

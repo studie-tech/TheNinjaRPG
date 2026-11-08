@@ -1,10 +1,13 @@
-import { createToastMock } from "../setup/toastMock";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as client from "@/app/_trpc/client";
 import AiProfileEdit from "@/layout/AiProfileEdit";
+import * as ContentBox from "@/layout/ContentBox";
+import * as userContext from "@/utils/UserContext";
 import { ActionMoveTowardsOpponent, ActionEndTurn, ActionSpecificCombo, ActionUseSpecificJutsu, getBackupRules, type AiRuleType } from "@/validators/ai";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { spyOnToasts } from "../setup/toastMock";
 
 const mocks = {
   profile: { id: "custom", includeDefaultRules: true, rules: [] as AiRuleType[] },
@@ -13,25 +16,24 @@ const mocks = {
   query: vi.fn(),
   role: "CONTENT-ADMIN",
 };
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    useUtils: () => ({ ai: { getAiProfile: { invalidate: mocks.invalidate } }, profile: { getAi: { invalidate: mocks.invalidate }, getPublicUser: { invalidate: mocks.invalidate } } }),
-    ai: {
-      getAiProfile: { useQuery: (input: unknown, options: unknown) => {
-        mocks.query(input, options);
-        return { data: mocks.profile, isPending: false };
-      } },
-      toggleAiProfile: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      updateAiProfile: { useMutation: () => ({ mutate: mocks.save, isPending: false }) },
-    },
+const api = {
+  useUtils: () => ({ ai: { getAiProfile: { invalidate: mocks.invalidate } }, profile: { getAi: { invalidate: mocks.invalidate }, getPublicUser: { invalidate: mocks.invalidate } } }),
+  ai: {
+    getAiProfile: { useQuery: (input: unknown, options: unknown) => {
+      mocks.query(input, options);
+      return { data: mocks.profile, isPending: false };
+    } },
+    toggleAiProfile: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    updateAiProfile: { useMutation: () => ({ mutate: mocks.save, isPending: false }) },
   },
-}));
-vi.mock("@/utils/UserContext", () => ({ useRequiredUserData: () => ({ data: { role: mocks.role } }) }));
-vi.mock("@/libs/toast", createToastMock);
-vi.mock("@/layout/ContentBox", () => ({ default: ({ children }: { children: ReactNode }) => <div>{children}</div> }));
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.assign(vi.spyOn(client, "api" as never), api);
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({ data: { role: mocks.role } }) as never);
+  spyOnToasts();
+  vi.spyOn(ContentBox, "default").mockImplementation((({ children }: { children: ReactNode }) => <div>{children}</div>) as never);
   mocks.profile = { id: "custom", includeDefaultRules: true, rules: [{ conditions: [], action: ActionEndTurn.parse({}) }, ...getBackupRules()] };
   mocks.role = "CONTENT-ADMIN";
 });
@@ -73,7 +75,10 @@ describe("controlled companion AI configuration", () => {
     expect(onSave.mock.lastCall?.[0].rules).toHaveLength(7);
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 const mount = () => render(<AiProfileEdit userData={{ aiProfileId: "custom", userId: "editor", jutsus: [], items: [] }} />);
 const headers = (view: ReturnType<typeof mount>) => view.getAllByRole("button").filter((button) => /^Rule \d+:/.test(button.textContent ?? ""));
 const save = (view: ReturnType<typeof mount>) => {
