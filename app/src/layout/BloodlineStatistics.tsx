@@ -1,5 +1,5 @@
 import type { ChartData, Chart as ChartJS, ChartOptions } from "chart.js";
-import { BarChart2, Bug } from "lucide-react";
+import { Bug } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface BloodlineStatisticsProps {
-  trigger?: React.ReactNode;
+  trigger: React.ReactNode;
 }
 
 export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
@@ -25,14 +25,14 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
     if (!data) return [];
     // Calculate total including "none" entries but excluding "H" rank
     const filteredData = Object.entries(data).filter(([rank]) => rank !== "H");
-    const total = filteredData.reduce((sum, [_, count]) => sum + Number(count), 0);
+    const total = filteredData.reduce((sum, [_, count]) => sum + count, 0);
 
     // Include all entries including "none" but excluding "H" rank
     return filteredData
       .map(([rank, count]) => ({
         rank,
-        count: Number(count),
-        percentage: total > 0 ? (Number(count) / total) * 100 : 0,
+        count,
+        percentage: total > 0 ? (count / total) * 100 : 0,
       }))
       .sort((a, b) => {
         // Sort by rank: S, A, B, C, D, none (at the end)
@@ -50,16 +50,12 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
 
   // Calculate total rolls including "none" entries
   const totalRolls = data
-    ? Object.values(data).reduce((sum, count) => sum + Number(count), 0)
+    ? Object.values(data).reduce((sum, count) => sum + count, 0)
     : 0;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        {trigger || (
-          <BarChart2 className="h-6 w-6 cursor-pointer hover:text-orange-500" />
-        )}
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent className="w-[350px] md:w-[450px]" align="end">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -146,44 +142,10 @@ const BloodlineRollChart: React.FC<{ chartData: BloodlineChartDatum[] }> = ({
             {
               label: "Percentage",
               data: chartData.map((item) => parseFloat(item.percentage.toFixed(2))),
-              backgroundColor: chartData.map((item) => {
-                // Color based on rank
-                switch (item.rank) {
-                  case "S":
-                    return "rgba(255, 99, 132, 0.7)"; // Red
-                  case "A":
-                    return "rgba(255, 159, 64, 0.7)"; // Orange
-                  case "B":
-                    return "rgba(255, 205, 86, 0.7)"; // Yellow
-                  case "C":
-                    return "rgba(75, 192, 192, 0.7)"; // Green
-                  case "D":
-                    return "rgba(54, 162, 235, 0.7)"; // Blue
-                  case "none":
-                    return "rgba(201, 203, 207, 0.7)"; // Grey
-                  default:
-                    return "rgba(201, 203, 207, 0.7)"; // Grey
-                }
-              }),
-              borderColor: chartData.map((item) => {
-                // Border color based on rank
-                switch (item.rank) {
-                  case "S":
-                    return "rgb(255, 99, 132)";
-                  case "A":
-                    return "rgb(255, 159, 64)";
-                  case "B":
-                    return "rgb(255, 205, 86)";
-                  case "C":
-                    return "rgb(75, 192, 192)";
-                  case "D":
-                    return "rgb(54, 162, 235)";
-                  case "none":
-                    return "rgb(201, 203, 207)";
-                  default:
-                    return "rgb(201, 203, 207)";
-                }
-              }),
+              backgroundColor: chartData.map(
+                (item) => `rgba(${rankColor(item.rank)}, 0.7)`,
+              ),
+              borderColor: chartData.map((item) => `rgb(${rankColor(item.rank)})`),
               borderWidth: 1,
             },
           ],
@@ -255,6 +217,17 @@ const BloodlineRollChart: React.FC<{ chartData: BloodlineChartDatum[] }> = ({
     </div>
   );
 };
+
+const RANK_COLORS: Record<string, string> = {
+  S: "255, 99, 132",
+  A: "255, 159, 64",
+  B: "255, 205, 86",
+  C: "75, 192, 192",
+  D: "54, 162, 235",
+};
+
+/** Chart colour channels of a roll rank; unranked and "none" rolls are grey. */
+const rankColor = (rank: string) => RANK_COLORS[rank] ?? "201, 203, 207";
 
 type BloodlineChartDatum = {
   rank: string;
