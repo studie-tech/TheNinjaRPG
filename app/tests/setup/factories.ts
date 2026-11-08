@@ -16,6 +16,7 @@ import {
   userPet,
   userVote,
 } from "@/drizzle/schema";
+import type { QuestContentType } from "@/validators/objectives";
 import { getTestDatabase } from "./testDatabase";
 
 type Insert<T> = Partial<T> & Record<string, unknown>;
@@ -50,14 +51,19 @@ export const insertUsers = async (users: Insert<typeof userData.$inferInsert>[])
   return rows;
 };
 
-export const insertQuests = async (quests: Insert<typeof quest.$inferInsert>[]) => {
+/** Quest rows; `content` keys a test omits keep the empty defaults. */
+export const insertQuests = async (
+  quests: (Insert<Omit<typeof quest.$inferInsert, "content">> & {
+    content?: Partial<QuestContentType>;
+  })[],
+) => {
   const database = await getTestDatabase();
   const rows = quests.map((entry) => ({
     id: nanoid(),
     name: "Test quest",
     questType: "daily",
-    content: { objectives: [], reward: {}, sceneBackground: "", sceneCharacters: [] },
     ...entry,
+    content: { objectives: [], reward: {}, sceneBackground: "", sceneCharacters: [], ...entry.content },
   }));
   await database.insert(quest).values(rows as never);
   return rows;

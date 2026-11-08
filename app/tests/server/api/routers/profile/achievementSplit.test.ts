@@ -222,12 +222,7 @@ describe("questHasOverworldObjectives", () => {
  * both together keep `getUser` and `getAchievementCatalogue` cutting at the same place.
  */
 describeWithDatabase("fetchPublishedAchievements", () => {
-  const content = (objectives: unknown[]) => ({
-    objectives,
-    reward: {},
-    sceneBackground: "",
-    sceneCharacters: [],
-  }) as never;
+  const content = (objectives: unknown[]) => ({ objectives }) as never;
 
   beforeEach(async () => {
     await resetTables(quest);

@@ -75,7 +75,7 @@ describeWithDatabase("confirmed progression cache responses against MySQL", () =
   });
 
   it("introduces newly eligible achievement progress while withholding its static definition", async () => {
-    await insertQuests([{ id: "level-achievement", questType: "achievement", requiredLevel: 31, content: { objectives: [SimpleObjective.parse({ id: "level-goal", task: "user_level", value: 31 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    await insertQuests([{ id: "level-achievement", questType: "achievement", requiredLevel: 31, content: { objectives: [SimpleObjective.parse({ id: "level-goal", task: "user_level", value: 31 })], reward: ObjectiveReward.parse({}) } }]);
     await seed();
     const result = await (await callerFor(profileRouter, USER_ID)).levelUp();
     expect(result.success).toBe(true);
@@ -87,7 +87,7 @@ describeWithDatabase("confirmed progression cache responses against MySQL", () =
   });
 
   it("keeps reconciliation when a newly eligible tier needs bootstrapping", async () => {
-    await insertQuests([{ id: "new-tier", questType: "tier", requiredLevel: 31, content: { objectives: [SimpleObjective.parse({ id: "tier-goal", task: "user_level", value: 40 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    await insertQuests([{ id: "new-tier", questType: "tier", requiredLevel: 31, content: { objectives: [SimpleObjective.parse({ id: "tier-goal", task: "user_level", value: 40 })], reward: ObjectiveReward.parse({}) } }]);
     await seed();
     const result = await (await callerFor(profileRouter, USER_ID)).levelUp();
     expect(result.success).toBe(true);
@@ -116,7 +116,7 @@ describeWithDatabase("confirmed progression cache responses against MySQL", () =
   });
 
   it("masks hidden achievement coordinates in both definitions and trackers without mutating canonical state", async () => {
-    await insertQuests([{ id: "secret-achievement", questType: "achievement", content: { objectives: [MoveToObjective.parse({ id: "secret-goal", task: "move_to_location", sector: 8, longitude: 4, latitude: 5, hideLocation: true })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    await insertQuests([{ id: "secret-achievement", questType: "achievement", content: { objectives: [MoveToObjective.parse({ id: "secret-goal", task: "move_to_location", sector: 8, longitude: 4, latitude: 5, hideLocation: true })], reward: ObjectiveReward.parse({}) } }]);
     await seed({ sector: 1, questData: [{ id: "secret-achievement", startAt: new Date().toISOString(), goals: [{ id: "secret-goal", value: 0, done: false, collected: false, recentlyDied: false, sector: 8, longitude: 4, latitude: 5, locationChecked: true }] }] });
     const snapshot = await fetchUpdatedUser({ client: await getTestDatabase(), userId: USER_ID });
     if (!snapshot.user) throw new Error("Missing hydrated user");
