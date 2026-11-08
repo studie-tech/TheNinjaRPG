@@ -1,12 +1,16 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { createStore, Provider } from "jotai";
+import * as image from "@/layout/Image";
 import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import { maskBattle } from "@/libs/combat/masking";
 import * as UserContext from "@/utils/UserContext";
 import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
+import { actualImage } from "../setup/preload";
 
 beforeEach(() => {
+  // Other suites replace the layout Image module; avatars need the real one.
+  vi.spyOn(image, "default").mockImplementation(actualImage);
   vi.spyOn(UserContext, "useUserData").mockReturnValue({
     data: { userId: "viewer" }, timeDiff: 0,
   } as ReturnType<typeof UserContext.useUserData>);

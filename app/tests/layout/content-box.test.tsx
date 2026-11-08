@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
-import ContentBox from "@/layout/ContentBox";
+import ContentBox, * as contentBox from "@/layout/ContentBox";
+import { actualContentBox } from "../setup/preload";
 
 beforeEach(() => {
+  // Other suites replace ContentBox; this one renders the real component.
+  vi.spyOn(contentBox, "default").mockImplementation(actualContentBox);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ back: vi.fn(), push: vi.fn() } as never);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });

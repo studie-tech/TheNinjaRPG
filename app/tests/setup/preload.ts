@@ -9,6 +9,7 @@
 import { afterAll, beforeAll, beforeEach } from "bun:test";
 import Link from "@/layout/Link";
 import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
 import * as gamesettings from "@/libs/gamesettings";
 import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
 import {
@@ -24,6 +25,7 @@ import * as userContext from "@/utils/UserContext";
 // UI suites can restore real components and feedback after another suite mocks their module.
 export const actualLink = Link;
 export const actualContentBox = ContentBox;
+export const actualImage = Image;
 export const actualShowMutationToast = toast.showMutationToast;
 export const actualUserContext = { ...userContext };
 

@@ -1,7 +1,14 @@
-import { afterEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import type { SkillTreeFolder } from "@/drizzle/schema";
+import * as image from "@/layout/Image";
 import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
+import { actualImage } from "../setup/preload";
+
+// Other suites replace the layout Image module; this one renders the real wrapper.
+beforeEach(() => {
+  vi.spyOn(image, "default").mockImplementation(actualImage);
+});
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
