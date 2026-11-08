@@ -1512,14 +1512,13 @@ export const warRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchRequest(ctx.drizzle, input.id, "WAR_ALLY"),
+        fetchRequest(ctx.drizzle, input.id, "WAR_ALLY", { allowMissing: true }),
       ]);
 
       // Guards
       if (!user?.villageId) return errorResponse("Not in a village");
       if (!isKage(user)) return errorResponse("Not kage");
       if (!request) return errorResponse("Request not found");
-      if (request.type !== "WAR_ALLY") return errorResponse("Not a war ally request");
       if (request.status !== "PENDING") return errorResponse("Request not pending");
       if (request.receiverId !== user.userId) return errorResponse("Not your request");
 
@@ -1551,7 +1550,7 @@ export const warRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchRequest(ctx.drizzle, input.offerId, "WAR_ALLY"),
+        fetchRequest(ctx.drizzle, input.offerId, "WAR_ALLY", { allowMissing: true }),
       ]);
 
       // Guard
@@ -1589,9 +1588,13 @@ export const warRouter = createTRPCRouter({
           userId: ctx.userId,
         }),
         fetchActiveWars(ctx.drizzle),
-        fetchRequest(ctx.drizzle, input.offerId, "WAR_ALLY"),
+        fetchRequest(ctx.drizzle, input.offerId, "WAR_ALLY", { allowMissing: true }),
         fetchAlliances(ctx.drizzle),
       ]);
+      // Guard
+      if (!request) {
+        return errorResponse("Offer not found");
+      }
       // Derived
       const warId = request.relatedId;
       const activeWar = activeWars.find(
@@ -1605,9 +1608,6 @@ export const warRouter = createTRPCRouter({
           ? activeWar?.attackerVillage
           : activeWar?.defenderVillage;
       // Guard
-      if (!request) {
-        return errorResponse("Offer not found");
-      }
       if (!senderVillage) {
         return errorResponse("Sender village not found");
       }

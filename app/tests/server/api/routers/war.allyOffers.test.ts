@@ -28,24 +28,27 @@ describeWithDatabase("war ally offers that no longer exist", () => {
     await insertUsers([{ userId: KAGE, username: "AllyKage", villageId: VILLAGE }]);
   });
 
-  it("rejects declining a missing offer", async () => {
+  it("answers declining a missing offer", async () => {
     const caller = await callerFor(warRouter, KAGE);
-    await expect(caller.rejectAllyOffer({ id: GONE })).rejects.toMatchObject({
-      code: "NOT_FOUND",
+    expect(await caller.rejectAllyOffer({ id: GONE })).toEqual({
+      success: false,
+      message: "Request not found",
     });
   });
 
-  it("rejects delisting a missing offer", async () => {
+  it("answers delisting a missing offer", async () => {
     const caller = await callerFor(warRouter, KAGE);
-    await expect(caller.cancelAllyOffer({ offerId: GONE })).rejects.toMatchObject({
-      code: "NOT_FOUND",
+    expect(await caller.cancelAllyOffer({ offerId: GONE })).toEqual({
+      success: false,
+      message: "Offer not found",
     });
   });
 
-  it("rejects accepting a missing offer", async () => {
+  it("answers accepting a missing offer", async () => {
     const caller = await callerFor(warRouter, KAGE);
-    await expect(caller.acceptAllyOffer({ offerId: GONE })).rejects.toMatchObject({
-      code: "NOT_FOUND",
+    expect(await caller.acceptAllyOffer({ offerId: GONE })).toEqual({
+      success: false,
+      message: "Offer not found",
     });
   });
 });
