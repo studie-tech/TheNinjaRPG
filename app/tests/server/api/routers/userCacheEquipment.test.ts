@@ -244,6 +244,37 @@ describeWithDatabase("committed profile cache patches", () => {
     expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "worn-kit") }))?.quantity).toBe(2);
   });
 
+  it.each([
+    ["moved home", { storedAtHome: true }],
+    ["listed in an auction", { isInAuction: true }],
+    ["crafting", { craftingFinishedAt: new Date(Date.now() + 3_600_000) }],
+    ["imbuing", undefined],
+  ] as const)("leaves gear unequipped when it is %s between the loadout snapshot and the write", async (_, change) => {
+    const db = await getTestDatabase();
+    await db.update(userItem).set({ durability: 100, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
+    await db.insert(itemLoadout).values({ id: "cache-loadout", userId, name: "Cache", itemData: [{ userItemId: "worn-armor", itemId: "cache-armor", slot: "CHEST" }] });
+    const client = beforeStatements(db, userItem, [async () => {
+      if (change) await db.update(userItem).set(change).where(eq(userItem.id, "worn-armor"));
+      else await db.insert(userItemImbuement).values({ id: "busy-imbuement", userItemId: "worn-armor", imbuementItemId: "cache-armor", craftingFinishedAt: new Date(Date.now() + 3_600_000) });
+    }], { operations: ["update"] });
+    await callerForDatabase(itemRouter, userId, client).selectItemLoadout({ id: "cache-loadout" });
+    expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "worn-armor") }))?.equipped).toBe("NONE");
+  });
+
+  it.each([
+    ["moved home", { storedAtHome: true }],
+    ["imbuing", undefined],
+  ] as const)("auto-equip leaves gear unequipped when it is %s after the snapshot", async (_, change) => {
+    const db = await getTestDatabase();
+    await db.update(userItem).set({ durability: 100, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
+    const client = beforeStatements(db, userItem, [async () => {
+      if (change) await db.update(userItem).set(change).where(eq(userItem.id, "worn-armor"));
+      else await db.insert(userItemImbuement).values({ id: "busy-imbuement", userItemId: "worn-armor", imbuementItemId: "cache-armor", craftingFinishedAt: new Date(Date.now() + 3_600_000) });
+    }], { operations: ["update"] });
+    await callerForDatabase(itemRouter, userId, client).autoEquipOptimal();
+    expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "worn-armor") }))?.equipped).toBe("NONE");
+  });
+
   it("reuses the loadout's committed slots without another profile read", async () => {
     const db = await getTestDatabase();
     await db.update(userItem).set({ durability: 100, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
