@@ -24,7 +24,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { TimeUnit } from "@/drizzle/constants";
-import { REPORT_CONTEXT_WINDOW, TERR_BOT_ID, TimeUnits } from "@/drizzle/constants";
+import {
+  REPORT_CONTEXT_WINDOW,
+  REPORT_TIMEOUT_HOURS,
+  TERR_BOT_ID,
+  TimeUnits,
+} from "@/drizzle/constants";
 import type { UserReport } from "@/drizzle/schema";
 import { CommentOnReport } from "@/layout/Comment";
 import Confirm from "@/layout/Confirm";
@@ -279,7 +284,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
               </div>
             ) : canModerate && canTimeout ? (
               <p className="mb-2 text-sm text-muted-foreground">
-                Timeout duration is fixed at 1 hour.
+                Timeout duration is fixed at {REPORT_TIMEOUT_HOURS} hour.
               </p>
             ) : null}
 
@@ -369,7 +374,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                 )}
                 {canModerate && canTimeout && (
                   <Confirm
-                    title="Confirm Timeout (1 hour)"
+                    title={`Confirm Timeout (${REPORT_TIMEOUT_HOURS} hour)`}
                     button={
                       <Button id="submit_timeout" variant="destructive">
                         <Clock className="mr-2 h-5 w-5" />
@@ -380,10 +385,10 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                       await handleSubmitTimeout();
                     }}
                   >
-                    You are about to timeout the user for 1 hour. This works like a
-                    silence. Please note that the comment and decision can not be edited
-                    or deleted. You can unsilence the person by posting another comment
-                    and &rdquo;Clear&rdquo; the report.
+                    You are about to timeout the user for {REPORT_TIMEOUT_HOURS} hour.
+                    This works like a silence. Please note that the comment and decision
+                    can not be edited or deleted. You can unsilence the person by
+                    posting another comment and &rdquo;Clear&rdquo; the report.
                   </Confirm>
                 )}
                 {canModerate && canBan && (

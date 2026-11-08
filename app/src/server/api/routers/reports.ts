@@ -5,6 +5,7 @@ import {
   ActiveSilenceStates,
   type BanState,
   BanStates,
+  REPORT_TIMEOUT_HOURS,
 } from "@/drizzle/constants";
 import type { UserReport } from "@/drizzle/schema";
 import { getForumContext, resolveForumPost } from "@/libs/forum";
@@ -85,7 +86,12 @@ import {
   canWarnUsers,
   isStaffRole,
 } from "@/utils/permissions";
-import { getMillisecondsFromTimeUnit, getUtcDayWindowStart } from "@/utils/time";
+import {
+  getMillisecondsFromTimeUnit,
+  getUtcDayWindowStart,
+  HOUR_S,
+  secondsFromNow,
+} from "@/utils/time";
 import { idSchema } from "@/validators/misc";
 import type { ReportCommentSchema } from "@/validators/reports";
 import {
@@ -477,7 +483,7 @@ export const reportsRouter = createTRPCRouter({
       scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
       return { success: true, message: "User silenced" };
     }),
-  // Timeout: 1-hour silence. CONTENT-ADMIN and EVENT-ADMIN only.
+  // Timeout: timed silence. CONTENT-ADMIN and EVENT-ADMIN only.
   timeout: protectedProcedure
     .input(reportTimeoutSchema)
     .output(baseServerResponse)
@@ -492,7 +498,7 @@ export const reportsRouter = createTRPCRouter({
       const hasModRights = canModerateReports(user, report);
       if (!hasModRights) return errorResponse("You cannot resolve this report");
       if (!canTimeoutUsers(user)) return errorResponse("You cannot timeout users");
-      const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
+      const timeoutEnd = secondsFromNow(REPORT_TIMEOUT_HOURS * HOUR_S);
       const applied = await applySanction(
         ctx,
         report,
@@ -500,12 +506,15 @@ export const reportsRouter = createTRPCRouter({
         {
           status: "TIMEOUT_ACTIVATED",
           adminResolved: true,
-          banEnd: oneHourFromNow,
+          banEnd: timeoutEnd,
         },
         updateUserDataForSilence,
       );
       if (!applied) return errorResponse(SANCTION_UNAVAILABLE_MESSAGE);
-      return { success: true, message: "User timed out (1 hour)" };
+      return {
+        success: true,
+        message: `User timed out (${REPORT_TIMEOUT_HOURS} hour)`,
+      };
     }),
   // Issue warning to user
   warn: protectedProcedure

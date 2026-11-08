@@ -2629,6 +2629,8 @@ export const repTradeLevelMessage = `You must reach level ${REP_TRADE_MIN_LEVEL}
 export const PARENTAL_MAX_APPROVED_PLAYERS = 50;
 
 export const REPORT_CONTEXT_WINDOW = 20;
+/** How long a report timeout silences the reported user. */
+export const REPORT_TIMEOUT_HOURS = 1;
 
 // Kage config
 export const FRIENDLY_PRESTIGE_COST = 10000; // Prestige cost of killing friendly

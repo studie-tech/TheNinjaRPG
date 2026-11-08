@@ -386,7 +386,7 @@ export const canSilenceUsers = (user: UserData) => {
   ].includes(user.role);
 };
 
-/** Timeout: 1-hour silence. Usable by CONTENT-ADMIN and EVENT-ADMIN only. */
+/** Timeout: timed silence. Usable by CONTENT-ADMIN and EVENT-ADMIN only. */
 export const canTimeoutUsers = (user: UserData) => {
   return ["CONTENT-ADMIN", "EVENT-ADMIN"].includes(user.role);
 };
