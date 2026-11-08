@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import RewardsPage from "@/app/[shell]/manual/rewards/page";
 import * as ContentBox from "@/layout/ContentBox";
-import * as EditContent from "@/layout/EditContent";
+import * as RewardEditor from "@/layout/RewardEditor";
 import * as UserContext from "@/utils/UserContext";
 import { ObjectiveReward } from "@/validators/rewards";
 
@@ -14,7 +14,7 @@ const savePackage = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
-  vi.spyOn(EditContent, "RewardFormWrapper").mockImplementation(() => null);
+  vi.spyOn(RewardEditor, "RewardFormWrapper").mockImplementation(() => null);
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: { userId: "staff", role: "CONTENT-ADMIN" },
   } as never);
