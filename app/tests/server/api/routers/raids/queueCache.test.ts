@@ -498,6 +498,34 @@ describeWithDatabase("raid join committed queue", () => {
     expect(result.userDelta).toBeUndefined();
   });
 
+  it("removes the team when its last member leaves", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));
+    await db.insert(mpvpBattleUser).values({ id: "leaver", userId: "queue-sql-user", clanBattleId: "cache-team", side: "ATTACKER", slot: 0 });
+    const result = await (await callerFor(raidsRouter, "queue-sql-user")).leaveRaidQueue();
+    expect(result.success).toBe(true);
+    expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(0);
+  });
+
+  it("keeps the team for a member who joins while the last one leaves", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));
+    await db.insert(mpvpBattleUser).values({ id: "leaver", userId: "queue-sql-user", clanBattleId: "cache-team", side: "ATTACKER", slot: 0 });
+    // The joiner lands after the leaver's row is gone and before the empty-team cleanup.
+    const client = beforeStatements(
+      db,
+      mpvpBattleQueue,
+      [async () => {
+        await db.insert(mpvpBattleUser).values({ id: "joiner", userId: "queue-joiner", clanBattleId: "cache-team", side: "ATTACKER", slot: 1 });
+      }],
+      { operations: ["delete"] },
+    );
+    const result = await callerForDatabase(raidsRouter, "queue-sql-user", client).leaveRaidQueue();
+    expect(result.success).toBe(true);
+    expect(await db.query.mpvpBattleQueue.findMany()).toEqual([expect.objectContaining({ id: "cache-team" })]);
+    expect(await db.query.mpvpBattleUser.findMany()).toEqual([expect.objectContaining({ id: "joiner" })]);
+  });
+
   it("confirms the guarded wake when leaving after a newer combat starts", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));

@@ -624,6 +624,28 @@ export const deleteQueueById = (
   teamId: string,
 ) => client.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, teamId));
 
+/**
+ * Build deletion of a multiplayer battle queue that has no members left. The member check
+ * runs in the same statement, so a member who joins concurrently keeps the team.
+ */
+export const deleteEmptyQueueById = (
+  client: Pick<DrizzleClient, "delete" | "select">,
+  teamId: string,
+) =>
+  client
+    .delete(mpvpBattleQueue)
+    .where(
+      and(
+        eq(mpvpBattleQueue.id, teamId),
+        notExists(
+          client
+            .select({ id: mpvpBattleUser.id })
+            .from(mpvpBattleUser)
+            .where(eq(mpvpBattleUser.clanBattleId, teamId)),
+        ),
+      ),
+    );
+
 /** Build the `mpvpBattleQueue` lookup for `startRaidBattle`, using predicates on `id` and `battleType`. */
 export const findMpvpBattleQueueForStartRaidBattle = (
   client: Pick<DrizzleClient, "query">,
@@ -844,19 +866,6 @@ export const deleteMpvpBattleUserForRollbackJoinRaidQueue = (
     .where(
       and(eq(mpvpBattleUser.userId, userId), eq(mpvpBattleUser.clanBattleId, teamId)),
     );
-
-/**
- * Build the `mpvpBattleUser` lookup for `rollbackJoinRaidQueue`, selecting only `id`,
- * using predicates on `clanBattleId`.
- */
-export const findMpvpBattleUserForRollbackJoinRaidQueue = (
-  client: Pick<DrizzleClient, "query">,
-  teamId: string,
-) =>
-  client.query.mpvpBattleUser.findFirst({
-    where: eq(mpvpBattleUser.clanBattleId, teamId),
-    columns: { id: true },
-  });
 
 /** Build the `mpvpBattleQueue` deletion for `rollbackStartRaidBattle`, using predicates on `id` and `battleId`. */
 export const deleteMpvpBattleQueueForRollbackStartRaidBattle = (

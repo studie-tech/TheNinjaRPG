@@ -40,7 +40,7 @@ import {
 } from "@/queries/profile";
 import { findStoreUserIdAlias, insertStoreUserIdAlias } from "@/queries/purchases";
 import { deleteRankedQueueForUser } from "@/queries/pvprank";
-import { clearQueueBattleId, deleteQueueById, listQueueMembers } from "@/queries/raids";
+import { clearQueueBattleId, deleteEmptyQueueById } from "@/queries/raids";
 import { fetchMasterySources } from "@/queries/skillTree";
 import {
   applyDevelopmentBackup,
@@ -457,15 +457,12 @@ export const staffRouter = createTRPCRouter({
       ]);
       // Clean up empty teams or stuck claiming states if user was in a team
       if (queueEntry) {
-        const remainingMembers = await listQueueMembers(
+        const removed = await deleteEmptyQueueById(
           ctx.drizzle,
           queueEntry.clanBattleId,
         );
-        if (remainingMembers.length === 0) {
-          // Delete the queue entry - team is now empty
-          await deleteQueueById(ctx.drizzle, queueEntry.clanBattleId);
-        } else {
-          // If there are remaining members but battleId is a claiming ID, reset it
+        if (removed.rowsAffected === 0) {
+          // Members remain: reset a claiming battleId so they can start again
           const team = await findMpvpBattleQueueForForceAwake(ctx.drizzle, queueEntry);
           if (isBattleClaimId(team?.battleId)) {
             await clearQueueBattleId(ctx.drizzle, queueEntry.clanBattleId);
