@@ -22,13 +22,13 @@ import {
   getUserCaps,
   REP_TRADE_MIN_LEVEL,
   RYO_CAP,
-  RYO_FOR_REP_DAYS_FROZEN,
   RYO_FOR_REP_MAX_LISTINGS,
   RYO_FOR_REP_MIN_REPS,
   RYO_FOR_REP_RESERVE,
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
+import { getRyoOfferUnfreezeDate } from "@/libs/blackmarket";
 import {
   getJutsuSlotIncreaseError,
   getJutsuSlotIncreaseLimit,
@@ -78,7 +78,6 @@ import {
   canRollSecondaryElement,
   isSiteOwnerAccount,
 } from "@/utils/permissions";
-import { secondsFromDate } from "@/utils/time";
 import type { DatabasePromiseReturn } from "@/utils/typeutils";
 import { blackMarketOfferSchema } from "@/validators/blackmarket";
 import { statSchema } from "@/validators/combat";
@@ -175,14 +174,13 @@ export const blackMarketRouter = createTRPCRouter({
       ]);
       if (!offer) return errorResponse("Offer not found");
       // Derived
-      const isTerr = isSiteOwnerAccount(user);
+      const isOwner = isSiteOwnerAccount(user);
       const creatorId = offer.creatorUserId;
       // Guard
-      if (creatorId !== ctx.userId && !isTerr) return errorResponse("Not yours");
+      if (creatorId !== ctx.userId && !isOwner) return errorResponse("Not yours");
       // Check time
-      const delistSeconds = 3600 * 24 * RYO_FOR_REP_DAYS_FROZEN;
-      const delistDate = secondsFromDate(delistSeconds, offer.createdAt);
-      const canDelist = new Date() >= delistDate || isTerr;
+      const canDelist =
+        new Date() >= getRyoOfferUnfreezeDate(offer.createdAt) || isOwner;
       if (!canDelist) return errorResponse("Offer is frozen");
       // Mutate
       await Promise.all([

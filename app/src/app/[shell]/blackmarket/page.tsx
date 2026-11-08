@@ -42,6 +42,7 @@ import NavTabs from "@/layout/NavTabs";
 import Shop from "@/layout/Shop";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { getRyoOfferUnfreezeDate } from "@/libs/blackmarket";
 import { filterRollableBloodlines, getPityRolls } from "@/libs/bloodline";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
@@ -49,7 +50,6 @@ import type { UserWithRelations } from "@/routers/profile";
 import { round } from "@/utils/math";
 import { isSiteOwnerAccount } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
-import { secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
@@ -381,10 +381,8 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
     .map((offer) => {
       const hasRyo = userData.money >= offer.requestedRyo;
       const owner = offer.creatorUserId === userData.userId;
-      const isTerr = isSiteOwnerAccount(userData);
-      const canDelist =
-        new Date() >=
-        secondsFromDate(3600 * 24 * RYO_FOR_REP_DAYS_FROZEN, offer.createdAt);
+      const isOwner = isSiteOwnerAccount(userData);
+      const canDelist = new Date() >= getRyoOfferUnfreezeDate(offer.createdAt);
       return {
         ...offer,
         item: (
@@ -432,7 +430,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                 Buy
               </Button>
             )}
-            {showActive && (isTerr || (owner && canDelist)) && (
+            {showActive && (isOwner || (owner && canDelist)) && (
               <Button onClick={() => delist({ offerId: offer.id })}>
                 <X className="h-6 w-6" />
               </Button>
