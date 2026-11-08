@@ -1018,90 +1018,85 @@ export default function OccupationCrafting() {
           ) : null;
         })()}
 
-        {/* Crafting Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5" />
-              Crafting Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
-                  <div>
-                    <Badge variant="outline" className="mb-2">
-                      Novice (0-
-                      {(CRAFTING_REQUIRED_EXP.APPRENTICE - 1).toLocaleString()} exp)
-                    </Badge>
-                    <ul className="space-y-1 text-muted-foreground">
-                      <li>• Common: {CRAFTING_TIMES_MINS.NOVICE.COMMON} minutes</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <Badge variant="outline" className="mb-2">
-                      Apprentice ({CRAFTING_REQUIRED_EXP.APPRENTICE.toLocaleString()}-
-                      {(CRAFTING_REQUIRED_EXP.MASTER - 1).toLocaleString()} exp)
-                    </Badge>
-                    <ul className="space-y-1 text-muted-foreground">
-                      <li>• Common: {CRAFTING_TIMES_MINS.APPRENTICE.COMMON} minutes</li>
-                      <li>• Rare: {CRAFTING_TIMES_MINS.APPRENTICE.RARE} minutes</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <Badge variant="outline" className="mb-2">
-                      Master ({CRAFTING_REQUIRED_EXP.MASTER.toLocaleString()}-
-                      {(CRAFTING_REQUIRED_EXP.FORGEMASTER - 1).toLocaleString()} exp)
-                    </Badge>
-                    <ul className="space-y-1 text-muted-foreground">
-                      <li>• Common: {CRAFTING_TIMES_MINS.MASTER.COMMON} minutes</li>
-                      <li>• Rare: {CRAFTING_TIMES_MINS.MASTER.RARE} minutes</li>
-                      <li>• Epic: {CRAFTING_TIMES_MINS.MASTER.EPIC} minutes</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <Badge variant="outline" className="mb-2">
-                      Forgemaster ({CRAFTING_REQUIRED_EXP.FORGEMASTER.toLocaleString()}+
-                      exp)
-                    </Badge>
-                    <ul className="space-y-1 text-muted-foreground">
-                      <li>
-                        • Common: {CRAFTING_TIMES_MINS.FORGEMASTER.COMMON} minutes
-                      </li>
-                      <li>• Rare: {CRAFTING_TIMES_MINS.FORGEMASTER.RARE} minutes</li>
-                      <li>• Epic: {CRAFTING_TIMES_MINS.FORGEMASTER.EPIC} minutes</li>
-                      <li>
-                        • Legendary: {CRAFTING_TIMES_MINS.FORGEMASTER.LEGENDARY} minutes
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h4 className="mb-2 font-medium">How Crafting Works</h4>
-                <ul className="space-y-1 text-muted-foreground text-sm">
-                  <li>• Items need crafting requirements set by administrators</li>
-                  <li>
-                    • One item crafts at a time; more can wait in your crafting queue
-                  </li>
-                  <li>
-                    • Required materials are consumed when you start or queue a craft
-                  </li>
-                  <li>
-                    • Experience is gained when a craft starts, queued ones included
-                  </li>
-                  <li>• Higher ranks unlock new rarities and faster crafting times</li>
-                  <li>• Items are automatically finished when the timer expires</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <CraftingInfoCard />
       </div>
     </ContentBox>
   );
 }
+
+/** Crafting rank experience ranges, rarity times and the crafting rules. */
+const CraftingInfoCard = () => (
+  <Card>
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        <Info className="h-5 w-5" />
+        Crafting Information
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      <div className="space-y-4">
+        <div>
+          <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+            <div>
+              <Badge variant="outline" className="mb-2">
+                Novice (0-
+                {(CRAFTING_REQUIRED_EXP.APPRENTICE - 1).toLocaleString()} exp)
+              </Badge>
+              <ul className="space-y-1 text-muted-foreground">
+                <li>• Common: {CRAFTING_TIMES_MINS.NOVICE.COMMON} minutes</li>
+              </ul>
+            </div>
+            <div>
+              <Badge variant="outline" className="mb-2">
+                Apprentice ({CRAFTING_REQUIRED_EXP.APPRENTICE.toLocaleString()}-
+                {(CRAFTING_REQUIRED_EXP.MASTER - 1).toLocaleString()} exp)
+              </Badge>
+              <ul className="space-y-1 text-muted-foreground">
+                <li>• Common: {CRAFTING_TIMES_MINS.APPRENTICE.COMMON} minutes</li>
+                <li>• Rare: {CRAFTING_TIMES_MINS.APPRENTICE.RARE} minutes</li>
+              </ul>
+            </div>
+            <div>
+              <Badge variant="outline" className="mb-2">
+                Master ({CRAFTING_REQUIRED_EXP.MASTER.toLocaleString()}-
+                {(CRAFTING_REQUIRED_EXP.FORGEMASTER - 1).toLocaleString()} exp)
+              </Badge>
+              <ul className="space-y-1 text-muted-foreground">
+                <li>• Common: {CRAFTING_TIMES_MINS.MASTER.COMMON} minutes</li>
+                <li>• Rare: {CRAFTING_TIMES_MINS.MASTER.RARE} minutes</li>
+                <li>• Epic: {CRAFTING_TIMES_MINS.MASTER.EPIC} minutes</li>
+              </ul>
+            </div>
+            <div>
+              <Badge variant="outline" className="mb-2">
+                Forgemaster ({CRAFTING_REQUIRED_EXP.FORGEMASTER.toLocaleString()}+ exp)
+              </Badge>
+              <ul className="space-y-1 text-muted-foreground">
+                <li>• Common: {CRAFTING_TIMES_MINS.FORGEMASTER.COMMON} minutes</li>
+                <li>• Rare: {CRAFTING_TIMES_MINS.FORGEMASTER.RARE} minutes</li>
+                <li>• Epic: {CRAFTING_TIMES_MINS.FORGEMASTER.EPIC} minutes</li>
+                <li>
+                  • Legendary: {CRAFTING_TIMES_MINS.FORGEMASTER.LEGENDARY} minutes
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div>
+          <h4 className="mb-2 font-medium">How Crafting Works</h4>
+          <ul className="space-y-1 text-muted-foreground text-sm">
+            <li>• Items need crafting requirements set by administrators</li>
+            <li>• One item crafts at a time; more can wait in your crafting queue</li>
+            <li>• Required materials are consumed when you start or queue a craft</li>
+            <li>• Experience is gained when a craft starts, queued ones included</li>
+            <li>• Higher ranks unlock new rarities and faster crafting times</li>
+            <li>• Items are automatically finished when the timer expires</li>
+          </ul>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+);
 
 type ImbuementRemoval = {
   userItemId: string;
