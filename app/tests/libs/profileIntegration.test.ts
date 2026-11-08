@@ -60,6 +60,15 @@ describe("shared profile system contracts", () => {
         village: { name: "Horizon" },
       }),
     ).toContain("Horizon");
+    expect(
+      levelUpBlockMessage({
+        ...user,
+        rank: "CHUNIN",
+        level: 9,
+        experience: calcLevelRequirements(9),
+        village: { name: "Horizon" },
+      }),
+    ).toBeNull();
   });
 
   it("rejects Energy spending for banned users", () => {
