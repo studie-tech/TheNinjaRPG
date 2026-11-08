@@ -17,7 +17,6 @@ import {
   useRef,
   useState,
 } from "react";
-import type { AchievementProgress, UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import type { StructureRoute } from "@/drizzle/constants";
@@ -30,6 +29,7 @@ import type { ReturnedBattle } from "@/libs/combat/types";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
+import type { AchievementProgress, UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 import {
   prepareUserUpdate as captureUserUpdate,

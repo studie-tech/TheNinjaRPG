@@ -1,4 +1,4 @@
-import type { ReportAction } from "../../drizzle/schema";
+import type { ReportAction } from "@/drizzle/schema";
 
 export const reportCommentColor = (status: ReportAction | null) => {
   switch (status) {

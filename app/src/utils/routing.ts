@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { publicPathForShellPath } from "@/libs/shell";
-import type { UserWithRelations } from "../server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 /**
  * The pathname as the visitor sees it. usePathname() reports the path a page was rendered

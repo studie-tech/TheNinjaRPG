@@ -1,4 +1,4 @@
-import type { UserData } from "../../drizzle/schema";
+import type { UserData } from "@/drizzle/schema";
 
 // Options in standard ramen shop
 export const ramenOptions = ["small", "medium", "large"] as const;
