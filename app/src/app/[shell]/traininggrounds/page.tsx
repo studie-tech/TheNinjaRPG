@@ -720,7 +720,7 @@ const StatsTraining: React.FC<
       {props.section === "Stats" && (
         <ContentBox
           title="Combat stats"
-          topRightCorntentBreakpoint="sm"
+          stackTopRight
           subtitle={isQueueingStats ? "Train as Energy recovers" : "Instant training"}
           initialBreak
           topRightContent={
@@ -897,7 +897,7 @@ const StatsTraining: React.FC<
           title={props.section}
           subtitle="Timed training · No Energy cost"
           initialBreak={true}
-          topRightCorntentBreakpoint="sm"
+          stackTopRight
           topRightContent={
             <div className="my-2 ml-2 overflow-x-auto overflow-y-hidden">
               <NavTabs

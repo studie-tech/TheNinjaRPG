@@ -65,7 +65,7 @@ export const VillageMission = ({
       subtitle="Village Mission"
       defaultBackHref="/village"
       topRightContent={navTabs}
-      topRightCorntentBreakpoint="sm"
+      stackTopRight
     >
       <p className="mb-4 text-muted-foreground text-sm">
         Complete objectives together to earn tokens for your village. Your Kage selects

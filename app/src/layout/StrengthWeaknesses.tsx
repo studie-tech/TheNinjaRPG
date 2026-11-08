@@ -114,7 +114,7 @@ const StrengthWeaknesses: React.FC = () => {
       id="tutorial-strength-weaknesses"
       title="User Stats"
       subtitle="Strengths & Weaknesses"
-      topRightCorntentBreakpoint="sm"
+      stackTopRight
       topRightContent={
         <div className="my-2 flex flex-wrap items-center gap-3">
           <NavTabs

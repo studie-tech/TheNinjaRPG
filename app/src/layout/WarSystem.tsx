@@ -171,7 +171,7 @@ export const WarRoom: React.FC<{
         subtitle="Manage Wars"
         defaultBackHref="/village"
         topRightContent={navTabs}
-        topRightCorntentBreakpoint="sm"
+        stackTopRight
         initialBreak={initialBreak}
       >
         <WarMap

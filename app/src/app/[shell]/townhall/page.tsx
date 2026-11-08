@@ -325,7 +325,7 @@ const ElderHall: React.FC<{
         subtitle="Elders Council"
         defaultBackHref="/village"
         topRightContent={navTabs}
-        topRightCorntentBreakpoint="sm"
+        stackTopRight
       >
         <p className="pb-2">
           The Elder Council is composed of representatives from the village&apos;s most
@@ -812,7 +812,7 @@ const KageHall: React.FC<{
         subtitle="Kage Challenge"
         defaultBackHref="/village"
         topRightContent={navTabs}
-        topRightCorntentBreakpoint="sm"
+        stackTopRight
       >
         <p>
           The &quot;Kage&quot; is the village&apos;s most potent and skilled ninja,
@@ -1065,7 +1065,7 @@ const AllianceHall: React.FC<{
         subtitle="Alliances & Relations"
         defaultBackHref="/village"
         topRightContent={navTabs}
-        topRightCorntentBreakpoint="sm"
+        stackTopRight
       >
         <AllianceList
           user={user}
