@@ -62,7 +62,6 @@ import {
   errorResponse,
   protectedProcedure,
   publicProcedure,
-  serverError,
 } from "@/server/api/trpc";
 import { offsetPage } from "@/server/utils/pagination";
 import { calculateContentDiff } from "@/utils/diff";
@@ -307,7 +306,7 @@ export const skillTreeRouter = createTRPCRouter({
           : Promise.resolve(null),
       ]);
       if (!user || !canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "You are not authorized to create skills");
+        return errorResponse("You are not authorized to create skills");
       }
       // New skills start hidden, so their creator must be allowed to access them.
       if (!canAccessHiddenSkillTree(user.role)) {
@@ -361,10 +360,7 @@ export const skillTreeRouter = createTRPCRouter({
         listSkillTreeForUpdate2(ctx.drizzle, input),
       ]);
       if (!user || !canChangeContent(user.role)) {
-        throw serverError(
-          "UNAUTHORIZED",
-          "You are not authorized to edit this content",
-        );
+        return errorResponse("You are not authorized to edit this content");
       }
       const canViewHidden = canAccessHiddenSkillTree(user.role);
       // A hidden skill, or a skill in a hidden folder, is invisible to this role.
@@ -500,10 +496,7 @@ export const skillTreeRouter = createTRPCRouter({
         listJutsuForDelete(ctx.drizzle, input),
       ]);
       if (!user || !canChangeContent(user.role)) {
-        throw serverError(
-          "UNAUTHORIZED",
-          "You are not authorized to delete this content",
-        );
+        return errorResponse("You are not authorized to delete this content");
       }
 
       if (!skill) return errorResponse("Skill not found");
@@ -783,7 +776,7 @@ export const skillTreeRouter = createTRPCRouter({
       // Check permissions
       const user = await findUserById(ctx.drizzle, ctx.userId);
       if (!user || !canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "You are not authorized to create folders");
+        return errorResponse("You are not authorized to create folders");
       }
       if (input.hidden && !canAccessHiddenSkillTree(user.role)) {
         return errorResponse("You are not authorized to create hidden folders");
@@ -806,7 +799,7 @@ export const skillTreeRouter = createTRPCRouter({
         findSkillTreeFolderForUpdateFolder(ctx.drizzle, input),
       ]);
       if (!user || !canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "You are not authorized to edit folders");
+        return errorResponse("You are not authorized to edit folders");
       }
       if (input.data.hidden && !canAccessHiddenSkillTree(user.role)) {
         return errorResponse("You are not authorized to hide folders");
@@ -830,7 +823,7 @@ export const skillTreeRouter = createTRPCRouter({
         listSkillTreeForDeleteFolder(ctx.drizzle, input),
       ]);
       if (!user || !canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "You are not authorized to delete folders");
+        return errorResponse("You are not authorized to delete folders");
       }
       if (!folder) {
         return errorResponse("Folder not found");
@@ -858,7 +851,7 @@ export const skillTreeRouter = createTRPCRouter({
       // Check permissions
       const user = await findUserById(ctx.drizzle, ctx.userId);
       if (!user || !canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "You are not authorized to reorder folders");
+        return errorResponse("You are not authorized to reorder folders");
       }
 
       // Update each folder's order in parallel

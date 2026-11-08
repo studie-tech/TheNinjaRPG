@@ -189,8 +189,9 @@ describe("hidden skill-tree permissions", () => {
       item: { findMany: vi.fn().mockResolvedValue([]) },
       jutsu: { findMany: vi.fn().mockResolvedValue([]) },
     });
-    await expect(invoke(name, drizzle, input)).rejects.toMatchObject({
-      code: "UNAUTHORIZED",
+    expect(await invoke(name, drizzle, input)).toMatchObject({
+      success: false,
+      message: expect.stringContaining("You are not authorized to"),
     });
     expect(drizzle.insert).not.toHaveBeenCalled();
     expect(drizzle.update).not.toHaveBeenCalled();
