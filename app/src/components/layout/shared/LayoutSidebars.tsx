@@ -26,6 +26,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
+import { SideBannerTitle } from "@/layout/SideBannerTitle";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import { getMainNavbarLinks, type NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
@@ -34,29 +35,6 @@ import { usePublicPathname } from "@/utils/routing";
 import { useUserData, useUserDataSelector } from "@/utils/UserContext";
 import { CollapsibleNotifications } from "./LayoutNotifications";
 import { layoutVariantClasses } from "./layoutVariants";
-
-export const SideBannerTitle: React.FC<{
-  children: React.ReactNode;
-  break?: boolean;
-}> = (props) => {
-  return (
-    <>
-      {props.break && <br />}
-      <p
-        data-sidebar-title
-        className="hidden px-1 pt-2 font-bold text-orange-100 text-xl md:block"
-      >
-        {props.children}
-      </p>
-      <p
-        data-sidebar-title
-        className="block px-1 pt-2 font-bold text-foreground text-xl md:hidden"
-      >
-        {props.children}
-      </p>
-    </>
-  );
-};
 
 // On desktop the default layout stacks StrongestUsersBanner under the left sidebar. While
 // the account loads, its skeletons hold the height the loaded sidebars take at the default

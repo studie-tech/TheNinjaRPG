@@ -1,13 +1,13 @@
 import { useAtomValue } from "jotai";
 import { Link2 } from "lucide-react";
 import type React from "react";
-import { SideBannerTitle } from "@/components/layout/shared/LayoutSidebars";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import AvatarImage from "@/layout/Avatar";
 import { BattleUserTraits } from "@/layout/BattleUserTraits";
 import Link from "@/layout/Link";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
+import { SideBannerTitle } from "@/layout/SideBannerTitle";
 import { findSidebarOpponent } from "@/libs/combat/actions";
 import {
   combatPresentedBattleAtom,
