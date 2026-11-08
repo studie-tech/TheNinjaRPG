@@ -27,8 +27,7 @@ describeWithDatabase("Atomic hunting settlement", () => {
     const db = await getTestDatabase();
     const player = makeUser({ userId: "hunter", username: "Hunter", villageId: "village-a", sector: 1, direction: "right", curHealth: outcome === "Lost" ? 0 : 5000, fledBattle: outcome === "Fled" });
     const enemy = makeUser({ userId: "enemy", username: "Enemy", villageId: "village-b", direction: "left", isAi: true, curHealth: outcome === "Won" ? 0 : 5000 });
-    const current = makeCompleteBattle({ usersState: [player, enemy], id: "hunt", battleType: "HUNTING", version: 0, extraState: { hunting: huntingBattleState(), villages: {}, wars: {}, clans: {}, anbuSquads: {}, items: {}, relations: {}, userQuests: {},  questData: {}, bounties: {}, bountySignups: {} } });
-    current.extraState.hunting = { ...huntingBattleState(), used: final ? 2 : 0 };
+    const current = makeCompleteBattle({ usersState: [player, enemy], id: "hunt", battleType: "HUNTING", version: 0, extraState: { hunting: { ...huntingBattleState(), used: final ? 2 : 0 }, villages: {}, wars: {}, clans: {}, anbuSquads: {}, items: {}, relations: {}, userQuests: {},  questData: {}, bounties: {}, bountySignups: {} } });
     if (final) await db.update(huntingProgress).set({ used: 2 });
     await db.insert(battle).values({ ...current, createdAt: new Date(), updatedAt: new Date(), roundStartAt: new Date() });
     current.extraState.completedQuests = {};
