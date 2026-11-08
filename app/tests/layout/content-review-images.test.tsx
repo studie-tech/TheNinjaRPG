@@ -1,9 +1,13 @@
 import { cleanup, fireEvent, render as renderInteractive } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as client from "@/app/_trpc/client";
+import * as battlefieldPreview from "@/layout/BattlefieldPreview";
+import * as ContentImage from "@/layout/ContentImage";
 import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
+import * as ItemWithEffects from "@/layout/ItemWithEffects";
 import { questSceneAssetIds } from "@/libs/contentReview/paths";
-import { createToastMock } from "../setup/toastMock";
+import { spyOnToasts } from "../setup/toastMock";
 import type { ContentProposalStatus } from "@/drizzle/constants";
 import * as logbook from "@/layout/Logbook";
 import * as UserContext from "@/utils/UserContext";
@@ -36,55 +40,45 @@ const sceneCandidate = (id: string, externalId: string | null = null, chosen = f
   currentValue: "old",
 });
 
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    useUtils: () => ({}),
-    contentReview: {
-      getProposal: {
-        useQuery: () => ({
-          isPending: false,
-          data: {
-            id: "proposal",
-            status,
-            canReview,
-            category: "VISUAL",
-            title: "Update scene",
-            rationale: "Show the cast",
-            createdAt: new Date().toISOString(),
-            statusChangedAt: revision,
-            targets: [],
-            basis: [],
-            assets: {
-              old: { name: "Old character", image: "https://example.com/old.webp" },
-              next: { name: "New character", image: "https://example.com/new.webp" },
-              background: { name: "Forest", image: "https://example.com/forest.webp" },
-            },
-            changes: [{
-              id: "change",
-              entityType: "QUEST",
-              operation: "UPDATE",
-              label: "Quest",
-              name: "Scene quest",
-              ...state,
-            }],
+const api = {
+  useUtils: () => ({}),
+  contentReview: {
+    getProposal: {
+      useQuery: () => ({
+        isPending: false,
+        data: {
+          id: "proposal",
+          status,
+          canReview,
+          category: "VISUAL",
+          title: "Update scene",
+          rationale: "Show the cast",
+          createdAt: new Date().toISOString(),
+          statusChangedAt: revision,
+          targets: [],
+          basis: [],
+          assets: {
+            old: { name: "Old character", image: "https://example.com/old.webp" },
+            next: { name: "New character", image: "https://example.com/new.webp" },
+            background: { name: "Forest", image: "https://example.com/forest.webp" },
           },
-        }),
-      },
-      approve: { useMutation: () => ({ isPending: false, mutate: approve }) },
-      reject: { useMutation: () => ({ isPending: false }) },
-      unreject: { useMutation: () => ({ isPending: isUndoing, mutate: unreject, data: undoResult }) },
-      revert: { useMutation: () => ({ isPending: false }) },
+          changes: [{
+            id: "change",
+            entityType: "QUEST",
+            operation: "UPDATE",
+            label: "Quest",
+            name: "Scene quest",
+            ...state,
+          }],
+        },
+      }),
     },
+    approve: { useMutation: () => ({ isPending: false, mutate: approve }) },
+    reject: { useMutation: () => ({ isPending: false }) },
+    unreject: { useMutation: () => ({ isPending: isUndoing, mutate: unreject, data: undoResult }) },
+    revert: { useMutation: () => ({ isPending: false }) },
   },
-}));
-vi.mock("@/layout/BattlefieldPreview", () => ({ BattlefieldPreview: () => null }));
-vi.mock("@/layout/ItemWithEffects", () => ({ default: () => null }));
-vi.mock("@/libs/toast", createToastMock);
-vi.mock("@/layout/ContentImage", () => ({
-  default: ({ image, alt }: { image: string; alt: string }) => (
-    <img src={image} alt={alt} />
-  ),
-}));
+};
 
 const render = () => renderToStaticMarkup(
   <ContentReviewDetail
@@ -101,6 +95,13 @@ describe("proposal review detail", () => {
     vi.restoreAllMocks();
   });
   beforeEach(() => {
+    Object.assign(vi.spyOn(client, "api" as never), api);
+    vi.spyOn(battlefieldPreview, "BattlefieldPreview").mockImplementation(() => null);
+    vi.spyOn(ItemWithEffects, "default").mockImplementation(() => null);
+    spyOnToasts();
+    vi.spyOn(ContentImage, "default").mockImplementation((({ image, alt }: { image: string; alt: string }) => (
+      <img src={image} alt={alt} />
+    )) as never);
     vi.spyOn(logbook, "QuestDialogScene").mockImplementation(({ background, characters }) => (
       <div data-scene="true"><img src={background} alt="Background" />{characters.map((image) => <img key={image} src={image} alt="Character" />)}</div>
     ));
