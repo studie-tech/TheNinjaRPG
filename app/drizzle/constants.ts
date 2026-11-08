@@ -1632,6 +1632,8 @@ export const ROBBING_SUCCESS_CHANCE = 0.4;
 export const ROBBING_STOLLEN_AMOUNT = 0.3;
 export const ROBBING_VILLAGE_PRESTIGE_GAIN = 5;
 export const ROBBING_IMMUNITY_DURATION = 90;
+/** Robbing is limited to targets within this many effective levels, outside war-torn sectors. */
+export const ROBBING_MAX_LEVEL_DIFFERENCE = 15;
 export const KILLING_NOTORIETY_GAIN = 5;
 
 // Reputation cost config
