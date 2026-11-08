@@ -132,7 +132,8 @@ export const createCombatScene = async (options: {
     if (shadows) game.own(shadows.registerTerrain(terrain.container, data.terrain));
     const labels = new Container();
     const outlineLayers = new Map(
-      [...new Set(data.terrain.batches.map((batch) => batch.layer))].map((layer) => {
+      // Highlight strokes sit on recessed water faces (-0.5) or on level arena ground (0).
+      [-0.5, 0].map((layer) => {
         const graphics = new Graphics({
           label: "combat-grid-outlines",
           zIndex: layer < 0 ? 3.5 : 5.5,

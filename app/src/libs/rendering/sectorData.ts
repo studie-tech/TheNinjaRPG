@@ -2,7 +2,12 @@ import type { Grid } from "honeycomb-grid";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { linearRenderColor } from "@/libs/rendering/color";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
-import { appendPathShoulder, buildHexTerrainData } from "@/libs/rendering/terrainData";
+import {
+  appendPathShoulder,
+  buildHexTerrainData,
+  terrainFrost,
+} from "@/libs/rendering/terrainData";
+import type { TerrainField } from "@/libs/rendering/terrainElevation";
 import { getVillageRoadLayout } from "@/libs/rendering/villageLandscape";
 import {
   hasWorldWaterDepth,
@@ -28,7 +33,7 @@ export const buildSectorTerrainData = (
     wall?: VillageWallPlan | null;
     roads?: ReadonlySet<string>;
     sector?: number;
-    waterDepthAt?: (point: { x: number; y: number }) => number;
+    field?: TerrainField;
   } = {},
 ) => {
   const roadColors = VILLAGE_ART[options.sector ?? -1]?.roads ?? ROAD_COLORS;
@@ -75,11 +80,11 @@ export const buildSectorTerrainData = (
             ? groundShade
             : undefined,
         groundColor: understory?.[variant],
-        frost: spec.key === "ice" ? "ice" : spec.key === "snow" ? "snow" : undefined,
+        frost: terrainFrost(spec.key),
       };
     },
     lightLayout,
-    options.waterDepthAt,
+    options.field,
   );
   const positions: number[] = [],
     colors: number[] = [];

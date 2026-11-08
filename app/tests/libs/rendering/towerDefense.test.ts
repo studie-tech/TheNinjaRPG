@@ -12,7 +12,7 @@ describe("tower defense world data", () => {
     for (const size of [7, 9, 13]) {
       const center = { col: Math.floor(size / 2), row: Math.floor(size / 2) };
       const first = prepareTowerDefenseTerrain("retained-run", size, center), second = prepareTowerDefenseTerrain("retained-run", size, center);
-      expect(first.terrain.batches).toEqual(second.terrain.batches);
+      expect(first.terrain.segments).toEqual(second.terrain.segments);
       expect(first.scenery).toEqual(second.scenery);
       expect(first.grid.size).toBe(size * size);
       const protectedIds = new Set<string>();

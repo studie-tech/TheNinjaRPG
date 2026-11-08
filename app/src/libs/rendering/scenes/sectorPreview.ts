@@ -8,7 +8,14 @@ import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
-import { hexTerrainAt } from "@/libs/rendering/terrainData";
+import { hexTerrainAt, terrainFrost } from "@/libs/rendering/terrainData";
+import {
+  createTerrainField,
+  isFlatZone,
+  liftSpritesToTerrain,
+  objectFootprints,
+  sectorRelief,
+} from "@/libs/rendering/terrainElevation";
 import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
 import { createWorldShadows } from "@/libs/rendering/worldShadows";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
@@ -74,12 +81,35 @@ export const createSectorPreview = async (options: {
       mapAssets: options.data.mapAssets,
       roads,
     });
+    const settled = !!villageType;
+    const relief = sectorRelief(sector, map.width, map.height);
+    const footprints = objectFootprints(grid, map.objects);
+    const field = createTerrainField(
+      grid,
+      new Map(
+        grid.toArray().map((tile) => [
+          tile,
+          {
+            isWater: !!tile.spec?.isWater,
+            frost: terrainFrost(tile.spec?.key ?? ""),
+            flat:
+              settled ||
+              !!tile.hasStructure ||
+              isFlatZone(tile.zone) ||
+              footprints.has(tile),
+            relief: relief(tile.col, tile.row),
+          },
+        ]),
+      ),
+    );
     const data = buildSectorTerrainData(grid, prng, false, {
       sector,
       sprites: descriptions,
       wall: villageWallPlan,
       roads,
+      field,
     });
+    liftSpritesToTerrain(descriptions, grid);
     const world = new Container();
     // Packed geometry decoding needs highp; static previews retain noon ambient light on mediump devices.
     const shadows =

@@ -80,14 +80,14 @@ describe("village landscape", () => {
     const before = grid.toArray().map((tile) => [tile.cost, tile.blocked, tile.spec]);
     const plain = buildSectorTerrainData(grid, alea(1), false, options);
     const grove = buildSectorTerrainData(grid, alea(1), false, { ...options, sprites: [tree] });
-    expect(grove.batches.map((batch) => batch.positions)).toEqual(plain.batches.map((batch) => batch.positions));
-    expect(grove.batches.map((batch) => batch.colors)).not.toEqual(plain.batches.map((batch) => batch.colors));
+    expect(grove.segments.map((segment) => segment.positions)).toEqual(plain.segments.map((segment) => segment.positions));
+    expect(grove.segments.map((segment) => segment.colors)).not.toEqual(plain.segments.map((segment) => segment.colors));
     expect(grove.surface).toEqual(plain.surface);
     expect(grove.faceOffsets).toEqual(plain.faceOffsets);
     expect(grid.toArray().map((tile) => [tile.cost, tile.blocked, tile.spec])).toEqual(before);
     for (const tile of grid) if (tile.spec?.key === "ground") tile.spec = { ...tile.spec, colors: ["#614126", "#614126", "#614126"] };
     const custom = buildSectorTerrainData(grid, alea(1), false, options);
-    expect(buildSectorTerrainData(grid, alea(1), false, { ...options, sprites: [tree] }).batches.map((batch) => batch.colors)).toEqual(custom.batches.map((batch) => batch.colors));
+    expect(buildSectorTerrainData(grid, alea(1), false, { ...options, sprites: [tree] }).segments.map((segment) => segment.colors)).toEqual(custom.segments.map((segment) => segment.colors));
   });
   it("clears bundled tree canopies from landmark approaches while retaining custom artwork", () => {
     const { grid, structures, map } = town();
@@ -304,13 +304,13 @@ describe("village landscape", () => {
     const plain = buildSectorTerrainData(grid, alea(1), false, options);
     sprite.entrance!.hasPrecinct = true;
     const precinct = buildSectorTerrainData(grid, alea(1), false, options);
-    const batch = plain.batches.find((batch) => batch.tiles.some((tile) => tile.key === "2,3"))!;
+    const batch = plain.segments.find((segment) => segment.tiles.some((tile) => tile.key === "2,3"))!;
     const road = batch.tiles.find((tile) => tile.key === "2,3")!;
     const face = batch.positions.slice(road.start * 2, (road.start + road.count) * 2);
     expect(precinct.surface.some((_, index) => face.every((value, offset) => precinct.surface[index + offset] === value))).toBe(false);
     const path = buildSectorTerrainData(grid, alea(1), false, { roads: options.roads });
     expect(precinct.surface.some((_, index) => path.surface.every((value, offset) => precinct.surface[index + offset] === value))).toBe(true);
-    expect(precinct.batches.map((batch) => batch.positions)).toEqual(plain.batches.map((batch) => batch.positions));
+    expect(precinct.segments.map((segment) => segment.positions)).toEqual(plain.segments.map((segment) => segment.positions));
     expect(precinct.faceOffsets).toEqual(plain.faceOffsets);
   });
   it("keeps civic flagstones inside the village enclosure", () => {
@@ -337,6 +337,6 @@ describe("village landscape", () => {
     const data = buildSectorTerrainData(grid, alea(1), false);
     expect(data.surface.length).toBeGreaterThan(131072);
     expect(data.surfaceColors.length).toBe((data.surface.length / 2) * 3);
-    expect(data.batches.reduce((count, batch) => count + batch.tiles.length, 0)).toBe(676);
+    expect(data.segments.reduce((count, segment) => count + segment.tiles.length, 0)).toBe(676);
   });
 });

@@ -1,252 +1,700 @@
-import { type Grid, ring } from "honeycomb-grid";
+import type { Grid } from "honeycomb-grid";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { type LinearColor, linearRenderColor } from "@/libs/rendering/color";
 import {
   calculateHexUVCoordinates,
   calculateTileOffset,
-  createGroundCorners,
   getHexPoints,
 } from "@/libs/rendering/hexGeometry";
+import {
+  applyTerrainField,
+  createTerrainField,
+  LAND_STEP,
+  MAX_SEABED_DEPTH,
+  SEABED_STEP,
+  type TerrainField,
+} from "@/libs/rendering/terrainElevation";
 import { parseHexColor } from "@/utils/color";
 
 /**
  * Renderer-free buffers in the grid's Y-up world units, retaining per-tile face
- * offsets for picking. lightLayout omits ground depth, textures and wave animation.
- * Surface outlines share their face layer so higher faces cover lower outlines.
- * A window-wide water sampler keeps coastal color continuous between retained sectors.
+ * offsets for picking. Tiles stand on integer terraces: raised land shows lit
+ * cliff walls and dark drop outlines, and stock water is a translucent surface
+ * over a stepped seabed whose blocks darken toward deep water with depth. Every
+ * piece carries a draw order so painters' order follows elevation, back to front
+ * within a level. lightLayout keeps one flat, untextured, unanimated plane.
+ * A window-wide terrain field keeps terraces, depth and ice continuous between
+ * retained sectors; without one, stock water gets a local field over flat land.
  */
 export const buildHexTerrainData = (
   grid: Grid<TerrainHex>,
   look: (tile: TerrainHex) => TerrainLook,
   lightLayout: boolean,
-  waterDepthAt?: (point: { x: number; y: number }) => number,
+  field?: TerrainField,
 ) => {
   const materials = new Map(grid.toArray().map((tile) => [tile, look(tile)]));
-  const shelf =
-    !lightLayout && [...materials.values()].some((material) => material.waterDepth)
-      ? (waterDepthAt ?? createWaterShelf(grid, materials))
-      : null;
-  const shallow = linearRenderColor("#8a9f88"),
-    deep = linearRenderColor("#3c6476");
-  const { points, groundPoints, groundEdges: groundEdgeIndices } = getHexPoints();
+  const stockWater = (tile: TerrainHex) => !!materials.get(tile)?.waterDepth;
+  const terrain = lightLayout
+    ? null
+    : (field ??
+      ([...materials.values()].some((material) => material.waterDepth)
+        ? createTerrainField(
+            grid,
+            new Map(
+              [...materials].map(([tile, material]) => [
+                tile,
+                { isWater: material.isWater, frost: material.frost, flat: true },
+              ]),
+            ),
+          )
+        : null));
+  if (terrain) applyTerrainField(grid, terrain, stockWater);
+  else for (const tile of materials.keys()) tile.frozen = false;
+  const surfaceTint = linearRenderColor(WATER_SURFACE),
+    sand = linearRenderColor(SEABED_SAND),
+    stone = linearRenderColor(SEABED_STONE),
+    deep = linearRenderColor(WATER_DEEP);
+  const { points } = getHexPoints();
   const tileUVArray = calculateHexUVCoordinates(grid.toArray()[0], points);
-  const groups = new Map<string, TerrainBatchBuilder>();
-  const ground: number[] = [],
-    groundEdges: number[] = [];
   const surface: number[] = [],
     surfaceColors: number[] = [];
-  const edges = new Map<number, number[]>();
-  const perimeter = new Map<
-    string,
-    {
-      count: number;
-      points: number[];
-      material: TerrainLook;
-      center: { x: number; y: number };
-      offset: number;
+  // Every piece of terrain lands in a painter-ordered item; items merge into two meshes.
+  const items = new Map<number, TerrainItem>();
+  const textures: string[] = [];
+  const item = (order: number) => {
+    let entry = items.get(order);
+    if (!entry) {
+      entry = emptyItem();
+      items.set(order, entry);
     }
-  >();
+    return entry;
+  };
+  const slotOf = (texture: string | null) => {
+    if (!texture) return 0;
+    let index = textures.indexOf(texture);
+    if (index < 0) index = textures.push(texture) - 1;
+    return index + 1;
+  };
+  const piece = (order: number): Painter => {
+    const target = item(order);
+    return (x, y, color, alpha) =>
+      pushVertex(target, x, y, 0, 0, color, alpha, KIND.flat, 0, -1, 0, 0);
+  };
   const faceOffsets = new Map<string, number>();
+  // Each tile's walkable face and solid top (its seabed when under stock water).
+  const tops = new Map<TerrainHex, TileTop>();
   let animatedTiles = 0;
   for (const [tile, material] of materials) {
-    const { length, offsetLength, offsetLayer } = calculateTileOffset(
+    const { length, offsetLength } = calculateTileOffset(
       tile.corners,
       material.depression,
       lightLayout,
     );
-    faceOffsets.set(`${tile.col},${tile.row}`, offsetLength);
-    let faceEdges = edges.get(offsetLayer);
-    if (!faceEdges) {
-      faceEdges = [];
-      edges.set(offsetLayer, faceEdges);
-    }
+    const terrace = lightLayout ? 0 : (tile.terrace ?? 0);
+    const land = !material.isWater && terrace > 0 ? terrace : 0;
+    const face = offsetLength + land * LAND_STEP * tile.height;
+    const stock = !lightLayout && !!material.waterDepth;
+    const depth = stock ? Math.max(1, Math.min(MAX_SEABED_DEPTH, -terrace)) : 0;
+    const solid = stock ? face - depth * SEABED_STEP * tile.height : face;
+    tops.set(tile, { face, solid, length, land, depth, material });
+    faceOffsets.set(`${tile.col},${tile.row}`, face);
+    const layer = face < 0 ? -0.5 : land;
     const kind = lightLayout
-      ? "solid"
-      : material.texture && !material.waterDepth
-        ? "image"
-        : "noise";
-    const texture = lightLayout || material.waterDepth ? null : material.texture;
-    const key = `${offsetLayer}:${kind}:${texture ?? ""}`;
-    let batch = groups.get(key);
-    if (!batch) {
-      batch = {
-        kind,
-        texture,
-        layer: offsetLayer,
-        positions: [],
-        uvs: [],
-        colors: [],
-        rawColors: [],
-        waves: [],
-        tiles: [],
-      };
-      groups.set(key, batch);
-    }
-    const linear = linearRenderColor(material.color),
-      raw = parseHexColor(material.color);
-    if (!raw) throw new Error(`Invalid terrain color ${material.color}`);
-    const wave = lightLayout ? -1 : material.waterDepth ? 0 : material.waveOffset;
+      ? KIND.solid
+      : stock
+        ? KIND.water
+        : material.texture
+          ? KIND.image
+          : KIND.noise;
+    const slot = lightLayout || stock ? 0 : slotOf(material.texture);
+    const batch = item(stock ? WATER_SURFACE_ORDER : faceOrder(layer));
+    const linear = linearRenderColor(material.color);
+    if (!parseHexColor(material.color))
+      throw new Error(`Invalid terrain color ${material.color}`);
+    const wave = lightLayout ? -1 : stock ? 0 : material.waveOffset;
     if (wave >= 0) animatedTiles++;
     batch.tiles.push({
       key: `${tile.col},${tile.row}`,
       start: batch.positions.length / 2,
       count: points.length,
     });
+    // Higher plateaus catch slightly more light, so stacked terraces separate at a glance.
+    const lift = 1 + land * 0.035;
     points.forEach((corner, index) => {
       const point = tile.corners[corner];
       if (!point) return;
-      batch.positions.push(point.x, point.y + offsetLength);
-      batch.uvs.push(
-        material.waterDepth
-          ? point.x / (tile.height * 4)
-          : (tileUVArray?.[index * 2] ?? 0),
-        material.waterDepth
-          ? point.y / (tile.height * 4)
-          : (tileUVArray?.[index * 2 + 1] ?? 0),
-      );
       const shade = material.groundShade?.(point) ?? 0;
-      const depth = material.waterDepth ? shelf?.(point) : undefined;
-      for (const channel of ["r", "g", "b"] as const)
-        batch.colors.push(
-          depth !== undefined
-            ? shallow[channel] * (1 - depth) + deep[channel] * depth
-            : shade > 0 && material.groundColor
-              ? linear[channel] * (1 - shade) + material.groundColor[channel] * shade
-              : linear[channel] * (1 - shade * 0.2),
-        );
-      batch.rawColors.push(raw.r, raw.g, raw.b, 255);
-      batch.waves.push(wave);
+      const sample = stock ? terrain?.sample(point) : undefined;
+      const color = stock
+        ? surfaceTint
+        : shade > 0 && material.groundColor
+          ? mix(linear, material.groundColor, shade, lift)
+          : mix(linear, linear, 0, (1 - shade * 0.2) * lift);
+      pushVertex(
+        batch,
+        point.x,
+        point.y + face,
+        stock ? point.x / (tile.height * 4) : (tileUVArray?.[index * 2] ?? 0),
+        stock ? point.y / (tile.height * 4) : (tileUVArray?.[index * 2 + 1] ?? 0),
+        color,
+        1,
+        kind,
+        slot,
+        wave,
+        sample?.depth ?? 0,
+        sample?.frozen ?? 0,
+      );
     });
+    if (!stock) continue;
+    // The seabed block: sand darkening toward deep water in proportion to its depth.
+    const fade = Math.min(1, depth * DEPTH_FADE);
+    const variation = 0.96 + tile.level * 0.08;
+    // Icy basins have cold stone beds, so clear ice reads blue rather than sandy.
+    const seabed = mix(tile.frozen ? stone : sand, deep, fade, variation);
+    const floor = item(seabedOrder(depth) + 0.02);
+    points.forEach((corner, index) => {
+      const point = tile.corners[corner];
+      if (!point) return;
+      pushVertex(
+        floor,
+        point.x,
+        point.y + solid,
+        tileUVArray?.[index * 2] ?? 0,
+        tileUVArray?.[index * 2 + 1] ?? 0,
+        seabed,
+        1,
+        KIND.seabed,
+        0,
+        -1,
+        depth / MAX_SEABED_DEPTH,
+        tile.frozen ? 1 : 0,
+      );
+    });
+    if (!tile.frozen && !material.frost)
+      appendSeagrass(piece(seabedOrder(depth) + 0.04), tile, solid, depth, deep);
+  }
+  const floor =
+    Math.min(...[...tops.values()].map((top) => top.solid)) -
+    ([...tops.values()][0]?.length ?? 0);
+  // Pair every hex edge with its neighbour to raise walls, outlines, shores and joins.
+  const shared = new Map<
+    string,
+    { tile: TerrainHex; a: { x: number; y: number }; b: { x: number; y: number } }[]
+  >();
+  for (const tile of materials.keys())
     tile.corners.forEach((a, index) => {
       const b = tile.corners[(index + 1) % tile.corners.length];
       if (!b) return;
-      faceEdges.push(a.x, a.y + offsetLength, b.x, b.y + offsetLength);
-      // Match neighbors at grid height, but draw the perimeter on the visible face.
       const key = [a, b]
         .map((point) => `${point.x.toFixed(4)},${point.y.toFixed(4)}`)
         .sort()
         .join(":");
-      const previous = perimeter.get(key);
-      if (previous) {
-        previous.count++;
-        if (!lightLayout && !!previous.material.isWater !== !!material.isWater) {
-          const water = material.isWater ? tile : previous.center;
-          appendShoreline(
-            surface,
-            surfaceColors,
-            a,
-            b,
-            water,
-            material.isWater ? offsetLength : previous.offset,
-          );
-        }
-        if (
-          !lightLayout &&
-          !!previous.material.isRoad !== !!material.isRoad &&
-          previous.material.depression === 0 &&
-          material.depression === 0
-        ) {
-          const roadCenter = material.isRoad ? tile : previous.center;
-          const grass = material.isRoad ? previous.material.color : material.color;
-          appendPathShoulder(surface, surfaceColors, a, b, roadCenter, grass);
-        }
-        if (
-          !lightLayout &&
-          material.frost &&
-          previous.material.frost &&
-          material.frost !== previous.material.frost &&
-          material.depression === 0 &&
-          previous.material.depression === 0
-        ) {
-          const iceCenter = material.frost === "ice" ? tile : previous.center;
-          const snow =
-            material.frost === "snow" ? material.color : previous.material.color;
-          appendPathShoulder(surface, surfaceColors, a, b, iceCenter, snow, 4, 1.5);
-        }
-      } else
-        perimeter.set(key, {
-          count: 1,
-          points: [a.x, a.y + offsetLength, b.x, b.y + offsetLength],
-          material,
-          center: { x: tile.x, y: tile.y },
-          offset: offsetLength,
-        });
+      const list = shared.get(key) ?? [];
+      list.push({ tile, a, b });
+      shared.set(key, list);
     });
+  const boundary: number[] = [];
+  const gridLine = linearRenderColor(GRID_LINE);
+  for (const sides of shared.values()) {
+    const [first, second] = sides;
+    if (!first) continue;
+    // A faint hex grid on the higher face of every edge, drawn once per edge.
+    const upper =
+      second && (tops.get(second.tile)?.face ?? 0) > (tops.get(first.tile)?.face ?? 0)
+        ? second
+        : first;
+    const upperTop = tops.get(upper.tile);
+    if (upperTop) {
+      const layer = upperTop.face < 0 ? -0.5 : upperTop.land;
+      appendLine(
+        piece(faceOrder(layer) + 0.045),
+        upper.a,
+        upper.b,
+        upperTop.face,
+        gridLine,
+        0.03,
+      );
+    }
+    if (!second) {
+      const top = tops.get(first.tile);
+      if (!top) continue;
+      boundary.push(first.a.x, first.a.y + top.face, first.b.x, first.b.y + top.face);
+      const middle = (first.a.y + first.b.y) / 2;
+      if (lightLayout || middle >= first.tile.y) continue;
+      // The window's front rim shows the cut through land, seabed and water like a diorama.
+      appendWall(
+        piece(top.material.waterDepth ? seabedOrder(top.depth) : wallOrder(top.land)),
+        first,
+        top.solid,
+        floor,
+        top.material.waterDepth
+          ? mix(sand, deep, Math.min(1, top.depth * DEPTH_FADE), 0.7)
+          : cliffColor(top.material),
+      );
+      if (top.material.waterDepth)
+        appendWall(
+          piece(WATER_SURFACE_ORDER + 0.01),
+          first,
+          top.face,
+          top.solid,
+          mix(surfaceTint, deep, 0.55, 0.9),
+        );
+      continue;
+    }
+    const one = tops.get(first.tile),
+      two = tops.get(second.tile);
+    if (!one || !two) continue;
+    const [back, front] =
+      first.tile.y > second.tile.y ? [first, second] : [second, first];
+    const high = tops.get(back.tile),
+      low = tops.get(front.tile);
+    if (!high || !low) continue;
     if (!lightLayout) {
-      const corners = createGroundCorners(tile.corners, offsetLength, length);
-      for (const index of groundPoints) {
-        const point = corners[index];
-        if (point) ground.push(point.x, point.y);
-      }
-      for (const edge of groundEdgeIndices)
-        for (const index of edge) {
-          const point = corners[index];
-          if (point) groundEdges.push(point.x, point.y);
-        }
+      appendDrops(back, front, high, low, piece, sand, deep);
+      appendJoins(first, one, second, two, surface, surfaceColors);
     }
   }
+  const ordered = [...items].sort(([a], [b]) => a - b);
   return {
-    batches: [...groups.values()]
-      .sort((a, b) => a.layer - b.layer)
-      .map((batch) => ({
-        ...batch,
-        positions: new Float32Array(batch.positions),
-        uvs: new Float32Array(batch.uvs),
-        colors: new Float32Array(batch.colors),
-        rawColors: new Uint8Array(batch.rawColors),
-        waves: new Float32Array(batch.waves),
-      })),
-    ground: new Float32Array(ground),
-    groundEdges: new Float32Array(groundEdges),
+    // Underwater, the water surface and banks paint first; land, cliffs and outlines follow.
+    segments: [
+      mergeItems(
+        UNDERWATER_SEGMENT,
+        ordered.filter(([order]) => order < LAND_FROM),
+      ),
+      mergeItems(
+        LAND_SEGMENT,
+        ordered.filter(([order]) => order >= LAND_FROM),
+      ),
+    ].filter((segment) => segment.positions.length > 0),
+    textures,
     surface: new Float32Array(surface),
     surfaceColors: new Float32Array(surfaceColors),
-    edges: new Map(
-      [...edges].map(([layer, points]) => [layer, new Float32Array(points)]),
-    ),
-    boundary: new Float32Array(
-      [...perimeter.values()]
-        .filter((edge) => edge.count === 1)
-        .flatMap((edge) => edge.points),
-    ),
+    boundary: new Float32Array(boundary),
     faceOffsets,
     animatedTiles,
   };
 };
 
-/** A bounded shoreline flood fill colors shared vertices once, preserving terrain geometry and picking. */
-export const createWaterShelf = (
-  grid: Grid<TerrainHex>,
-  materials: ReadonlyMap<TerrainHex, Pick<TerrainLook, "isWater">>,
+/** Draw order of the faces on one terrace; recessed faces sit below land and its cliffs. */
+const faceOrder = (layer: number) => (layer < 0 ? 2 : 4 + layer * 0.1);
+const wallOrder = (land: number) => (land > 0 ? 3.95 + land * 0.1 : 2.65);
+/** Deeper seabed terraces paint first, so shallower blocks in front overlap them. */
+const seabedOrder = (depth: number) => 1 + (MAX_SEABED_DEPTH - depth) * 0.1;
+const WATER_SURFACE_ORDER = 2.6;
+const UNDERWATER_WALL_ORDER = 1.55;
+const DEPTH_FADE = 0.19;
+
+type TileTop = {
+  face: number;
+  solid: number;
+  length: number;
+  land: number;
+  depth: number;
+  material: TerrainLook;
+};
+type TileEdge = {
+  tile: TerrainHex;
+  a: { x: number; y: number };
+  b: { x: number; y: number };
+};
+/** Appends one vertex of a flat-coloured piece: walls, outlines and seabed flora. */
+type Painter = (x: number, y: number, color: LinearColor, alpha: number) => void;
+
+/** Per-vertex material kinds read by the terrain shader. */
+export const KIND = {
+  solid: 0,
+  noise: 1,
+  image: 2,
+  water: 3,
+  seabed: 4,
+  flat: 5,
+  grain: 6,
+} as const;
+/** Segment draw orders; pieces ordered below LAND_FROM paint with the underwater segment. */
+const UNDERWATER_SEGMENT = 2;
+export const LAND_SEGMENT = 4;
+const LAND_FROM = 3;
+const GRID_LINE = "#324b36";
+/** World-unit width of drawn outlines: one scenery pixel. */
+const LINE_WIDTH = 0.75;
+
+type TerrainItem = {
+  positions: number[];
+  uvs: number[];
+  colors: number[];
+  kinds: number[];
+  slots: number[];
+  waves: number[];
+  relief: number[];
+  tiles: { key: string; start: number; count: number }[];
+};
+
+const emptyItem = (): TerrainItem => ({
+  positions: [],
+  uvs: [],
+  colors: [],
+  kinds: [],
+  slots: [],
+  waves: [],
+  relief: [],
+  tiles: [],
+});
+
+const pushVertex = (
+  target: TerrainItem,
+  x: number,
+  y: number,
+  u: number,
+  v: number,
+  color: LinearColor,
+  alpha: number,
+  kind: number,
+  slot: number,
+  wave: number,
+  depth: number,
+  frozen: number,
 ) => {
-  const distances = new Map<TerrainHex, number>();
-  for (const [tile, material] of materials)
-    if (!material.isWater) distances.set(tile, 0);
-  const queue = [...distances.keys()];
-  for (let index = 0; index < queue.length; index++) {
-    const tile = queue[index];
-    if (!tile) continue;
-    const distance = distances.get(tile) ?? 4;
-    if (distance >= 4) continue;
-    for (const neighbor of grid.traverse(ring({ center: tile, radius: 1 })))
-      if (!distances.has(neighbor)) {
-        distances.set(neighbor, distance + 1);
-        queue.push(neighbor);
-      }
+  target.positions.push(x, y);
+  target.uvs.push(u, v);
+  target.colors.push(color.r, color.g, color.b, alpha);
+  target.kinds.push(kind);
+  target.slots.push(slot);
+  target.waves.push(wave);
+  target.relief.push(depth, frozen);
+};
+
+/** Concatenates painter-ordered items into one vertex stream, rebasing tile ranges. */
+const mergeItems = (order: number, entries: [number, TerrainItem][]) => {
+  const merged = emptyItem();
+  for (const [, entry] of entries) {
+    const base = merged.positions.length / 2;
+    for (const tile of entry.tiles)
+      merged.tiles.push({ ...tile, start: tile.start + base });
+    for (const key of [
+      "positions",
+      "uvs",
+      "colors",
+      "kinds",
+      "slots",
+      "waves",
+      "relief",
+    ] as const)
+      for (const value of entry[key]) merged[key].push(value);
   }
-  const vertices = new Map<string, { sum: number; count: number }>();
-  for (const tile of grid)
-    for (const point of tile.corners) {
-      const key = `${point.x.toFixed(4)},${point.y.toFixed(4)}`;
-      const sample = vertices.get(key) ?? { sum: 0, count: 0 };
-      sample.sum += distances.get(tile) ?? 4;
-      sample.count++;
-      vertices.set(key, sample);
-    }
-  return (point: { x: number; y: number }) => {
-    const sample = vertices.get(`${point.x.toFixed(4)},${point.y.toFixed(4)}`);
-    return sample ? Math.min(1, sample.sum / sample.count / 4) : 1;
+  return {
+    order,
+    positions: new Float32Array(merged.positions),
+    uvs: new Float32Array(merged.uvs),
+    colors: new Float32Array(merged.colors),
+    kinds: new Float32Array(merged.kinds),
+    slots: new Float32Array(merged.slots),
+    waves: new Float32Array(merged.waves),
+    relief: new Float32Array(merged.relief),
+    tiles: merged.tiles,
   };
 };
+
+const mix = (a: LinearColor, b: LinearColor, t: number, scale = 1): LinearColor => ({
+  r: (a.r * (1 - t) + b.r * t) * scale,
+  g: (a.g * (1 - t) + b.g * t) * scale,
+  b: (a.b * (1 - t) + b.b * t) * scale,
+});
+
+/** Earthy rock for temperate cliffs; frost keeps a cold grey face and sand stays sandy. */
+const cliffColor = (material: TerrainLook) => {
+  const own = linearRenderColor(material.color);
+  return material.frost
+    ? mix(own, linearRenderColor("#7d8c95"), 0.5, 0.85)
+    : material.isRoad
+      ? mix(own, linearRenderColor(CLIFF_DIRT), 0.5, 0.75)
+      : mix(own, linearRenderColor(CLIFF_DIRT), 0.6, 0.8);
+};
+
+/**
+ * A vertical face from top down to bottom along one hex edge. Faces turned toward
+ * the upper-left light are brighter, and every face darkens toward its foot.
+ */
+const appendWall = (
+  paint: Painter,
+  edge: TileEdge,
+  top: number,
+  bottom: number,
+  color: LinearColor,
+) => {
+  if (top - bottom < 1e-4) return;
+  const { a, b } = edge;
+  const normal = (a.x + b.x) / 2 - edge.tile.x;
+  const facing = 1 - Math.sign(normal) * 0.14 * Math.min(1, Math.abs(normal) / 10);
+  const upper = mix(color, color, 0, facing * 1.05),
+    lower = mix(color, color, 0, facing * 0.82);
+  const quad = [
+    [a.x, a.y + top, upper],
+    [b.x, b.y + top, upper],
+    [b.x, b.y + bottom, lower],
+    [a.x, a.y + bottom, lower],
+  ] as const;
+  for (const index of [0, 1, 2, 0, 2, 3] as const) {
+    const [x, y, tint] = quad[index];
+    paint(x, y, tint, 1);
+  }
+};
+
+/** A one-pixel band along an edge, so outlines share the terrain's single draw. */
+const appendLine = (
+  paint: Painter,
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  offset: number,
+  color: LinearColor,
+  alpha: number,
+) => {
+  const half = LINE_WIDTH / 2;
+  const quad = [
+    [a.x, a.y + offset + half],
+    [b.x, b.y + offset + half],
+    [b.x, b.y + offset - half],
+    [a.x, a.y + offset - half],
+  ] as const;
+  for (const index of [0, 1, 2, 0, 2, 3] as const)
+    paint(quad[index][0], quad[index][1], color, alpha);
+};
+
+/**
+ * Where the back tile stands higher, its front edge drops as a cliff, split at the
+ * water surface so the submerged part is seen through the water. Each drop is traced
+ * by a dark outline on the higher face, and tall cliffs show a stratum per terrace.
+ */
+const appendDrops = (
+  back: TileEdge,
+  front: TileEdge,
+  high: TileTop,
+  low: TileTop,
+  piece: (order: number) => Painter,
+  sand: LinearColor,
+  deep: LinearColor,
+) => {
+  const ink = linearRenderColor(DROP_OUTLINE);
+  if (high.solid > low.solid) {
+    const backWater = !!high.material.waterDepth;
+    const frontWater = !!low.material.waterDepth;
+    const step = back.tile.height * (backWater ? SEABED_STEP : LAND_STEP);
+    if (backWater) {
+      const color = mix(sand, deep, Math.min(1, high.depth * DEPTH_FADE), 0.6);
+      appendWall(piece(seabedOrder(high.depth)), back, high.solid, low.solid, color);
+      appendLine(
+        piece(seabedOrder(high.depth) + 0.05),
+        back.a,
+        back.b,
+        high.solid,
+        ink,
+        0.3,
+      );
+    } else {
+      const cliff = cliffColor(high.material);
+      const surface = frontWater ? low.face : low.solid;
+      appendWall(piece(wallOrder(high.land)), back, high.solid, surface, cliff);
+      if (frontWater) {
+        const submerged = mix(cliff, deep, Math.min(1, low.depth * DEPTH_FADE), 0.85);
+        appendWall(piece(UNDERWATER_WALL_ORDER), back, surface, low.solid, submerged);
+      }
+      for (let level = 1; high.solid - level * step > surface + 1e-4; level++)
+        appendLine(
+          piece(wallOrder(high.land) + 0.01),
+          back.a,
+          back.b,
+          high.solid - level * step,
+          ink,
+          0.16,
+        );
+      appendLine(
+        piece(faceOrder(high.land) + 0.04),
+        back.a,
+        back.b,
+        high.solid,
+        ink,
+        0.5,
+      );
+    }
+  } else if (low.solid > high.solid) {
+    // A higher block in front shows its back rim against the lower ground behind it.
+    const order = low.material.waterDepth
+      ? seabedOrder(low.depth) + 0.05
+      : faceOrder(low.land) + 0.04;
+    appendLine(
+      piece(order),
+      front.a,
+      front.b,
+      low.solid,
+      ink,
+      low.material.waterDepth ? 0.18 : 0.35,
+    );
+  }
+};
+
+/** Shore lines, lily pads, road shoulders and frost drifts where two materials meet. */
+const appendJoins = (
+  first: TileEdge,
+  one: TileTop,
+  second: TileEdge,
+  two: TileTop,
+  surface: number[],
+  surfaceColors: number[],
+) => {
+  const { a, b } = first;
+  if (!!one.material.isWater !== !!two.material.isWater) {
+    const [water, coast] = one.material.isWater ? [first, two] : [second, one];
+    const top = one.material.isWater ? one : two;
+    appendShoreline(
+      surface,
+      surfaceColors,
+      a,
+      b,
+      water.tile,
+      top.face,
+      !!water.tile.frozen,
+    );
+    if (top.material.waterDepth && !water.tile.frozen && !coast.material.frost)
+      appendLilyPads(surface, surfaceColors, water.tile, top.face, a, b);
+  }
+  if (
+    !!one.material.isRoad !== !!two.material.isRoad &&
+    one.face === 0 &&
+    two.face === 0
+  ) {
+    const [road, grass] = one.material.isRoad ? [first, two] : [second, one];
+    appendPathShoulder(surface, surfaceColors, a, b, road.tile, grass.material.color);
+  }
+  if (
+    one.material.frost &&
+    two.material.frost &&
+    one.material.frost !== two.material.frost &&
+    one.face === two.face &&
+    one.face >= 0
+  ) {
+    const [ice, snow] = one.material.frost === "ice" ? [first, two] : [second, one];
+    appendPathShoulder(
+      surface,
+      surfaceColors,
+      a,
+      b,
+      ice.tile,
+      snow.material.color,
+      4,
+      1.5,
+      one.face,
+    );
+  }
+};
+
+/** Deterministic per-tile hash in [0, 1) for scattering details without consuming the sector PRNG. */
+const tileHash = (tile: TerrainHex, salt: number) => {
+  let value = Math.imul(
+    (tile.col * 73856093) ^ (tile.row * 19349663) ^ salt,
+    0x5bd1e995,
+  );
+  value ^= value >>> 13;
+  value = Math.imul(value, 0x5bd1e995);
+  return ((value ^ (value >>> 15)) >>> 0) / 4294967296;
+};
+
+/** Seagrass on shallow sand and kelp in deeper water, tinted toward the deep like the seabed. */
+const appendSeagrass = (
+  paint: Painter,
+  tile: TerrainHex,
+  offset: number,
+  depth: number,
+  deep: LinearColor,
+) => {
+  if (depth >= MAX_SEABED_DEPTH) return;
+  const kelp = depth >= 3;
+  const clumps = Math.floor(tileHash(tile, 1) * (kelp ? 2.5 : 4));
+  const color = mix(
+    linearRenderColor(kelp ? "#5c7a44" : "#78a052"),
+    deep,
+    Math.min(1, depth * DEPTH_FADE),
+  );
+  for (let clump = 0; clump < clumps; clump++) {
+    const angle = tileHash(tile, 10 + clump) * Math.PI * 2;
+    const radius = 0.25 + tileHash(tile, 20 + clump) * 0.45;
+    const x = snap(tile.x + Math.cos(angle) * radius * tile.width * 0.32);
+    const y = snap(
+      tile.y + offset - Math.abs(Math.sin(angle)) * radius * tile.height * 0.3,
+    );
+    const blades = 2 + Math.floor(tileHash(tile, 30 + clump) * 2);
+    for (let blade = 0; blade < blades; blade++) {
+      const height = snap(
+        (kelp ? 3 : 1.5) + tileHash(tile, 40 + clump * 3 + blade) * 2.25,
+      );
+      const left = x + (blade - (blades - 1) / 2) * 1.5,
+        lean = (blade - (blades - 1) / 2) * 0.75;
+      const shade = mix(color, color, 0, blade % 2 ? 0.85 : 1);
+      const quad = [
+        [left, y],
+        [left + 0.75, y],
+        [left + 0.75 + lean, y + height],
+        [left + lean, y + height],
+      ] as const;
+      for (const index of [0, 1, 2, 0, 2, 3] as const)
+        paint(quad[index][0], quad[index][1], shade, 1);
+    }
+  }
+};
+
+/** Lily pads drift on calm shallow water along temperate shores. */
+const appendLilyPads = (
+  positions: number[],
+  colors: number[],
+  tile: TerrainHex,
+  offset: number,
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+) => {
+  const seed = Math.abs(Math.round(a.x * 7 + a.y * 13 + b.x * 3 + b.y));
+  if (tileHash(tile, seed) > 0.32) return;
+  const pad = linearRenderColor("#6d9a4b"),
+    rim = linearRenderColor("#4d7536"),
+    bloom = linearRenderColor("#e7b6c9");
+  const t = 0.3 + tileHash(tile, seed + 1) * 0.4;
+  const inward = 0.22 + tileHash(tile, seed + 2) * 0.18;
+  const cx = snap(a.x + (b.x - a.x) * t + (tile.x - (a.x + b.x) / 2) * inward);
+  const cy = snap(a.y + (b.y - a.y) * t + (tile.y - (a.y + b.y) / 2) * inward + offset);
+  const rx = 2.25 + tileHash(tile, seed + 3) * 1.5,
+    ry = rx * 0.5;
+  const notch = Math.floor(tileHash(tile, seed + 4) * 8);
+  for (let side = 0; side < 8; side++) {
+    if (side === notch) continue;
+    const from = (side / 8) * Math.PI * 2,
+      to = ((side + 1) / 8) * Math.PI * 2;
+    const color = side >= 4 ? rim : pad;
+    for (const [x, y] of [
+      [cx, cy],
+      [cx + Math.cos(from) * rx, cy + Math.sin(from) * ry],
+      [cx + Math.cos(to) * rx, cy + Math.sin(to) * ry],
+    ] as const) {
+      positions.push(snap(x), snap(y));
+      colors.push(color.r, color.g, color.b);
+    }
+  }
+  if (tileHash(tile, seed + 5) < 0.3)
+    for (const [x, y] of [
+      [cx, cy],
+      [cx + 1.5, cy],
+      [cx + 1.5, cy + 0.75],
+      [cx, cy],
+      [cx + 1.5, cy + 0.75],
+      [cx, cy + 0.75],
+    ] as const) {
+      positions.push(x, y);
+      colors.push(bloom.r, bloom.g, bloom.b);
+    }
+};
+
+const snap = (value: number) => Math.round(value / 0.75) * 0.75;
+
+/** Frost class of a stock terrain key; snow and ice coasts freeze their stock water. */
+export const terrainFrost = (key: string): TerrainLook["frost"] =>
+  key === "ice" ? "ice" : key === "snow" ? "snow" : undefined;
 
 /** Picks an inclusive recessed face in grid-local Y-up units; misses return null. */
 export const hexTerrainAt = (
@@ -303,9 +751,17 @@ export type TerrainLook = {
   groundShade?: (point: { x: number; y: number }) => number;
   /** Warm leaf-earth material blended through the canopy field. */
   groundColor?: LinearColor;
-  /** Flat snow/ice joins use grouped drifts rather than elevated foundation rims. */
+  /** Flat snow/ice joins use grouped drifts rather than elevated foundation rims; icy coasts freeze stock water. */
   frost?: "snow" | "ice";
 };
+
+/** Stock water palette in display sRGB: a translucent surface over sand that fades toward the deep. */
+const WATER_SURFACE = "#3a9c9b";
+const SEABED_SAND = "#d3c58f";
+const SEABED_STONE = "#7f98a2";
+const WATER_DEEP = "#11304a";
+const CLIFF_DIRT = "#6b5842";
+const DROP_OUTLINE = "#1b2618";
 
 /** A shallow two-tone tidal edge grounds island foundations in the same static surface batch. */
 const appendShoreline = (
@@ -315,6 +771,7 @@ const appendShoreline = (
   b: { x: number; y: number },
   water: { x: number; y: number },
   offset: number,
+  frozen: boolean,
 ) => {
   const dx = b.x - a.x,
     dy = b.y - a.y,
@@ -323,10 +780,16 @@ const appendShoreline = (
     (water.x - (a.x + b.x) / 2) * -dy + (water.y - (a.y + b.y) / 2) * dx > 0 ? 1 : -1;
   const nx = (-dy / length) * direction,
     ny = (dx / length) * direction;
-  for (const [near, far, tint] of [
-    [0, 0.75, "#9fb8ad"],
-    [0.75, 2.5, "#6b918b"],
-  ] as const) {
+  // Frozen coasts trade the tidal line for a packed-snow lip on the ice.
+  for (const [near, far, tint] of frozen
+    ? ([
+        [0, 0.75, "#e6eff0"],
+        [0.75, 2.5, "#c7dadf"],
+      ] as const)
+    : ([
+        [0, 0.75, "#9fb8ad"],
+        [0.75, 2.5, "#6b918b"],
+      ] as const)) {
     const color = linearRenderColor(tint);
     const count = near === 0 ? 4 : 1;
     for (let segment = 0; segment < count; segment++) {
@@ -363,6 +826,7 @@ export const appendPathShoulder = (
   grass: string,
   depth = 2.8,
   step = 1.5,
+  offset = 0,
 ) => {
   const dx = b.x - a.x,
     dy = b.y - a.y,
@@ -378,7 +842,8 @@ export const appendPathShoulder = (
     const x =
       Math.round((a.x + dx * t - (dy / length) * inset * direction) / step) * step;
     const y =
-      Math.round((a.y + dy * t + (dx / length) * inset * direction) / step) * step;
+      Math.round((a.y + dy * t + (dx / length) * inset * direction) / step) * step +
+      offset;
     const size = seed % 3 === 0 ? step * 2 : step;
     positions.push(
       x,
@@ -398,14 +863,3 @@ export const appendPathShoulder = (
   }
 };
 export type HexTerrainData = ReturnType<typeof buildHexTerrainData>;
-type TerrainBatchBuilder = {
-  kind: "solid" | "noise" | "image";
-  texture: string | null;
-  layer: number;
-  positions: number[];
-  uvs: number[];
-  colors: number[];
-  rawColors: number[];
-  waves: number[];
-  tiles: { key: string; start: number; count: number }[];
-};

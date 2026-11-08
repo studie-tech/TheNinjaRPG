@@ -6,7 +6,7 @@ import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Texture } 
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
-import * as terrainData from "@/libs/rendering/terrainData";
+import * as terrainElevation from "@/libs/rendering/terrainElevation";
 import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
 import * as navigation from "@/libs/sector-map/navigation";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
@@ -62,7 +62,7 @@ const gameFixture = () => {
     const container = new Container();
     const dispose = () => { if (!container.destroyed) container.destroy({ children: true }); };
     scope.own(dispose);
-    return { container, dispose, isAnimated: false, setLighting: () => {}, setTints: () => {} };
+    return { container, dispose, isAnimated: false, setLighting: () => {}, setTints: () => {}, setOrigin: () => {}, setDepthBias: () => {} };
   });
   const event = (type: string, x: number, y: number) => {
     const pointer = new window.MouseEvent(type, { button: 0, clientX: x, clientY: y });
@@ -294,7 +294,7 @@ describe("travel scene ground depth", () => {
     entry.globalTileType = 0;
     state.terrains = new Map([["ocean", BUILTIN_TERRAINS_BY_KEY.get("ocean")!]]);
     if (shared) state.nav = navigation.buildWindowNav(state.window, 10);
-    const nav = vi.spyOn(navigation, "buildWindowNav"), shelf = vi.spyOn(terrainData, "createWaterShelf");
+    const nav = vi.spyOn(navigation, "buildWindowNav"), shelf = vi.spyOn(terrainElevation, "createTerrainField");
     const { scene } = await sceneFixture(state);
     const builds = [nav.mock.calls.length, shelf.mock.calls.length];
     expect(builds[0]).toBe(shared ? 0 : 1); expect(builds[1]).toBeGreaterThan(0);

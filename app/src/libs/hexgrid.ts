@@ -43,6 +43,10 @@ export class TerrainHex extends Hex {
   /** The authored map tile backing this hex (if any), stashed alongside `spec`
    *  so the geometry pass skips a second per-tile authoredTiles lookup */
   authored?: NormalizedSectorTile;
+  /** Stock water sealed by an icy coast; recorded by the terrain field for ice-aware actors */
+  frozen?: boolean;
+  /** Integer terrain step from the terrain field: land rises 0..3, stock seabeds sink -1..-5 */
+  terrace?: number;
 }
 
 /**
