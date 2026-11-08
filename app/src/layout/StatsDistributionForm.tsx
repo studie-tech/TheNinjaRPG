@@ -106,9 +106,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
   const handleAcceptWithTutorial = async (data: AssignableUserStats) => {
     const shouldAdvance = advanceTutorial && currentStep?.advanceOn === "assignStats";
     if (shouldAdvance) {
-      const formSum = Object.values(data)
-        .map((v) => (Number.isFinite(Number(v)) ? Number(v) : 0))
-        .reduce((a, b) => a + b, 0);
+      const formSum = sumStatValues(data);
 
       if (formSum !== availableStats) {
         showMutationToast({
@@ -310,27 +308,9 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
       : []),
   ];
 
-  // Disable a specialization only when every one of its stats is already at cap.
-  // All presets share offence/defence, so treating a single capped combat stat as
-  // "maxed" would hide every Simple option.
-  const isSpecializationDisabled = (option: (typeof specializationOptions)[number]) => {
-    if (isInArray(option.id, BasicElementName) && !canAttemptAwakeAction(userData))
-      return true;
-    return option.stats.every((stat) => {
-      const maxValue = maxValues[stat];
-      const currentValue = defaultValues[stat] ?? 0;
-      return maxValue !== undefined && maxValue !== null && currentValue >= maxValue;
-    });
-  };
-
-  // Get which stats are capped for display purposes
-  const getCappedStats = (option: (typeof specializationOptions)[number]) => {
-    return option.stats.filter((stat) => {
-      const maxValue = maxValues[stat];
-      const currentValue = defaultValues[stat] ?? 0;
-      return maxValue !== undefined && maxValue !== null && currentValue >= maxValue;
-    });
-  };
+  // Every default is 0 and every stat has a numeric cap, so a stat is capped when no room is left.
+  const isCapped = (stat: (typeof specializationOptions)[number]["stats"][number]) =>
+    maxValues[stat] <= 0;
 
   /**
    * Points this preset adds per stat: an even split, with whatever a capped stat cannot take
@@ -365,20 +345,19 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
     option: (typeof specializationOptions)[number],
   ) => {
     setPendingSpecialization(option.id);
-    const distribution: Partial<AssignableUserStats> = { ...defaultValues };
-    const added = getSpecializationSplit(option);
-    for (const stat of option.stats) {
-      distribution[stat] = (defaultValues[stat] ?? 0) + (added[stat] ?? 0);
-    }
-    onAccept(distribution as AssignableUserStats);
+    onAccept({ ...defaultValues, ...getSpecializationSplit(option) });
   };
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4" aria-busy={isPending}>
       {specializationOptions.map((option) => {
-        const isDisabled = isSpecializationDisabled(option);
+        const cappedStats = option.stats.filter(isCapped);
+        // Disabled only when every stat is capped: all combat presets share offence/defence.
+        const isDisabled =
+          (isInArray(option.id, BasicElementName) &&
+            !canAttemptAwakeAction(userData)) ||
+          cappedStats.length === option.stats.length;
         const isAssigning = pendingSpecialization === option.id;
-        const cappedStats = getCappedStats(option);
         const split = getSpecializationSplit(option);
         const placed = round(Object.values(split).reduce((a, b) => a + b, 0));
         const isCapLimited = placed < round(availableStats);
@@ -533,9 +512,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
     resolver: zodResolver(statSchema),
   });
   const formValues = useWatch({ control: form.control });
-  const formSum = Object.values(formValues)
-    .map((v) => (Number.isFinite(Number(v)) ? Number(v) : 0))
-    .reduce((a, b) => a + b, 0);
+  const formSum = sumStatValues(formValues);
 
   // Is the form the same as the default values
   const isDefault = Object.keys(formValues).every((key) => {
@@ -707,3 +684,9 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
 };
 
 export default DistributeStatsForm;
+
+/** Total of the numeric entries in a stat allocation; blank or invalid inputs count as 0. */
+const sumStatValues = (values: Record<string, unknown>) =>
+  Object.values(values)
+    .map((v) => (Number.isFinite(Number(v)) ? Number(v) : 0))
+    .reduce((a, b) => a + b, 0);
