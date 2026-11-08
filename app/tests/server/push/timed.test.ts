@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import { Redis } from "@upstash/redis";
 import * as Sentry from "@sentry/nextjs";
 import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
@@ -25,6 +25,7 @@ integration("background timer delivery receipts (real Redis)", () => {
     send = createTimedPushSender(redis);
   });
   afterAll(() => close?.());
+  afterEach(() => vi.restoreAllMocks());
 
   it("allows one concurrent worker and consumes a successful event across later runs", async () => {
     let finish: () => void = () => {};
@@ -89,14 +90,12 @@ integration("background timer delivery receipts (real Redis)", () => {
     const transport = vi.spyOn(fcm, "sendAlerts").mockResolvedValue([{ token: "synthetic-device", status: "sent" }]);
     vi.spyOn(apns, "sendAlerts").mockResolvedValue([]);
     vi.spyOn(Sentry, "captureException").mockReturnValue("synthetic-event");
-    try {
-      const deliver = () => push.sendPushToUsers(client, [event.userId], timerElapsed("jutsu", "synthetic"));
-      expect(await send(current, deliver)).toBe("retry");
-      expect(await redis.get(timedPushKey(current))).toBeNull();
-      expect(await send(current, deliver)).toBe("complete");
-      expect(await send(current, deliver)).toBe("duplicate");
-      expect(transport).toHaveBeenCalledTimes(1);
-    } finally { vi.restoreAllMocks(); }
+    const deliver = () => push.sendPushToUsers(client, [event.userId], timerElapsed("jutsu", "synthetic"));
+    expect(await send(current, deliver)).toBe("retry");
+    expect(await redis.get(timedPushKey(current))).toBeNull();
+    expect(await send(current, deliver)).toBe("complete");
+    expect(await send(current, deliver)).toBe("duplicate");
+    expect(transport).toHaveBeenCalledTimes(1);
   });
   it("retains successful real dispatch outcomes when pruning fails and never replays the alert", async () => {
     const current = { ...event, sourceId: "dispatch-prune" };
@@ -113,13 +112,11 @@ integration("background timer delivery receipts (real Redis)", () => {
     ]);
     vi.spyOn(apns, "sendAlerts").mockResolvedValue([]);
     vi.spyOn(Sentry, "captureException").mockReturnValue("synthetic-event");
-    try {
-      const deliver = () => push.sendPushToUsers(client, [event.userId], timerElapsed("jutsu", "synthetic"));
-      expect(await send(current, deliver)).toBe("complete");
-      expect(await send(current, deliver)).toBe("duplicate");
-      expect(transport).toHaveBeenCalledTimes(1);
-      expect(prune).toHaveBeenCalledTimes(1);
-    } finally { vi.restoreAllMocks(); }
+    const deliver = () => push.sendPushToUsers(client, [event.userId], timerElapsed("jutsu", "synthetic"));
+    expect(await send(current, deliver)).toBe("complete");
+    expect(await send(current, deliver)).toBe("duplicate");
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(prune).toHaveBeenCalledTimes(1);
   });
   it("runs persisted recovery and training delivery without the app or a foreground profile read", async () => {
     const current = user({ userId: "background-worker", status: "HOSPITALIZED",
@@ -132,13 +129,11 @@ integration("background timer delivery receipts (real Redis)", () => {
     vi.spyOn(Redis, "fromEnv").mockReturnValue(redis);
     vi.spyOn(push, "isPushEnabled").mockReturnValue(true);
     vi.spyOn(push, "sendPushToUsers").mockImplementation(delivery);
-    try {
-      expect(await deliverDueTimedPushes(client, now)).toEqual({ processed: 2 });
-      expect(delivery).toHaveBeenCalledWith(client, [current.userId], expect.objectContaining({ category: "recovery", url: "/hospital" }));
-      expect(delivery).toHaveBeenCalledWith(client, [current.userId], expect.objectContaining({ category: "training", url: "/jutsus" }));
-      expect(await deliverDueTimedPushes(client, now)).toEqual({ processed: 0 });
-      expect(delivery).toHaveBeenCalledTimes(2);
-    } finally { vi.restoreAllMocks(); }
+    expect(await deliverDueTimedPushes(client, now)).toEqual({ processed: 2 });
+    expect(delivery).toHaveBeenCalledWith(client, [current.userId], expect.objectContaining({ category: "recovery", url: "/hospital" }));
+    expect(delivery).toHaveBeenCalledWith(client, [current.userId], expect.objectContaining({ category: "training", url: "/jutsus" }));
+    expect(await deliverDueTimedPushes(client, now)).toEqual({ processed: 0 });
+    expect(delivery).toHaveBeenCalledTimes(2);
   });
 });
 
