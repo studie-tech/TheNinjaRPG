@@ -12,7 +12,7 @@ export const createMapControls = (
     enabled: () => boolean;
     zoom?: (factor: number) => void;
     pan?: (dx: number, dy: number) => void;
-    tap: (x: number, y: number) => void;
+    tap: (x: number, y: number, client: { x: number; y: number }) => void;
   },
 ) => {
   const contacts = new Map<
@@ -79,7 +79,7 @@ export const createMapControls = (
       !multi &&
       Math.hypot(p.x - contact.startX, p.y - contact.startY) <= 10
     )
-      options.tap(p.x, p.y);
+      options.tap(p.x, p.y, { x: p.clientX, y: p.clientY });
   });
   const cancel = (event: PointerEvent) => {
     contacts.delete(event.pointerId);

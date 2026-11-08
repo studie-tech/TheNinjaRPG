@@ -53,6 +53,7 @@ import Modal from "@/layout/Modal";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import SliderField from "@/layout/SliderField";
+import { TravelUserCard } from "@/layout/TravelUserCard";
 import WebGlError from "@/layout/WebGLError";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
@@ -249,6 +250,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // State pertaining to the sector
   const [targetUser, setTargetUser] = useState<SectorUser | null>(null);
   const [healTargetUser, setHealTargetUser] = useState<SectorUser | null>(null);
+  // Each tap opens a new card; the previous card's outside-tap dismissal can land after it.
+  const [profileCard, setProfileCard] = useState<{
+    user: SectorUser;
+    anchor: { x: number; y: number };
+    openedAt: number;
+  } | null>(null);
   const [sorrounding, setSorrounding] = useState<SectorUser[]>([]);
   const publishSurroundingsRef = useRef(false);
   publishSurroundingsRef.current =
@@ -1997,7 +2004,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     }
   };
 
-  const onTravelTap = (hit: TravelPick) => {
+  const onTravelTap = (hit: TravelPick, client: { x: number; y: number }) => {
     if (
       showSorroundingRef.current ||
       performance.now() < ignoreMapClicksUntilRef.current
@@ -2146,8 +2153,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         }
         return false;
       } else if (showUsersRef.current && i.type === "info") {
-        const userId = i.userId as string;
-        void router.push(`/userid/${userId}`);
+        const target = usersRef.current?.find((u) => u.userId === i.userId);
+        if (target)
+          setProfileCard({ user: target, anchor: client, openedAt: performance.now() });
         return false;
       } else if (showUsersRef.current && i.type === "marker") {
         return true;
@@ -2256,7 +2264,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             brightness: getWorldCycleBrightness(lightDate),
           };
         },
-        onTap: (hit) => travelCallbacks.current.onTap(hit),
+        onTap: (hit, client) => travelCallbacks.current.onTap(hit, client),
         onReady: () => travelCallbacks.current.onReady(),
         onHover: (structureId, locationId) => {
           if (structureId !== hoveredStructureIdRef.current) {
@@ -2622,6 +2630,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             trigger={<div className="h-1 w-1 opacity-0" />}
           />
         </div>
+      )}
+      {profileCard && (
+        <TravelUserCard
+          key={profileCard.openedAt}
+          user={profileCard.user}
+          anchor={profileCard.anchor}
+          onClose={() =>
+            setProfileCard((current) => (current === profileCard ? null : current))
+          }
+        />
       )}
       {/* Hunting can receive focus later without dismissing this NPC arrival. */}
       {arrivalNpc && (

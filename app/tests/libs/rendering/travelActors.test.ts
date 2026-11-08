@@ -28,6 +28,12 @@ describe("travel actor snapshots", () => {
   it("omits restricted attack actions while preserving healing and profile details", () => {
     expect(recipes([player({ rank: "STUDENT" })])[0]?.parts.map((part) => part.kind)).toEqual(["marker", "marker", "avatar", "heal", "info"]);
   });
+  it("tucks the profile control in by a character sprite's head, clear of a wider portrait", () => {
+    const info = (patch: Partial<SectorUser>) => recipes([player(patch)])[0]?.parts.find((part) => part.kind === "info");
+    const portrait = info({}), sprite = info({ spriteAppearance: { body: "male", layers: [] } as never });
+    expect(portrait).toMatchObject({ x: 20 * 0.1, y: 10 * 1.4 });
+    expect(sprite).toMatchObject({ x: 20 * 0.22, y: 10 * 1.2 });
+  });
   it("preserves solo PvE battle pins and adds a second portrait when available", () => {
     const solo = recipes([player({ status: "BATTLE", battleId: "battle" })]);
     const pair = recipes([player({ status: "BATTLE", battleId: "battle" }), player({ userId: "foe", status: "BATTLE", battleId: "battle" })]);

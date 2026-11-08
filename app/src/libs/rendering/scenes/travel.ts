@@ -76,7 +76,8 @@ export const createTravelScene = async (options: {
   onError: (error: unknown) => void;
   /** Runs when sector terrain is usable, possibly before scenery or this factory finishes. */
   onReady: () => void;
-  onTap: (hit: TravelPick) => void;
+  /** Client coordinates let DOM overlays open beside the tapped artwork. */
+  onTap: (hit: TravelPick, client: { x: number; y: number }) => void;
   onHover: (structureId: string | null, locationId: string | null) => void;
   onZoom: (zoom: number) => void;
   initialZoom: number;
@@ -249,7 +250,7 @@ export const createTravelScene = async (options: {
         const snapshot = options.getSnapshot();
         return snapshot.enabled && sectors.has(snapshot.sector);
       },
-      tap: (x, y) => options.onTap(pick(x, y)),
+      tap: (x, y, client) => options.onTap(pick(x, y), client),
       pan: (dx, dy) => {
         if (!camera) return;
         hasManualCamera = true;

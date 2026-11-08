@@ -1006,9 +1006,11 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
       !RANKS_RESTRICTED_FROM_PVP.includes(user.rank)
     )
       parts.push(part(tile, "attack", IMG_SECTOR_ATTACK, 0.8, 0.9, 1.4));
+    // Character sprites are narrower than portraits, so their profile control tucks in by the head.
+    const [infoX, infoY] = user.spriteAppearance ? [0.22, 1.2] : [0.1, 1.4];
     parts.push(
       part(tile, "heal", IMG_ICON_HEAL, 0.7, 1, 0.5),
-      part(tile, "info", IMG_SECTOR_INFO, 0.7, 0.1, 1.4),
+      part(tile, "info", IMG_SECTOR_INFO, 0.7, infoX, infoY),
     );
   }
   return parts;

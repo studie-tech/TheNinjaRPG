@@ -6,10 +6,10 @@ const setup = (zoom = true, pan = false, pointerType = "touch") => {
   const canvas = document.createElement("canvas");
   canvas.getBoundingClientRect = () => new DOMRect(0, 0, 390, 390);
   const listeners = new window.AbortController();
-  const taps: number[][] = [], zooms: number[] = [], pans: number[][] = [];
+  const taps: number[][] = [], clients: { x: number; y: number }[] = [], zooms: number[] = [], pans: number[][] = [];
   let enabled = true;
   const controls = createMapControls({ canvas, renderer: { width: 390, height: 390 }, listen: (type: string, callback: EventListener) => canvas.addEventListener(type, callback, { signal: listeners.signal }) } as GameRenderer, {
-    enabled: () => enabled, tap: (x, y) => taps.push([x, y]), ...(zoom ? { zoom: (factor: number) => zooms.push(factor) } : {}),
+    enabled: () => enabled, tap: (x, y, client) => { taps.push([x, y]); clients.push(client); }, ...(zoom ? { zoom: (factor: number) => zooms.push(factor) } : {}),
     ...(pan ? { pan: (dx: number, dy: number) => pans.push([dx, dy]) } : {}),
   });
   const event = (type: string, id: number, x: number, y: number, button = 0) => {
@@ -17,7 +17,7 @@ const setup = (zoom = true, pan = false, pointerType = "touch") => {
     Object.defineProperties(pointer, { pointerId: { value: id }, pointerType: { value: pointerType } });
     canvas.dispatchEvent(pointer);
   };
-  return { canvas, taps, zooms, pans, controls, event, disable: () => { enabled = false; }, dispose: () => listeners.abort() };
+  return { canvas, taps, clients, zooms, pans, controls, event, disable: () => { enabled = false; }, dispose: () => listeners.abort() };
 };
 
 describe("map gesture ownership", () => {
@@ -79,6 +79,8 @@ describe("map gesture ownership", () => {
     try {
       scene.event("pointerdown", 1, 100, 100); scene.event("pointerup", 1, 102, 102);
       expect(scene.taps).toEqual([[102, 102]]);
+      // DOM overlays anchor to the client point where the tap was released.
+      expect(scene.clients).toEqual([{ x: 102, y: 102 }]);
       scene.event("pointerdown", 2, 100, 100); scene.event("pointermove", 2, 150, 100);
       scene.event("pointermove", 2, 100, 100); scene.event("pointerup", 2, 100, 100);
       expect(scene.taps).toHaveLength(1);
