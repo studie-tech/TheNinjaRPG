@@ -16,6 +16,7 @@ import {
   executeRowsForSettleCookingExperience,
   insertUserRaidBuffForConsumeMeal,
 } from "@/queries/item";
+import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
@@ -92,28 +93,21 @@ export const consumeMeal = async ({
 }) => {
   const now = new Date();
   if (user.status !== "AWAKE" || user.battleId)
-    return {
-      success: false,
-      message: "Meals can only be eaten while awake and out of combat",
-    };
+    return errorResponse("Meals can only be eaten while awake and out of combat");
   if (
     owned.storedAtHome ||
     owned.isInAuction ||
     owned.equipped !== "NONE" ||
     (owned.craftingFinishedAt && owned.craftingFinishedAt > now)
   ) {
-    return {
-      success: false,
-      message: "Carry a finished meal in your inventory before eating it",
-    };
+    return errorResponse("Carry a finished meal in your inventory before eating it");
   }
   if (expectedQuantity === undefined || expectedQuantity !== owned.quantity)
-    return {
-      success: false,
-      message: "Your meal stack changed. Refresh your inventory and try again",
-    };
+    return errorResponse(
+      "Your meal stack changed. Refresh your inventory and try again",
+    );
   if (owned.item.effects.length !== 1 || owned.item.mealDurationSeconds < 1) {
-    return { success: false, message: "This meal has an invalid effect or duration" };
+    return errorResponse("This meal has an invalid effect or duration");
   }
   const id = `meal-${user.userId}`;
   const previous = user.raidBuffs?.find(
@@ -143,10 +137,7 @@ export const consumeMeal = async ({
     ),
   );
   if (consumed.rowsAffected === 0)
-    return {
-      success: false,
-      message: "Your state or meal stack changed. Please try again",
-    };
+    return errorResponse("Your state or meal stack changed. Please try again");
   if (expectedQuantity === 1) {
     try {
       await retryOnDeadlock(() => deleteEmptyUserItem(client, owned.id, user.userId));
