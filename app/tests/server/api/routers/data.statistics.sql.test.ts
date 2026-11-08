@@ -44,7 +44,7 @@ describeWithDatabase("data.getStatistics", () => {
 
   it("totals jutsu owners across their level distribution", async () => {
     const result = await statistics({ id: "fireball", type: "jutsu" });
-    expect(result.info?.id).toBe("fireball");
+    expect(result.info).toMatchObject({ id: "fireball" });
     expect(result.levelDistribution).toEqual([
       { level: 1, count: 2 },
       { level: 3, count: 1 },
@@ -55,7 +55,7 @@ describeWithDatabase("data.getStatistics", () => {
 
   it("totals bloodline holders across their level distribution", async () => {
     const result = await statistics({ id: "line", type: "bloodline" });
-    expect(result.info?.id).toBe("line");
+    expect(result.info).toMatchObject({ id: "line" });
     expect(result.levelDistribution).toEqual([
       { level: 5, count: 2 },
       { level: 20, count: 1 },
@@ -65,7 +65,7 @@ describeWithDatabase("data.getStatistics", () => {
 
   it("counts distinct item owners without a level distribution", async () => {
     const result = await statistics({ id: "kunai", type: "item" });
-    expect(result.info?.id).toBe("kunai");
+    expect(result.info).toMatchObject({ id: "kunai" });
     expect(result.totalUsers).toBe(2);
     expect(result.levelDistribution).toBeNull();
   });
