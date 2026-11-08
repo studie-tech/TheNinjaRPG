@@ -1,4 +1,3 @@
-import { huntingSession, huntingProgress, huntingReceipt } from "@/drizzle/schema";
 import { huntingBattleState } from "../../../../setup/hunting";
 import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
 
@@ -9,6 +8,9 @@ import {
   auctionOffer,
   bloodline,
   farmPlot,
+  huntingProgress,
+  huntingReceipt,
+  huntingSession,
   rankedUserRewards,
   recruitReferral,
   userSkill,

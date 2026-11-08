@@ -1,7 +1,16 @@
 import { expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
+import { quest, questHistory, questParty, userData } from "@/drizzle/schema";
+import { projectPartyTracker } from "@/libs/questParty";
+import { questPartyRelations } from "@/queries/questParty";
+import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import { synchronizeQuestParty, type LoadedQuestParty, saveQuestPartyMember } from "@/server/utils/questParty";
 import { AllObjectives, ObjectiveTracker, QuestTracker } from "@/validators/objectives";
+import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
+import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
+import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 it("keeps committed terminal progress when its party CAS must retry", async () => {
   const goal = ObjectiveTracker.parse({ id: "goal" });
@@ -29,17 +38,6 @@ it.each([
   const result = await synchronizeQuestParty(client, party);
   expect(result.battleId).toBe(expected === "fresh" ? battleId : expected);
 });
-
-import { eq } from "drizzle-orm";
-import { quest, questHistory, questParty, userData } from "@/drizzle/schema";
-import { projectPartyTracker } from "@/libs/questParty";
-import type { UserWithRelations } from "@/routers/profile";
-import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
-import { questPartyRelations } from "@/queries/questParty";
-import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
-import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
-
 
 describeWithDatabase("quest teams on real SQL", () => {
   it("merges concurrent member contributions exactly once", async () => {
