@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { useState } from "react";
+import { useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,10 +30,10 @@ export const NameChange: React.FC = () => {
   const [showNameChangeConfirm, setShowNameChangeConfirm] = useState(false);
   const usernameFlight = useSingleFlight();
   const isChangingUsername = usernameFlight.isPending;
-  const [usernameDraft, setUsernameDraft] = useState("");
 
   // Username search
   const { form, searchTerm } = useUserSearch();
+  const usernameDraft = useWatch({ control: form.control, name: "username" });
 
   // Queries
   const { data: databaseUsername } = api.profile.getUsername.useQuery(
@@ -69,15 +70,10 @@ export const NameChange: React.FC = () => {
           // The paid mutation has already committed. A failed cache refresh must
           // not leave the confirmation retryable and charge the user twice.
           setShowNameChangeConfirm(false);
-        } else {
-          setUsernameDraft(submittedUsername);
-          form.setValue("username", submittedUsername, { shouldValidate: true });
         }
       } catch {
         // The shared tRPC error handler surfaces transport failures. Leave the
         // confirmation and draft open so the user can correct or retry it.
-        setUsernameDraft(submittedUsername);
-        form.setValue("username", submittedUsername, { shouldValidate: true });
       }
     });
   };
@@ -121,16 +117,11 @@ export const NameChange: React.FC = () => {
                     {...field}
                     id="username"
                     placeholder="Search user"
-                    value={usernameDraft}
                     readOnly={isChangingUsername}
                     aria-disabled={isChangingUsername}
                     className={
                       isChangingUsername ? "cursor-not-allowed opacity-50" : undefined
                     }
-                    onChange={(event) => {
-                      field.onChange(event);
-                      setUsernameDraft(event.target.value);
-                    }}
                   />
                 </FormControl>
                 <FormMessage />
