@@ -4,7 +4,7 @@ import * as client from "@/app/_trpc/client";
 import type { VillageAlliance } from "@/drizzle/schema";
 import * as Image from "@/layout/Image";
 import * as modal from "@/layout/Modal";
-import { SorroundingUsers } from "@/layout/Sector";
+import { SorroundingUsers } from "@/layout/SorroundingUsers";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { travelActionAvailability } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
