@@ -107,6 +107,29 @@ describe("native deletion confirmation", () => {
     ).toBe(true);
     expect(state.mutate).not.toHaveBeenCalled();
   });
+  it.each([
+    ["the permanence acknowledgement", "I understand that my account and progress cannot be recovered.", "DELETE MY ACCOUNT"],
+    ["the subscription acknowledgement", "I understand that recurring subscriptions must be cancelled separately.", "DELETE MY ACCOUNT"],
+    ["the exact phrase", null, "DELETE MY ACCOUN"],
+  ])("keeps deletion disabled without %s", (_missing, uncheck, phrase) => {
+    render(<NativeAccountDeletion />);
+    confirm(phrase);
+    if (uncheck) fireEvent.click(screen.getByLabelText(uncheck));
+    const remove = screen.getByRole("button", {
+      name: "Delete permanently",
+    }) as HTMLButtonElement;
+    expect(remove.disabled).toBe(true);
+    fireEvent.click(remove);
+    expect(state.mutate).not.toHaveBeenCalled();
+  });
+  it("enables deletion once both acknowledgements and the phrase are given", () => {
+    render(<NativeAccountDeletion />);
+    confirm("  DELETE MY ACCOUNT ");
+    expect(
+      (screen.getByRole("button", { name: "Delete permanently" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+  });
   it("clears confirmations after keeping the account", () => {
     render(<NativeAccountDeletion />);
     confirm();
