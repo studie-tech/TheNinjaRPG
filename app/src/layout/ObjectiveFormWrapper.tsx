@@ -213,6 +213,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     titles: titleData,
     badges: badgeData?.data,
   };
+  const objectiveIds = props.objectives.map((objective) => objective.id);
   const formData: FormEntry<Attribute>[] = attributes
     .filter((value) => value !== "reward_packages")
     .filter(
@@ -266,9 +267,8 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         !sectorType ||
         (sectorType === "specific" && !["sectorList"].includes(value)) ||
         (sectorType === "from_list" && !["sector"].includes(value)) ||
-        (sectorType === "random" && !["sector", "sectorList"].includes(value)) ||
-        (sectorType === "user_village" && !["sector", "sectorList"].includes(value)) ||
-        (sectorType === "current_sector" && !["sector", "sectorList"].includes(value))
+        (["random", "user_village", "current_sector"].includes(sectorType) &&
+          !["sector", "sectorList"].includes(value))
       );
     })
     .filter((value) => {
@@ -402,7 +402,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
           type: "db_values",
         };
       } else if (value === "nextObjectiveId" && props.objectives) {
-        const obejctiveIds = props.objectives.map((objective) => objective.id);
         if (innerType instanceof z.ZodArray) {
           // Dialog objective: nextObjectiveId is an array of {text, nextObjectiveId}
           return {
@@ -410,12 +409,12 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
             doubleWidth: true,
             label: FORM_LABEL_MAP[value] ?? value,
             type: "dialog_options",
-            objectiveIds: obejctiveIds,
+            objectiveIds,
           };
         } else {
           return {
             id: value,
-            values: obejctiveIds,
+            values: objectiveIds,
             type: "str_array",
             label: FORM_LABEL_MAP[value] ?? value,
             resetButton: true,
@@ -425,10 +424,9 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         ["failObjectiveId", "resetObjectiveId"].includes(value) &&
         props.objectives
       ) {
-        const obejctiveIds = props.objectives.map((objective) => objective.id);
         return {
           id: value,
-          values: obejctiveIds,
+          values: objectiveIds,
           type: "str_array",
           label: FORM_LABEL_MAP[value] ?? value,
           resetButton: true,

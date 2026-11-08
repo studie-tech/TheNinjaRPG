@@ -1692,63 +1692,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   const formData: FormEntry<Attribute>[] = attributes
     .filter((value) => !ignore.includes(value))
     .filter((value) => !props.editableFields || props.editableFields.includes(value))
-    .filter((value) => {
-      return (
-        !["noncombatconsumereward", "noncombatgainskill", "noncombatquest"].includes(
-          watchType,
-        ) ||
-        ![
-          "staticAnimation",
-          "animationScale",
-          "staticAssetPath",
-          "appearAnimation",
-          "disappearAnimation",
-          "rounds",
-          "target",
-          "friendlyFire",
-          "calculation",
-          "power",
-          "powerPerLevel",
-        ].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !["repair"].includes(watchType) ||
-        ![
-          "staticAnimation",
-          "animationScale",
-          "staticAssetPath",
-          "appearAnimation",
-          "disappearAnimation",
-          "rounds",
-          "target",
-          "friendlyFire",
-          "calculation",
-        ].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        ![
-          "rollbloodline",
-          "rollsagemode",
-          "removebloodline",
-          "marriageslotincrease",
-        ].includes(watchType) ||
-        ![
-          "staticAnimation",
-          "animationScale",
-          "staticAssetPath",
-          "appearAnimation",
-          "disappearAnimation",
-          "rounds",
-          "target",
-          "friendlyFire",
-          "calculation",
-        ].includes(value)
-      );
-    })
+    .filter((value) => !OUT_OF_BATTLE_HIDDEN_FIELDS.get(watchType)?.includes(value))
     .map((value) => {
       const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
       if (rewardCatalogEntry) return rewardCatalogEntry;
@@ -2299,6 +2243,34 @@ const ASSET_PICKER_FIELDS: readonly string[] = [
   "appearSfx",
   "disappearSfx",
 ];
+
+/** Battle presentation, targeting and timing fields, which out-of-battle tags never use. */
+const BATTLE_ONLY_FIELDS = [
+  "staticAnimation",
+  "animationScale",
+  "staticAssetPath",
+  "appearAnimation",
+  "disappearAnimation",
+  "rounds",
+  "target",
+  "friendlyFire",
+  "calculation",
+];
+
+/** Noncombat tags also hide power and its per-level scaling. */
+const NONCOMBAT_HIDDEN_FIELDS = [...BATTLE_ONLY_FIELDS, "power", "powerPerLevel"];
+
+/** Fields hidden from the editor of each tag that resolves outside battle. */
+const OUT_OF_BATTLE_HIDDEN_FIELDS = new Map<string, readonly string[]>([
+  ["noncombatconsumereward", NONCOMBAT_HIDDEN_FIELDS],
+  ["noncombatgainskill", NONCOMBAT_HIDDEN_FIELDS],
+  ["noncombatquest", NONCOMBAT_HIDDEN_FIELDS],
+  ["repair", BATTLE_ONLY_FIELDS],
+  ["rollbloodline", BATTLE_ONLY_FIELDS],
+  ["rollsagemode", BATTLE_ONLY_FIELDS],
+  ["removebloodline", BATTLE_ONLY_FIELDS],
+  ["marriageslotincrease", BATTLE_ONLY_FIELDS],
+]);
 
 /**
  * Whether a combobox field has a selected value. `0` is a real choice (e.g. sage
