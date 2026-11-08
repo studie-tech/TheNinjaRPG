@@ -50,7 +50,7 @@ export const CombatLobby: React.FC<CombatLobbyProps> = ({
   const suid = userData?.userId;
 
   // Session battle user state (the human's own account — used for lobby/ready
-  // UI and loadout selection, NOT for piloting; piloting reads userIdRef).
+  // UI and loadout selection, NOT the actor it pilots).
   const battleSessionUser = battleRef.current?.usersState.find(
     (u) => u.userId === userData?.userId,
   );
