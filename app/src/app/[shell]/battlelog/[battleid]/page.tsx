@@ -26,7 +26,6 @@ const Combat = dynamic(loadCombat, {
 export default function BattleLog(props: { params: Promise<{ battleid: string }> }) {
   const params = use(props.params);
   // State
-  const [userId, setUserId] = useState<string | undefined>(undefined);
   const config = useCombatPreferences();
   const [battleState, setBattleState] = useState<BattleState | undefined>(undefined);
   const battleId = params.battleid;
@@ -46,6 +45,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
   }, []);
 
   const { data: userData } = useRequiredUserData();
+  const userId = userData?.userId;
   const { data } = api.combat.getBattle.useQuery(
     { battleId: battleId },
     { enabled: !!battleId },
@@ -71,7 +71,6 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
           ...(data.battle.extraState.sfxAssets ?? []),
         ],
       });
-      setUserId(userData.userId);
       setBattleState({
         battle: data?.battle,
         result: undefined,
