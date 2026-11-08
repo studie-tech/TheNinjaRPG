@@ -1617,7 +1617,7 @@ export const updateKageDefendedChallengesForInitiateBattle = (
  * `version`, including predicates on `userId`, `id`, `version`.
  */
 export const updateHuntingSessionForInitiateBattle = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   battleId: string,
   meta: {
     userId: string;
@@ -1641,7 +1641,18 @@ export const updateHuntingSessionForInitiateBattle = (
         eq(huntingSession.contractId, meta.contract.id),
         eq(huntingSession.sector, sector ?? -1),
         eq(huntingSession.habitatId, meta.habitatId),
-        sql`EXISTS (SELECT 1 FROM ${huntingProgress} WHERE ${huntingProgress.userId} = ${meta.userId} AND ${huntingProgress.contractId} = ${meta.contract.id} AND ${huntingProgress.version} = ${meta.progressVersion})`,
+        exists(
+          client
+            .select({ userId: huntingProgress.userId })
+            .from(huntingProgress)
+            .where(
+              and(
+                eq(huntingProgress.userId, meta.userId),
+                eq(huntingProgress.contractId, meta.contract.id),
+                eq(huntingProgress.version, meta.progressVersion),
+              ),
+            ),
+        ),
       ),
     );
 
