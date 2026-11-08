@@ -1,9 +1,8 @@
 "use client";
 
-import type { inferRouterOutputs } from "@trpc/server";
 import { CirclePlay, DoorOpen, Loader2, Shield, Swords, Users } from "lucide-react";
 import type React from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -20,15 +19,13 @@ import Loader from "@/layout/Loader";
 import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import type { AppRouter } from "@/server/api/root";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
-type ShrineBattleData =
-  inferRouterOutputs<AppRouter>["shrine"]["getShrineBattles"][number];
+type ShrineBattleData = RouterOutputs["shrine"]["getShrineBattles"][number];
 
 interface ShrineBattleLobbyProps {
   sectorNumber: number;

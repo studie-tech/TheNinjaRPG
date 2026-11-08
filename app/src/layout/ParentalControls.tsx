@@ -1,8 +1,7 @@
 "use client";
 
-import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +23,6 @@ import Loader from "@/layout/Loader";
 import { QueryError } from "@/layout/QueryError";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
-import type { AppRouter } from "@/server/api/root";
 import { useUserPicker } from "@/utils/search";
 import { parentalSettingsSchema } from "@/validators/parentalControls";
 
@@ -58,7 +56,7 @@ function ParentalSettingsForm({
   settings,
   onSaved,
 }: {
-  settings: inferRouterOutputs<AppRouter>["parentalControls"]["get"];
+  settings: RouterOutputs["parentalControls"]["get"];
   onSaved: () => Promise<void>;
 }) {
   const [enabled, setEnabled] = useState(settings.enabled);

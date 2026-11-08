@@ -146,6 +146,10 @@ import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/trav
 type SectorWindowEntry =
   RouterOutputs["worldMap"]["getSectorWindow"]["sectors"][number];
 
+type NpcDialog = NonNullable<
+  RouterOutputs["overworldAi"]["interactWithOverworldAi"]["dialog"]
+>;
+
 /**
  * The assembled window the travel page passes in: the 3x3 sector entries
  * (assembled client-side from per-sector data so crossings need no refetch)
@@ -289,13 +293,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
   const [showRaidModal, setShowRaidModal] = useState<boolean>(false);
-  const [npcDialog, setNpcDialog] = useState<{
-    objectiveId: string;
-    description: string;
-    sceneBackground: string;
-    sceneCharacters: string[];
-    branches: { text: string; nextObjectiveId?: string }[];
-  } | null>(null);
+  const [npcDialog, setNpcDialog] = useState<NpcDialog | null>(null);
   const [arrivalNpc, setArrivalNpc] = useState<SectorUser | null>(null);
   // A blocking global popup (e.g. daily rewards) is up or still loading — hold the arrival prompt.
   const isBlockingPopupOpen = useAtomValue(blockingPopupOpenAtom);
