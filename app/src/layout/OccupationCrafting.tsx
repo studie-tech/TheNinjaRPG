@@ -940,9 +940,7 @@ export default function OccupationCrafting() {
                         </div>
                         <Confirm
                           title="Repair All Items"
-                          proceed_label={
-                            repairAllMutation.isPending ? undefined : "Repair All"
-                          }
+                          proceed_label="Repair All"
                           button={
                             <Button
                               variant="default"

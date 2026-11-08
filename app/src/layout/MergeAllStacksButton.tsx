@@ -59,8 +59,7 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
   return (
     <Confirm
       title="Merge all stacks"
-      proceed_label={isPending ? undefined : "Merge all stacks"}
-      isValid={!isPending}
+      proceed_label="Merge all stacks"
       disabled={isPending}
       button={
         <Button
