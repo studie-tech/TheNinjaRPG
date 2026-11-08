@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type React from "react";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,7 +61,6 @@ const TowerDefenseCanvas = dynamic(() => import("@/layout/TowerDefense"), {
 });
 
 const GAME_NAME = "Tower Defense";
-const PAGE_TITLE = `${GAME_NAME}`;
 const PAGE_SUBTITLE = "Survive as many waves as possible!";
 
 const TowerDefensePage: React.FC = () => {
@@ -128,14 +127,6 @@ const TowerDefensePage: React.FC = () => {
     checkForExistingSession,
   ]);
 
-  // PERFORMANCE: Stable callback for tile clicks (never changes reference)
-  const handleTileClick = useCallback(
-    (position: { col: number; row: number }) => {
-      throwShuriken(position);
-    },
-    [throwShuriken],
-  );
-
   // Loader
   if (!isClerkLoaded) return <Loader explanation="Loading user data..." />;
 
@@ -143,17 +134,10 @@ const TowerDefensePage: React.FC = () => {
   if (gameState.mode === "lobby") {
     return (
       <ContentBox
-        title={PAGE_TITLE}
+        title={GAME_NAME}
         subtitle={PAGE_SUBTITLE}
         defaultBackHref="/minigames"
-        topRightContent={
-          <Link href="/manual/towerDefense/leaderboard">
-            <Button size="sm">
-              <Trophy className="mr-2 h-4 w-4" />
-              Leaderboard
-            </Button>
-          </Link>
-        }
+        topRightContent={<LeaderboardLink />}
       >
         {/* Guest Mode Notice */}
         {isGuest && (
@@ -340,13 +324,7 @@ const TowerDefensePage: React.FC = () => {
 
         {/* Error Display */}
         {gameState.error && (
-          <div className="mt-4 flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <span>{gameState.error}</span>
-            <Button variant="ghost" size="sm" onClick={clearError}>
-              Dismiss
-            </Button>
-          </div>
+          <ErrorBanner message={gameState.error} onDismiss={clearError} />
         )}
       </ContentBox>
     );
@@ -359,14 +337,7 @@ const TowerDefensePage: React.FC = () => {
       subtitle={
         gameState.mode === "wave-end" ? "Wave Complete!" : `Score: ${gameState.score}`
       }
-      topRightContent={
-        <Link href="/manual/towerDefense/leaderboard">
-          <Button size="sm">
-            <Trophy className="mr-2 h-4 w-4" />
-            Leaderboard
-          </Button>
-        </Link>
-      }
+      topRightContent={<LeaderboardLink />}
     >
       {/* Game HUD - Subscribes directly to module-level hudStore, parent never re-renders */}
       <GameHUD />
@@ -378,7 +349,7 @@ const TowerDefensePage: React.FC = () => {
             seed={gameState.seed}
             initialGridSize={gameState.state.gridSize}
             initialPlayerPosition={gameState.state.playerPosition}
-            onTileClick={handleTileClick}
+            onTileClick={throwShuriken}
             active={gameState.mode === "playing"}
             onFrame={update}
             entitiesRef={entitiesRef}
@@ -544,19 +515,42 @@ const TowerDefensePage: React.FC = () => {
 
       {/* Error Display */}
       {gameState.error && gameState.mode !== "game-over" && (
-        <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
-          <AlertCircle className="h-4 w-4" />
-          <span>{gameState.error}</span>
-          <Button variant="ghost" size="sm" onClick={clearError}>
-            Dismiss
-          </Button>
-        </div>
+        <ErrorBanner message={gameState.error} onDismiss={clearError} centered />
       )}
     </ContentBox>
   );
 };
 
 export default TowerDefensePage;
+
+const LeaderboardLink = () => (
+  <Link href="/manual/towerDefense/leaderboard">
+    <Button size="sm">
+      <Trophy className="mr-2 h-4 w-4" />
+      Leaderboard
+    </Button>
+  </Link>
+);
+
+const ErrorBanner = ({
+  message,
+  onDismiss,
+  centered = false,
+}: {
+  message: string;
+  onDismiss: () => void;
+  centered?: boolean;
+}) => (
+  <div
+    className={`mt-4 flex items-center ${centered ? "justify-center " : ""}gap-2 rounded-lg bg-destructive/10 p-3 text-destructive`}
+  >
+    <AlertCircle className="h-4 w-4" />
+    <span>{message}</span>
+    <Button variant="ghost" size="sm" onClick={onDismiss}>
+      Dismiss
+    </Button>
+  </div>
+);
 
 // ============================================================================
 // PERFORMANCE: HUD components that subscribe directly to hudStore (module-level singleton)
