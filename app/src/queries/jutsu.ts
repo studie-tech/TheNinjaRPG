@@ -6,12 +6,14 @@ import {
   asc,
   desc,
   eq,
+  exists,
   getTableColumns,
   gte,
   inArray,
   isNotNull,
   isNull,
   ne,
+  notExists,
   or,
   type SQL,
   sql,
@@ -858,7 +860,7 @@ export const updateJutsuLoadoutForUnequipAll = (
 
 /** Build the `userJutsu` update for `toggleEquip`, setting `equipped`, using predicates on `id`, `userId`, `equipped`. */
 export const updateUserJutsuForToggleEquip = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   input: { userJutsuId: string },
   ctx: { userId: string },
 
@@ -872,7 +874,7 @@ export const updateUserJutsuForToggleEquip = (
         eq(userJutsu.id, input.userJutsuId),
         eq(userJutsu.userId, ctx.userId),
         eq(userJutsu.equipped, true),
-        activeJutsuLoadoutLacksJutsuSql(ctx.userId, userjutsuObj.jutsuId),
+        activeJutsuLoadoutLacksJutsu(client, ctx.userId, userjutsuObj.jutsuId),
       ),
     );
 
@@ -1459,7 +1461,7 @@ export const selectUserJutsuEquipped = (
  * Supplying an expected order also guards the baseline used for cache projection.
  */
 export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   jutsuId: string,
   loadoutId: string,
   userId: string,
@@ -1474,7 +1476,7 @@ export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
       and(
         eq(jutsuLoadout.id, loadoutId),
         eq(jutsuLoadout.userId, userId),
-        isActiveJutsuLoadoutSql(userId, loadoutId),
+        isActiveJutsuLoadout(client, userId, loadoutId),
         expectedJutsuIds
           ? sql`${jutsuLoadout.jutsuIds} = CAST(${JSON.stringify(expectedJutsuIds)} AS JSON)`
           : undefined,
@@ -1487,7 +1489,7 @@ export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
  * Supplying an expected order also guards the baseline used for cache projection.
  */
 export const updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   searchPattern: string,
   loadoutId: string,
   userId: string,
@@ -1507,7 +1509,7 @@ export const updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically = (
       and(
         eq(jutsuLoadout.id, loadoutId),
         eq(jutsuLoadout.userId, userId),
-        isActiveJutsuLoadoutSql(userId, loadoutId),
+        isActiveJutsuLoadout(client, userId, loadoutId),
         expectedJutsuIds
           ? sql`${jutsuLoadout.jutsuIds} = CAST(${JSON.stringify(expectedJutsuIds)} AS JSON)`
           : undefined,
@@ -1618,17 +1620,24 @@ export const listJutsuByIds = (
 ) => client.query.jutsu.findMany({ where: inArray(jutsu.id, jutsusIds) });
 
 /** True when the user's active loadout does not currently contain `jutsuId`. */
-const activeJutsuLoadoutLacksJutsuSql = (userId: string, jutsuId: string) =>
-  sql`NOT EXISTS (
-    SELECT 1 FROM (
-      SELECT ${jutsuLoadout.jutsuIds} AS ids
-      FROM ${userData}
-      INNER JOIN ${jutsuLoadout} ON ${jutsuLoadout.id} = ${userData.jutsuLoadout}
-      WHERE ${userData.userId} = ${userId}
-        AND ${jutsuLoadout.userId} = ${userId}
-    ) AS active_loadout
-    WHERE JSON_CONTAINS(active_loadout.ids, JSON_QUOTE(${jutsuId}))
-  )`;
+const activeJutsuLoadoutLacksJutsu = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  jutsuId: string,
+) =>
+  notExists(
+    client
+      .select({ id: jutsuLoadout.id })
+      .from(userData)
+      .innerJoin(jutsuLoadout, eq(jutsuLoadout.id, userData.jutsuLoadout))
+      .where(
+        and(
+          eq(userData.userId, userId),
+          eq(jutsuLoadout.userId, userId),
+          sql`JSON_CONTAINS(${jutsuLoadout.jutsuIds}, JSON_QUOTE(${jutsuId}))`,
+        ),
+      ),
+  );
 
 /**
  * Rollback predicate: unequip this row only when it sits outside the first N
@@ -1676,11 +1685,17 @@ const equipCapUnderGuardSql = (
 };
 
 /** True when this loadout is still the user's active `userData.jutsuLoadout`. */
-const isActiveJutsuLoadoutSql = (userId: string, loadoutId: string) => sql`EXISTS (
-  SELECT 1 FROM ${userData}
-  WHERE ${userData.userId} = ${userId}
-    AND ${userData.jutsuLoadout} = ${loadoutId}
-)`;
+const isActiveJutsuLoadout = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  loadoutId: string,
+) =>
+  exists(
+    client
+      .select({ userId: userData.userId })
+      .from(userData)
+      .where(and(eq(userData.userId, userId), eq(userData.jutsuLoadout, loadoutId))),
+  );
 
 /**
  * Detect nonzero numeric residual modifiers on a trusted jutsu table alias.

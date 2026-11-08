@@ -2625,10 +2625,8 @@ export const jutsuDatabaseFilter = (
     ...(input?.name
       ? [
           or(
-            like(sql`LOWER(${jutsu.name})`, `%${input.name.toLowerCase()}%`),
-            additionalName
-              ? like(sql`LOWER(${additionalName})`, `%${input.name.toLowerCase()}%`)
-              : undefined,
+            like(jutsu.name, `%${input.name}%`),
+            additionalName ? like(additionalName, `%${input.name}%`) : undefined,
           ),
         ]
       : []),
