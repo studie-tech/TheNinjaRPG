@@ -5,7 +5,12 @@ import { GUIDE_CATEGORY_LABELS } from "@/drizzle/constants";
 import { GuideArticleView } from "@/layout/GuideArticleView";
 import { BloodlineCatalog, FarmCatalog } from "@/layout/GuideCatalog";
 import { GuideStructuredData } from "@/layout/GuideStructuredData";
-import { buildMetadata, metaDescription, stripSiteName } from "@/libs/seo";
+import {
+  buildMetadata,
+  metaDescription,
+  noindexMetadata,
+  stripSiteName,
+} from "@/libs/seo";
 import {
   fetchBloodlineCatalog,
   fetchFarmCatalog,
@@ -72,7 +77,7 @@ const guideDescription = (article: {
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { slug } = await props.params;
   const article = await getGuide(slug);
-  if (!article?.published) return { title: "Guide Not Found" };
+  if (!article?.published) return noindexMetadata("Guide Not Found");
   return buildMetadata({
     title: article.seoTitle || article.title,
     description: guideDescription(article),
