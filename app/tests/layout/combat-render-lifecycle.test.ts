@@ -134,7 +134,7 @@ it("lets only the battle's fighters drive its AI turns, never a spectator", () =
     useEffect(callback: () => void) { callback(); },
     setInterval(callback: () => void) { drive = callback; return 1; },
     calcActiveUser: () => ({ actor: { userId: "ai" }, changedActor: false }),
-    getTurnControl: () => ({ isAITurn: true }),
+    getTurnControl: () => ({ isAITurn: true }), isBattleInLobby,
     canPerformAction: () => true, canDrive: () => true,
     performAction: () => { actions++; },
   };
