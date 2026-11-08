@@ -15,6 +15,7 @@ import { showFormErrorsToast } from "@/libs/toast";
 import { isStaffRole } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import {
+  MAX_REWARD_PACKAGES,
   QuestReward,
   type RewardPackageSnapshotType,
 } from "@/validators/rewardPackages";
@@ -105,7 +106,7 @@ export const RewardEditor = ({
     form.setValue("reward_packages", next, { shouldDirty: true, shouldValidate: true });
   /** Validate only the copied group's fields, leaving invalid drafts available for correction. */
   const copyNode = (node: (typeof groups)[number]) => {
-    if (packages.length >= 50) return;
+    if (packages.length >= MAX_REWARD_PACKAGES) return;
     const rewards = ObjectiveReward.safeParse(
       Object.fromEntries(node.fields.map((field) => [field, values[field]])),
     );
@@ -166,7 +167,7 @@ export const RewardEditor = ({
             </select>
             <Button
               type="button"
-              disabled={!source || packages.length >= 50}
+              disabled={!source || packages.length >= MAX_REWARD_PACKAGES}
               onClick={() => {
                 // Each attachment owns its payload and identity; catalog edits cannot change it.
                 if (source)
@@ -214,7 +215,7 @@ export const RewardEditor = ({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={packages.length >= 50}
+                  disabled={packages.length >= MAX_REWARD_PACKAGES}
                   onClick={() =>
                     setPackages([
                       ...packages,
@@ -271,7 +272,9 @@ export const RewardEditor = ({
           {groups
             .filter(
               (node) =>
-                (node.id !== "milestone" && allowPackages && packages.length < 50) ||
+                (node.id !== "milestone" &&
+                  allowPackages &&
+                  packages.length < MAX_REWARD_PACKAGES) ||
                 !activeNodes.some((active) => active.id === node.id),
             )
             .map((node) => (
@@ -301,7 +304,7 @@ export const RewardEditor = ({
               type="button"
               size="sm"
               variant="outline"
-              disabled={packages.length >= 50}
+              disabled={packages.length >= MAX_REWARD_PACKAGES}
               onClick={() => copyNode(node)}
             >
               Add Another Node
@@ -336,7 +339,7 @@ export const RewardEditor = ({
 };
 
 /** Fallback groups expose every reward field even when no custom catalog node includes it. */
-export const DEFAULT_REWARD_NODES = [
+const DEFAULT_REWARD_NODES = [
   { id: "give-title", name: "Give Title", fields: ["reward_titles"] },
   {
     id: "currency",

@@ -331,7 +331,7 @@ const getAmountIcon = (field: string): LucideIcon => {
  * this session (e.g. from the logbook button, or after a completion was refused because an
  * offer is still waiting).
  */
-export const rewardChoiceOpenAtom = atom<boolean>(false);
+const rewardChoiceOpenAtom = atom<boolean>(false);
 
 /** Opens the reward-choice modal and refreshes the waiting offers. */
 export const useOpenRewardChoice = () => {

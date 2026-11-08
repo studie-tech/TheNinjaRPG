@@ -43,11 +43,13 @@ export const RewardPackageSnapshot = RewardPackageValidator.extend({
   /** Catalog attribution; independent reward nodes have no catalog source. */
   packageId: z.string().min(1).max(191).optional(),
 });
+/** Most reward packages one quest or objective reward can attach. */
+export const MAX_REWARD_PACKAGES = 50;
 /** Quest and objective rewards share direct fields plus optional independent or catalog snapshots. */
 export const questRewardFields = {
   ...rewardFields,
   ...milestoneRewardFields,
-  reward_packages: z.array(RewardPackageSnapshot).max(50).optional(),
+  reward_packages: z.array(RewardPackageSnapshot).max(MAX_REWARD_PACKAGES).optional(),
 };
 /** A reward, or its parsed `head`, followed by its package payloads, ready to collapse. */
 export const rewardPayloads = <
