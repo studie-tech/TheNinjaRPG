@@ -63,8 +63,8 @@ export const CRITTER_SPECIES: Record<CritterSpeciesId, CritterSpecies> = {
     rest: [4, 10],
     range: 5,
     ...sheets(
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJUjEDBDILCIhwPniJ69VxpvAbTDWkOyGzS8rM",
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJC5hhtI26OYrIJuNP1pvSyz29edFtKbngjRcA",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvBeeXxEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOWB6MbVHevxIThUauQkGJEBY3D2cPqy8f5sp",
     ),
   },
   boar: {
@@ -77,8 +77,8 @@ export const CRITTER_SPECIES: Record<CritterSpeciesId, CritterSpecies> = {
     rest: [3, 8],
     range: 4,
     ...sheets(
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYFFswbHOMAlNnPZ41ev6fCGcFK3hmjX9I8W7",
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOuriBfVHevxIThUauQkGJEBY3D2cPqy8f5sp",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtPakwnUYJDfpFXWm3nrcPluEtIZqyLkaSV1j",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoYVBsNQZ9MPZpHJ7VliuEWDfATdxhv62SXnm",
     ),
   },
   rabbit: {
@@ -91,8 +91,8 @@ export const CRITTER_SPECIES: Record<CritterSpeciesId, CritterSpecies> = {
     rest: [2, 6],
     range: 3,
     ...sheets(
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJecHNiJyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJG3pVciRfoVrha0LP4mAS5KM7wtiZbUNXJxdC",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvI2J2jEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcIIB4CSnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
     ),
   },
   fox: {
@@ -105,8 +105,8 @@ export const CRITTER_SPECIES: Record<CritterSpeciesId, CritterSpecies> = {
     rest: [3, 7],
     range: 6,
     ...sheets(
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJe9RXOYyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtFVBvcUYJDfpFXWm3nrcPluEtIZqyLkaSV1j",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJA2bLR1oZUC4muiGcQNzjfEndY5y1w20B8hTW",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPyc5HHpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
     ),
   },
   camel: {
@@ -119,8 +119,8 @@ export const CRITTER_SPECIES: Record<CritterSpeciesId, CritterSpecies> = {
     rest: [5, 11],
     range: 5,
     ...sheets(
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy22ii63ukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyioQS3ukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2ZQuVznMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXnYklaqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv",
     ),
   },
   icebear: {
@@ -133,8 +133,8 @@ export const CRITTER_SPECIES: Record<CritterSpeciesId, CritterSpecies> = {
     rest: [5, 12],
     range: 6,
     ...sheets(
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOkJxDKVHevxIThUauQkGJEBY3D2cPqy8f5sp",
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7Zbh90XKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtxfxceUYJDfpFXWm3nrcPluEtIZqyLkaSV1j",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4MkZ2elYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     ),
   },
   reindeer: {
@@ -147,8 +147,8 @@ export const CRITTER_SPECIES: Record<CritterSpeciesId, CritterSpecies> = {
     rest: [4, 10],
     range: 5,
     ...sheets(
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJe9UUjLyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAaRbxpjoZUC4muiGcQNzjfEndY5y1w20B8hT",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmscIt3HE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMLxYXGtsO4cexqW2RDgkE3zZbNXSFGitmnar",
     ),
   },
 };
