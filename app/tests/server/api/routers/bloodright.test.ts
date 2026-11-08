@@ -200,6 +200,15 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     expect((await invoke("refund", { skillId: "root" })).success).toBe(false);
     expect(await read()).toMatchObject({ seichiSilver: 900, bloodrightSpent: 100, status: "BATTLE" });
   });
+  it("claims battle only when a missing bloodline matches the snapshot", async () => {
+    const db = await getTestDatabase();
+    const snapshot = await read();
+    const claim = (bloodlineId: string | null) => db.update(userData).set({ status: "BATTLE" }).where(and(ne(userData.status, "BATTLE"), matchBloodrightSnapshot({ ...snapshot, bloodlineId })));
+    expect((await claim(null)).rowsAffected).toBe(0);
+    await db.update(userData).set({ bloodlineId: null }).where(eq(userData.userId, userId));
+    expect((await claim("line")).rowsAffected).toBe(0);
+    expect((await claim(null)).rowsAffected).toBe(1);
+  });
   it("clones Silver and saved Bloodright purchases as one debug snapshot without retaining the staff path", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ role: "OWNER", staffAccount: true }).where(eq(userData.userId, userId));
