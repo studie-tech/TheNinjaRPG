@@ -1478,6 +1478,8 @@ export const TUTORIAL_GENIN_EXAM_QUEST_ID = "9-t1rNWEzXbIfdUfxWrny";
 export const HEAVENLY_SONATA_BLOODLINE_ID = "clh4d6q6s000atb0h0qdqdh1z";
 export const BLUE_BLADE_EYES_BLOODLINE_ID = "clh4d6qo4000itb0hrx8t06wq";
 export const TUTORIAL_ARENA_DUMMY_ID = "ICXb49Z0Jle3GyJ-rosTi";
+/** The seeded training dummy fought from the arena. */
+export const TRAINING_ARENA_DUMMY_ID = "tra93opw09262024jut5ufa8f";
 
 // Recruitment analytics metric options (used by frontend and backend)
 export const RecruitmentMetrics = [
