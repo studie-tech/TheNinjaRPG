@@ -47,33 +47,9 @@ jobs:
       - uses: ./.github/actions/setup-app
       - name: run tests
         working-directory: ./app
-        run: |
-          shards=$(node -p 'Math.min(4, require("node:os").availableParallelism())')
-          echo "Running $shards test shards on $(nproc) available CPUs"
-          logs_dir="$RUNNER_TEMP/test-logs"
-          mkdir -p "$logs_dir"
-          pids=()
-          for ((shard = 1; shard <= shards; shard++)); do
-            # Suites reset rows and process caches, so each long-lived Bun owns its schema.
-            docker exec "${{ job.services.mysql.id }}" mysql -uroot \
-              -e "CREATE DATABASE IF NOT EXISTS tnr_test_$shard"
-            TEST_MYSQL_URL="mysql://root@127.0.0.1:3306/tnr_test_$shard" \
-              bun run test --shard="$shard/$shards" >"$logs_dir/$shard.log" 2>&1 &
-            pids+=("$!")
-          done
-          status=0
-          for index in "${!pids[@]}"; do
-            shard=$((index + 1))
-            echo "::group::Test shard $shard/$shards"
-            if wait "${pids[$index]}"; then
-              tail -n 8 "$logs_dir/$shard.log"
-            else
-              status=1
-              cat "$logs_dir/$shard.log"
-            fi
-            echo "::endgroup::"
-          done
-          exit "$status"
+        run: bun run test
+        env:
+          TEST_LOG_DIR: ${{ runner.temp }}/test-logs
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

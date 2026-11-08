@@ -2,9 +2,9 @@
  * Registered via bunfig.toml: brings the shared test database up once per `bun test` run.
  * No-ops when TEST_MYSQL_URL is unset.
  *
- * The schema is left in place afterwards. `prepareTestDatabase` reconciles it on the next run
- * and truncates every table, so a leftover database makes the next run cheaper without letting
- * its rows or triggers leak into it.
+ * Direct serial runs retain the schema for reconciliation on the next run. The sharded runner
+ * removes its invocation-owned schemas after every worker closes its pool. Setup truncates all
+ * tables and removes triggers so neither rows nor fault injections leak between serial runs.
  */
 import { afterAll, beforeAll, beforeEach } from "bun:test";
 import Link from "@/layout/Link";

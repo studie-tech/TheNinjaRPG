@@ -20,24 +20,12 @@ import type { DrizzleClient } from "@/server/db";
 import * as schema from "@/drizzle/schema";
 import { withAfterTasks } from "./after";
 import { pollUntil } from "./statements";
+import { readTestDatabaseUrl } from "./testDatabaseConfig";
 
-const url = process.env.TEST_MYSQL_URL;
-const allowDestructive = process.env.TEST_MYSQL_ALLOW_DESTRUCTIVE === "1";
+const url = readTestDatabaseUrl(process.env);
 
-/**
- * Setup truncates every table in the target database, so the caller has to say out loud that it
- * is disposable. Naming heuristics were not enough: `production_test` and `contest` both read as
- * test databases. Configuring a URL without the opt-in is a mistake worth surfacing rather than
- * silently skipping, so it throws.
- */
-if (url && !allowDestructive) {
-  throw new Error(
-    "TEST_MYSQL_URL is set but TEST_MYSQL_ALLOW_DESTRUCTIVE is not '1'. Every table in that " +
-      "database will be truncated, so opt in explicitly and only for a database you can lose.",
-  );
-}
-
-export const hasTestDatabase = !!url && allowDestructive;
+/** Real-SQL suites run only with explicitly acknowledged throwaway database configuration. */
+export const hasTestDatabase = !!url;
 
 /** `describe` that skips wholesale when no test database is configured. */
 export const describeWithDatabase = hasTestDatabase ? describe : describe.skip;

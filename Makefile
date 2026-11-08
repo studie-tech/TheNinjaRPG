@@ -160,9 +160,14 @@ emptymigration: ensure-env # Create database migration file
 ----------------Tests-------------------: # -------------------------------------------------------
 .PHONY: test
 test: export NODE_ENV = test
-test: # Run unit tests with Bun
+test: # Run tests in up to four isolated Bun shards (TEST_SHARDS=1..4)
 	@echo "${YELLOW}Running unit tests ${RESET}"
 	cd app && node ../scripts/dev-bun.mjs run test
+
+.PHONY: test-serial
+test-serial: export NODE_ENV = test
+test-serial: # Run tests in one Bun process for debugging
+	cd app && node ../scripts/dev-bun.mjs run test:serial
 
 .PHONY: lint
 lint: # Run linting of the project
