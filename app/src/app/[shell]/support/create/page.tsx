@@ -29,7 +29,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   SUPPORT_TICKET_CATEGORY_DESCRIPTIONS,
-  SUPPORT_TICKET_COLORS,
   SUPPORT_TICKET_LIMITS,
   SUPPORT_TICKET_PRIORITY_DESCRIPTIONS,
   SupportTicketCategories,
@@ -40,6 +39,7 @@ import {
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
+import { getCategoryColor, getPriorityColor } from "@/libs/support";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { createSupportTicketSchema } from "@/validators/support";
@@ -206,7 +206,7 @@ export default function CreateSupportTicket() {
                   {SupportTicketCategories.map((category, i) => (
                     <SelectItem key={`${category}-${i}`} value={category}>
                       <div className="flex items-center gap-2">
-                        <Badge className={SUPPORT_TICKET_COLORS.CATEGORY[category]}>
+                        <Badge className={getCategoryColor(category)}>
                           {category.replaceAll("_", " ")}
                         </Badge>
                         <span className="text-gray-600 text-sm">
@@ -237,9 +237,7 @@ export default function CreateSupportTicket() {
                   {SupportTicketPriorities.map((priority, i) => (
                     <SelectItem key={`${priority}-${i}`} value={priority}>
                       <div className="flex items-center gap-2">
-                        <Badge className={SUPPORT_TICKET_COLORS.PRIORITY[priority]}>
-                          {priority}
-                        </Badge>
+                        <Badge className={getPriorityColor(priority)}>{priority}</Badge>
                         <span className="text-gray-600 text-sm">
                           {SUPPORT_TICKET_PRIORITY_DESCRIPTIONS[priority]}
                         </span>
