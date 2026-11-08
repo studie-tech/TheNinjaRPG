@@ -139,11 +139,7 @@ export const QuestTeams = ({
     ) : null;
   if (questId && current && current.questId !== questId) return null;
   const location = current?.encounterLocation;
-  const atEncounter =
-    location &&
-    user.sector === location.sector &&
-    user.longitude === location.longitude &&
-    user.latitude === location.latitude;
+  const atEncounter = location && isSameTile(user, location);
   const travelHref = location
     ? `/travel?sector=${location.sector}&longitude=${location.longitude}&latitude=${location.latitude}`
     : "/travel";
@@ -154,9 +150,7 @@ export const QuestTeams = ({
         ? !canAttemptAwakeAction(user)
         : member.status !== "AWAKE") ||
       !location ||
-      member.sector !== location.sector ||
-      member.longitude !== location.longitude ||
-      member.latitude !== location.latitude,
+      !isSameTile(member, location),
   );
   const isTeamChooser = asAction && !!questId && !current;
   const content = (
@@ -288,9 +282,7 @@ export const QuestTeams = ({
               details:
                 member.status !== "AWAKE"
                   ? capitalizeFirstLetter(member.status.toLowerCase())
-                  : member.sector === user.sector &&
-                      member.longitude === user.longitude &&
-                      member.latitude === user.latitude
+                  : isSameTile(member, user)
                     ? "At your location"
                     : `Sector ${member.sector} · ${member.longitude}, ${member.latitude}`,
             }))}
@@ -503,3 +495,9 @@ export const QuestTeams = ({
     content
   );
 };
+
+/** Whether two map positions are the same tile of the same sector. */
+const isSameTile = (a: MapTile, b: MapTile) =>
+  a.sector === b.sector && a.longitude === b.longitude && a.latitude === b.latitude;
+
+type MapTile = Record<"sector" | "longitude" | "latitude", number | undefined>;
