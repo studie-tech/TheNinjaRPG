@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider, useMutation, type UseMutationOptions 
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { ComponentProps } from "react";
+import { format } from "date-fns";
 import { Controller } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
@@ -137,6 +138,12 @@ describe("poll save flows", () => {
     expect((view.getByLabelText("Title") as HTMLInputElement).value).toBe("Revised title");
     expect((view.getByLabelText("Description") as HTMLTextAreaElement).value).toBe("Revised description");
 
+    expect(update.mock.calls[0]?.[0]).toStrictEqual({
+      id: "poll-1",
+      title: "Revised title",
+      description: "Revised description",
+      allowCustomOptions: true,
+    });
     fireEvent.click(view.getByRole("button", { name: "Update Poll" }));
     await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
     expect(update.mock.calls[1]?.[0]).toEqual(update.mock.calls[0]?.[0]);
@@ -144,6 +151,81 @@ describe("poll save flows", () => {
     await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
     expect(invalidate).toHaveBeenCalledTimes(1);
     await act(async () => { resolveRefresh(); });
+  });
+});
+
+describe("poll list", () => {
+  const closePoll = vi.fn();
+  const option = {
+    id: "option-1", pollId: "poll-1", text: "Yes", optionType: "text", targetUserId: null,
+    createdByUserId: "someone", createdBy: { userId: "someone", username: "Someone", avatar: null },
+    createdAt: new Date(), targetUser: null, voteCount: 2, percentage: 100,
+  };
+  const second = { ...poll, id: "poll-2", title: "Second title", totalVotes: 3, options: [option] };
+  const closed = { ...poll, id: "poll-3", title: "Closed title", isActive: false };
+
+  beforeEach(() => {
+    queryClient = new QueryClient();
+    Object.assign(vi.spyOn(client, "api" as never), {
+      useUtils: () => ({ poll: { getPolls: { invalidate } } }),
+      poll: {
+        getPolls: { useInfiniteQuery: () => ({ data: { pages: [{ data: [poll, second, closed], nextCursor: null }] }, isLoading: false, fetchNextPage: async () => undefined, hasNextPage: false }) },
+        getUserVote: { useQuery: () => ({ data: null }) },
+        createPoll: { useMutation: noMutation }, updatePoll: { useMutation: noMutation },
+        vote: { useMutation: noMutation }, retractVote: { useMutation: noMutation },
+        addOption: { useMutation: noMutation }, closePoll: { useMutation: () => ({ mutate: closePoll, isPending: false }) },
+        deletePollOption: { useMutation: noMutation },
+      },
+    });
+    vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { userId: "admin", role: "CONTENT-ADMIN" } } as never);
+    vi.spyOn(UserSearchSelect, "default").mockImplementation(() => null);
+  });
+
+  const header = (view: ReturnType<typeof render>, title: string) =>
+    view.getByRole("heading", { name: title }).closest("button") as HTMLButtonElement;
+
+  it("opens the first active poll, switches on click and keeps an open poll open", () => {
+    const view = render(<QueryClientProvider client={queryClient}><PollsPage /></QueryClientProvider>);
+    const date = format(poll.createdAt, "PPP");
+    expect(header(view, "Original title").getAttribute("aria-expanded")).toBe("true");
+    expect(header(view, "Original title").textContent).toContain(`Created by Admin • ${date} • 0 votes`);
+    expect(header(view, "Second title").getAttribute("aria-expanded")).toBe("false");
+    expect(header(view, "Second title").textContent).toContain(`Created by Admin • ${date} • 3 votes`);
+
+    fireEvent.click(header(view, "Second title"));
+    expect(header(view, "Second title").getAttribute("aria-expanded")).toBe("true");
+    expect(header(view, "Original title").getAttribute("aria-expanded")).toBe("false");
+    expect(view.getByText("Yes")).toBeDefined();
+    fireEvent.click(header(view, "Second title"));
+    expect(header(view, "Second title").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("offers closing an active poll from the results and the voting view", () => {
+    const view = render(<QueryClientProvider client={queryClient}><PollsPage /></QueryClientProvider>);
+    const results = view.getByRole("button", { name: "Close Poll" });
+    expect(results.className).toContain("bg-destructive");
+    fireEvent.click(results);
+    fireEvent.click(view.getByRole("button", { name: "Vote Now" }));
+    const voting = view.getByRole("button", { name: "Close Poll" });
+    expect(voting).not.toBe(results);
+    expect(voting.className).toBe(results.className);
+    fireEvent.click(voting);
+    expect(closePoll.mock.calls).toEqual([
+      [{ id: "poll-1", isActive: false }],
+      [{ id: "poll-1", isActive: false }],
+    ]);
+  });
+
+  it("offers reopening a closed poll from its results", () => {
+    const view = render(<QueryClientProvider client={queryClient}><PollsPage /></QueryClientProvider>);
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Closed Polls" }), { button: 0, ctrlKey: false });
+    expect(header(view, "Closed title").getAttribute("aria-expanded")).toBe("true");
+    expect(header(view, "Closed title").textContent).toContain("0 votes • Closed");
+    const reopen = view.getByRole("button", { name: "Reopen Poll" });
+    expect(reopen.className).toContain("bg-primary");
+    expect(view.queryByRole("button", { name: "Vote Now" })).toBeNull();
+    fireEvent.click(reopen);
+    expect(closePoll).toHaveBeenCalledWith({ id: "poll-3", isActive: true });
   });
 });
 
