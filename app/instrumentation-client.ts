@@ -1013,12 +1013,9 @@ const isInvalidOriginError = (event: Sentry.ErrorEvent): boolean => {
     return false;
   }
 
-  // Check if any stack frames are from our application code
-  const hasAppFrames = stackFrames.some(isOwnAppFrame);
-
-  // Only filter if no app frames are present (third-party origin)
-  // OR if there's no meaningful stack trace (browser-level error)
-  return !hasAppFrames || stackFrames.length === 0;
+  // Only filter if no app frames are present: a third-party origin, or no stack at all
+  // (a browser-level error)
+  return !stackFrames.some(isOwnAppFrame);
 };
 
 /**
@@ -1150,43 +1147,18 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
       frame.abs_path?.includes("app:///injected"),
   );
 
-  // Check for wallet-specific error patterns that require stack evidence
-  const isWalletErrorMessage =
-    message.includes("Failed to connect to MetaMask") ||
-    message.includes("No extension found with id:") ||
-    message.includes("setExternalProvider is not a function");
-
-  // "Cannot redefine property" requires wallet-specific property names or wallet script frames
-  // to avoid hiding real app-side TypeErrors
+  // Without wallet frames, "Cannot redefine property" counts only for wallet-specific
+  // property names, to avoid hiding real app-side TypeErrors
   const isWalletPropertyError =
     message.includes("Cannot redefine property") &&
     (message.includes("ethereum") ||
       message.includes("tronWeb") ||
       message.includes("tronLink") ||
       message.includes("scatter") ||
-      message.includes("walletRouter") ||
-      isFromWalletScript);
+      message.includes("walletRouter"));
 
-  if (isWalletErrorMessage && isFromWalletScript) {
-    return true;
-  }
-
-  if (isWalletPropertyError) {
-    return true;
-  }
-
-  // Additional check for proxy trap errors from wallet extensions
-  // TronLink and similar extensions may fail when setting properties on Proxy objects
-  // Example: TronLink's injected.js attempting to set tronlinkParams
-  const isProxyTrapError =
-    message.includes("'set' on proxy: trap returned falsish") ||
-    message.includes("proxy trap");
-
-  if (isProxyTrapError && isFromWalletScript) {
-    return true;
-  }
-
-  return isFromWalletScript;
+  // Anything a wallet's injected script raises is dropped, whatever its message
+  return isFromWalletScript || isWalletPropertyError;
 };
 
 /**
