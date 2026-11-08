@@ -193,6 +193,24 @@ describe("player training modifiers", () => {
     expect(trainingMultiplier(joined)).toBe(0.005);
     expect(getTrainingMultiplierBoost({ ...joined, joinedVillageAt: trainee.joinedVillageAt })).toBe(1);
   });
+
+  it("pins each interval's duration, efficiency and multiplier", () => {
+    expect(TrainingSpeeds.map((trainingSpeed) => trainingSpeedSeconds(trainingSpeed))).toEqual([
+      900, 3600, 14400, 28800, 43200, 86400,
+    ]);
+    expect(TrainingSpeeds.map((trainingSpeed) => trainingMultiplier({ ...trainee, trainingSpeed }))).toEqual([
+      0.01, 0.04, 0.16, 0.32, 0.48, 0.96,
+    ]);
+  });
+
+  it("rejects training speeds outside the interval list", () => {
+    for (const speed of ["2hrs", "constructor", "toString"]) {
+      const trainingSpeed = speed as UserData["trainingSpeed"];
+      expect(() => trainEfficiency({ trainingSpeed })).toThrow("Invalid training speed");
+      expect(() => trainingMultiplier({ ...trainee, trainingSpeed })).toThrow("Invalid training speed");
+      expect(() => trainingSpeedSeconds(trainingSpeed)).toThrow("Invalid training speed");
+    }
+  });
 });
 
 describe("trainingEnergyMessage", () => {
