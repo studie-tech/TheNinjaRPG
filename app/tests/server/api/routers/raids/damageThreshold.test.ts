@@ -34,28 +34,38 @@ describe("raid damage threshold effects", () => {
     vi.restoreAllMocks();
   });
 
-  it("stores coordinate-targeted effects on create", async () => {
+  it("rejects coordinate-targeted effects on create", async () => {
     const { caller, database } = makeCaller();
-    const result = await caller.createDamageThreshold({
-      questId: "raid-quest",
-      damageRequired: 100,
-      rewards,
-      effects: [coordinateEffect],
-    });
-    expect(result).toMatchObject({ success: true });
-    expect(database.insert).toHaveBeenCalledTimes(1);
+    await expect(
+      caller.createDamageThreshold({
+        questId: "raid-quest",
+        damageRequired: 100,
+        rewards,
+        effects: [coordinateEffect],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(database.insert).not.toHaveBeenCalled();
+    expect(
+      await caller.createDamageThreshold({
+        questId: "raid-quest",
+        damageRequired: 100,
+        rewards,
+        effects: [IncreaseStatTag.parse({})],
+      }),
+    ).toMatchObject({ success: true });
   });
 
-  it("stores coordinate-targeted effects on update", async () => {
+  it("rejects coordinate-targeted effects on update", async () => {
     const { caller, database } = makeCaller();
-    const result = await caller.updateDamageThreshold({
-      thresholdId: "threshold",
-      damageRequired: 100,
-      sortOrder: 0,
-      rewards,
-      effects: [coordinateEffect],
-    });
-    expect(result).toMatchObject({ success: true });
-    expect(database.update).toHaveBeenCalledTimes(1);
+    await expect(
+      caller.updateDamageThreshold({
+        thresholdId: "threshold",
+        damageRequired: 100,
+        sortOrder: 0,
+        rewards,
+        effects: [coordinateEffect],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(database.update).not.toHaveBeenCalled();
   });
 });
