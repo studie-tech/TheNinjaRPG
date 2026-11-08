@@ -1778,6 +1778,34 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(states[0]?.revokedThrough.getTime()).toBe(newer.getTime());
   });
 
+  it("moves uncontested entitlement watermarks per store and environment on a user-id rename", async () => {
+    const database = await db();
+    const newUserId = "renamed-entitlement-user";
+    const older = new Date(Date.now() - MINUTE);
+    const newer = new Date();
+    await database.insert(storeEntitlementState).values([
+      { id: "old-apple", userId: USER, store: "APPLE", revokedThrough: older },
+      { id: "old-google-sandbox", userId: USER, store: "GOOGLE", isSandbox: true, revokedThrough: newer },
+      { id: "new-apple", userId: newUserId, store: "APPLE", revokedThrough: newer },
+      { id: "new-google", userId: newUserId, store: "GOOGLE", revokedThrough: older },
+    ]);
+
+    await migrateStoreEntitlementStates(database, USER, newUserId);
+
+    const states = (await database.query.storeEntitlementState.findMany()).map((state) => ({
+      id: state.id,
+      userId: state.userId,
+      store: state.store,
+      isSandbox: state.isSandbox,
+      revokedThrough: state.revokedThrough.getTime(),
+    }));
+    expect(states.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      { id: "new-apple", userId: newUserId, store: "APPLE", isSandbox: false, revokedThrough: newer.getTime() },
+      { id: "new-google", userId: newUserId, store: "GOOGLE", isSandbox: false, revokedThrough: older.getTime() },
+      { id: "old-google-sandbox", userId: newUserId, store: "GOOGLE", isSandbox: true, revokedThrough: newer.getTime() },
+    ]);
+  });
+
   it("carries an expiry watermark across a transfer before delayed purchase delivery", async () => {
     await insertUsers([
       { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
