@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn, vi } from "bun:test";
 import { act, cleanup, render } from "@testing-library/react";
 import { createElement, useEffect } from "react";
-import ParticleProvider from "@/components/ui/particles";
+import ParticleProvider from "@/components/layout/shared/LayoutParticles";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import { setGameSceneVisible } from "@/libs/gameSceneVisibility";
 
