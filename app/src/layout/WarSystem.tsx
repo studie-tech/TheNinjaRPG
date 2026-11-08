@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  ALLIANCE_VILLAGE_TYPES,
   FACTION_RAID_BOOST_HOURS,
   FACTION_RAID_BOOST_PERCENT,
   FACTION_RAID_COST,
@@ -88,10 +89,11 @@ import { canJoinWar, isFactionVillage } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
+import { isKage } from "@/utils/kage";
 import { canAdministrateWars } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 import {
   type AllianceOfferSchema,
   type AllianceOfferSchemaInput,
@@ -142,7 +144,7 @@ export const WarRoom: React.FC<{
   const allyOffers = useAllyOfferActions();
 
   // Derived
-  const isLeader = user.userId === user.village?.kageId;
+  const isLeader = isKage(user);
   const villages = villageData?.villages;
   const userVillage = villages?.find((v) => v.id === user.villageId);
   const relationships = villageData?.relationships || [];
@@ -280,21 +282,18 @@ export const WarMap: React.FC<{
   const [focusSector, setFocusSector] = useState<number | null>(null);
 
   // Query data
-  const { data: userData } = useRequiredUserData();
   const { data: allSectors } = api.travel.getAllSectors.useQuery();
   const utils = api.useUtils();
 
   // Derived
-  const canWar = ["VILLAGE", "STRONGHOLD", "HIDEOUT"].includes(
-    userData?.village?.type ?? "",
-  );
+  const canWar = ALLIANCE_VILLAGE_TYPES.some((type) => type === user.village?.type);
   const userOwnedSectors = allSectors?.find((s) => s.villageId === user.villageId);
   const canDeclareWar = isKage && canWar;
   const sectorVillage = villages?.find(
     (v) =>
       v.sector === targetSector &&
       ((v.type === "VILLAGE" && (user.isOutlaw || v.allianceSystem === true)) ||
-        ["HIDEOUT", "STRONGHOLD"].includes(v.type)),
+        isFactionVillage(v)),
   );
   const sectorClaimed = villages?.find((v) => v.sector === targetSector);
   const sectorOwnerId = allSectors?.find((s) =>
@@ -443,7 +442,7 @@ export const WarMap: React.FC<{
             userVillageId: user.villageId ?? "",
           });
         };
-      } else if (["HIDEOUT", "STRONGHOLD"].includes(sectorVillage.type)) {
+      } else if (isFactionVillage(sectorVillage)) {
         proceedLabel = undefined;
         modalContent = <p>Only factions can initiate raids.</p>;
       } else if (status === "ALLY" && relationship) {
@@ -526,7 +525,7 @@ export const WarMap: React.FC<{
                 ?.filter(
                   (v) =>
                     v.id !== user.villageId &&
-                    ["VILLAGE", "HIDEOUT", "STRONGHOLD"].includes(v.type),
+                    ALLIANCE_VILLAGE_TYPES.some((type) => type === v.type),
                 )
                 .map((v) => (
                   <SelectItem key={v.id} value={v.id}>
@@ -576,7 +575,7 @@ export const WarMap: React.FC<{
         />
       )}
       {mapError && <MapError />}
-      {showModal && globe && userData && targetSector && (
+      {showModal && globe && targetSector && (
         <Modal
           title={modalTitle}
           isOpen={showModal}
