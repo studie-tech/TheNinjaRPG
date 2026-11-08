@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 /**
@@ -13,11 +13,5 @@ export function useDelayState<T>(
   const [immediateValue, setImmediateValue] = useState<T>(initialValue);
   const debouncedValue = useDebouncedValue(immediateValue, delayMs);
 
-  const setValue = useCallback((update: React.SetStateAction<T>) => {
-    setImmediateValue((prev) =>
-      typeof update === "function" ? (update as (p: T) => T)(prev) : update,
-    );
-  }, []);
-
-  return [immediateValue, debouncedValue, setValue];
+  return [immediateValue, debouncedValue, setImmediateValue];
 }
