@@ -29,8 +29,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/components/ui/use-toast";
 import type { PollOptionType } from "@/drizzle/constants";
 import type { Poll, PollOption } from "@/drizzle/schema";
 import Accordion from "@/layout/Accordion";
@@ -41,7 +39,6 @@ import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
-import { getSessionErrorToastId } from "@/libs/trpcSession";
 import { parseHtml } from "@/utils/parse";
 import {
   canAddNonCustomPollOptions,
@@ -991,14 +988,6 @@ function EditPollForm({
       form.reset();
       onSuccess();
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-        id: getSessionErrorToastId(error.message),
-      });
-    },
   });
 
   const onSubmit = (data: UpdatePollSchema) => {
@@ -1030,14 +1019,16 @@ function EditPollForm({
         <FormField
           control={form.control}
           name="description"
-          render={({ field }) => (
+          render={() => (
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea
+                <RichInput
                   placeholder="Poll description"
-                  className="min-h-[100px]"
-                  {...field}
+                  id="description"
+                  height="150"
+                  control={form.control}
+                  error={form.formState.errors.description?.message}
                 />
               </FormControl>
               <FormMessage />

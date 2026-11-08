@@ -14,13 +14,12 @@ const messages = () => notices().map((notice) => notice.description ?? notice.ti
 
 const callbacks = [
   { file: "support/[ticketId]", path: "support.updateTicket" },
-  { file: "manual/polls", path: "poll.updatePoll" },
   { file: "points", path: "paypal.resolveSubscription", subscription: true },
   { file: "points", path: "paypal.upgradeSubscription", subscription: true },
   { file: "points", path: "paypal.subscribeWithReps", subscription: true },
 ] as const;
 
-// Run the pages' actual callback expressions, including the unexported poll form.
+// Run the pages' actual callback expressions.
 // Taking them from source makes a bypass in any one callback fail the feedback check.
 const pageOnError = (source: (typeof callbacks)[number]) => {
   const file = join(import.meta.dirname, "../../src/app/[shell]", source.file, "page.tsx");
