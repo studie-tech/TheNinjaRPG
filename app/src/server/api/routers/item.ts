@@ -298,11 +298,7 @@ import {
   fetchUserQuestByQuestId,
 } from "@/queries/quests";
 import { fetchSageModeRolls, fetchSageModes } from "@/queries/sageMode";
-import {
-  fetchMasterySources,
-  fetchUserSkills,
-  findRequiredSkillTreeEntry,
-} from "@/queries/skillTree";
+import { fetchUserSkills, findRequiredSkillTreeEntry } from "@/queries/skillTree";
 import { fetchStructures } from "@/queries/village";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
@@ -2048,18 +2044,18 @@ export const itemRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [useritems, user, loadouts, masterySources] = await Promise.all([
+      const [useritems, user, loadouts] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
+      if (!user) return errorResponse("User not found");
       // Mutate
       const result = await toggleEquipItem(
         ctx.drizzle,
         input.userItemId,
         useritems,
-        { ...user, ...masterySources },
+        user,
         input.slot,
       );
       // If anything happened
@@ -3508,11 +3504,11 @@ export const itemRouter = createTRPCRouter({
     .meta({ mcp: { description: "Auto-equip best items by cost" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
-      const [useritems, user, masterySources] = await Promise.all([
+      const [useritems, user] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
       ]);
+      if (!user) return errorResponse("User not found");
 
       // Slot exclusivity and category / maxEquips limits are decided against one
       // in-memory snapshot. Writes are a single Promise.all so validation is not
@@ -3520,13 +3516,9 @@ export const itemRouter = createTRPCRouter({
       // a row that moves home / auction / crafting / imbue after the snapshot
       // is not equipped.
       const now = new Date();
-      const masteries = effectiveMasteries({ ...user, ...masterySources });
+      const masteries = effectiveMasteries(user);
       const { assignments, hasUnequipped, hasAvailableSlots } =
-        computeAutoEquipAssignments(
-          useritems,
-          { ...user, ...masteries, userSkills: masterySources.userSkills },
-          now,
-        );
+        computeAutoEquipAssignments(useritems, { ...user, ...masteries }, now);
 
       if (!hasUnequipped) {
         return errorResponse("No unequipped items available");
@@ -3601,24 +3593,27 @@ export const itemRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       let inventoryRecovered = false;
-      const [loadouts, user, useritems, masterySources] = await Promise.all([
+      const [loadouts, user, useritems] = await Promise.all([
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId, {
           includeHidden: true,
           onStaleMergeClaimRecovery: () => {
             inventoryRecovered = true;
           },
         }),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
+      if (!user) return errorResponse("User not found");
       // Mutate & return result
       const id = input.id;
       const beforeEquipment = useritems.map((row) => ({ ...row }));
-      const result = await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, {
-        ...user,
-        ...masterySources,
-      });
+      const result = await selectItemLoadout(
+        ctx.drizzle,
+        id,
+        loadouts,
+        useritems,
+        user,
+      );
       return result.success
         ? {
             ...result,
@@ -3632,7 +3627,6 @@ export const itemRouter = createTRPCRouter({
             ...getSelectItemLoadoutUserUpdate({
               result,
               user,
-              masterySources,
               id,
               useritems,
             }),

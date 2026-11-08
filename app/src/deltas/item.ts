@@ -3,15 +3,10 @@ import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import { VARIANT_CURRENCY_FIELD, type VariantCurrency } from "@/drizzle/constants";
 import type { Item, UserData, UserItem, UserItemWithRelations } from "@/drizzle/schema";
-import {
-  effectiveMasteries,
-  type MasteryBuffUser,
-  type MasterySources,
-} from "@/libs/mastery";
+import { effectiveMasteries, type MasteryBuffUser } from "@/libs/mastery";
 import { calcMaxEnergy } from "@/libs/profile";
 import { hasEnergyQueue } from "@/libs/queue";
 import type { fetchItem, fetchUserEquipmentSnapshot } from "@/queries/item";
-import type { fetchUser } from "@/queries/profile";
 import type { InventoryQuantityChange } from "@/validators/inventory";
 import type { UserCachePatch } from "@/validators/userCache";
 
@@ -359,7 +354,6 @@ export const getBuyUserUpdate = ({
 export const getSelectItemLoadoutUserUpdate = ({
   result,
   user,
-  masterySources,
   id,
   useritems,
 }: {
@@ -369,8 +363,7 @@ export const getSelectItemLoadoutUserUpdate = ({
     userCacheEligible: boolean;
     items: UserItemWithRelations[];
   };
-  user: NonNullable<Awaited<ReturnType<typeof fetchUser>>>;
-  masterySources: Required<MasterySources>;
+  user: NonNullable<Awaited<ReturnType<typeof fetchUserEquipmentSnapshot>>>;
   id: string;
   useritems: UserItemWithRelations[];
 }) => ({
@@ -378,7 +371,6 @@ export const getSelectItemLoadoutUserUpdate = ({
     "userCacheEligible" in result && result.userCacheEligible
       ? getUserEquipmentPatch({
           ...user,
-          ...masterySources,
           itemLoadout: id,
           items: useritems.filter(
             (entry) => entry.equipped !== "NONE" && entry.quantity > 0,

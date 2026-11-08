@@ -252,8 +252,8 @@ describeWithDatabase("committed profile cache patches", () => {
     const reads = vi.spyOn(db.query.userData, "findFirst");
     const result = await (await callerFor(itemRouter, userId)).selectItemLoadout({ id: "cache-loadout" });
     expect(result.success).toBe(true);
-    // The original user and mastery-source reads run before writes; neither is repeated.
-    expect(reads).toHaveBeenCalledTimes(2);
+    // One user read carries the mastery sources before writes; it is not repeated.
+    expect(reads).toHaveBeenCalledTimes(1);
     expect(result.userPatch?.itemLoadout).toBe("cache-loadout");
     expect(result.userPatch?.items?.map((row) => row.equipped)).toEqual(["CHEST"]);
     expect(getEquippedInventory(before, result.equipmentChanges)?.map(({ id, equipped }) => ({ id, equipped }))).toEqual((await db.select().from(userItem).where(eq(userItem.userId, userId))).map(({ id, equipped }) => ({ id, equipped })));
