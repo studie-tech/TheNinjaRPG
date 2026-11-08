@@ -15,7 +15,7 @@ import {
   towerDefenseEnemyPosition,
   towerDefenseProjectileProgress,
 } from "@/libs/rendering/scenes/towerDefenseTerrain";
-import { calculateHexDistance } from "@/libs/towerDefense/game";
+import { calculateProjectileDamage } from "@/libs/towerDefense/game";
 import type {
   TowerDefenseAbility,
   TowerDefenseEnemy,
@@ -189,20 +189,8 @@ export const createTowerDefenseEffects = async (game: GameRenderer) => {
           if (target) {
             impact(target.x, target.y, asset, frame.now);
             onImpact();
-            const projectile = record.projectile;
-            const distanceBonus = Math.floor(
-              calculateHexDistance(projectile.origin, projectile.target) *
-                (ability?.damagePerTile ?? 0),
-            );
-            const critical =
-              projectile.critRoll !== undefined &&
-              projectile.critRoll < (ability?.critChance ?? 0);
-            damage(
-              target.x,
-              target.y,
-              (projectile.damage + distanceBonus) * (critical ? 2 : 1),
-              critical,
-            );
+            const hit = calculateProjectileDamage(record.projectile, ability);
+            damage(target.x, target.y, hit.value, hit.critical);
           }
           record.sprite.destroy({ texture: false, textureSource: false });
           projectileRecords.delete(id);

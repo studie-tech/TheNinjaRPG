@@ -3887,6 +3887,7 @@ export const TD_SHURIKEN_BASE_RANGE = 2;
 export const TD_SHURIKEN_BASE_COOLDOWN = 500; // ms
 export const TD_BASE_CRIT_CHANCE = 0; // Base critical hit chance (0%)
 export const TD_BASE_DAMAGE_PER_TILE = 0; // Extra damage per tile distance traveled (0)
+export const TD_CRIT_DAMAGE_MULTIPLIER = 2; // Critical hit damage factor - must match the crit branch in lib.rs
 export const TD_RANGE_VISUAL_FACTOR = 0.85; // Range visual factor for ellipse-based range checking
 export const TD_PROJECTILE_SPEED = 5.0; // tiles/sec - must match PROJECTILE_SPEED in lib.rs
 export const TD_EXISTING_SESSION_CHECK_TIMEOUT_MS = 500; // Time to wait for SpacetimeDB to send existing session data
