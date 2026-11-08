@@ -72,7 +72,7 @@ const Building: React.FC<BuildingProps> = (props) => {
                 <Info className="size-4" aria-hidden="true" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{StructureRewardEntries(structure)}</TooltipContent>
+            <TooltipContent>{structureRewardEntries(structure)}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
         {userData && userData?.village?.kageId === userData?.userId && showUpgrade && (
@@ -305,7 +305,7 @@ const UpgradeButton = ({
  * @param structure - The village structure object.
  * @returns An array of reward messages.
  */
-export const StructureRewardEntries = (structure: VillageStructure) => {
+export const structureRewardEntries = (structure: VillageStructure) => {
   const baseLevel = structure.level;
   const effectiveLevel = getEffectiveStructureLevel(structure);
 

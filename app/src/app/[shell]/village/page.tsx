@@ -26,7 +26,7 @@ import {
   WAR_VILLAGE_MAX_SECTORS,
 } from "@/drizzle/constants";
 import { useTutorialStep } from "@/hooks/tutorial";
-import Building, { StructureRewardEntries } from "@/layout/Building";
+import Building, { structureRewardEntries } from "@/layout/Building";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { GroupOrders } from "@/layout/GroupOrders";
@@ -144,7 +144,7 @@ export default function VillageOverview() {
                     </div>
                   </TooltipTrigger>
                   {walls && (
-                    <TooltipContent>{StructureRewardEntries(walls)}</TooltipContent>
+                    <TooltipContent>{structureRewardEntries(walls)}</TooltipContent>
                   )}
                 </Tooltip>
 
@@ -156,7 +156,7 @@ export default function VillageOverview() {
                   </TooltipTrigger>
                   {protectors && (
                     <TooltipContent>
-                      {StructureRewardEntries(protectors)}
+                      {structureRewardEntries(protectors)}
                     </TooltipContent>
                   )}
                 </Tooltip>
