@@ -1,4 +1,7 @@
 import {
+  ANBU_HOSPITAL_DISCOUNT_PERC,
+  BANK_INTEREST_CLAIM_DAYS,
+  BANK_INTEREST_DAILY_CAP,
   COST_CHANGE_GENDER,
   COST_CHANGE_USERNAME,
   COST_EXTRA_JUTSU_SLOT,
@@ -8,16 +11,61 @@ import {
   ELITE_JONIN_JUTSU_LEVEL_CAP,
   ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER,
   ELITE_JONIN_JUTSU_XP_TO_LEVEL,
+  ERRANDS_PER_DAY,
+  FED_BANK_INTEREST,
   FED_JUTSU_SLOTS,
+  HOSPITAL_BASE_HEAL_SECONDS,
+  HOSPITAL_RYO_PER_100_HP,
   JUTSU_LEVEL_CAP,
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_TRANSFER_MAX_LEVEL,
   JUTSU_XP_TO_LEVEL,
+  MAX_ATTRIBUTES,
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
   MEDNIN_REQUIRED_EXP,
+  MISSIONS_PER_DAY,
+  RYO_FOR_REP_MIN_REPS,
   RYO_FOR_REP_RESERVE,
+  TRAINING_SPEED_CONFIG,
+  TrainingSpeeds,
 } from "@/drizzle/constants";
+import { getDefaultBasicActions } from "@/libs/combat/actions";
+import { COMBAT_SECONDS } from "@/libs/combat/constants";
+import { calcJutsuEquipLimit } from "@/libs/jutsuRequirements";
+import { calcBankInterest } from "@/utils/village";
+
+// Game rules rendered into the prompt come from the definitions the game itself uses.
+const {
+  basicAttack,
+  basicOffensiveStance,
+  basicDefensiveStance,
+  basicHeal,
+  basicMeditate,
+  basicMove,
+  basicReplacementTechnique,
+  basicClear,
+  basicCleanse,
+  basicFlee,
+} = getDefaultBasicActions({ rank: "GENIN" });
+const studentBasicAttack = getDefaultBasicActions({ rank: "STUDENT" }).basicAttack;
+const jutsuSlots = (rank: "GENIN" | "CHUNIN" | "JONIN" | "ELITE JONIN") =>
+  calcJutsuEquipLimit({
+    rank,
+    staffAccount: false,
+    extraJutsuSlots: 0,
+    federalStatus: "NONE",
+  });
+const trainingIntervals = TrainingSpeeds.map((speed) => {
+  const { seconds, efficiency } = TRAINING_SPEED_CONFIG[speed];
+  const hours = seconds / 3600;
+  const length =
+    seconds < 3600
+      ? `${seconds / 60} minutes`
+      : `${hours} hour${hours === 1 ? "" : "s"}`;
+  return `  - ${length}: ${efficiency}% efficiency.`;
+}).join("\n");
+const thousands = (exp: number) => `${exp / 1000}k`;
 
 /** System instructions for the Seichi AI support chat: a player-facing guide to the game. */
 export const SUPPORT_CHAT_INSTRUCTIONS = `
@@ -101,10 +149,8 @@ This document outlines various screens, menus, and gameplay systems available in
 - **Training Grounds:**  
   The primary facility for enhancing your stats.
 - **Timer Lengths and Efficiency:**  
-  - 15 minutes: 100% efficiency (recommended for active play).  
-  - 1 hour: 90% efficiency.  
-  - 4 hours: 80% efficiency.  
-  - 8 hours: 70% efficiency.
+  Shorter timers are more efficient; the shortest is recommended for active play.
+${trainingIntervals}
 - **Training (combat stats):**
   - Train Offence, Defence, Strength, Intelligence, Willpower or Speed.
   - These grant experience and determine your damage.
@@ -120,8 +166,8 @@ This document outlines various screens, menus, and gameplay systems available in
 
 - **Mission Hall:**  
   - Offers missions and errands.  
-  - **Missions:** Reward you with experience, ryo, and prestige.  
-  - **Errands:** Typically reward ryo and are limited on a daily basis.
+  - **Missions:** Reward you with experience, ryo, and prestige; up to ${MISSIONS_PER_DAY} per day.  
+  - **Errands:** Typically reward ryo; up to ${ERRANDS_PER_DAY} per day.
 - **Errand Example:**  
   - Completing tasks like cleaning up trash provides ryo and requires travel.
 
@@ -151,7 +197,7 @@ This document outlines various screens, menus, and gameplay systems available in
   - Click and drag to rotate.  
   - Click a sector to initiate travel, then confirm in the dialog.
 - **Errand Completion:**  
-  - Travel to the designated location, complete the errand, and claim your reward (2500 ryo).
+  - Travel to the designated location, complete the errand, and claim your ryo reward.
 
 ---
 
@@ -197,30 +243,30 @@ This document outlines various screens, menus, and gameplay systems available in
   - **Battlefield:**  
     - Provides a zoomed-out view of the combat area.
   - **Time Remaining and Action Gauge:**  
-    - 60-second turn timer.  
+    - ${COMBAT_SECONDS}-second turn timer.  
     - The action gauge (AP) determines available actions; actions drain AP by varying amounts (typically 60%, 40%, 20%, or 10%).  
-    - The turn automatically ends if AP drops below 20%.
+    - The turn automatically ends when you cannot afford any remaining action.
 - **Basic Actions:**  
   - **Basic Attack:**  
-    - Costs 20 AP and 10 SP; has a 1-round cooldown; scales with Offence and your highest generals.
+    - Costs ${basicAttack.actionCostPerc} AP and ${basicAttack.staminaCost} SP; has a ${basicAttack.cooldown}-round cooldown (${studentBasicAttack.cooldown} for Academy Students); scales with Offence and your highest generals.
   - **Offensive Stance:**  
-    - Costs 20 AP; has a 1-round cooldown; increases all offence damage by 5% for 1 round.
+    - Costs ${basicOffensiveStance.actionCostPerc} AP; has a ${basicOffensiveStance.cooldown}-round cooldown; increases damage dealt by ${basicOffensiveStance.effects[0]?.power}% for ${basicOffensiveStance.effects[0]?.rounds} round.
   - **Defensive Stance:**  
-    - Costs 20 AP; has a 1-round cooldown; reduces damage taken by 5% for 1 round.
+    - Costs ${basicDefensiveStance.actionCostPerc} AP; has a ${basicDefensiveStance.cooldown}-round cooldown; reduces damage taken by ${basicDefensiveStance.effects[0]?.power}% for ${basicDefensiveStance.effects[0]?.rounds} round.
   - **Basic Heal:**  
-    - Costs 60 AP and 10 CP; has a 5-round cooldown and scales with Medical Ninja Rank.
+    - Costs ${basicHeal.actionCostPerc} AP and ${basicHeal.chakraCost} CP; has a ${basicHeal.cooldown}-round cooldown and heals more at higher Medical Ninja Ranks.
   - **Meditate:**  
-    - Costs 20 AP and 10 CP; has a 4-round cooldown; restores chakra and Stamina and scales with Medical Ninja Rank.
+    - Costs ${basicMeditate.actionCostPerc} AP; has a ${basicMeditate.cooldown}-round cooldown; restores chakra and stamina.
   - **Move:**  
-    - Costs 10 AP per hexagon of movement.
+    - Costs ${basicMove.actionCostPerc} AP per hexagon of movement.
   - **Replacement Technique:**  
-    - Costs 20 AP; has a 2-round cooldown; reposition up to 5 hexes away.
+    - Costs ${basicReplacementTechnique.actionCostPerc} AP; has a ${basicReplacementTechnique.cooldown}-round cooldown; reposition up to ${basicReplacementTechnique.range} hexes away.
   - **Clear:**  
-    - Costs 60 AP, affects a 4-hex range, with a 9-turn cooldown; removes opponent’s positive effects.
+    - Costs ${basicClear.actionCostPerc} AP, has a ${basicClear.range}-hex range and a ${basicClear.cooldown}-round cooldown; removes an opponent’s positive effects.
   - **Cleanse:**  
-    - Costs 60 AP with a 9-turn cooldown; removes debuffs and damage-over-time effects.
+    - Costs ${basicCleanse.actionCostPerc} AP with a ${basicCleanse.cooldown}-round cooldown; removes debuffs and damage-over-time effects from yourself.
   - **Flee:**  
-    - Costs 100 AP to attempt an escape.
+    - Costs ${basicFlee.actionCostPerc} AP to attempt an escape.
   - **End Turn:**  
     - Manually end your turn.
   - **Potato:**  
@@ -238,10 +284,11 @@ This document outlines various screens, menus, and gameplay systems available in
 ## Medical Facilities and Healing Training
 
 - **Hospital:**  
-  - Provides healing after battle defeat with a 2-minute wait, or you may pay to skip the timer (cost scales with HP pool).
+  - Provides healing after battle defeat. Recovery takes ${HOSPITAL_BASE_HEAL_SECONDS / 60} minutes (${HOSPITAL_BASE_HEAL_SECONDS} seconds) before village hospital boosts, which shorten it; a medical ninja can heal you sooner.  
+  - You may pay to skip the timer: ${HOSPITAL_RYO_PER_100_HP} ryo per 100 missing HP, ${ANBU_HOSPITAL_DISCOUNT_PERC}% less for ANBU members.
 - **Medical Ninja Training:**  
   - Heal fellow village members to gain medical experience and improve your basic heal.  
-  - Rank increases at thresholds of ${MEDNIN_REQUIRED_EXP.APPRENTICE / 1000}k and ${MEDNIN_REQUIRED_EXP.MASTER / 1000}k experience.
+  - Ranks: Novice from Genin, Apprentice at ${thousands(MEDNIN_REQUIRED_EXP.APPRENTICE)}, Master at ${thousands(MEDNIN_REQUIRED_EXP.MASTER)} and Legendary at ${thousands(MEDNIN_REQUIRED_EXP.LEGENDARY)} medical experience.
 
 ---
 
@@ -259,8 +306,10 @@ This document outlines various screens, menus, and gameplay systems available in
   - Safeguard your ryo from potential theft.  
   - Essential for non-Academy Students/Genin.
 - **Interest Rate:**  
-  - Earn 1.9% daily interest on deposited ryo at server reset (midnight UTC).  
-  - Interest is capped at 1 million ryo per day without federal support, with potential for increases.
+  - Deposited ryo earns daily interest at server reset (midnight UTC), starting from a base rate of ${calcBankInterest(0)}% per day.  
+  - Upgrading the village bank raises the rate for everyone in the village. Federal support adds ${FED_BANK_INTEREST.NORMAL}, ${FED_BANK_INTEREST.SILVER} or ${FED_BANK_INTEREST.GOLD} percentage points (Normal, Silver or Gold). The Bank page shows your current rate.  
+  - Interest is capped at ${BANK_INTEREST_DAILY_CAP.toLocaleString("en-US")} ryo per day for every federal tier.  
+  - Claim interest at the Bank within ${BANK_INTEREST_CLAIM_DAYS} days (UTC); older interest expires.
 
 ---
 
@@ -351,7 +400,7 @@ This document outlines various screens, menus, and gameplay systems available in
   - **Bloodline Purchase:** Buy bloodlines directly.  
   - **Items Tab:** Purchase items associated with a random bloodline of a specific rank (more cost-effective than direct purchase).  
   - **Ryo Tab:**  
-    - Exchange reputation points for ryo (you must keep at least ${RYO_FOR_REP_RESERVE} rep).
+    - Exchange reputation points for ryo: each listing must offer at least ${RYO_FOR_REP_MIN_REPS} reputation points, and the last ${RYO_FOR_REP_RESERVE} reputation points you own cannot be sold.
 - **Points Page:**  
   - **Reputation Purchase:** Buy reputation using real money.  
   - **Federal Support Purchase:**  
@@ -379,9 +428,9 @@ This document outlines various screens, menus, and gameplay systems available in
   - **Nindo:** Customize your "About Me" section.
   - **Marriage:** Option to marry another player.
   - **Name Change:** Costs ${COST_CHANGE_USERNAME} rep.
-  - **Custom Title:** Set a custom epithet (15-character limit, 5 rep cost).
+  - **Titles:** Display one of your collected titles (earned from quest rewards); bonuses from every collected title apply whichever one you display.
   - **Change Gender:** Costs ${COST_CHANGE_GENDER} rep.
-  - **Attribute Management:** Adjust physical traits for AI avatar creation (5 options available instead of 6).
+  - **Attribute Management:** Adjust physical traits for AI avatar creation. Choose up to ${MAX_ATTRIBUTES} traits.
   - **Reset Stats:** Redistribute all stats for ${COST_RESET_STATS} rep.
   - **Re-Roll Elements:** Reroll elemental proficiencies at Chunin (do not use if already possessing two or more bloodline elements).
   - **Combat Preferences:** Customize AI rules for AFK Kage seat battles (advanced; note limitations with movement and summon jutsus).
@@ -407,7 +456,7 @@ This document outlines various screens, menus, and gameplay systems available in
   - Pair with a Jonin+ sensei to reduce jutsu training timers.
 - **Jutsu Management (Jutsus Menu):**  
   - Jutsus are automatically equipped when slots are available.  
-  - **Genin:** 8 slots, with additional slots available at Chunin and Jonin.  
+  - **Slots:** ${jutsuSlots("GENIN")} at Genin, ${jutsuSlots("CHUNIN")} at Chunin and ${jutsuSlots("JONIN")} at Jonin (${jutsuSlots("ELITE JONIN")} at Elite Jonin).  
   - **Extra Slots:**  
     - Up to ${MAX_EXTRA_JUTSU_SLOTS} extra slots for ${COST_EXTRA_JUTSU_SLOT} rep each.  
     - Up to ${FED_JUTSU_SLOTS.GOLD} extra slots with federal support.
