@@ -320,10 +320,6 @@ const updateJutsuReskinSchema = getJutsuReskinSchema.extend({
 
 const updateJutsuSchema = z.object({ id: z.string(), data: JutsuValidator });
 
-/** "level 3" or "levels 3-5" */
-const formatLevelRange = (from: number, to: number) =>
-  from === to ? `level ${from}` : `levels ${from}-${to}`;
-
 export const jutsuRouter = createTRPCRouter({
   getRecentTransfers: protectedProcedure
     .meta({
@@ -745,7 +741,7 @@ export const jutsuRouter = createTRPCRouter({
       await insertJutsuForCreate(ctx.drizzle, id);
       return { success: true, message: id };
     } else {
-      return { success: false, message: `Not allowed to create jutsu` };
+      return errorResponse(`Not allowed to create jutsu`);
     }
   }),
 
@@ -847,7 +843,7 @@ export const jutsuRouter = createTRPCRouter({
           return { success: true, message: "Jutsu forgotten" };
         }
       }
-      return { success: false, message: `Could not find jutsu to delete` };
+      return errorResponse(`Could not find jutsu to delete`);
     }),
 
   getEvolutions: publicProcedure
@@ -1688,7 +1684,7 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       const userjutsuObj = findJutsuInTraining(userjutsus, Date.now());
       if (!userjutsuObj) {
-        return { success: false, message: "Not training any jutsu" };
+        return errorResponse("Not training any jutsu");
       }
       await updateUserJutsuForStopTraining(ctx.drizzle, userjutsuObj, ctx);
       // The next queued level starts now instead of in the stopped training's slot.
@@ -3234,3 +3230,7 @@ const saveJutsuFamily = async (
       };
     }),
   );
+
+/** "level 3" or "levels 3-5" */
+const formatLevelRange = (from: number, to: number) =>
+  from === to ? `level ${from}` : `levels ${from}-${to}`;
