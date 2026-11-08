@@ -109,55 +109,49 @@ describe("damage-derived tag filters", () => {
     ).toBe(1);
   });
 
-  it.each([
+  const derivedDamageCases = [
     ["afterburn", afterburn, "afterburn", "defender"],
     ["lifesteal", lifesteal, "lifesteal_hp", "attacker"],
     ["recoil", recoil, "recoil", "attacker"],
     ["absorb", absorb, "absorb_hp", "defender"],
     ["reflect", reflect, "reflect", "defender"],
-  ] as const)(
+  ] as const;
+  type DerivedDamageCase = (typeof derivedDamageCases)[number];
+  /** What a derived-damage effect locked to `lockElement` takes from a 100-damage Fire hit. */
+  const convertedDamage = (
+    type: DerivedDamageCase[0],
+    handler: DerivedDamageCase[1],
+    field: DerivedDamageCase[2],
+    targetId: DerivedDamageCase[3],
+    lockElement: "Fire" | "Water",
+  ) => {
+    const damage = makeDamageEffect({ elements: ["Fire"] });
+    const effect = makeEffect(type, { power: 20, elements: [lockElement] }, { targetId });
+    const consequence: Consequence = {
+      userId: "attacker",
+      targetId: "defender",
+      damage: 100,
+    };
+    handler(
+      effect,
+      [damage, effect],
+      new Map([[damage.id, consequence]]),
+      makeBattleUser(targetId),
+    );
+    return consequence[field];
+  };
+
+  it.each(derivedDamageCases)(
     "%s converts damage of any element despite an element lock",
     (type, handler, field, targetId) => {
-      const damage = makeDamageEffect({ elements: ["Fire"] });
-      const effect = makeEffect(type, { power: 20, elements: ["Water"] }, { targetId });
-      const consequence: Consequence = {
-        userId: "attacker",
-        targetId: "defender",
-        damage: 100,
-      };
-      handler(
-        effect,
-        [damage, effect],
-        new Map([[damage.id, consequence]]),
-        makeBattleUser(targetId),
-      );
-      expect(consequence[field]).toBe(20);
+      expect(convertedDamage(type, handler, field, targetId, "Water")).toBe(20);
     },
   );
 
-  it.each([
-    ["afterburn", afterburn, "afterburn", "defender"],
-    ["lifesteal", lifesteal, "lifesteal_hp", "attacker"],
-    ["recoil", recoil, "recoil", "attacker"],
-    ["absorb", absorb, "absorb_hp", "defender"],
-    ["reflect", reflect, "reflect", "defender"],
-  ] as const)(
+  it.each(derivedDamageCases)(
     "%s converts matching damage without statTypes",
     (type, handler, field, targetId) => {
-      const damage = makeDamageEffect({ elements: ["Fire"] });
-      const effect = makeEffect(type, { power: 20, elements: ["Fire"] }, { targetId });
-      const consequence: Consequence = {
-        userId: "attacker",
-        targetId: "defender",
-        damage: 100,
-      };
-      handler(
-        effect,
-        [damage, effect],
-        new Map([[damage.id, consequence]]),
-        makeBattleUser(targetId),
-      );
-      expect(consequence[field]).toBe(20);
+      expect(convertedDamage(type, handler, field, targetId, "Fire")).toBe(20);
     },
   );
 

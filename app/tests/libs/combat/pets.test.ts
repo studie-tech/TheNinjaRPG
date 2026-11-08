@@ -8,6 +8,7 @@ import { applyEffects } from "@/libs/combat/process";
 import { hasLiveSummon, isClone, spliceOrphanedSummons } from "@/libs/combat/summon";
 import { applyPoolAdjustmentsToBase, getBattleGrid, resolveDamageCreditUser } from "@/libs/combat/util";
 import { getTurnControl } from "@/libs/combat/turn";
+import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
 import { makeBasicAttack, makeBattleUser, makeBattleUserItem, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
@@ -54,6 +55,26 @@ const add = (battle: ReturnType<typeof scenario>, pets = [petFixture()]) =>
   addPetsToBattle({ ...battle, pets });
 
 describe("owned pets in combat", () => {
+  /**
+   * Neither a stale equipped copy of `jutsuId` nor one injected by an effect becomes an
+   * action for `actor`, and the injected copy is still recorded on the actor's loadout.
+   */
+  const expectStaleAndInjectedUnavailable = (
+    battle: CompleteBattle,
+    actor: BattleUserState,
+    jutsuId: string,
+  ) => {
+    actor.jutsus = [{ id: "stale", jutsuId, level: 1, experience: 0,
+      equipped: true, lastUsedRound: -1, originalCooldown: 1, reskinId: null, origin: "user" }];
+    expect(availableUserActions(battle, actor.userId).some((action) => action.id === jutsuId)).toBe(false);
+    actor.jutsus = [];
+    battle.usersEffects = [makeEffect("injectjutsus", InjectJutsusTag.parse({ jutsuIds: [jutsuId] }), {
+      creatorId: actor.userId, targetId: actor.userId, createdRound: battle.round, rounds: 10,
+    })];
+    expect(availableUserActions(battle, actor.userId).some((action) => action.id === jutsuId)).toBe(false);
+    expect(actor.jutsus).toMatchObject([{ jutsuId, origin: "injected" }]);
+  };
+
   let previousBattleEnabled = PET_BATTLE_CONFIG.enabled;
   beforeEach(() => {
     previousBattleEnabled = PET_BATTLE_CONFIG.enabled;
@@ -209,15 +230,7 @@ describe("owned pets in combat", () => {
     ]) {
       const actor = battle.usersState[0]!;
       Object.assign(actor, patch);
-      actor.jutsus = [{ id: "stale", jutsuId: jutsu.id, level: 1, experience: 0,
-        equipped: true, lastUsedRound: -1, originalCooldown: 1, reskinId: null, origin: "user" }];
-      expect(availableUserActions(battle, actor.userId).some((action) => action.id === jutsu.id)).toBe(false);
-      actor.jutsus = [];
-      battle.usersEffects = [makeEffect("injectjutsus", InjectJutsusTag.parse({ jutsuIds: [jutsu.id] }), {
-        creatorId: actor.userId, targetId: actor.userId, createdRound: battle.round, rounds: 10,
-      })];
-      expect(availableUserActions(battle, actor.userId).some((action) => action.id === jutsu.id)).toBe(false);
-      expect(actor.jutsus).toMatchObject([{ jutsuId: jutsu.id, origin: "injected" }]);
+      expectStaleAndInjectedUnavailable(battle, actor, jutsu.id);
     }
   });
 
@@ -246,15 +259,7 @@ describe("owned pets in combat", () => {
     const actor = battle.usersState.find((user) => user.petId)!;
     const jutsu = petJutsuFixture({ jutsuType: "NORMAL" });
     battle.extraState.jutsus[jutsu.id] = jutsu;
-    actor.jutsus = [{ id: "stale", jutsuId: jutsu.id, level: 1, experience: 0,
-      equipped: true, lastUsedRound: -1, originalCooldown: 1, reskinId: null, origin: "user" }];
-    expect(availableUserActions(battle, actor.userId).some((action) => action.id === jutsu.id)).toBe(false);
-    actor.jutsus = [];
-    battle.usersEffects = [makeEffect("injectjutsus", InjectJutsusTag.parse({ jutsuIds: [jutsu.id] }), {
-      creatorId: actor.userId, targetId: actor.userId, createdRound: battle.round, rounds: 10,
-    })];
-    expect(availableUserActions(battle, actor.userId).some((action) => action.id === jutsu.id)).toBe(false);
-    expect(actor.jutsus).toMatchObject([{ jutsuId: jutsu.id, origin: "injected" }]);
+    expectStaleAndInjectedUnavailable(battle, actor, jutsu.id);
   });
 
   it("casts its selected self shield through a saved highest-power AI rule", () => {

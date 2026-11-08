@@ -55,10 +55,6 @@ const makeTransferEffect = (
     },
   );
 
-// A transfer candidate for the selectTransferEffects unit tests (ids irrelevant).
-const cand = makeTransferEffect;
-// A positive effect ON the opponent (copy source).
-const oppBuff = makeTransferEffect;
 // A negative effect ON self (mirror source).
 const selfDebuff = (
   type: string,
@@ -155,19 +151,19 @@ describe("copy/mirror priority constants", () => {
 
 describe("selectTransferEffects", () => {
   it("returns [] when cap <= 0", () => {
-    expect(selectTransferEffects([cand("shield", 10)], testRank, 0)).toEqual([]);
+    expect(selectTransferEffects([makeTransferEffect("shield", 10)], testRank, 0)).toEqual([]);
   });
 
   it("keeps repeated types ordered by strength", () => {
     const result = selectTransferEffects(
-      [cand("shield", 10), cand("shield", 40), cand("shield", 25)], testRank, 4,
+      [makeTransferEffect("shield", 10), makeTransferEffect("shield", 40), makeTransferEffect("shield", 25)], testRank, 4,
     );
     expect(result.map((e) => e.power)).toEqual([40, 25, 10]);
   });
 
   it("orders equal-power instances deterministically regardless of input order", () => {
-    const low = cand("shield", 30, { id: "aaa" });
-    const high = cand("shield", 30, { id: "bbb" });
+    const low = makeTransferEffect("shield", 30, { id: "aaa" });
+    const high = makeTransferEffect("shield", 30, { id: "bbb" });
     for (const candidates of [[low, high], [high, low]]) {
       expect(selectTransferEffects(candidates, testRank, 4).map((e) => e.id)).toEqual(["aaa", "bbb"]);
     }
@@ -176,10 +172,10 @@ describe("selectTransferEffects", () => {
   it("orders by rank then power and applies the cap", () => {
     const result = selectTransferEffects(
       [
-        cand("shield", 90), // rank 2
-        cand("lifesteal", 10), // rank 1
-        cand("increasedamagegiven", 20), // rank 0
-        cand("increaseheal", 99), // tail
+        makeTransferEffect("shield", 90), // rank 2
+        makeTransferEffect("lifesteal", 10), // rank 1
+        makeTransferEffect("increasedamagegiven", 20), // rank 0
+        makeTransferEffect("increaseheal", 99), // tail
       ],
       testRank,
       3,
@@ -192,8 +188,8 @@ describe("selectTransferEffects", () => {
   });
 
   it("tie-breaks equal rank+power deterministically by id", () => {
-    const a = cand("increaseheal", 30, { id: "aaa" });
-    const b = cand("increasestat", 30, { id: "bbb" });
+    const a = makeTransferEffect("increaseheal", 30, { id: "aaa" });
+    const b = makeTransferEffect("increasestat", 30, { id: "bbb" });
     // both tail rank, equal power -> id ascending
     const result = selectTransferEffects([b, a], testRank, 2);
     expect(result.map((e) => e.id)).toEqual(["aaa", "bbb"]);
@@ -202,9 +198,9 @@ describe("selectTransferEffects", () => {
   it("allows the strongest same-type instances to consume multiple slots", () => {
     const result = selectTransferEffects(
       [
-        cand("increasedamagegiven", 50), // rank 0, strongest of its type
-        cand("increasedamagegiven", 45), // rank 0, second strongest instance
-        cand("lifesteal", 10), // rank 1
+        makeTransferEffect("increasedamagegiven", 50), // rank 0, strongest of its type
+        makeTransferEffect("increasedamagegiven", 45), // rank 0, second strongest instance
+        makeTransferEffect("lifesteal", 10), // rank 1
       ],
       testRank,
       2,
@@ -216,17 +212,17 @@ describe("selectTransferEffects", () => {
   it("ranks negated decrease-type effects by magnitude, not signed value", () => {
     // The damage-modifier pass mutates decrease* powers to -|power| in place, and
     // those objects persist in the battle state. |−40| must beat +5 within tier 0.
-    const boost = cand("increasedamagegiven", 5, { id: "boost" });
-    const reduction = cand("decreasedamagetaken", 40, { id: "reduction" });
+    const boost = makeTransferEffect("increasedamagegiven", 5, { id: "boost" });
+    const reduction = makeTransferEffect("decreasedamagetaken", 40, { id: "reduction" });
     reduction.power = -40;
     const result = selectTransferEffects([boost, reduction], COPY_PRIORITY_RANK, 1);
     expect(result.map((e) => e.id)).toEqual(["reduction"]);
   });
 
   it("orders negated same-type effects by magnitude", () => {
-    const weak = cand("decreasedamagetaken", 5, { id: "weak" });
+    const weak = makeTransferEffect("decreasedamagetaken", 5, { id: "weak" });
     weak.power = -5;
-    const strong = cand("decreasedamagetaken", 40, { id: "strong" });
+    const strong = makeTransferEffect("decreasedamagetaken", 40, { id: "strong" });
     strong.power = -40;
     const result = selectTransferEffects([weak, strong], COPY_PRIORITY_RANK, 4);
     expect(result.map((e) => e.id)).toEqual(["strong", "weak"]);
@@ -244,12 +240,12 @@ describe("copy tag: ceiling + priority", () => {
     "copies at most 4, keeping absorb ahead of a %i HP shield",
     (shieldPower) => {
       const effects: UserEffect[] = [
-        oppBuff("increasedamagegiven", 40),
-        oppBuff("decreasedamagetaken", 30),
-        oppBuff("lifesteal", 20),
-        oppBuff("absorb", 50),
-        oppBuff("shield", shieldPower),
-        oppBuff("increaseheal", 80),
+        makeTransferEffect("increasedamagegiven", 40),
+        makeTransferEffect("decreasedamagetaken", 30),
+        makeTransferEffect("lifesteal", 20),
+        makeTransferEffect("absorb", 50),
+        makeTransferEffect("shield", shieldPower),
+        makeTransferEffect("increaseheal", 80),
       ];
       const before = effects.length;
       copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
@@ -267,13 +263,13 @@ describe("copy tag: ceiling + priority", () => {
 
   it("keeps multiple high-HP shields from displacing absorb and reflect", () => {
     const effects: UserEffect[] = [
-      oppBuff("shield", 100_000),
-      oppBuff("shield", 90_000),
-      oppBuff("shield", 80_000),
-      oppBuff("increasedamagegiven", 40),
-      oppBuff("lifesteal", 20),
-      oppBuff("absorb", 50),
-      oppBuff("reflect", 40),
+      makeTransferEffect("shield", 100_000),
+      makeTransferEffect("shield", 90_000),
+      makeTransferEffect("shield", 80_000),
+      makeTransferEffect("increasedamagegiven", 40),
+      makeTransferEffect("lifesteal", 20),
+      makeTransferEffect("absorb", 50),
+      makeTransferEffect("reflect", 40),
     ];
     copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
     const copied = effects.filter((e) => e.fromEffectId);
@@ -288,12 +284,12 @@ describe("copy tag: ceiling + priority", () => {
   it("respects the persistent ceiling across casts (already at 4 -> copies nothing)", () => {
     const effects: UserEffect[] = [
       // 4 effects already copied onto SELF
-      oppBuff("increasedamagegiven", 40, { id: "c1", targetId: SELF, creatorId: SELF, fromEffectId: "src1" }),
-      oppBuff("decreasedamagetaken", 30, { id: "c2", targetId: SELF, creatorId: SELF, fromEffectId: "src2" }),
-      oppBuff("lifesteal", 20, { id: "c3", targetId: SELF, creatorId: SELF, fromEffectId: "src3" }),
-      oppBuff("absorb", 50, { id: "c4", targetId: SELF, creatorId: SELF, fromEffectId: "src4" }),
+      makeTransferEffect("increasedamagegiven", 40, { id: "c1", targetId: SELF, creatorId: SELF, fromEffectId: "src1" }),
+      makeTransferEffect("decreasedamagetaken", 30, { id: "c2", targetId: SELF, creatorId: SELF, fromEffectId: "src2" }),
+      makeTransferEffect("lifesteal", 20, { id: "c3", targetId: SELF, creatorId: SELF, fromEffectId: "src3" }),
+      makeTransferEffect("absorb", 50, { id: "c4", targetId: SELF, creatorId: SELF, fromEffectId: "src4" }),
       // a fresh copyable buff on the opponent
-      oppBuff("shield", 90),
+      makeTransferEffect("shield", 90),
     ];
     const before = effects.length;
     copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
@@ -305,11 +301,11 @@ describe("copy tag: ceiling + priority", () => {
     // Without the creatorId scope in the budget filter these would exhaust the
     // ceiling and block the cast; with it, the copy must still succeed.
     const effects: UserEffect[] = [
-      oppBuff("increasedamagegiven", 40, { id: "o1", targetId: SELF, creatorId: OPP, fromEffectId: "s1" }),
-      oppBuff("decreasedamagetaken", 30, { id: "o2", targetId: SELF, creatorId: OPP, fromEffectId: "s2" }),
-      oppBuff("lifesteal", 20, { id: "o3", targetId: SELF, creatorId: OPP, fromEffectId: "s3" }),
-      oppBuff("absorb", 50, { id: "o4", targetId: SELF, creatorId: OPP, fromEffectId: "s4" }),
-      oppBuff("shield", 90), // fresh copyable buff on the opponent
+      makeTransferEffect("increasedamagegiven", 40, { id: "o1", targetId: SELF, creatorId: OPP, fromEffectId: "s1" }),
+      makeTransferEffect("decreasedamagetaken", 30, { id: "o2", targetId: SELF, creatorId: OPP, fromEffectId: "s2" }),
+      makeTransferEffect("lifesteal", 20, { id: "o3", targetId: SELF, creatorId: OPP, fromEffectId: "s3" }),
+      makeTransferEffect("absorb", 50, { id: "o4", targetId: SELF, creatorId: OPP, fromEffectId: "s4" }),
+      makeTransferEffect("shield", 90), // fresh copyable buff on the opponent
     ];
     copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
     const copied = effects.filter(
@@ -323,11 +319,11 @@ describe("copy tag: ceiling + priority", () => {
     // identity checks (targetId/creatorId = SELF). Only the isCopyableEffect
     // scope in the budget filter keeps them from exhausting the ceiling.
     const effects: UserEffect[] = [
-      oppBuff("increasedamagetaken", 40, { id: "n1", targetId: SELF, creatorId: SELF, fromEffectId: "s1" }),
-      oppBuff("poison", 30, { id: "n2", targetId: SELF, creatorId: SELF, fromEffectId: "s2" }),
-      oppBuff("wound", 20, { id: "n3", targetId: SELF, creatorId: SELF, fromEffectId: "s3" }),
-      oppBuff("afterburn", 50, { id: "n4", targetId: SELF, creatorId: SELF, fromEffectId: "s4" }),
-      oppBuff("shield", 90), // fresh copyable buff on the opponent
+      makeTransferEffect("increasedamagetaken", 40, { id: "n1", targetId: SELF, creatorId: SELF, fromEffectId: "s1" }),
+      makeTransferEffect("poison", 30, { id: "n2", targetId: SELF, creatorId: SELF, fromEffectId: "s2" }),
+      makeTransferEffect("wound", 20, { id: "n3", targetId: SELF, creatorId: SELF, fromEffectId: "s3" }),
+      makeTransferEffect("afterburn", 50, { id: "n4", targetId: SELF, creatorId: SELF, fromEffectId: "s4" }),
+      makeTransferEffect("shield", 90), // fresh copyable buff on the opponent
     ];
     copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
     const copied = effects.filter(
@@ -339,8 +335,8 @@ describe("copy tag: ceiling + priority", () => {
 
   it("skips buffs from excluded passive sources (bloodline, ranked)", () => {
     const effects: UserEffect[] = [
-      oppBuff("increasedamagegiven", 40, { fromType: "bloodline" }),
-      oppBuff("decreasedamagetaken", 30, { fromType: "ranked" }),
+      makeTransferEffect("increasedamagegiven", 40, { fromType: "bloodline" }),
+      makeTransferEffect("decreasedamagetaken", 30, { fromType: "ranked" }),
     ];
     const before = effects.length;
     const res = copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
@@ -350,7 +346,7 @@ describe("copy tag: ceiling + priority", () => {
 
   it("skips ground-derived buffs (their clones cannot outlive the tile pass)", () => {
     const effects: UserEffect[] = [
-      oppBuff("increasedamagegiven", 40, { fromGround: true }),
+      makeTransferEffect("increasedamagegiven", 40, { fromGround: true }),
     ];
     const before = effects.length;
     const res = copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
@@ -359,7 +355,7 @@ describe("copy tag: ceiling + priority", () => {
   });
 
   it("skips depleted effects (a fully absorbed shield must not burn a slot)", () => {
-    const depleted = oppBuff("shield", 10);
+    const depleted = makeTransferEffect("shield", 10);
     depleted.power = 0; // shield absorbed to zero; rounds still > 0
     const effects: UserEffect[] = [depleted];
     const before = effects.length;
@@ -370,8 +366,8 @@ describe("copy tag: ceiling + priority", () => {
 
   it("skips the exact source already actively copied", () => {
     const effects: UserEffect[] = [
-      oppBuff("lifesteal", 20, { id: "held", targetId: SELF, creatorId: SELF, fromEffectId: "srcL" }),
-      oppBuff("lifesteal", 99, { id: "srcL" }),
+      makeTransferEffect("lifesteal", 20, { id: "held", targetId: SELF, creatorId: SELF, fromEffectId: "srcL" }),
+      makeTransferEffect("lifesteal", 99, { id: "srcL" }),
     ];
     const before = effects.length;
     copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
@@ -381,7 +377,7 @@ describe("copy tag: ceiling + priority", () => {
   it("reports a no-op when the caster targets itself (self-copy)", () => {
     const effects: UserEffect[] = [
       // A copyable buff sitting on SELF; a self-cast must not clone it.
-      oppBuff("increasedamagegiven", 40, { targetId: SELF, creatorId: SELF }),
+      makeTransferEffect("increasedamagegiven", 40, { targetId: SELF, creatorId: SELF }),
     ];
     const before = effects.length;
     const res = copy(copyTag(), effects, asUser(SELF, "Self"), asUser(SELF, "Self"));
@@ -545,7 +541,7 @@ describe("transfer instances across casts", () => {
 
   it.each(["copy", "mirror"] as ("copy" | "mirror")[])("%s transfers four strongest instances and refills expired slots", (type) => {
     const transfer = type === "copy" ? copy : mirror;
-    const source = type === "copy" ? oppBuff : selfDebuff;
+    const source = type === "copy" ? makeTransferEffect : selfDebuff;
     const tagType = type === "copy" ? "increasedamagegiven" : "increasedamagetaken";
     const landingId = type === "copy" ? SELF : OPP;
     const sources = [10, 50, 20, 40, 30].map((power) => source(tagType, power));
@@ -566,7 +562,7 @@ describe("transfer instances across casts", () => {
   });
 
   it.each(["copy", "mirror"] as ("copy" | "mirror")[])("%s fills remaining slots with new sources of a held type", (type) => {
-    const source = type === "copy" ? oppBuff : selfDebuff;
+    const source = type === "copy" ? makeTransferEffect : selfDebuff;
     const tagType = type === "copy" ? "increasedamagegiven" : "increasedamagetaken";
     const effects = [source(tagType, 10), source(tagType, 20)];
     const transfer = type === "copy" ? copy : mirror;

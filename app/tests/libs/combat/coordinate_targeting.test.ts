@@ -557,21 +557,19 @@ describe("coordinate casts and preview", () => {
         staminaCostReducePerLvl: 0,
       } as unknown as Item,
     };
-    expect(
-      userJutsuToAction(
-        { id: "owned", jutsuId: "pattern", level: 1, originalCooldown: 0 } as never,
-        battle,
-      ).coordinateTargeting,
-    ).toEqual(ability.coordinateTargeting ?? null);
-    expect(userJutsuToAction({ id: "owned", jutsuId: "pattern", level: 1, originalCooldown: 0 } as never, battle).methodSize).toEqual(ability.methodSize ?? null);
-    expect(userItemToAction({ id: "owned", itemId: "pattern", originalCooldown: 0 } as never, actor, battle).methodSize).toEqual(ability.methodSize ?? null);
-    expect(
-      userItemToAction(
-        { id: "owned", itemId: "pattern", originalCooldown: 0 } as never,
-        actor,
-        battle,
-      ).coordinateTargeting,
-    ).toEqual(ability.coordinateTargeting ?? null);
+    const jutsuAction = userJutsuToAction(
+      { id: "owned", jutsuId: "pattern", level: 1, originalCooldown: 0 } as never,
+      battle,
+    );
+    const itemAction = userItemToAction(
+      { id: "owned", itemId: "pattern", originalCooldown: 0 } as never,
+      actor,
+      battle,
+    );
+    expect(jutsuAction.coordinateTargeting).toEqual(ability.coordinateTargeting ?? null);
+    expect(jutsuAction.methodSize).toEqual(ability.methodSize ?? null);
+    expect(itemAction.methodSize).toEqual(ability.methodSize ?? null);
+    expect(itemAction.coordinateTargeting).toEqual(ability.coordinateTargeting ?? null);
   });
 });
 
@@ -649,9 +647,8 @@ describe("coordinate validation", () => {
     expect(
       effects.safeParse([DamageTag.parse({ target: "COORDINATES" })]).success,
     ).toBe(false);
-    const moveEffects = JutsuValidatorRawSchema.shape.effects;
     expect(
-      moveEffects.safeParse([
+      effects.safeParse([
         MoveTag.parse({ target: "COORDINATES", coordinateTargeting: pattern() }),
       ]).success,
     ).toBe(false);
