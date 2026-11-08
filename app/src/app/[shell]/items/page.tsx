@@ -92,13 +92,6 @@ export default function MyItems() {
           setIsBuyItemSlotOpen(false);
         }
       },
-      onError: (error) => {
-        showMutationToast({
-          success: false,
-          message: error.message,
-          variant: "destructive",
-        });
-      },
       onSettled: () => {
         buyItemSlotInFlight.current = false;
       },

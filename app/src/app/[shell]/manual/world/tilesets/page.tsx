@@ -39,9 +39,6 @@ export default function MapTilesets() {
         router.push(`/manual/world/tilesets/edit/${data.message}`);
       }
     },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
-    },
     onSettled: () => createFlight.release(),
   });
 
@@ -55,9 +52,6 @@ export default function MapTilesets() {
     onSuccess: async (data) => {
       showMutationToast(data);
       await refetch();
-    },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
     },
     onSettled: (_data, _error, variables) => assetDeletions.end(variables.id),
   });
@@ -192,9 +186,6 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         router.push(`/manual/world/tilesets/terrain/edit/${data.message}`);
       }
     },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
-    },
     onSettled: () => createFlight.release(),
   });
 
@@ -207,9 +198,6 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       await refetch();
-    },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
     },
     onSettled: (_data, _error, variables) => terrainDeletions.end(variables.id),
   });

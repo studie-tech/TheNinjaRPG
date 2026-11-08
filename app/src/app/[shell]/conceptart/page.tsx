@@ -138,9 +138,6 @@ export default function ConceptArt() {
           ]);
         }
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
     });
 
   // Create a new video
@@ -165,9 +162,6 @@ export default function ConceptArt() {
             updateUser(undefined, { revision, delta: result.userDelta }),
           ]);
         }
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
       },
     });
 
