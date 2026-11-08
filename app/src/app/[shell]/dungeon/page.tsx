@@ -118,11 +118,13 @@ export default function DungeonPage() {
   }, [battleId, router]);
   const pending = create.isPending || act.isPending || claim.isPending;
   /** Send a party command; the shared mutation callbacks display failures and refresh run state. */
-  const action = (
+  const sendPartyAction = (
     id: string,
-    action: Parameters<typeof act.mutate>[0]["action"],
+    command: Parameters<typeof act.mutate>[0]["action"],
     userId?: string,
-  ) => act.mutate({ id, action, userId });
+  ) => act.mutate({ id, action: command, userId });
+  const usernameOf = (userId: string) =>
+    state.data?.users.find((u) => u.userId === userId)?.username;
   if (state.error)
     return (
       <ContentBox title="Dungeon Pyramids" defaultBackHref="/travel">
@@ -140,6 +142,7 @@ export default function DungeonPage() {
   const claimed = completed.filter((run) => receiptFor(run.id));
   const readyCount = current?.state.readyIds.length ?? 0;
   const isReady = current?.state.readyIds.includes(user.userId) ?? false;
+  const canReady = !!current && ["LOBBY", "BETWEEN"].includes(current.status);
   const allReady =
     current?.state.memberIds.length ===
       (current?.state.pets ? 1 : DUNGEON_PARTY_SIZE) &&
@@ -210,17 +213,19 @@ export default function DungeonPage() {
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{run.content.name}</p>
                 <p className="text-muted-foreground text-sm">
-                  Invitation from{" "}
-                  {state.data?.users.find((u) => u.userId === run.leaderId)?.username}
+                  Invitation from {usernameOf(run.leaderId)}
                 </p>
               </div>
-              <Button disabled={pending} onClick={() => action(run.id, "accept")}>
+              <Button
+                disabled={pending}
+                onClick={() => sendPartyAction(run.id, "accept")}
+              >
                 Accept invitation
               </Button>
               <Button
                 variant="ghost"
                 disabled={pending}
-                onClick={() => action(run.id, "decline")}
+                onClick={() => sendPartyAction(run.id, "decline")}
               >
                 Decline
               </Button>
@@ -284,7 +289,7 @@ export default function DungeonPage() {
                       disabled={pending}
                       onClick={() => {
                         setIsOptionsOpen(false);
-                        action(current.id, "pause");
+                        sendPartyAction(current.id, "pause");
                       }}
                     >
                       <Pause className="mr-2 h-4 w-4" />
@@ -339,8 +344,7 @@ export default function DungeonPage() {
               capacity={current.state.pets ? 1 : DUNGEON_PARTY_SIZE}
               members={current.state.memberIds.map((id) => ({
                 userId: id,
-                username:
-                  state.data?.users.find((u) => u.userId === id)?.username ?? id,
+                username: usernameOf(id) ?? id,
                 isReady: current.state.readyIds.includes(id),
                 details: current.state.readyIds.includes(id) ? "Ready" : "Not ready",
               }))}
@@ -349,7 +353,7 @@ export default function DungeonPage() {
               disabled={pending}
               onRemove={
                 current.status === "LOBBY"
-                  ? (id) => action(current.id, "remove", id)
+                  ? (id) => sendPartyAction(current.id, "remove", id)
                   : undefined
               }
             />
@@ -382,13 +386,13 @@ export default function DungeonPage() {
                     key={id}
                     className="inline-flex items-center gap-1 rounded-md border border-dashed px-2 py-1 text-muted-foreground"
                   >
-                    {state.data?.users.find((u) => u.userId === id)?.username} · Invited
+                    {usernameOf(id)} · Invited
                     {current.leaderId === user.userId && current.status === "LOBBY" && (
                       <Button
                         size="sm"
                         variant="ghost"
                         disabled={pending}
-                        onClick={() => action(current.id, "remove", id)}
+                        onClick={() => sendPartyAction(current.id, "remove", id)}
                       >
                         Cancel invitation
                       </Button>
@@ -414,7 +418,7 @@ export default function DungeonPage() {
                     disabled={pending || !selected[0]}
                     onClick={() => {
                       const target = selected[0];
-                      if (target) action(current.id, "invite", target.userId);
+                      if (target) sendPartyAction(current.id, "invite", target.userId);
                     }}
                   >
                     Invite
@@ -429,30 +433,31 @@ export default function DungeonPage() {
                   : `${readyCount}/${current.state.pets ? 1 : DUNGEON_PARTY_SIZE} ready`}
               </span>
               <div className="flex gap-2">
-                {["LOBBY", "BETWEEN"].includes(current.status) && (
+                {canReady && (
                   <Button
                     variant={isReady ? "secondary" : "default"}
                     disabled={pending}
-                    onClick={() => action(current.id, isReady ? "unready" : "ready")}
+                    onClick={() =>
+                      sendPartyAction(current.id, isReady ? "unready" : "ready")
+                    }
                   >
                     {isReady ? "Undo ready" : "Ready"}
                   </Button>
                 )}
-                {current.leaderId === user.userId &&
-                  ["LOBBY", "BETWEEN"].includes(current.status) && (
-                    <Button
-                      variant={allReady ? "default" : "secondary"}
-                      disabled={pending || !allReady}
-                      onClick={() => action(current.id, "start")}
-                    >
-                      <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Enter next floor
-                    </Button>
-                  )}
+                {current.leaderId === user.userId && canReady && (
+                  <Button
+                    variant={allReady ? "default" : "secondary"}
+                    disabled={pending || !allReady}
+                    onClick={() => sendPartyAction(current.id, "start")}
+                  >
+                    <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Enter next floor
+                  </Button>
+                )}
                 {current.leaderId === user.userId && current.status === "PAUSED" && (
                   <Button
                     disabled={pending}
-                    onClick={() => action(current.id, "resume")}
+                    onClick={() => sendPartyAction(current.id, "resume")}
                   >
                     Resume and ready up
                   </Button>
@@ -660,7 +665,7 @@ export default function DungeonPage() {
         isLoading={pending}
         keepOpenOnAccept
         onAccept={() => {
-          if (abandonId) action(abandonId, "leave");
+          if (abandonId) sendPartyAction(abandonId, "leave");
         }}
       >
         <p>
