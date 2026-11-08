@@ -127,7 +127,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
     await (await getTestDatabase()).insert(jutsuEquipLimit).values(equipLimitFixture);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
-          battle,
+      battle,
       aiProfile,
       userJutsu,
       jutsuReskin,
@@ -140,7 +140,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
       userTitle,
       title,
       userData,
-        );
+    );
   });
   afterEach(() => vi.restoreAllMocks());
 
