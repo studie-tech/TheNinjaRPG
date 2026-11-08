@@ -8,6 +8,7 @@ import {
   MAX_EXPERIENCE_LEVEL,
   MAX_PLAYER_LEVEL,
   CombatStatNames,
+  type UserStatName,
   UserStatNames,
   WAR_MISSIONS_PER_DAY,
   getUserCaps,
@@ -358,7 +359,7 @@ const occupationTracker = (
 
 const trainableUser = () => {
   const stats = Object.fromEntries(UserStatNames.map((stat) => [stat, 0])) as Record<
-    (typeof UserStatNames)[number],
+    UserStatName,
     number
   >;
   return {

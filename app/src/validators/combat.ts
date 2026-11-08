@@ -1,7 +1,9 @@
 import { z } from "zod";
 import {
   AdjustableBasicActions,
+  type AttackMethod,
   AttackMethods,
+  type AttackTarget,
   AttackTargets,
   type BasicElement,
   BattleUsageTypes,
@@ -1385,8 +1387,8 @@ export const getTagSchema = (type: ZodAllTags["type"]) => {
  * Refiner object, which is used to refine the data in the battle object
  */
 interface ContentBaseValidatorType {
-  target: (typeof AttackTargets)[number];
-  method: (typeof AttackMethods)[number];
+  target: AttackTarget;
+  method: AttackMethod;
   range?: number;
   coordinateTargeting?: CoordinateTargeting | null;
   methodSize?: MethodSize | null;

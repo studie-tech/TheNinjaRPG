@@ -10,12 +10,14 @@ import {
   type ItemSlot,
   ItemSlots,
   ItemSlotTypes,
+  type ItemType,
   ItemTypes,
   MATERIALS_BASE_SLOTS,
 } from "@/drizzle/constants";
 import type {
   Item,
   ItemLoadout,
+  ItemSlotType,
   UserData,
   UserItemWithItem,
   UserItemWithRelations,
@@ -559,21 +561,21 @@ export const findFreeEquipSlot = (
  */
 export const readItemListFilterSlot = (
   slot: string | undefined,
-  itemType: (typeof ItemTypes)[number] | undefined,
+  itemType: ItemType | undefined,
 ): {
-  slot?: (typeof ItemSlotTypes)[number];
-  itemType?: (typeof ItemTypes)[number];
+  slot?: ItemSlotType;
+  itemType?: ItemType;
 } => {
   const slotName = slot?.split("_")[0];
   const catalogSlot = (ItemSlotTypes as readonly string[]).includes(slotName ?? "")
-    ? (slotName as (typeof ItemSlotTypes)[number])
+    ? (slotName as ItemSlotType)
     : undefined;
   return {
     slot: catalogSlot,
     itemType:
       itemType ??
       (slotName && !catalogSlot && (ItemTypes as readonly string[]).includes(slotName)
-        ? (slotName as (typeof ItemTypes)[number])
+        ? (slotName as ItemType)
         : undefined),
   };
 };

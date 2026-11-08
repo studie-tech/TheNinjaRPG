@@ -8,6 +8,7 @@ import {
   QUEST_REWARD_MODES,
   QUEST_REWARD_PICK_MAX,
   STARTER_VILLAGES,
+  type StarterVillage,
   UserRanks,
 } from "@/drizzle/constants";
 import { idsWithNumberField } from "@/validators/base";
@@ -19,7 +20,7 @@ import { idsWithNumberField } from "@/validators/base";
 const LEGACY_STARTER_VILLAGE_KEYS = ["SHINE", "GLACIER", "SHROUD", "CURRENT"] as const;
 const LEGACY_STARTER_VILLAGE_MAP: Record<
   (typeof LEGACY_STARTER_VILLAGE_KEYS)[number],
-  (typeof STARTER_VILLAGES)[number]
+  StarterVillage
 > = {
   SHINE: "SHIROHANA",
   GLACIER: "HYORIN",

@@ -1,6 +1,6 @@
 import type { Grid } from "honeycomb-grid";
 import { nanoid } from "nanoid";
-import type { AttackTargets, ElementName, UserRank } from "@/drizzle/constants";
+import type { AttackTarget, ElementName, UserRank } from "@/drizzle/constants";
 import {
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
@@ -1322,7 +1322,7 @@ const replacePronouns = (text: string, prefix: string, gender: string | undefine
  */
 export const getTargetUser = (
   users: BattleUserState[],
-  target: (typeof AttackTargets)[number],
+  target: AttackTarget,
   tile: TerrainHex,
   userId: string,
 ) => {

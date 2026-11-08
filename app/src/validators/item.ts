@@ -10,6 +10,7 @@ import {
   MAX_ITEM_SHOP_PURCHASE_QUANTITY,
   MAX_ITEM_VARIANTS,
   VARIANT_COST_TYPES,
+  type VariantCostType,
 } from "@/drizzle/constants";
 import { furnitureVariantDataSchema } from "@/validators/itemFurniture";
 import { lpcItemFields } from "@/validators/lpc";
@@ -74,7 +75,7 @@ export const ItemVariantValidator = z.object({
 });
 export type ZodItemVariantType = z.infer<typeof ItemVariantValidator>;
 
-const COST_TYPE_LABELS: Record<(typeof VARIANT_COST_TYPES)[number], string> = {
+const COST_TYPE_LABELS: Record<VariantCostType, string> = {
   MONEY: "Ryo",
   REPUTATION: "Reputation",
   SEICHI_SILVER: "Seichi Silver",
@@ -83,5 +84,5 @@ const COST_TYPE_LABELS: Record<(typeof VARIANT_COST_TYPES)[number], string> = {
 };
 
 /** Returns the human-readable label for a variant cost type. */
-export const displayCostType = (type: (typeof VARIANT_COST_TYPES)[number]): string =>
+export const displayCostType = (type: VariantCostType): string =>
   COST_TYPE_LABELS[type];
