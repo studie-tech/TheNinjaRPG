@@ -1018,10 +1018,12 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
       user.username === CREATOR_USERNAME ||
       !RANKS_RESTRICTED_FROM_PVP.includes(user.rank)
     )
-      parts.push(part(tile, "attack", IMG_SECTOR_ATTACK, 0.8, ...at.attack));
+      parts.push(
+        part(tile, "attack", IMG_SECTOR_ATTACK, 0.8, at.attack[0], at.attack[1]),
+      );
     parts.push(
-      part(tile, "heal", IMG_ICON_HEAL, 0.7, ...at.heal),
-      part(tile, "info", IMG_SECTOR_INFO, 0.7, ...at.info),
+      part(tile, "heal", IMG_ICON_HEAL, 0.7, at.heal[0], at.heal[1]),
+      part(tile, "info", IMG_SECTOR_INFO, 0.7, at.info[0], at.info[1]),
     );
   }
   return parts;

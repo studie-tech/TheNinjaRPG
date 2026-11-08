@@ -34,7 +34,7 @@ describe("travel actor snapshots", () => {
     expect(portrait).toEqual({ attack: [0.9, 1.4], heal: [1, 0.5], info: [0.1, 1.4] });
     expect(sprite).toEqual({ attack: [0.79, 1.2], heal: [0.8, 0.5], info: [0.22, 1.2] });
     for (const kind of ["attack", "heal", "info"] as const)
-      expect(Math.abs(sprite[kind]![0] - 0.5)).toBeLessThan(Math.abs(portrait[kind]![0] - 0.5));
+      expect(Math.abs(sprite[kind]![0]! - 0.5)).toBeLessThan(Math.abs(portrait[kind]![0]! - 0.5));
   });
   it("preserves solo PvE battle pins and adds a second portrait when available", () => {
     const solo = recipes([player({ status: "BATTLE", battleId: "battle" })]);
