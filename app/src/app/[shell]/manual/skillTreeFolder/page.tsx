@@ -11,7 +11,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { nanoid } from "nanoid";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +23,7 @@ import type { SkillTreeFolder } from "@/drizzle/schema";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
+import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
