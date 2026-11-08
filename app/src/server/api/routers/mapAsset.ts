@@ -28,8 +28,13 @@ import {
 } from "@/server/utils/mapLocations";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
-import { createMapAssetSchema, mapAssetValidator } from "@/validators/mapAsset";
+import { mapAssetValidator } from "@/validators/mapAsset";
 import { idSchema } from "@/validators/misc";
+
+/** Omission preserves decoration defaults; structure creation uses building-sized artwork. */
+const createMapAssetSchema = z
+  .object({ category: z.enum(["prop", "structure"]) })
+  .optional();
 
 export const mapAssetRouter = createTRPCRouter({
   /** Shared decoration and structure sprites; travel refreshes artwork after content edits. */

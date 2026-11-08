@@ -258,22 +258,18 @@ import {
 } from "@/validators/combat";
 import {
   createLinkedJutsuSchema,
-  evolveJutsuSchema,
-  getEvolutionsSchema,
-  getJutsuReskinSchema,
   type JutsuFilteringSchema,
   jutsuFilteringSchema,
   jutsuReskinCreateSchema,
+  jutsuReskinUpdateSchema,
   type UserJutsuFilteringSchema,
-  updateJutsuReskinSchema,
-  updateJutsuSchema,
   userJutsuFilteringSchema,
 } from "@/validators/jutsu";
 import {
-  importJutsuLoadoutSchema,
-  previewJutsuLoadoutSchema,
+  LOADOUT_SHARE_MAX_LENGTH,
   renameLoadoutSchema,
   setLoadoutHotkeysSchema,
+  sharedIdSchema,
   sharedJutsuLoadoutTextSchema,
 } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
@@ -284,6 +280,34 @@ import {
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUpdatedUser } from "./profile";
+
+/** Defer JSON decoding to preparation so malformed text uses the normal mutation response. */
+const previewJutsuLoadoutSchema = z.object({
+  loadoutId: sharedIdSchema,
+  text: z.string().min(1).max(LOADOUT_SHARE_MAX_LENGTH),
+});
+
+/** Carry the preview fingerprint; the import endpoint recomputes recipient authorization. */
+const importJutsuLoadoutSchema = previewJutsuLoadoutSchema.extend({
+  previewToken: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+const getEvolutionsSchema = z.object({
+  jutsuId: z.string(),
+});
+
+const evolveJutsuSchema = z.object({
+  userJutsuId: z.string(),
+  evolutionJutsuId: z.string(),
+});
+
+const getJutsuReskinSchema = z.object({ reskinId: z.string() });
+
+const updateJutsuReskinSchema = getJutsuReskinSchema.extend({
+  data: jutsuReskinUpdateSchema,
+});
+
+const updateJutsuSchema = z.object({ id: z.string(), data: JutsuValidator });
 
 /** "level 3" or "levels 3-5" */
 const formatLevelRange = (from: number, to: number) =>

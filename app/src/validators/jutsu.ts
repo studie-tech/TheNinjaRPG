@@ -9,17 +9,7 @@ import {
   UserRanks,
 } from "@/drizzle/constants";
 import { reskinBaseSchema } from "@/validators/bloodline";
-import { JutsuValidator } from "@/validators/combat";
 import { statFilters } from "@/validators/statFilters";
-
-export const getEvolutionsSchema = z.object({
-  jutsuId: z.string(),
-});
-
-export const evolveJutsuSchema = z.object({
-  userJutsuId: z.string(),
-  evolutionJutsuId: z.string(),
-});
 
 /**
  * Full filtering schema for jutsu,
@@ -109,11 +99,6 @@ export const jutsuReskinUpdateSchema = jutsuReskinBaseSchema.extend({
   reason: z.string().min(10),
 });
 
-export const getJutsuReskinSchema = z.object({ reskinId: z.string() });
-export const updateJutsuReskinSchema = getJutsuReskinSchema.extend({
-  data: jutsuReskinUpdateSchema,
-});
-
 export type JutsuReskinUpdateSchema = z.infer<typeof jutsuReskinUpdateSchema>;
 
 export const createLinkedJutsuSchema = z.object({
@@ -121,5 +106,3 @@ export const createLinkedJutsuSchema = z.object({
   bloodlineReskinId: z.string().min(1),
 });
 export type CreateLinkedJutsuSchema = z.infer<typeof createLinkedJutsuSchema>;
-
-export const updateJutsuSchema = z.object({ id: z.string(), data: JutsuValidator });

@@ -73,14 +73,24 @@ import { getKageEligibility } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";
-import {
-  kageNominationSchema,
-  kageRemovalSchema,
-  kageVillageSchema,
-  kageVoteSchema,
-} from "@/validators/kage";
+import { kageVillageSchema } from "@/validators/kage";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { structureUpgradeSchema } from "@/validators/villageMission";
+
+const kageRemovalSchema = kageVillageSchema.extend({
+  reason: z.string().trim().min(10).max(1000),
+});
+
+const kageVoteSchema = z.object({
+  voteId: z.string().min(1),
+  vote: z.enum(["YES", "NO"]),
+});
+
+const kageNominationSchema = kageVillageSchema.extend({
+  // Defense-panel nominations omit this; the server finds the current vacancy's approved motion.
+  voteId: z.string().min(1).optional(),
+  userId: z.string().min(1),
+});
 
 export const kageRouter = createTRPCRouter({
   ...kageDefenseProcedures,

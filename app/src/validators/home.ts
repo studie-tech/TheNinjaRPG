@@ -11,7 +11,6 @@ import {
   HomeTypes,
 } from "@/drizzle/constants";
 import { objectKeys } from "@/utils/typeutils";
-import { baseServerResponse } from "@/validators/base";
 
 /** Placement belongs to one UserItem row, so multiple copies of the same content item remain independent. */
 export const homePlacementSchema = z.strictObject({
@@ -64,21 +63,4 @@ export const homeFurnitureSaveInputSchema = z.strictObject({
 export type HomeRoomStyle = NonNullable<
   z.infer<typeof homeFurnitureSaveInputSchema>["styles"]
 >[number];
-/** The router checks visibility or invitation membership for the requested owner. */
-export const homeVisitInputSchema = z.strictObject({
-  userId: z.string().min(1).max(191),
-});
-/** Visibility edits retain the layout revision guard; invitations use shared request identities. */
-export const homeSharingInputSchema = z.strictObject({
-  revision: z.int().nonnegative(),
-  isPublic: z.boolean(),
-});
-/** The existing request system resolves active recipients by their current username. */
-export const homeInvitationInputSchema = z.strictObject({
-  username: z.string().trim().min(1).max(191),
-});
 export const homeUpgradeInputSchema = z.object({ homeType: z.enum(HomeTypes) });
-export const homeStorageInputSchema = z.object({ userItemId: z.string() });
-export const homeSleepResponseSchema = baseServerResponse.extend({
-  newStatus: z.enum(["AWAKE", "ASLEEP"]).optional(),
-});

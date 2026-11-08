@@ -23,31 +23,6 @@ export const kageScheduleSchema = kageVillageSchema.extend({
       "Choose different days for each defense window",
     ),
 });
-export const kageMatchSchema = z.object({ id: z.string().min(1) });
-/** Omit the invitation ID for an ordinary scheduled start; include it to accept early. */
-export const kageStartSchema = kageMatchSchema.extend({
-  instantRequestId: z.string().min(1).optional(),
-});
-/** Bind dismissal to the exact invitation shown, so stale responses cannot revoke a new one. */
-export const kageInstantResponseSchema = kageMatchSchema.extend({
-  instantRequestId: z.string().min(1),
-});
-export const kageAiSchema = kageMatchSchema.extend({ consent: z.boolean() });
-export const kageJoinSchema = kageVillageSchema.extend({
-  aiRequested: z.boolean().default(false),
-});
-export const kageRemovalSchema = kageVillageSchema.extend({
-  reason: z.string().trim().min(10).max(1000),
-});
-export const kageVoteSchema = z.object({
-  voteId: z.string().min(1),
-  vote: z.enum(["YES", "NO"]),
-});
-export const kageNominationSchema = kageVillageSchema.extend({
-  // Defense-panel nominations omit this; the server finds the current vacancy's approved motion.
-  voteId: z.string().min(1).optional(),
-  userId: z.string().min(1),
-});
 export const kageBattleResponseSchema = userDeltaResponseSchema.extend({
   battleId: z.string().optional(),
 });

@@ -6,7 +6,16 @@ import type {
   ContentProposalStatus,
   ItemType,
 } from "@/drizzle/constants";
-import { CONTENT_REVIEW_SFX_SEARCH_RESULTS } from "@/drizzle/constants";
+import {
+  CONTENT_PROPOSAL_NOTE_MAX_LENGTH,
+  CONTENT_REVIEW_BULK_LIMIT,
+  CONTENT_REVIEW_SFX_SEARCH_RESULTS,
+  ContentProposalCategories,
+  ContentProposalEntityTypes,
+  ContentProposalRejectReasons,
+  ContentProposalSources,
+  ContentProposalStatuses,
+} from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { contentProposal, type gameAsset } from "@/drizzle/schema";
 import {
@@ -78,20 +87,70 @@ import type {
   JutsuValidator,
 } from "@/validators/combat";
 import {
-  type ApproveProposalInput,
-  approveProposalSchema,
-  bulkApproveSchema,
-  proposalIdSchema,
-  rejectProposalSchema,
-  reviewQueueSchema,
   reviewStatsSchema,
-  sfxImportSchema,
-  sfxSearchSchema,
   staffCreateProposalSchema,
-  unrejectProposalSchema,
 } from "@/validators/contentReview";
 import type { QuestValidator } from "@/validators/objectives";
 import type { TitleValidator } from "@/validators/title";
+
+const reviewQueueSchema = z.object({
+  status: z.enum(ContentProposalStatuses),
+  category: z.enum(ContentProposalCategories).nullish(),
+  source: z.enum(ContentProposalSources).nullish(),
+  entityType: z.enum(ContentProposalEntityTypes).nullish(),
+  /** Offset of the page's first row. */
+  cursor: z.number().int().min(0).nullish(),
+  limit: z.number().int().min(1).max(50).prefault(25),
+});
+
+const approveProposalSchema = z.object({
+  id: z.string(),
+  expectedStatusChangedAt: z.iso.datetime().optional(),
+  /** Fields the reviewer unticked, per change. */
+  exclude: z
+    .array(z.object({ changeId: z.string(), field: z.string() }))
+    .max(80)
+    .prefault([]),
+  /** Reviewer edits to proposed top-level values, per change. */
+  edits: z
+    .array(z.object({ changeId: z.string(), field: z.string(), value: z.unknown() }))
+    .max(80)
+    .prefault([]),
+  /** Chosen media candidate per field; the first candidate is used when absent. */
+  media: z
+    .array(z.object({ mediaId: z.string() }))
+    .max(12)
+    .prefault([]),
+});
+
+type ApproveProposalInput = z.infer<typeof approveProposalSchema>;
+
+const rejectProposalSchema = z.object({
+  id: z.string(),
+  expectedStatusChangedAt: z.iso.datetime().optional(),
+  reason: z.enum(ContentProposalRejectReasons),
+  note: z.string().max(CONTENT_PROPOSAL_NOTE_MAX_LENGTH).nullish(),
+});
+
+const unrejectProposalSchema = z.object({
+  id: z.string(),
+  expectedStatusChangedAt: z.iso.datetime(),
+});
+
+const bulkApproveSchema = z.object({
+  ids: z.array(z.string()).min(1).max(CONTENT_REVIEW_BULK_LIMIT),
+});
+
+const proposalIdSchema = z.object({ id: z.string() });
+
+const sfxSearchSchema = z.object({
+  term: z.string().trim().min(2).max(100),
+});
+
+const sfxImportSchema = z.object({
+  epidemicId: z.string().min(1).max(191),
+  title: z.string().min(1).max(191),
+});
 
 export const contentReviewRouter = createTRPCRouter({
   /**

@@ -2,19 +2,15 @@ import { z } from "zod";
 import {
   COMBAT_BIOMES,
   CONTENT_PROPOSAL_MAX_BASIS,
-  CONTENT_PROPOSAL_NOTE_MAX_LENGTH,
   CONTENT_PROPOSAL_RATIONALE_LENGTH,
   CONTENT_PROPOSAL_RETENTION_DAYS,
   CONTENT_PROPOSAL_TITLE_LENGTH,
-  CONTENT_REVIEW_BULK_LIMIT,
   ContentAuditFocuses,
   ContentProposalCategories,
   ContentProposalEntityTypes,
   ContentProposalMediaKinds,
   ContentProposalOperations,
-  ContentProposalRejectReasons,
   ContentProposalSources,
-  ContentProposalStatuses,
 } from "@/drizzle/constants";
 
 /**
@@ -167,53 +163,6 @@ export const staffCreateProposalSchema = z.object({
 });
 export type StaffCreateProposal = z.infer<typeof staffCreateProposalSchema>;
 
-export const reviewQueueSchema = z.object({
-  status: z.enum(ContentProposalStatuses),
-  category: z.enum(ContentProposalCategories).nullish(),
-  source: z.enum(ContentProposalSources).nullish(),
-  entityType: z.enum(ContentProposalEntityTypes).nullish(),
-  /** Offset of the page's first row. */
-  cursor: z.number().int().min(0).nullish(),
-  limit: z.number().int().min(1).max(50).prefault(25),
-});
-
-export const approveProposalSchema = z.object({
-  id: z.string(),
-  expectedStatusChangedAt: z.iso.datetime().optional(),
-  /** Fields the reviewer unticked, per change. */
-  exclude: z
-    .array(z.object({ changeId: z.string(), field: z.string() }))
-    .max(80)
-    .prefault([]),
-  /** Reviewer edits to proposed top-level values, per change. */
-  edits: z
-    .array(z.object({ changeId: z.string(), field: z.string(), value: z.unknown() }))
-    .max(80)
-    .prefault([]),
-  /** Chosen media candidate per field; the first candidate is used when absent. */
-  media: z
-    .array(z.object({ mediaId: z.string() }))
-    .max(12)
-    .prefault([]),
-});
-export type ApproveProposalInput = z.infer<typeof approveProposalSchema>;
-
-export const rejectProposalSchema = z.object({
-  id: z.string(),
-  expectedStatusChangedAt: z.iso.datetime().optional(),
-  reason: z.enum(ContentProposalRejectReasons),
-  note: z.string().max(CONTENT_PROPOSAL_NOTE_MAX_LENGTH).nullish(),
-});
-
-export const unrejectProposalSchema = z.object({
-  id: z.string(),
-  expectedStatusChangedAt: z.iso.datetime(),
-});
-
-export const bulkApproveSchema = z.object({
-  ids: z.array(z.string()).min(1).max(CONTENT_REVIEW_BULK_LIMIT),
-});
-
 /**
  * Rejected and outdated rows only live for the retention window, so stats cannot go
  * further back.
@@ -233,15 +182,4 @@ export const reviewStatsSchema = z.object({
 });
 export type ReviewStatsInput = z.infer<typeof reviewStatsSchema>;
 
-export const proposalIdSchema = z.object({ id: z.string() });
-
 export const sfxPreviewSchema = z.object({ epidemicId: z.string().min(1).max(191) });
-
-export const sfxSearchSchema = z.object({
-  term: z.string().trim().min(2).max(100),
-});
-
-export const sfxImportSchema = z.object({
-  epidemicId: z.string().min(1).max(191),
-  title: z.string().min(1).max(191),
-});

@@ -47,6 +47,7 @@ import {
   MAX_ITEM_VARIANTS,
   PET_MAX_CONSUME_PETS,
   TUTORIAL_ITEM_ID,
+  VARIANT_COST_TYPES,
   VARIANT_CURRENCY_FIELD,
   type VariantCurrency,
   type VariantCurrencyField,
@@ -368,21 +369,16 @@ import {
   inventoryQuantityChangeSchema,
 } from "@/validators/inventory";
 import {
-  adjustUserItemSchema,
   displayCostType,
-  evolveItemSchema,
-  furnitureImageMeasurementSchema,
-  getItemEvolutionsSchema,
-  getPublicUserItemsSchema,
   type ItemFilteringSchema,
-  ItemVariantResponseSchema,
+  ItemVariantValidator,
   itemBuySchema,
   itemCreateSchema,
   itemFilteringSchema,
-  UserUnlockedVariantResponseSchema,
-  upsertItemVariantInputSchema,
 } from "@/validators/item";
+import { furnitureVariantDataSchema } from "@/validators/itemFurniture";
 import { renameLoadoutSchema, setLoadoutHotkeysSchema } from "@/validators/loadout";
+import { lpcItemFields } from "@/validators/lpc";
 import { idSchema } from "@/validators/misc";
 import {
   ObjectiveReward,
@@ -397,6 +393,60 @@ import {
   type WeightedCache,
   weightedCacheSchema,
 } from "@/validators/weightedCache";
+
+/** Furniture measurements always describe the original uploaded image, never a CDN rendition. */
+const furnitureImageMeasurementSchema = z.object({
+  image: z.url().max(512),
+  useFullFootprint: z.boolean(),
+});
+
+const getItemEvolutionsSchema = z.object({
+  itemId: z.string(),
+});
+
+const evolveItemSchema = z.object({
+  userItemId: z.string(),
+  evolutionItemId: z.string(),
+});
+
+const getPublicUserItemsSchema = z.object({
+  userId: z.string(),
+});
+
+const adjustUserItemSchema = z.object({
+  userId: z.string(),
+  userItemId: z.string(),
+  level: z.number().int().min(1).max(ITEM_LEVEL_CAP),
+});
+
+const ItemVariantResponseSchema = z.object({
+  ...lpcItemFields.shape,
+  id: z.string(),
+  itemId: z.string(),
+  name: z.string(),
+  image: z.string(),
+  requiredItemId: z.string().trim().min(1).nullable().prefault(null),
+  costType: z.enum(VARIANT_COST_TYPES),
+  cost: z.number(),
+  order: z.number(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  description: z.string().nullish(),
+  battleDescription: z.string().nullish(),
+  furnitureData: furnitureVariantDataSchema.nullable().prefault(null),
+});
+
+const upsertItemVariantInputSchema = z.object({
+  itemId: z.string(),
+  variant: ItemVariantValidator,
+});
+
+const UserUnlockedVariantResponseSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  variantId: z.string(),
+  createdAt: z.date(),
+});
 
 /** Meals require a stack snapshot; collection grants and weighted caches require a retry ID. */
 const consumeItemInputSchema = z.object({

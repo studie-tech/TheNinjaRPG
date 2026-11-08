@@ -58,7 +58,6 @@ import { fetchSectorVillage } from "@/queries/village";
 import { fetchUserItems } from "@/routers/item";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { fetchRequest, updateRequestState } from "@/routers/sparring";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -73,15 +72,32 @@ import {
   type HomePlacement,
   type HomeRoomStyle,
   homeFurnitureSaveInputSchema,
-  homeInvitationInputSchema,
-  homeSharingInputSchema,
-  homeSleepResponseSchema,
-  homeStorageInputSchema,
   homeUpgradeInputSchema,
-  homeVisitInputSchema,
 } from "@/validators/home";
 import { DEFAULT_FURNITURE_DATA } from "@/validators/itemFurniture";
 import { idSchema } from "@/validators/misc";
+
+/** The router checks visibility or invitation membership for the requested owner. */
+const homeVisitInputSchema = z.strictObject({
+  userId: z.string().min(1).max(191),
+});
+
+/** Visibility edits retain the layout revision guard; invitations use shared request identities. */
+const homeSharingInputSchema = z.strictObject({
+  revision: z.int().nonnegative(),
+  isPublic: z.boolean(),
+});
+
+/** The existing request system resolves active recipients by their current username. */
+const homeInvitationInputSchema = z.strictObject({
+  username: z.string().trim().min(1).max(191),
+});
+
+const homeStorageInputSchema = z.object({ userItemId: z.string() });
+
+const homeSleepResponseSchema = baseServerResponse.extend({
+  newStatus: z.enum(["AWAKE", "ASLEEP"]).optional(),
+});
 
 export const homeRouter = createTRPCRouter({
   /** Return authorized, placed decorations without repairing the owner's home or exposing inventory. */

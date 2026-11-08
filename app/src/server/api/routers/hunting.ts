@@ -54,13 +54,31 @@ import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getRandomElement } from "@/utils/array";
 import { canChangeContent } from "@/utils/permissions";
-import {
-  acceptHuntingContractSchema,
-  huntingIdSchema,
-  huntingSessionActionSchema,
-  saveHuntingHabitatSchema,
-} from "@/validators/hunting";
+import { huntingHabitatSchema } from "@/validators/hunting";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+/** An omitted ID creates a habitat; an existing ID updates the same authored definition. */
+const saveHuntingHabitatSchema = z.object({
+  id: z.string().optional(),
+  content: huntingHabitatSchema,
+});
+
+/** Identify the habitat or personal session addressed by its procedure. */
+const huntingIdSchema = z.object({ id: z.string().min(1) });
+
+/** A null version creates a session; an existing version guards contract switching. */
+const acceptHuntingContractSchema = z.object({
+  habitatId: z.string().min(1),
+  contractId: z.string().min(1),
+  version: z.number().int().nullable(),
+});
+
+/** Both preparation and finish must claim the exact session version displayed to the player. */
+const huntingSessionActionSchema = z.object({
+  id: z.string().min(1),
+  version: z.number().int(),
+  action: z.enum(["prepare", "finish"]),
+});
 
 /** Staff-authored definitions and version-guarded, personal hunting sessions. */
 export const huntingRouter = createTRPCRouter({
