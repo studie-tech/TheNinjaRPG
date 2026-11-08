@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  HOME_DOWNGRADE_REFUND_PERCENT,
   HomeTypeDetails,
   IMG_HOME_KITCHEN,
   ITEM_LEVEL_CAP,
@@ -654,7 +655,7 @@ function Residence() {
                                     <div className="flex flex-col items-center">
                                       <span className="font-semibold text-lg text-muted-foreground">
                                         {downgrade.downgradeRefund > 0
-                                          ? `${downgrade.downgradeRefund.toLocaleString()} Ryo back (75%)`
+                                          ? `${downgrade.downgradeRefund.toLocaleString()} Ryo back (${HOME_DOWNGRADE_REFUND_PERCENT}%)`
                                           : "No cost"}
                                       </span>
                                       <Button

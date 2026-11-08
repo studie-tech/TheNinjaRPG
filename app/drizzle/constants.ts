@@ -3507,6 +3507,8 @@ export const HomeTypeDetails = {
   },
 } as const;
 export type HomeTypeDetails = (typeof HomeTypeDetails)[keyof typeof HomeTypeDetails];
+/** Share of the price difference returned when moving to a cheaper home. */
+export const HOME_DOWNGRADE_REFUND_PERCENT = 75;
 
 /** Furniture definitions choose only existing home actions; a null action is decorative. */
 export const HomeFurnitureActions = ["sleep", "storage", "kitchen", "farm"] as const;

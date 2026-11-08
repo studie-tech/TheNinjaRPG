@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
 import { z } from "zod";
-import type { UserRequestState, UserStatus } from "@/drizzle/constants";
+import type { HomeType, UserRequestState, UserStatus } from "@/drizzle/constants";
 import {
+  HOME_DOWNGRADE_REFUND_PERCENT,
   HOME_FURNITURE_STORAGE_CAPACITY,
   HOME_INVITATION_EXPIRY_SECONDS,
   HOME_MAX_INVITATIONS,
@@ -448,25 +449,12 @@ export const homeRouter = createTRPCRouter({
       });
       // Guard
       if (!user) return [];
-      // Derived
-      const currentHomeIndex = HomeTypes.indexOf(user.homeType);
-      const currentHomeCost = HomeTypeDetails[user.homeType].cost;
-      // Return all other home types; upgradeCost is what the user pays (target cost minus current home value)
-      const upgrades = HomeTypes.map((homeType, i) => {
-        const details = HomeTypeDetails[homeType];
-        const isUpgrade = i > currentHomeIndex;
-        const upgradeCost = isUpgrade ? Math.max(0, details.cost - currentHomeCost) : 0;
-        const downgradeRefund = !isUpgrade
-          ? Math.floor((currentHomeCost - details.cost) * 0.75)
-          : 0;
-        return {
-          type: homeType,
-          ...details,
-          isUpgrade,
-          upgradeCost,
-          downgradeRefund,
-        };
-      }).filter((upgrade) => upgrade.type !== user.homeType);
+      // Return all other home types with what a move to each costs or refunds
+      const upgrades = HomeTypes.map((homeType) => ({
+        type: homeType,
+        ...HomeTypeDetails[homeType],
+        ...getHomeChangeQuote(user.homeType, homeType),
+      })).filter((upgrade) => upgrade.type !== user.homeType);
       return upgrades;
     }),
 
@@ -493,10 +481,12 @@ export const homeRouter = createTRPCRouter({
         return errorResponse("You already own this home type");
       // Derived
       const targetHome = HomeTypeDetails[input.homeType];
-      const currentHomeCost = HomeTypeDetails[user.homeType].cost;
-      const upgradeCost = Math.max(0, targetHome.cost - currentHomeCost);
+      const { isUpgrade, upgradeCost, downgradeRefund } = getHomeChangeQuote(
+        user.homeType,
+        input.homeType,
+      );
       // Upgrading or downgrading
-      if (HomeTypes.indexOf(input.homeType) > HomeTypes.indexOf(user.homeType)) {
+      if (isUpgrade) {
         if (user.money < upgradeCost) return errorResponse("Not enough Ryo");
         const result = await updateUserDataForUpgradeHome(
           ctx.drizzle,
@@ -540,7 +530,6 @@ export const homeRouter = createTRPCRouter({
             );
           }
         }
-        const downgradeRefund = Math.floor((currentHomeCost - targetHome.cost) * 0.75);
         // As with layout saves, Drizzle needs a joined statement to publish both tables atomically.
         // Join settings after inventory so MySQL applies the guarded revision to every placement.
         // LEFT JOIN also refunds homes with no removed placements; the owner is updated once.
@@ -822,6 +811,22 @@ const homeFurnitureAccessError = (
   if (!["AWAKE", "ASLEEP"].includes(user.status))
     return "You cannot furnish your home right now";
   return null;
+};
+
+/**
+ * Price of moving between home types: an upgrade pays the price difference, a downgrade
+ * refunds HOME_DOWNGRADE_REFUND_PERCENT of it.
+ */
+const getHomeChangeQuote = (current: HomeType, target: HomeType) => {
+  const isUpgrade = HomeTypes.indexOf(target) > HomeTypes.indexOf(current);
+  const priceDifference = HomeTypeDetails[target].cost - HomeTypeDetails[current].cost;
+  return {
+    isUpgrade,
+    upgradeCost: isUpgrade ? Math.max(0, priceDifference) : 0,
+    downgradeRefund: isUpgrade
+      ? 0
+      : Math.floor(-priceDifference * (HOME_DOWNGRADE_REFUND_PERCENT / 100)),
+  };
 };
 
 /** Create home-only settings on the first write; a concurrent insertion retains the existing row. */
