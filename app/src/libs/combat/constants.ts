@@ -59,6 +59,18 @@ export const SPAR_EXPIRY_SECONDS = 120;
  */
 export const DAMAGE_LEECH_CAP_RATIO = 0.6;
 
+/**
+ * Max fraction of a hit's pre-Diffuse damage that reflect returns to the attacker;
+ * the Diffuse split and the final reflect application share it.
+ */
+export const REFLECT_CAP_RATIO = 0.6;
+
+/** Max fraction of a hit's pre-shield damage that absorb converts to health. */
+export const ABSORB_CAP_RATIO = 0.6;
+
+/** Max fraction of a hit's damage that stacked afterburn conversions can reach. */
+export const AFTERBURN_CAP_RATIO = 0.6;
+
 export const BARRIER_DAMAGE_TAG_TYPES = new Set<string>(["damage", "pierce"]);
 
 /** These tags execute from battlefield cells rather than user-effect dispatch. */

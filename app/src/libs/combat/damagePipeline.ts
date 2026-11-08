@@ -6,7 +6,12 @@ import {
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   PARRY_MAX_PERCENTAGE,
 } from "@/drizzle/constants";
-import { damageBoostTypes, damageReductionTypes, HP_DAMAGE_KEYS } from "./constants";
+import {
+  damageBoostTypes,
+  damageReductionTypes,
+  HP_DAMAGE_KEYS,
+  REFLECT_CAP_RATIO,
+} from "./constants";
 import { getCurseDamageMultiplier } from "./curse";
 import { type DiffusePacket, deferDiffuseDamage } from "./diffuse";
 import { getDamageModifierPreventState, getEfficiencyRatio, getPower } from "./tags";
@@ -414,7 +419,7 @@ export const applyDiffuseToConsequences = ({
       // Reflect is capped against the source hit before splitting the returned damage.
       const cappedDamage =
         key === "reflect"
-          ? Math.min(originalDamage, (consequence.damage ?? 0) * 0.6)
+          ? Math.min(originalDamage, (consequence.damage ?? 0) * REFLECT_CAP_RATIO)
           : originalDamage;
       // Parry splits the complete packet, including static damage increases.
       const parryFraction =

@@ -2,6 +2,7 @@ import type { Grid } from "honeycomb-grid";
 import { nanoid } from "nanoid";
 import type { AttackTarget, ElementName, UserRank } from "@/drizzle/constants";
 import {
+  ELEMENTAL_SEAL_AP_COST,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
   ID_SFX_CLEANSE,
@@ -230,9 +231,11 @@ export const availableUserActions = (
               );
               if (hasMoveTag) return false;
             }
-            // Elemental Seal affects exactly 60 AP elemental jutsu, regardless
-            // of the element lists retained in older content/battle payloads.
-            if (!elementalSeal || jutsu.actionCostPerc !== 60) return true;
+            // Elemental Seal affects only elemental jutsu costing exactly
+            // ELEMENTAL_SEAL_AP_COST, regardless of the element lists retained in
+            // older content/battle payloads.
+            if (!elementalSeal || jutsu.actionCostPerc !== ELEMENTAL_SEAL_AP_COST)
+              return true;
             const isElemental =
               (jutsu.elementClassification != null &&
                 jutsu.elementClassification !== "None") ||

@@ -12,6 +12,7 @@ import {
   type CombatStatName,
   DIFFUSE_DEFAULT_DELAY_ROUNDS,
   DIFFUSE_MAX_PERCENTAGE,
+  ELEMENTAL_SEAL_AP_COST,
   ElementNames,
   GeneralTypes,
   getCombatStatCap,
@@ -966,7 +967,7 @@ export const StealthTag = simpleTag(
 
 export const ElementalSealTag = simpleTag(
   "elementalseal",
-  "Seals the target's ability to use all elemental 60 AP jutsu",
+  `Seals the target's ability to use all elemental ${ELEMENTAL_SEAL_AP_COST} AP jutsu`,
 );
 
 export const StunPreventTag = z.object({

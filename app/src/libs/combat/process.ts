@@ -20,11 +20,13 @@ import type { ShieldTagType, ZodAllTags } from "@/validators/combat";
 import { ShieldTag, VisualTag } from "@/validators/combat";
 import { creditConsequenceEnmity, creditDamageEnmity } from "./aggro";
 import {
+  ABSORB_CAP_RATIO,
   BARRIER_DAMAGE_TAG_TYPES,
   DAMAGE_LEECH_CAP_RATIO,
   damageModifierTypes,
   dmgConfig as defaultDmgConfig,
   HP_DAMAGE_KEYS,
+  REFLECT_CAP_RATIO,
 } from "./constants";
 import {
   accumulateCurseConsequence,
@@ -1131,7 +1133,7 @@ const applyConsequence = (
     if (c.reflect !== undefined && c.reflect >= 0) {
       // Reflect caps against the source hit before Diffuse and shields; leech uses the remainder.
       const preShieldDamage = c.preDiffuseDamage ?? c.preShieldDamage ?? 0;
-      const maxReflect = preShieldDamage * 0.6;
+      const maxReflect = preShieldDamage * REFLECT_CAP_RATIO;
       const finalReflect = Math.min(c.reflect, maxReflect);
       accumulateCurseDamage(
         newUsersEffects,
@@ -1215,9 +1217,10 @@ const applyConsequence = (
       target.curHealth > 0 &&
       !curseHolders.has(target.userId)
     ) {
-      // Use pre-shield damage for the 60% cap calculation to avoid shield interference
+      // Use pre-shield damage for the absorb cap to avoid shield interference
       const preShieldDamage = c.preShieldDamage ?? 0;
-      const maxAbsorb = (c.diffuseImmediateDamage ?? preShieldDamage) * 0.6;
+      const maxAbsorb =
+        (c.diffuseImmediateDamage ?? preShieldDamage) * ABSORB_CAP_RATIO;
       const absorbAmount = Math.min(c.absorb_hp, maxAbsorb);
       target.curHealth += absorbAmount;
       target.curHealth = Math.min(cap(target, "Health"), target.curHealth);

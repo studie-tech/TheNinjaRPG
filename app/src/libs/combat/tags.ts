@@ -13,6 +13,7 @@ import {
   COPY_MAX_TAGS,
   COPY_PRIORITY_RANK,
   COPYABLE_EFFECT_TYPES,
+  ELEMENTAL_SEAL_AP_COST,
   MIRROR_EXCLUDED_EFFECT_TYPES,
   MIRROR_MAX_TAGS,
   MIRROR_PRIORITY_RANK,
@@ -22,7 +23,11 @@ import {
   TRANSFER_EXCLUDED_SOURCE_TYPES,
 } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
-import { damageDerivedTagTypes, damageModifierTypes } from "@/libs/combat/constants";
+import {
+  AFTERBURN_CAP_RATIO,
+  damageDerivedTagTypes,
+  damageModifierTypes,
+} from "@/libs/combat/constants";
 import {
   getPreferredDamageElement,
   resolveElementalDamage,
@@ -1904,9 +1909,9 @@ export const afterburn = (
           const ratio = getEfficiencyRatio(damageEffect, effect);
           const convert = capConversion(effect, power, consequence.damage) * ratio;
 
-          // Add to existing afterburn damage (stacking) with 60% limit
+          // Add to existing afterburn damage (stacking) up to the afterburn cap
           const currentAfterburn = consequence.afterburn || 0;
-          const maxAfterburn = Math.floor(consequence.damage * 0.6); // 60% limit
+          const maxAfterburn = Math.floor(consequence.damage * AFTERBURN_CAP_RATIO);
           const newAfterburn = Math.min(currentAfterburn + convert, maxAfterburn);
           consequence.afterburn = newAfterburn;
         }
@@ -2435,7 +2440,11 @@ export const elementalseal = (effect: UserEffect, target: BattleUserState) => {
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
-    return getInfo(target, effect, "will be sealed from using elemental 60 AP jutsu");
+    return getInfo(
+      target,
+      effect,
+      `will be sealed from using elemental ${ELEMENTAL_SEAL_AP_COST} AP jutsu`,
+    );
   } else if (effect.isNew) {
     effect.rounds = 0;
   }

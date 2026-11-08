@@ -3829,6 +3829,7 @@ export const PARRY_MAX_PERCENTAGE = 100;
 export const DIFFUSE_MAX_PERCENTAGE = 99;
 export const DIFFUSE_DEFAULT_DELAY_ROUNDS = 3;
 export const TEMPORAL_AP_DELTA = 10; // AP added or removed by time compression / dilation
+export const ELEMENTAL_SEAL_AP_COST = 60; // AP cost of the elemental jutsu Elemental Seal blocks
 export const OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION = 50; // Percentage points added to pre-battle DR pool
 
 /** Armor/accessory folded into early pre-battle inc/DR pools in the damage pipeline. */
