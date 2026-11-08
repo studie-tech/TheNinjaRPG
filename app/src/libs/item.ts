@@ -322,15 +322,19 @@ export const isEquippableUserItem = (
 export const isImbuing = (
   ui: { imbuements: { craftingFinishedAt: Date | null }[] },
   now: Date = new Date(),
-): boolean =>
-  ui.imbuements.some((im) => im.craftingFinishedAt && im.craftingFinishedAt > now);
+): boolean => ui.imbuements.some((im) => !isImbuementFinished(im, now));
 
 /** A user item's imbuements that are no longer being crafted at `now`. */
 export const finishedImbuements = <T extends { craftingFinishedAt: Date | null }>(
   ui: { imbuements: T[] },
   now: Date = new Date(),
-): T[] =>
-  ui.imbuements.filter((im) => !im.craftingFinishedAt || im.craftingFinishedAt <= now);
+): T[] => ui.imbuements.filter((im) => isImbuementFinished(im, now));
+
+/** An imbuement finishing exactly at `now` counts as finished, as in getEquipBlockReason. */
+const isImbuementFinished = (
+  im: { craftingFinishedAt: Date | null },
+  now: Date = new Date(),
+) => !im.craftingFinishedAt || im.craftingFinishedAt <= now;
 
 /**
  * Items of a user item's finished imbuements, in the shape item detail views pass
