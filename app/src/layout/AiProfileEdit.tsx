@@ -258,10 +258,6 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
       }
     >
       {rules.map((rule, ruleIndex) => {
-        const currentActionType = rule.action.type;
-        const itemId = "itemId" in rule.action ? rule.action.itemId : undefined;
-        const coordinates =
-          "target" in rule.action ? rule.action.coordinates : undefined;
         const isLastTwo = ruleIndex >= rules.length - backupRules.length;
         const isLastThree = ruleIndex >= rules.length - backupRules.length - 1;
         const ruleKey = rule.id ?? `rule-${ruleIndex}`;
@@ -271,64 +267,14 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
         return (
           <Fragment key={ruleKey}>
             {beginsGroup && (
-              <div className="border-b-2 bg-popover p-3">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  aria-expanded={!isCollapsed}
-                  onClick={() =>
-                    setCollapsedGroups((previous) =>
-                      isCollapsed
-                        ? previous.filter((id) => id !== group.id)
-                        : [...previous, group.id],
-                    )
-                  }
-                >
-                  {isCollapsed ? "▸" : "▾"} {group.name || "Unnamed group"}
-                </Button>
-                {!isCollapsed && (
-                  <div className="flex flex-col gap-2">
-                    {canEdit ? (
-                      <>
-                        <Label>Group name</Label>
-                        <Input
-                          aria-label="Group name"
-                          value={group.name}
-                          maxLength={100}
-                          onChange={(event) =>
-                            updateGroup(group.id, "name", event.target.value)
-                          }
-                        />
-                        <Label>Group note</Label>
-                        <Input
-                          aria-label="Group note"
-                          value={group.note}
-                          maxLength={1000}
-                          onChange={(event) =>
-                            updateGroup(group.id, "note", event.target.value)
-                          }
-                        />
-                        <Button
-                          variant="outline"
-                          onClick={() =>
-                            setRules((previous) =>
-                              previous.map((entry) =>
-                                entry.group?.id === group.id
-                                  ? { ...entry, group: undefined }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        >
-                          Remove label
-                        </Button>
-                      </>
-                    ) : (
-                      <p>{group.note}</p>
-                    )}
-                  </div>
-                )}
-              </div>
+              <RuleGroupHeader
+                group={group}
+                isCollapsed={isCollapsed}
+                canEdit={canEdit}
+                setCollapsedGroups={setCollapsedGroups}
+                setRules={setRules}
+                updateGroup={updateGroup}
+              />
             )}
             <div hidden={isCollapsed}>
               <Accordion
@@ -417,425 +363,27 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                   {/* ******************** */}
                   {/*     CONDITIONS       */}
                   {/* ******************** */}
-                  <div className="flex flex-col gap-2">
-                    <Select
-                      disabled={!canEdit}
-                      value={""}
-                      onValueChange={(e) =>
-                        setRules((prevRules) => {
-                          const conditionType = e as ZodAllAiCondition["type"];
-                          const schema = getConditionSchema(conditionType);
-                          return prevRules.map((entry, index) =>
-                            index === ruleIndex
-                              ? {
-                                  ...entry,
-                                  conditions: [...entry.conditions, schema.parse({})],
-                                }
-                              : entry,
-                          );
-                        })
-                      }
-                    >
-                      <Label htmlFor="available_conditions">Available Conditions</Label>
-                      <SelectTrigger>
-                        <SelectValue placeholder={`None`} />
-                      </SelectTrigger>
-                      <SelectContent id="available_conditions">
-                        {AiConditionTypes.map((condition, i) => (
-                          <SelectItem key={`${condition}-${i}`} value={condition}>
-                            {condition}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Label htmlFor="available_conditions">
-                      Clauses (all conditions must match)
-                    </Label>
-                    <p className="text-muted-foreground text-xs">
-                      Combine conditions with AND. With no clauses, this rule always
-                      applies.
-                    </p>
-                    {rule.conditions.map((condition, conditionIndex) => (
-                      <div
-                        className="relative flex w-full flex-col rounded-lg border bg-popover p-2 text-xs"
-                        key={`ai-condition-${ruleIndex}-${condition.type}-${conditionIndex}`}
-                      >
-                        <b>{condition.type}</b>
-                        <i>{condition.description}</i>
-                        {canEdit && (
-                          <Trash2
-                            className="absolute top-2 right-2 h-6 w-6 hover:cursor-pointer hover:text-orange-500"
-                            onClick={() => {
-                              setRules((prevRules) =>
-                                prevRules.map((rule, k) => {
-                                  if (k === ruleIndex) {
-                                    return {
-                                      ...rule,
-                                      conditions: rule.conditions.filter(
-                                        (_, l) => l !== conditionIndex,
-                                      ),
-                                    };
-                                  }
-                                  return rule;
-                                }),
-                              );
-                            }}
-                          />
-                        )}
-                        {"value" in condition && (
-                          <Input
-                            disabled={!canEdit}
-                            id="value"
-                            type="input"
-                            value={condition.value}
-                            onChange={(e) => {
-                              updateCondition(
-                                ruleIndex,
-                                conditionIndex,
-                                "value",
-                                e.target.value,
-                              );
-                            }}
-                          />
-                        )}
-                        {"minRange" in condition && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <Label>
-                              Minimum range
-                              <NumberInput
-                                disabled={!canEdit}
-                                aria-label="Minimum range"
-                                min={0}
-                                value={condition.minRange}
-                                onValueChange={(value) =>
-                                  updateCondition(
-                                    ruleIndex,
-                                    conditionIndex,
-                                    "minRange",
-                                    value,
-                                  )
-                                }
-                              />
-                            </Label>
-                            <Label>
-                              Maximum range
-                              <NumberInput
-                                disabled={!canEdit}
-                                aria-label="Maximum range"
-                                min={0}
-                                value={condition.maxRange}
-                                onValueChange={(value) =>
-                                  updateCondition(
-                                    ruleIndex,
-                                    conditionIndex,
-                                    "maxRange",
-                                    value,
-                                  )
-                                }
-                              />
-                            </Label>
-                          </div>
-                        )}
-                        {"effectType" in condition && (
-                          <Select
-                            disabled={!canEdit}
-                            value={condition.effectType}
-                            onValueChange={(value) => {
-                              updateCondition(
-                                ruleIndex,
-                                conditionIndex,
-                                "effectType",
-                                value,
-                              );
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select effect type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {AvailableEffectTypes.map((effectType) => (
-                                <SelectItem key={effectType} value={effectType}>
-                                  {effectType}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                        {"threshold" in condition && (
-                          <NumberInput
-                            disabled={!canEdit}
-                            id="threshold"
-                            min="0"
-                            max="100"
-                            value={condition.threshold}
-                            onValueChange={(value) => {
-                              updateCondition(
-                                ruleIndex,
-                                conditionIndex,
-                                "threshold",
-                                value,
-                              );
-                            }}
-                            placeholder="Effect threshold (0-100)"
-                          />
-                        )}
-                        {"target" in condition && (
-                          <Select
-                            disabled={!canEdit}
-                            value={condition.target}
-                            onValueChange={(value) => {
-                              updateCondition(
-                                ruleIndex,
-                                conditionIndex,
-                                "target",
-                                value,
-                              );
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select target" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {AvailableTargets.map((target, i) => (
-                                <SelectItem key={`${target}-${i}`} value={target}>
-                                  {target}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
-                    ))}
-                    {rule.conditions.length === 0 && (
-                      <Badge className="bg-slate-500">None Added</Badge>
-                    )}
-                  </div>
+                  <RuleConditionsEditor
+                    rule={rule}
+                    ruleIndex={ruleIndex}
+                    canEdit={canEdit}
+                    setRules={setRules}
+                    updateCondition={updateCondition}
+                  />
                   {/* ******************** */}
                   {/*       ACTION         */}
                   {/* ******************** */}
-                  <div className="flex flex-col gap-2">
-                    <Select
-                      disabled={!canEdit}
-                      value={currentActionType}
-                      onValueChange={(e) =>
-                        updateAction(ruleIndex, () =>
-                          getActionSchema(e as ZodAllAiAction["type"]).parse({}),
-                        )
-                      }
-                    >
-                      <Label htmlFor="available_action">Selected Action</Label>
-                      <SelectTrigger>
-                        <SelectValue placeholder={`None`} />
-                      </SelectTrigger>
-                      <SelectContent id="available_action">
-                        {AiActionTypes.filter(
-                          (action) =>
-                            !props.availableActionTypes ||
-                            props.availableActionTypes.some((type) => type === action),
-                        ).map((action, i) => (
-                          <SelectItem key={`${action}-${i}`} value={action}>
-                            {action}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Label htmlFor="available_conditions">Action Settings</Label>
-                    <div className="flex w-full flex-col gap-2 rounded-lg border bg-popover p-2 text-xs">
-                      <div className="flex flex-col">
-                        <b>{currentActionType}</b>
-                        <i>{rule.action.description}</i>
-                      </div>
-                      {"jutsuId" in rule.action && (
-                        <SearchSelect
-                          label="Specific jutsu"
-                          searchLabel="Search jutsu"
-                          emptyText="No jutsu found."
-                          // A saved ID stays selected until the player picks a replacement.
-                          placeholder={
-                            rule.action.jutsuId
-                              ? "Selected jutsu unavailable"
-                              : "Select jutsu"
-                          }
-                          disabled={!canEdit}
-                          value={rule.action.jutsuId}
-                          options={jutsus.map((entry) => ({
-                            value: entry.jutsuId,
-                            label: entry.jutsu.name,
-                          }))}
-                          onChange={(e) =>
-                            updateAction(ruleIndex, (action) => ({
-                              ...action,
-                              jutsuId: e,
-                            }))
-                          }
-                        />
-                      )}
-                      {"itemId" in rule.action && (
-                        <Select
-                          disabled={!canEdit}
-                          value={rule.action.itemId}
-                          onValueChange={(e) =>
-                            updateAction(ruleIndex, (action) => ({
-                              ...action,
-                              itemId: e,
-                            }))
-                          }
-                        >
-                          <SelectTrigger aria-label="Specific item">
-                            <SelectValue placeholder="Select item">
-                              {items.find((entry) => entry.itemId === itemId)?.item
-                                .name ||
-                                (rule.action.itemId
-                                  ? "Selected item unavailable"
-                                  : "Select item")}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent id="available_action">
-                            {items.map((useritem) => (
-                              <SelectItem key={useritem.itemId} value={useritem.itemId}>
-                                {useritem.item.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      {"comboIds" in rule.action && (
-                        <MultiSelect
-                          disabled={!canEdit}
-                          selected={rule.action.comboIds}
-                          getSelectedLabel={(id) => {
-                            const name = props.comboActionNames?.[id];
-                            return name
-                              ? `${name} (unavailable)`
-                              : "Unavailable action";
-                          }}
-                          options={[
-                            ...items.map((ui) => ({
-                              value: ui.itemId,
-                              label: ui.item.name,
-                            })),
-                            ...jutsus.map((uj) => ({
-                              value: uj.jutsuId,
-                              label: uj.jutsu.name,
-                            })),
-                          ]}
-                          onChange={(e) =>
-                            updateAction(ruleIndex, (action) => ({
-                              ...action,
-                              comboIds: e as string[],
-                            }))
-                          }
-                        />
-                      )}
-                      {"target" in rule.action && (
-                        <Select
-                          disabled={!canEdit}
-                          value={rule.action.target}
-                          onValueChange={(e) =>
-                            updateAction(ruleIndex, (action) => {
-                              if (!("target" in action)) return action;
-                              return {
-                                ...action,
-                                target: e as typeof action.target,
-                                coordinates:
-                                  e === "COORDINATE"
-                                    ? (action.coordinates ?? {
-                                        longitude: 0,
-                                        latitude: 0,
-                                      })
-                                    : undefined,
-                              };
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={`None`} />
-                          </SelectTrigger>
-                          <SelectContent id="available_action">
-                            {AvailableActionTargets.map((target, i) => (
-                              <SelectItem key={`${target}-${i}`} value={target}>
-                                {target}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      {"target" in rule.action &&
-                        rule.action.target === "COORDINATE" && (
-                          <div className="flex flex-col gap-2">
-                            <p>
-                              Zero-based battle tiles: X is the column, Y is the row.
-                              The top-left tile is (0, 0). Unavailable tiles skip this
-                              rule.
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {(["longitude", "latitude"] as const).map((axis) => (
-                                <Label key={axis}>
-                                  {axis === "longitude" ? "X (column)" : "Y (row)"}
-                                  <NumberInput
-                                    disabled={!canEdit}
-                                    aria-label={
-                                      axis === "longitude" ? "X (column)" : "Y (row)"
-                                    }
-                                    min={0}
-                                    step={1}
-                                    value={coordinates?.[axis]}
-                                    onValueChange={(value) => {
-                                      updateAction(ruleIndex, (action) => {
-                                        if (!("target" in action)) return action;
-                                        return {
-                                          ...action,
-                                          coordinates: {
-                                            ...(action.coordinates ?? {
-                                              longitude: Number.NaN,
-                                              latitude: Number.NaN,
-                                            }),
-                                            [axis]: value,
-                                          },
-                                        };
-                                      });
-                                    }}
-                                  />
-                                </Label>
-                              ))}
-                            </div>
-                            {!aiCoordinatesSchema.safeParse(rule.action.coordinates)
-                              .success && (
-                              <p role="alert" className="text-red-500">
-                                Enter a non-negative whole number for both X and Y.
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      {"effect" in rule.action && rule.action.effect && (
-                        <Select
-                          disabled={!canEdit}
-                          value={rule.action.effect}
-                          onValueChange={(e) =>
-                            updateAction(ruleIndex, (action) => ({
-                              ...action,
-                              effect: e,
-                            }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={`None`} />
-                          </SelectTrigger>
-                          <SelectContent id="available_action">
-                            {AvailableEffectTypes.filter(
-                              (effect) =>
-                                !props.availableActionEffects ||
-                                props.availableActionEffects.includes(effect),
-                            ).map((effect, i) => (
-                              <SelectItem key={`${effect}-${i}`} value={effect}>
-                                {effect}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  </div>
+                  <RuleActionEditor
+                    rule={rule}
+                    ruleIndex={ruleIndex}
+                    canEdit={canEdit}
+                    jutsus={jutsus}
+                    items={items}
+                    updateAction={updateAction}
+                    comboActionNames={props.comboActionNames}
+                    availableActionTypes={props.availableActionTypes}
+                    availableActionEffects={props.availableActionEffects}
+                  />
                 </div>
               </Accordion>
             </div>
@@ -919,3 +467,477 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
 };
 
 export default AiProfileEdit;
+
+type SetRules = React.Dispatch<React.SetStateAction<AiRuleType[]>>;
+
+/** Collapsible name and note of the rule group that starts at this rule. */
+const RuleGroupHeader: React.FC<{
+  group: NonNullable<AiRuleType["group"]>;
+  isCollapsed: boolean;
+  canEdit: boolean;
+  setCollapsedGroups: React.Dispatch<React.SetStateAction<string[]>>;
+  setRules: SetRules;
+  updateGroup: (id: string, field: "name" | "note", value: string) => void;
+}> = ({ group, isCollapsed, canEdit, setCollapsedGroups, setRules, updateGroup }) => (
+  <div className="border-b-2 bg-popover p-3">
+    <Button
+      variant="ghost"
+      className="w-full justify-start"
+      aria-expanded={!isCollapsed}
+      onClick={() =>
+        setCollapsedGroups((previous) =>
+          isCollapsed
+            ? previous.filter((id) => id !== group.id)
+            : [...previous, group.id],
+        )
+      }
+    >
+      {isCollapsed ? "▸" : "▾"} {group.name || "Unnamed group"}
+    </Button>
+    {!isCollapsed && (
+      <div className="flex flex-col gap-2">
+        {canEdit ? (
+          <>
+            <Label>Group name</Label>
+            <Input
+              aria-label="Group name"
+              value={group.name}
+              maxLength={100}
+              onChange={(event) => updateGroup(group.id, "name", event.target.value)}
+            />
+            <Label>Group note</Label>
+            <Input
+              aria-label="Group note"
+              value={group.note}
+              maxLength={1000}
+              onChange={(event) => updateGroup(group.id, "note", event.target.value)}
+            />
+            <Button
+              variant="outline"
+              onClick={() =>
+                setRules((previous) =>
+                  previous.map((entry) =>
+                    entry.group?.id === group.id
+                      ? { ...entry, group: undefined }
+                      : entry,
+                  ),
+                )
+              }
+            >
+              Remove label
+            </Button>
+          </>
+        ) : (
+          <p>{group.note}</p>
+        )}
+      </div>
+    )}
+  </div>
+);
+
+/** The clauses that must all match for a rule to apply. */
+const RuleConditionsEditor: React.FC<{
+  rule: AiRuleType;
+  ruleIndex: number;
+  canEdit: boolean;
+  setRules: SetRules;
+  updateCondition: (
+    ruleIndex: number,
+    conditionIdx: number,
+    field: string,
+    value: string | number,
+  ) => void;
+}> = ({ rule, ruleIndex, canEdit, setRules, updateCondition }) => (
+  <div className="flex flex-col gap-2">
+    <Select
+      disabled={!canEdit}
+      value={""}
+      onValueChange={(e) =>
+        setRules((prevRules) => {
+          const conditionType = e as ZodAllAiCondition["type"];
+          const schema = getConditionSchema(conditionType);
+          return prevRules.map((entry, index) =>
+            index === ruleIndex
+              ? {
+                  ...entry,
+                  conditions: [...entry.conditions, schema.parse({})],
+                }
+              : entry,
+          );
+        })
+      }
+    >
+      <Label htmlFor="available_conditions">Available Conditions</Label>
+      <SelectTrigger>
+        <SelectValue placeholder={`None`} />
+      </SelectTrigger>
+      <SelectContent id="available_conditions">
+        {AiConditionTypes.map((condition, i) => (
+          <SelectItem key={`${condition}-${i}`} value={condition}>
+            {condition}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+    <Label htmlFor="available_conditions">Clauses (all conditions must match)</Label>
+    <p className="text-muted-foreground text-xs">
+      Combine conditions with AND. With no clauses, this rule always applies.
+    </p>
+    {rule.conditions.map((condition, conditionIndex) => (
+      <div
+        className="relative flex w-full flex-col rounded-lg border bg-popover p-2 text-xs"
+        key={`ai-condition-${ruleIndex}-${condition.type}-${conditionIndex}`}
+      >
+        <b>{condition.type}</b>
+        <i>{condition.description}</i>
+        {canEdit && (
+          <Trash2
+            className="absolute top-2 right-2 h-6 w-6 hover:cursor-pointer hover:text-orange-500"
+            onClick={() => {
+              setRules((prevRules) =>
+                prevRules.map((rule, k) => {
+                  if (k === ruleIndex) {
+                    return {
+                      ...rule,
+                      conditions: rule.conditions.filter(
+                        (_, l) => l !== conditionIndex,
+                      ),
+                    };
+                  }
+                  return rule;
+                }),
+              );
+            }}
+          />
+        )}
+        {"value" in condition && (
+          <Input
+            disabled={!canEdit}
+            id="value"
+            type="input"
+            value={condition.value}
+            onChange={(e) => {
+              updateCondition(ruleIndex, conditionIndex, "value", e.target.value);
+            }}
+          />
+        )}
+        {"minRange" in condition && (
+          <div className="grid grid-cols-2 gap-2">
+            <Label>
+              Minimum range
+              <NumberInput
+                disabled={!canEdit}
+                aria-label="Minimum range"
+                min={0}
+                value={condition.minRange}
+                onValueChange={(value) =>
+                  updateCondition(ruleIndex, conditionIndex, "minRange", value)
+                }
+              />
+            </Label>
+            <Label>
+              Maximum range
+              <NumberInput
+                disabled={!canEdit}
+                aria-label="Maximum range"
+                min={0}
+                value={condition.maxRange}
+                onValueChange={(value) =>
+                  updateCondition(ruleIndex, conditionIndex, "maxRange", value)
+                }
+              />
+            </Label>
+          </div>
+        )}
+        {"effectType" in condition && (
+          <Select
+            disabled={!canEdit}
+            value={condition.effectType}
+            onValueChange={(value) => {
+              updateCondition(ruleIndex, conditionIndex, "effectType", value);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select effect type" />
+            </SelectTrigger>
+            <SelectContent>
+              {AvailableEffectTypes.map((effectType) => (
+                <SelectItem key={effectType} value={effectType}>
+                  {effectType}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {"threshold" in condition && (
+          <NumberInput
+            disabled={!canEdit}
+            id="threshold"
+            min="0"
+            max="100"
+            value={condition.threshold}
+            onValueChange={(value) => {
+              updateCondition(ruleIndex, conditionIndex, "threshold", value);
+            }}
+            placeholder="Effect threshold (0-100)"
+          />
+        )}
+        {"target" in condition && (
+          <Select
+            disabled={!canEdit}
+            value={condition.target}
+            onValueChange={(value) => {
+              updateCondition(ruleIndex, conditionIndex, "target", value);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select target" />
+            </SelectTrigger>
+            <SelectContent>
+              {AvailableTargets.map((target, i) => (
+                <SelectItem key={`${target}-${i}`} value={target}>
+                  {target}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    ))}
+    {rule.conditions.length === 0 && <Badge className="bg-slate-500">None Added</Badge>}
+  </div>
+);
+
+/** The action a rule takes, with the settings its action type supports. */
+const RuleActionEditor: React.FC<{
+  rule: AiRuleType;
+  ruleIndex: number;
+  canEdit: boolean;
+  jutsus: AiProfileEditProps["userData"]["jutsus"];
+  items: AiProfileEditProps["userData"]["items"];
+  updateAction: (
+    ruleIndex: number,
+    update: (action: ZodAllAiAction) => ZodAllAiAction,
+  ) => void;
+  comboActionNames: AiProfileEditProps["comboActionNames"];
+  availableActionTypes: AiProfileEditProps["availableActionTypes"];
+  availableActionEffects: AiProfileEditProps["availableActionEffects"];
+}> = (props) => {
+  const { rule, ruleIndex, canEdit, jutsus, items, updateAction } = props;
+  const currentActionType = rule.action.type;
+  const itemId = "itemId" in rule.action ? rule.action.itemId : undefined;
+  const coordinates = "target" in rule.action ? rule.action.coordinates : undefined;
+  return (
+    <div className="flex flex-col gap-2">
+      <Select
+        disabled={!canEdit}
+        value={currentActionType}
+        onValueChange={(e) =>
+          updateAction(ruleIndex, () =>
+            getActionSchema(e as ZodAllAiAction["type"]).parse({}),
+          )
+        }
+      >
+        <Label htmlFor="available_action">Selected Action</Label>
+        <SelectTrigger>
+          <SelectValue placeholder={`None`} />
+        </SelectTrigger>
+        <SelectContent id="available_action">
+          {AiActionTypes.filter(
+            (action) =>
+              !props.availableActionTypes ||
+              props.availableActionTypes.some((type) => type === action),
+          ).map((action, i) => (
+            <SelectItem key={`${action}-${i}`} value={action}>
+              {action}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Label htmlFor="available_conditions">Action Settings</Label>
+      <div className="flex w-full flex-col gap-2 rounded-lg border bg-popover p-2 text-xs">
+        <div className="flex flex-col">
+          <b>{currentActionType}</b>
+          <i>{rule.action.description}</i>
+        </div>
+        {"jutsuId" in rule.action && (
+          <SearchSelect
+            label="Specific jutsu"
+            searchLabel="Search jutsu"
+            emptyText="No jutsu found."
+            // A saved ID stays selected until the player picks a replacement.
+            placeholder={
+              rule.action.jutsuId ? "Selected jutsu unavailable" : "Select jutsu"
+            }
+            disabled={!canEdit}
+            value={rule.action.jutsuId}
+            options={jutsus.map((entry) => ({
+              value: entry.jutsuId,
+              label: entry.jutsu.name,
+            }))}
+            onChange={(e) =>
+              updateAction(ruleIndex, (action) => ({
+                ...action,
+                jutsuId: e,
+              }))
+            }
+          />
+        )}
+        {"itemId" in rule.action && (
+          <Select
+            disabled={!canEdit}
+            value={rule.action.itemId}
+            onValueChange={(e) =>
+              updateAction(ruleIndex, (action) => ({
+                ...action,
+                itemId: e,
+              }))
+            }
+          >
+            <SelectTrigger aria-label="Specific item">
+              <SelectValue placeholder="Select item">
+                {items.find((entry) => entry.itemId === itemId)?.item.name ||
+                  (rule.action.itemId ? "Selected item unavailable" : "Select item")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent id="available_action">
+              {items.map((useritem) => (
+                <SelectItem key={useritem.itemId} value={useritem.itemId}>
+                  {useritem.item.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {"comboIds" in rule.action && (
+          <MultiSelect
+            disabled={!canEdit}
+            selected={rule.action.comboIds}
+            getSelectedLabel={(id) => {
+              const name = props.comboActionNames?.[id];
+              return name ? `${name} (unavailable)` : "Unavailable action";
+            }}
+            options={[
+              ...items.map((ui) => ({
+                value: ui.itemId,
+                label: ui.item.name,
+              })),
+              ...jutsus.map((uj) => ({
+                value: uj.jutsuId,
+                label: uj.jutsu.name,
+              })),
+            ]}
+            onChange={(e) =>
+              updateAction(ruleIndex, (action) => ({
+                ...action,
+                comboIds: e as string[],
+              }))
+            }
+          />
+        )}
+        {"target" in rule.action && (
+          <Select
+            disabled={!canEdit}
+            value={rule.action.target}
+            onValueChange={(e) =>
+              updateAction(ruleIndex, (action) => {
+                if (!("target" in action)) return action;
+                return {
+                  ...action,
+                  target: e as typeof action.target,
+                  coordinates:
+                    e === "COORDINATE"
+                      ? (action.coordinates ?? {
+                          longitude: 0,
+                          latitude: 0,
+                        })
+                      : undefined,
+                };
+              })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={`None`} />
+            </SelectTrigger>
+            <SelectContent id="available_action">
+              {AvailableActionTargets.map((target, i) => (
+                <SelectItem key={`${target}-${i}`} value={target}>
+                  {target}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {"target" in rule.action && rule.action.target === "COORDINATE" && (
+          <div className="flex flex-col gap-2">
+            <p>
+              Zero-based battle tiles: X is the column, Y is the row. The top-left tile
+              is (0, 0). Unavailable tiles skip this rule.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {(["longitude", "latitude"] as const).map((axis) => (
+                <Label key={axis}>
+                  {axis === "longitude" ? "X (column)" : "Y (row)"}
+                  <NumberInput
+                    disabled={!canEdit}
+                    aria-label={axis === "longitude" ? "X (column)" : "Y (row)"}
+                    min={0}
+                    step={1}
+                    value={coordinates?.[axis]}
+                    onValueChange={(value) => {
+                      updateAction(ruleIndex, (action) => {
+                        if (!("target" in action)) return action;
+                        return {
+                          ...action,
+                          coordinates: {
+                            ...(action.coordinates ?? {
+                              longitude: Number.NaN,
+                              latitude: Number.NaN,
+                            }),
+                            [axis]: value,
+                          },
+                        };
+                      });
+                    }}
+                  />
+                </Label>
+              ))}
+            </div>
+            {!aiCoordinatesSchema.safeParse(rule.action.coordinates).success && (
+              <p role="alert" className="text-red-500">
+                Enter a non-negative whole number for both X and Y.
+              </p>
+            )}
+          </div>
+        )}
+        {"effect" in rule.action && rule.action.effect && (
+          <Select
+            disabled={!canEdit}
+            value={rule.action.effect}
+            onValueChange={(e) =>
+              updateAction(ruleIndex, (action) => ({
+                ...action,
+                effect: e,
+              }))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={`None`} />
+            </SelectTrigger>
+            <SelectContent id="available_action">
+              {AvailableEffectTypes.filter(
+                (effect) =>
+                  !props.availableActionEffects ||
+                  props.availableActionEffects.includes(effect),
+              ).map((effect, i) => (
+                <SelectItem key={`${effect}-${i}`} value={effect}>
+                  {effect}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    </div>
+  );
+};
