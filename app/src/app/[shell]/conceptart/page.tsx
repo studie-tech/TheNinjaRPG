@@ -71,6 +71,7 @@ import {
   type TimeFrame,
   timeFrame,
 } from "@/validators/art";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 export default function ConceptArt() {
   // State
@@ -121,6 +122,21 @@ export default function ConceptArt() {
     resolver: zodResolver(conceptVideoPromptSchema),
   });
 
+  // Show a new creation among the viewer's newest art and apply its cost
+  const showCreation = async (
+    id: string,
+    revision: number | undefined,
+    delta: UserDeltaResponse["userDelta"],
+  ) => {
+    filterForm.setValue("only_own", true);
+    filterForm.setValue("sort", "Most Recent");
+    router.push(`/conceptart/${id}`);
+    await Promise.all([
+      utils.conceptart.getAll.refetch(),
+      updateUser(undefined, { revision, delta }),
+    ]);
+  };
+
   // Create a new image
   const { mutate: create, isPending: isImagePending } =
     api.conceptart.create.useMutation({
@@ -129,13 +145,7 @@ export default function ConceptArt() {
         showMutationToast(result);
         if (result.success && result.imageId) {
           promptForm.setValue("prompt", "");
-          filterForm?.setValue("only_own", true);
-          filterForm?.setValue("sort", "Most Recent");
-          router.push(`/conceptart/${result.imageId}`);
-          await Promise.all([
-            utils.conceptart.getAll.refetch(),
-            updateUser(undefined, { revision, delta: result.userDelta }),
-          ]);
+          await showCreation(result.imageId, revision, result.userDelta);
         }
       },
     });
@@ -153,14 +163,8 @@ export default function ConceptArt() {
         });
         if (result.success && result.videoId) {
           videoPromptForm.reset();
-          filterForm?.setValue("only_own", true);
-          filterForm?.setValue("sort", "Most Recent");
-          // Navigate to video page where polling will show progress
-          router.push(`/conceptart/${result.videoId}`);
-          await Promise.all([
-            utils.conceptart.getAll.refetch(),
-            updateUser(undefined, { revision, delta: result.userDelta }),
-          ]);
+          // The video page polls the generation progress
+          await showCreation(result.videoId, revision, result.userDelta);
         }
       },
     });
@@ -188,43 +192,33 @@ export default function ConceptArt() {
   );
   const allImage = data?.pages
     .flatMap((page) => page.data)
-    .sort((a, b) => {
-      if (sort === "Most Recent") {
-        return b.createdAt.getTime() - a.createdAt.getTime();
-      } else if (sort === "Most Liked") {
-        return b.sumReaction - a.sumReaction;
-      }
-      return 1;
-    });
+    .sort((a, b) =>
+      sort === "Most Liked"
+        ? b.sumReaction - a.sumReaction
+        : b.createdAt.getTime() - a.createdAt.getTime(),
+    );
   const visibleImages = allImage?.filter((image) => !deletedImageIds.has(image.id));
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
+  // Check the viewer can pay for a creation, explaining when they cannot
+  const canAfford = (cost: number, message: string) => {
+    if (!userData) return false;
+    if (userData.reputationPoints >= cost) return true;
+    showMutationToast({ success: false, message });
+    return false;
+  };
+
   // Handle image creation
   const handleCreateImage = promptForm.handleSubmit((data) => {
-    if (userData) {
-      if (userData.reputationPoints >= COST_CONCEPT_IMAGE) {
-        if (!isPending) create(data);
-      } else {
-        showMutationToast({
-          success: false,
-          message: "No reputation points left.",
-        });
-      }
+    if (canAfford(COST_CONCEPT_IMAGE, "No reputation points left.") && !isPending) {
+      create(data);
     }
   }, showFormErrorsToast);
 
   // Handle video creation
   const handleCreateVideo = videoPromptForm.handleSubmit((data) => {
-    if (userData) {
-      if (userData.reputationPoints >= COST_CONCEPT_VIDEO) {
-        if (!isPending) createVideo(data);
-      } else {
-        showMutationToast({
-          success: false,
-          message: `Not enough reputation points. Video costs ${COST_CONCEPT_VIDEO} points.`,
-        });
-      }
-    }
+    const message = `Not enough reputation points. Video costs ${COST_CONCEPT_VIDEO} points.`;
+    if (canAfford(COST_CONCEPT_VIDEO, message) && !isPending) createVideo(data);
   }, showFormErrorsToast);
 
   // Handle form submit based on creation type
