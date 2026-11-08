@@ -139,34 +139,35 @@ describe("editing a message that quotes another", () => {
   });
 });
 
-describe("conversation emoji outside-click listener", () => {
-  it("listens only while open, survives rerenders, and cleans up on close and unmount", async () => {
-    // jsdom's document proxy does not retain an instance-level Bun spy.
-    const add = vi.spyOn(window.EventTarget.prototype, "addEventListener");
-    const remove = vi.spyOn(window.EventTarget.prototype, "removeEventListener");
+describe("conversation emoji picker", () => {
+  it("opens from the reaction button, survives rerenders, and closes on an outside press or a second click", async () => {
+    installBrowserGlobals({ resizeObserver: true });
     const toggleReaction = vi.fn();
     const view = render(<CommentOnConversation comment={comment} user={user} toggleReaction={toggleReaction}>{comment.content}</CommentOnConversation>);
-    const mousedownAdds = () => add.mock.calls.filter(([event], i) => event === "mousedown" && add.mock.contexts[i] === document);
-    const mousedownRemoves = () => remove.mock.calls.filter(([event], i) => event === "mousedown" && remove.mock.contexts[i] === document);
     try {
-      expect(mousedownAdds()).toHaveLength(0);
-      await act(async () => { fireEvent.click(view.container.querySelector(".lucide-smile-plus")!); });
-      await waitFor(() => expect(mousedownAdds()).toHaveLength(1));
+      const trigger = view.getByRole("button", { name: "Add reaction" });
+      expect(view.queryByRole("dialog")).toBeNull();
+      await act(async () => { fireEvent.click(trigger); });
+      await waitFor(() => expect(view.getByRole("dialog")).toBeTruthy());
 
       view.rerender(<CommentOnConversation comment={{ ...comment, reactions: { "👍": ["Friend"] } }} user={user} toggleReaction={toggleReaction}>{comment.content}</CommentOnConversation>);
-      expect(mousedownAdds()).toHaveLength(1);
-      expect(mousedownRemoves()).toHaveLength(0);
+      expect(view.getByRole("dialog")).toBeTruthy();
 
-      fireEvent.mouseDown(document.body);
-      await waitFor(() => expect(mousedownRemoves()).toHaveLength(1));
-      expect(mousedownRemoves()[0]?.[1]).toBe(mousedownAdds()[0]?.[1]);
-      fireEvent.click(view.container.querySelector(".lucide-smile-plus")!);
-      await waitFor(() => expect(mousedownAdds()).toHaveLength(2));
-      view.unmount();
-      expect(mousedownRemoves()).toHaveLength(2);
+      await act(flushRadixFocus);
+      await act(async () => {
+        fireEvent.pointerDown(document.body);
+        fireEvent.click(document.body);
+      });
+      await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+
+      await act(async () => { fireEvent.click(view.getByRole("button", { name: "Add reaction" })); });
+      await waitFor(() => expect(view.getByRole("dialog")).toBeTruthy());
+      await act(async () => { fireEvent.click(view.getByRole("button", { name: "Add reaction" })); });
+      await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
     } finally {
-      add.mockRestore();
-      remove.mockRestore();
+      view.unmount();
+      await act(flushRadixFocus);
+      restoreBrowserGlobals();
     }
   });
 });
