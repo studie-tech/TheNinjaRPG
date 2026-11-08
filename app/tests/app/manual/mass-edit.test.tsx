@@ -15,7 +15,7 @@ const getAll = { useInfiniteQuery: () => ({ data: { pages: [] }, isFetching: fal
 let editor: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-  editor = vi.spyOn(MassEffectEditorPage, "MassEffectEditorPage").mockImplementation(() => null);
+  editor = vi.spyOn(MassEffectEditorPage, "MassEffectEditorPage").mockImplementation(() => <div />);
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   for (const filtering of [ItemFiltering, BloodlineFiltering, JutsuFiltering]) {
     vi.spyOn(filtering, "useFiltering").mockReturnValue({ effect } as never);
