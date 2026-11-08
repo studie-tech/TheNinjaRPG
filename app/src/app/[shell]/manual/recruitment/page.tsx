@@ -17,7 +17,6 @@ import {
   type RecruitmentMetric,
   RecruitmentMetrics,
 } from "@/drizzle/constants";
-import { TUTORIAL_STEPS } from "@/hooks/tutorial";
 import AbTestResults from "@/layout/AbTestResults";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -36,6 +35,7 @@ import VisitorFiltering, {
   getFilter as getVisitorFilter,
   useFiltering as useVisitorFiltering,
 } from "@/layout/VisitorFiltering";
+import { TUTORIAL_STEPS } from "@/libs/tutorialSteps";
 import {
   canViewRecruitmentAnalytics,
   canViewRevenueAnalytics,

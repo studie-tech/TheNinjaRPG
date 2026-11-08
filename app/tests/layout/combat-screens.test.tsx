@@ -8,6 +8,7 @@ import * as gameScene from "@/hooks/game-scene";
 import * as lpc from "@/hooks/lpc";
 import * as navigation from "@/hooks/navigation";
 import * as tutorialHooks from "@/hooks/tutorial";
+import * as tutorialSteps from "@/libs/tutorialSteps";
 import * as inventoryCache from "@/hooks/useInventoryCacheUpdate";
 import * as pageActive from "@/hooks/usePageActive";
 import * as sectorCache from "@/hooks/useSectorCacheUpdate";
@@ -42,7 +43,7 @@ type Response = { success: boolean; message: string; battle?: ReturnedBattle };
 
 const state = {
   profile: undefined as unknown as Profile,
-  currentStep: undefined as tutorialHooks.TutorialStepConfig | undefined,
+  currentStep: undefined as tutorialSteps.TutorialStepConfig | undefined,
   push: vi.fn(),
   nextStep: vi.fn(async (_step?: string) => {}),
   invalidateBattle: vi.fn(async () => {}),
@@ -318,7 +319,7 @@ describe("combat result screen", () => {
     expect(state.fetchProfile).toHaveBeenCalledTimes(1);
     const profile = { userData: { tutorialOn: true, tutorialStep: 9, status: "AWAKE" } };
     await act(async () => settle(profile));
-    expect(returnPage).toHaveBeenCalledWith(tutorialHooks.TUTORIAL_STEPS, profile.userData, outcome, destination);
+    expect(returnPage).toHaveBeenCalledWith(tutorialSteps.TUTORIAL_STEPS, profile.userData, outcome, destination);
     expect(state.push).toHaveBeenCalledWith("/next-lesson");
     await waitFor(() => expect(view.getByRole("button", { name })).toBeTruthy());
   });

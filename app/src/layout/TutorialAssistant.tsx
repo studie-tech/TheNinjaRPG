@@ -32,13 +32,7 @@ import {
 import type { UserQuest } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
-import type { TutorialStepConfig } from "@/hooks/tutorial";
-import {
-  TUTORIAL_CHAPTERS,
-  TUTORIAL_HOSPITALIZED_STEP,
-  TUTORIAL_STEPS,
-  useTutorialStep,
-} from "@/hooks/tutorial";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { ActivityDock } from "@/layout/ActivityDock";
@@ -72,6 +66,12 @@ import {
   type TutorialPortraitSide,
   type TutorialScreenBox,
 } from "@/libs/tutorial";
+import type { TutorialStepConfig } from "@/libs/tutorialSteps";
+import {
+  TUTORIAL_CHAPTERS,
+  TUTORIAL_HOSPITALIZED_STEP,
+  TUTORIAL_STEPS,
+} from "@/libs/tutorialSteps";
 import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 import { usePublicPathname } from "@/utils/routing";

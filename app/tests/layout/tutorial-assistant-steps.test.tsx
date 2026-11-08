@@ -7,6 +7,7 @@ import * as client from "@/app/_trpc/client";
 import * as sortableList from "@/components/ui/sortable-list";
 import { OrderedQuestTypesInTutorial, TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
 import type * as TutorialHooks from "@/hooks/tutorial";
+import type * as TutorialSteps from "@/libs/tutorialSteps";
 import * as abVariant from "@/hooks/useAbVariant";
 import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
@@ -19,12 +20,15 @@ import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { stubDialog } from "../setup/dialog";
 
-// Another assistant suite replaces this module with one synthetic step, and Bun keeps
-// module mocks across files. A query-suffixed import loads the real definitions again.
+// Another assistant suite replaces these modules with one synthetic step, and Bun keeps
+// module mocks across files. Query-suffixed imports load the real definitions again.
+const realStepsPath = "../../src/libs/tutorialSteps.tsx?real";
+const steps = (await import(realStepsPath)) as typeof TutorialSteps;
+mock.module("@/libs/tutorialSteps", () => steps);
 const realTutorialPath = "../../src/hooks/tutorial.tsx?real";
 const tutorial = (await import(realTutorialPath)) as typeof TutorialHooks;
 mock.module("@/hooks/tutorial", () => tutorial);
-const { TUTORIAL_CHAPTERS, TUTORIAL_HOSPITALIZED_STEP, TUTORIAL_STEPS } = tutorial;
+const { TUTORIAL_CHAPTERS, TUTORIAL_HOSPITALIZED_STEP, TUTORIAL_STEPS } = steps;
 const { default: TutorialAssistant } = await import("@/layout/TutorialAssistant");
 
 type Profile = {

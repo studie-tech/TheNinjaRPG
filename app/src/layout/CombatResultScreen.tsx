@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
-import { TUTORIAL_STEPS, type TutorialStepConfig } from "@/hooks/tutorial";
 import { CombatRewards } from "@/layout/CombatRewards";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import Link from "@/layout/Link";
@@ -13,6 +12,7 @@ import type { BattleState, CombatResult, ReturnedBattle } from "@/libs/combat/ty
 import { getIsolatedPyramid } from "@/libs/questRun";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialBattleReturnPage } from "@/libs/tutorial";
+import { TUTORIAL_STEPS, type TutorialStepConfig } from "@/libs/tutorialSteps";
 import { useRequiredUserData, userBattleAtom } from "@/utils/UserContext";
 
 interface CombatResultScreenProps {

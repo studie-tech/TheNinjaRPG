@@ -7,7 +7,7 @@ import { type ReactNode, useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
 import * as sortableList from "@/components/ui/sortable-list";
-import type { TutorialStepConfig } from "@/hooks/tutorial";
+import type { TutorialStepConfig } from "@/libs/tutorialSteps";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import { BattleFocusView } from "@/layout/BattleFocusView";
 import * as logbook from "@/layout/Logbook";
@@ -65,9 +65,12 @@ vi.mock("@/app/_trpc/client", () => ({ api: {
 } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 vi.mock("@/utils/routing", () => ({ usePublicPathname: () => "/profile" }));
-vi.mock("@/hooks/tutorial", () => {
+vi.mock("@/libs/tutorialSteps", () => {
   const step = { id: "welcome", chapter: "student", title: "Welcome", description: "Welcome", page: "/profile" };
-  return { TUTORIAL_STEPS: [step], TUTORIAL_CHAPTERS: [{ id: "student", title: "A New Student" }], TUTORIAL_HOSPITALIZED_STEP: step, useTutorialStep: () => ({ currentStep: testMocks().step, stepNumber: testMocks().stepNumber, isAssistantVisible: testMocks().visible, setIsAssistantVisible: vi.fn(), updateTutorialStep: vi.fn(), handleNextStep: testMocks().next, handleNextStepAsync: vi.fn(async () => {}), completeTutorialAction: vi.fn(async () => {}) }) };
+  return { TUTORIAL_STEPS: [step], TUTORIAL_CHAPTERS: [{ id: "student", title: "A New Student" }], TUTORIAL_HOSPITALIZED_STEP: step };
+});
+vi.mock("@/hooks/tutorial", () => {
+  return { useTutorialStep: () => ({ currentStep: testMocks().step, stepNumber: testMocks().stepNumber, isAssistantVisible: testMocks().visible, setIsAssistantVisible: vi.fn(), updateTutorialStep: vi.fn(), handleNextStep: testMocks().next, handleNextStepAsync: vi.fn(async () => {}), completeTutorialAction: vi.fn(async () => {}) }) };
 });
 vi.mock("@/hooks/useAbVariant", () => ({ useAbVariant: () => ({ variant: "A" }) }));
 vi.mock("@/layout/Image", () => ({ default: () => null }));

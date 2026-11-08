@@ -42,14 +42,13 @@ import {
 } from "@/libs/tutorial";
 
 /**
- * TUTORIAL_STEPS lives in a client module that pulls in tRPC, jotai and
- * next/navigation, so it cannot be imported here. Read the source instead and
- * slice it to the array, so `id:` keys elsewhere in the file cannot leak in.
+ * Read the step source and slice it to the array, so `id:` keys elsewhere in
+ * the file cannot leak in.
  */
 const readTutorialStepsSource = () => {
   const tutorialPath = join(
     dirname(fileURLToPath(import.meta.url)),
-    "../../src/hooks/tutorial.tsx",
+    "../../src/libs/tutorialSteps.tsx",
   );
   const source = readFileSync(tutorialPath, "utf8");
   const start = source.indexOf("export const TUTORIAL_STEPS");
@@ -266,7 +265,7 @@ describe("TUTORIAL_STEPS", () => {
   it("highlights the world-travel confirm button before the globe and the Global tab", () => {
     // Travel steps share one element list defined above the step array.
     const source = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "../../src/hooks/tutorial.tsx"),
+      join(dirname(fileURLToPath(import.meta.url)), "../../src/libs/tutorialSteps.tsx"),
       "utf8",
     );
     const start = source.indexOf("const globalTravelElements = [");
