@@ -95,6 +95,13 @@ const MenuBoxProfile: React.FC = () => {
 
   const activeItemCraftingTimer = sidebarTimers?.crafting;
   const activeImbuementTimer = sidebarTimers?.imbuement;
+  /** A finished craft or imbuement changes the inventory and the next sidebar timer. */
+  const refreshItemTimers = async () => {
+    await Promise.all([
+      utils.item.getUserItems.invalidate(),
+      utils.profile.getSidebarTimers.invalidate(),
+    ]);
+  };
 
   // Get location of user
   const { location } = useGameMenu();
@@ -427,206 +434,133 @@ const MenuBoxProfile: React.FC = () => {
               const endsAt = masteryTrainingEndsAt(userData, kind);
               const Icon = kind === "ELEMENT" ? Flame : Medal;
               return endsAt ? (
-                <TooltipProvider key={kind} delayDuration={50}>
-                  <Tooltip>
-                    <TooltipTrigger className="w-full">
-                      <div className="flex flex-row items-center hover:text-orange-500">
-                        <Icon className="mr-2 h-6 w-6" />
-                        <Link href="/traininggrounds">
-                          <Countdown targetDate={endsAt} timeDiff={timeDiff} />
-                        </Link>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {MASTERY_QUEUE_KIND_LABELS[kind]} training
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <SidebarTimerRow
+                  key={kind}
+                  icon={<Icon className="mr-2 h-6 w-6" />}
+                  href="/traininggrounds"
+                  tooltip={<>{MASTERY_QUEUE_KIND_LABELS[kind]} training</>}
+                >
+                  <Countdown targetDate={endsAt} timeDiff={timeDiff} />
+                </SidebarTimerRow>
               ) : null;
             })}
           {trainingJutsu && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <div className="flex flex-row items-center hover:text-orange-500">
-                    <Atom className="mr-2 h-6 w-6" />
-                    <Link href="/traininggrounds">
-                      <Countdown
-                        targetDate={trainingJutsu.finishTraining}
-                        timeDiff={timeDiff}
-                        onFinish={async () => {
-                          await Promise.all([
-                            utils.jutsu.getUserJutsus.invalidate(),
-                            utils.profile.getSidebarTimers.invalidate(),
-                          ]);
-                        }}
-                      />
-                    </Link>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
+            <SidebarTimerRow
+              icon={<Atom className="mr-2 h-6 w-6" />}
+              href="/traininggrounds"
+              tooltip={
+                <>
                   Training {trainingJutsu.name} to level {trainingJutsu.level}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                </>
+              }
+            >
+              <Countdown
+                targetDate={trainingJutsu.finishTraining}
+                timeDiff={timeDiff}
+                onFinish={async () => {
+                  await Promise.all([
+                    utils.jutsu.getUserJutsus.invalidate(),
+                    utils.profile.getSidebarTimers.invalidate(),
+                  ]);
+                }}
+              />
+            </SidebarTimerRow>
           )}
           {userData?.covertTrainingType && covertTrainingFinishAt && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <div className="flex flex-row items-center hover:text-orange-500">
-                    {userData.covertTrainingType === "stealth" ? (
-                      <EyeOff className="mr-2 h-6 w-6" />
-                    ) : (
-                      <ScanSearch className="mr-2 h-6 w-6" />
-                    )}
-                    <Link href="/traininggrounds">
-                      <Countdown
-                        targetDate={covertTrainingFinishAt}
-                        timeDiff={timeDiff}
-                        onFinish={async () => {
-                          await utils.profile.getUser.invalidate();
-                        }}
-                      />
-                    </Link>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {userData.covertTrainingType === "stealth"
-                    ? "Stealth training"
-                    : "Sensory training"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <SidebarTimerRow
+              icon={
+                userData.covertTrainingType === "stealth" ? (
+                  <EyeOff className="mr-2 h-6 w-6" />
+                ) : (
+                  <ScanSearch className="mr-2 h-6 w-6" />
+                )
+              }
+              href="/traininggrounds"
+              tooltip={
+                userData.covertTrainingType === "stealth"
+                  ? "Stealth training"
+                  : "Sensory training"
+              }
+            >
+              <Countdown
+                targetDate={covertTrainingFinishAt}
+                timeDiff={timeDiff}
+                onFinish={async () => {
+                  await utils.profile.getUser.invalidate();
+                }}
+              />
+            </SidebarTimerRow>
           )}
           {activeItemCraftingTimer && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <div className="flex flex-row items-center hover:text-orange-500">
-                    <Hammer className="mr-2 h-6 w-6" />
-                    <Link href="/occupation">
-                      <Countdown
-                        targetDate={activeItemCraftingTimer.craftingFinishedAt}
-                        timeDiff={timeDiff}
-                        onFinish={async () => {
-                          await Promise.all([
-                            utils.item.getUserItems.invalidate(),
-                            utils.profile.getSidebarTimers.invalidate(),
-                          ]);
-                        }}
-                      />
-                    </Link>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Crafting {activeItemCraftingTimer.itemName}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <SidebarTimerRow
+              icon={<Hammer className="mr-2 h-6 w-6" />}
+              href="/occupation"
+              tooltip={<>Crafting {activeItemCraftingTimer.itemName}</>}
+            >
+              <Countdown
+                targetDate={activeItemCraftingTimer.craftingFinishedAt}
+                timeDiff={timeDiff}
+                onFinish={refreshItemTimers}
+              />
+            </SidebarTimerRow>
           )}
           {activeImbuementTimer && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <div className="flex flex-row items-center hover:text-orange-500">
-                    <Gem className="mr-2 h-6 w-6" />
-                    <Link href="/occupation">
-                      <Countdown
-                        targetDate={activeImbuementTimer.craftingFinishedAt}
-                        timeDiff={timeDiff}
-                        onFinish={async () => {
-                          await Promise.all([
-                            utils.item.getUserItems.invalidate(),
-                            utils.profile.getSidebarTimers.invalidate(),
-                          ]);
-                        }}
-                      />
-                    </Link>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
+            <SidebarTimerRow
+              icon={<Gem className="mr-2 h-6 w-6" />}
+              href="/occupation"
+              tooltip={
+                <>
                   Imbuing {activeImbuementTimer.imbuedName} onto{" "}
                   {activeImbuementTimer.targetName}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {userData && userData.dailyMissions < MISSIONS_PER_DAY && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <Link href="/missionhall" className="hover:text-orange-500">
-                    <div className="flex flex-row items-center">
-                      <LayoutList className="mr-2 h-6 w-6" /> {userData.dailyMissions} /{" "}
-                      {MISSIONS_PER_DAY}
-                    </div>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent>Daily missions to complete</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {userData && (userData.dailyErrands ?? 0) < ERRANDS_PER_DAY && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <Link href="/missionhall" className="hover:text-orange-500">
-                    <div className="flex flex-row items-center">
-                      <ClipboardList className="mr-2 h-6 w-6" />{" "}
-                      {userData.dailyErrands ?? 0} / {ERRANDS_PER_DAY}
-                    </div>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent>Daily errands to complete</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                </>
+              }
+            >
+              <Countdown
+                targetDate={activeImbuementTimer.craftingFinishedAt}
+                timeDiff={timeDiff}
+                onFinish={refreshItemTimers}
+              />
+            </SidebarTimerRow>
           )}
           {userData &&
-            (userData.dailyMedicalMissions ?? 0) < MEDICAL_MISSIONS_PER_DAY && (
-              <TooltipProvider delayDuration={50}>
-                <Tooltip>
-                  <TooltipTrigger className="w-full">
-                    <Link href="/missionhall" className="hover:text-orange-500">
-                      <div className="flex flex-row items-center">
-                        <Stethoscope className="mr-2 h-6 w-6" />{" "}
-                        {userData.dailyMedicalMissions ?? 0} /{" "}
-                        {MEDICAL_MISSIONS_PER_DAY}
-                      </div>
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent>Daily medical missions to complete</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+            [
+              {
+                icon: LayoutList,
+                done: userData.dailyMissions,
+                limit: MISSIONS_PER_DAY,
+                tooltip: "Daily missions to complete",
+              },
+              {
+                icon: ClipboardList,
+                done: userData.dailyErrands ?? 0,
+                limit: ERRANDS_PER_DAY,
+                tooltip: "Daily errands to complete",
+              },
+              {
+                icon: Stethoscope,
+                done: userData.dailyMedicalMissions ?? 0,
+                limit: MEDICAL_MISSIONS_PER_DAY,
+                tooltip: "Daily medical missions to complete",
+              },
+              {
+                icon: Swords,
+                done: userData.dailyPvpMissions ?? 0,
+                limit: PVP_MISSIONS_PER_DAY,
+                tooltip: "Daily PvP missions to complete",
+              },
+            ].map(({ icon: Icon, done, limit, tooltip }) =>
+              done < limit ? (
+                <SidebarLinkRow key={tooltip} href="/missionhall" tooltip={tooltip}>
+                  <Icon className="mr-2 h-6 w-6" /> {done} / {limit}
+                </SidebarLinkRow>
+              ) : null,
             )}
-          {userData && (userData.dailyPvpMissions ?? 0) < PVP_MISSIONS_PER_DAY && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <Link href="/missionhall" className="hover:text-orange-500">
-                    <div className="flex flex-row items-center">
-                      <Swords className="mr-2 h-6 w-6" />{" "}
-                      {userData.dailyPvpMissions ?? 0} / {PVP_MISSIONS_PER_DAY}
-                    </div>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent>Daily PvP missions to complete</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <TooltipProvider delayDuration={50}>
-            <Tooltip>
-              <TooltipTrigger className="w-full">
-                <Link href="/points" className="hover:text-orange-500">
-                  <div className="flex flex-row items-center">
-                    <Star className="mr-2 h-6 w-6" />{" "}
-                    {userData?.reputationPoints ?? "??"}
-                  </div>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent>Reputation points for use in black market</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <SidebarLinkRow
+            href="/points"
+            tooltip="Reputation points for use in black market"
+          >
+            <Star className="mr-2 h-6 w-6" /> {userData?.reputationPoints ?? "??"}
+          </SidebarLinkRow>
         </div>
       </div>
       <hr className="my-2" />
@@ -650,6 +584,44 @@ const MenuBoxProfile: React.FC = () => {
 };
 
 export default MenuBoxProfile;
+
+/** Sidebar row whose countdown links to the page running the timer. */
+const SidebarTimerRow: React.FC<{
+  icon: React.ReactNode;
+  href: string;
+  tooltip: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ icon, href, tooltip, children }) => (
+  <TooltipProvider delayDuration={50}>
+    <Tooltip>
+      <TooltipTrigger className="w-full">
+        <div className="flex flex-row items-center hover:text-orange-500">
+          {icon}
+          <Link href={href}>{children}</Link>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
+
+/** Sidebar row linked as a whole to the page where the value is used. */
+const SidebarLinkRow: React.FC<{
+  href: string;
+  tooltip: string;
+  children: React.ReactNode;
+}> = ({ href, tooltip, children }) => (
+  <TooltipProvider delayDuration={50}>
+    <Tooltip>
+      <TooltipTrigger className="w-full">
+        <Link href={href} className="hover:text-orange-500">
+          <div className="flex flex-row items-center">{children}</div>
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
 
 /** A live text node keeps UTC clock ticks outside the surrounding React tree. */
 const GameClock: React.FC = () => {
