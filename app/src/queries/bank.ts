@@ -13,6 +13,7 @@ import {
   or,
   type SQL,
   sql,
+  sum,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { RYO_CAP } from "@/drizzle/constants";
@@ -93,14 +94,14 @@ export const selectBankTransfersForGetGraph = (
       receiverUsername: receiver.username,
       senderAvatar: sender.avatar,
       receiverAvatar: receiver.avatar,
-      total: sql<number>`SUM(${bankTransfers.amount})`,
+      total: sum(bankTransfers.amount).mapWith(Number),
     })
     .from(bankTransfers)
     .innerJoin(sender, eq(bankTransfers.senderId, sender.userId))
     .innerJoin(receiver, eq(bankTransfers.receiverId, receiver.userId))
     .where(gte(bankTransfers.createdAt, cutoffDate))
     .groupBy(bankTransfers.senderId, bankTransfers.receiverId)
-    .having(sql`SUM(${bankTransfers.amount}) >= ${minAmount}`)
+    .having(({ total }) => gte(total, minAmount))
     .limit(50);
 
 /** Build the `bankTransfers` listing for `getTransfers`, using predicates on `senderId` and `receiverId`. */

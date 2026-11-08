@@ -39,7 +39,7 @@ export const fetchActiveUserOffers = async (client: DrizzleClient, userId: strin
   });
 };
 
-import { asc, desc, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { asc, desc, gte, isNotNull, lte, sql, sum } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
@@ -119,8 +119,8 @@ export const selectRyoTradeForGetGraph = (client: Pick<DrizzleClient, "select">)
       receiverUsername: receiver.username,
       senderAvatar: sender.avatar,
       receiverAvatar: receiver.avatar,
-      totalReps: sql<number>`SUM(${ryoTrade.repsForSale})`,
-      totalRyo: sql<number>`SUM(${ryoTrade.requestedRyo})`,
+      totalReps: sum(ryoTrade.repsForSale).mapWith(Number),
+      totalRyo: sum(ryoTrade.requestedRyo).mapWith(Number),
     })
     .from(ryoTrade)
     .innerJoin(sender, eq(ryoTrade.creatorUserId, sender.userId))

@@ -1,7 +1,7 @@
 /**
  * Database access for avatar; authorization and transaction scopes stay in callers.
  */
-import { and, desc, eq, gt, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { COST_GENERATE_AVATAR } from "@/drizzle/constants";
 import { historicalAvatar, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
@@ -111,7 +111,7 @@ export const selectHistoricalAvatarForAvatarMiddleware = (
   user: { userId: string },
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(historicalAvatar)
     .where(
       and(

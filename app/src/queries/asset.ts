@@ -5,6 +5,7 @@ import type { SQL } from "drizzle-orm";
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   exists,
@@ -114,12 +115,12 @@ export const selectGameAssetForGetAllFolders = (
   client
     .select({
       folder: gameAsset.folder,
-      count: sql`count(*)`.mapWith(Number),
+      count: count(),
     })
     .from(gameAsset)
     .where(
       and(
-        sql`${gameAsset.folder} != ''`,
+        ne(gameAsset.folder, sql`''`),
         input?.type ? eq(gameAsset.type, input.type) : undefined,
       ),
     )
