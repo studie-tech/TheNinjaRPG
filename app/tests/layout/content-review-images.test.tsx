@@ -6,7 +6,6 @@ import * as battlefieldPreview from "@/layout/BattlefieldPreview";
 import * as ContentImage from "@/layout/ContentImage";
 import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import * as ItemWithEffects from "@/layout/ItemWithEffects";
-import { questSceneAssetIds } from "@/libs/contentReview/paths";
 import { spyOnToasts } from "../setup/toastMock";
 import type { ContentProposalStatus } from "@/drizzle/constants";
 import * as logbook from "@/layout/Logbook";
@@ -204,18 +203,6 @@ describe("proposal review detail", () => {
     const html = render();
     expect(html).toContain("Quest scene");
     expect(html).toContain('data-scene="true"');
-  });
-
-  it("collects only nonempty scene references at any nesting level", () => {
-    expect(questSceneAssetIds({
-      content: {
-        sceneBackground: "background",
-        sceneCharacters: ["old", ""],
-        objectives: [{ sceneCharacters: ["next"], targetId: "unrelated" }],
-        image: "https://example.com/image.webp",
-      },
-    })).toEqual(["background", "old", "next"]);
-    expect(questSceneAssetIds(null)).toEqual([]);
   });
 
   it("previews the chosen generated character and the current catalog cast", () => {

@@ -17,6 +17,7 @@ import {
   getAtPath,
   isMediaPath,
   mediaPlaceholder,
+  questSceneAssetIds,
   setAtPath,
   topLevelField,
 } from "@/libs/contentReview/paths";
@@ -71,6 +72,18 @@ describe("paths", () => {
     expect(setAtPath(original, "effects.1", { power: 1 }).effects).toHaveLength(2);
     expect(() => setAtPath(original, "effects.5.power", 1)).toThrow(/out of range/);
     expect(() => setAtPath(original, "__proto__.polluted", 1)).toThrow(/not allowed/);
+  });
+
+  it("collects only nonempty scene references at any nesting level", () => {
+    expect(questSceneAssetIds({
+      content: {
+        sceneBackground: "background",
+        sceneCharacters: ["old", ""],
+        objectives: [{ sceneCharacters: ["next"], targetId: "unrelated" }],
+        image: "https://example.com/image.webp",
+      },
+    })).toEqual(["background", "old", "next"]);
+    expect(questSceneAssetIds(null)).toEqual([]);
   });
 });
 

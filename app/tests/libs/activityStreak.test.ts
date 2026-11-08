@@ -4,6 +4,8 @@ import {
   getStreakClaimState,
   isActivityStreakPopupBlocking,
   isEventPassCompletion,
+  isStreakContinuous,
+  nextStreakRefreshAt,
   normalizeRecurringStreakProgress,
   resolveActivityStreakDateLatches,
   resolveActivityStreakPopupOpen,
@@ -273,6 +275,22 @@ it("resets an expanded converted pass only until its new recurring cycle starts"
   expect(normalized.currentDay).toBe(0);
   const nextDay = { ...normalized, currentDay: 1 };
   expect(normalizeRecurringStreakProgress(nextDay, config, new Date("2026-09-21"), completedAt)).toBe(nextDay);
+});
+
+describe("streak refresh schedule", () => {
+  it("refreshes streaks at elapsed pass days and the exact continuity deadline", () => {
+    const now = new Date("2026-10-01T12:00:00Z");
+    const lastClaimDate = new Date("2026-09-30T00:00:00Z");
+    expect(isStreakContinuous(lastClaimDate, new Date(now.getTime() - 1))).toBe(true);
+    expect(isStreakContinuous(lastClaimDate, now)).toBe(false);
+    expect(
+      nextStreakRefreshAt(
+        [{ lastClaimDate: now, startedAt: new Date("2026-09-30T14:00:00Z") }],
+        now,
+      ),
+    ).toEqual(new Date("2026-10-01T14:00:00Z"));
+    expect(nextStreakRefreshAt([], now)).toEqual(new Date("2026-10-02T00:00:00Z"));
+  });
 });
 
 describe("streak claim state", () => {
