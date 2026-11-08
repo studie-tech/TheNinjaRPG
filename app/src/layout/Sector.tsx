@@ -1523,6 +1523,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
   });
 
+  /** Start a battle with a user standing on the player's tile, in this tile's biome. */
+  const attackSectorUser = (target: SectorUser) =>
+    attack({
+      originSocketId: pusher?.connection.socket_id,
+      userId: target.userId,
+      longitude: target.longitude,
+      latitude: target.latitude,
+      sector: sectorRef.current,
+      asset: originRef.current?.battleBiome,
+    });
+
   const { mutate: interactNpc, isPending: isInteracting } =
     api.overworldAi.interactWithOverworldAi.useMutation({
       /** Applies battle/dialog results and refreshes state after an overworld NPC interaction. */
@@ -1824,14 +1835,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         ) {
           // Update last attack time and attack
           lastAutoAttackTimeRef.current = now;
-          attack({
-            originSocketId: pusher?.connection.socket_id,
-            userId: closestEnemy.userId,
-            longitude: closestEnemy.longitude,
-            latitude: closestEnemy.latitude,
-            sector: sectorRef.current,
-            asset: originRef.current?.battleBiome,
-          });
+          attackSectorUser(closestEnemy);
         } else {
           setTarget({ x: closestEnemy.longitude, y: closestEnemy.latitude });
         }
@@ -2100,14 +2104,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           ) {
             document.body.style.cursor = "wait";
             setTargetUser(target);
-            attack({
-              originSocketId: pusher?.connection.socket_id,
-              userId: target.userId,
-              longitude: target.longitude,
-              latitude: target.latitude,
-              sector: sectorRef.current,
-              asset: originRef.current?.battleBiome,
-            });
+            attackSectorUser(target);
           } else {
             setTarget({ x: target.longitude, y: target.latitude });
           }
@@ -2542,14 +2539,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           attackUser={(userId) => {
             const target = sorrounding.find((u) => u.userId === userId);
             if (target && !isAttacking && !movePendingRef.current) {
-              attack({
-                originSocketId: pusher?.connection.socket_id,
-                userId: target.userId,
-                longitude: target.longitude,
-                latitude: target.latitude,
-                sector: sectorRef.current,
-                asset: originRef.current?.battleBiome,
-              });
+              attackSectorUser(target);
             }
           }}
           robUser={(userId) => {
