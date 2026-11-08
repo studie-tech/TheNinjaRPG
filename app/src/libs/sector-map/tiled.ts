@@ -21,7 +21,7 @@ import type {
   SectorMapObjectType,
   SectorMapZone,
 } from "@/libs/sector-map/types";
-import { SECTOR_MAP_OBJECT_TYPES } from "@/libs/sector-map/types";
+import { SECTOR_MAP_OBJECT_TYPES, SECTOR_MAP_ZONES } from "@/libs/sector-map/types";
 import { validateNormalizedSectorMap } from "@/libs/sector-map/validation";
 import { clamp } from "@/utils/math";
 import {
@@ -118,17 +118,9 @@ const toBattleBiome = (value: unknown, fallback: CombatBiome) => {
  */
 const toZone = (value: unknown): SectorMapZone => {
   const zone = asString(value);
-  if (
-    zone === "village" ||
-    zone === "safezone" ||
-    zone === "water" ||
-    zone === "road" ||
-    zone === "structure" ||
-    zone === "shrine"
-  ) {
-    return zone;
-  }
-  return "wilderness";
+  return zone && (SECTOR_MAP_ZONES as readonly string[]).includes(zone)
+    ? (zone as SectorMapZone)
+    : "wilderness";
 };
 
 /**

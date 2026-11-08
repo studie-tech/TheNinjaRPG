@@ -1,13 +1,16 @@
 import type { CombatBiome } from "@/drizzle/constants";
 
-export type SectorMapZone =
-  | "wilderness"
-  | "village"
-  | "safezone"
-  | "water"
-  | "road"
-  | "structure"
-  | "shrine";
+/** Canonical tile zones the importer accepts; anything else imports as wilderness */
+export const SECTOR_MAP_ZONES = [
+  "wilderness",
+  "village",
+  "safezone",
+  "water",
+  "road",
+  "structure",
+  "shrine",
+] as const;
+export type SectorMapZone = (typeof SECTOR_MAP_ZONES)[number];
 
 /** Canonical object types the importer accepts (runtime list so consumers and
  * tests derive from one source instead of copying it) */
