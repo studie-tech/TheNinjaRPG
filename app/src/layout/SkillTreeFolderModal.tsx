@@ -1,11 +1,11 @@
 "use client";
 
 import { Check, ChevronLeft, ExternalLink, Lock, X } from "lucide-react";
-import Image from "next/image";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { SkillTree, SkillTreeFolder, UserSkill } from "@/drizzle/schema";
+import Image from "@/layout/Image";
 import Modal from "@/layout/Modal";
 import { parseHtml } from "@/utils/parse";
 

@@ -10,7 +10,6 @@ import {
   RotateCcw,
   ShoppingCart,
 } from "lucide-react";
-import Image from "next/image";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import {
   AlertDialog,
@@ -29,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
 import Confirm from "@/layout/Confirm";
+import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { formatEventPassCost } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";

@@ -1,11 +1,11 @@
 "use client";
 
 import { Folder } from "lucide-react";
-import Image from "next/image";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import type { OptionType } from "@/components/ui/multi-select";
 import { MultiSelect } from "@/components/ui/multi-select";
 import type { SkillTree, SkillTreeFolder } from "@/drizzle/schema";
+import Image from "@/layout/Image";
 
 interface SkillTreeFolderGridProps {
   folders: SkillTreeFolder[];
