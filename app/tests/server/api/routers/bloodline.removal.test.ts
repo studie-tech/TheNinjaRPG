@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { COST_SWAP_BLOODLINE, REMOVAL_COST } from "@/drizzle/constants";
+import { BLOODLINE_COST, COST_SWAP_BLOODLINE, PITY_BLOODLINE_ROLLS, REMOVAL_COST } from "@/drizzle/constants";
 import { actionLog, bloodline, bloodlineRolls, jutsu, userData, userJutsu, userQueue, userVote } from "@/drizzle/schema";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
@@ -66,6 +66,53 @@ describeWithDatabase("bloodline change rejection recovery", () => {
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({
       bloodlineId: "current-line", reputationPoints: 100, seichiSilver: 200, bloodrightSpent: 77,
     });
+    expect(await db.query.actionLog.findMany()).toHaveLength(0);
+  });
+});
+
+describeWithDatabase("bloodline grant rejection", () => {
+  const raceToBattle = async () => {
+    const db = await getTestDatabase();
+    return beforeStatements(db, userData, [() => db.update(userData).set({ status: "BATTLE" }).where(eq(userData.userId, userId))]);
+  };
+
+  beforeEach(async () => {
+    await resetTables(actionLog, bloodlineRolls, userQueue, userJutsu, jutsu, userVote, userData, bloodline);
+    await insertUsers([{ userId, username: "BloodlineGrant", rank: "JONIN", level: 50, status: "AWAKE",
+      bloodlineId: null, reputationPoints: BLOODLINE_COST.D }]);
+    const db = await getTestDatabase();
+    await insertUserVotes([{ userId }]);
+    await db.insert(bloodline).values({ id: "next-line", name: "next-line", rank: "D", image: "", description: "Grant fixture", effects: [] });
+    await db.insert(bloodlineRolls).values({ id: "item-roll", userId, type: "ITEM", goal: "D", used: PITY_BLOODLINE_ROLLS });
+  });
+
+  it("removeBloodline rejects a user without a bloodline", async () => {
+    const caller = callerForDatabase(bloodlineRouter, userId, await getTestDatabase());
+    await expect(caller.removeBloodline()).rejects.toThrow("You do not have a bloodline");
+  });
+
+  it("purchaseBloodline grants nothing when battle starts during the request", async () => {
+    const db = await getTestDatabase();
+    const caller = callerForDatabase(bloodlineRouter, userId, await raceToBattle());
+    await expect(caller.purchaseBloodline({ bloodlineId: "next-line" })).rejects.toThrow(
+      "Bloodline or battle status changed. Refresh and try again",
+    );
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({
+      bloodlineId: null, reputationPoints: BLOODLINE_COST.D,
+    });
+    expect(await db.query.bloodlineRolls.findMany({ where: eq(bloodlineRolls.type, "DIRECT") })).toHaveLength(0);
+    expect(await db.query.actionLog.findMany()).toHaveLength(0);
+  });
+
+  it("pityRoll refunds the reserved credit when battle starts during the request", async () => {
+    const db = await getTestDatabase();
+    const caller = callerForDatabase(bloodlineRouter, userId, await raceToBattle());
+    await expect(caller.pityRoll({ rank: "D" })).rejects.toThrow(
+      "Bloodline or battle status changed. Refresh and try again",
+    );
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ bloodlineId: null });
+    expect(await db.query.bloodlineRolls.findFirst({ where: eq(bloodlineRolls.id, "item-roll") })).toMatchObject({ pityRolls: 0 });
+    expect(await db.query.bloodlineRolls.findMany({ where: eq(bloodlineRolls.type, "PITY") })).toHaveLength(0);
     expect(await db.query.actionLog.findMany()).toHaveLength(0);
   });
 });
