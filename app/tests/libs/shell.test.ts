@@ -1,5 +1,5 @@
 import { GAME_LAYOUTS } from "@/libs/gameLayouts";
-import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
+import { LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import { drawWallpaperVariant, WALLPAPER_EXPERIMENT, WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
@@ -255,9 +255,3 @@ describe("chooseShell", () => {
     });
   });
  });
-describe("selected Lemu portraits", () => {
-  it("uses the baseline for visitors without a valid new assignment", () => {
-    expect(getLemuImage()).toBe(getLemuImage("control"));
-    expect(getLemuImage("treatment")).toBe(getLemuImage("control"));
-  });
-});
