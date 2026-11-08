@@ -4,7 +4,12 @@ import * as dynamic from "next/dynamic";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
-import { WAR_PURCHASE_SHRINE_TOKEN_COST } from "@/drizzle/constants";
+import {
+  WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8,
+  WAR_PURCHASE_SHRINE_TOKEN_COST,
+} from "@/drizzle/constants";
 import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schema";
 import * as map from "@/hooks/map";
 import * as building from "@/layout/Building";
@@ -78,6 +83,7 @@ const structures = [
 let user: NonNullable<UserWithRelations>;
 let ownsSector = false;
 let relationshipStatus: VillageAlliance["status"] = "ENEMY";
+let raidOptions: { route: string; block?: string }[] = [];
 
 beforeEach(() => {
   // Isolate globe rendering when another page has already loaded WarMap.
@@ -92,6 +98,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   ownsSector = false;
   relationshipStatus = "ENEMY";
+  raidOptions = [];
   user = {
     userId: "leader",
     villageId: own.id,
@@ -120,7 +127,7 @@ beforeEach(() => {
     war: {
       getRules: { useQuery: () => ({ data: undefined }) },
       getRaidOptions: {
-        useQuery: () => ({ data: [], isFetching: false }),
+        useQuery: () => ({ data: raidOptions, isFetching: false }),
       },
       declareSectorWar: sectorWar,
       declareVillageWarOrRaid: declarations,
@@ -250,6 +257,59 @@ describe("war declaration targets", () => {
       targetVillageId: target.id,
       targetStructureRoute: "/townhall",
     });
+  });
+
+  it("explains the daily token decay before sector and village wars", () => {
+    const decay = `Each day at war reduces your tokens by ${WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to ${WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5}% after 5 days and ${WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days).`;
+    const view = mount();
+    fireEvent.click(view.getByRole("button", { name: "Target tile" }));
+    expect(view.getByRole("dialog").textContent).toContain(
+      `Village Tokens. ${decay}`,
+    );
+    cleanup();
+    const sector = mount();
+    fireEvent.click(sector.getByRole("button", { name: "Sector tile" }));
+    expect(sector.getByRole("dialog").textContent).toContain(`Village Tokens. ${decay}`);
+  });
+
+  it("lists the alliances an enemy declaration breaks and the enemies it adds", () => {
+    relationshipStatus = "NEUTRAL";
+    const rich = { ...own, tokens: 1_000_000_000 } as Village;
+    const third = { ...target, id: "third", name: "Third", sector: 104 };
+    user = { ...user, village: rich };
+    const view = render(
+      <WarMap
+        user={user}
+        isKage
+        villages={[rich, target, allied, third]}
+        relationships={[
+          { id: "own-target", villageIdA: own.id, villageIdB: target.id, status: "NEUTRAL" },
+          { id: "own-allied", villageIdA: own.id, villageIdB: allied.id, status: "ALLY" },
+          { id: "allied-target", villageIdA: allied.id, villageIdB: target.id, status: "ALLY" },
+          { id: "third-target", villageIdA: third.id, villageIdB: target.id, status: "ALLY" },
+        ] as VillageAlliance[]}
+      />,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Target tile" }));
+    expect(view.getByText("Additional Enemies:").parentElement?.textContent).toBe(
+      "Additional Enemies: Third will become enemies",
+    );
+    expect(view.getByText("Broken Alliances:").parentElement?.textContent).toBe(
+      "Broken Alliances: Allied will become neutral",
+    );
+  });
+
+  it("shows a structure's raid block and holds the raid until another structure is chosen", () => {
+    raidOptions = [{ route: "/missionhall", block: "Raided too recently" }, { route: "/traininggrounds" }];
+    user = { ...user, isOutlaw: true, village: { ...own, type: "HIDEOUT" } };
+    const view = mount();
+    fireEvent.click(view.getByRole("button", { name: "Target tile" }));
+    expect(view.getByRole("status").textContent).toBe("Raided too recently");
+    expect((view.getByRole("button", { name: "Start Raid" }) as HTMLButtonElement).disabled).toBe(true);
+    const selector = view.getAllByRole("combobox", { name: "Structure" }).at(-1)!;
+    fireEvent.change(selector, { target: { value: "/traininggrounds" } });
+    expect(view.queryByRole("status")).toBeNull();
+    expect((view.getByRole("button", { name: "Start Raid" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("keeps the faction raid default and submits the selected structure", () => {
