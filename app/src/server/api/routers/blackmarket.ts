@@ -81,6 +81,7 @@ import {
   canChangeContent,
   canRollPrimaryElement,
   canRollSecondaryElement,
+  isSiteOwnerAccount,
 } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import type { DatabasePromiseReturn } from "@/utils/typeutils";
@@ -179,7 +180,7 @@ export const blackMarketRouter = createTRPCRouter({
       ]);
       if (!offer) return errorResponse("Offer not found");
       // Derived
-      const isTerr = user.username === "Terriator";
+      const isTerr = isSiteOwnerAccount(user);
       const creatorId = offer.creatorUserId;
       // Guard
       if (creatorId !== ctx.userId && !isTerr) return errorResponse("Not yours");

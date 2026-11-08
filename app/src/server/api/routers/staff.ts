@@ -213,6 +213,7 @@ import {
   canUnequipAllUsers,
   canUnstuckVillage,
   canUseMonitoringTests,
+  isSiteOwnerAccount,
   isStaffRole,
 } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
@@ -705,7 +706,7 @@ export const staffRouter = createTRPCRouter({
         ],
       );
       // Guard
-      if (user.username !== "Terriator") {
+      if (!isSiteOwnerAccount(user)) {
         return { success: false, message: "You are not Terriator" };
       }
       if (isDeletedStoreUserId(input.userId) || isDeletedStoreUserId(input.newUserId)) {

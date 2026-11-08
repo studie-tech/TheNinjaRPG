@@ -18,6 +18,7 @@ import {
   canRemoveBloodlineFromPool,
   canViewAllApplications,
   getApprovalGroup,
+  isSiteOwnerAccount,
   getConversationComposeRestriction,
   getMessagingRestriction,
   RESTRICTED_STAFF_CONVERSATION_MESSAGE,
@@ -236,4 +237,11 @@ test("conversation compose restriction lets banned users reply to their own tick
   expect(compose(banned, staffConvo, "me")).toBeNull();
   expect(compose(banned, staffConvo, "other")).toBe(RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE);
   expect(compose(banned, staffConvo, null)).toBe(RESTRICTED_STAFF_CONVERSATION_MESSAGE);
+});
+
+test("isSiteOwnerAccount matches only the owner's exact username", () => {
+  expect(isSiteOwnerAccount({ username: "Terriator" })).toBe(true);
+  for (const username of ["terriator", "Terriator2", " Terriator", "Terr"]) {
+    expect(isSiteOwnerAccount({ username })).toBe(false);
+  }
 });

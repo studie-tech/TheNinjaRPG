@@ -47,6 +47,7 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { round } from "@/utils/math";
+import { isSiteOwnerAccount } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
 import { secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -380,7 +381,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
     .map((offer) => {
       const hasRyo = userData.money >= offer.requestedRyo;
       const owner = offer.creatorUserId === userData.userId;
-      const isTerr = userData.username === "Terriator";
+      const isTerr = isSiteOwnerAccount(userData);
       const canDelist =
         new Date() >=
         secondsFromDate(3600 * 24 * RYO_FOR_REP_DAYS_FROZEN, offer.createdAt);

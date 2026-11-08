@@ -7,6 +7,7 @@ import type {
 } from "@/drizzle/constants";
 import {
   ABANDONABLE_QUEST_TYPES,
+  CREATOR_USERNAME,
   isStaffApprovalGroup,
   MESSAGING_MIN_LEVEL,
   messagingLevelMessage,
@@ -177,6 +178,13 @@ export const canTransferJutsu = (user?: UserData) => {
   if (!user) return false;
   return user.role !== "USER" || user.staffAccount;
 };
+
+/**
+ * The site owner's own account, matched by username: no role grant confers its powers
+ * (delisting any ryo offer before its freeze ends, renaming user ids).
+ */
+export const isSiteOwnerAccount = (user: Pick<UserData, "username">) =>
+  user.username === CREATOR_USERNAME;
 
 export const canUseMonitoringTests = (role: UserRole) => {
   return ["OWNER"].includes(role);
