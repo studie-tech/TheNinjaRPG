@@ -16,12 +16,13 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   RAID_BATTLE_LOBBY_SECONDS,
   RAID_BATTLE_MAX_USERS_PER_TEAM,
+  RAID_MAX_CONCURRENT_TEAMS,
 } from "@/drizzle/constants";
 import { ActiveTimedBuffs } from "@/layout/ActiveTimedBuffs";
 import AvatarImage from "@/layout/Avatar";
@@ -221,7 +222,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   const thresholds = raidDetailsData?.thresholds ?? [];
   const leaderboard = leaderboardData?.participations ?? [];
   const activeTeams = activeTeamsData?.teams ?? [];
-  const maxTeams = activeTeamsData?.maxTeams ?? 5;
+  const maxTeams = activeTeamsData?.maxTeams ?? RAID_MAX_CONCURRENT_TEAMS;
 
   // Auto-select the only raid when sectorFilter is provided and there's exactly one raid
   useEffect(() => {
@@ -723,21 +724,6 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
 // --- RaidTeamsDisplay Component ---
 
-interface RaidTeamMember {
-  slot: number;
-  visibleId: string;
-  username: string;
-  avatar: string | null;
-}
-
-interface RaidTeam {
-  id: string;
-  createdAt: Date;
-  members: RaidTeamMember[];
-  canJoin: boolean;
-  isClaiming?: boolean;
-}
-
 interface RaidTeamsDisplayProps {
   activeTeams: RaidTeam[];
   maxTeams: number;
@@ -1017,3 +1003,5 @@ const RaidEmptySlot: React.FC<RaidEmptySlotProps> = ({
 };
 
 export default RaidBrowser;
+
+type RaidTeam = RouterOutputs["raids"]["getActiveRaidTeams"]["teams"][number];
