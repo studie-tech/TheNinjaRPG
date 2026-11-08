@@ -15,11 +15,13 @@ import { EffectFieldInputGeneric, EffectFormWrapper, MassEffectEditor, Objective
 import { RewardEditor } from "@/layout/RewardEditor";
 import { ObjectiveReward } from "@/validators/rewards";
 import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
-import { getObjectiveSchema, QuestValidator } from "@/validators/objectives";
+import { type AllObjectivesType, getObjectiveSchema, QuestValidator } from "@/validators/objectives";
 import * as toastHelpers from "@/libs/toast";
+import * as errorUtils from "@/utils/error";
 import * as UserContext from "@/utils/UserContext";
 import {
   DamageTag,
+  getTagSchema,
   NonCombatConsumeRewardTag,
   NonCombatQuestTag,
   HealTag,
@@ -1178,4 +1180,107 @@ describe("weighted cache effect drafts", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ rewardMode: "standard", reward_money: 17, weightedCache: { rolls: [{ count: 1, probability: 4900 }, { count: 2, probability: 5000 }], tiers: [{ entries: [{ items: [{ itemId: "replacement", quantity: 1 }] }] }] } });
   });
+});
+
+describe("schema-derived field visibility", () => {
+  beforeEach(() => {
+    installBrowserGlobals({ resizeObserver: true, scrollIntoView: true, animationFrame: true });
+  });
+  afterEach(() => {
+    cleanup();
+    restoreBrowserGlobals();
+  });
+
+  const labels = (container: HTMLElement) =>
+    [...container.querySelectorAll("label")].map((label) => label.textContent);
+
+  it.each([
+    ["damage", "jutsu", ["type", "staticAssetPath", "staticAnimation", "appearAnimation", "disappearAnimation", "appearSfx", "disappearSfx", "rounds", "power", "powerPerLevel", "target", "friendlyFire", "calculation", "statTypes", "generalTypes", "elements", "residualModifier", "dmgModifier", "allowBloodlineDamageIncrease", "allowBloodlineDamageDecrease", "description"]],
+    ["heal", "bloodline", ["type", "staticAssetPath", "staticAnimation", "appearAnimation", "disappearAnimation", "appearSfx", "disappearSfx", "power", "powerPerLevel", "target", "calculation", "poolsAffected", "description"]],
+    ["noncombatgainskill", "item", ["type", "appearSfx", "disappearSfx", "Skill Unlocked by Consumption", "description"]],
+    ["noncombatquest", "item", ["type", "appearSfx", "disappearSfx", "Special quest", "description"]],
+    ["repair", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"]],
+    ["rollbloodline", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "rank", "description"]],
+    ["rollsagemode", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"]],
+    ["removebloodline", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"]],
+    ["marriageslotincrease", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "rank", "description"]],
+  ] as const)("shows the %s tag fields for a %s", (type, wrapper, expected) => {
+    const tag = getTagSchema(type).parse({ type }) as ZodAllTags;
+    const view = render(
+      <EffectFormWrapper type={wrapper} idx={0} tag={tag} effects={[tag]} setEffects={vi.fn()} availableTags={[type]} />,
+    );
+    expect(labels(view.container)).toEqual([...expected]);
+  });
+
+  it.each([
+    ["specific", true, false],
+    ["from_list", false, true],
+    ["random", false, false],
+    ["user_village", false, false],
+    ["current_sector", false, false],
+  ] as const)("shows location fields for the %s sector type", (sectorType, showsSector, showsSectorList) => {
+    const objective = getObjectiveSchema("move_to_location").parse({ id: "travel", task: "move_to_location", sectorType });
+    const view = render(
+      <ObjectiveFormWrapper
+        idx={0} quest={{ consecutiveObjectives: true }} availableTags={["move_to_location"]}
+        objective={objective} objectives={[objective]} setObjectives={vi.fn()}
+      />,
+    );
+    expect(labels(view.container).includes("sector")).toBe(showsSector);
+    expect(labels(view.container).includes("sectorList")).toBe(showsSectorList);
+    expect(labels(view.container).includes("sectorType")).toBe(true);
+  });
+
+  it.each([
+    ["defeat_opponents", ["Next Objective ID", "If fail, go to objective"]],
+    ["reset_quest", ["Reset to specific objective"]],
+  ] as const)("offers every objective id in the %s objective links", async (task, links) => {
+    const parsed = getObjectiveSchema(task).safeParse({ id: "fight", task });
+    const objective = (parsed.success ? parsed.data : { id: "fight", task }) as AllObjectivesType;
+    const objectives = [objective, { ...objective, id: "retry" }, { ...objective, id: "done" }] as AllObjectivesType[];
+    const view = render(
+      <ObjectiveFormWrapper
+        idx={0} quest={{ consecutiveObjectives: true }} availableTags={[task]}
+        objective={objective} objectives={objectives} setObjectives={vi.fn()}
+      />,
+    );
+    expect(labels(view.container).filter((label) => /Objective ID|objective$/.test(label ?? ""))).toEqual([...links]);
+    for (const label of links) {
+      const trigger = view.getByText(label).closest("div")!.querySelector<HTMLElement>('[role="combobox"]')!;
+      fireEvent.click(trigger);
+      for (const id of ["fight", "retry", "done"]) expect(await view.findByRole("option", { name: id })).toBeTruthy();
+      fireEvent.click(trigger);
+      await waitFor(() => expect(view.queryByRole("option", { name: "retry" })).toBeNull());
+    }
+  });
+});
+
+describe("MassEffectEditor save failures", () => {
+  for (const kind of ["item", "jutsu", "bloodline"] as const) {
+    it(`reports ${kind} save failures and releases the pending state`, async () => {
+      const retryable = vi.spyOn(errorUtils, "isRetryableTrpcError").mockImplementation((error) => error.message === "Network down");
+      for (const failure of [new Error("Server rejected"), new Error("Network down"), "opaque"]) {
+        save.mockImplementationOnce(async () => { throw failure; });
+      }
+      const entries = [{ id: "first", name: "First", effects: [DamageTag.parse({})], updatedAt: new Date() }];
+      const view = render(<MassEffectEditor kind={kind} entries={entries} selectedFields={["power"]} onPendingChange={pending} />);
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        fireEvent.click(view.getByRole("button", { name: `Save ${kind} effects for First` }));
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(attempt));
+        await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
+        await waitFor(() => expect(view.queryByRole("status")).toBeNull());
+      }
+      expect(pending.mock.calls).toEqual([[true], [false], [true], [false], [true], [false]]);
+      expect(toast.mock.calls).toEqual(
+        kind === "item"
+          ? [
+              [{ success: false, message: "Server rejected" }],
+              [{ success: false, message: "Network down" }],
+              [{ success: false, message: "Unable to save item effects" }],
+            ]
+          : [[{ success: false, message: "Network down" }]],
+      );
+      retryable.mockRestore();
+    });
+  }
 });
