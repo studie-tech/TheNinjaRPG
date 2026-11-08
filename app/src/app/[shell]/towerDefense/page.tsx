@@ -35,7 +35,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { TowerDefenseUpgradeCategory } from "@/drizzle/constants";
-import { ID_ANIMATION_HIT, ID_SFX_HIT } from "@/drizzle/constants";
+import {
+  ID_ANIMATION_HIT,
+  ID_SFX_HIT,
+  TD_SCORE_TO_POINTS_RATIO,
+} from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useHudStoreValues, useTowerDefense } from "@/hooks/useTowerDefense";
 import ContentBox from "@/layout/ContentBox";
@@ -433,7 +437,8 @@ const TowerDefensePage: React.FC = () => {
                   <div className="mt-4 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
                     <p className="font-semibold text-blue-500 text-lg">
                       <Info className="mr-2 inline h-5 w-5" />
-                      Would have earned {Math.floor(gameState.score / 100)} points
+                      Would have earned{" "}
+                      {Math.floor(gameState.score / TD_SCORE_TO_POINTS_RATIO)} points
                     </p>
                     <div className="mt-2 space-y-1 text-muted-foreground text-xs">
                       <p>
@@ -461,12 +466,12 @@ const TowerDefensePage: React.FC = () => {
                     <div className="mt-2 space-y-1 text-muted-foreground text-xs">
                       <p className="font-medium">How points are calculated:</p>
                       <p>
-                        {gameState.score} score ÷ 100 ={" "}
-                        {Math.floor(gameState.score / 100)} points
+                        {gameState.score} score ÷ {TD_SCORE_TO_POINTS_RATIO} ={" "}
+                        {Math.floor(gameState.score / TD_SCORE_TO_POINTS_RATIO)} points
                       </p>
                       {(gameState.finalPointsEarned ?? 0) === 0 && (
                         <p className="text-amber-500/80">
-                          Reach 100+ score to earn points!
+                          Reach {TD_SCORE_TO_POINTS_RATIO}+ score to earn points!
                         </p>
                       )}
                       {(gameState.finalPointsEarned ?? 0) > 0 && (
