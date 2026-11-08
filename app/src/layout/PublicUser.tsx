@@ -2625,10 +2625,8 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
           userId: target.userId,
           badgeId: target.badgeId,
         });
-        if (!result.success) {
-          setRemovalNeedsRetry(true);
-          return showMutationToast(result);
-        }
+        // Structured failures are known not to have committed, so staff can retry.
+        if (!result.success) return showMutationToast(result);
 
         showMutationToast(result);
         if (
@@ -2974,7 +2972,7 @@ interface ReferralRemovalRequest {
   expectedRecruiterId: string;
 }
 
-const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
+export const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
   recruit,
   recruiterId,
   recruiterUsername,
@@ -2999,9 +2997,9 @@ const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
     await removalFlight.run(request, async () => {
       try {
         const result = await deleteReferral.mutateAsync({ userId: request.userId });
+        // Structured failures are known not to have committed, so staff can retry.
         if (!result.success) {
           showMutationToast(result);
-          setRetryRequest(request);
           return;
         }
         // The commit is authoritative. Remove only this captured row before cache/network work so
