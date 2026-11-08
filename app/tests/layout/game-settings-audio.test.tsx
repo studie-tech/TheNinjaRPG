@@ -6,56 +6,22 @@ import * as audioHook from "@/hooks/useAudio";
 import * as iframeHook from "@/hooks/useIframeMute";
 import { GlobalAudioProvider, useGameSettings } from "@/layout/GameSettings";
 import * as audioPreferences from "@/libs/audioPreferences";
+import * as native from "@/libs/native";
+import type { RemoteCommand } from "@/libs/native/audioSession";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as timeUtils from "@/utils/time";
 import { capacitorWindow, removeCapacitor, type CapacitorBridge } from "../setup/native";
 
-type RemoteCommand = "play" | "pause" | "toggle";
-type AudioTestMocks = {
-  remoteCommand?: (command: RemoteCommand) => void;
-  setEnabled: ReturnType<
-    typeof vi.fn<(enabled: boolean, isPreferenceChange?: boolean) => Promise<void>>
-  >;
-  activate: ReturnType<typeof vi.fn>;
-  deactivate: ReturnType<typeof vi.fn>;
-  isPlaying: boolean;
-  enabled: boolean;
+/** Audio hook state and native session fakes the provider reads; reset after each test. */
+const audio = {
+  remoteCommand: undefined as ((command: RemoteCommand) => void) | undefined,
+  setEnabled: vi.fn(async (_enabled: boolean, _isPreferenceChange?: boolean) => undefined),
+  activate: vi.fn(async () => true),
+  deactivate: vi.fn(async (_preserveControls?: boolean) => undefined),
+  isPlaying: false,
+  enabled: true,
 };
-
-function getAudioTestMocks(): AudioTestMocks {
-  const globals = globalThis as typeof globalThis & {
-    __audioTestMocks?: AudioTestMocks;
-  };
-  globals.__audioTestMocks ??= {
-    setEnabled: vi.fn(async (_enabled: boolean, _isPreferenceChange?: boolean) => undefined),
-    activate: vi.fn(async () => true),
-    deactivate: vi.fn(async () => undefined),
-    isPlaying: false,
-    enabled: true,
-  };
-  return globals.__audioTestMocks;
-}
-
-vi.mock("@/libs/native", () => ({
-  platform: () => {
-    const reported = (
-      globalThis as typeof globalThis & {
-        window?: Window & { Capacitor?: { getPlatform: () => string } };
-      }
-    ).window?.Capacitor?.getPlatform();
-    return reported === "ios" || reported === "android" ? reported : "web";
-  },
-  audioSession: {
-    activate: getAudioTestMocks().activate,
-    deactivate: getAudioTestMocks().deactivate,
-    setNowPlaying: vi.fn(async () => undefined),
-    onRemoteCommand: (callback: (command: RemoteCommand) => void) => {
-      getAudioTestMocks().remoteCommand = callback;
-      return () => undefined;
-    },
-  },
-}));
 
 const user = (level: number, musicOn = true) =>
   ({
@@ -69,20 +35,26 @@ beforeEach(() => {
   vi.spyOn(audioPreferences, "isLocalAudioSession").mockReturnValue(false);
   // Restore hook and utility exports between suites sharing Bun's module cache.
   vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
-    isPlaying: getAudioTestMocks().isPlaying,
+    isPlaying: audio.isPlaying,
     requiresInteraction: false,
-    enabled: getAudioTestMocks().enabled,
-    setEnabled: getAudioTestMocks().setEnabled,
+    enabled: audio.enabled,
+    setEnabled: audio.setEnabled,
   }));
   vi.spyOn(audioUtils, "playPreloadedAudio").mockResolvedValue(undefined);
   vi.spyOn(audioUtils, "preloadAudioBuffers").mockResolvedValue(undefined);
+  vi.spyOn(native.audioSession, "activate").mockImplementation(audio.activate);
+  vi.spyOn(native.audioSession, "deactivate").mockImplementation(audio.deactivate);
+  vi.spyOn(native.audioSession, "setNowPlaying").mockResolvedValue(undefined);
+  vi.spyOn(native.audioSession, "onRemoteCommand").mockImplementation((callback) => {
+    audio.remoteCommand = callback;
+    return () => undefined;
+  });
 });
 
 afterEach(() => {
   removeCapacitor();
   cleanup();
   vi.restoreAllMocks();
-  const audio = getAudioTestMocks();
   audio.setEnabled.mockClear();
   audio.activate.mockClear();
   audio.activate.mockResolvedValue(true);
@@ -126,7 +98,6 @@ describe("GlobalAudioProvider", () => {
 
   it("ignores Android remote commands while the saved music preference is off", async () => {
     setShellPlatform("android");
-    const audio = getAudioTestMocks();
     const view = render(
       <GlobalAudioProvider userData={user(1, false)}>
         <span>child</span>
@@ -158,7 +129,6 @@ describe("GlobalAudioProvider", () => {
 
   it("starts iOS remote Play during the gesture and keeps a later Pause authoritative", async () => {
     setShellPlatform("ios");
-    const audio = getAudioTestMocks();
     audio.enabled = false;
     const view = render(
       <GlobalAudioProvider userData={user(1)}>
@@ -197,7 +167,6 @@ describe("GlobalAudioProvider", () => {
 
   it("retries iOS session activation after a failed attempt", async () => {
     setShellPlatform("ios");
-    const audio = getAudioTestMocks();
     audio.isPlaying = true;
     audio.activate.mockResolvedValueOnce(false);
     const view = render(
@@ -225,7 +194,6 @@ describe("GlobalAudioProvider", () => {
 
   it("keeps the iOS audio session through a brief pause and releases it when music is off", async () => {
     setShellPlatform("ios");
-    const audio = getAudioTestMocks();
     audio.isPlaying = true;
     const view = render(
       <GlobalAudioProvider userData={user(1)}>
@@ -254,7 +222,6 @@ describe("GlobalAudioProvider", () => {
   });
 
   it("keeps a remote pause through unrelated profile refreshes", async () => {
-    const audio = getAudioTestMocks();
     const view = render(
       <GlobalAudioProvider userData={user(1)}>
         <span>child</span>
@@ -280,7 +247,6 @@ describe("GlobalAudioProvider", () => {
   });
 
   it("releases the soundtrack when the saved music preference is off", async () => {
-    const audio = getAudioTestMocks();
     const view = render(
       <GlobalAudioProvider userData={user(1)}>
         <span>child</span>
@@ -403,7 +369,7 @@ describe("shared SFX preference action", () => {
       expect(audioHook.useAudio).toHaveBeenLastCalledWith(
         expect.objectContaining({ enabled: false }),
       );
-      expect(getAudioTestMocks().setEnabled).toHaveBeenCalledWith(false, true);
+      expect(audio.setEnabled).toHaveBeenCalledWith(false, true);
       expect(view.result.current.buttonSfxOn).toBe(false);
       expect(view.result.current.sfxOn).toBe(false);
 
