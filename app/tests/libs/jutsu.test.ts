@@ -173,13 +173,13 @@ describe("computeJutsuLoadoutAssignments", () => {
     expect(out.invalidJutsus[0]).toMatch(/equip limit/);
   });
 
-  it.each([
+  it.each<[kind: string, cap: number, prefix: string, marker: { jutsuType?: string; effectTypes?: string[] }]>([
     ["event", 2, "e", { jutsuType: "EVENT" }],
     ["forbidden", 1, "f", { jutsuType: "FORBIDDEN" }],
     ["barrier", 1, "b", { effectTypes: ["barrier"] }],
     ["shield", 2, "s", { effectTypes: ["shield"] }],
     ["heal", 3, "h", { effectTypes: ["heal"] }],
-  ] as const)("enforces the %s-jutsu cap", (kind, cap, prefix, marker) => {
+  ])("enforces the %s-jutsu cap", (kind, cap, prefix, marker) => {
     const name = `${kind[0]!.toUpperCase()}${kind.slice(1)}`;
     const userjutsus = Array.from({ length: cap + 1 }, (_, i) =>
       uj({ jutsuId: `${prefix}${i}`, name: `${name} ${i}`, ...marker }),
