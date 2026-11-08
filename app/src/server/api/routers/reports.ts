@@ -65,6 +65,7 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { offsetPage } from "@/server/utils/pagination";
 import { fetchUserReport } from "@/server/utils/reports";
@@ -75,8 +76,8 @@ import {
   canClearUserNindo,
   canEscalateBan,
   canMarkAdminResolved,
+  canModerate,
   canModerateReports,
-  canModerateRoles,
   canSeeReport,
   canSeeSecretData,
   canSilenceUsers,
@@ -93,7 +94,6 @@ import {
   userReportSchema,
   userReviewSchema,
 } from "@/validators/reports";
-import type { DrizzleClient } from "../../db";
 
 const reportTimeoutSchema = z.object({
   comment: z.string().min(10).max(5000),
@@ -118,16 +118,17 @@ export const reportsRouter = createTRPCRouter({
     return await selectDistinctUserReportForGetReportSystemNames(ctx.drizzle);
   }),
   getReportStatistics: protectedProcedure.query(async ({ ctx }) => {
-    const [user, staff, timesReported, timesReporting, decisions] = await Promise.all([
-      fetchUser(ctx.drizzle, ctx.userId),
-      await selectUserDataForGetReportStatistics(ctx.drizzle),
-      await selectUserReportForGetReportStatistics(ctx.drizzle),
-      await selectUserReportForGetReportStatistics2(ctx.drizzle),
-      await selectUserReportCommentForGetReportStatistics(ctx.drizzle),
-    ]);
-    if (user.role === "USER") {
+    // The aggregates scan whole tables, so they run only after the staff check
+    const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (!isStaffRole(user.role)) {
       throw serverError("UNAUTHORIZED", "You cannot view this page");
     }
+    const [staff, timesReported, timesReporting, decisions] = await Promise.all([
+      selectUserDataForGetReportStatistics(ctx.drizzle),
+      selectUserReportForGetReportStatistics(ctx.drizzle),
+      selectUserReportForGetReportStatistics2(ctx.drizzle),
+      selectUserReportCommentForGetReportStatistics(ctx.drizzle),
+    ]);
     return { staff, timesReported, timesReporting, decisions };
   }),
   getModBotPerformance: protectedProcedure
@@ -171,7 +172,7 @@ export const reportsRouter = createTRPCRouter({
       const { skip, cursorAfter } = offsetPage(input);
       const user = await fetchUser(ctx.drizzle, ctx.userId);
 
-      const staffUser = canModerateRoles.includes(user.role);
+      const staffUser = canModerate(user.role);
       const timeoutOnlyStaff = canTimeoutUsers(user);
       const reports = await selectUserReportForGetAll(
         ctx.drizzle,
@@ -632,7 +633,8 @@ export const reportsRouter = createTRPCRouter({
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform moderation actions");
-      if (!canClearUserNindo(user)) return errorResponse("You cannot clear nindos");
+      if (!canClearUserNindo(user))
+        return errorResponse("You cannot regenerate avatars");
       // Mutate
       const { avatarUrl, thumbnailUrl } = await createUserAvatar(
         ctx.drizzle,
@@ -688,7 +690,7 @@ export const reportsRouter = createTRPCRouter({
       ]);
       // Guard
       if (user.isBanned) return errorResponse("You are banned and cannot post reviews");
-      if (target.role === "USER") return errorResponse("You cannot review users");
+      if (!isStaffRole(target.role)) return errorResponse("You cannot review users");
       // Mutate
       if (review) {
         await updateUserReviewForUpsertStaffReview(ctx.drizzle, input, review);
