@@ -442,6 +442,22 @@ describe("quest steps", () => {
       expect(state.sceneAssets).toHaveBeenLastCalledWith({ assetIds: ["scene-character"] }, { enabled: true });
     });
 
+    it.each([
+      ["the active objective's scene", true, ["objective-character"], ["objective-character"]],
+      ["the quest's scene when the objective has none", true, [], ["scene-character"]],
+      ["the quest's scene for a quest without an objective order", false, ["objective-character"], ["scene-character"]],
+    ] as const)("shows %s", async (_name, consecutiveObjectives, objectiveCharacters, assetIds) => {
+      openLesson();
+      const quest = dialogQuest("cast", "cast-objective", "mission");
+      const [entry] = quest.userQuests as { quest: { consecutiveObjectives: boolean; description: string; content: { objectives: { sceneCharacters: readonly string[] }[] } } }[];
+      entry!.quest.consecutiveObjectives = consecutiveObjectives;
+      entry!.quest.content.objectives[0]!.sceneCharacters = objectiveCharacters;
+      const view = show(TUTORIAL_STEPS_COUNT, { rank: "GENIN", ...quest }, "/profile");
+      const region = await waitFor(() => lesson(view, "Quest cast"));
+      expect(region.textContent).toContain(consecutiveObjectives ? "Say yes to cast" : "About cast");
+      expect(state.sceneAssets).toHaveBeenLastCalledWith({ assetIds }, { enabled: true });
+    });
+
     it("steps aside for a quest already shown in the logbook", async () => {
       openLesson();
       const quest = dialogQuest("listed", "listed-objective", "mission");
