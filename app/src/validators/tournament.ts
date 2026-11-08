@@ -20,6 +20,10 @@ export type TournamentCreateSchemaInput = z.input<typeof tournamentCreateSchema>
 
 /** Allowed best-of settings, shared by the default and per-round overrides. */
 const seriesLength = z.union([z.literal(1), z.literal(3), z.literal(5)]);
+export type EventTournamentSeriesLength = z.infer<typeof seriesLength>;
+export const EVENT_TOURNAMENT_SERIES_LENGTHS = seriesLength.options.map(
+  (option) => option.value,
+);
 /** Staff configuration; schedule values are Unix milliseconds and rewards use quest schemas. */
 export const eventTournamentConfigSchema = z
   .object({
@@ -111,7 +115,7 @@ export type EventSeries = {
   loserId: string | null;
   /** The player who earned this series win, preserved across later substitutions. */
   winnerUserId: string | null;
-  bestOf: 1 | 3 | 5;
+  bestOf: EventTournamentSeriesLength;
   scores: [number, number];
   dodges: [number, number];
   games: EventGame[];
