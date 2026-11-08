@@ -1,7 +1,9 @@
 import { describe, it, expect } from "bun:test";
 import {
   COOKING_BASE_SLOTS,
+  DURABILITY_POINT_PRICE_PERCENT,
   FED_COOKING_SLOTS,
+  FED_INVENTORY_SLOTS,
   ItemTypes,
   ItemSlots,
   MATERIALS_BASE_SLOTS,
@@ -9,7 +11,10 @@ import {
 } from "@/drizzle/constants";
 import {
   buildItemLoadoutData,
+  calcItemRepairCost,
+  calcItemSellingPrice,
   calcMaxCookingItems,
+  calcMaxItems,
   calcMaxHouseSpecialItems,
   calcMaxMaterials,
   canEquipAdditional,
@@ -1167,5 +1172,42 @@ describe("finishedImbuementItems", () => {
 
   it("returns an empty list for items without imbuements", () => {
     expect(finishedImbuementItems({ imbuements: [] }, NOW)).toEqual([]);
+  });
+});
+
+describe("item economy values", () => {
+  const user = {
+    staffAccount: false,
+    federalStatus: "NONE",
+    extraItemSlots: 0,
+    anbuId: null,
+  } as unknown as UserData;
+  const owned = (item: Record<string, unknown>) =>
+    ({
+      quantity: 1,
+      durability: 0,
+      item: { cost: 1000, isEventItem: false, effects: [], maxDurability: 10, ...item },
+    }) as unknown as Parameters<typeof calcItemRepairCost>[0];
+
+  it("starts the carried inventory at 20 slots", () => {
+    expect(calcMaxItems(user)).toBe(20 + FED_INVENTORY_SLOTS.NONE);
+  });
+
+  it("sells at the 80% base discount, capped at 95%", () => {
+    expect(calcItemSellingPrice(user, owned({}), undefined)).toBe(200);
+    expect(calcItemSellingPrice(user, owned({ effects: [{ type: "heal" }] }), undefined)).toBe(50);
+  });
+
+  it.each([
+    ["COMMON", 50],
+    ["RARE", 200],
+    ["EPIC", 400],
+    ["LEGENDARY", 800],
+    ["UNKNOWN", 0],
+    ["constructor", 0],
+  ])("prices %s repairs from their base cost", (rarity, base) => {
+    expect(calcItemRepairCost(owned({ rarity }))).toBe(
+      Math.ceil(base * 10 * DURABILITY_POINT_PRICE_PERCENT),
+    );
   });
 });

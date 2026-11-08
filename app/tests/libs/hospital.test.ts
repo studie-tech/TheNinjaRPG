@@ -11,6 +11,7 @@ import {
   calcHospitalHealPools,
   calcHowMuchToHeal,
   calcMedninHealablePool,
+  calcUserHealFactor,
 } from "@/libs/hospital";
 
 describe("calcHospitalHealExperience", () => {
@@ -119,5 +120,15 @@ describe("mednin rank tables", () => {
   it("treats a missing healer as unranked", () => {
     expect(calcCombatHealPercentage(undefined)).toBe(30);
     expect(calcMedninHealablePool(undefined)).toEqual(["Health"]);
+  });
+
+  it.each([
+    ["NONE", 0],
+    ["NOVICE", 0.5 - 0.05],
+    ["APPRENTICE", 0.5 - 0.1],
+    ["MASTER", 0.5 - 0.25],
+    ["LEGENDARY", 0.5 - 0.35],
+  ] as const)("gives a %s healer the exact chakra factor %d", (rank, factor) => {
+    expect(calcUserHealFactor(healer(rank) as Parameters<typeof calcUserHealFactor>[0])).toBe(factor);
   });
 });
