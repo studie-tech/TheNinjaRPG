@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/select";
 import type { BattleType } from "@/drizzle/constants";
 import { BattleTypes } from "@/drizzle/constants";
-import { useDelayState } from "@/hooks/useDelayState";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -614,11 +613,11 @@ export const ContentFiltering = <
 }) => {
   // Local UI state
   const [filterOpen, setFilterOpen] = useState(false);
-  const [showExclusionPopover, , setShowExclusionPopover] = useDelayState(false);
-  const [exclusionCategoryKey, , setExclusionCategoryKey] = useDelayState<string>(
+  const [showExclusionPopover, setShowExclusionPopover] = useState(false);
+  const [exclusionCategoryKey, setExclusionCategoryKey] = useState<string>(
     schema.exclusions?.[0]?.key ?? "",
   );
-  const [tempExclusions, , setTempExclusions] = useDelayState<string[]>([]);
+  const [tempExclusions, setTempExclusions] = useState<string[]>([]);
 
   useEffect(() => {
     if (disabled) setFilterOpen(false);
