@@ -98,6 +98,22 @@ export const safeSessionStorageSetItem = (key: string, value: string): boolean =
   }
 };
 
+/**
+ * Safely removes an item from sessionStorage
+ * @param key - The key to remove
+ * @returns true if successful, false otherwise
+ */
+export const safeSessionStorageRemoveItem = (key: string): boolean => {
+  if (typeof window === "undefined") return false;
+  try {
+    window.sessionStorage.removeItem(key);
+    return true;
+  } catch {
+    // SecurityError or other storage access errors
+    return false;
+  }
+};
+
 export const useLocalStorage = <T>(
   key: string,
   initialValue: T,
