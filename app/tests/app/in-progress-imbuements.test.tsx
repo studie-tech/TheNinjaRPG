@@ -8,6 +8,7 @@ import { AuctionOffers } from "@/app/[shell]/auctionhouse/Offers";
 import * as CombatActions from "@/layout/CombatActions";
 import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
+import * as pagination from "@/libs/pagination";
 import OccupationCrafting from "@/layout/OccupationCrafting";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
@@ -51,6 +52,7 @@ const stubApi = (auction: object = {}, rows: object[] = [imbuedRow], occupation:
 
 beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true });
+  vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: { userId: "viewer", occupation: "CRAFTING", level: 1, bank: 0, reputationPoints: 0, money: 0, role: "USER" },
     prepareUserUpdate: vi.fn(),
