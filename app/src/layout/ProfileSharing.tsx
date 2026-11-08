@@ -28,11 +28,13 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import { getClaimedVotesPatch } from "@/deltas/profile";
 import {
   ACTIVE_VOTING_SITES,
   RECRUIT_RANK_MILESTONES,
   type RecruitMilestoneRank,
   SITE_URL,
+  VOTE_REWARD_REPUTATION,
 } from "@/drizzle/constants";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AvatarImage from "@/layout/Avatar";
@@ -58,20 +60,17 @@ import {
 
 export function ProfileSharing() {
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [recruitTab, setRecruitTab] = useState<string>("Link");
 
   // mutations
   const { mutate: claimVotes, isPending } = api.profile.claimVotes.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
-      if (data.success && userData && userData?.votes) {
-        await updateUser({
-          reputationPoints: userData.reputationPoints + 1,
-          reputationPointsTotal: userData.reputationPointsTotal + 1,
-          votes: { ...userData.votes, userId: userData.userId, claimed: true },
-        });
+      if (data.success) {
+        await updateUser(getClaimedVotesPatch, { revision, delta: data.userDelta });
       }
     },
   });
@@ -158,9 +157,9 @@ export function ProfileSharing() {
       <ContentBox title="TNR Promotion" subtitle="Earn by helping us grow">
         <p className="mb-4 italic">
           Vote on the following sites to earn reputation points. Once you have voted on
-          all voting sites, and the votes have succesfully registered, you can claim 1
-          reputation point per day. Note that sites may be added/removed from this list
-          regularly.
+          all voting sites, and the votes have succesfully registered, you can claim{" "}
+          {VOTE_REWARD_REPUTATION} reputation point per day. Note that sites may be
+          added/removed from this list regularly.
         </p>
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

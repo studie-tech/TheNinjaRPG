@@ -70,6 +70,8 @@ export type StarterVillage = (typeof STARTER_VILLAGES)[number];
 
 // bbogd.com stopped resolving (Oct 2026); its UserVote column is kept but no longer active
 export const ACTIVE_VOTING_SITES = ["mmoHub", "arenaTop100", "topWebGames"] as const;
+/** Reputation credited once a day for voting on every active site. */
+export const VOTE_REWARD_REPUTATION = 1;
 
 export const GameAssetTypes = [
   "STATIC",

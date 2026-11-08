@@ -39,6 +39,11 @@ describeWithDatabase("vote claims", () => {
       Array.from({ length: ATTEMPTS }, () => caller.claimVotes()),
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(results.find((result) => result.success)?.userDelta).toEqual({
+      reputationPoints: 1,
+      reputationPointsTotal: 1,
+    });
+    expect(results.filter((result) => !result.success).every((result) => !result.userDelta)).toBe(true);
     expect(await readVoter()).toMatchObject({ reputationPoints: 1, reputationPointsTotal: 1 });
     expect(await readVote()).toMatchObject({ claimed: true, totalClaims: 1 });
   });

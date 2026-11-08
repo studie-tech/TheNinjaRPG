@@ -41,6 +41,7 @@ import {
   type TimedMasteryName,
   type TrainingSpeed,
   type UserRole,
+  VOTE_REWARD_REPUTATION,
 } from "@/drizzle/constants";
 import {
   abEvent,
@@ -1506,8 +1507,8 @@ export const executeClaimVotes = (
     SET ${userVote.claimed} = true,
         ${userVote.totalClaims} = ${userVote.totalClaims} + 1,
         ${userVote.secret} = ${secret},
-        ${userData.reputationPoints} = ${userData.reputationPoints} + 1,
-        ${userData.reputationPointsTotal} = ${userData.reputationPointsTotal} + 1
+        ${userData.reputationPoints} = ${userData.reputationPoints} + ${VOTE_REWARD_REPUTATION},
+        ${userData.reputationPointsTotal} = ${userData.reputationPointsTotal} + ${VOTE_REWARD_REPUTATION}
     WHERE ${and(
       eq(userVote.userId, ctx.userId),
       eq(userVote.claimed, false),

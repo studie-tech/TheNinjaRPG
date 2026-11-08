@@ -6,6 +6,7 @@ import {
   canBootstrapQuestType,
   getAwardExperienceToAllUserUpdate,
   getAwardExperienceUserUpdate,
+  getClaimVotesUserUpdate,
   getTavernColorPatch,
   getToggleDeletionTimerUserUpdate,
   getUpdatePreferencesUserUpdate,
@@ -2188,7 +2189,7 @@ export const profileRouter = createTRPCRouter({
     }),
   claimVotes: protectedProcedure
     .meta({ mcp: { description: "Claim reputation points for voting" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Get user's vote record
       const userVoteRecord = await findUserVoteForClaimVotes(ctx.drizzle, ctx);
@@ -2211,6 +2212,7 @@ export const profileRouter = createTRPCRouter({
       return {
         success: true,
         message: "Successfully claimed reputation points for voting",
+        ...getClaimVotesUserUpdate(),
       };
     }),
   /** Load support controls on demand without publishing generation leases. */
