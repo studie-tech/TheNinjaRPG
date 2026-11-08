@@ -1151,7 +1151,6 @@ export const itemRouter = createTRPCRouter({
     .input(
       itemFilteringSchema.extend({
         cursor: z.number().nullish(),
-        limit: z.number().min(1).max(500),
       }),
     )
     .query(async ({ ctx, input }) => {
