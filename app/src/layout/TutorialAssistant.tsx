@@ -72,6 +72,7 @@ import {
   type TutorialPortraitSide,
   type TutorialScreenBox,
 } from "@/libs/tutorial";
+import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 import { usePublicPathname } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -447,74 +448,15 @@ const PlayerTutorialAssistant: React.FC<
     return () => clearTimeout(timer);
   }, [currentStep?.id, currentStep?.showNextButton, isAssistantVisible]);
 
-  // Post tutorial state - quest data from userData
-  const [postTutorialQuest, setPostTutorialQuest] = useState<{
-    userQuest: UserQuest;
-    tracker: QuestTrackerType;
-  } | null>(null);
-
-  // Post tutorial state - whether to show the quest
-  const [showPostTutorialQuest, setShowPostTutorialQuest] = useState(false);
-
-  // Quest type priority ordering (persisted in localStorage)
-  const [questTypePriority, setQuestTypePriority] = useLocalStorage<QuestType[]>(
-    "tutorial-quest-type-priority",
-    [...OrderedQuestTypesInTutorial],
-  );
-
   // Dialog state for quest type ordering
   const [showOrderingDialog, setShowOrderingDialog] = useState(false);
 
-  // Post-tutorial quest guidance: Find quest based on priority ordering
-  useEffect(() => {
-    if (userData?.tutorialOn !== false && stepNumber >= TUTORIAL_STEPS.length) {
-      // Find the first quest based on priority ordering
-      const activeUserQuests = userData?.userQuests?.filter(
-        (uq) => OrderedQuestTypesInTutorial.includes(uq.quest.questType) && !uq.endAt,
-      );
-
-      if (activeUserQuests && activeUserQuests.length > 0) {
-        // Sort by priority order (lower index = higher priority)
-        const sortedQuests = [...activeUserQuests].sort((a, b) => {
-          const aPriority = questTypePriority.indexOf(a.quest.questType);
-          const bPriority = questTypePriority.indexOf(b.quest.questType);
-          // If not found in priority list, put at end
-          const aIdx = aPriority === -1 ? questTypePriority.length : aPriority;
-          const bIdx = bPriority === -1 ? questTypePriority.length : bPriority;
-          return aIdx - bIdx;
-        });
-
-        const quest = sortedQuests[0];
-        const tracker = quest
-          ? userData?.questData?.find((q) => q.id === quest.questId)
-          : undefined;
-        setPostTutorialQuest(quest && tracker ? { userQuest: quest, tracker } : null);
-      } else {
-        setPostTutorialQuest(null);
-      }
-    } else {
-      setPostTutorialQuest(null);
-    }
-  }, [userData, stepNumber, questTypePriority]);
-
-  // Check if logbook entry exists on the page to determine whether to show the quest
-  useEffect(() => {
-    if (!postTutorialQuest) {
-      setShowPostTutorialQuest(false);
-      return;
-    }
-
-    const checkLogbookEntry = () => {
-      const logbookEntryExists = document.getElementById(
-        `logbook-entry-${postTutorialQuest.userQuest.questId}`,
-      );
-      setShowPostTutorialQuest(!logbookEntryExists);
-    };
-
-    checkLogbookEntry();
-    const interval = setInterval(checkLogbookEntry, 1000);
-    return () => clearInterval(interval);
-  }, [postTutorialQuest]);
+  const {
+    postTutorialQuest,
+    showPostTutorialQuest,
+    questTypePriority,
+    setQuestTypePriority,
+  } = usePostTutorialQuest(userData, stepNumber);
 
   // Determine which step to show - hospitalized overrides everything
   const isHospitalized = userData?.status === "HOSPITALIZED";
@@ -1058,35 +1000,11 @@ const PlayerTutorialAssistant: React.FC<
               </blockquote>
             )}
           {isQuestOverlay && postTutorialQuest?.userQuest.quest.content.objectives && (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                <QuestObjectives
-                  quest={postTutorialQuest.userQuest.quest}
-                  tracker={postTutorialQuest.tracker}
-                  checkRewards={() =>
-                    checkRewards({ questId: postTutorialQuest.userQuest.quest.id })
-                  }
-                />
-              </div>
-              {isQuestComplete(
-                postTutorialQuest.userQuest.quest,
-                postTutorialQuest.tracker,
-              ) &&
-                !postTutorialQuest.userQuest.completed &&
-                userData?.status === "AWAKE" && (
-                  <Button
-                    onClick={() => {
-                      checkRewards({
-                        questId: postTutorialQuest.userQuest.quest.id,
-                      });
-                    }}
-                    className="w-full"
-                  >
-                    <Sparkles className="mr-2 h-5 w-5" />
-                    Collect Reward
-                  </Button>
-                )}
-            </>
+            <PostTutorialQuestObjectives
+              postTutorialQuest={postTutorialQuest}
+              userData={userData}
+              checkRewards={checkRewards}
+            />
           )}
         </AssistantDialog>
       )}
@@ -1476,6 +1394,40 @@ const CancelTutorialConfirmDialog: React.FC<{
   );
 };
 
+/** The guided quest's objectives, with its reward once every objective is done. */
+const PostTutorialQuestObjectives: React.FC<{
+  postTutorialQuest: PostTutorialQuest;
+  userData: { status: string } | undefined;
+  checkRewards: ReturnType<typeof useCheckRewards>["checkRewards"];
+}> = ({ postTutorialQuest, userData, checkRewards }) => (
+  <>
+    <div className="grid grid-cols-2 gap-4">
+      <QuestObjectives
+        quest={postTutorialQuest.userQuest.quest}
+        tracker={postTutorialQuest.tracker}
+        checkRewards={() =>
+          checkRewards({ questId: postTutorialQuest.userQuest.quest.id })
+        }
+      />
+    </div>
+    {isQuestComplete(postTutorialQuest.userQuest.quest, postTutorialQuest.tracker) &&
+      !postTutorialQuest.userQuest.completed &&
+      userData?.status === "AWAKE" && (
+        <Button
+          onClick={() => {
+            checkRewards({
+              questId: postTutorialQuest.userQuest.quest.id,
+            });
+          }}
+          className="w-full"
+        >
+          <Sparkles className="mr-2 h-5 w-5" />
+          Collect Reward
+        </Button>
+      )}
+  </>
+);
+
 /**
  * Dims the page around a highlight. A mask cut-out rather than a huge
  * box-shadow spread: Chrome stops painting shadows that large on a
@@ -1807,6 +1759,89 @@ const useHighlightPlacement = ({
   return { highlight, panelDodgesHighlight };
 };
 
+/**
+ * The active quest to guide once the tutorial is over, by the player's quest type priority.
+ * It is shown only while that quest's logbook entry is not already on the page.
+ */
+const usePostTutorialQuest = (
+  userData:
+    | Pick<NonNullable<UserWithRelations>, "tutorialOn" | "userQuests" | "questData">
+    | undefined,
+  stepNumber: number,
+) => {
+  // Post tutorial state - quest data from userData
+  const [postTutorialQuest, setPostTutorialQuest] = useState<PostTutorialQuest | null>(
+    null,
+  );
+
+  // Post tutorial state - whether to show the quest
+  const [showPostTutorialQuest, setShowPostTutorialQuest] = useState(false);
+
+  // Quest type priority ordering (persisted in localStorage)
+  const [questTypePriority, setQuestTypePriority] = useLocalStorage<QuestType[]>(
+    "tutorial-quest-type-priority",
+    [...OrderedQuestTypesInTutorial],
+  );
+
+  // Post-tutorial quest guidance: Find quest based on priority ordering
+  useEffect(() => {
+    if (userData?.tutorialOn !== false && stepNumber >= TUTORIAL_STEPS.length) {
+      // Find the first quest based on priority ordering
+      const activeUserQuests = userData?.userQuests?.filter(
+        (uq) => OrderedQuestTypesInTutorial.includes(uq.quest.questType) && !uq.endAt,
+      );
+
+      if (activeUserQuests && activeUserQuests.length > 0) {
+        // Sort by priority order (lower index = higher priority)
+        const sortedQuests = [...activeUserQuests].sort((a, b) => {
+          const aPriority = questTypePriority.indexOf(a.quest.questType);
+          const bPriority = questTypePriority.indexOf(b.quest.questType);
+          // If not found in priority list, put at end
+          const aIdx = aPriority === -1 ? questTypePriority.length : aPriority;
+          const bIdx = bPriority === -1 ? questTypePriority.length : bPriority;
+          return aIdx - bIdx;
+        });
+
+        const quest = sortedQuests[0];
+        const tracker = quest
+          ? userData?.questData?.find((q) => q.id === quest.questId)
+          : undefined;
+        setPostTutorialQuest(quest && tracker ? { userQuest: quest, tracker } : null);
+      } else {
+        setPostTutorialQuest(null);
+      }
+    } else {
+      setPostTutorialQuest(null);
+    }
+  }, [userData, stepNumber, questTypePriority]);
+
+  // Check if logbook entry exists on the page to determine whether to show the quest
+  useEffect(() => {
+    if (!postTutorialQuest) {
+      setShowPostTutorialQuest(false);
+      return;
+    }
+
+    const checkLogbookEntry = () => {
+      const logbookEntryExists = document.getElementById(
+        `logbook-entry-${postTutorialQuest.userQuest.questId}`,
+      );
+      setShowPostTutorialQuest(!logbookEntryExists);
+    };
+
+    checkLogbookEntry();
+    const interval = setInterval(checkLogbookEntry, 1000);
+    return () => clearInterval(interval);
+  }, [postTutorialQuest]);
+
+  return {
+    postTutorialQuest,
+    showPostTutorialQuest,
+    questTypePriority,
+    setQuestTypePriority,
+  };
+};
+
 /** Include the Activity header when keeping highlighted controls clear of the dock. */
 const getAssistantPanelRect = (): DOMRect | null => {
   const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
@@ -1977,3 +2012,6 @@ type TutorialIdentityRef = React.RefObject<{
   userId: string | undefined;
   tutorialStep: number | undefined;
 }>;
+
+/** A quest the assistant guides after the tutorial, with its live tracker. */
+type PostTutorialQuest = { userQuest: UserQuest; tracker: QuestTrackerType };
