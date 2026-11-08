@@ -4,7 +4,7 @@ export function formatAuctionCurrency(
   amount: number,
   currencyType: AuctionListingRow["currencyType"],
 ) {
-  return `${amount.toLocaleString()} ${currencyType === "MONEY" ? "ryo" : "reputation"}`;
+  return `${amount.toLocaleString()} ${auctionCurrencyUnit(currencyType)}`;
 }
 
 export function formatAuctionPerUnitLine(
@@ -14,12 +14,16 @@ export function formatAuctionPerUnitLine(
 ) {
   if (quantity <= 1) return null;
   const per = totalAmount / quantity;
-  const suffix = currencyType === "MONEY" ? "ryo" : "reputation";
+  const suffix = auctionCurrencyUnit(currencyType);
   const perStr = per.toLocaleString(undefined, {
     maximumFractionDigits: 4,
     minimumFractionDigits: Number.isInteger(per) ? 0 : 2,
   });
   return `${perStr} ${suffix}/unit · ×${quantity.toLocaleString()}`;
+}
+
+export function auctionCurrencyUnit(currencyType: AuctionListingRow["currencyType"]) {
+  return currencyType === "MONEY" ? "ryo" : "reputation";
 }
 
 export type AuctionListingRow =

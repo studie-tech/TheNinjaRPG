@@ -36,6 +36,7 @@ import { cn } from "@/libs/shadui";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type AuctionListingRow,
+  auctionCurrencyUnit,
   formatAuctionCurrency,
   formatAuctionPerUnitLine,
 } from "./format";
@@ -298,7 +299,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
   onOpen,
 }) => {
   const item = listing.userItem.item;
-  const currencyLabel = listing.currencyType === "MONEY" ? "ryo" : "reputation";
+  const currencyLabel = auctionCurrencyUnit(listing.currencyType);
   const stackQuantity = listing.userItem.quantity;
   const showPerUnitPricing = item.canStack && stackQuantity > 1;
   const { bidderMinLevel, bidderMaxLevel } = listing;

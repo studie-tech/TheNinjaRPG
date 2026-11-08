@@ -40,7 +40,11 @@ import { finishedImbuementItems } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { formatAuctionCurrency, formatAuctionPerUnitLine } from "./format";
+import {
+  auctionCurrencyUnit,
+  formatAuctionCurrency,
+  formatAuctionPerUnitLine,
+} from "./format";
 
 /**
  * @param auctionId - Auction ID
@@ -156,7 +160,7 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     ? spendBalanceForListing + userBid.amount
     : spendBalanceForListing;
   const spendCurrencyLabel = listing.currencyType === "MONEY" ? "bank" : "reputation";
-  const spendCurrencyUnit = listing.currencyType === "MONEY" ? "ryo" : "reputation";
+  const spendCurrencyUnit = auctionCurrencyUnit(listing.currencyType);
   const isExpired = new Date(listing.expiresAt) < new Date();
   const isOwner = listing.sellerId === userData.userId;
   const isActive = listing.status === "ACTIVE";
@@ -170,6 +174,11 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     (userData.level >= bidderMinLevel && userData.level <= bidderMaxLevel);
   const canBid = meetsAuctionHouseMinLevel && canBidByLevel;
   const canSellerCancel = isOwner && isActive && listing.bids.length === 0;
+  const viewerCanAct =
+    isActive &&
+    !isExpired &&
+    !isOwner &&
+    (!listing.targetUserId || listing.targetUserId === userData.userId);
 
   const minIntegerBid = Math.floor(listing.currentPrice) + 1;
   const parsedBidAmount = bidAmount.trim() === "" ? Number.NaN : Number(bidAmount);
@@ -395,87 +404,83 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
           </CardContent>
         </Card>
 
-        {isActive &&
-          !isExpired &&
-          !isOwner &&
-          (!listing.targetUserId || listing.targetUserId === userData.userId) &&
-          canBid && (
-            <Card className="border-primary/20 bg-muted/20">
-              <CardHeader className="space-y-0.5 p-3 pb-1.5">
-                <CardTitle className="text-sm">Raise your bid</CardTitle>
-                <CardDescription className="text-xs leading-snug">
-                  {listing.currencyType === "MONEY"
-                    ? "Above current price; bank holds ryo on confirm."
-                    : "Above current price; reputation is held on confirm."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 p-3 pt-0">
-                <div className="space-y-1 rounded-md border bg-background/80 p-2 text-xs">
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">
-                      Available {spendCurrencyLabel}
-                    </span>
+        {viewerCanAct && canBid && (
+          <Card className="border-primary/20 bg-muted/20">
+            <CardHeader className="space-y-0.5 p-3 pb-1.5">
+              <CardTitle className="text-sm">Raise your bid</CardTitle>
+              <CardDescription className="text-xs leading-snug">
+                {listing.currencyType === "MONEY"
+                  ? "Above current price; bank holds ryo on confirm."
+                  : "Above current price; reputation is held on confirm."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 p-3 pt-0">
+              <div className="space-y-1 rounded-md border bg-background/80 p-2 text-xs">
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">
+                    Available {spendCurrencyLabel}
+                  </span>
+                  <span className="font-semibold tabular-nums">
+                    {availableFunds.toLocaleString()} {spendCurrencyUnit}
+                  </span>
+                </div>
+                {userBid && (
+                  <div className="flex justify-between gap-2 text-primary">
+                    <span>Your bid</span>
                     <span className="font-semibold tabular-nums">
-                      {availableFunds.toLocaleString()} {spendCurrencyUnit}
+                      {userBid.amount.toLocaleString()} {spendCurrencyUnit}
                     </span>
                   </div>
-                  {userBid && (
-                    <div className="flex justify-between gap-2 text-primary">
-                      <span>Your bid</span>
-                      <span className="font-semibold tabular-nums">
-                        {userBid.amount.toLocaleString()} {spendCurrencyUnit}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-1.5 sm:flex-row">
-                  <NumberInput
-                    inputMode="numeric"
-                    placeholder="Bid amount (whole numbers)"
-                    value={bidAmount}
-                    onTextChange={setBidAmount}
-                    min={minIntegerBid}
-                    step={1}
-                    className="h-9 flex-1"
-                    disabled={isSubmittingThisAuction}
-                    aria-busy={isSubmittingThisAuction}
-                  />
-                  <Button
-                    onClick={handleBid}
-                    disabled={!isBidInputValid || isSubmittingThisAuction}
-                    aria-busy={isSubmittingThisAuction}
-                    className="h-9 shrink-0"
-                    size="sm"
-                  >
-                    {isSubmittingThisAuction ? (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Hammer className="mr-1.5 h-3.5 w-3.5" />
-                    )}
-                    {isSubmittingThisAuction
-                      ? "Submitting"
-                      : userBid
-                        ? "Raise to"
-                        : "Place bid"}
-                  </Button>
-                </div>
-                {listing.buyoutPrice && availableFunds >= listing.buyoutPrice && (
-                  <Button
-                    onClick={handleBuyoutClick}
-                    disabled={isSubmittingThisAuction}
-                    aria-busy={isSubmittingThisAuction}
-                    variant="default"
-                    size="sm"
-                    className="h-9 w-full"
-                  >
-                    Buy it now —{" "}
-                    {formatAuctionCurrency(listing.buyoutPrice, listing.currencyType)}
-                  </Button>
                 )}
-              </CardContent>
-            </Card>
-          )}
+              </div>
+
+              <div className="flex flex-col gap-1.5 sm:flex-row">
+                <NumberInput
+                  inputMode="numeric"
+                  placeholder="Bid amount (whole numbers)"
+                  value={bidAmount}
+                  onTextChange={setBidAmount}
+                  min={minIntegerBid}
+                  step={1}
+                  className="h-9 flex-1"
+                  disabled={isSubmittingThisAuction}
+                  aria-busy={isSubmittingThisAuction}
+                />
+                <Button
+                  onClick={handleBid}
+                  disabled={!isBidInputValid || isSubmittingThisAuction}
+                  aria-busy={isSubmittingThisAuction}
+                  className="h-9 shrink-0"
+                  size="sm"
+                >
+                  {isSubmittingThisAuction ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Hammer className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {isSubmittingThisAuction
+                    ? "Submitting"
+                    : userBid
+                      ? "Raise to"
+                      : "Place bid"}
+                </Button>
+              </div>
+              {listing.buyoutPrice && availableFunds >= listing.buyoutPrice && (
+                <Button
+                  onClick={handleBuyoutClick}
+                  disabled={isSubmittingThisAuction}
+                  aria-busy={isSubmittingThisAuction}
+                  variant="default"
+                  size="sm"
+                  className="h-9 w-full"
+                >
+                  Buy it now —{" "}
+                  {formatAuctionCurrency(listing.buyoutPrice, listing.currencyType)}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {isOwner ? (
           <div className="space-y-2">
@@ -516,25 +521,18 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             </div>
           )}
 
-        {isActive &&
-          !isExpired &&
-          !isOwner &&
-          !meetsAuctionHouseMinLevel &&
-          (!listing.targetUserId || listing.targetUserId === userData.userId) && (
-            <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50/90 p-2.5 dark:border-amber-900 dark:bg-amber-950/40">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-800 dark:text-amber-200" />
-              <p className="text-amber-950 text-xs leading-snug dark:text-amber-100">
-                {auctionHouseLevelMessage}
-              </p>
-            </div>
-          )}
+        {viewerCanAct && !meetsAuctionHouseMinLevel && (
+          <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50/90 p-2.5 dark:border-amber-900 dark:bg-amber-950/40">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-800 dark:text-amber-200" />
+            <p className="text-amber-950 text-xs leading-snug dark:text-amber-100">
+              {auctionHouseLevelMessage}
+            </p>
+          </div>
+        )}
 
-        {isActive &&
-          !isExpired &&
-          !isOwner &&
+        {viewerCanAct &&
           listing.listingType === "AUCTION" &&
           meetsAuctionHouseMinLevel &&
-          (!listing.targetUserId || listing.targetUserId === userData.userId) &&
           !canBidByLevel && (
             <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50/90 p-2.5 dark:border-amber-900 dark:bg-amber-950/40">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-800 dark:text-amber-200" />
@@ -547,74 +545,38 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
       </div>
 
       {/* Bid Confirmation Dialog */}
-      <AlertDialog
+      <ConfirmPurchaseDialog
         open={showBidConfirmation}
-        onOpenChange={(open) => {
-          if (!isSubmittingThisAuction) setShowBidConfirmation(open);
-        }}
+        onOpenChange={setShowBidConfirmation}
+        title="Confirm Bid"
+        confirmLabel="Confirm Bid"
+        pendingLabel="Submitting"
+        isPending={isSubmittingThisAuction}
+        onConfirm={confirmBid}
       >
-        <AlertDialogContent aria-busy={isSubmittingThisAuction}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Bid</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to place a bid of{" "}
-              <span className="font-semibold">
-                {submittedBidAmount?.toLocaleString()}{" "}
-                {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
-              </span>{" "}
-              on this auction?
-              {showPerUnitPricing &&
-              submittedBidAmount != null &&
-              listing.currencyType != null ? (
-                <span className="mt-2 block text-muted-foreground text-sm">
-                  {formatAuctionPerUnitLine(
-                    submittedBidAmount,
-                    stackQuantity,
-                    listing.currencyType,
-                  )}
-                </span>
-              ) : null}
-              {userBid && (
-                <span className="mt-2 block text-sm">
-                  Your current bid of {userBid.amount.toLocaleString()} will be
-                  replaced.
-                </span>
-              )}
-              {isSubmittingThisAuction ? (
-                <span
-                  className="mt-3 flex items-center gap-2 font-medium text-foreground"
-                  role="status"
-                >
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Submitting
-                </span>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmittingThisAuction}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isSubmittingThisAuction}
-              aria-busy={isSubmittingThisAuction}
-              onClick={(event) => {
-                event.preventDefault();
-                confirmBid();
-              }}
-            >
-              {isSubmittingThisAuction ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting
-                </>
-              ) : (
-                "Confirm Bid"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        Are you sure you want to place a bid of{" "}
+        <span className="font-semibold">
+          {submittedBidAmount?.toLocaleString()}{" "}
+          {auctionCurrencyUnit(listing.currencyType)}
+        </span>{" "}
+        on this auction?
+        {showPerUnitPricing &&
+        submittedBidAmount != null &&
+        listing.currencyType != null ? (
+          <span className="mt-2 block text-muted-foreground text-sm">
+            {formatAuctionPerUnitLine(
+              submittedBidAmount,
+              stackQuantity,
+              listing.currencyType,
+            )}
+          </span>
+        ) : null}
+        {userBid && (
+          <span className="mt-2 block text-sm">
+            Your current bid of {userBid.amount.toLocaleString()} will be replaced.
+          </span>
+        )}
+      </ConfirmPurchaseDialog>
 
       <AlertDialog
         open={showCancelConfirmation}
@@ -648,74 +610,107 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
       </AlertDialog>
 
       {/* Buyout Confirmation Dialog */}
-      <AlertDialog
+      <ConfirmPurchaseDialog
         open={showBuyoutConfirmation}
-        onOpenChange={(open) => {
-          if (!isSubmittingThisAuction) setShowBuyoutConfirmation(open);
-        }}
+        onOpenChange={setShowBuyoutConfirmation}
+        title="Confirm Buyout"
+        confirmLabel="Confirm Buyout"
+        pendingLabel="Purchasing"
+        isPending={isSubmittingThisAuction}
+        onConfirm={confirmBuyout}
       >
-        <AlertDialogContent aria-busy={isSubmittingThisAuction}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Buyout</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to buyout this auction for{" "}
-              <span className="font-semibold">
-                {listing.buyoutPrice?.toLocaleString()}{" "}
-                {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
-              </span>
-              ? This will immediately complete the auction and transfer the item to you.
-              {showPerUnitPricing &&
-              listing.buyoutPrice != null &&
-              listing.currencyType != null ? (
-                <span className="mt-2 block text-muted-foreground text-sm">
-                  {formatAuctionPerUnitLine(
-                    listing.buyoutPrice,
-                    stackQuantity,
-                    listing.currencyType,
-                  )}
-                </span>
-              ) : null}
-              {isSubmittingThisAuction ? (
-                <span
-                  className="mt-3 flex items-center gap-2 font-medium text-foreground"
-                  role="status"
-                >
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Purchasing
-                </span>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmittingThisAuction}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isSubmittingThisAuction}
-              aria-busy={isSubmittingThisAuction}
-              onClick={(event) => {
-                event.preventDefault();
-                confirmBuyout();
-              }}
-            >
-              {isSubmittingThisAuction ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Purchasing
-                </>
-              ) : (
-                "Confirm Buyout"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        Are you sure you want to buyout this auction for{" "}
+        <span className="font-semibold">
+          {listing.buyoutPrice?.toLocaleString()}{" "}
+          {auctionCurrencyUnit(listing.currencyType)}
+        </span>
+        ? This will immediately complete the auction and transfer the item to you.
+        {showPerUnitPricing &&
+        listing.buyoutPrice != null &&
+        listing.currencyType != null ? (
+          <span className="mt-2 block text-muted-foreground text-sm">
+            {formatAuctionPerUnitLine(
+              listing.buyoutPrice,
+              stackQuantity,
+              listing.currencyType,
+            )}
+          </span>
+        ) : null}
+      </ConfirmPurchaseDialog>
     </Modal>
   );
 };
+
+/** Confirm spending on a listing; the dialog stays open while the purchase is in flight. */
+const ConfirmPurchaseDialog: React.FC<ConfirmPurchaseDialogProps> = ({
+  open,
+  onOpenChange,
+  title,
+  confirmLabel,
+  pendingLabel,
+  isPending,
+  onConfirm,
+  children,
+}) => (
+  <AlertDialog
+    open={open}
+    onOpenChange={(next) => {
+      if (!isPending) onOpenChange(next);
+    }}
+  >
+    <AlertDialogContent aria-busy={isPending}>
+      <AlertDialogHeader>
+        <AlertDialogTitle>{title}</AlertDialogTitle>
+        <AlertDialogDescription>
+          {children}
+          {isPending ? (
+            <span
+              className="mt-3 flex items-center gap-2 font-medium text-foreground"
+              role="status"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {pendingLabel}
+            </span>
+          ) : null}
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+        <AlertDialogAction
+          disabled={isPending}
+          aria-busy={isPending}
+          onClick={(event) => {
+            event.preventDefault();
+            onConfirm();
+          }}
+        >
+          {isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {pendingLabel}
+            </>
+          ) : (
+            confirmLabel
+          )}
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+);
 
 interface AuctionDetailsDialogProps {
   auctionId: string;
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+interface ConfirmPurchaseDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  confirmLabel: string;
+  pendingLabel: string;
+  isPending: boolean;
+  onConfirm: () => void;
+  children: React.ReactNode;
 }
