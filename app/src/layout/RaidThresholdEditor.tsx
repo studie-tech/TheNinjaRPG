@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import Confirm from "@/layout/Confirm";
 import { EffectFormWrapper } from "@/layout/EditContent";
 import Modal from "@/layout/Modal";
 import {
@@ -155,12 +156,6 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
     }
   };
 
-  const handleDelete = (thresholdId: string) => {
-    if (confirm("Are you sure you want to delete this threshold?")) {
-      deleteThreshold({ thresholdId });
-    }
-  };
-
   const addEffect = () => {
     const tagSchema = getTagSchema("damage");
     const parsed = tagSchema.safeParse({ type: "damage" });
@@ -210,16 +205,16 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
                     Tier {idx + 1}: {threshold.damageRequired.toLocaleString()} damage
                   </span>
                   {threshold.effects && threshold.effects.length > 0 && (
-                    <span className="flex items-center gap-1 rounded bg-blue-100 px-2 py-0.5 text-blue-800 text-xs dark:bg-blue-900 dark:text-blue-200">
-                      <Shield className="h-3 w-3" />
-                      {threshold.effects.length} effect(s)
-                    </span>
-                  )}
-                  {threshold.effects && threshold.effects.length > 0 && (
-                    <span className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-purple-800 text-xs dark:bg-purple-900 dark:text-purple-200">
-                      <Clock className="h-3 w-3" />
-                      {threshold.effectDurationMinutes}min
-                    </span>
+                    <>
+                      <span className="flex items-center gap-1 rounded bg-blue-100 px-2 py-0.5 text-blue-800 text-xs dark:bg-blue-900 dark:text-blue-200">
+                        <Shield className="h-3 w-3" />
+                        {threshold.effects.length} effect(s)
+                      </span>
+                      <span className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-purple-800 text-xs dark:bg-purple-900 dark:text-purple-200">
+                        <Clock className="h-3 w-3" />
+                        {threshold.effectDurationMinutes}min
+                      </span>
+                    </>
                   )}
                 </div>
                 <p className="text-muted-foreground text-sm">
@@ -234,14 +229,21 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDelete(threshold.id)}
+                <Confirm
+                  title="Delete Threshold"
+                  proceed_label="Delete"
+                  confirmClassName="bg-red-600 text-white hover:bg-red-700"
                   disabled={deletePending}
+                  triggerLabel={`Delete tier ${idx + 1}`}
+                  button={
+                    <Button variant="outline" size="sm" disabled={deletePending}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  }
+                  onAccept={() => deleteThreshold({ thresholdId: threshold.id })}
                 >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                  Are you sure you want to delete this threshold?
+                </Confirm>
               </div>
             </div>
           ))}
@@ -260,7 +262,10 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
         onAccept={form.handleSubmit(handleSubmit)}
-        proceed_label={isPending ? "Saving..." : "Save"}
+        proceed_label="Save"
+        proceed_loading_label="Saving..."
+        isLoading={isPending}
+        keepOpenOnAccept
         confirmClassName="bg-blue-600 hover:bg-blue-700"
       >
         <Form {...form}>
