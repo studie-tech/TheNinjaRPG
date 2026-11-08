@@ -41,6 +41,18 @@ export const NativeAccountDeletion = () => {
   const submitting = useRef(false);
   const requestDeletion = api.accountDeletion.request.useMutation();
   const submitVerified = useReverification(requestDeletion.mutateAsync);
+  const canSubmit =
+    !!user &&
+    user.id === confirmationOwner &&
+    permanent &&
+    subscriptions &&
+    confirmation.trim() === ACCOUNT_DELETION_CONFIRMATION;
+
+  const resetConfirmation = () => {
+    setConfirmation("");
+    setPermanent(false);
+    setSubscriptions(false);
+  };
 
   useEffect(() => {
     // The shared game frame can preserve scroll past the deletion warnings.
@@ -50,18 +62,7 @@ export const NativeAccountDeletion = () => {
   }, [native, isLoaded, user?.id]);
 
   const submit = async () => {
-    if (
-      !user ||
-      submitting.current ||
-      confirmation.trim() !== ACCOUNT_DELETION_CONFIRMATION ||
-      !permanent ||
-      !subscriptions
-    )
-      return;
-    if (user.id !== confirmationOwner) {
-      setError("Your signed-in account changed. Close this dialog and start again.");
-      return;
-    }
+    if (!user || !canSubmit || submitting.current) return;
     submitting.current = true;
     setPending(true);
     setError("");
@@ -227,11 +228,7 @@ export const NativeAccountDeletion = () => {
         onOpenChange={(value) => {
           if (!pending) {
             setOpen(value);
-            if (!value) {
-              setConfirmation("");
-              setPermanent(false);
-              setSubscriptions(false);
-            }
+            if (!value) resetConfirmation();
           }
         }}
       >
@@ -297,9 +294,7 @@ export const NativeAccountDeletion = () => {
               disabled={pending}
               onClick={() => {
                 setOpen(false);
-                setConfirmation("");
-                setPermanent(false);
-                setSubscriptions(false);
+                resetConfirmation();
               }}
             >
               Keep my account
@@ -307,13 +302,7 @@ export const NativeAccountDeletion = () => {
             <Button
               variant="destructive"
               className="h-[44px] min-h-[44px] w-full whitespace-nowrap text-[14px]"
-              disabled={
-                pending ||
-                !permanent ||
-                !subscriptions ||
-                confirmationOwner !== user.id ||
-                confirmation.trim() !== ACCOUNT_DELETION_CONFIRMATION
-              }
+              disabled={pending || !canSubmit}
               onClick={() => void submit()}
             >
               {pending ? "Verifying…" : "Delete permanently"}
