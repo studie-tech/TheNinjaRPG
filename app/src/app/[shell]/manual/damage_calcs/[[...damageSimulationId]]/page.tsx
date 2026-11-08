@@ -149,7 +149,10 @@ export default function Simulator(props: {
   // Mutation for editing entry
   const { mutate: deleteEntry, isPending: isDeleting } =
     api.simulator.deleteDamageSimulation.useMutation({
-      onSuccess: () => refetch(),
+      onSuccess: async (data) => {
+        if (!data.success) showMutationToast(data);
+        await refetch();
+      },
     });
 
   const isPending = isSaving || isUpdating || isDeleting;

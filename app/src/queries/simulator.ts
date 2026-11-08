@@ -90,8 +90,14 @@ export const updateDamageSimulationForUpdateDamageSimulation = (
       ),
     );
 
-/** Build the `damageSimulation` deletion for `deleteDamageSimulation`, using predicates on `id`. */
+/** Build the `damageSimulation` deletion for `deleteDamageSimulation`, using predicates on `id` and `userId`. */
 export const deleteDamageSimulationForDeleteDamageSimulation = (
   client: Pick<DrizzleClient, "delete">,
-  entry: { id: string },
-) => client.delete(damageSimulation).where(eq(damageSimulation.id, entry.id));
+  input: { id: string },
+  ctx: { userId: string },
+) =>
+  client
+    .delete(damageSimulation)
+    .where(
+      and(eq(damageSimulation.id, input.id), eq(damageSimulation.userId, ctx.userId)),
+    );

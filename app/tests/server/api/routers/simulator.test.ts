@@ -74,11 +74,13 @@ describeWithDatabase("damage simulation history", () => {
     expect(await caller.deleteDamageSimulation({ id: "sim-00" })).toMatchObject({
       success: true,
     });
-    await expect(caller.deleteDamageSimulation({ id: "other-user-sim" })).rejects.toMatchObject({
-      code: "UNAUTHORIZED",
+    expect(await caller.deleteDamageSimulation({ id: "other-user-sim" })).toEqual({
+      success: false,
+      message: "Entry not found",
     });
-    await expect(caller.deleteDamageSimulation({ id: "missing-sim" })).rejects.toMatchObject({
-      code: "NOT_FOUND",
+    expect(await caller.deleteDamageSimulation({ id: "missing-sim" })).toEqual({
+      success: false,
+      message: "Entry not found",
     });
     const rows = await db.select({ id: damageSimulation.id }).from(damageSimulation);
     expect(rows.map((row) => row.id)).toEqual(["other-user-sim"]);
