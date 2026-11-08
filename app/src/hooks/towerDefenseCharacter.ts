@@ -5,11 +5,7 @@ import type { TowerDefenseCharacterDb } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
-import {
-  type CharacterAnimationState,
-  type CharacterAssetConfig,
-  characterAnimationStates,
-} from "@/validators/towerDefense";
+import type { CharacterAssetConfig } from "@/validators/towerDefense";
 import {
   type InsertTowerDefenseCharacter,
   type InsertTowerDefenseCharacterInput,
@@ -78,34 +74,15 @@ export const useTowerDefenseCharacterEditForm = (
     form.setValue("assetConfig", config, { shouldDirty: true });
   };
 
-  // Update a single animation's state mapping
-  const updateAnimationState = (
-    animIndex: number,
-    newState: CharacterAnimationState,
-  ) => {
+  // Update a single animation's state mapping or timing
+  const updateAnimation = (animIndex: number, patch: AnimationPatch) => {
     if (!assetConfig) return;
     const config = assetConfig as CharacterAssetConfig;
 
     const updatedAnimations = [...config.animations];
     const anim = updatedAnimations[animIndex];
     if (anim) {
-      updatedAnimations[animIndex] = { ...anim, state: newState };
-      setAssetConfig({ ...config, animations: updatedAnimations });
-    }
-  };
-
-  // Update animation settings
-  const updateAnimationSettings = (
-    animIndex: number,
-    settings: { frameDurationMs?: number; loop?: boolean },
-  ) => {
-    if (!assetConfig) return;
-    const config = assetConfig as CharacterAssetConfig;
-
-    const updatedAnimations = [...config.animations];
-    const anim = updatedAnimations[animIndex];
-    if (anim) {
-      updatedAnimations[animIndex] = { ...anim, ...settings };
+      updatedAnimations[animIndex] = { ...anim, ...patch };
       setAssetConfig({ ...config, animations: updatedAnimations });
     }
   };
@@ -144,9 +121,11 @@ export const useTowerDefenseCharacterEditForm = (
     isPlayer,
     isUpdating,
     setAssetConfig,
-    updateAnimationState,
-    updateAnimationSettings,
+    updateAnimation,
     handleCharacterSubmit,
-    characterAnimationStates,
   };
 };
+
+export type AnimationPatch = Partial<
+  Pick<CharacterAssetConfig["animations"][number], "state" | "frameDurationMs" | "loop">
+>;

@@ -72,13 +72,13 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe("tower defense character editor", () => {
   it("patches one animation's state or timing and leaves the rest untouched", async () => {
     const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character));
-    await act(async () => { result.current.updateAnimationState(1, "throw"); });
+    await act(async () => { result.current.updateAnimation(1, { state: "throw" }); });
     expect<unknown>(result.current.assetConfig?.animations).toEqual([
       assetConfig.animations[0],
       { ...assetConfig.animations[1], state: "throw" },
     ]);
-    await act(async () => { result.current.updateAnimationSettings(0, { frameDurationMs: 60 }); });
-    await act(async () => { result.current.updateAnimationSettings(0, { loop: false }); });
+    await act(async () => { result.current.updateAnimation(0, { frameDurationMs: 60 }); });
+    await act(async () => { result.current.updateAnimation(0, { loop: false }); });
     expect<unknown>(result.current.assetConfig?.animations[0]).toEqual({
       ...assetConfig.animations[0], frameDurationMs: 60, loop: false,
     });
@@ -89,22 +89,21 @@ describe("tower defense character editor", () => {
 
   it("ignores updates for a missing animation or an empty asset config", async () => {
     const { result } = renderHook(() => useTowerDefenseCharacterEditForm(character));
-    await act(async () => { result.current.updateAnimationState(5, "idle"); });
-    await act(async () => { result.current.updateAnimationSettings(5, { loop: false }); });
+    await act(async () => { result.current.updateAnimation(5, { state: "idle" }); });
+    await act(async () => { result.current.updateAnimation(5, { loop: false }); });
     expect(result.current.assetConfig).toEqual(assetConfig);
     const empty = renderHook(() =>
       useTowerDefenseCharacterEditForm({ ...character, assetConfig: null }),
     );
-    await act(async () => { empty.result.current.updateAnimationState(0, "idle"); });
-    await act(async () => { empty.result.current.updateAnimationSettings(0, { loop: false }); });
+    await act(async () => { empty.result.current.updateAnimation(0, { state: "idle" }); });
+    await act(async () => { empty.result.current.updateAnimation(0, { loop: false }); });
     expect(empty.result.current.assetConfig).toBeNull();
   });
 
-  it("offers every animation state and hides enemy-only fields for players", () => {
+  it("hides enemy-only fields for players", () => {
     const { result } = renderHook(() =>
       useTowerDefenseCharacterEditForm({ ...character, isPlayer: true }),
     );
-    expect(result.current.characterAnimationStates).toEqual(["idle", "moving", "throw", "punch"]);
     expect(result.current.formData.map((entry) => entry.id)).toEqual(["name", "isPlayer", "scaleFactor"]);
   });
 
