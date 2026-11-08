@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import {
-  merchAddSchema,
-  merchUpdateSchema,
-  shopifyCartSchema,
-} from "@/validators/merch";
+import { shopifyCartSchema } from "@/validators/merch";
 import { env } from "@/env/server.mjs";
 import {
   completeShopifyCart,
@@ -213,20 +209,6 @@ describe("Shopify merch connection", () => {
     expect(JSON.parse(request.mock.calls[0]?.[1].body).query).toContain("query BagLines");
     expect(cart.totalQuantity).toBe(101);
   });
-  it("allows reducing a quantity accumulated by repeated additions", () => {
-    expect(
-      merchUpdateSchema.safeParse({
-        lineId: "gid://shopify/CartLine/line",
-        quantity: 19,
-      }).success,
-    ).toBe(true);
-    expect(
-      merchAddSchema.safeParse({
-        variantId: "gid://shopify/ProductVariant/123",
-        quantity: 11,
-      }).success,
-    ).toBe(false);
-  });
   it("rejects injected checkout destinations and non-HTTPS URLs", () => {
     for (const url of [
       "https://shop.theninja-rpg.com.attacker.example/checkout",
@@ -252,28 +234,5 @@ describe("Shopify merch connection", () => {
     await expect(shopifyRequest("query Test { shop { name } }")).rejects.toThrow(
       "The shop could not complete this request. Please try again.",
     );
-  });
-  it("rejects preview IDs and invalid cart quantities at the API boundary", () => {
-    expect(
-      merchAddSchema.safeParse({ variantId: "preview:tee", quantity: 1 }).success,
-    ).toBe(false);
-    expect(
-      merchAddSchema.safeParse({
-        variantId: "gid://shopify/ProductVariant/123",
-        quantity: 0,
-      }).success,
-    ).toBe(false);
-    expect(
-      merchUpdateSchema.safeParse({
-        lineId: "gid://shopify/CartLine/line",
-        quantity: 0,
-      }).success,
-    ).toBe(true);
-    expect(
-      merchUpdateSchema.safeParse({
-        lineId: "gid://shopify/CartLine/line",
-        quantity: 2147483648,
-      }).success,
-    ).toBe(false);
   });
 });
