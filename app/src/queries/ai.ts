@@ -1,11 +1,49 @@
 /**
  * Database access for ai; authorization and transaction scopes stay in callers.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import type { z } from "zod";
-import { aiProfile } from "@/drizzle/schema";
+import { aiProfile, aiTransformation } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import type { updateAiProfileSchema } from "@/validators/ai";
+import type { AiTransformationInput, updateAiProfileSchema } from "@/validators/ai";
+
+/** Every boss link; the table holds a handful of rows, read whole so chains need one query. */
+export const listAiTransformations = (client: Pick<DrizzleClient, "query">) =>
+  client.query.aiTransformation.findMany();
+
+/** Save or replace an AI's next form in one statement; staff edits are last-write-wins. */
+export const saveAiTransformation = (
+  client: DrizzleClient,
+  userId: string,
+  { nextAiId, announce, log, tier, color, glow }: AiTransformationInput,
+) =>
+  client
+    .insert(aiTransformation)
+    .values({ userId, nextAiId, announce, log, tier, color, glow })
+    .onDuplicateKeyUpdate({ set: { nextAiId, announce, log, tier, color, glow } });
+
+/** Stop an AI transforming, leaving any forms that lead into it. */
+export const deleteAiTransformation = (client: DrizzleClient, userId: string) =>
+  client.delete(aiTransformation).where(eq(aiTransformation.userId, userId));
+
+/** A deleted AI leaves no link to or from it. */
+export const deleteAiTransformationsFor = (client: DrizzleClient, userId: string) =>
+  client
+    .delete(aiTransformation)
+    .where(
+      or(eq(aiTransformation.userId, userId), eq(aiTransformation.nextAiId, userId)),
+    );
+
+/** What the boss editor shows for each form, including its readiness to fight. */
+export const listAiForBossFight = (client: DrizzleClient, userIds: string[]) =>
+  client.query.userData.findMany({
+    where: and(inArray(userData.userId, userIds), eq(userData.isAi, true)),
+    columns: { userId: true, username: true, avatar: true },
+    with: {
+      spriteAnimationBindings: { columns: { actionKey: true } },
+      jutsus: { columns: { jutsuId: true } },
+    },
+  });
 
 /**
  * Fetches an AI profile from the database using the provided client and profile ID.

@@ -1,15 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import {
-  CREATOR_TRIAL_FORMS,
+  BOSS_FIGHT_MAX_FORMS,
   ID_SFX_TRANSFORMATION_BURST,
   ID_SFX_TRANSFORMATION_SURGE,
 } from "@/drizzle/constants";
 import { findSidebarOpponent } from "@/libs/combat/actions";
-import { bossFightEncounter } from "@/libs/combat/bossFight";
+import {
+  bossChainIssue,
+  bossFormsFrom,
+  expandBossWaves,
+  withBossForms,
+} from "@/libs/combat/bossFight";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
 import { maskBattle } from "@/libs/combat/masking";
 import { calcBattleResult } from "@/libs/combat/settlement";
-import { bossArrivalSchema } from "@/validators/coop";
 import { makeCompleteBattle, makeUser } from "./helpers/battleScenario";
 
 const form = (userId: string, longitude = 8, latitude = 4) =>
@@ -21,6 +25,12 @@ const arrival = (announce: string, tier = 1) => ({
   tier,
   color: 0x112233,
   glow: 0x445566,
+});
+
+const link = (userId: string, nextAiId: string) => ({
+  userId,
+  nextAiId,
+  ...arrival(nextAiId.toUpperCase()),
 });
 
 /** A challenger facing a boss's current form, with later forms waiting. */
@@ -49,24 +59,63 @@ const trial = (pending: string[] = ["genin", "chunin"]) =>
   });
 
 describe("boss fight", () => {
-  it("fights every form in order, one at a time, keeping each arrival", () => {
-    const rising = arrival("SECOND");
-    expect(
-      bossFightEncounter([{ aiId: "first" }, { aiId: "second", arrival: rising }]),
-    ).toEqual({
+  it("turns a lone target that transforms into a boss fight, and leaves other fights as they are", () => {
+    const links = [link("first", "second")];
+    expect(withBossForms({ targetIds: ["first"] }, links)).toEqual({
       targetIds: ["first", "second"],
-      encounterWaves: [
+      waves: [
         { aiIds: ["first"], delayRounds: 0 },
-        { aiIds: ["second"], delayRounds: 0, arrival: rising },
+        { aiIds: ["second"], delayRounds: 0, arrival: arrival("SECOND") },
       ],
     });
+    const alone = { targetIds: ["alone"] };
+    expect(withBossForms(alone, links)).toBe(alone);
+    const pack = { targetIds: ["first", "guard"] };
+    expect(withBossForms(pack, links)).toBe(pack);
+    const authored = { targetIds: ["first"], waves: [{ aiIds: ["first"], delayRounds: 3 }] };
+    expect(withBossForms(authored, links).targetIds).toEqual(["first", "second"]);
   });
 
-  it("authors the creator's forms as a valid, escalating boss", () => {
-    const [opening, ...later] = CREATOR_TRIAL_FORMS;
-    expect("arrival" in opening).toBe(false);
-    const tiers = later.map((form) => bossArrivalSchema.parse(form.arrival).tier);
-    expect(tiers).toEqual([1, 2, 3, 4]);
+  it("walks an AI's links into forms, stopping at the end, a loop or the form limit", () => {
+    const links = [link("first", "second"), link("second", "third")];
+    expect(bossFormsFrom("first", links).map((entry) => entry.aiId)).toEqual([
+      "first",
+      "second",
+      "third",
+    ]);
+    expect(bossFormsFrom("first", links)[0]?.arrival).toBeUndefined();
+    expect(bossFormsFrom("second", links)[1]?.arrival).toEqual(arrival("THIRD"));
+    expect(bossFormsFrom("alone", links).map((entry) => entry.aiId)).toEqual(["alone"]);
+    const loop = [link("first", "second"), link("second", "first")];
+    expect(bossFormsFrom("first", loop)).toHaveLength(2);
+    const long = Array.from({ length: 20 }, (_, i) => link(`f${i}`, `f${i + 1}`));
+    expect(bossFormsFrom("f0", long)).toHaveLength(BOSS_FIGHT_MAX_FORMS);
+  });
+
+  it("brings a lone wave enemy's later forms into its encounter, leaving packs alone", () => {
+    const links = [link("boss", "risen")];
+    const pack = { aiIds: ["boss", "guard"], delayRounds: 0 };
+    const lone = { aiIds: ["boss"], delayRounds: 2 };
+    expect(expandBossWaves([pack, lone], links)).toEqual([
+      pack,
+      lone,
+      { aiIds: ["risen"], delayRounds: 0, arrival: arrival("RISEN") },
+    ]);
+  });
+
+  it("rejects a link that would break any chain it joins", () => {
+    const links = [link("a", "b"), link("b", "c")];
+    expect(bossChainIssue({ userId: "c", nextAiId: "d" }, links)).toBeUndefined();
+    expect(bossChainIssue({ userId: "a", nextAiId: "a" }, links)).toContain("itself");
+    expect(bossChainIssue({ userId: "c", nextAiId: "a" }, links)).toContain("loop");
+    // Replacing a form's own link is judged without the link it replaces.
+    expect(bossChainIssue({ userId: "b", nextAiId: "d" }, links)).toBeUndefined();
+    const full = Array.from({ length: BOSS_FIGHT_MAX_FORMS - 1 }, (_, i) =>
+      link(`f${i}`, `f${i + 1}`),
+    );
+    expect(
+      bossChainIssue({ userId: `f${BOSS_FIGHT_MAX_FORMS - 1}`, nextAiId: "extra" }, full),
+    ).toContain(`${BOSS_FIGHT_MAX_FORMS} forms`);
   });
 
   it("tells each form whether another follows it, and leaves other enemies alone", async () => {

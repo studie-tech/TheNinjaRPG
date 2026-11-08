@@ -62,6 +62,7 @@ export const createTravelActors = (
     // Position and health updates retain artwork; every input used by userParts belongs in this key.
     const key = JSON.stringify([
       user.spriteAppearance,
+      user.bodyArt,
       user.avatar,
       user.avatarLight,
       user.isNpc,
@@ -727,8 +728,9 @@ export const travelActorRecipes = (
       ? awake.filter((user) => selected.has(userActorKey(user)))
       : awake;
     shown.forEach((user, index) => {
-      const appearanceUser =
-        !user.spriteAppearance && user.userId === snapshot.viewer?.userId
+      const appearanceUser = user.bodyArt
+        ? { ...user, spriteAppearance: undefined }
+        : !user.spriteAppearance && user.userId === snapshot.viewer?.userId
           ? { ...user, spriteAppearance: resolveSpriteAppearance(snapshot.viewer) }
           : user;
       recipes.push({
@@ -862,6 +864,7 @@ const LPC_TRAVEL_SCALE = 0.7;
 const LPC_TRAVEL_HEIGHT = 1.8 * LPC_TRAVEL_SCALE;
 const LPC_TRAVEL_FOOT_Y = 0.1;
 const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
+const NPC_TRAVEL_HEIGHT = 1.3;
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
 /** Repeated NPC appearances remain distinct through placement identity; players use account identity. */
@@ -905,8 +908,9 @@ const pin = (tile: TerrainHex, tint: number) => [
   }),
 ];
 const userParts = (user: SectorUser, tile: TerrainHex) => {
+  const fullBody = user.isNpc || !!user.bodyArt;
   const parts =
-    user.isNpc || user.spriteAppearance
+    fullBody || user.spriteAppearance
       ? []
       : pin(
           tile,
@@ -920,8 +924,14 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
     part(
       tile,
       "avatar",
-      travelAvatar(user),
-      user.spriteAppearance ? LPC_TRAVEL_HEIGHT : user.isNpc ? 1.3 : 0.8,
+      user.bodyArt ?? travelAvatar(user),
+      user.spriteAppearance
+        ? LPC_TRAVEL_HEIGHT
+        : user.bodyArt
+          ? NPC_TRAVEL_HEIGHT * 2
+          : user.isNpc
+            ? NPC_TRAVEL_HEIGHT
+            : 0.8,
       0.5,
       user.spriteAppearance ? LPC_TRAVEL_FOOT_Y + LPC_TRAVEL_HEIGHT / 2 : 1,
       user.spriteAppearance
@@ -932,11 +942,13 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
             shadow: 0.16,
             light: 0.65,
           }
-        : user.isNpc
+        : fullBody
           ? {
-              rendition: 256,
+              // Double-height body art outgrows a 256px rendition; it keeps its native
+              // source and samples smoothly, so its scale never doubles or drops pixels.
+              rendition: user.bodyArt ? 0 : 256,
               preserveAspect: true,
-              nearest: true,
+              nearest: !user.bodyArt,
               shadowCaster: "character",
             }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },

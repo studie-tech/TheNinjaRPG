@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { beforeEach, expect, it } from "bun:test";
 import { inArray } from "drizzle-orm";
 import {
-  CREATOR_TRIAL_FORMS,
+  CREATOR_TRIAL_FIRST_FORM,
   TRANSFORMATION_ACTION,
   USER_CAPS,
   getCombatStatCap,
@@ -10,13 +10,16 @@ import {
 } from "@/drizzle/constants";
 import {
   aiProfile,
+  aiTransformation,
   aiSpriteAnimation,
   jutsu,
   spriteAnimation,
   userData,
   userJutsu,
 } from "@/drizzle/schema";
+import { bossFormsFrom } from "@/libs/combat/bossFight";
 import { AiRule } from "@/validators/ai";
+import { bossArrivalSchema } from "@/validators/coop";
 import { JutsuValidator } from "@/validators/combat";
 import { describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../setup/testDatabase";
 
@@ -28,7 +31,18 @@ const statements = migration
   .split(/;\n/)
   .map((statement) => statement.replace(/^(--.*\n)+/gm, "").trim())
   .filter(Boolean);
-const IDS = CREATOR_TRIAL_FORMS.map((form) => form.aiId);
+const IDS = [
+  CREATOR_TRIAL_FIRST_FORM,
+  "creator-trial-genin",
+  "creator-trial-chunin",
+  "creator-trial-jonin",
+  "creator-trial-elite",
+];
+const linkFile = await readFile(
+  new URL("../../drizzle/migrations/0147_ai_transformations.sql", import.meta.url),
+  "utf8",
+);
+const links = linkFile.slice(linkFile.indexOf("INSERT INTO"));
 
 const seed = async () => {
   for (const statement of statements) await runRawSql(statement);
@@ -127,5 +141,16 @@ describeWithDatabase("creator trial seed", () => {
     await client.update(jutsu).set({ description: "Edited by staff" });
     await seed();
     expect((await client.query.jutsu.findFirst())?.description).toBe("Edited by staff");
+  });
+
+  it("links every form into one valid boss that escalates to the last", async () => {
+    const client = await getTestDatabase();
+    await resetTables(aiTransformation);
+    await runRawSql(links.trim().replace(/;$/, ""));
+    const rows = await client.query.aiTransformation.findMany();
+    const forms = bossFormsFrom(CREATOR_TRIAL_FIRST_FORM, rows);
+    expect(forms.map((form) => form.aiId)).toEqual(IDS);
+    expect(forms.slice(1).map((form) => bossArrivalSchema.parse(form.arrival).tier))
+      .toEqual([1, 2, 3, 4]);
   });
 });

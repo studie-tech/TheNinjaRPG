@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { CREATOR_TRIAL_FORMS, CREATOR_USERNAME } from "@/drizzle/constants";
+import { CREATOR_TRIAL_FIRST_FORM, CREATOR_USERNAME } from "@/drizzle/constants";
 import {
   aiProfile,
+  aiTransformation,
   badge,
   battle,
   quest,
@@ -25,7 +26,8 @@ import {
 const HERO = "trial-hero";
 const CREATOR = "trial-creator";
 const SPOT = { sector: 12, longitude: 5, latitude: 6 };
-const IDS = CREATOR_TRIAL_FORMS.map((form) => form.aiId);
+const IDS = [CREATOR_TRIAL_FIRST_FORM, "trial-form-b", "trial-form-c"];
+const ARRIVAL = { log: "It rises", tier: 1, color: 1, glow: 2 };
 
 const attack = async (position = SPOT) =>
   initiateBattle(
@@ -40,10 +42,25 @@ const attack = async (position = SPOT) =>
     "COMBAT",
   );
 
+/** The fight a quest objective naming the creator starts, as quest consequences do. */
+const questFight = async () =>
+  initiateBattle(
+    {
+      ...SPOT,
+      longitude: SPOT.longitude + 3,
+      userIds: [HERO],
+      targetIds: [CREATOR],
+      client: await getTestDatabase(),
+      biome: "default",
+      questBattleSource: { questId: "kill-the-creator", objectiveId: "objective" },
+    },
+    "QUEST",
+  );
+
 describeWithDatabase("creator trial admission", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await resetTables(battle, aiProfile, badge, quest, questHistory, userBadge, userData, userJutsu);
+    await resetTables(battle, aiProfile, aiTransformation, badge, quest, questHistory, userBadge, userData, userJutsu);
     await insertDefaultAiProfile({ userId: IDS[0] });
     await insertUsers([
       { userId: HERO, username: HERO, level: 8, rank: "STUDENT", villageId: "village", ...SPOT },
@@ -63,6 +80,14 @@ describeWithDatabase("creator trial admission", () => {
         rank: "JONIN" as const,
       })),
     ]);
+    await (await getTestDatabase()).insert(aiTransformation).values(
+      IDS.slice(1).map((nextAiId, index) => ({
+        ...ARRIVAL,
+        userId: IDS[index]!,
+        nextAiId,
+        announce: `FORM ${index + 1}`,
+      })),
+    );
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -83,11 +108,7 @@ describeWithDatabase("creator trial admission", () => {
     ).toEqual(IDS.slice(1));
     expect(
       created.extraState.encounter?.pendingWaves.map((wave) => wave.arrival?.announce),
-    ).toEqual(
-      CREATOR_TRIAL_FORMS.flatMap((form) =>
-        "arrival" in form ? [form.arrival.announce] : [],
-      ),
-    );
+    ).toEqual(["FORM 1", "FORM 2"]);
     expect(enemies[0]?.risesAgain).toBe(true);
     expect(created.extraState.creatorTrial).toEqual({
       creatorId: CREATOR,
@@ -103,6 +124,24 @@ describeWithDatabase("creator trial admission", () => {
     ).toBe(created.id);
   });
 
+  it("turns a quest fight naming the creator into the trial, keeping it a quest fight", async () => {
+    const client = await getTestDatabase();
+    expect(await questFight()).toMatchObject({ success: true });
+
+    const created = (await client.query.battle.findFirst())!;
+    expect(created.battleType).toBe("QUEST");
+    expect(created.extraState.questBattleSource).toEqual({
+      questId: "kill-the-creator",
+      objectiveId: "objective",
+    });
+    const enemies = created.usersState.filter((user) => user.direction === "right" && !user.isSummon);
+    expect(enemies.map((user) => user.controllerId)).toEqual([IDS[0]!]);
+    expect(created.extraState.encounter?.pendingWaves).toHaveLength(IDS.length - 1);
+    expect(
+      await client.query.userData.findFirst({ where: eq(userData.userId, CREATOR) }),
+    ).toMatchObject({ status: "AWAKE", battleId: null });
+  });
+
   it("still requires standing with the creator", async () => {
     const client = await getTestDatabase();
     const result = await attack({ ...SPOT, longitude: SPOT.longitude + 1 });
@@ -115,7 +154,7 @@ describeWithDatabase("creator trial admission", () => {
 
   it("reports a trial whose forms are not seeded instead of opening an empty battle", async () => {
     const client = await getTestDatabase();
-    await client.delete(userData).where(eq(userData.userId, IDS[4]!));
+    await client.delete(userData).where(eq(userData.userId, IDS[2]!));
     expect(await attack()).toMatchObject({
       success: false,
       message: "The trial is unavailable",
@@ -123,7 +162,10 @@ describeWithDatabase("creator trial admission", () => {
     expect(await client.query.battle.findFirst()).toBeUndefined();
   });
 
-  it("credits the creator's achievement when the last form falls", async () => {
+  it.each([
+    ["an attack", attack],
+    ["the quest's own fight", questFight],
+  ])("credits the creator's achievement when the last form falls after %s", async (_, start) => {
     const client = await getTestDatabase();
     await client.insert(badge).values({
       id: "creator-badge",
@@ -158,7 +200,7 @@ describeWithDatabase("creator trial admission", () => {
         sceneCharacters: [],
       },
     } as never);
-    await attack();
+    await start();
     const created = (await client.query.battle.findFirst())!;
     const usersState = created.usersState.map((user) =>
       user.controllerId === IDS[0] ? { ...user, curHealth: 0 } : user,

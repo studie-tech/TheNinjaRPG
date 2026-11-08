@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { ENCOUNTER_MAX_WAVE_DELAY_ROUNDS } from "@/drizzle/constants";
+import {
+  ENCOUNTER_MAX_WAVE_DELAY_ROUNDS,
+  TRANSFORMATION_TIERS,
+} from "@/drizzle/constants";
 
 /** Shared roster contract; activity progress and personal reward receipts live separately. */
 export const coopRosterSchema = z.object({
@@ -12,7 +15,7 @@ export const coopRosterSchema = z.object({
 export const bossArrivalSchema = z.object({
   announce: z.string().min(1).max(32),
   log: z.string().min(1).max(200),
-  tier: z.number().int().min(1).max(4),
+  tier: z.number().int().min(1).max(TRANSFORMATION_TIERS.length),
   color: z.number().int().min(0).max(0xffffff),
   glow: z.number().int().min(0).max(0xffffff),
 });

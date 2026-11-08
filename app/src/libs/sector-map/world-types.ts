@@ -53,6 +53,8 @@ export interface GlobalMapData {
 export interface SectorUser {
   /** Viewer-safe resolved art; the sector router substitutes uniforms for masked identities. */
   spriteAppearance?: import("@/validators/lpc").SpriteAppearance;
+  /** Full-body art drawn in place of the layered character, at twice an NPC's height. */
+  bodyArt?: string;
   userId: string;
   username: string;
   /** Viewer-specific anonymity from the authenticated sector snapshot. */

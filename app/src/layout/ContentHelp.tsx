@@ -3,7 +3,7 @@
 import { ExternalLink, HelpCircle, Info } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -15,6 +15,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import {
+  BOSS_FIGHT_MAX_FORMS,
   DEFAULT_ITEM_DESCRIPTION,
   MIN_CONTENT_DESCRIPTION_LENGTH,
   type QuestType,
@@ -183,15 +184,21 @@ export const BloodlineHelper: React.FC<BloodlineHelperProps> = ({ bloodline }) =
 export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
   const { data: userData } = useRequiredUserData();
   const aiId = ai.userId ?? "";
+  const isEditor = !!userData && canChangeContent(userData.role);
 
   const { data } = api.ai.getAiRelations.useQuery({ aiId }, { enabled: !!aiId });
+  const { data: bossFight } = api.ai.getBossFight.useQuery(
+    { aiId },
+    { enabled: !!aiId && isEditor },
+  );
 
-  if (!userData) return null;
-  if (!canChangeContent(userData.role)) return null;
+  if (!isEditor) return null;
 
   return (
     <HelperSheet title="AI Helper" heading={<>AI: {ai.username ?? ai.userId}</>}>
       {renderAiRelations(data)}
+      {renderBossFightStatus(aiId, bossFight)}
+      {renderBossFightGuide()}
     </HelperSheet>
   );
 };
@@ -1209,6 +1216,85 @@ const renderJutsuRelations = (relations?: JutsuRelations) => {
   );
 };
 
+/** Where this AI sits in its boss, and what each form still needs before it is ready. */
+const renderBossFightStatus = (aiId: string, boss?: AiBossFight) => {
+  if (!boss || boss.forms.length < 2) return null;
+  const position = boss.forms.findIndex((form) => form.userId === aiId) + 1;
+  const missing = boss.forms.flatMap((form, index) => [
+    ...(form.jutsuCount === 0 ? [`${form.username} has no jutsu`] : []),
+    ...(form.hasIdle ? [] : [`${form.username} has no Idle sprite`]),
+    ...(index > 0 && !form.hasArrivalClip
+      ? [`${form.username} has no Boss arrival sprite, so it arrives without a morph`]
+      : []),
+  ]);
+  return (
+    <div className="space-y-2">
+      <h4 className="font-medium text-gray-900">This boss</h4>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
+        <p>
+          Form {position} of {boss.forms.length}.
+          {position > 1 && " Content should use the first form, not this one."}
+        </p>
+      </div>
+      {missing.length > 0 ? (
+        <Alert className="border-yellow-300 bg-yellow-50">
+          <AlertDescription>
+            <ul className="list-disc space-y-1 pl-4 text-sm">
+              {missing.map((entry) => (
+                <li key={entry}>{entry}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <p className="text-green-700 text-sm">Every form is ready to fight.</p>
+      )}
+    </div>
+  );
+};
+
+/** How to build a multi-form boss, from the AI page's own controls. */
+const renderBossFightGuide = () => (
+  <div className="space-y-2">
+    <h4 className="font-medium text-gray-900">Creating a boss fight</h4>
+    <p className="text-gray-700 text-sm">
+      A boss is a chain of AIs. When one falls, the next rises on the same tile with a
+      cinematic, in the same battle.
+    </p>
+    <ol className="list-decimal space-y-1 pl-5 text-gray-700 text-sm">
+      <li>Create one AI per form, weakest first, with stats, jutsu and AI rules.</li>
+      <li>
+        On every form except the last, open Boss transformation and choose the Next
+        form. Set its banner, battle log line, intensity and colours.
+      </li>
+      <li>
+        On every form except the first, bind a Boss arrival sprite under Sprite
+        Animations: a clip that morphs the previous form into this one.
+      </li>
+      <li>
+        Use only the first form in your content. It must be the only enemy, in a quest,
+        arena, hunt, encounter, map NPC or a dungeon wave.
+      </li>
+      <li>Play it from start to finish before release.</li>
+    </ol>
+    <ul className="list-disc space-y-1 pl-5 text-gray-600 text-xs">
+      <li>
+        Up to {BOSS_FIGHT_MAX_FORMS} forms. Raids, wars, events and fights with allies
+        or several enemies ignore transformations.
+      </li>
+      <li>Save the highest intensity for the final form, so each arrival escalates.</li>
+      <li>
+        Each form adds to battle rewards, because rewards scale with the number of
+        enemies. Check them against the difficulty.
+      </li>
+      <li>
+        Forms heal and buff like any AI, so test with a realistic player: strong healing
+        on the last form can make a boss unbeatable.
+      </li>
+    </ul>
+  </div>
+);
+
 const renderAiRelations = (relations?: AiRelations) => {
   if (!relations) return null;
   const { questsUsingAi } = relations;
@@ -1301,3 +1387,5 @@ interface RelationSectionProps {
   route: string;
   rowClassName?: string;
 }
+
+type AiBossFight = RouterOutputs["ai"]["getBossFight"];

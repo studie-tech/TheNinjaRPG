@@ -1,7 +1,8 @@
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { actionLog, aiProfile, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userCookingJob, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage } from "@/drizzle/schema";
+import { actionLog, aiProfile, aiTransformation, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userCookingJob, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage } from "@/drizzle/schema";
+import { Pusher } from "@/libs/pusher";
 import { ObjectiveReward } from "@/validators/rewards";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
@@ -20,7 +21,7 @@ import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battl
 describeWithDatabase("Dungeon parties and settlement", () => {
   beforeEach(async () => {
     stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected HTTP request in dungeon tests" });
-    await resetTables(actionLog, aiProfile, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userCookingJob, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage);
+    await resetTables(actionLog, aiProfile, aiTransformation, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userCookingJob, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage);
     await insertUsers(["a", "b", "c", "outsider"].map((id) => ({userId: id, username: id, status: "AWAKE", sector: 1, money: 0, experience: 0, earnedExperience: 0, villagePrestige: 0, villageId: "village"})));
     const db = await getTestDatabase();
     await db.insert(village).values({id: "village", name: "Village", sector: 1, kageId: "a"});
@@ -308,6 +309,20 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "a") })).toMatchObject({ cookingExperience: 23, status: "QUEUED", battleId: null });
     expect(await db.query.userCookingJob.findMany()).toHaveLength(0);
     expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) })).toMatchObject({ status: "LOBBY", battleId: null });
+  });
+  it("brings a lone floor enemy's later forms into the floor's battle", async () => {
+    const db = await getTestDatabase();
+    const { a, id } = await lobby();
+    await db.update(userData).set({ status: "QUEUED", rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0, primaryElement: "Fire", secondaryElement: "Water" });
+    await insertDefaultAiProfile();
+    await insertUsers(["enemy", "enemy-risen"].map((userId) => ({ userId, username: userId, isAi: true, rank: "JONIN" as const, level: 50 })));
+    await db.insert(aiTransformation).values({ userId: "enemy", nextAiId: "enemy-risen", announce: "RISEN", log: "It rises!", tier: 2, color: 1, glow: 2 });
+    await db.update(dungeonRun).set({ state: { ...dungeonBattleState().runState, readyIds: ["a", "b", "c"] } }).where(eq(dungeonRun.id, id));
+    await db.insert(dungeonMember).values(["b", "c"].map(userId => ({ runId: id, userId, activeUserId: userId })));
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    expect(await a.act({ id, action: "start" })).toMatchObject({ success: true });
+    const created = await db.query.battle.findFirst();
+    expect(created?.extraState.encounter?.pendingWaves.map((wave) => wave.arrival?.announce)).toEqual(["RISEN"]);
   });
   it("accepts only one of two simultaneous invitations into different parties", async () => {
     const {a, id} = await lobby(); const c = await callerFor(dungeonRouter, "c");

@@ -19,6 +19,7 @@ import {
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
 import { anbuStealthChance } from "@/libs/anbu";
+import { isCreator } from "@/libs/combat/creatorTrial";
 import {
   anonymousSpriteAppearance,
   resolveSpriteAppearance,
@@ -80,6 +81,7 @@ import {
 import { fetchIsolatedPyramid } from "@/queries/quests";
 import {
   fetchSectorWindowData,
+  findUserDataForCreatorBody,
   findUserDataForGetSectorData,
   findUserForGlobalTravelFinish,
   findVillageForMoveInSector,
@@ -470,12 +472,13 @@ export const travelRouter = createTRPCRouter({
         .map((p) => placementToSectorUser(p, p.aiTemplate!));
 
       // Quest history can only affect placements backed by an AI template.
-      const [userQuests, completedQuests] = placements.some((p) => p.aiTemplate?.isAi)
-        ? await Promise.all([
-            listQuestHistoryForGetSectorData(ctx.drizzle, ctx),
-            listQuestHistoryForGetSectorData2(ctx.drizzle, ctx),
-          ])
-        : [[], []];
+      const readsQuests = placements.some((p) => p.aiTemplate?.isAi);
+      const hostsCreator = processedUsers.some(isCreator);
+      const [userQuests, completedQuests, creatorBody] = await Promise.all([
+        readsQuests ? listQuestHistoryForGetSectorData(ctx.drizzle, ctx) : [],
+        readsQuests ? listQuestHistoryForGetSectorData2(ctx.drizzle, ctx) : [],
+        hostsCreator ? findUserDataForCreatorBody(ctx.drizzle) : undefined,
+      ]);
       const activeQuests = getUserQuests({ ...user, userQuests, completedQuests });
       const boundPlacementIds = new Set(
         activeQuests.flatMap((entry) =>
@@ -507,7 +510,12 @@ export const travelRouter = createTRPCRouter({
       );
 
       return {
-        users: processedUsers,
+        // A disguise renames the creator, so a disguised creator keeps the disguise.
+        users: creatorBody?.avatar
+          ? processedUsers.map((u) =>
+              isCreator(u) ? { ...u, bodyArt: creatorBody.avatar } : u,
+            )
+          : processedUsers,
         village: villageData,
         sectorData,
         warData: warData.map((w) =>

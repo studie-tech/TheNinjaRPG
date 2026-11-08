@@ -42,6 +42,19 @@ describe("travel actor snapshots", () => {
     expect(result.map((recipe) => recipe.key)).toEqual(["user:creator"]);
     expect(result[0]?.parts.some((part) => part.kind === "attack")).toBe(true);
   });
+  it("draws full-body art in place of the layered character, for the viewer too", () => {
+    const appearance = { bodyStyle: "male" } as never;
+    for (const userId of ["creator", "self"]) {
+      const creator = player({ userId, username: CREATOR_USERNAME, bodyArt: "robot.webp", spriteAppearance: appearance });
+      const [recipe] = recipes([creator]);
+      expect(recipe?.user?.spriteAppearance).toBeUndefined();
+      expect(recipe?.parts.some((part) => part.kind === "marker")).toBe(false);
+      const body = recipe?.parts.find((part) => part.kind === "avatar");
+      // Twice an NPC's height on the 10px test tile, from the native source, sampled smoothly.
+      expect(body).toMatchObject({ image: "robot.webp", rendition: 0, nearest: false, size: 26 });
+      expect(body).not.toHaveProperty("character");
+    }
+  });
   it("still pins a battle beside an ordinary player, and once the creator has left the tile", () => {
     const challenger = player({ userId: "challenger", status: "BATTLE", battleId: "fight" });
     expect(recipes([player(), challenger]).some((recipe) => recipe.battleId === "fight")).toBe(true);

@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { huntingProgress, huntingReceipt, huntingSession } from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
+import { deleteAiTransformationsFor } from "@/queries/ai";
 import { deleteBattleQueueMembersForUser } from "@/queries/clan";
 import { deleteUserAttributes, deleteUserNindo } from "@/queries/profile";
 import { deleteRankedQueueForUser } from "@/queries/pvprank";
@@ -196,6 +197,7 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
       deleteRowsForUser(client, table, userId),
     ),
     deleteAiSpriteAnimationBindings(client, userId),
+    deleteAiTransformationsFor(client, userId),
     deleteUserItems(client, userId),
     deleteFarmPlotForDeleteUserInternal(client, userId),
     deleteFarmExtractionForDeleteUserInternal(client, userId),
