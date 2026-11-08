@@ -53,8 +53,9 @@ let pickers: Record<string, { ids: string[]; count: number; disabled: boolean | 
 beforeEach(() => {
   pickers = {};
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
-  vi.spyOn(MissionPicker, "default").mockImplementation(({ setting, missions, count, disabled }) => {
-    pickers[setting.name] = { ids: missions.map((m) => m.id), count, disabled };
+  vi.spyOn(MissionPicker, "default").mockImplementation(({ setting, missions, disabled }) => {
+    // The picker shows how many missions it was given.
+    pickers[setting.name] = { ids: missions.map((m) => m.id), count: missions.length, disabled };
     return null;
   });
   vi.spyOn(QuestStartCache, "useQuestStartCacheUpdate").mockReturnValue({
