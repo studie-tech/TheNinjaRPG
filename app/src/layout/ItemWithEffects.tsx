@@ -584,27 +584,27 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 )}
               {"canBeImbued" in item && item.canBeImbued && (
                 <p>
-                  <b>Can be Imbued</b>: {item.canBeImbued ? "yes" : "no"}
+                  <b>Can be Imbued</b>: yes
                 </p>
               )}
               {"canBeHunted" in item && item.canBeHunted && (
                 <p>
-                  <b>Can be Hunted</b>: {item.canBeHunted ? "yes" : "no"}
+                  <b>Can be Hunted</b>: yes
                 </p>
               )}
               {"canBeGathered" in item && item.canBeGathered && (
                 <p>
-                  <b>Can be Gathered</b>: {item.canBeGathered ? "yes" : "no"}
+                  <b>Can be Gathered</b>: yes
                 </p>
               )}
               {"canBeTraded" in item && item.canBeTraded && (
                 <p>
-                  <b>Can be Traded</b>: {item.canBeTraded ? "yes" : "no"}
+                  <b>Can be Traded</b>: yes
                 </p>
               )}
               {"canBeCrafted" in item && item.canBeCrafted && (
                 <p>
-                  <b>Can be Crafted</b>: {item.canBeCrafted ? "yes" : "no"}
+                  <b>Can be Crafted</b>: yes
                 </p>
               )}
               {"isFarmSeed" in item && item.isFarmSeed && (
@@ -727,7 +727,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"onInitialBattleField" in item && item.onInitialBattleField && (
                 <p>
-                  <b>On battlefield</b>: {item.onInitialBattleField ? "yes" : "no"}
+                  <b>On battlefield</b>: yes
                 </p>
               )}
               {"licenseDetails" in item && item.licenseDetails && (
@@ -1024,38 +1024,18 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             </div>
           )}
           {/* Show medical rank requirement for quests */}
-          {"medicalRank" in item && item.medicalRank && item.medicalRank !== "NONE" && (
-            <div className="my-2 rounded-lg bg-poppopover p-2">
-              <p>
-                <b>Medical Rank Requirement</b>: {item.medicalRank}
-              </p>
-            </div>
+          {"medicalRank" in item && (
+            <RankRequirement label="Medical" rank={item.medicalRank} />
           )}
-          {"huntingRank" in item && item.huntingRank && item.huntingRank !== "NONE" && (
-            <div className="my-2 rounded-lg bg-poppopover p-2">
-              <p>
-                <b>Hunting Rank Requirement</b>: {item.huntingRank}
-              </p>
-            </div>
+          {"huntingRank" in item && (
+            <RankRequirement label="Hunting" rank={item.huntingRank} />
           )}
-          {"gatheringRank" in item &&
-            item.gatheringRank &&
-            item.gatheringRank !== "NONE" && (
-              <div className="my-2 rounded-lg bg-poppopover p-2">
-                <p>
-                  <b>Gathering Rank Requirement</b>: {item.gatheringRank}
-                </p>
-              </div>
-            )}
-          {"requiredSageRank" in item &&
-            item.requiredSageRank &&
-            item.requiredSageRank !== "NONE" && (
-              <div className="my-2 rounded-lg bg-poppopover p-2">
-                <p>
-                  <b>Sage Rank Requirement</b>: {item.requiredSageRank}
-                </p>
-              </div>
-            )}
+          {"gatheringRank" in item && (
+            <RankRequirement label="Gathering" rank={item.gatheringRank} />
+          )}
+          {"requiredSageRank" in item && (
+            <RankRequirement label="Sage" rank={item.requiredSageRank} />
+          )}
           {!isFurniture &&
             !hideEffects &&
             effects?.map((effect, i) => {
@@ -1432,15 +1412,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                         {"reward_hunter_items" in parsedEffect &&
                           parsedEffect.reward_hunter_items && (
                             <p>
-                              <b>Reward Hunter Items</b>:{" "}
-                              {parsedEffect.reward_hunter_items ? "yes" : "no"}
+                              <b>Reward Hunter Items</b>: yes
                             </p>
                           )}
                         {"reward_gathering_items" in parsedEffect &&
                           parsedEffect.reward_gathering_items && (
                             <p>
-                              <b>Reward Gathering Items</b>:{" "}
-                              {parsedEffect.reward_gathering_items ? "yes" : "no"}
+                              <b>Reward Gathering Items</b>: yes
                             </p>
                           )}
                         {"direction" in parsedEffect &&
@@ -1480,6 +1458,16 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
 export default ItemWithEffects;
 
 /** Shows furniture's home and shop metadata without equipment or battle statistics. */
+/** Highlighted rank a quest requires, unless it requires none. */
+const RankRequirement = ({ label, rank }: { label: string; rank: string | null }) =>
+  rank && rank !== "NONE" ? (
+    <div className="my-2 rounded-lg bg-poppopover p-2">
+      <p>
+        <b>{label} Rank Requirement</b>: {rank}
+      </p>
+    </div>
+  ) : null;
+
 const FurnitureDetails = ({ item }: { item: Item }) => (
   <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
     <p>
