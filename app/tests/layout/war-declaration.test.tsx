@@ -636,6 +636,54 @@ describe("objective war townhall health", () => {
     expect(pollInterval({ state: { data: { war: response } } })).toBe(false);
   });
 
+  it.each(
+    viewers.flatMap(([villageId, isAttacker]) =>
+      (
+        [
+          ["ATTACKER_VICTORY", isAttacker ? "Victory" : "Defeat"],
+          ["DEFENDER_VICTORY", isAttacker ? "Defeat" : "Victory"],
+          ["DRAW", "War ended in a Draw"],
+        ] as const
+      ).map(([status, label]) => [villageId, status, label] as const),
+    ),
+  )("shows %s the %s outcome as %s", (villageId, status, label) => {
+    const user = { userId: "viewer", villageId, role: "USER" } as NonNullable<UserWithRelations>;
+    response = { ...war, status, endedAt: new Date() };
+    const view = render(<VillageWar war={war} user={user} isKage={false} />);
+    const colour = { Victory: "text-green-500", Defeat: "text-red-500", "War ended in a Draw": "text-yellow-500" }[label];
+    expect(view.getByText(`Outcome: ${label}`).className).toBe(`font-bold ${colour}`);
+  });
+
+  it.each(viewers)("lists the viewer's side first on shrines and supporting forces for %s", (villageId, isAttacker) => {
+    const user = { userId: "viewer", villageId, role: "USER" } as NonNullable<UserWithRelations>;
+    const shrineWar = {
+      ...war,
+      rules: null,
+      attackerWarHealth: 9000,
+      defenderWarHealth: 8000,
+      attackerShrineHp: 400,
+      attackerShrineMaxHp: 500,
+      attackerShrineStatus: "ACTIVE",
+      defenderShrineHp: 0,
+      defenderShrineMaxHp: 500,
+      defenderShrineStatus: "CAPTURED",
+    } as unknown as FetchActiveWarsReturnType;
+    const view = render(<VillageWar war={shrineWar} user={user} isKage={false} />);
+    const order = isAttacker ? ["Attacker", "Defender"] : ["Defender", "Attacker"];
+    expect(view.getAllByText(/ Shrine$/).map((label) => label.textContent)).toEqual(order.map((name) => `${name} Shrine`));
+    expect(view.getAllByText(/^(Captured|Damaged|Active)$/).map((badge) => badge.textContent)).toEqual(
+      isAttacker ? ["Active", "Captured"] : ["Captured", "Active"],
+    );
+    const own = isAttacker ? ["HP (9000 / 10000)", "HP (400 / 500)"] : ["HP (8000 / 10000)", "HP (0 / 500)"];
+    const enemy = isAttacker ? ["HP (8000 / 10000)", "HP (0 / 500)"] : ["HP (9000 / 10000)", "HP (400 / 500)"];
+    expect(view.getAllByText(/^HP \(/).map((label) => label.textContent)).toEqual([own[0], enemy[0], own[1], enemy[1]]);
+    const forces = view.getByText("Supporting Forces").parentElement!;
+    expect([...forces.querySelectorAll("p.text-muted-foreground")].map((name) => name.textContent)).toEqual(order);
+    expect([...forces.querySelectorAll("span.text-sm")].map((ally) => ally.textContent)).toEqual(
+      isAttacker ? ["Attacking ally", "Defending ally"] : ["Defending ally", "Attacking ally"],
+    );
+  });
+
   it("does not poll historical objective wars", () => {
     const user = { userId: "viewer", villageId: "attacker", role: "USER" } as NonNullable<UserWithRelations>;
     render(<VillageWar war={{ ...war, status: "DRAW", endedAt: new Date() }} user={user} isKage={false} />);
