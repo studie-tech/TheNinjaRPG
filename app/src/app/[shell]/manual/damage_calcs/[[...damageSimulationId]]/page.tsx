@@ -553,11 +553,7 @@ export default function Simulator(props: {
                     <ClipboardCopy
                       className="ml-1 h-5 w-5 hover:cursor-pointer hover:text-orange-900"
                       onClick={() => {
-                        const origin =
-                          typeof window !== "undefined" && window.location.origin
-                            ? window.location.origin
-                            : "";
-                        const link = `${origin}/manual/damage_calcs/${entry.id}`;
+                        const link = `${window.location.origin}/manual/damage_calcs/${entry.id}`;
                         navigator.clipboard.writeText(link).then(
                           () => {
                             showMutationToast({
