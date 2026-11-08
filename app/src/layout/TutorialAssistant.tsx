@@ -241,6 +241,7 @@ const PlayerTutorialAssistant: React.FC<
 
       // Handle the tutorial step
       const tutorialStep = userData.tutorialStep;
+      const isActiveStep = tutorialStep < TUTORIAL_STEPS.length;
 
       // Get current step config
       const isHospitalized = userData.status === "HOSPITALIZED";
@@ -264,7 +265,7 @@ const PlayerTutorialAssistant: React.FC<
         inBattle &&
         !onBattlePage &&
         userData.battleId &&
-        tutorialStep < TUTORIAL_STEPS.length &&
+        isActiveStep &&
         isBattleStep
       ) {
         router.replace("/combat");
@@ -276,7 +277,7 @@ const PlayerTutorialAssistant: React.FC<
       const shouldShowGameMenuTutorial =
         isMobile &&
         !rightSideBarOpen &&
-        tutorialStep < TUTORIAL_STEPS.length &&
+        isActiveStep &&
         currentStepConfig?.requiresGameMenu === true &&
         isTutorialPageMatch(currentStepConfig.page, pathname);
 
@@ -293,12 +294,10 @@ const PlayerTutorialAssistant: React.FC<
       const onCorrectPage = isTutorialPageMatch(currentStepConfig?.page, pathname);
       const hasRequiredGameMenu =
         currentStepConfig?.requiresGameMenu && isMobile ? rightSideBarOpen : true;
-      setIsAssistantVisible(
-        tutorialStep < TUTORIAL_STEPS.length && onCorrectPage && hasRequiredGameMenu,
-      );
+      setIsAssistantVisible(isActiveStep && onCorrectPage && hasRequiredGameMenu);
 
       // If we're at a valid step but not on the correct page, redirect
-      if (tutorialStep < TUTORIAL_STEPS.length && !onCorrectPage && currentStepConfig) {
+      if (isActiveStep && !onCorrectPage && currentStepConfig) {
         if (!currentStepConfig?.requiresGameMenu) {
           setRightSideBarOpen(false);
         }
@@ -461,17 +460,21 @@ const PlayerTutorialAssistant: React.FC<
   // Determine which step to show - hospitalized overrides everything
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
+  // The guided quest's current objective, for its text and its characters
+  const postTutorialObjective =
+    showPostTutorialQuest && postTutorialQuest
+      ? getActiveObjective(postTutorialQuest.userQuest.quest, postTutorialQuest.tracker)
+      : undefined;
+
   // Create a dynamic tutorial step for post-tutorial quest guidance
   let dynamicQuestStep: TutorialStepConfig | null = null;
   if (showPostTutorialQuest && postTutorialQuest) {
-    const { userQuest, tracker } = postTutorialQuest;
-    const quest = userQuest.quest;
-    const activeObjective = getActiveObjective(quest, tracker);
+    const quest = postTutorialQuest.userQuest.quest;
 
     // Determine the text to show
     let description = quest.description;
-    if (quest.consecutiveObjectives && activeObjective?.description) {
-      description = activeObjective.description;
+    if (quest.consecutiveObjectives && postTutorialObjective?.description) {
+      description = postTutorialObjective.description;
     }
 
     dynamicQuestStep = {
@@ -619,23 +622,15 @@ const PlayerTutorialAssistant: React.FC<
   // For starter quests, skip fetching scene characters - we'll use the A/B tested assistant image instead
   const postTutorialCharacterIds: string[] = [];
   if (showPostTutorialQuest && postTutorialQuest) {
-    const { userQuest, tracker } = postTutorialQuest;
-    const quest = userQuest.quest;
+    const quest = postTutorialQuest.userQuest.quest;
     const isStarterQuest = quest.questType === "starter";
+    // Only consecutive quests have an active objective, which may cast its own scene.
     if (!isStarterQuest) {
-      if (quest.consecutiveObjectives) {
-        const activeObjective = getActiveObjective(quest, tracker);
-        if (
-          activeObjective?.sceneCharacters &&
-          activeObjective.sceneCharacters.length > 0
-        ) {
-          postTutorialCharacterIds.push(...activeObjective.sceneCharacters);
-        } else {
-          postTutorialCharacterIds.push(...(quest.content.sceneCharacters || []));
-        }
-      } else {
-        postTutorialCharacterIds.push(...(quest.content.sceneCharacters || []));
-      }
+      postTutorialCharacterIds.push(
+        ...(postTutorialObjective?.sceneCharacters?.length
+          ? postTutorialObjective.sceneCharacters
+          : quest.content.sceneCharacters || []),
+      );
     }
   }
 
