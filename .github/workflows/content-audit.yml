@@ -40,7 +40,6 @@ on:
       - ".github/scripts/render-scene-catalog.mjs"
       - ".github/scripts/apply-visual-check.mjs"
       - ".github/scripts/check-audit-media.mjs"
-      - "app/tests/scripts/check-audit-media.test.mjs"
       - ".agents/skills/tnr-content-audit/**"
       - "app/src/app/api/content-review/**"
       - "app/src/app/*/manual/review/battlefield/**"
@@ -371,7 +370,6 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             .github/scripts
-            app/tests/scripts
       - name: Apply the battlefield check
         env:
           PROPOSALS: ${{ needs.audit.outputs.proposals }}
