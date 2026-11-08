@@ -5,12 +5,14 @@ import * as client from "@/app/_trpc/client";
 import TownHall from "@/app/[shell]/townhall/page";
 import * as localstorage from "@/hooks/localstorage";
 import * as ContentBox from "@/layout/ContentBox";
+import * as Image from "@/layout/Image";
 import * as KageDefense from "@/layout/KageDefense";
 import * as PublicUser from "@/layout/PublicUser";
 import * as UserRequestSystem from "@/layout/UserRequestSystem";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import { actualImage } from "../../setup/preload";
 
 type Options = { onSuccess: (data: { success: boolean; message: string }) => Promise<void> };
 const captured: Record<string, Options> = {};
@@ -47,6 +49,8 @@ beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true });
   vi.clearAllMocks();
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  // Other suites replace the layout Image module; the card list is read through its images.
+  vi.spyOn(Image, "default").mockImplementation(actualImage);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children, title }) => (
     <section aria-label={String(title)}>{children}</section>
   ));
