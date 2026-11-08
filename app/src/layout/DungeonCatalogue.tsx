@@ -213,7 +213,7 @@ export const DungeonCatalogue = () => {
                         {drop.name}
                         {drop.onlyOnce && (
                           <span className="block text-muted-foreground text-xs">
-                            Once per dungeon run
+                            Once per player per dungeon
                           </span>
                         )}
                       </td>

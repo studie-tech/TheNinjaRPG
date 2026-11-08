@@ -30,7 +30,7 @@ it("opens reward chances in a modal and paginates the dungeon list", () => {
   expect(view.getByRole("dialog", { name: "Dungeon 1" })).toBeTruthy();
   expect(view.getByText("Reward scroll")).toBeTruthy();
   expect(view.getByText("15%")).toBeTruthy();
-  expect(view.getByText("Once per dungeon run")).toBeTruthy();
+  expect(view.getByText("Once per player per dungeon")).toBeTruthy();
   fireEvent.click(view.getByRole("button", { name: "Close" }));
   expect(view.queryByRole("dialog")).toBeNull();
   fireEvent.click(view.getByRole("button", { name: "Next" }));
