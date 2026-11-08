@@ -1107,6 +1107,7 @@ export const warRouter = createTRPCRouter({
         existingPending,
         elders,
         attackerStructures,
+        warRules,
       ] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchActiveWars(ctx.drizzle),
@@ -1119,6 +1120,7 @@ export const warRouter = createTRPCRouter({
         findVillageElderVoteForDeclareVillageWarOrRaid2(ctx.drizzle, input),
         listUserDataForDeclareVillageWarOrRaid(ctx.drizzle, input),
         fetchStructures(ctx.drizzle, input.userVillageId),
+        fetchWarRules(ctx.drizzle),
       ]);
       // Derived
       const now = new Date();
@@ -1133,7 +1135,7 @@ export const warRouter = createTRPCRouter({
         defenderVillage?.type || "",
       );
       const isRaid = !!attackerVillage && isFactionVillage(attackerVillage);
-      const configuredRules = !isRaid ? await fetchWarRules(ctx.drizzle) : null;
+      const configuredRules = !isRaid ? warRules : null;
       const declarationCost = isRaid
         ? FACTION_RAID_COST
         : configuredRules?.enabled
