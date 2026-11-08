@@ -1,3 +1,29 @@
+diff --git a/lib/rendering/renderers/gl/texture/GlTextureSystem.js b/lib/rendering/renderers/gl/texture/GlTextureSystem.js
+index 3aafc1a4a579a6d9a0ba5d0ef616329920a9cbc5..2ed713bda70c36ebdf5f59228484d5273b6a3d70 100644
+--- a/lib/rendering/renderers/gl/texture/GlTextureSystem.js
++++ b/lib/rendering/renderers/gl/texture/GlTextureSystem.js
+@@ -81,6 +81,8 @@ const _GlTextureSystem = class _GlTextureSystem {
+     this.bind(source);
+   }
+   bind(texture, location = 0) {
++    // A retained batch can still list a source destroyed after its last sprite moved on; nothing samples that slot.
++    if (texture?.source?.destroyed) texture = Texture.Texture.EMPTY;
+     const source = texture.source;
+     if (texture) {
+       this.bindSource(source, location);
+diff --git a/lib/rendering/renderers/gl/texture/GlTextureSystem.mjs b/lib/rendering/renderers/gl/texture/GlTextureSystem.mjs
+index 61607c8dcaa7e3229fb92fa9b9699ef0a9d38c86..e605959f789b929e63837ff5ec5a77c83023e5f7 100644
+--- a/lib/rendering/renderers/gl/texture/GlTextureSystem.mjs
++++ b/lib/rendering/renderers/gl/texture/GlTextureSystem.mjs
+@@ -79,6 +79,8 @@ const _GlTextureSystem = class _GlTextureSystem {
+     this.bind(source);
+   }
+   bind(texture, location = 0) {
++    // A retained batch can still list a source destroyed after its last sprite moved on; nothing samples that slot.
++    if (texture?.source?.destroyed) texture = Texture.EMPTY;
+     const source = texture.source;
+     if (texture) {
+       this.bindSource(source, location);
 diff --git a/lib/rendering/renderers/gl/texture/utils/applyStyleParams.js b/lib/rendering/renderers/gl/texture/utils/applyStyleParams.js
 index b7101b6734389111a303bed538166a129b1946ed..be5ab547a2a75cc20920892f49e34872f9f0a49d 100644
 --- a/lib/rendering/renderers/gl/texture/utils/applyStyleParams.js
