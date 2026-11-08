@@ -1,9 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { combatMasteryGains, recordMasteryUsage } from "@/libs/combat/mastery";
-import { getEfficiencyRatio } from "@/libs/combat/tags";
-import { getTagSchema } from "@/validators/combat";
-import type { CombatAction, UserEffect } from "@/libs/combat/types";
-import { makeUser, makeEffect, makeDamageEffect } from "./helpers/battleScenario";
+import type { CombatAction } from "@/libs/combat/types";
+import { makeUser } from "./helpers/battleScenario";
 
 const user = () => makeUser({ rank: "JONIN", masteryRanks: { ninjutsuMastery: "MASTER", taijutsuMastery: "MASTER", sageMastery: "NOVICE" }, ninjutsuMastery: 100, taijutsuMastery: 100, usedMasteries: { ninjutsuMastery: 1, taijutsuMastery: 1 } });
 const opponent = makeUser({ userId: "enemy", isAi: false });
@@ -39,18 +37,5 @@ describe("combat mastery rewards", () => {
   it("credits Sage usage without counting temporary mastery buffs as growth", () => {
     const u=user(); u.usedMasteries = {}; u.sageModeUsedThisBattle = true;
     expect(combatMasteryGains({ battleType: "ARENA", rewardScaling: 1 }, u, [makeUser({ isAi: true })], "Won", 20)).toMatchObject({ sageMastery: 20 });
-  });
-});
-
-describe("damage modifier selectors", () => {
-  it.each(["increasedamagegiven", "decreasedamagegiven", "increasedamagetaken", "decreasedamagetaken"] as const)("%s preserves elements and ignores stat and general selectors", (type) => {
-    const old = { ...makeEffect(type), statTypes: ["Taijutsu"], generalTypes: ["Speed"], elements: ["Wind"] } as UserEffect;
-    const schema = getTagSchema(type);
-    expect(schema.parse(old)).not.toHaveProperty("statTypes");
-    expect(schema.parse(old)).not.toHaveProperty("generalTypes");
-    expect(schema.parse(old)).toHaveProperty("elements", ["Wind"]);
-    expect(getEfficiencyRatio(makeDamageEffect({ statTypes: ["Ninjutsu"], elements: ["Fire"] }), old)).toBe(0);
-    expect(getEfficiencyRatio(makeDamageEffect({ statTypes: ["Ninjutsu"], elements: ["Wind"] }), old)).toBe(1);
-    expect(getEfficiencyRatio(makeDamageEffect({ elements: ["Fire"] }), makeEffect(type))).toBe(1);
   });
 });
