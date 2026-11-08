@@ -121,6 +121,56 @@ describe("statistics popover chart lifetime", () => {
     expect(charts[1]?.destroy).toHaveBeenCalledTimes(1);
   });
 
+  it("charts each rank except H with its own colour and leaves H in the total", async () => {
+    Object.assign(vi.spyOn(client, "api" as never), {
+      bloodline: {
+        getNaturalRollStatistics: {
+          useQuery: () => ({
+            data: { D: 10, C: 20, B: 30, A: 15, S: 5, H: 100, none: 20 },
+            isLoading: false,
+          }),
+        },
+      },
+    });
+    const view = mount();
+    fireEvent.click(view.getByRole("button", { name: "Roll Statistics" }));
+    await waitFor(() => expect(charts).toHaveLength(1));
+    expect(view.getByText("Total bloodline rolls:").nextElementSibling?.textContent).toBe("200");
+    const config = (chartLibrary.Chart as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as {
+      data: { labels: string[]; datasets: Record<string, unknown>[] };
+    };
+    expect(config.data.labels).toEqual([
+      "S-Rank",
+      "A-Rank",
+      "B-Rank",
+      "C-Rank",
+      "D-Rank",
+      "No Bloodline",
+    ]);
+    expect(config.data.datasets[0]).toEqual(
+      expect.objectContaining({
+        data: [5, 15, 30, 20, 10, 20],
+        backgroundColor: [
+          "rgba(255, 99, 132, 0.7)",
+          "rgba(255, 159, 64, 0.7)",
+          "rgba(255, 205, 86, 0.7)",
+          "rgba(75, 192, 192, 0.7)",
+          "rgba(54, 162, 235, 0.7)",
+          "rgba(201, 203, 207, 0.7)",
+        ],
+        borderColor: [
+          "rgb(255, 99, 132)",
+          "rgb(255, 159, 64)",
+          "rgb(255, 205, 86)",
+          "rgb(75, 192, 192)",
+          "rgb(54, 162, 235)",
+          "rgb(201, 203, 207)",
+        ],
+      }),
+    );
+  });
+
   it("cancels a draw if closed before the import resolves", async () => {
     const view = mount();
     const trigger = view.getByRole("button", { name: "Roll Statistics" });
