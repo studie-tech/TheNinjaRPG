@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { insertJutsus, insertUsers, jutsuRow } from "../../../../setup/factories";
-import { beforeStatements } from "../../../../setup/statements";
+import { aroundStatements, beforeStatements } from "../../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const userId = "loadout-switcher";
@@ -45,6 +45,23 @@ describeWithDatabase("jutsu equip racing a loadout switch", () => {
 
   it("keeps the equip when the newly active loadout already lists the jutsu", async () => {
     expect((await equipDuringSwitch(["strike"])).success).toBe(true);
+    expect(await loadoutIds("main")).toEqual([]);
+    expect(await isEquipped()).toBe(true);
+  });
+
+  it("does not roll back an equip once the newly active loadout lists the jutsu", async () => {
+    const db = await getTestDatabase();
+    let switched = false;
+    const switching = beforeStatements(db, jutsuLoadout, [async () => {
+      switched = true;
+      await db.update(userData).set({ jutsuLoadout: "other" }).where(eq(userData.userId, userId));
+    }], { operations: ["update"] });
+    // The rollback unequip lands after another request already listed the jutsu.
+    const raced = aroundStatements(switching, userJutsu, async (run) => {
+      if (switched) await db.update(jutsuLoadout).set({ jutsuIds: ["strike"] }).where(eq(jutsuLoadout.id, "other"));
+      return run();
+    }, { when: (values) => values.equipped === false });
+    expect((await callerForDatabase(jutsuRouter, userId, raced).toggleEquip({ userJutsuId: "owned" })).success).toBe(true);
     expect(await loadoutIds("main")).toEqual([]);
     expect(await isEquipped()).toBe(true);
   });
