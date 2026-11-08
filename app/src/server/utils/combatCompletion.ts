@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import { Redis } from "@upstash/redis";
 import superjson from "superjson";
 import type { CombatResult, ReturnedBattle } from "@/libs/combat/types";

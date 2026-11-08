@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import {
   QUERY_METRICS_COUNT_WEIGHT,
   QUERY_METRICS_SAMPLE_RATE,

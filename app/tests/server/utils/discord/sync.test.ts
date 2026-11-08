@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import { DrizzleQueryError } from "drizzle-orm";
 import { errorText } from "@/server/utils/discord/sync";
 import { DATABASE_FAILURE_MESSAGE } from "@/server/utils/mysqlErrors";

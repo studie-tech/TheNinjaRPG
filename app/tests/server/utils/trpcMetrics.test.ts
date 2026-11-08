@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import type * as Sentry from "@sentry/node";
+import type * as Sentry from "@sentry/nextjs";
 import { measureTrpcCall } from "@/server/utils/trpcMetrics";
 
 const recorder = () => ({ count: mock<typeof Sentry.metrics.count>(() => {}), distribution: mock<typeof Sentry.metrics.distribution>(() => {}) });

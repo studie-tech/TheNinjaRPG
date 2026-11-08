@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "bun:test";
 import { Redis } from "@upstash/redis";
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import { userDevice } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";

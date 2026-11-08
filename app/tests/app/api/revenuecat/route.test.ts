@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import * as nextHeaders from "next/headers";
 import { env } from "@/env/server.mjs";
 import * as grants from "@/server/utils/purchases/grant";

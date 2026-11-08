@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import { DrizzleQueryError, eq } from "drizzle-orm";
 import JSZip from "jszip";
 import * as uploadthing from "uploadthing/server";

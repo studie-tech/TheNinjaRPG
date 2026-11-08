@@ -6,7 +6,7 @@
  * an interrupted grant without either losing or doubling paid value on PlanetScale.
  */
 
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import {
   type FederalStatus,
   STORE_FEDERAL_PRODUCTS,

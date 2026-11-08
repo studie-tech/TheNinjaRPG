@@ -1,6 +1,6 @@
 import { DrizzleQueryError, eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import { conceptImage, userData, userQueue } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
-import * as SentryNode from "@sentry/node";
 import * as next from "next/server";
 import { deferModeration } from "@/libs/moderation/defer";
 import * as moderator from "@/libs/moderator";
@@ -56,7 +55,7 @@ describe("deferred moderation", () => {
     vi.spyOn(moderator, "moderateContent").mockRejectedValue(failure);
     const capture = vi.spyOn(Sentry, "captureException").mockReturnValue("event");
     let release!: (result: boolean) => void;
-    const flush = vi.spyOn(SentryNode, "flush").mockReturnValue(
+    const flush = vi.spyOn(Sentry, "flush").mockReturnValue(
       new Promise<boolean>((resolve) => { release = resolve; }),
     );
     deferModeration(client, info);

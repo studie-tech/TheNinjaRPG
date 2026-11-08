@@ -9,7 +9,7 @@ import { fetchIsolatedPyramid } from "@/queries/quests";
  */
 
 import { auth } from "@clerk/nextjs/server";
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { middlewareMarker } from "@trpc/server/unstable-core-do-not-import";

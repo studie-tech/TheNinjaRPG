@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import { checkBotId } from "botid/server";
 import { env } from "@/env/server.mjs";
