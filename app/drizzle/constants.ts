@@ -993,7 +993,7 @@ export const TournamentStates = ["OPEN", "IN_PROGRESS", "COMPLETED"] as const;
 export const TournamentMatchStates = ["WAITING", "PLAYED", "NO_SHOW"] as const;
 export type TournamentMatchState = (typeof TournamentMatchStates)[number];
 
-export const AutoBattleTypes = ["KAGE_AI", "CLAN_CHALLENGE"];
+export const AutoBattleTypes: readonly BattleType[] = ["KAGE_AI", "CLAN_CHALLENGE"];
 
 /**
  * Battle types that always start under manual control, whatever the player's
@@ -1156,7 +1156,7 @@ export const QuestRewardMetrics = [
 ] as const;
 export type QuestRewardMetric = (typeof QuestRewardMetrics)[number];
 
-export const QuestTypesWithMaxAttempts = [
+export const QuestTypesWithMaxAttempts: readonly QuestType[] = [
   "mastery",
   "event",
   "story",
@@ -2024,7 +2024,7 @@ export const SPARRING_NEAR_LEVEL_RANGE = 5;
 export const ONLINE_WINDOW_MINUTES = 30;
 export const BATTLE_ARENA_HEAL_COST = 500;
 export const BATTLE_TAG_STACKING = true;
-export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
+export const RANKS_RESTRICTED_FROM_PVP: readonly UserRank[] = ["STUDENT", "GENIN"];
 
 /**
  * The game's creator. Attacking them on the map, or a quest fight naming them, opens a PvE
@@ -3718,10 +3718,7 @@ export const TowerDefenseUpgradeTypes = [
 export type TowerDefenseUpgradeType = (typeof TowerDefenseUpgradeTypes)[number];
 
 // Upgrade categories for UI organization
-export const TowerDefenseUpgradeCategories: Record<
-  string,
-  readonly TowerDefenseUpgradeType[]
-> = {
+export const TowerDefenseUpgradeCategories = {
   ATTACK: ["DAMAGE", "ATTACK_SPEED", "RANGE", "CRIT_CHANCE", "DAMAGE_PER_TILE"],
   DEFENSE: [
     "HEALTH",
@@ -3739,7 +3736,7 @@ export const TowerDefenseUpgradeCategories: Record<
     "SKIP_ENEMY_CHANCE",
   ],
   ABILITIES: ["ABILITY_UNLOCK"],
-} as const;
+} as const satisfies Record<string, readonly TowerDefenseUpgradeType[]>;
 export type TowerDefenseUpgradeCategory = keyof typeof TowerDefenseUpgradeCategories;
 
 export const TowerDefenseRunStatuses = ["ACTIVE", "COMPLETED", "ABANDONED"] as const;
