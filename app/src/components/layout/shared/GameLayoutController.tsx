@@ -9,11 +9,7 @@ import React, {
 } from "react";
 import ReactDOM from "react-dom";
 import { api } from "@/app/_trpc/client";
-import {
-  safeLocalStorageGetItem,
-  safeLocalStorageSetItem,
-  useLocalStorage,
-} from "@/hooks/localstorage";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
 import { useGameMenu } from "@/hooks/useGameMenu";
 import { usePageActive } from "@/hooks/usePageActive";
@@ -38,6 +34,7 @@ import {
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
 import { usePublicPathname } from "@/utils/routing";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { getCurrentSeason } from "@/utils/time";
 import { useUserDataSelector } from "@/utils/UserContext";
 import {

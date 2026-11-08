@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import {
   GAME_LAYOUT_ATTRIBUTE,
   GAME_LAYOUT_FRAME_ATTRIBUTE,
@@ -14,6 +13,7 @@ import {
   persistLayoutPreferenceCookie,
 } from "@/libs/layoutPreference";
 import { useChangeLayout } from "@/utils/LayoutContext";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 export const applyGameLayout = (id: GameLayoutId) => {
   const layout = getGameLayout(id);

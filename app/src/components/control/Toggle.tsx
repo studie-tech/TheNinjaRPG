@@ -4,8 +4,8 @@ import { useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { cn } from "@/libs/shadui";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 interface ToggleProps {
   id?: string;

@@ -8,7 +8,6 @@ import { GameLayout } from "@/components/layout/GameLayout";
 import { PanelPublicLayout } from "@/components/layout/PanelPublicLayout";
 import PixelPublicLayout from "@/components/layout/PixelPublicLayout";
 import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { applyGameLayout } from "@/hooks/useGameLayout";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import {
@@ -20,6 +19,7 @@ import {
 import type { WallpaperVariant } from "@/libs/wallpaperExperiment";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
 import { usePublicPathname } from "@/utils/routing";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 import { useUserInfo } from "@/utils/UserContext";
 
 /**

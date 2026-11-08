@@ -39,7 +39,6 @@ import {
   MASTERY_QUEUE_KIND_LABELS,
   MasteryQueueKinds,
 } from "@/drizzle/constants";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
 import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
@@ -75,6 +74,7 @@ import { cn } from "@/libs/shadui";
 import { getMasteryTrainingState, masteryTrainingEndsAt } from "@/libs/train";
 import { moveItem } from "@/utils/array";
 import { calculatePercent } from "@/utils/math";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter, stripHtmlPreview } from "@/utils/string";
 import { nextUtcDayAt } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";

@@ -1,7 +1,7 @@
 "use client";
 
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 
 export type ColorTheme = "light" | "dark";
 

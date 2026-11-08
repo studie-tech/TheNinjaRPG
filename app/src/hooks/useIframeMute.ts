@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { showMutationToast } from "@/libs/toast";
 import { observeUserIframes, setIframeMuteState } from "@/utils/audio";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { useUserDataSelector } from "@/utils/UserContext";
 
 interface UseIframeMuteReturn {

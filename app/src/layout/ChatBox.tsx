@@ -16,15 +16,15 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import type { SentimentType } from "@/drizzle/constants";
-import {
-  safeLocalStorageGetItem,
-  safeLocalStorageRemoveItem,
-  safeLocalStorageSetItem,
-} from "@/hooks/localstorage";
 import Link from "@/layout/Link";
 import RichInput from "@/layout/RichInput";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
+import {
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/utils/storage";
 import { useUserData } from "@/utils/UserContext";
 import { type ChatMessageSchema, chatMessageSchema } from "@/validators/chat";
 

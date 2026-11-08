@@ -2,8 +2,8 @@
  * Audio utility functions for handling browser compatibility and user interactions
  */
 
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { clamp } from "@/utils/math";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 
 /** Sound effect volume the player chose in the game settings; 0.8 until they change it. */
 export const savedSfxVolume = () => {

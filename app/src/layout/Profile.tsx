@@ -33,7 +33,6 @@ import {
   PVP_WEEKLY_KILL_BOOST_CAP,
   VILLAGE_LOYALTY_TIERS,
 } from "@/drizzle/constants";
-import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import { DashboardSettings } from "@/layout/DashboardSettings";
@@ -61,6 +60,7 @@ import {
   getVillageLoyaltyDays,
   getVillageLoyaltyTierDescription,
 } from "@/libs/villageLoyalty";
+import { safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { nextRegenerationTickAt } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";

@@ -9,12 +9,13 @@ import { NativeFeatureCard } from "@/components/native/NativeFeatureCard";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { PushCategory } from "@/drizzle/constants";
-import { safeLocalStorageSetItem, useLocalStorage } from "@/hooks/localstorage";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useNativePushPermission } from "@/hooks/useNativePush";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import Link from "@/layout/Link";
 import { haptics, liveActivity, platform } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
+import { safeLocalStorageSetItem } from "@/utils/storage";
 
 /** Player-facing wording for each push category. */
 const CATEGORY_LABELS: Record<PushCategory, string> = {

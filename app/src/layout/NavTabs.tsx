@@ -1,8 +1,8 @@
 import type React from "react";
 import { startTransition, useEffect } from "react";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { cn } from "@/libs/shadui";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 interface NavTabsProps {
   id?: string;

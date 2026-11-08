@@ -4,11 +4,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
-  safeLocalStorageGetItem,
-  safeLocalStorageRemoveItem,
-  safeLocalStorageSetItem,
-} from "@/hooks/localstorage";
-import {
   appEvents,
   isNative,
   parseNativeUserAgent,
@@ -16,6 +11,11 @@ import {
   toSafePath,
 } from "@/libs/native";
 import { createSerialQueue } from "@/utils/async";
+import {
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/utils/storage";
 
 /** Token last handed to the server, so a resume does not re-register the same value. */
 const LAST_TOKEN_KEY = "native-push-token";

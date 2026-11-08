@@ -42,7 +42,6 @@ import {
   IMG_REGISTRATIN_STEP8,
   IMG_REGISTRATIN_STEP9,
 } from "@/drizzle/constants";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CharacterPreview } from "@/layout/CharacterPreview";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -55,6 +54,7 @@ import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getRandomElement, shuffle } from "@/utils/array";
 import { isRetryableTrpcError } from "@/utils/error";
 import { secureRandomInt } from "@/utils/math";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 import { useUserData } from "@/utils/UserContext";
 import {
   attributes,

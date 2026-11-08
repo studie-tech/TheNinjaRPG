@@ -1,9 +1,9 @@
 "use client";
 
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { isNative } from "@/libs/native";
 import { isIOSInstallDevice } from "@/utils/hardware";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 /** Delay before the prompt appears, so it never lands on top of a page still loading. */
 const AUTO_SHOW_DELAY_MS = 3000;

@@ -1,6 +1,6 @@
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { fetchWithRetry } from "@/utils/http";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 const MAP_CACHE_KEY = "hexasphere_map_cache";
 const MAP_CACHE_VERSION = "v21-horizon-near-wake";

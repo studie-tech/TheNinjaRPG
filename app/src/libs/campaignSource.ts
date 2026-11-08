@@ -1,9 +1,9 @@
+import { hasCookieConsent, hasDeclinedCookieConsent } from "@/libs/cookieConsent";
 import {
   safeLocalStorageGetItem,
   safeLocalStorageRemoveItem,
   safeLocalStorageSetItem,
-} from "@/hooks/localstorage";
-import { hasCookieConsent, hasDeclinedCookieConsent } from "@/libs/cookieConsent";
+} from "@/utils/storage";
 
 const CAMPAIGN_SOURCE_KEY = "utm_source";
 

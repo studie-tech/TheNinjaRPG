@@ -8,11 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  safeLocalStorageGetItem,
-  safeLocalStorageSetItem,
-  useLocalStorage,
-} from "@/hooks/localstorage";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { useSelectGameLayout } from "@/hooks/useGameLayout";
 import { useIframeMute } from "@/hooks/useIframeMute";
@@ -34,6 +30,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { clamp } from "@/utils/math";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 /** Audio and preference fields consumed by settings and playback. */
 export type GameSettingsUser = Pick<

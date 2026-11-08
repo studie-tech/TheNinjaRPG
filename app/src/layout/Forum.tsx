@@ -17,7 +17,6 @@ import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { safeLocalStorageRemoveItem } from "@/hooks/localstorage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import { ForumAttachments } from "@/layout/ForumAttachments";
 import Link from "@/layout/Link";
@@ -27,6 +26,7 @@ import { hasForumContent } from "@/libs/forumContent";
 import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
+import { safeLocalStorageRemoveItem } from "@/utils/storage";
 import { useUserData } from "@/utils/UserContext";
 
 /** Keep browse shortcuts compact in the header and expose staff tools only to eligible accounts. */

@@ -20,7 +20,6 @@ import {
   IMG_PIXEL_HERO_POSTER,
   TOTAL_PLAYERS_MILESTONE,
 } from "@/drizzle/constants";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
 import { IllustratedWelcome } from "@/layout/IllustratedWelcome";
 import Image from "@/layout/Image";
@@ -35,6 +34,7 @@ import {
   useIsPixelLanding,
   useWallpaperVariant,
 } from "@/utils/LayoutContext";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 /**
  * The feature screenshots are 900x700 sources in a column that never renders wider than

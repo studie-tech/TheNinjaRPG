@@ -5,9 +5,10 @@ import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import { AUTO_ATTACK_SETTINGS, useAutoAttackMode } from "@/hooks/autoAttack";
-import { safeLocalStorageSetItem, useLocalStorage } from "@/hooks/localstorage";
+import { useLocalStorage } from "@/hooks/localstorage";
 import Modal from "@/layout/Modal";
 import { cn } from "@/libs/shadui";
+import { safeLocalStorageSetItem } from "@/utils/storage";
 
 const { minLevel, delay } = AUTO_ATTACK_SETTINGS;
 

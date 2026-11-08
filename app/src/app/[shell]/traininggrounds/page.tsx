@@ -76,7 +76,6 @@ import {
   TUTORIAL_JUTSU_ID,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
-import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
 import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
@@ -153,6 +152,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { useUserPicker } from "@/utils/search";
+import { safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";

@@ -9,7 +9,6 @@ import {
 } from "@/components/native/NativeFeatureCard";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env/client.mjs";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -31,6 +30,7 @@ import {
   storeRestoreReconciliation,
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { sleep } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";

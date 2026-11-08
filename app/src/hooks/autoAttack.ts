@@ -1,4 +1,5 @@
-import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
+import { useLocalStorage } from "@/hooks/localstorage";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 
 /** Browser-stored auto-attack settings; their keys hold saved player preferences. */
 export const AUTO_ATTACK_SETTINGS = {

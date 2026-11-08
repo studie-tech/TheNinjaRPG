@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as storage from "@/hooks/localstorage";
+import * as storage from "@/utils/storage";
 import NavTabs from "@/layout/NavTabs";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
