@@ -52,31 +52,24 @@ export type FilteringDataSource =
 
 // Field config types (discriminated unions ensure correct value types)
 
-/** Free-text input */
-export interface TextFieldConfig<Id extends string> {
+/** Members every field shares; `T` discriminates the field and `V` is its value. */
+interface BaseFieldConfig<Id extends string, T extends string, V> {
   id: Id;
   label: string;
-  type: "text";
-  defaultValue: string;
+  type: T;
+  defaultValue: V;
   filterKey?: string;
   doubleWidth?: boolean;
-  countActive?: (value: string) => number;
-  normalizeForFilter?: (value: string) => unknown;
+  countActive?: (value: V) => number;
+  normalizeForFilter?: (value: V) => unknown;
   visibleIf?: (ctx?: unknown) => boolean;
 }
 
+/** Free-text input */
+export type TextFieldConfig<Id extends string> = BaseFieldConfig<Id, "text", string>;
+
 /** Date input (string yyyy-mm-dd) */
-export interface DateFieldConfig<Id extends string> {
-  id: Id;
-  label: string;
-  type: "date";
-  defaultValue: string;
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: string) => number;
-  normalizeForFilter?: (value: string) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
-}
+export type DateFieldConfig<Id extends string> = BaseFieldConfig<Id, "date", string>;
 
 /**
  * Numeric input (undefined considered empty).
@@ -85,20 +78,12 @@ export interface DateFieldConfig<Id extends string> {
  * starts at 0, so without `min` a single click or arrow key produces -1. Values outside
  * the bounds stay editable, but are treated as empty and never reach the API.
  */
-export interface NumberFieldConfig<Id extends string> {
-  id: Id;
-  label: string;
-  type: "number";
-  defaultValue: number | undefined;
+export interface NumberFieldConfig<Id extends string>
+  extends BaseFieldConfig<Id, "number", number | undefined> {
   /** Lowest accepted value; defaults to 0 since no content filter takes negatives. */
   min?: number;
   /** Highest accepted value; unbounded when omitted. */
   max?: number;
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: number | undefined) => number;
-  normalizeForFilter?: (value: number | undefined) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
 }
 
 /** Single-select (supports an optional sentinel 'none' value) */
@@ -106,55 +91,30 @@ export interface SingleSelectFieldConfig<
   Id extends string,
   V extends string,
   NV extends string = never,
-> {
-  id: Id;
-  label: string;
-  type: "single-select";
-  defaultValue: V | NV;
+> extends BaseFieldConfig<Id, "single-select", V | NV> {
   options?: Option<V>[];
   dataSource?: FilteringDataSource;
   filterOptions?: (options: Option<string>[], ctx?: unknown) => Option<string>[];
   includeNone?: boolean;
   noneOption?: Option<NV>;
   emptyValues?: ReadonlyArray<V | NV> | (V | NV)[];
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: V | NV) => number;
-  normalizeForFilter?: (value: V | NV) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
 }
 
 /** Multi-select (empty array is considered empty) */
-export interface MultiSelectFieldConfig<Id extends string, V extends string> {
-  id: Id;
-  label: string;
-  type: "multi-select";
-  defaultValue: V[];
+export interface MultiSelectFieldConfig<Id extends string, V extends string>
+  extends BaseFieldConfig<Id, "multi-select", V[]> {
   options?: Option<V>[];
   dataSource?: FilteringDataSource;
   filterOptions?: (options: Option<string>[], ctx?: unknown) => Option<string>[];
   includeNone?: boolean;
   noneOption?: Option<string>;
   emptyValues?: never;
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: V[]) => number;
-  normalizeForFilter?: (value: V[]) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
 }
 
 /** Tri-state toggle (undefined represents "All") */
-export interface TriStateFieldConfig<Id extends string> {
-  id: Id;
-  label: string;
-  type: "tri-state";
-  defaultValue: boolean | undefined;
+export interface TriStateFieldConfig<Id extends string>
+  extends BaseFieldConfig<Id, "tri-state", boolean | undefined> {
   triStateLabels?: { labelActive: string; labelInactive: string; labelAll: string };
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: boolean | undefined) => number;
-  normalizeForFilter?: (value: boolean | undefined) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
 }
 
 export type AnyFieldConfig<Id extends string = string> =
