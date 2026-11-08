@@ -47,7 +47,7 @@ cloc: # Count lines of code
 .PHONY: docker-build
 docker-build: # Build/Rebuild the application.
 	@echo "${YELLOW}Building/Rebuilding the application${RESET}"
-	docker-compose --file $$PWD/.devcontainer/docker-compose.yml build --no-cache
+	docker compose -p devcontainer -f $$PWD/.devcontainer/docker-compose.yml build --no-cache
 
 .PHONY: docker-apply
 docker-apply: # Recreate the shared service stack from the current docker-compose.yml
@@ -57,7 +57,7 @@ docker-apply: # Recreate the shared service stack from the current docker-compos
 .PHONY: docker-stop
 docker-stop: # Stop all docker containers.
 	@echo "${GREEN}docker-stop${RESET}"
-	docker compose --progress plain --file $$PWD/.devcontainer/docker-compose.yml stop
+	docker compose --progress plain -p devcontainer -f $$PWD/.devcontainer/docker-compose.yml stop
 
 -----------LocalDevelopment-------------: # -------------------------------------------------------
 .PHONY: setup
@@ -177,7 +177,7 @@ lint: # Run linting of the project
 .PHONY: format
 format: # Run biome formatter on the project
 	@echo "${YELLOW}Running biome formatter${RESET}"
-	cd app && ./node_modules/@biomejs/biome/bin/biome format --write src/
+	cd app && node ../scripts/dev-bun.mjs run format:write
 
 .PHONY: check
 check: # Run Biome and TypeScript checks
