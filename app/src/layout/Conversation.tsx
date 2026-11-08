@@ -437,22 +437,28 @@ export const useConversation = (props: ConversationLogicProps) => {
     }
   }, [conversation?.id]);
 
+  /** Prepend a comment another player posted, fetched after its live event. */
+  const prependFetchedComment = async (comment: ReturnedComment) => {
+    if (!userData || !conversation) return;
+    await utils.comments.getConversationComments.cancel(queryKey);
+    updateCachedComments((data, pageIndex) =>
+      pageIndex === 0 ? [comment, ...data] : data,
+    );
+  };
+
   /**
-   * Perform an optimistic update to the conversation comments, i.e. no API calls,
-   * just directly insert message into the comments array.
-   * @param newMessage
-   * @returns
+   * Show the player's own submission at the top before the server confirms it. The
+   * returned temp id lets success and failure reconcile exactly that row.
    */
-  const optimisticConversationUpdate = async (
-    newMessage: MutateCommentSchema | ReturnedComment,
-  ) => {
+  const insertOptimisticComment = async (newMessage: MutateCommentSchema) => {
     if (!userData || !conversation) return {};
 
-    // If we're in search mode and this is a new message, don't show it unless it matches the search
-    if (searchQuery && "comment" in newMessage) {
-      if (!newMessage.comment.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return {};
-      }
+    // During a search, a new message only shows when it matches the search
+    if (
+      searchQuery &&
+      !newMessage.comment.toLowerCase().includes(searchQuery.toLowerCase())
+    ) {
+      return {};
     }
 
     // Optimistic update
@@ -468,62 +474,53 @@ export const useConversation = (props: ConversationLogicProps) => {
         })
         .join("") || "";
 
-    // Build optimistic comment in component scope so types narrow without `!`.
-    // Temp id is only present when we insert; success/failure reconcile by it.
-    const optimisticComment =
-      "id" in newMessage
-        ? null
-        : {
-            id: nanoid(),
-            createdAt: new Date(),
-            conversationId: conversation.id,
-            content: quoteText + processMentions(newMessage.comment).processedContent,
-            reactions: {},
-            isPinned: false,
-            isReported: false,
-            isStaffOnly: false,
-            villageName: senderUser
-              ? (senderUser.village?.name ?? null)
-              : (userData.village?.name ?? null),
-            villageHexColor: senderUser
-              ? (senderUser.village?.hexColor ?? null)
-              : (userData.village?.hexColor ?? null),
-            villageKageId: senderUser
-              ? (senderUser.village?.kageId ?? null)
-              : (userData.village?.kageId ?? null),
-            userId: senderUser ? senderUser.userId : userData.userId,
-            authorId: userData.userId,
-            username: senderUser?.username ?? userData.username,
-            avatar: senderUser?.avatar ?? userData.avatar,
-            rank: senderUser?.rank ?? userData.rank,
-            isOutlaw: senderUser?.isOutlaw ?? userData.isOutlaw,
-            level: senderUser?.level ?? userData.level,
-            role: senderUser?.role ?? userData.role,
-            displayTitle: senderUser
-              ? (senderUser.displayTitle ?? "")
-              : (userData.displayTitle ?? ""),
-            federalStatus: senderUser?.federalStatus ?? userData.federalStatus,
-            tavernUsernameColor: senderUser
-              ? (senderUser.tavernUsernameColor ?? "DEFAULT")
-              : userData.tavernUsernameColor,
-            tavernTitleColor: senderUser
-              ? (senderUser.tavernTitleColor ?? "DEFAULT")
-              : userData.tavernTitleColor,
-            nRecruited: senderUser ? (senderUser.nRecruited ?? 0) : userData.nRecruited,
-            tavernMessages: senderUser
-              ? (senderUser.tavernMessages ?? 0)
-              : userData.tavernMessages,
-          };
-    // `?? newMessage` keeps MutateCommentSchema in the union; narrow explicitly.
-    const next: ReturnedComment | undefined =
-      optimisticComment ?? ("id" in newMessage ? newMessage : undefined);
-    if (!next) return {};
+    const optimisticComment = {
+      id: nanoid(),
+      createdAt: new Date(),
+      conversationId: conversation.id,
+      content: quoteText + processMentions(newMessage.comment).processedContent,
+      reactions: {},
+      isPinned: false,
+      isReported: false,
+      isStaffOnly: false,
+      villageName: senderUser
+        ? (senderUser.village?.name ?? null)
+        : (userData.village?.name ?? null),
+      villageHexColor: senderUser
+        ? (senderUser.village?.hexColor ?? null)
+        : (userData.village?.hexColor ?? null),
+      villageKageId: senderUser
+        ? (senderUser.village?.kageId ?? null)
+        : (userData.village?.kageId ?? null),
+      userId: senderUser ? senderUser.userId : userData.userId,
+      authorId: userData.userId,
+      username: senderUser?.username ?? userData.username,
+      avatar: senderUser?.avatar ?? userData.avatar,
+      rank: senderUser?.rank ?? userData.rank,
+      isOutlaw: senderUser?.isOutlaw ?? userData.isOutlaw,
+      level: senderUser?.level ?? userData.level,
+      role: senderUser?.role ?? userData.role,
+      displayTitle: senderUser
+        ? (senderUser.displayTitle ?? "")
+        : (userData.displayTitle ?? ""),
+      federalStatus: senderUser?.federalStatus ?? userData.federalStatus,
+      tavernUsernameColor: senderUser
+        ? (senderUser.tavernUsernameColor ?? "DEFAULT")
+        : userData.tavernUsernameColor,
+      tavernTitleColor: senderUser
+        ? (senderUser.tavernTitleColor ?? "DEFAULT")
+        : userData.tavernTitleColor,
+      nRecruited: senderUser ? (senderUser.nRecruited ?? 0) : userData.nRecruited,
+      tavernMessages: senderUser
+        ? (senderUser.tavernMessages ?? 0)
+        : userData.tavernMessages,
+    };
     if (!cached?.pages[0]?.convo) return {};
 
     updateCachedComments((data, pageIndex) =>
-      pageIndex === 0 ? [next, ...data] : data,
+      pageIndex === 0 ? [optimisticComment, ...data] : data,
     );
-    return { optimisticCommentId: optimisticComment?.id };
+    return { optimisticCommentId: optimisticComment.id };
   };
 
   /** Remove a single optimistic comment by temp id without discarding later cache updates. */
@@ -537,7 +534,7 @@ export const useConversation = (props: ConversationLogicProps) => {
     api.comments.createConversationComment.useMutation({
       onMutate: async (newMessage) => {
         const input = queryKey;
-        return { ...(await optimisticConversationUpdate(newMessage)), input };
+        return { ...(await insertOptimisticComment(newMessage)), input };
       },
       onSuccess: (data, newComment, context) => {
         if (data.success) {
@@ -578,7 +575,7 @@ export const useConversation = (props: ConversationLogicProps) => {
   const { mutate: fetchComment } = api.comments.fetchConversationComment.useMutation({
     onSuccess: async (data) => {
       if (!data) return;
-      await optimisticConversationUpdate(data);
+      await prependFetchedComment(data);
       if (data.lastReadAt && data.conversationId)
         await recordConversationRead(data.conversationId, data.lastReadAt);
     },
