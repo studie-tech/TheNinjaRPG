@@ -86,7 +86,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.has_changes == 'true'
     name: test_linting
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
