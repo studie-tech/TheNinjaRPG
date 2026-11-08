@@ -1,13 +1,21 @@
 import {
+  COST_CHANGE_GENDER,
+  COST_CHANGE_USERNAME,
+  COST_EXTRA_JUTSU_SLOT,
+  COST_GENERATE_AVATAR,
+  COST_RESET_STATS,
   ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL,
   ELITE_JONIN_JUTSU_LEVEL_CAP,
   ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER,
   ELITE_JONIN_JUTSU_XP_TO_LEVEL,
+  FED_JUTSU_SLOTS,
   JUTSU_LEVEL_CAP,
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_TRANSFER_MAX_LEVEL,
   JUTSU_XP_TO_LEVEL,
+  MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
+  MEDNIN_REQUIRED_EXP,
 } from "@/drizzle/constants";
 
 /** System instructions for the Seichi AI support chat: a player-facing guide to the game. */
@@ -232,7 +240,7 @@ This document outlines various screens, menus, and gameplay systems available in
   - Provides healing after battle defeat with a 2-minute wait, or you may pay to skip the timer (cost scales with HP pool).
 - **Medical Ninja Training:**  
   - Heal fellow village members to gain medical experience and improve your basic heal.  
-  - Rank increases at thresholds of 100k and 400k experience.
+  - Rank increases at thresholds of ${MEDNIN_REQUIRED_EXP.APPRENTICE / 1000}k and ${MEDNIN_REQUIRED_EXP.MASTER / 1000}k experience.
 
 ---
 
@@ -364,16 +372,16 @@ This document outlines various screens, menus, and gameplay systems available in
 
 - **Wrench Icon (Profile Page):**  
   - Access advanced customization settings:
-  - **AI Avatar:** Generate additional avatars (cost: 1 rep per generation).
+  - **AI Avatar:** Generate additional avatars (cost: ${COST_GENERATE_AVATAR} rep per generation).
   - **Custom Avatar:** Available with federal support (size limits apply).
   - **User Blacklist:** Block users (combat remains possible for Chunin+).
   - **Nindo:** Customize your "About Me" section.
   - **Marriage:** Option to marry another player.
-  - **Name Change:** Costs 5 rep.
+  - **Name Change:** Costs ${COST_CHANGE_USERNAME} rep.
   - **Custom Title:** Set a custom epithet (15-character limit, 5 rep cost).
-  - **Change Gender:** Costs 5 rep.
+  - **Change Gender:** Costs ${COST_CHANGE_GENDER} rep.
   - **Attribute Management:** Adjust physical traits for AI avatar creation (5 options available instead of 6).
-  - **Reset Stats:** Redistribute all stats for 15 rep.
+  - **Reset Stats:** Redistribute all stats for ${COST_RESET_STATS} rep.
   - **Re-Roll Elements:** Reroll elemental proficiencies at Chunin (do not use if already possessing two or more bloodline elements).
   - **Combat Preferences:** Customize AI rules for AFK Kage seat battles (advanced; note limitations with movement and summon jutsus).
 - **Web Icon (Profile Page):**  
@@ -400,8 +408,8 @@ This document outlines various screens, menus, and gameplay systems available in
   - Jutsus are automatically equipped when slots are available.  
   - **Genin:** 8 slots, with additional slots available at Chunin and Jonin.  
   - **Extra Slots:**  
-    - Up to 2 extra slots for 50 rep each.  
-    - Up to 3 extra slots with federal support.
+    - Up to ${MAX_EXTRA_JUTSU_SLOTS} extra slots for ${COST_EXTRA_JUTSU_SLOT} rep each.  
+    - Up to ${FED_JUTSU_SLOTS.GOLD} extra slots with federal support.
   - **Unequip/Equip:**  
     - Manage your equipped jutsus.
 - **Understanding Jutsu (Info Tab):**  
