@@ -1,5 +1,5 @@
 import { userData, userJutsu, aiProfile } from "@/drizzle/schema";
-import { sql, eq } from "drizzle-orm";
+import { eq, notExists } from "drizzle-orm";
 import type { DrizzleClient } from "@/server/db";
 import { executeSqlDump } from "./sqlDump";
 
@@ -8,9 +8,16 @@ export const seedAI = async (client: DrizzleClient) => {
   console.log("\nClearing AIs...");
   await client.delete(aiProfile).where(eq(aiProfile.id, "Default"));
   await client.delete(userData).where(eq(userData.isAi, true));
-  await client.execute(
-    sql`DELETE FROM ${userJutsu} a WHERE NOT EXISTS (SELECT id FROM ${userData} b WHERE b.userId = a.userId)`,
-  );
+  await client
+    .delete(userJutsu)
+    .where(
+      notExists(
+        client
+          .select({ userId: userData.userId })
+          .from(userData)
+          .where(eq(userData.userId, userJutsu.userId)),
+      ),
+    );
   // Insert AI
   console.log("Syncing AIs...");
   await executeSqlDump(client, "ai.sql");
