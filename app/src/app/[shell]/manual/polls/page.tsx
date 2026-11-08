@@ -54,6 +54,7 @@ import { useUserPicker } from "@/utils/search";
 import { useUserData } from "@/utils/UserContext";
 import {
   type AddPollOptionSchema,
+  type CreatePollSchema,
   createPollSchema,
   type UpdatePollSchema,
   updatePollSchema,
@@ -79,9 +80,8 @@ interface PollWithRelations extends Poll {
   totalVotes: number;
 }
 
-// Form types for the poll creation form - using z.input/z.output for proper Zod v4 handling
+// Form input type for the poll creation form; z.input keeps Zod v4 prefaults optional
 type CreatePollInput = z.input<typeof createPollSchema>;
-type CreatePollOutput = z.output<typeof createPollSchema>;
 
 export default function PollsPage() {
   const { data: userData } = useUserData();
@@ -703,7 +703,7 @@ function PollContent({
 function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
   const [optionType, setOptionType] = useState<PollOptionType>("text");
 
-  const form = useForm<CreatePollInput, unknown, CreatePollOutput>({
+  const form = useForm<CreatePollInput, unknown, CreatePollSchema>({
     resolver: zodResolver(createPollSchema),
     defaultValues: {
       title: "",
@@ -777,7 +777,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
     },
   });
 
-  const onSubmit = (data: CreatePollOutput) => {
+  const onSubmit = (data: CreatePollSchema) => {
     createPoll(data);
   };
 
