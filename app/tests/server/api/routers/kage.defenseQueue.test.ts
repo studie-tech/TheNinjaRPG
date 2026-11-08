@@ -13,6 +13,7 @@ import { makeBattleUser, makeCompleteBattle } from "../../../setup/combat";
 import { villageRouter } from "@/server/api/routers/village";
 import { kageRouter } from "@/server/api/routers/kage";
 import { syncKageDefense, syncLockedKageDefense, withinKageChallengeLimits, withKageDefense } from "@/server/utils/kage";
+import type { DrizzleClient } from "@/server/db";
 import { calcBattleResult } from "@/libs/combat/settlement";
 import { beforeStatements, failStatements, inTransactions, beforeTransaction, failCommits } from "../../../setup/statements";
 import { getKageSlots } from "@/utils/kage";
@@ -133,8 +134,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const dismissed = await recordQueries(() => defender.dismissInstantDefense({ id: m.id, instantRequestId: home.kageSchedule!.instantChallenge!.id }));
     expect(dismissed.result.success).toBe(true);
     for (const result of [sent, dismissed]) {
-      expect(result.statements.filter((statement) => /^\s*update /i.test(statement))).toHaveLength(1);
-      expect(result.statements.some((statement) => /begin|start transaction|commit/i.test(statement))).toBe(false);
+      expectSingleGuardedUpdate(result.statements);
     }
     const after = (await db.query.village.findFirst())!;
     expect(after.kageSchedule!.instantChallenge).toBeUndefined();
@@ -162,21 +162,15 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const defender = await callerFor(kageRouter, "defender");
     if (action === "dismiss") expect((await defender.requestInstantDefense({ id: m.id })).success).toBe(true);
     const invitation = (await db.query.village.findFirst())!.kageSchedule!.instantChallenge;
-    const { promise: loaded, resolve: markLoaded } = deferred<void>();
-    const { promise: resume, resolve: resumeSync } = deferred<void>();
+    const { syncing, release: resumeSync } = await pauseKageSync(db);
     const { promise: submitted, resolve: markSubmitted } = deferred<void>();
-    const syncing = withKageDefense(db, villageId, async (tx, hall) => {
-      markLoaded(); await resume;
-      return syncLockedKageDefense(tx, hall);
-    });
-    await loaded;
     const caller = callerForDatabase(kageRouter, "defender", beforeStatements(db, village, [async () => { markSubmitted(); }]));
     const changing = action === "send"
       ? caller.requestInstantDefense({ id: m.id })
       : caller.dismissInstantDefense({ id: m.id, instantRequestId: invitation!.id });
     try {
       await submitted;
-      const blocked = await Promise.race([changing.then(() => false), new Promise<true>((resolve) => setTimeout(() => resolve(true), 50))]);
+      const blocked = await stillPending(changing);
       expect(blocked).toBe(true);
     } finally {
       resumeSync(); await syncing; await changing;
@@ -347,8 +341,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const challenger = await callerFor(kageRouter, "first");
     const recorded = await recordQueries(() => challenger.withdrawDefense({ id: m.id }));
     expect(recorded.result).toEqual({ success: true, message: "Withdrawn from the queue" });
-    expect(recorded.statements.filter((statement) => /^\s*update /i.test(statement))).toHaveLength(1);
-    expect(recorded.statements.some((statement) => /begin|start transaction|commit/i.test(statement))).toBe(false);
+    expectSingleGuardedUpdate(recorded.statements);
     expect((await db.query.village.findFirst())!.kageScheduleVersion).toBe(initialVersion + 1);
     expect((await challenger.withdrawDefense({ id: m.id })).success).toBe(false);
     await syncKageDefense(db, villageId);
@@ -373,19 +366,13 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const challenger = await callerFor(kageRouter, "first");
     expect((await challenger.joinDefenseQueue({ villageId })).success).toBe(true);
     const m = (await db.query.kageDefendedChallenges.findFirst())!;
-    const { promise: loaded, resolve: markLoaded } = deferred<void>();
-    const { promise: resume, resolve: resumeSync } = deferred<void>();
+    const { syncing, release: resumeSync } = await pauseKageSync(db);
     const { promise: submitted, resolve: markSubmitted } = deferred<void>();
-    const syncing = withKageDefense(db, villageId, async (tx, hall) => {
-      markLoaded(); await resume;
-      return syncLockedKageDefense(tx, hall);
-    });
-    await loaded;
     const withdrawing = callerForDatabase(kageRouter, "first", beforeStatements(db, kageDefendedChallenges, [async () => { markSubmitted(); }])).withdrawDefense({ id: m.id });
     try {
       await submitted;
       // A queue-only write would complete here while sync still owns a stale QUEUED snapshot.
-      const pending = await Promise.race([withdrawing.then(() => false), new Promise<true>((resolve) => setTimeout(() => resolve(true), 50))]);
+      const pending = await stillPending(withdrawing);
       expect(pending).toBe(true);
     } finally {
       resumeSync(); await syncing; await withdrawing;
@@ -408,8 +395,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
     const version = (await db.query.village.findFirst())!.kageScheduleVersion;
     const recorded = await recordQueries(() => defender.setDefenseAi({ id: m.id, consent: true }));
     expect(recorded.result.success).toBe(true);
-    expect(recorded.statements.filter((statement) => /^\s*update /i.test(statement))).toHaveLength(1);
-    expect(recorded.statements.some((statement) => /begin|start transaction|commit/i.test(statement))).toBe(false);
+    expectSingleGuardedUpdate(recorded.statements);
     expect((await db.query.village.findFirst())!.kageScheduleVersion).toBe(version + 1);
     expect((await defender.setDefenseAi({ id: m.id, consent: false })).success).toBe(true);
     expect((await db.query.kageDefendedChallenges.findFirst())?.aiRequested).toBe(true);
@@ -682,3 +668,26 @@ it("uses UTC days and Monday calendar weeks for challenger caps", () => {
   expect(withinKageChallengeLimits([13, 14, 15].map((day) => ({ startedAt: new Date(`2026-10-${day}T12:00Z`) })), new Date("2026-10-16T12:00Z"))).toBe(false);
   expect(getKageSlots(windows, now).slice(0, 2).map((d) => d.toISOString())).toEqual(["2026-10-13T14:00:00.000Z", "2026-10-13T15:00:00.000Z"]);
 });
+
+/** Start a Kage defense sync and hold it after it loads its locked snapshot until `release`. */
+async function pauseKageSync(db: DrizzleClient) {
+  const { promise: loaded, resolve: markLoaded } = deferred<void>();
+  const { promise: resume, resolve: release } = deferred<void>();
+  const syncing = withKageDefense(db, villageId, async (tx, hall) => {
+    markLoaded(); await resume;
+    return syncLockedKageDefense(tx, hall);
+  });
+  await loaded;
+  return { syncing, release };
+}
+
+/** Resolves true when `promise` is still unsettled 50 ms later. */
+function stillPending(promise: Promise<unknown>) {
+  return Promise.race([promise.then(() => false), new Promise<true>((resolve) => setTimeout(() => resolve(true), 50))]);
+}
+
+/** A recorded mutation wrote exactly one guarded UPDATE and opened no transaction. */
+function expectSingleGuardedUpdate(statements: string[]) {
+  expect(statements.filter((statement) => /^\s*update /i.test(statement))).toHaveLength(1);
+  expect(statements.some((statement) => /begin|start transaction|commit/i.test(statement))).toBe(false);
+}
