@@ -1,7 +1,7 @@
 /**
  * Database access for account deletion; authorization and transaction scopes stay in callers.
  */
-import { and, eq, inArray, isNull, lte, ne, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, ne, or, type SQL, sql } from "drizzle-orm";
 import {
   accountDeletion,
   anbuSquad,
@@ -11,6 +11,7 @@ import {
   emailReminder,
   supportTicket,
   supportTicketActivity,
+  userData,
   userUpload,
   village,
 } from "@/drizzle/schema";
@@ -68,15 +69,20 @@ export const selectAuctionBidForRemoveAccountGameData = (
 
 /** Build the `anbuSquad` update for `removeAccountGameData`, setting `leaderId`, using predicates on `leaderId`. */
 export const updateAnbuSquadForRemoveAccountGameData = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   userId: string,
-) =>
-  client
+) => {
+  const successor = client
+    .select({ userId: userData.userId })
+    .from(userData)
+    .where(and(eq(userData.anbuId, anbuSquad.id), ne(userData.userId, userId)))
+    .orderBy(asc(userData.createdAt))
+    .limit(1);
+  return client
     .update(anbuSquad)
-    .set({
-      leaderId: sql`(SELECT u.userId FROM UserData u WHERE u.anbuId = ${anbuSquad.id} AND u.userId <> ${userId} ORDER BY u.createdAt LIMIT 1)`,
-    })
+    .set({ leaderId: sql`${successor}` })
     .where(eq(anbuSquad.leaderId, userId));
+};
 
 /** Build the `village` update for `removeAccountGameData`, setting `kageId`, using predicates on `kageId`. */
 export const updateVillageForRemoveAccountGameData = (
