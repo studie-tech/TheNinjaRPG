@@ -209,6 +209,9 @@ export const canChangeDefaultAiProfile = (role: UserRole) =>
 
 export const canAdministrateWars = (role: UserRole) => WAR_MANAGER_ROLES.includes(role);
 
+/** Staff roles are granted through the staff application; this role may promote players directly. */
+export const canPromoteUsersToStaff = (role: UserRole) => role === "CODING-ADMIN";
+
 export const canChangeUserRolesTo = (role: UserRole): UserRole[] => {
   if (role === "OWNER") {
     return Array.from(UserRoles);

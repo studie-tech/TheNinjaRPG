@@ -348,13 +348,15 @@ import {
   canEditUsername,
   canEditVillage,
   canInteractWithPolls,
-  canModerateRoles,
+  canModerate,
   canOnlyEditSelf,
+  canPromoteUsersToStaff,
   canResetPetImageGeneration,
   canSeeIps,
   canSeeSecretData,
   getApprovalGroup,
   getBanOrSilenceRestriction,
+  isStaffRole,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
@@ -1024,13 +1026,11 @@ export const profileRouter = createTRPCRouter({
         // Get moderation, application and content review counts in parallel for staff.
         const approvalGroup = getApprovalGroup(user.role);
         const canReviewContent = canChangeContent(user.role);
-        if (canModerateRoles.includes(user.role) || approvalGroup || canReviewContent) {
+        if (canModerate(user.role) || approvalGroup || canReviewContent) {
           const [reportCounts, ticketCounts, applicationCounts, reviewCounts] =
             await Promise.all([
-              canModerateRoles.includes(user.role)
-                ? selectUserReportForGetUser(ctx.drizzle)
-                : null,
-              canModerateRoles.includes(user.role)
+              canModerate(user.role) ? selectUserReportForGetUser(ctx.drizzle) : null,
+              canModerate(user.role)
                 ? selectSupportTicketForGetUser(ctx.drizzle)
                 : null,
               approvalGroup
@@ -1410,14 +1410,12 @@ export const profileRouter = createTRPCRouter({
       if (roleChanged && !availableRoles.includes(input.data.role)) {
         return errorResponse(`Only available roles: ${availableRoles.join(", ")}`);
       }
-      // Block promoting USER to staff role - must go through application process
-      // Demotions (to USER) are allowed without restrictions
-      // CODING-ADMIN can bypass this restriction
+      // Promoting a player to staff goes through the staff application; demotions do not
       if (
         roleChanged &&
-        input.data.role !== "USER" &&
-        target.role === "USER" &&
-        user.role !== "CODING-ADMIN"
+        isStaffRole(input.data.role) &&
+        !isStaffRole(target.role) &&
+        !canPromoteUsersToStaff(user.role)
       ) {
         return errorResponse(
           "Promotion of users to staff must go through the staff application process. See manual.",
