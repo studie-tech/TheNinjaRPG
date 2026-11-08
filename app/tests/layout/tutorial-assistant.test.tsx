@@ -75,6 +75,9 @@ const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}
 const dialogMocks = { Dialog: ({ children, open }: { children: ReactNode; open: boolean }) => open ? <div role="dialog">{children}</div> : null, DialogContent: dialogContent, DialogDescription: dialogContent, DialogHeader: dialogContent, DialogTitle: dialogContent };
 const dialogSpies: { mockRestore: () => void }[] = [];
 
+/** A new assistant element whose callback and ref props get fresh identities on every call. */
+const assistantElement = () => <TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />;
+
 let close: (() => void) | undefined;
 beforeEach(() => {
   vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({
@@ -115,7 +118,7 @@ describe("TutorialAssistant highlight activation", () => {
       <div id="lesson-control" ref={(element) => {
         if (element) element.getBoundingClientRect = () => new DOMRect(20, 120, 160, 48);
       }} />
-      <TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />
+      {assistantElement()}
     </>
   );
 
@@ -174,7 +177,7 @@ afterEach(() => {
   mocks.client.clear();
   restoreBrowserGlobals();
 });
-const renderAssistant = () => render(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+const renderAssistant = () => render(assistantElement());
 
 it("pauses tutorial controls while chatting and restores the saved lesson on close", () => {
   mocks.step = { ...mocks.step, showNextButton: true };
@@ -223,7 +226,7 @@ describe("TutorialAssistant account boundary", () => {
     expect(view.container.innerHTML).toBe("");
     expect(mocks.rewardHook).not.toHaveBeenCalled();
     route.mockRestore();
-    view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+    view.rerender(assistantElement());
     expect(view.getByRole("button", { name: "Skip tutorial" })).toBeTruthy();
     expect(mocks.rewardHook).toHaveBeenCalled();
   });
@@ -240,13 +243,13 @@ describe("TutorialAssistant account boundary", () => {
     expect(mocks.rewardHook).not.toHaveBeenCalled();
 
     mocks.client.setQueryData(key, profile());
-    view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+    view.rerender(assistantElement());
     expect(mocks.rewardHook).toHaveBeenCalled();
     expect(view.getByRole("button", { name: "Skip tutorial" })).toBeTruthy();
 
     mocks.rewardHook.mockClear();
     mocks.client.removeQueries({ queryKey: key });
-    view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+    view.rerender(assistantElement());
     expect(view.container.innerHTML).toBe("");
     expect(mocks.rewardHook).not.toHaveBeenCalled();
   });
@@ -303,7 +306,7 @@ describe("TutorialAssistant disable reconciliation", () => {
     const view = renderAssistant();
     confirmDisable(view);
     mocks.client.setQueryData(key, profile(300, "other"));
-    view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+    view.rerender(assistantElement());
     await act(async () => { resolve({ success: true, message: "Saved" }); });
     expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(300, "other"));
     expect(mocks.updateUser).not.toHaveBeenCalled();
@@ -314,7 +317,6 @@ describe("TutorialAssistant disable reconciliation", () => {
 });
 
 describe("TutorialAssistant completion sync", () => {
-  const assistant = <TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />;
   const graduate = (rank: string) => {
     const { userData } = profile();
     mocks.client.setQueryData(key, { userData: { ...userData, rank, userQuests: [] } });
@@ -324,7 +326,7 @@ describe("TutorialAssistant completion sync", () => {
   it("finishes the tutorial of a graduate whose lesson is collapsed", async () => {
     graduate("GENIN");
     collapsed();
-    render(assistant);
+    render(assistantElement());
     await waitFor(() => expect(mocks.finish).toHaveBeenCalledWith({ step: TUTORIAL_STEPS_COUNT }));
     expect(mocks.finish).toHaveBeenCalledTimes(1);
     await act(() => mocks.finished?.({ success: true, userPatch: { tutorialStep: TUTORIAL_STEPS_COUNT } }));
@@ -334,13 +336,13 @@ describe("TutorialAssistant completion sync", () => {
   it("leaves a student with a collapsed lesson on their step", () => {
     graduate("STUDENT");
     collapsed();
-    render(assistant);
+    render(assistantElement());
     expect(mocks.finish).not.toHaveBeenCalled();
   });
 
   it("leaves the guided finish to the assistant while the lesson is on screen", () => {
     graduate("GENIN");
-    render(assistant);
+    render(assistantElement());
     expect(mocks.finish).not.toHaveBeenCalled();
   });
 });
@@ -365,7 +367,7 @@ it("shows a completed tutorial state and still presents available quest guidance
   }] as never;
   completed.userData.questData = [{ id: "quest", goals: [] }] as never;
   mocks.client.setQueryData(key, { userData: { ...completed.userData } });
-  view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+  view.rerender(assistantElement());
   await waitFor(() => expect(view.getByRole("region", { name: "Tutorial: Current quest" })).toBeTruthy());
   expect(view.queryByText("Tutorial complete. Quest guidance will appear here when available.")).toBeNull();
 });

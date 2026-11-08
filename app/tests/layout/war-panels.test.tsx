@@ -139,10 +139,11 @@ const makeInfo = (): ObjectiveInfo => ({
   attempt: null,
 });
 
-const mount = (children: ReactNode) =>
-  render(
-    <AppRouterContext.Provider value={router}>{children}</AppRouterContext.Provider>,
-  );
+const RouterProvider = ({ children }: { children: ReactNode }) => (
+  <AppRouterContext.Provider value={router}>{children}</AppRouterContext.Provider>
+);
+/** Renders under the app router; `rerender` keeps the provider, so the tree stays mounted. */
+const mount = (children: ReactNode) => render(children, { wrapper: RouterProvider });
 const openTab = (view: ReturnType<typeof render>, name: RegExp | string) => {
   fireEvent.mouseDown(view.getByRole("tab", { name }), { button: 0, ctrlKey: false });
 };
@@ -380,11 +381,7 @@ describe("war field objectives", () => {
     );
     expect(view.getAllByRole("region", { name: "War objectives" })).toHaveLength(1);
     wars = [wars[0]!];
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <WarFieldActions />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<WarFieldActions />);
     expect(client.api.war.getObjectiveWarInfo.useQuery).toHaveBeenLastCalledWith(
       { warId: "war-1" },
       expect.anything(),
@@ -397,26 +394,14 @@ describe("war field objectives", () => {
     fireEvent.click(view.getByRole("button", { name: "War" }));
     const saved = wars;
     wars = [{ ...wars[0]!, rules: null }];
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <WarFieldActions />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<WarFieldActions />);
     expect(view.queryByRole("button", { name: "War" })).toBeNull();
     expect(view.queryByRole("dialog")).toBeNull();
     wars = [];
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <WarFieldActions />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<WarFieldActions />);
     expect(view.queryByRole("button", { name: "War" })).toBeNull();
     wars = saved;
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <WarFieldActions />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<WarFieldActions />);
     expect(
       view.getByRole("button", { name: "War" }).getAttribute("aria-expanded"),
     ).toBe("false");
@@ -439,11 +424,7 @@ describe("war field objectives", () => {
     expect(view.getByRole("button", { name: "War, 1 update" })).toBeDefined();
     expect(client.api.war.getObjectiveWarInfo.useQuery).not.toHaveBeenCalled();
     user.warMission = { ...user.warMission, warId: "unrelated" };
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <WarFieldActions />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<WarFieldActions />);
     expect(view.getByRole("button", { name: "War" })).toBeDefined();
   });
 
@@ -455,11 +436,7 @@ describe("war field objectives", () => {
     expect(view.getByText("Loading war objectives...")).toBeDefined();
     isPending = false;
     objectiveError = new Error("Connection interrupted");
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <WarFieldActions />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<WarFieldActions />);
     expect(view.getByRole("alert").textContent).toContain(
       "Unable to load war objectives",
     );
@@ -467,18 +444,10 @@ describe("war field objectives", () => {
     expect(objectiveRefetch).toHaveBeenCalledTimes(1);
     info = makeInfo();
     objectiveError = null;
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <WarFieldActions />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<WarFieldActions />);
     expect(pollInterval({ state: { data: info } })).toBe(10000);
     info = { ...info, war: { ...info.war, status: "DRAW", endedAt: new Date(NOW) } };
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <WarFieldActions />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<WarFieldActions />);
     expect(view.getByText("War ended")).toBeDefined();
     expect(pollInterval({ state: { data: info } })).toBe(false);
   });
@@ -602,11 +571,7 @@ describe("war field objectives", () => {
     expect(view.queryByRole("button", { name: "Complete mission" })).toBeNull();
     info!.attempt = readyAttempt();
     info!.war = { ...info!.war, status: "DRAW", endedAt: new Date(NOW) };
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <ObjectiveWarPanel warId="war-1" />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<ObjectiveWarPanel warId="war-1" />);
     expect(
       (view.getByRole("button", { name: "Complete mission" }) as HTMLButtonElement)
         .disabled,
@@ -703,11 +668,7 @@ describe("war field objectives", () => {
         .every((button) => (button as HTMLButtonElement).disabled),
     ).toBe(true);
     info!.war.attackerWarHealth = 0;
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <ObjectiveWarPanel warId="war-1" />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<ObjectiveWarPanel warId="war-1" />);
     expect(view.getByText("Settling war")).toBeDefined();
     openTab(view, "Missions");
     expect(
@@ -730,11 +691,7 @@ describe("war dashboard updates", () => {
     claimError = null;
     timeDiff = 5000;
     camps = [{ id: "camp-20", sector: 20, endsAt: new Date(NOW - 3000) }];
-    view.rerender(
-      <AppRouterContext.Provider value={router}>
-        <WarDashboardNotices />
-      </AppRouterContext.Provider>,
-    );
+    view.rerender(<WarDashboardNotices />);
     expect(
       view.getByRole("link", { name: "Travel to camp" }).getAttribute("href"),
     ).toBe("/travel?sector=20");
