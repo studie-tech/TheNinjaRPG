@@ -734,8 +734,8 @@ describe("objective war townhall health", () => {
     expect(view.getAllByText(/^(Captured|Damaged|Active)$/).map((badge) => badge.textContent)).toEqual(
       isAttacker ? ["Active", "Captured"] : ["Captured", "Active"],
     );
-    const own = isAttacker ? ["HP (9000 / 10000)", "HP (400 / 500)"] : ["HP (8000 / 10000)", "HP (0 / 500)"];
-    const enemy = isAttacker ? ["HP (8000 / 10000)", "HP (0 / 500)"] : ["HP (9000 / 10000)", "HP (400 / 500)"];
+    const own = isAttacker ? (["HP (9000 / 10000)", "HP (400 / 500)"] as const) : (["HP (8000 / 10000)", "HP (0 / 500)"] as const);
+    const enemy = isAttacker ? (["HP (8000 / 10000)", "HP (0 / 500)"] as const) : (["HP (9000 / 10000)", "HP (400 / 500)"] as const);
     expect(view.getAllByText(/^HP \(/).map((label) => label.textContent)).toEqual([own[0], enemy[0], own[1], enemy[1]]);
     const forces = view.getByText("Supporting Forces").parentElement!;
     expect([...forces.querySelectorAll("p.text-muted-foreground")].map((name) => name.textContent)).toEqual(order);

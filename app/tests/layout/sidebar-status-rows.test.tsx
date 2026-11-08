@@ -159,7 +159,7 @@ describe("sidebar status rows", () => {
         ["/missionhall", ` 0 / ${MEDICAL_MISSIONS_PER_DAY}`, "Daily medical missions to complete"],
         ["/missionhall", ` 1 / ${PVP_MISSIONS_PER_DAY}`, "Daily PvP missions to complete"],
         ["/points", " 7", "Reputation points for use in black market"],
-      ].map(([href, text, tip]) => ({
+      ].map((row) => row as [string, string, string]).map(([href, text, tip]) => ({
         trigger: "w-full",
         outer: "A",
         outerClass: "hover:text-orange-500",
