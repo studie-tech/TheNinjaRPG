@@ -11,11 +11,11 @@ import {
   deleteStorePurchaseTransferForMigrateStorePurchaseTransfers,
   deleteStorePurchaseTransferForMigrateStorePurchaseTransfers2,
   findStoreEntitlementRevocationForMigrateStoreEntitlementRevocations,
-  findStoreEntitlementStateForMigrateStoreEntitlementStates,
   findStorePurchaseTransferForMigrateStorePurchaseTransfers,
   findStoreUserIdAlias,
   insertStoreUserIdAlias,
   listStoreEntitlementRevocationForMigrateStoreEntitlementRevocations,
+  listStoreEntitlementStateForMigrateStoreEntitlementStates,
   listStorePurchaseTransferForMigrateStorePurchaseTransfers,
   updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations,
   updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations2,
@@ -140,20 +140,22 @@ export const migrateStoreEntitlementStates = async (
   oldUserId: string,
   newUserId: string,
 ): Promise<void> => {
+  // Each (store, environment) pair writes only its own rows, so one read serves every pair.
+  const states = await listStoreEntitlementStateForMigrateStoreEntitlementStates(
+    client,
+    [oldUserId, newUserId],
+  );
+  const stateOf = (userId: string, store: string, isSandbox: boolean) =>
+    states.find(
+      (state) =>
+        state.userId === userId &&
+        state.store === store &&
+        state.isSandbox === isSandbox,
+    );
   for (const store of STORE_PLATFORMS) {
     for (const isSandbox of [false, true]) {
-      const oldState = await findStoreEntitlementStateForMigrateStoreEntitlementStates(
-        client,
-        oldUserId,
-        store,
-        isSandbox,
-      );
-      const newState = await findStoreEntitlementStateForMigrateStoreEntitlementStates(
-        client,
-        newUserId,
-        store,
-        isSandbox,
-      );
+      const oldState = stateOf(oldUserId, store, isSandbox);
+      const newState = stateOf(newUserId, store, isSandbox);
       if (!oldState) continue;
       if (newState) {
         await updateStoreEntitlementStateForMigrateStoreEntitlementStates(
