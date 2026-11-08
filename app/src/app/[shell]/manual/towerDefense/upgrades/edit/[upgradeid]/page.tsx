@@ -94,9 +94,10 @@ const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade, refetch 
         type="towerDefenseUpgrade"
         relationId={upgrade.id}
         allowImageUpload={false}
+        submitLoading={isUpdating}
+        submitLoadingText="Saving"
         onAccept={handleUpgradeSubmit}
       />
-      {isUpdating && <Loader explanation="Saving..." />}
     </ContentBox>
   );
 };

@@ -110,9 +110,10 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
           buttonTxt="Save to Database"
           type="towerDefenseCharacter"
           relationId={character.id}
+          submitLoading={isUpdating}
+          submitLoadingText="Saving"
           onAccept={handleCharacterSubmit}
         />
-        {isUpdating && <Loader explanation="Saving..." />}
       </ContentBox>
 
       <ContentBox
