@@ -17,7 +17,7 @@ import * as tutorial from "@/hooks/tutorial";
 import * as ContentBox from "@/layout/ContentBox";
 import * as TravelPosition from "@/layout/TravelPositionLabel";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import { useGameMenu } from "@/libs/menus";
+import { useGameMenu } from "@/hooks/useGameMenu";
 import type { BaseServerResponse } from "@/validators/base";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 

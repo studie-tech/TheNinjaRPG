@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import * as sector from "@/hooks/useSectorVillage";
 import { chatMentionsAtom, chatTavernActivityAtom } from "@/libs/chatPanel";
-import { useGameMenu } from "@/libs/menus";
+import { useGameMenu } from "@/hooks/useGameMenu";
 import * as routing from "@/utils/routing";
 import * as context from "@/utils/UserContext";
 

@@ -15,6 +15,7 @@ import {
   useLocalStorage,
 } from "@/hooks/localstorage";
 import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
+import { useGameMenu } from "@/hooks/useGameMenu";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useRankedQueueCount } from "@/hooks/useRankedQueueCount";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
@@ -29,7 +30,7 @@ import {
   SWAP_SIDEBARS_STORAGE_KEY,
   toFontScale,
 } from "@/libs/layoutPreference";
-import { getMainNavbarLinks, useGameMenu } from "@/libs/menus";
+import { getMainNavbarLinks } from "@/libs/menus";
 import {
   DEFAULT_MOBILE_NAV_CONFIG,
   MOBILE_NAV_STORAGE_KEY,

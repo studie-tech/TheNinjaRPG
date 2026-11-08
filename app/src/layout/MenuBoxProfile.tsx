@@ -54,6 +54,7 @@ import {
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
+import { useGameMenu } from "@/hooks/useGameMenu";
 import AvatarImage from "@/layout/Avatar";
 import Countdown from "@/layout/Countdown";
 import ElementImage from "@/layout/ElementImage";
@@ -70,7 +71,6 @@ import {
   isEffectActive,
   sealCheck,
 } from "@/libs/combat/util";
-import { useGameMenu } from "@/libs/menus";
 import {
   getExpBracket,
   levelExperienceProgress,

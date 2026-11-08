@@ -6,7 +6,7 @@ import * as Avatar from "@/layout/Avatar";
 import * as Image from "@/layout/Image";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import * as PoolStatusBars from "@/layout/PoolStatusBars";
-import * as menus from "@/libs/menus";
+import * as gameMenu from "@/hooks/useGameMenu";
 import * as userContext from "@/utils/UserContext";
 
 const localNow = new Date("2026-06-01T12:00:00.000Z");
@@ -39,7 +39,7 @@ beforeEach(() => {
     profile: { getSidebarTimers: { useQuery: () => ({ data: undefined }) } },
     raids: { getUserRaidBuffs: { useQuery: () => ({ data: undefined }) } },
   });
-  vi.spyOn(menus, "useGameMenu").mockReturnValue({ location: undefined } as never);
+  vi.spyOn(gameMenu, "useGameMenu").mockReturnValue({ location: undefined } as never);
   vi.spyOn(pools, "useEffectivePools").mockReturnValue({} as never);
   vi.spyOn(Avatar, "default").mockReturnValue(null as never);
   vi.spyOn(Image, "default").mockReturnValue(null as never);

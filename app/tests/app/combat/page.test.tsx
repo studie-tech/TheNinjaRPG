@@ -19,7 +19,7 @@ import * as combatSettings from "@/layout/UserCombatSettings";
 import * as avatar from "@/layout/Avatar";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import * as statusBar from "@/layout/StatusBar";
-import * as menus from "@/libs/menus";
+import * as gameMenu from "@/hooks/useGameMenu";
 import * as toast from "@/libs/toast";
 import { resolveHotkeys } from "@/libs/combat/hotkeys";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
@@ -288,7 +288,7 @@ it.each(["query", "profile"])("releases battle pools when the %s confirms combat
     timeDiff: 0, data: select({ ...userContext.useRequiredUserData().data, level: 10, experience: 0, rank: "GENIN", regeneration: 7, raidBuffs: [], titles: [] } as never),
   }) as never);
   vi.spyOn(avatar, "default").mockReturnValue(null as never);
-  vi.spyOn(menus, "useGameMenu").mockReturnValue({} as never);
+  vi.spyOn(gameMenu, "useGameMenu").mockReturnValue({} as never);
   vi.spyOn(statusBar, "default").mockImplementation(({ title, current, regen }) => <p>{title}: {current}; regen: {regen}</p>);
   Object.assign(client.api, {
     profile: { getSidebarTimers: { useQuery: () => ({ data: undefined }) } },
