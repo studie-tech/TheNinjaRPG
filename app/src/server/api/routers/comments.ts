@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -321,7 +321,12 @@ export const commentsRouter = createTRPCRouter({
         // which the awaited membership delete above already settled. Guarding
         // each one on that condition keeps a concurrent exit from wiping a
         // conversation someone still belongs to, without serializing them.
-        const noMembersLeft = sql`NOT EXISTS (SELECT 1 FROM ${user2conversation} WHERE ${user2conversation.conversationId} = ${convo.id})`;
+        const noMembersLeft = notExists(
+          ctx.drizzle
+            .select({ userId: user2conversation.userId })
+            .from(user2conversation)
+            .where(eq(user2conversation.conversationId, convo.id)),
+        );
         await Promise.all([
           deleteConversationForExitConversation(ctx.drizzle, convo, noMembersLeft),
           deleteConversationCommentForExitConversation(
@@ -445,8 +450,8 @@ export const commentsRouter = createTRPCRouter({
         whereConditions = and(
           whereConditions,
           or(
-            sql`${conversationComment.content} LIKE ${`%${input.searchQuery}%`}`,
-            sql`${userData.username} LIKE ${`%${input.searchQuery}%`}`,
+            like(conversationComment.content, `%${input.searchQuery}%`),
+            like(userData.username, `%${input.searchQuery}%`),
           ),
         );
       }
