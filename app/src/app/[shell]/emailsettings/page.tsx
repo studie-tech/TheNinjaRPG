@@ -5,17 +5,6 @@ import { AlertCircle, Mail, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { api } from "@/app/_trpc/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
@@ -186,8 +176,9 @@ const EmailReminderContent: React.FC = () => {
               This link is unique to your email address. Do not share it with others.
             </p>
 
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
+            <Confirm
+              title="Delete Email Reminder"
+              button={
                 <Button
                   variant="destructive"
                   size="sm"
@@ -196,26 +187,14 @@ const EmailReminderContent: React.FC = () => {
                   <Trash2 className="h-4 w-4" />
                   Delete
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Email Reminder</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete this email reminder? This action
-                    cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              }
+              proceed_label="Delete"
+              confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onAccept={handleDelete}
+            >
+              Are you sure you want to delete this email reminder? This action cannot be
+              undone.
+            </Confirm>
           </CardFooter>
         </Card>
       )}

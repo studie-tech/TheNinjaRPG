@@ -39,7 +39,7 @@ afterEach(async () => {
 
 it("deletes the reminder only after the deletion is confirmed", async () => {
   const view = render(<EmailReminderPage />);
-  fireEvent.click(view.getByRole("button", { name: "Delete" }));
+  fireEvent.click(view.getAllByRole("button", { name: "Delete" })[0]!);
   const prompt = await view.findByText(/Are you sure you want to delete this email reminder\?/);
   const dialog = prompt.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]')!;
   expect(dialog).not.toBeNull();
