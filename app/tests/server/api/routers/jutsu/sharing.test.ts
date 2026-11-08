@@ -44,7 +44,7 @@ const setup = () => {
   type Result = { success: boolean; message: string; preview?: { token: string; jutsuIds: string[] } };
   /** Invoke the actual procedure with this fixture's user and database. */
   const call = (name: "previewJutsuLoadout" | "importJutsuLoadout", input: { loadoutId: string; text: string; previewToken?: string }) => {
-    return callerForDatabase(jutsuRouter, user.userId, database as never)[name](input) as Promise<Result>;
+    return callerForDatabase(jutsuRouter, user.userId, database as never)[name](input as never) as Promise<Result>;
   };
   const input = { loadoutId: "active", text: exportJutsuLoadout(["b", "a"]) };
   /** Obtain the actual resolver's fingerprint rather than constructing one in the test. */
