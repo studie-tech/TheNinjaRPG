@@ -2673,8 +2673,8 @@ export const RANKED_QUEUE_MAX_WAIT_SECS = 300;
 export const RANKED_MIN_LP_GAIN = 18;
 // LP added to a win per rank the opponent stands above the winner.
 export const RANKED_UPSET_BONUS_PER_RANK = 10;
-// A loss shrinks by RANKED_LOSS_PROTECTION_FACTOR when the ranks differ by at least
-// RANKED_LOSS_PROTECTION_RANK_GAP (opponent below the loser).
+// A loss shrinks by RANKED_LOSS_PROTECTION_FACTOR when the opponent stands at least
+// RANKED_LOSS_PROTECTION_RANK_GAP ranks above the loser.
 export const RANKED_LOSS_PROTECTION_RANK_GAP = 2;
 export const RANKED_LOSS_PROTECTION_FACTOR = 0.5;
 // Matchmaking LP radius: RANKED_RADIUS_STEP_LP to start, one more step every

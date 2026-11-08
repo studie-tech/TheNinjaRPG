@@ -87,8 +87,8 @@ export function calculateLpEloChange(
     lpChange += rankDifference * RANKED_UPSET_BONUS_PER_RANK;
   }
 
-  // LP protection: reduce the loss when the ranks are far enough apart
-  if (!playerWon && rankDifference <= -RANKED_LOSS_PROTECTION_RANK_GAP) {
+  // LP protection: soften a loss to an opponent ranked far enough above the loser
+  if (!playerWon && rankDifference >= RANKED_LOSS_PROTECTION_RANK_GAP) {
     lpChange *= RANKED_LOSS_PROTECTION_FACTOR;
   }
 

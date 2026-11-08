@@ -10,6 +10,7 @@ import {
 import type { Item, Jutsu } from "@/drizzle/schema";
 import {
   RANKED_LEGEND_LP_REQUIREMENT,
+  RANKED_LOSS_PROTECTION_RANK_GAP,
   RANKED_MIN_LP_GAIN,
   RANKED_QUEUE_MAX_WAIT_SECS,
   RANKED_SANNIN_TOP_PLAYERS,
@@ -92,10 +93,34 @@ describe("calculateLpEloChange", () => {
     expect(calculateLpEloChange({ rankedLp: 150, rankedStreak: 0 }, { rankedLp: 600 }, true, [])).toBe(57);
   });
 
-  it("halves the loss only at the loss-protection rank gap", () => {
-    // Master loses to Adept (one rank apart) and to Wood (two ranks apart, Elo -22.3 halved)
-    expect(calculateLpEloChange({ rankedLp: 600, rankedStreak: 0 }, { rankedLp: 300 }, false, [])).toBe(-20);
-    expect(calculateLpEloChange({ rankedLp: 600, rankedStreak: 0 }, { rankedLp: 150 }, false, [])).toBe(-11);
+  describe("loss protection", () => {
+    const loss = (playerLp: number, opponentLp: number) =>
+      calculateLpEloChange({ rankedLp: playerLp, rankedStreak: 0 }, { rankedLp: opponentLp }, false, []);
+
+    it("softens a loss to an opponent exactly the protection gap above the loser", () => {
+      expect(RANKED_LOSS_PROTECTION_RANK_GAP).toBe(2);
+      // Wood loses to Master: Elo -6.0 halved
+      expect(loss(299, 600)).toBe(-3);
+      // Adept loses to Legend: Elo -4.8 halved
+      expect(loss(599, 900)).toBe(-2);
+    });
+
+    it("softens a loss to an opponent more than the protection gap above the loser", () => {
+      // Unranked loses to Master: Elo -2.8 halved
+      expect(loss(149, 600)).toBe(-1);
+    });
+
+    it("keeps the full loss to an opponent one rank above the loser", () => {
+      // Wood loses to Adept, Adept loses to Master
+      expect(loss(299, 300)).toBe(-20);
+      expect(loss(300, 600)).toBe(-5);
+    });
+
+    it("keeps the full loss to an opponent ranked below the loser", () => {
+      // Master loses to Adept (one rank below) and to Wood (two ranks below)
+      expect(loss(600, 300)).toBe(-20);
+      expect(loss(600, 299)).toBe(-20);
+    });
   });
 });
 
