@@ -227,18 +227,14 @@ describeWithDatabase("event tournament persistence", () => {
 
   it("returns invitations and ready matches after unrelated active events fill the notice limit", async () => {
     const database = await getTestDatabase();
-    /** Build pending or confirmed seats with the same neutral eligibility snapshot. */
-    const participant = (userId: string, accepted: boolean): EventParticipant => ({
-      id: `seat-${userId}`, userId, username: userId, accepted,
-      invited: true, withdrawn: false, seed: 0,
-      snapshot: { bracket: 0, pvpWins: 0, winRate: 0, masteredJutsu: 0 },
-      previousUsers: [],
-    });
+    /** Build pending or confirmed invited seats with the same neutral eligibility snapshot. */
+    const invitedSeat = (userId: string, accepted: boolean) =>
+      participant(userId, { accepted, invited: true, snapshot: { bracket: 0, pvpWins: 0, winRate: 0, masteredJutsu: 0 } });
     const invitation = createEventState({ ...eventConfig("Invitation"), registration: "INVITE_ONLY" });
     invitation.status = "REGISTRATION";
-    invitation.participants = [participant("target", false)];
+    invitation.participants = [invitedSeat("target", false)];
     const ready = createEventState(eventConfig("Ready match"));
-    ready.participants = [participant("target", true), participant("opponent", true)];
+    ready.participants = [invitedSeat("target", true), invitedSeat("opponent", true)];
     generateEventBracket(ready, ready.participants.map((seat) => seat.id));
     beginEventRound(ready, Date.now() - 1000);
     const game = ready.series[0]!.games[0]!;
@@ -249,7 +245,7 @@ describeWithDatabase("event tournament persistence", () => {
       { ...base, id: "900-invite", name: "Invitation", status: "OPEN", eventData: invitation },
       { ...base, id: "901-ready", name: "Ready match", status: "IN_PROGRESS", eventData: ready },
       { ...base, id: "902-withdrawn", name: "Withdrawn", status: "OPEN", eventData: {
-        ...invitation, participants: [{ ...participant("target", false), withdrawn: true }],
+        ...invitation, participants: [{ ...invitedSeat("target", false), withdrawn: true }],
       } },
     ]);
     const expected = [
@@ -264,7 +260,7 @@ describeWithDatabase("event tournament persistence", () => {
     await database.insert(tournament).values(Array.from({ length: 100 }, (_, index) => ({
       ...base, id: `000-${String(index).padStart(3, "0")}`, name: `Unrelated ${index}`,
       status: "OPEN" as const, eventData: {
-        ...invitation, participants: [participant(`other-${index}`, false)],
+        ...invitation, participants: [invitedSeat(`other-${index}`, false)],
       },
     })));
     expect(await notices()).toEqual(expected);
@@ -551,17 +547,7 @@ describeWithDatabase("event tournament persistence", () => {
     );
     await insertDefaultAiProfile({ userId: "ai" });
     const event = createEventState({ ...eventConfig("Launch race"), rules });
-    event.participants = userIds.map((userId, i) => ({
-      id: `seat-${i}`,
-      userId,
-      username: userId,
-      invited: false,
-      accepted: true,
-      withdrawn: false,
-      seed: 0,
-      snapshot: { bracket: 1, pvpWins: 0, winRate: 0, masteredJutsu: 0 },
-      previousUsers: [],
-    }));
+    event.participants = userIds.map((userId, i) => participant(userId, { id: `seat-${i}` }));
     generateEventBracket(
       event,
       event.participants.map((p) => p.id),
@@ -787,19 +773,7 @@ describeWithDatabase("event tournament persistence", () => {
     await insertDefaultAiProfile({ userId: "ai" });
     const event = createEventState(eventConfig("Queue guard"));
     event.status = "REGISTRATION";
-    event.participants = [
-      {
-        id: "seat-foe",
-        userId: "foe",
-        username: "foe",
-        invited: false,
-        accepted: true,
-        withdrawn: false,
-        seed: 0,
-        snapshot: { bracket: 1, pvpWins: 0, winRate: 0, masteredJutsu: 0 },
-        previousUsers: [],
-      },
-    ];
+    event.participants = [participant("foe")];
     await database.insert(tournament).values({
       id: "queue-guard",
       name: "Queue guard",
@@ -1368,17 +1342,7 @@ describeWithDatabase("event tournament persistence", () => {
     event.status = "COMPLETED";
     event.finishedAt = Date.now();
     event.payRewards = true;
-    event.participants = ["deleted", "remaining"].map((userId, i) => ({
-      id: `seat-${i}`,
-      userId,
-      username: userId,
-      invited: false,
-      accepted: true,
-      withdrawn: false,
-      seed: i + 1,
-      snapshot: { bracket: 1, pvpWins: 0, winRate: 0, masteredJutsu: 0 },
-      previousUsers: [],
-    }));
+    event.participants = ["deleted", "remaining"].map((userId, i) => participant(userId, { id: `seat-${i}`, seed: i + 1 }));
     return {
       id,
       name: id,
@@ -1856,3 +1820,19 @@ const afterTransactionCommit = (client: DrizzleClient, hook: () => Promise<void>
     },
   });
 };
+
+/** A confirmed, uninvited seat for `userId` in bracket 1; pass what a test changes. */
+function participant(userId: string, overrides: Partial<EventParticipant> = {}): EventParticipant {
+  return {
+    id: `seat-${userId}`,
+    userId,
+    username: userId,
+    invited: false,
+    accepted: true,
+    withdrawn: false,
+    seed: 0,
+    snapshot: { bracket: 1, pvpWins: 0, winRate: 0, masteredJutsu: 0 },
+    previousUsers: [],
+    ...overrides,
+  };
+}
