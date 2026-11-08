@@ -5,6 +5,7 @@
 import {
   and,
   eq,
+  exists,
   gt,
   inArray,
   isNotNull,
@@ -55,7 +56,7 @@ import { nextSnapshotSql, selectClaimedRankedQueueEntry } from "@/queries/concur
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
-import { secondsFromNow } from "@/utils/time";
+import { DAY_S, secondsFromNow } from "@/utils/time";
 
 /** Build the `battle` deletion for `GET`, using predicates on `updatedAt`. */
 export const deleteBattleForGET = (
@@ -104,7 +105,19 @@ export const updateUserDataForGET = (
       bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
       bracketImmunityPausedAt: null,
       battleId: null,
-      status: sql`CASE WHEN EXISTS (SELECT 1 FROM ${questHistory} WHERE ${questHistory.userId} = ${userData.userId} AND ${questHistory.isolated} = TRUE AND ${questHistory.completed} = 0 AND ${questHistory.endAt} IS NULL) THEN 'BATTLE' ELSE 'AWAKE' END`,
+      status: sql`CASE WHEN ${exists(
+        client
+          .select({ id: questHistory.id })
+          .from(questHistory)
+          .where(
+            and(
+              eq(questHistory.userId, userData.userId),
+              eq(questHistory.isolated, true),
+              eq(questHistory.completed, 0),
+              isNull(questHistory.endAt),
+            ),
+          ),
+      )} THEN 'BATTLE' ELSE 'AWAKE' END`,
       travelFinishAt: null,
     })
     .where(
@@ -120,13 +133,10 @@ export const updateUserDataForGET = (
     );
 
 /** Build the `userLiveActivity` deletion for `GET`, using predicates on `endsAt`. */
-export const deleteUserLiveActivityForGET = (
-  client: Pick<DrizzleClient, "delete">,
-  oneDay: number,
-) =>
+export const deleteUserLiveActivityForGET = (client: Pick<DrizzleClient, "delete">) =>
   client
     .delete(userLiveActivity)
-    .where(lt(userLiveActivity.endsAt, new Date(Date.now() - oneDay)));
+    .where(lt(userLiveActivity.endsAt, secondsFromNow(-DAY_S)));
 
 /** Build the `battleAction` deletion for `GET`, using predicates on `updatedAt`. */
 export const deleteBattleActionForGET = (
@@ -238,15 +248,12 @@ export const executeRowsForGET2 = (
   );
 
 /** Build the `conversation` deletion for `GET`, using predicates on `updatedAt`, `isPublic`, `isStaffAvailable`. */
-export const deleteConversationForGET = (
-  client: Pick<DrizzleClient, "delete">,
-  oneDay: number,
-) =>
+export const deleteConversationForGET = (client: Pick<DrizzleClient, "delete">) =>
   client
     .delete(conversation)
     .where(
       and(
-        lte(conversation.updatedAt, new Date(Date.now() - oneDay * 14)),
+        lte(conversation.updatedAt, secondsFromNow(-14 * DAY_S)),
         eq(conversation.isPublic, false),
         eq(conversation.isStaffAvailable, false),
       ),
@@ -403,10 +410,10 @@ export const executeRowsForGET9 = (client: Pick<DrizzleClient, "execute">) =>
   );
 
 /** Execute the database statement for `GET`. */
-export const executeRowsForGET10 = (client: Pick<DrizzleClient, "execute">) =>
-  client.execute(
-    sql`UPDATE ${userData} SET tavernMessages = FLOOR(tavernMessages * 0.95)`,
-  );
+export const executeRowsForGET10 = (client: Pick<DrizzleClient, "update">) =>
+  client
+    .update(userData)
+    .set({ tavernMessages: sql`FLOOR(${userData.tavernMessages} * 0.95)` });
 
 /** Build the `automatedModeration` deletion for `GET`, using predicates on `createdAt`. */
 export const deleteAutomatedModerationForGET = (

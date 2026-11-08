@@ -84,13 +84,9 @@ export async function GET(request: Request) {
     // Step 2.5: Complete travel for users whose travel time has expired
     await completeExpiredGlobalTravel(drizzleDB);
 
-    // Time constants
-    const oneHour = 1000 * 60 * 60;
-    const oneDay = oneHour * 24;
-
     // A device can end an orphaned activity after a cold launch without JavaScript knowing
     // its id. Keep a retry window for failed APNs endings, then drain those dead addresses.
-    await deleteUserLiveActivityForGET(drizzleDB, oneDay);
+    await deleteUserLiveActivityForGET(drizzleDB);
 
     // Battle retention periods:
     // - PVP (72 hours): Explicit PVP types that we want longer retention for
@@ -123,7 +119,7 @@ export async function GET(request: Request) {
     await executeRowsForGET2(drizzleDB, pvpTypes, cleanupBatchSize);
 
     // Step 6: Delete conversations older than 14 days
-    await deleteConversationForGET(drizzleDB, oneDay);
+    await deleteConversationForGET(drizzleDB);
 
     // Step 8a: Delete conversation comments older than 14 days
     await executeRowsForGET3(drizzleDB);
@@ -238,7 +234,7 @@ export async function GET(request: Request) {
     );
     await notifyRankedQueueChanged(expiredRankedRows.rowsAffected);
 
-    // Clear war kills older than 10 days
+    // Clear war kills older than 30 days
     await deleteWarKillForGET(drizzleDB, rangeCleanupBatchSize);
 
     // Clear dataBattleAction entries older than 30 days
