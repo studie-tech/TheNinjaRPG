@@ -57,7 +57,6 @@ export function SeasonManager() {
   const deleteInFlightRef = useRef(false);
   const { data: userData } = useUserData();
   const canEditContent = canChangeContent(userData?.role ?? "USER");
-  const canEndSeason = canChangeContent(userData?.role ?? "USER");
 
   const utils = api.useUtils();
 
@@ -242,7 +241,7 @@ export function SeasonManager() {
                   </DialogContent>
                 </Dialog>
 
-                {isSeasonActive && canEndSeason && (
+                {isSeasonActive && (
                   <AlertDialog
                     open={isEndDialogOpen}
                     onOpenChange={(open) => {
