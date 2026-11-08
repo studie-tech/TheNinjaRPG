@@ -1,24 +1,35 @@
-/** Render the snapshot's scene asset pixels for audits that judge narrative fit. */
+/**
+ * Renders the snapshot's scene characters and backgrounds as contact sheets for audits that
+ * judge narrative fit: sixteen labelled tiles per sheet, with tiles whose picture failed to
+ * load marked so the audit never selects them.
+ *
+ * Env vars consumed:
+ *   SNAPSHOT  the audit snapshot ({ assets })
+ *   OUT_DIR   where to write the sheets and their index
+ *
+ * Outputs:
+ *   OUT_DIR/scene-catalog-NNN.png  one contact sheet per sixteen assets
+ *   OUT_DIR/scene-index.json       the assets on each sheet and the ids whose image failed
+ */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
+
+const HTML_ESCAPES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+const SHEET_SIZE = 16;
 
 const snapshotPath = process.env.SNAPSHOT;
 const outDir = process.env.OUT_DIR;
 if (!snapshotPath || !outDir) throw new Error("SNAPSHOT and OUT_DIR are required");
 const snapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
-const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-})[character]);
-const imageUrl = (asset) => {
-  const candidate = asset.image || asset.url;
-  try {
-    const url = new URL(candidate);
-    return ["https:", "http:"].includes(url.protocol) ? url.href : "";
-  } catch { return ""; }
-};
-const assets = snapshot.assets.filter((asset) =>
-  ["SCENE_CHARACTER", "SCENE_BACKGROUND"].includes(asset.type))
+const assets = snapshot.assets
+  .filter((asset) => ["SCENE_CHARACTER", "SCENE_BACKGROUND"].includes(asset.type))
   .sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
 await mkdir(outDir, { recursive: true });
 const browser = await chromium.launch({
@@ -29,11 +40,49 @@ const index = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 1300 }, deviceScaleFactor: 1 });
   // Images load as ordinary cross-origin pictures; no secret reaches the page or asset hosts.
-  for (let offset = 0; offset < assets.length; offset += 16) {
-    const group = assets.slice(offset, offset + 16);
+  for (let offset = 0; offset < assets.length; offset += SHEET_SIZE) {
+    const group = assets.slice(offset, offset + SHEET_SIZE);
     const file = `scene-catalog-${String(index.length + 1).padStart(3, "0")}.png`;
     await page.setViewportSize({ width: 1400, height: 70 + Math.ceil(group.length / 4) * 300 });
-    await page.setContent(`<html><head><style>
+    await page.setContent(contactSheetHtml(group), { waitUntil: "domcontentloaded" });
+    await page
+      .waitForFunction(() => [...document.images].every((image) => image.complete), undefined, { timeout: 45000 })
+      .catch(() => {});
+    const failedIds = await markFailedImages(page);
+    await page.screenshot({ path: path.join(outDir, file), fullPage: true });
+    index.push({
+      file,
+      assets: group.map((asset) => ({ id: asset.id, name: asset.name, type: asset.type, v: asset.v, url: imageUrl(asset) })),
+      failedIds,
+    });
+  }
+} finally {
+  await browser.close();
+}
+await writeFile(path.join(outDir, "scene-index.json"), JSON.stringify(index, null, 2));
+console.log(`Rendered ${assets.length} scene assets on ${index.length} contact sheets`);
+
+/** `value` as HTML text; null and undefined render empty. */
+function escape(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => HTML_ESCAPES[character]);
+}
+
+/** The asset's http(s) picture URL, or an empty string so the tile renders as failed. */
+function imageUrl(asset) {
+  const candidate = asset.image || asset.url;
+  try {
+    const url = new URL(candidate);
+    return ["https:", "http:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+/** One contact sheet: a four-column grid of labelled tiles over a transparency checkerboard. */
+function contactSheetHtml(group) {
+  const tiles = group.map((asset) => `<article data-id="${escape(asset.id)}"><div class="pixels"><img src="${escape(imageUrl(asset))}" alt=""></div>
+      <div class="label">${escape(asset.name)}</div><code>${escape(asset.id)}<br>${escape(asset.type)} · v ${escape(asset.v)}</code></article>`);
+  return `<html><head><style>
       * {box-sizing:border-box} body {margin:0;padding:16px;background:#eee;font:16px Arial;color:#111}
       h1 {font-size:22px;margin:0 0 12px}.grid {display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
       article {background:white;border:1px solid #777;padding:8px;overflow:hidden}
@@ -43,20 +92,19 @@ try {
       code {font-size:13px;overflow-wrap:anywhere}.failed .pixels {background:#fee;color:#900;font-weight:bold}
       .failed img {display:none}.failed .pixels::after {content:'IMAGE FAILED — DO NOT SELECT'}
     </style></head><body><h1>Scene catalog — inspect role, clothing, expression, silhouette and transparency</h1>
-    <div class="grid">${group.map((asset) => `<article data-id="${escape(asset.id)}"><div class="pixels"><img src="${escape(imageUrl(asset))}" alt=""></div>
-      <div class="label">${escape(asset.name)}</div><code>${escape(asset.id)}<br>${escape(asset.type)} · v ${escape(asset.v)}</code></article>`).join("")}</div></body></html>`, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => [...document.images].every((image) => image.complete), undefined, { timeout: 45000 }).catch(() => {});
-    const failedIds = await page.evaluate(() => [...document.querySelectorAll("article")].flatMap((article) => {
+    <div class="grid">${tiles.join("")}</div></body></html>`;
+}
+
+/** Mark each tile whose picture did not load and return the ids of those assets. */
+function markFailedImages(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll("article")].flatMap((article) => {
       const image = article.querySelector("img");
       if (!image?.complete || !image.naturalWidth) {
         article.classList.add("failed");
         return [article.dataset.id];
       }
       return [];
-    }));
-    await page.screenshot({ path: path.join(outDir, file), fullPage: true });
-    index.push({ file, assets: group.map((asset) => ({ id: asset.id, name: asset.name, type: asset.type, v: asset.v, url: imageUrl(asset) })), failedIds });
-  }
-} finally { await browser.close(); }
-await writeFile(path.join(outDir, "scene-index.json"), JSON.stringify(index, null, 2));
-console.log(`Rendered ${assets.length} scene assets on ${index.length} contact sheets`);
+    }),
+  );
+}
