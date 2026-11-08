@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { type ImgHTMLAttributes, type ComponentProps, useState } from "react";
 import { HOME_FLOOR_TILES, HOME_FURNITURE_MAX_PLACEMENTS, HOME_WALL_PAINTS, type HomeType, HomeTypes, HomeTypeDetails, IMG_HOME_PROPERTIES } from "@/drizzle/constants";
 import { HomeScene as ResidenceScene } from "@/layout/HomeScene";
+import * as Image from "@/layout/Image";
 import { homeLayoutPlacementError, projectHomePlacement, type HomeFurniture, unprojectHomePlacement } from "@/libs/home";
 import { boundHomeCamera, getHomeOverviewCamera, getHomePlacementRoom, getHomeRoomCamera, getHomeRooms, type HomeCamera, zoomHomeCamera } from "@/libs/homeProperty";
 import { HOME_ART_PLANS, HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
@@ -11,13 +12,6 @@ import { type HomePlacement, homeFurnitureSaveInputSchema } from "@/validators/h
 import { deferred } from "../setup/deferred";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-// The image stub exposes art failures without relying on a browser image loader.
-vi.mock("@/layout/Image", () => ({
-  default: ({ src, alt, onError, style }: ImgHTMLAttributes<HTMLImageElement>) => (
-    // biome-ignore lint/performance/noImgElement: isolated image-failure test stub
-    <img src={src} alt={alt} onError={onError} style={style} />
-  ),
-}));
 
 /** The page header owns decoration; this wrapper keeps that state through scene rerenders. */
 const HomeScene = (props: Omit<ComponentProps<typeof ResidenceScene>, "isDecorating" | "onDecoratingChange"> & { isRefreshingFurniture?: boolean }) => {
@@ -72,10 +66,16 @@ const centeredEssentialsLayout = [
 
 beforeEach(() => {
   installBrowserGlobals();
+  // The image stub exposes art failures without relying on a browser image loader.
+  vi.spyOn(Image, "default").mockImplementation((({ src, alt, onError, style }: ImgHTMLAttributes<HTMLImageElement>) => (
+    // biome-ignore lint/performance/noImgElement: isolated image-failure test stub
+    <img src={src} alt={alt} onError={onError} style={style} />
+  )) as never);
 });
 afterEach(() => {
   cleanup();
   restoreBrowserGlobals();
+  vi.restoreAllMocks();
 });
 
 /** Regression coverage for residence navigation, owner access, and artwork recovery. */
