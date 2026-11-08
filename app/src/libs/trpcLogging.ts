@@ -8,6 +8,10 @@ export const hasSensitiveTrpcInput = (path: string | undefined) =>
       path?.startsWith("nativeAuth."),
   );
 
+/** Redacts the whole sensitive input so future credential fields are also protected. */
+export const diagnosticTrpcInput = (path: string | undefined, input: unknown) =>
+  hasSensitiveTrpcInput(path) ? "[REDACTED]" : input;
+
 export const shouldLogTrpcOperation = (
   operation: { path?: string; direction: "up" | "down"; result?: unknown },
   development = process.env.NODE_ENV === "development",

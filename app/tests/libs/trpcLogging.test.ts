@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createTRPCUntypedClient, loggerLink, TRPCClientError } from "@trpc/client";
 import { observable } from "@trpc/server/observable";
-import { shouldLogTrpcOperation } from "@/libs/trpcLogging";
+import { diagnosticTrpcInput, shouldLogTrpcOperation } from "@/libs/trpcLogging";
 
 const request = async (path: string, development: boolean, failure: boolean, data: unknown = { ticket: "synthetic-ticket" }) => {
   const logs: unknown[][] = [];
@@ -45,4 +45,19 @@ describe("credential-safe client logging", () => {
     expect(await request("profile.updatePreferences", false, false)).toHaveLength(0);
     expect(await request("profile.updatePreferences", false, true)).toHaveLength(1);
   });
+});
+
+it("redacts parental PIN inputs before diagnostics while retaining ordinary inputs", () => {
+  const credentials = { pin: "012345", newPin: "543210" };
+  expect(diagnosticTrpcInput("parentalControls.save", credentials)).toBe("[REDACTED]");
+  expect(diagnosticTrpcInput("parentalControls.get", undefined)).toBe("[REDACTED]");
+  const input = { conversationId: "example" };
+  expect(diagnosticTrpcInput("comments.getConversationComments", input)).toBe(input);
+  expect(diagnosticTrpcInput(undefined, undefined)).toBeUndefined();
+});
+
+it("redacts native authentication proofs and future handoff credentials", () => {
+  const proof = { flowId: "flow", verifier: "private-proof", ticket: "private-ticket" };
+  expect(diagnosticTrpcInput("nativeAuth.exchange", proof)).toBe("[REDACTED]");
+  expect(diagnosticTrpcInput("nativeAuth.start", proof)).toBe("[REDACTED]");
 });

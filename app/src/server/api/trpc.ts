@@ -30,6 +30,7 @@ import {
   ISOLATED_PYRAMID_MESSAGE,
   isPyramidRestrictedProcedure,
 } from "@/libs/questRun";
+import { hasSensitiveTrpcInput } from "@/libs/trpcLogging";
 import { trpcSessionUserId } from "@/libs/trpcSession";
 import {
   parseWallpaperVariant,
@@ -48,7 +49,6 @@ import { drizzleDB } from "@/server/db";
 import { enforceBotId } from "@/server/utils/botid";
 import { clientErrorMessage } from "@/server/utils/mysqlErrors";
 
-import { hasSensitiveTrpcInput } from "@/server/utils/trpcInput";
 import { measureTrpcCall } from "@/server/utils/trpcMetrics";
 import { getClientIp } from "@/utils/network";
 
