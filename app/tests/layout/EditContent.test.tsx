@@ -1,11 +1,17 @@
-import { createToastMock } from "../setup/toastMock";
+import * as useSize from "@radix-ui/react-use-size";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import * as navigation from "next/navigation";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import * as client from "@/app/_trpc/client";
 import type { Item, Quest } from "@/drizzle/schema";
+import { useItemEditForm } from "@/hooks/item";
+import { useQuestEditForm } from "@/hooks/quest";
+import * as ContentImageSelector from "@/layout/ContentImageSelector";
+import { EffectFieldInputGeneric, EffectFormWrapper, MassEffectEditor, ObjectiveFormWrapper, RewardFormWrapper } from "@/layout/EditContent";
 import { RewardEditor } from "@/layout/RewardEditor";
 import { ObjectiveReward } from "@/validators/rewards";
 import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
@@ -23,6 +29,7 @@ import {
   type ZodAllTags,
 } from "@/validators/combat";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { spyOnToasts } from "../setup/toastMock";
 
 const save = vi.fn(async (_input: { id: string; data: { effects: ZodAllTags[] } }) => ({
   success: true,
@@ -36,53 +43,48 @@ let rewardCatalog: { packages: []; nodes: { id: string; name: string; fields: st
 const rewardCatalogQuery = { useQuery: (_input?: unknown, _options?: { enabled: boolean; retryOnMount?: boolean }) => ({ data: rewardCatalog, isFetched: !!rewardCatalog, isError: false, refetch: vi.fn() }) };
 const update: { useMutation: () => { mutateAsync: (...args: Parameters<typeof save>) => ReturnType<typeof save>; isPending?: boolean } } = { useMutation: () => ({ mutateAsync: save }) };
 
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    useUtils: () => ({ item: { getAllNames: { invalidate: async () => undefined }, getVariantNames: { invalidate: async () => undefined } } }),
-    profile: { getAllAiNames: names, getUser: { useQuery: () => ({ data: undefined }) } },
-    item: { getVariantNames: names, getAllNames: names, update },
-    jutsu: { getAllNames: names, update },
-    bloodline: { getAllNames: names, update },
-    sageMode: { getAllNames: names },
-    petSpecies: { getAll: names },
-    skillTree: { getAllNames: names },
-    badge: { getAll: names },
-    mapAsset: { getAll: names },
-    title: { getAllNames: names },
-    misc: { getAllGameAssetNames: names },
-    village: { getAllNames: names },
-    quests: { getAllNames: names, getPublicLocations: names, update: { useMutation: () => ({ mutateAsync: saveQuest }) } },
-    worldMap: { getSectorWindow: { useQuery: () => ({ data: undefined }) } },
-    mapTerrain: { getAll: names },
-    overworldAi: { getAllPlacementNames: names },
-    rewardPackages: {
-      getCatalog: rewardCatalogQuery,
-    },
-    gameAsset: {
-      getAllNames: names,
-      getNameTags: names,
-      getSceneAssets: names,
-      getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },
-    },
+const api = {
+  useUtils: () => ({ item: { getAllNames: { invalidate: async () => undefined }, getVariantNames: { invalidate: async () => undefined } } }),
+  profile: { getAllAiNames: names, getUser: { useQuery: () => ({ data: undefined }) } },
+  item: { getVariantNames: names, getAllNames: names, update },
+  jutsu: { getAllNames: names, update },
+  bloodline: { getAllNames: names, update },
+  sageMode: { getAllNames: names },
+  petSpecies: { getAll: names },
+  skillTree: { getAllNames: names },
+  badge: { getAll: names },
+  mapAsset: { getAll: names },
+  title: { getAllNames: names },
+  misc: { getAllGameAssetNames: names },
+  village: { getAllNames: names },
+  quests: { getAllNames: names, getPublicLocations: names, update: { useMutation: () => ({ mutateAsync: saveQuest }) } },
+  worldMap: { getSectorWindow: { useQuery: () => ({ data: undefined }) } },
+  mapTerrain: { getAll: names },
+  overworldAi: { getAllPlacementNames: names },
+  rewardPackages: {
+    getCatalog: rewardCatalogQuery,
   },
-}));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock("@/libs/toast", () => ({ ...createToastMock(), showMutationToast: toast }));
-vi.mock("@/layout/ContentImageSelector", () => ({ default: () => null }));
-
-vi.mock("@radix-ui/react-use-size", () => ({
-  useSize: () => ({ width: 0, height: 0 }),
-}));
-
-const { MassEffectEditor, EffectFieldInputGeneric, EffectFormWrapper, ObjectiveFormWrapper, RewardFormWrapper } = await import("@/layout/EditContent");
-const { useItemEditForm } = await import("@/hooks/item");
-const { useQuestEditForm } = await import("@/hooks/quest");
-
+  gameAsset: {
+    getAllNames: names,
+    getNameTags: names,
+    getSceneAssets: names,
+    getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },
+  },
+};
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.assign(vi.spyOn(client, "api" as never), api);
+  vi.spyOn(navigation, "useRouter").mockImplementation(() => ({ push: vi.fn() }) as never);
+  spyOnToasts();
+  vi.spyOn(toastHelpers, "showMutationToast").mockImplementation(toast);
+  vi.spyOn(ContentImageSelector, "default").mockImplementation(() => null);
+  vi.spyOn(useSize, "useSize").mockReturnValue({ width: 0, height: 0 });
   rewardCatalog = { packages: [], nodes: [] };
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 /** Render real form controls to verify quest-specific and generic-package material visibility. */
 const MaterialRewardForm = ({
