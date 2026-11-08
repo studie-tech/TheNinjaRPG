@@ -25,7 +25,7 @@ describe("setEmptyStringsToNulls", () => {
     expect(data.statClassification).toBeNull();
   });
 
-  it("ignores keys that are not columns on the table", () => {
+  it("nulls keys that are not columns on the table", () => {
     const data: Record<string, unknown> = { notAColumn: "" };
     setEmptyStringsToNulls(data, item);
     expect(data.notAColumn).toBeNull();
