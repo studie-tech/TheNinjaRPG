@@ -72,6 +72,26 @@ describe("ShrineHall reserve boost locks", () => {
     expect(view.queryByText("Sector 290")).toBeNull();
   });
 
+  it("judges maintenance due dates against the server clock", () => {
+    // The device runs two hours ahead of the server, so an hour-old due date is still upcoming.
+    vi.spyOn(UserContext, "useUserInfo").mockReturnValue({ timeDiff: 2 * 3600000 } as never);
+    const view = renderShrineHall([
+      {
+        id: 1,
+        sector: 100,
+        villageId: "reserve-village",
+        shrineLevel: 2,
+        nextMaintainanceDueDate: new Date(Date.now() - 3600000),
+      },
+    ]);
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Maintenance" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(view.getByText("Sector 100")).toBeTruthy();
+    expect(view.queryByText("Payment overdue")).toBeNull();
+  });
+
   const defenders = (activeAiIds: string[], unlockedAiIds: string[]) => {
     const view = renderShrineHall(
       [{ id: 1, sector: 100, villageId: "reserve-village", shrineLevel: 2 }],

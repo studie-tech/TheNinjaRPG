@@ -22,7 +22,7 @@ import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 type ShrineBattleData = RouterOutputs["shrine"]["getShrineBattles"][number];
@@ -177,6 +177,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
   isLeaving,
   isInitiating,
 }) => {
+  const { timeDiff } = useUserInfo();
   const attackers = battle.queue.filter((q) => q.side === "ATTACKER");
   const defenders = battle.queue.filter((q) => q.side === "DEFENDER");
   const userInBattle = battle.queue.some((q) => q.userId === userId);
@@ -231,7 +232,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
         <div className="text-muted-foreground text-sm">
           <Countdown
             targetDate={startTime}
-            timeDiff={0}
+            timeDiff={timeDiff}
             onEndShow={
               canInitiate
                 ? "Battle can start!"
