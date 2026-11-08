@@ -7,7 +7,7 @@ import { insertItems, insertUserItems, insertUsers } from "../../../../setup/fac
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 import { overrideQuery } from "../../../../setup/statements";
 
-describeWithDatabase("cooking trade quantities", () => {
+describeWithDatabase("auction listing quantities", () => {
   beforeEach(async () => {
     await resetTables(actionLog, auctionBid, auctionListing, userItem, item, userData);
     await insertUsers([
