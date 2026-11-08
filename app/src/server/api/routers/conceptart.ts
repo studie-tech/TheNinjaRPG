@@ -70,7 +70,7 @@ export const conceptartRouter = createTRPCRouter({
       // Guard
       if (!result) return errorResponse("Image not found");
       // Mutate
-      const hasLike = result?.likes.find((like) => like.type === input.type);
+      const hasLike = result.likes.find((like) => like.type === input.type);
       // Concurrent removals decrement only the reactions this request deletes.
       const delta = hasLike
         ? -(await deleteUserLikesForToggleEmotion(ctx.drizzle, ctx, input)).rowsAffected
