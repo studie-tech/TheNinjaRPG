@@ -80,4 +80,6 @@ test("stored pins keep valid entries when another pin is invalid", () => {
   expect(parseTravelPins(Array.from({ length: MAX_TRAVEL_PINS + 1 }, () => pin))).toHaveLength(MAX_TRAVEL_PINS);
   expect(parseTravelPins(undefined)).toEqual([]);
   expect(parseTravelPins({ pin })).toEqual([]);
+  expect(travelPinSchema.safeParse({ ...pin, label: "x".repeat(40) }).success).toBe(true);
+  expect(travelPinSchema.safeParse({ ...pin, label: "x".repeat(41) }).success).toBe(false);
 });

@@ -3,6 +3,7 @@ import {
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
   MAX_PVP_BRACKET,
+  MAX_TRAVEL_PIN_LABEL_LENGTH,
   MAX_TRAVEL_PINS,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
@@ -52,7 +53,7 @@ export type TravelLocation = z.infer<typeof travelLocationSchema>;
 export const travelPinSchema = travelLocationSchema.extend({
   longitude: z.number().int().nonnegative(),
   latitude: z.number().int().nonnegative(),
-  label: z.string().trim().min(1).max(40),
+  label: z.string().trim().min(1).max(MAX_TRAVEL_PIN_LABEL_LENGTH),
 });
 export type TravelPin = z.infer<typeof travelPinSchema>;
 

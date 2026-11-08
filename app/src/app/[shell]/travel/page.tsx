@@ -47,6 +47,7 @@ import {
   HIDEOUT_COST,
   MAP_WAR_TORN_BATTLEGROUND_COLOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MAX_TRAVEL_PIN_LABEL_LENGTH,
   MAX_TRAVEL_PINS,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
@@ -1154,7 +1155,7 @@ function Travel() {
                   <Input
                     aria-label="Pin name"
                     placeholder="Name this location"
-                    maxLength={40}
+                    maxLength={MAX_TRAVEL_PIN_LABEL_LENGTH}
                     value={pinLabel}
                     onChange={(event) => setPinLabel(event.target.value)}
                   />

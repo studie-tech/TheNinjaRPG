@@ -174,8 +174,9 @@ export const MAP_WORLD_ROWS = 27;
 export const MAP_NAVIGABLE_LATITUDE_LIMIT = 65;
 export const MAP_TOTAL_SECTORS = MAP_WORLD_COLUMNS * MAP_WORLD_ROWS;
 export const MAP_SECTOR_ID_MAX = MAP_TOTAL_SECTORS - 1;
-// Saved travel pins kept per player.
+// Saved travel pins kept per player, and the length of their labels.
 export const MAX_TRAVEL_PINS = 20;
+export const MAX_TRAVEL_PIN_LABEL_LENGTH = 40;
 export const MAP_WAKE_ISLAND_SECTOR = 222;
 // When true, PvP combat attacks are blocked for everyone in the Wake Island sector.
 // Robbery, farming and crafting restrictions on Wake Island are independent of this.
