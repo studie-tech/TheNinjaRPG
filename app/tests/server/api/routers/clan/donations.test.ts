@@ -101,6 +101,16 @@ describeWithDatabase("clan donations and deposits", () => {
     expect(await balances()).toEqual({ ...before, repTreasury: filled });
   });
 
+  it("takes no reputation from the donor when the treasury is already above its limit", async () => {
+    const database = await getTestDatabase();
+    const over = FACTION_REPUTATION_TREASURY_LIMIT + 20;
+    await database.update(clan).set({ repTreasury: over }).where(eq(clan.id, CLAN));
+    const before = await balances();
+    const result = await (await callerAfter()).clanDonate({ clanId: CLAN, reputationPoints: 30 });
+    expect(result.success).toBe(true);
+    expect(await balances()).toEqual(before);
+  });
+
   const depositRaces: Array<[string, () => Promise<unknown>, Partial<Awaited<ReturnType<typeof balances>>>]> = [
     ["the member's pocket drains", () => setMember({ money: 100 }), { money: 100 }],
     ["the member leaves the clan", () => setMember({ clanId: null }), { clanId: null }],

@@ -331,9 +331,13 @@ export const clanRouter = createTRPCRouter({
       // right now its only purpose is hideouts. We should implement
       // it so that users can do aesthetics for their hideouts/strongholds,
       // e.g. move around building, change skins, etc.
-      const repsCost = Math.min(
-        input.reputationPoints,
-        FACTION_REPUTATION_TREASURY_LIMIT - fetchedClan.repTreasury,
+      // A treasury already past the limit takes nothing rather than a negative donation.
+      const repsCost = Math.max(
+        0,
+        Math.min(
+          input.reputationPoints,
+          FACTION_REPUTATION_TREASURY_LIMIT - fetchedClan.repTreasury,
+        ),
       );
       if (repsCost === 0) {
         return {
