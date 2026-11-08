@@ -1,4 +1,4 @@
-import { RANKED_ENTRY_COST } from "@/drizzle/constants";
+import { RANKED_ENTRY_COST, RANKED_ENTRY_LP } from "@/drizzle/constants";
 
 /** Publish queue admission when ranked selection cleanup did not change cached equipment/loadouts. */
 export const getRankedQueueUserUpdate = (changedSelections: boolean) => ({
@@ -7,6 +7,6 @@ export const getRankedQueueUserUpdate = (changedSelections: boolean) => ({
 
 /** Set the ranked season's starting LP and debit the configured village-prestige entry cost. */
 export const getEnterRankedSeasonUserUpdate = () => ({
-  userPatch: { rankedLp: 150 },
+  userPatch: { rankedLp: RANKED_ENTRY_LP },
   userDelta: { villagePrestige: -RANKED_ENTRY_COST },
 });

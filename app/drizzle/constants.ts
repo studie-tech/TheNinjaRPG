@@ -1560,7 +1560,6 @@ export const RECRUIT_RANK_MILESTONES = [
 ] as const satisfies readonly { rank: RecruitMilestoneRank; reputation: number }[];
 export const RECRUIT_MILESTONE_RANKS = ["GENIN", "CHUNIN", "JONIN", "ELITE JONIN"] as const;
 export type RecruitMilestoneRank = (typeof RECRUIT_MILESTONE_RANKS)[number];
-
 // Outcome recorded for each (recruit, rank) milestone; only PAID moved reputation.
 // PRE_EXISTING: the rank was already held when milestones were introduced.
 // INELIGIBLE: the referral is ineligible, or has no eligibility record.
@@ -2698,9 +2697,11 @@ export const RANKED_LEGEND_LP_REQUIREMENT = 900;
 export const RANKED_LP_DAILY_DECAY = 70;
 /** Days without a ranked battle, on either side, before a Legend player's LP decays. */
 export const RANKED_DECAY_INACTIVE_DAYS = 5;
+/** LP a player enters the ranked season with: the Wood division threshold. */
+export const RANKED_ENTRY_LP = 150;
 export const RANKED_DIVISIONS = [
   { key: "UNRANKED", name: "Unranked", rankedLp: 0, kFactor: 40 },
-  { key: "WOOD", name: "Wood", rankedLp: 150, kFactor: 40 },
+  { key: "WOOD", name: "Wood", rankedLp: RANKED_ENTRY_LP, kFactor: 40 },
   { key: "ADEPT", name: "Adept", rankedLp: 300, kFactor: 32 },
   { key: "MASTER", name: "Master", rankedLp: 600, kFactor: 24 },
   { key: "LEGEND", name: "Legend", rankedLp: RANKED_LEGEND_LP_REQUIREMENT, kFactor: 16 },

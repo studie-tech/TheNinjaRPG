@@ -20,6 +20,7 @@ import {
 import {
   PVP_EXPERIENCE_DAILY_DECAY,
   RANKED_ENTRY_COST,
+  RANKED_ENTRY_LP,
   RANKED_LEGEND_LP_REQUIREMENT,
   RANKED_LP_DAILY_DECAY,
   RANKED_SANNIN_TOP_PLAYERS,
@@ -310,7 +311,7 @@ export const updateUserDataForEnterRankedSeason = (
   client
     .update(userData)
     .set({
-      rankedLp: 150,
+      rankedLp: RANKED_ENTRY_LP,
       villagePrestige: sql`${userData.villagePrestige} - ${RANKED_ENTRY_COST}`,
     })
     .where(
