@@ -1,4 +1,4 @@
-import { and, exists, ne, notExists, sql } from "drizzle-orm";
+import { and, exists, like, ne, notExists, sql } from "drizzle-orm";
 import OpenAI from "openai";
 import {
   OPENAI_REPORT_EMBEDDING_MODEL,
@@ -182,9 +182,7 @@ export const getRelatedReports = async (
     .filter((word) => word.length >= 3)
     .slice(0, 25);
   if (words.length === 0) return [];
-  const matches = words.map(
-    (word) => sql`${userReport.aiInterpretation} LIKE ${`%${word}%`}`,
-  );
+  const matches = words.map((word) => like(userReport.aiInterpretation, `%${word}%`));
   const score = sql<number>`(${sql.join(
     matches.map((match) => sql`CASE WHEN ${match} THEN 1 ELSE 0 END`),
     sql` + `,

@@ -252,7 +252,7 @@ export const selectUserReportForGetRelatedReports2 = (
   client
     .select({ ...reportColumns(client), score })
     .from(userReport)
-    .where(and(eligible, sql`${score} > 0`))
+    .where(and(eligible, gt(score, 0)))
     .orderBy(desc(score), desc(userReport.createdAt), asc(userReport.id))
     .limit(10);
 

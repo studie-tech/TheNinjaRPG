@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { eq, gte, isNull, sql } from "drizzle-orm";
+import { eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import { getUserProgressionUpdate } from "@/deltas/profile";
@@ -458,7 +458,7 @@ export const trainRouter = createTRPCRouter({
         where: [
           ...elementalSnapshotConditions(user),
           isNull(userData[fields.stat]),
-          sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`,
+          lt(userData.dailyTrainings, MAX_DAILY_TRAININGS),
         ],
       });
       if (!claim.success)
@@ -579,7 +579,7 @@ export const trainRouter = createTRPCRouter({
           ...sessionUpdate,
           ...(gained > 0
             ? {
-                dailyTrainings: sql`dailyTrainings + 1`,
+                dailyTrainings: sql`${userData.dailyTrainings} + 1`,
                 // Apply both live progression caps without lowering stored entitlement;
                 // the snapshot guards keep the gain and queued-session handoff consistent.
                 ...masteryGainUpdates({ [trained]: gained }),
@@ -589,9 +589,7 @@ export const trainRouter = createTRPCRouter({
           ...(questData ? { questData } : {}),
         },
         where: [
-          ...(gained > 0
-            ? [sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`]
-            : []),
+          ...(gained > 0 ? [lt(userData.dailyTrainings, MAX_DAILY_TRAININGS)] : []),
           ...MasteryNames.map((stat) => eq(userData[stat], user[stat])),
           ...elementalSnapshotConditions(user),
           sql`${userData.masteryRanks} = CAST(${JSON.stringify(user.masteryRanks)} AS JSON)`,

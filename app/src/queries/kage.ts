@@ -3,7 +3,19 @@
  */
 
 import { randomInt } from "node:crypto";
-import { and, desc, eq, exists, gte, isNull, ne, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gt,
+  gte,
+  isNull,
+  ne,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   ELDER_KAGE_REMOVAL_VOTE_DAYS,
@@ -257,7 +269,7 @@ export const updateVillageForPayStructureMaintenance = (
         eq(village.id, input.villageId),
         eq(village.type, "VILLAGE"),
         eq(village.kageId, ctx.userId),
-        sql`${village.structureMaintenanceDue} > 0`,
+        gt(village.structureMaintenanceDue, 0),
         eq(village.structureMaintenanceDue, input.expectedDue),
         gte(village.tokens, village.structureMaintenanceDue),
         exists(

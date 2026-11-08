@@ -11,6 +11,7 @@ import {
   isNull,
   lte,
   ne,
+  not,
   or,
   type SQL,
   sql,
@@ -467,7 +468,7 @@ export const updateUserDataForCompleteExpiredGlobalTravel = (
   client
     .update(userData)
     .set({ status: "AWAKE", travelFinishAt: null })
-    .where(and(expiredTravel, sql`NOT (${hasQueue})`));
+    .where(and(expiredTravel, not(hasQueue)));
 
 /** Arrival evaluates quest targets and collection bonuses from one relation read. */
 export const findUserForGlobalTravelFinish = (

@@ -773,7 +773,7 @@ export const listQuestPartyForGetUser = (
 /** Build the `userReport` selection for `getUser`, using predicates on `status`. */
 export const selectUserReportForGetUser = (client: Pick<DrizzleClient, "select">) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(userReport)
     .innerJoin(userData, eq(userData.userId, userReport.reportedUserId))
     .where(inArray(userReport.status, ["UNVIEWED", "BAN_ESCALATED"]));
@@ -781,7 +781,7 @@ export const selectUserReportForGetUser = (client: Pick<DrizzleClient, "select">
 /** Build the `supportTicket` selection for `getUser`, using predicates on `status`. */
 export const selectSupportTicketForGetUser = (client: Pick<DrizzleClient, "select">) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(supportTicket)
     .where(inArray(supportTicket.status, ["OPEN", "IN_PROGRESS", "WAITING_FOR_STAFF"]));
 
@@ -792,7 +792,7 @@ export const selectStaffApplicationForGetUser = (
   user: { userId: string },
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(staffApplication)
     .leftJoin(
       staffApplicationApproval,
@@ -814,7 +814,7 @@ export const selectContentProposalForGetUser = (
   client: Pick<DrizzleClient, "select">,
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(contentProposal)
     .where(eq(contentProposal.status, "PENDING"));
 
@@ -1140,7 +1140,7 @@ export const updateUserDataForUpdateUsername = (
     .update(userData)
     .set({
       username: input.username,
-      reputationPoints: sql`reputationPoints - ${COST_CHANGE_USERNAME}`,
+      reputationPoints: sql`${userData.reputationPoints} - ${COST_CHANGE_USERNAME}`,
     })
     .where(
       and(
@@ -1290,7 +1290,7 @@ export const listUserDataForSearchUsers = (
       like(userData.username, `%${input.username}%`),
       eq(userData.approvedTos, true),
       ...(input.showAi ? [] : [eq(userData.isAi, false)]),
-      ...(input.showYourself ? [] : [sql`${userData.userId} != ${ctx.userId}`]),
+      ...(input.showYourself ? [] : [ne(userData.userId, ctx.userId)]),
     ),
     orderBy: [sql`LENGTH(${userData.username}) asc`],
     limit: 5,

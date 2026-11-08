@@ -2,7 +2,7 @@
  * Database access for train; authorization and transaction scopes stay in callers.
  */
 
-import { and, asc, eq, gt, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, lte, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type {
   CombatStatName,
@@ -106,7 +106,7 @@ export const deleteDeadQueueRows = (
 ) =>
   client
     .delete(userQueue)
-    .where(and(queueOf(userId, kind), sql`${userQueue.position} <= ${head}`));
+    .where(and(queueOf(userId, kind), lte(userQueue.position, head)));
 
 /** Build insertion of caller-prepared queue rows. */
 export const insertUserQueueRows = (
