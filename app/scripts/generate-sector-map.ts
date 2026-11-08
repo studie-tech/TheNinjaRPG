@@ -34,10 +34,15 @@ import {
   SECTOR_WIDTH,
 } from "@/drizzle/constants";
 import { generateDecorationPlacements } from "@/libs/sector-map/decorations";
-import { BUILTIN_TERRAINS_BY_KEY, mergeTerrainSpecs } from "@/libs/sector-map/terrains";
+import {
+  BUILTIN_TERRAINS_BY_KEY,
+  mergeTerrainSpecs,
+  resolveTerrainSpec,
+} from "@/libs/sector-map/terrains";
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import {
   hexTileToPixel,
+  normalizeTiledSectorMap,
   TILED_HEX_SIDE_LENGTH,
   TILED_TILE_HEIGHT,
   TILED_TILE_WIDTH,
@@ -53,7 +58,6 @@ import {
   tilePosition,
   type Vec3,
 } from "@/libs/sector-map/worldgen";
-import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
 import type { SectorMapZone } from "@/libs/sector-map/types";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 
@@ -187,15 +191,8 @@ const generateCells = (options: GeneratorOptions) => {
           cell = { terrain: "ocean", zone: "water", blocked: false, walkCost: 1 };
           sea = true;
         } else {
-          cell = { terrain: voteTerrain, zone: "village", blocked: false, walkCost: 1 };
-          if (elevation > 0.68) {
-            cell = {
-              terrain: voteTerrain,
-              zone: "village",
-              blocked: true,
-              walkCost: 0,
-            };
-          }
+          const high = elevation > 0.68;
+          cell = { terrain: voteTerrain, zone: "village", blocked: high, walkCost: high ? 0 : 1 };
         }
         landRow.push(landTerrain);
       } else if (voteTerrain === "ocean") {
@@ -237,12 +234,10 @@ const generateCells = (options: GeneratorOptions) => {
     const cell = cells[y]?.[x];
     if (!cell) return;
     cell.blocked = false;
-    if (isSea[y]?.[x]) {
-      // Genuine open sea stays water so the coastline is not broken by a ring
-      // of forced land along the perimeter.
-      if (cell.walkCost <= 0) cell.walkCost = 1;
-    } else {
-      if (cell.walkCost <= 0) cell.walkCost = 1;
+    if (cell.walkCost <= 0) cell.walkCost = 1;
+    // Genuine open sea stays water so the coastline is not broken by a ring
+    // of forced land along the perimeter.
+    if (!isSea[y]?.[x]) {
       if (cell.terrain === "ocean") cell.terrain = intendedLand[y]![x]!;
       if (cell.zone === "water") cell.zone = village ? "village" : "wilderness";
     }
@@ -277,14 +272,17 @@ const generateCells = (options: GeneratorOptions) => {
     setWalkable(x, roadY, roadZone(x, roadY));
   }
 
-  // Force anchor tiles walkable and connect them to the vertical carve
-  anchors.forEach((anchor) => {
-    setWalkable(anchor.x, anchor.y);
-    const step = anchor.x > spawn.x ? -1 : 1;
-    for (let x = anchor.x; x !== spawn.x; x += step) {
-      setWalkable(x, anchor.y);
+  // Make a tile walkable and connect it to the vertical carve
+  const carveToSpine = (tileX: number, tileY: number) => {
+    setWalkable(tileX, tileY);
+    const step = tileX > spawn.x ? -1 : 1;
+    for (let x = tileX; x !== spawn.x; x += step) {
+      setWalkable(x, tileY);
     }
-  });
+  };
+
+  // Force anchor tiles walkable and connect them to the vertical carve
+  anchors.forEach((anchor) => carveToSpine(anchor.x, anchor.y));
 
   // The full perimeter stays walkable: global travel drops players on the
   // edge coordinates they left the previous sector from, so any border tile
@@ -301,13 +299,7 @@ const generateCells = (options: GeneratorOptions) => {
   // Occupied tiles (users/structures) must stay walkable and connected
   options.ensureWalkable
     .filter((tile) => tile.x >= 0 && tile.y >= 0 && tile.x < width && tile.y < height)
-    .forEach((tile) => {
-      setWalkable(tile.x, tile.y);
-      const step = tile.x > spawn.x ? -1 : 1;
-      for (let x = tile.x; x !== spawn.x; x += step) {
-        setWalkable(x, tile.y);
-      }
-    });
+    .forEach((tile) => carveToSpine(tile.x, tile.y));
 
   // Sandy shorelines: walkable grass tiles bordering water become sand,
   // keeping their original battle biome and without sprite decorations so
@@ -357,10 +349,6 @@ const generateCells = (options: GeneratorOptions) => {
 
   return { cells, anchors };
 };
-
-/** Battle biome for a terrain key, falling back to "ground" for keys not in the built-in registry */
-const getBattleBiome = (terrain: string) =>
-  BUILTIN_TERRAINS_BY_KEY.get(terrain)?.battleBiome ?? "ground";
 
 /**
  * Dedup key for the embedded tileset: cells with identical
@@ -413,7 +401,9 @@ export const buildTiledJson = (options: GeneratorOptions) => {
           {
             name: "battleBiome",
             type: "string",
-            value: cell.battleBiome ?? getBattleBiome(cell.terrain),
+            value:
+              cell.battleBiome ??
+              resolveTerrainSpec(cell.terrain, BUILTIN_TERRAINS_BY_KEY).battleBiome,
           },
         ];
         if (cell.decoration !== undefined) {
