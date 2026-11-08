@@ -17,7 +17,7 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { spriteAnimationRouter } from "@/server/api/routers/spriteAnimation";
 import { ActionEndTurn, ActionUseSpecificJutsu } from "@/validators/ai";
-import { makeTag } from "../../libs/combat/helpers/battleScenario";
+import { makeTag } from "../../setup/combat";
 import { insertUsers, insertJutsus, insertDefaultAiProfile } from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import {

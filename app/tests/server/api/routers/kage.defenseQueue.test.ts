@@ -9,7 +9,7 @@ import * as pusherModule from "@/libs/pusher";
 import { aiProfile, battle, battleHistory, kageDefendedChallenges, userData, village, villageElderVote, war } from "@/drizzle/schema";
 import * as combat from "@/server/api/routers/combat";
 import { updateBattle, updateKage } from "@/libs/combat/database";
-import { makeBattleUser, makeCompleteBattle } from "../../../libs/combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../../setup/combat";
 import { villageRouter } from "@/server/api/routers/village";
 import { kageRouter } from "@/server/api/routers/kage";
 import { syncKageDefense, syncLockedKageDefense, withinKageChallengeLimits, withKageDefense } from "@/server/utils/kage";

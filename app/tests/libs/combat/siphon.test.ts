@@ -3,7 +3,7 @@ import { SHIELD_MAX_HEALTH } from "@/drizzle/constants";
 import { applyEffects } from "@/libs/combat/process";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { getTagSchema, isPositiveUserEffect, SiphonTag } from "@/validators/combat";
-import { makeBattleUser, makeCombatAction, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCombatAction, makeCompleteBattle, makeEffect } from "../../setup/combat";
 import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
 
 const ROUND = 3;

@@ -14,7 +14,7 @@ import {
   makeEffect,
   makeJutsu,
   makeShield,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
 
 const ROUND = 3;

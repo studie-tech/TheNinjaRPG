@@ -1,5 +1,5 @@
 import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
-import { makeEffect, makeJutsu, makeTag } from "./helpers/battleScenario";
+import { makeEffect, makeJutsu, makeTag } from "../../setup/combat";
 import { describe, it, expect } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";

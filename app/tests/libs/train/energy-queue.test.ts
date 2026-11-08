@@ -7,7 +7,7 @@ import {
 } from "@/drizzle/constants";
 import { settleEnergyTrainingQueue } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
-import { makeBattleUser } from "../combat/helpers/battleScenario";
+import { makeBattleUser } from "../../setup/combat";
 
 const start = new Date("2026-10-24T12:00:00Z");
 const after = (ticks: number) =>

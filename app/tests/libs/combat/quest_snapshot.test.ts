@@ -6,7 +6,7 @@ import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { getPublicQuestUser } from "@/libs/quest/projection";
 import { getIsolatedPyramid } from "@/libs/questRun";
 import { QuestTracker } from "@/validators/objectives";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 describe("combat quest snapshot", () => {
   it.each(COMBAT_QUEST_TASKS)("preloads achievements containing %s", (task) => {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Pusher } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/routers/profile";
-import { makeBattleUser } from "../../../../libs/combat/helpers/battleScenario";
+import { makeBattleUser } from "../../../../setup/combat";
 const NOW = new Date("2026-09-19T12:00:00Z");
 const member = (days: number) => ({ isOutlaw: false, villageId: "village-1", joinedVillageAt: new Date(NOW.getTime() - days * 86_400_000) });
 const profileSnapshot = (isOutlaw: boolean, anbuId: string | null = null) => ({

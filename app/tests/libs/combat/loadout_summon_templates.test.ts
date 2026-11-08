@@ -13,7 +13,7 @@ import { mergeExtraState } from "@/libs/combat/util";
 import { TerrainHex } from "@/libs/hexgrid";
 import type { DrizzleClient } from "@/server/db";
 import { AiRule } from "@/validators/ai";
-import { flatCombatStats } from "./helpers/battleScenario";
+import { flatCombatStats } from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 /**

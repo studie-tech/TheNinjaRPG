@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
 import { maskBattle } from "@/libs/combat/masking";
 import type { AppRouter } from "@/server/api/root";
-import { makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle } from "../setup/combat";
 import { guardianVictory } from "../setup/territoryWar";
 import { getCombatInventoryUpdate } from "@/deltas/combat";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";

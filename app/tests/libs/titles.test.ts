@@ -8,7 +8,7 @@ import { ObjectiveReward, hasReward } from "@/validators/rewards";
 import { TitleEffectSchema, TitleValidator } from "@/validators/title";
 import { IncreaseRegenerationTag } from "@/validators/combat";
 import { rewardOwnership } from "../setup/quest";
-import { makeUser } from "./combat/helpers/battleScenario";
+import { makeUser } from "../setup/combat";
 
 const from = new Date("2026-01-01T00:00:00Z");
 const acquired = new Date("2026-01-01T00:02:00Z");

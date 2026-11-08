@@ -7,7 +7,7 @@ import * as userContext from "@/utils/UserContext";
 import {
   makeBattleUser,
   makeCompleteBattle,
-} from "../libs/combat/helpers/battleScenario";
+} from "../setup/combat";
 
 const FROZEN_NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
 let isHidden = false;

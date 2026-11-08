@@ -9,7 +9,7 @@ import {
   makeBattleUser,
   makeDamageEffect,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 describe("ranked bloodline damage boost", () => {
   it.each([...ElementNames])(

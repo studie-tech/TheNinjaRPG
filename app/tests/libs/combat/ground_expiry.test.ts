@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import { alignBattle } from "@/libs/combat/turn";
 import type { GroundEffect } from "@/libs/combat/types";
-import { makeBattleUser, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 /** Create a round-boundary fixture with a temporary creature next in initiative order. */
 const scenario = (type: "summon" | "clone", expires = true) => {

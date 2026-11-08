@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { decreaseCooldown, increaseCooldown, increaseRange } from "@/libs/combat/tags";
-import { makeBattleUser, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeEffect } from "../../setup/combat";
 
 const runtime = {
   creatorId: "target",

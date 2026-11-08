@@ -5,7 +5,7 @@ import {
   makeCompleteBattle,
   makeDamageModifierEffect,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 import type {
   ActionEffect,
   CompleteBattle,

@@ -16,7 +16,7 @@ import {
   makeJutsu,
   makeTag,
   makeWeapon,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 describe("AI action catalog isolation", () => {
   it.each(["end_turn", "use_specific_jutsu", "use_specific_item"] as const)(

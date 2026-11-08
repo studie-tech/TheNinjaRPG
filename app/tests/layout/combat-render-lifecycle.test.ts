@@ -8,7 +8,7 @@ import { useGameScene } from "@/hooks/game-scene";
 import { maskBattle } from "@/libs/combat/masking";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { userBattleAtom } from "@/utils/UserContext";
-import { makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle } from "../setup/combat";
 import { deferred } from "../setup/deferred";
 
 afterEach(cleanup);

@@ -27,7 +27,7 @@ import {
   makeEffect,
   makeJutsu,
   makeTag,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const makePotency = (
   fields: Partial<PotencyTag> = {},

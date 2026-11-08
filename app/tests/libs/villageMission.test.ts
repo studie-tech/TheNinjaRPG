@@ -6,7 +6,7 @@ import type { CombatResult } from "@/libs/combat/types";
 import type { Quest } from "@/drizzle/schema";
 import { isVillageMissionAvailable, villageMissionCompletionEvents } from "@/libs/villageMission";
 import { villageMissionContentError } from "@/validators/villageMission";
-import { makeBattleUser, makeCompleteBattle } from "./combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 
 it.each([["D", 1], ["C", 3], ["B", 7], ["A", 14]] as const)("credits %s missions with %s shared points", (questRank, points) => {
   expect(villageMissionCompletionEvents({ questType: "mission", questRank })).toEqual({ [`${questRank.toLowerCase()}_missions_total`]: 1, combined_mission_effort: points });

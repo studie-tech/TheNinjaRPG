@@ -5,7 +5,7 @@ import type { TerrainHex } from "@/libs/hexgrid";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { combatActorParts } from "@/libs/rendering/scenes/combatActors";
 import { createStatusMeter } from "@/libs/rendering/primitives/statusMeter";
-import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const tile = { width: 40, height: 20 } as TerrainHex;
 const battle = makeCompleteBattle() as unknown as ReturnedBattle;

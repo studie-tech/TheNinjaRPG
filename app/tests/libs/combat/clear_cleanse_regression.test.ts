@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { computeDamagePacket } from "@/libs/combat/damagePipeline";
 import { cleanse, clear } from "@/libs/combat/tags";
 import type { UserEffect } from "@/libs/combat/types";
-import { gearMods, makeBattleUser, makeDamageEffect, makeEffect } from "./helpers/battleScenario";
+import { gearMods, makeBattleUser, makeDamageEffect, makeEffect } from "../../setup/combat";
 
 describe("Clear/Cleanse damage modifier regressions", () => {
   it("clear removes temporary DR but preserves village DR and base DR", () => {

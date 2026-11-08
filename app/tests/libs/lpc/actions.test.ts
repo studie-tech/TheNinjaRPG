@@ -2,7 +2,7 @@ import { expect, it } from "bun:test";
 import { availableUserActions, performBattleAction, userItemToAction } from "@/libs/combat/actions";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance, withSpriteEquipment } from "@/libs/lpc/appearance";
-import { makeBattleUser, makeBattleUserItem, makeBattleWithWeapon, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeBattleUserItem, makeBattleWithWeapon, makeCompleteBattle } from "../../setup/combat";
 
 it("removes broken gear and preserves its attack cue through a batched end-turn", () => {
   const owned = makeBattleUserItem({ durability: 3 });

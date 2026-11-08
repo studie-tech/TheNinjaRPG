@@ -8,7 +8,7 @@ import {
   makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 describe("applySingleEffect lifecycle visuals", () => {
   it.each([

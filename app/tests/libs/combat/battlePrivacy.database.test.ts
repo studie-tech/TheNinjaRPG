@@ -4,7 +4,7 @@ import { battle } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
 import { maskBattle } from "@/libs/combat/masking";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
-import { makeCompleteBattle } from "./helpers/battleScenario";
+import { makeCompleteBattle } from "../../setup/combat";
 
 // Revealed definitions must survive a later request even after their caster despawns.
 describeWithDatabase("persisted battle privacy", () => {

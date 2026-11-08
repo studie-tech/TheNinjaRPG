@@ -4,7 +4,7 @@ import { getBattleGrid } from "@/libs/combat/util";
 import { BarrierTag, CloneTag, DamageTag, HealTag, MoveTag, PoisonTag, StealthTag, SummonTag, VisualTag } from "@/validators/combat";
 import { applyEffects } from "@/libs/combat/process";
 import type { ReturnedBattle, UserEffect } from "@/libs/combat/types";
-import { makeBasicAttack, makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBasicAttack, makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 const setup = () => {
   const stats = { curHealth: 1000, maxHealth: 1000, offence: 100, defence: 100 };
   const actor = makeBattleUser("actor", { ...stats, direction: "left", longitude: 0, latitude: 0 });

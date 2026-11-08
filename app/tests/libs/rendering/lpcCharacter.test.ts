@@ -15,7 +15,7 @@ import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
 import type { SpriteAppearance } from "@/validators/lpc";
 import type { LpcLayout } from "@/validators/lpcAsset";
-import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { deferred } from "../../setup/deferred";
 
 const cleanups: (() => void)[] = [];

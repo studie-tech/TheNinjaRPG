@@ -19,7 +19,7 @@ import {
   makeCompleteBattle,
   makeEffect,
   makeTag,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const target = () => makeBattleUser("defender");
 const newCast = {

@@ -6,7 +6,7 @@ import type { CompleteBattle } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
-import { makeCompleteBattle, makeUser } from "../../../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../../../setup/combat";
 import { resolverOf } from "../../../../setup/testDatabase";
 
 const userId = "ready-player";

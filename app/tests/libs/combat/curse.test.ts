@@ -11,7 +11,7 @@ import {
   makeBattleUser,
   makeCompleteBattle,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const mark = (
   power = 50,

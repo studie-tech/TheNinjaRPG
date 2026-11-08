@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { SkillTree } from "@/drizzle/schema";
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { PoisonTag, IncreaseDamageGivenTag } from "@/validators/combat";
-import { flatCombatStats, makeJutsu } from "./helpers/battleScenario";
+import { flatCombatStats, makeJutsu } from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const skill = (id: string, target: SkillTree["target"], pathType: SkillTree["pathType"] = "SKILL") =>

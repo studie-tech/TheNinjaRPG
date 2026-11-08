@@ -17,7 +17,7 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import { fetchUserJutsus } from "@/server/api/routers/jutsu";
 import { getTagSchema } from "@/validators/combat";
-import { makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle } from "../../../../setup/combat";
 import { insertSnapshotLobby, loadCombatant, preloadLobby } from "../../../../libs/combat/helpers/preload";
 import {
   insertItems,

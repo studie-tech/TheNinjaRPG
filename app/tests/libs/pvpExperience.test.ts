@@ -7,7 +7,7 @@ import { calcActiveUserRegen } from "@/libs/profile";
 import { getReward } from "@/libs/quest/rewards";
 import { combatMasteryGains } from "@/libs/combat/mastery";
 import { calcBattleResult } from "@/libs/combat/settlement";
-import { makeUser, makeCompleteBattle } from "./combat/helpers/battleScenario";
+import { makeUser, makeCompleteBattle } from "../setup/combat";
 
 const now = new Date("2026-10-11T12:00:00Z");
 const settings: GameSetting[] = [{ id: "avg", name: PVP_EXPERIENCE_AVERAGE_SETTING, value: 1000, time: now }];

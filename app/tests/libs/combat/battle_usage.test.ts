@@ -14,7 +14,7 @@ import {
   makeJutsu,
   makeTag,
   makeWeapon,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const USAGES = ["PVE", "PVP", "BOTH"] as const satisfies readonly BattleUsageType[];
 

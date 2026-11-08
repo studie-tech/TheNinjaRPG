@@ -21,7 +21,7 @@ import { maskBattle } from "@/libs/combat/masking";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { ActionUseSpecificJutsu } from "@/validators/ai";
-import { makeTag } from "../../../../libs/combat/helpers/battleScenario";
+import { makeTag } from "../../../../setup/combat";
 import { insertFightingDungeonRun } from "../../../../setup/dungeon";
 import {
   insertItems,

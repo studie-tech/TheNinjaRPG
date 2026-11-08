@@ -53,7 +53,7 @@ import {
   makeBattleUserItem,
   makeCompleteBattle,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 import { deferred } from "../../setup/deferred";
 import { observeProfile, soloPveResult } from "./helpers/profileCache";
 

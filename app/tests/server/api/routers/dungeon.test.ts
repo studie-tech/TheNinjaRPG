@@ -16,7 +16,7 @@ import {
 } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 import { inTransactions, failStatements, withoutTransactions, aroundStatements } from "../../../setup/statements";
-import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../../setup/combat";
 
 describeWithDatabase("Dungeon parties and settlement", () => {
   beforeEach(async () => {

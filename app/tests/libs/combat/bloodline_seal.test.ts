@@ -13,7 +13,7 @@ import {
   makeEffect,
   makeJutsu,
   makeTag,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
 
 const target = () => makeBattleUser("defender", { curHealth: 100, maxHealth: 1000 });

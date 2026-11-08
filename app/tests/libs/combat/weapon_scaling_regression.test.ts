@@ -9,7 +9,7 @@ import {
   makeBattleUserItem,
   makeBattleWithWeapon,
   makeDamageEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 /** A battle holding the 22-power Ninjutsu weapon that gains 1 power per level. */
 const scalingWeaponBattle = () =>

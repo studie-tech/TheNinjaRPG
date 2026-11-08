@@ -19,7 +19,7 @@ import {
   makeBattleUserItem,
   makeCombatAction,
   makeCompleteBattle,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const ITEM_ID = "smoke-bomb-item";
 

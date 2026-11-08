@@ -9,7 +9,7 @@ import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { IncreaseHuntingYield } from "@/validators/combat";
-import { makeUser } from "../../../../libs/combat/helpers/battleScenario";
+import { makeUser } from "../../../../setup/combat";
 import { huntingBattleState } from "../../../../setup/hunting";
 
 const defaults = (table: typeof userData | typeof item | typeof userItem) =>

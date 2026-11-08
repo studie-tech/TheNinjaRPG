@@ -4,7 +4,7 @@ import { war, warKill } from "@/drizzle/schema";
 import { updateWars } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 describeWithDatabase("battle team war credit", () => {
   beforeEach(async () => resetTables(war, warKill));

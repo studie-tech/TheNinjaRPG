@@ -4,7 +4,7 @@ import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfil
 import { getEffectMagnitude, getEffectPower } from "@/libs/combat/power";
 import { invertPower } from "@/libs/combat/tags";
 import type { GroundEffect } from "@/libs/combat/types";
-import { makeEffect } from "../libs/combat/helpers/battleScenario";
+import { makeEffect } from "../setup/combat";
 
 const userId = "holder";
 const runtime = { targetId: userId, creatorId: userId, fromType: "jutsu" as const };

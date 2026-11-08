@@ -16,7 +16,7 @@ import {
   recordQueries,
   resetTables,
 } from "../../setup/testDatabase";
-import { makeBattleUser, makeBattleUserItem, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeBattleUserItem, makeCompleteBattle } from "../../setup/combat";
 import { soloPveResult } from "./helpers/profileCache";
 
 const pusher = { trigger: async () => {} } as unknown as PusherClient;

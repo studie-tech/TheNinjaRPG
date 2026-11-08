@@ -9,7 +9,7 @@ import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
 import type { SpriteAppearance } from "@/validators/lpc";
-import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const cleanups: (() => void)[] = [];
 let sequence = 0;

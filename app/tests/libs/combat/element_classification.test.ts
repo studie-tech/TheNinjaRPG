@@ -19,7 +19,7 @@ import {
   makeEffect,
   makeJutsu,
   makeTag,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const fixture = (elementClassification: ElementName | null = "Fire") => {
   const jutsu = makeJutsu({

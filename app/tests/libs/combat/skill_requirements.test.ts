@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { handleInjectedJutsus } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import { makeBattleUser, makeInjectBattle, makeJutsu } from "./helpers/battleScenario";
+import { makeBattleUser, makeInjectBattle, makeJutsu } from "../../setup/combat";
 
 const injected = makeJutsu({ id: "injected", requiredSkillId: "required" });
 

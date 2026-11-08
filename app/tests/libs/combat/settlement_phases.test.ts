@@ -12,7 +12,7 @@ import {
 } from "@/drizzle/constants";
 import type { BattleUserState } from "@/libs/combat/types";
 import { calcBattleResult } from "@/libs/combat/settlement";
-import { makeCompleteBattle, makeUser } from "./helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../setup/combat";
 
 const villages = {
   home: { id: "home", name: "Home", sector: 1, kageId: "", structures: [], sectors: [] },

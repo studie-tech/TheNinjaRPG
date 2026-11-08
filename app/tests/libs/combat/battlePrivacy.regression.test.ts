@@ -5,7 +5,7 @@ import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import type { BattleWar, ReturnedBattle } from "@/libs/combat/types";
 import { hasNoAvailableActions } from "@/libs/combat/turn";
 import { maskBattle } from "@/libs/combat/masking";
-import { flatCombatStats, makeBattleUser, makeCompleteBattle, makeEffect, makeTag } from "./helpers/battleScenario";
+import { flatCombatStats, makeBattleUser, makeCompleteBattle, makeEffect, makeTag } from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const now = new Date("2026-10-11T12:00:00Z");

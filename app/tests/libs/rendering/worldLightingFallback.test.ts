@@ -23,7 +23,7 @@ import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
-import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const cleanups: (() => void)[] = [];
 const map: NormalizedSectorMap = {

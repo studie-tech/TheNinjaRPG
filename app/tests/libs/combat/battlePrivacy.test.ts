@@ -11,7 +11,7 @@ import {
   makeBattleUserItem,
   makeCompleteBattle,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const jutsu = (id: string): Jutsu => ({
   id, name: id, image: `/${id}.png`, effects: [], cooldown: 4,

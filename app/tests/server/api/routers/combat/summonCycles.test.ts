@@ -7,7 +7,7 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle, processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { JutsuValidator } from "@/validators/combat";
-import { makeTag, makeUser, tableDefaults } from "../../../../libs/combat/helpers/battleScenario";
+import { makeTag, makeUser, tableDefaults } from "../../../../setup/combat";
 import { insertFightingDungeonRun } from "../../../../setup/dungeon";
 import { insertUsers, insertDefaultAiProfile, insertJutsus } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";

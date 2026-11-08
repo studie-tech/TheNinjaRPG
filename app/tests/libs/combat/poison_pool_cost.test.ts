@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { calcPoolCost } from "@/libs/combat/util";
-import { makeBattleUser, makeCombatAction, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCombatAction, makeEffect } from "../../setup/combat";
 
 const runtime = (id: string, creatorId: string) => ({
   id,

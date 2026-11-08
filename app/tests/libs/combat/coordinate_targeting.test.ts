@@ -30,7 +30,7 @@ import {
   makeBattleUser,
   makeEffect,
   makeJutsu,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 import type { Item, Jutsu } from "@/drizzle/schema";
 
 const coordinate = (longitude: number, latitude: number) => ({ longitude, latitude });

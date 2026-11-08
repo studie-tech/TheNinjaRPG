@@ -14,7 +14,7 @@ import {
   makeJutsu,
   makeTag,
   makeWeapon,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 /**
  * Drives the global cooldown (GCD) round by round through the same two calls the

@@ -22,7 +22,7 @@ import {
   insertDefaultAiProfile,
 } from "../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 /** An ally from another village and a same-village enemy expose incorrect allegiance rules. */
 const scenario = (battleType: "QUEST" | "OVERWORLD", enemyHealth = 100) => makeCompleteBattle({

@@ -2,7 +2,7 @@ import { beforeEach, expect, it } from "bun:test";
 import type { BattleType } from "@/drizzle/constants";
 import { battle, tournamentMatch, userRequest } from "@/drizzle/schema";
 import { combatRouter } from "@/server/api/routers/combat";
-import { makeCompleteBattle, makeUser } from "../../../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../../../setup/combat";
 import {
   callerForDatabase,
   describeWithDatabase,

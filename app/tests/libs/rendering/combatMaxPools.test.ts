@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import { getEffectiveMaxPool } from "@/libs/combat/util";
 import type { ReturnedBattle, ReturnedUserState, UserEffect } from "@/libs/combat/types";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
-import { makeBattleUser, makeCompleteBattle, makeEffect } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 let cache = createCombatMaxPoolCache();
 afterEach(() => { vi.restoreAllMocks(); cache = createCombatMaxPoolCache(); });

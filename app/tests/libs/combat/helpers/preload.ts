@@ -22,7 +22,7 @@ import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
 import { fetchUserJutsus } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
 import { equipLimitFixture } from "../../../setup/jutsuEquipLimits";
-import { makeBattleUser, makeUser, tableDefaults } from "./battleScenario";
+import { makeBattleUser, makeUser, tableDefaults } from "../../../setup/combat";
 
 type PreloadOptions = Parameters<typeof processUsersForBattle>[1];
 type Essentials = Awaited<ReturnType<typeof fetchBattleEssentials>>;

@@ -5,7 +5,7 @@ import {
   makeBattleUser,
   makeCompleteBattle,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const hit = (creatorId = "attacker", residual = false) =>
   makeEffect(

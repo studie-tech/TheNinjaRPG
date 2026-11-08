@@ -56,7 +56,7 @@ import {
   resetTables,
 } from "../../../setup/testDatabase";
 
-import { makeEffect } from "../../../libs/combat/helpers/battleScenario";
+import { makeEffect } from "../../../setup/combat";
 import { deferred } from "../../../setup/deferred";
 
 const HOME = 30;

@@ -7,7 +7,7 @@ import type { CombatAction } from "@/libs/combat/types";
 import { getDistanceToClosestEnemy, isValidMove } from "@/libs/combat/util";
 import { calcBattleResult, getOpposingBattleWars } from "@/libs/combat/settlement";
 import { TerrainHex } from "@/libs/hexgrid";
-import { makeBattleUser, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 /** Build teams whose faction identities disagree with allegiance, including summons. */
 const scenario = () => {

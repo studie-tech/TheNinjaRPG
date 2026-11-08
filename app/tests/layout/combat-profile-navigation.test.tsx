@@ -5,7 +5,7 @@ import * as image from "@/layout/Image";
 import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import { maskBattle } from "@/libs/combat/masking";
 import * as UserContext from "@/utils/UserContext";
-import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 import { actualImage } from "../setup/preload";
 
 beforeEach(() => {

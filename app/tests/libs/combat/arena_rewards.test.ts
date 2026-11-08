@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { VillageStructure } from "@/drizzle/schema";
 import { calcBattleResult } from "@/libs/combat/settlement";
-import { makeCompleteBattle, makeUser } from "./helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../setup/combat";
 
 /** Calculate an arena victory with the same preloaded settlement data used by combat. */
 const arenaExperience = (structures?: VillageStructure[]) =>

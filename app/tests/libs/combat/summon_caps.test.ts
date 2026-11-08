@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { summonCastBlockedReason } from "@/libs/combat/summon";
-import { makeBattleUser } from "./helpers/battleScenario";
+import { makeBattleUser } from "../../setup/combat";
 import {
   DEMON,
   TIGER,

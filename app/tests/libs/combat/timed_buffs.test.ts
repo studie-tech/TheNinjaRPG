@@ -3,7 +3,7 @@ import { applyEffects } from "@/libs/combat/process";
 import { getPower, realizeTag } from "@/libs/combat/tags";
 import { getTimedRegeneration, getTimedRegenerationGain, getTimedRegenerationPeriods, getRegenerationPeriodGain } from "@/libs/timedBuffs";
 import { IncreaseRegenerationTag } from "@/validators/combat";
-import { makeCompleteBattle, makeEffect, makeUser } from "./helpers/battleScenario";
+import { makeCompleteBattle, makeEffect, makeUser } from "../../setup/combat";
 
 const statBuff = (id: string, power: number, expires: number, patch = {}) => makeEffect("increasestat", {
   statTypes: ["Ninjutsu"], direction: "offence", power, powerPerLevel: 0, ...patch,

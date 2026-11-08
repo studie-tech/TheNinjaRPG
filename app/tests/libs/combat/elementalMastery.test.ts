@@ -6,7 +6,7 @@ import { clear, copy } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
 import { DamageTag, IncreaseDamageGivenTag } from "@/validators/combat";
-import { flatCombatStats, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { flatCombatStats, makeCompleteBattle, makeEffect } from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const user = (patch: Partial<CombatQueryUser> = {}): CombatQueryUser =>

@@ -6,7 +6,7 @@ import type {
   ReturnedBattle,
 } from "@/libs/combat/types";
 import { oddQHexDistance } from "@/libs/hexgrid";
-import { makeBattleUser, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeEffect } from "../../setup/combat";
 
 const WIDTH = 13;
 const HEIGHT = 9;

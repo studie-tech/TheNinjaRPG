@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { didKageChallengerWin, didUserTakeKageSeat } from "@/libs/combat/settlement";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 describe("Kage challenge outcome", () => {
   it("does not treat the defending Kage's victory as a challenger win", () => {

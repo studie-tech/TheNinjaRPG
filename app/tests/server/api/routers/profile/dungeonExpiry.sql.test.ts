@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { battle, dungeonMember, dungeonRun, userData, userVote, village } from "@/drizzle/schema";
 import { markDungeonFloorPublished, updateDungeonRunForReserve } from "@/queries/dungeon";
 import { profileRouter } from "@/server/api/routers/profile";
-import { makeCompleteBattle, makeUser } from "../../../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../../../setup/combat";
 import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
 import { insertUsers } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";

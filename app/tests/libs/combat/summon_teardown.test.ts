@@ -4,7 +4,7 @@ import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import { clone, summon } from "@/libs/combat/tags";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
-import { makeCompleteBattle } from "./helpers/battleScenario";
+import { makeCompleteBattle } from "../../setup/combat";
 
 // Drives the REAL applyEffects pipeline to settle whether a *blocked* summon
 // re-cast (player already has a live summon) can tear down the existing summon

@@ -3,7 +3,7 @@ import { BattleTypes } from "@/drizzle/constants";
 import type { CombatAction, Consequence, ReturnedBattle, UserEffect } from "@/libs/combat/types";
 import { applyPoolAdjustmentsToBase, calcPoolCost, collapseConsequences, getDefaultBattleSizes, rollInitiative } from "@/libs/combat/util";
 import { calcApReduction, hasNoAvailableActions } from "@/libs/combat/turn";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 afterEach(() => {
   vi.restoreAllMocks();

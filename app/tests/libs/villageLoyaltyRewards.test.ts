@@ -7,7 +7,7 @@ import { calcBattleResult } from "@/libs/combat/settlement";
 import { getReward, postProcessRewards } from "@/libs/quest/rewards";
 import { QuestValidator } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { makeBattleUser, makeCompleteBattle } from "./combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 
 const NOW = new Date("2026-09-19T12:00:00Z");
 const member = (days: number) => ({

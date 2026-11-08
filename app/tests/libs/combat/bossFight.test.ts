@@ -14,7 +14,7 @@ import {
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
 import { maskBattle } from "@/libs/combat/masking";
 import { calcBattleResult } from "@/libs/combat/settlement";
-import { makeCompleteBattle, makeUser } from "./helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../setup/combat";
 
 const form = (userId: string, longitude = 8, latitude = 4) =>
   makeUser({ userId, isAi: true, direction: "right", longitude, latitude });

@@ -10,7 +10,7 @@ import { applyPoolAdjustmentsToBase, getBattleGrid, resolveDamageCreditUser } fr
 import { getTurnControl } from "@/libs/combat/turn";
 import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
-import { makeBasicAttack, makeBattleUser, makeBattleUserItem, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeBasicAttack, makeBattleUser, makeBattleUserItem, makeCompleteBattle, makeEffect } from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 import { AiRule } from "@/validators/ai";
 import { BarrierTag, CloneTag, DamageTag, IncreaseMaxPoolsTag, InjectJutsusTag, IncreaseStatTag, DecreaseStatTag, MoveTag, PoisonTag, ShieldTag, SummonTag, VisualTag } from "@/validators/combat";

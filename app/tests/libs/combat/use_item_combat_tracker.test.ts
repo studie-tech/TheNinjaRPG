@@ -2,7 +2,7 @@ import { trackerQuest as makeQuest } from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
 import { buildCombatTrackerTasks, hydrateUserForQuests } from "@/libs/combat/settlement";
 import { getNewTrackers } from "@/libs/quest";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 
 // Exercise combat task construction, quest hydration and objective credit together.

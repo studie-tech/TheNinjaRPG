@@ -9,7 +9,7 @@ import type { CompleteBattle } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
-import { makeBattleUser, makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../../../setup/combat";
 import { resolverOf } from "../../../../setup/testDatabase";
 
 type ActionInput = inferProcedureInput<typeof combatRouter.performAction>;

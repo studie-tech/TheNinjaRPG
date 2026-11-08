@@ -9,7 +9,7 @@ import * as combatTerrain from "@/libs/rendering/scenes/combatTerrain";
 import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatScene, type CombatSceneSnapshot } from "@/libs/rendering/scenes/combat";
-import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { deferred } from "../../setup/deferred";
 
 const cleanups: (() => void)[] = [];

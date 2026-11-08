@@ -12,7 +12,7 @@ import { applyEffects } from "@/libs/combat/process";
 import { getBattleSpawnLocations } from "@/libs/combat/participants";
 import { dungeonContentSchema } from "@/validators/dungeon";
 import { dungeonBattleState, encounterWaveState, dungeonContent } from "../setup/dungeon";
-import { makeCompleteBattle, makeEffect, makeUser } from "./combat/helpers/battleScenario";
+import { makeCompleteBattle, makeEffect, makeUser } from "../setup/combat";
 
 const floorBattle = () => makeCompleteBattle({
   battleType: "QUEST", round: 0, width: 12, height: 10,

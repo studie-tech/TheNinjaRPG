@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { combatMasteryGains, recordMasteryUsage } from "@/libs/combat/mastery";
 import type { CombatAction } from "@/libs/combat/types";
-import { makeUser } from "./helpers/battleScenario";
+import { makeUser } from "../../setup/combat";
 
 const user = () => makeUser({ rank: "JONIN", masteryRanks: { ninjutsuMastery: "MASTER", taijutsuMastery: "MASTER", sageMastery: "NOVICE" }, ninjutsuMastery: 100, taijutsuMastery: 100, usedMasteries: { ninjutsuMastery: 1, taijutsuMastery: 1 } });
 const opponent = makeUser({ userId: "enemy", isAi: false });

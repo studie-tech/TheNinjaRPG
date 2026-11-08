@@ -26,7 +26,7 @@ import {
   makeDamageEffect,
   makeEffect,
   makeUser,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 /** Applies a static 250-point Ninjutsu mastery change to a user with 1000 mastery and 2000 offence/defence. */
 const changeMastery = (

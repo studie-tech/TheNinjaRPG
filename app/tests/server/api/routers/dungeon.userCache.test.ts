@@ -16,7 +16,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { type UserDeltaResponse, userDeltaResponseSchema } from "@/validators/userCache";
-import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../../setup/combat";
 import { dungeonBattleState, dungeonContent } from "../../../setup/dungeon";
 import { insertQuests, insertUsers, insertUserVotes, insertClans } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";

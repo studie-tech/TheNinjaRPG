@@ -8,7 +8,7 @@ import {
   makeCompleteBattle,
   makeJutsu,
   makeTag,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const furniture = {

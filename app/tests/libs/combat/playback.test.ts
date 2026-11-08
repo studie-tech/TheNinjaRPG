@@ -6,7 +6,7 @@ import {
   createCombatPlaybackRecorder,
 } from "@/libs/combat/playback";
 import type { CompleteBattle, ReturnedBattle } from "@/libs/combat/types";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const setup = () => {
   const hero = makeBattleUser("hero", { longitude: 0, latitude: 0, curHealth: 100 });

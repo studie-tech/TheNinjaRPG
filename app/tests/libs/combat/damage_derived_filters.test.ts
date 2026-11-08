@@ -11,7 +11,7 @@ import {
 import type { Consequence, UserEffect } from "@/libs/combat/types";
 import { getStatTypeLabels } from "@/libs/combat/util";
 import { getTagSchema } from "@/validators/combat";
-import { makeBattleUser, makeDamageEffect, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeDamageEffect, makeEffect } from "../../setup/combat";
 
 const tagTypes = [
   "afterburn",

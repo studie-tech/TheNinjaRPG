@@ -8,7 +8,7 @@ import {
   makeBattleUser,
   makeCompleteBattle,
   makeEffect,
-} from "../../../../libs/combat/helpers/battleScenario";
+} from "../../../../setup/combat";
 import { insertUsers } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {

@@ -7,7 +7,7 @@ import {
   makeCompleteBattle,
   makeEffect,
   makeTag,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 import { activateSageMode, makeSageMode, makeSageUser } from "./helpers/sageMode";
 import type { UserEffect } from "@/libs/combat/types";
 

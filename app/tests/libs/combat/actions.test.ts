@@ -6,7 +6,7 @@ import {
 import type { ElementName } from "@/drizzle/constants";
 import type { CombatAction, ReturnedBattle, ReturnedUserState, UserEffect } from "@/libs/combat/types";
 import type { ZodAllTags } from "@/validators/combat";
-import { makeBattleUser, makeCombatAction, makeCompleteBattle, makeEffect, makeJutsu } from "./helpers/battleScenario";
+import { makeBattleUser, makeCombatAction, makeCompleteBattle, makeEffect, makeJutsu } from "../../setup/combat";
 
 const makeBattle = (effects: UserEffect[]): ReturnedBattle =>
   makeCompleteBattle({

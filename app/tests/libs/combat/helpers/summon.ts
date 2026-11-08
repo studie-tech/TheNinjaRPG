@@ -1,5 +1,5 @@
 import type { BattleUserState } from "@/libs/combat/types";
-import { makeBattleUser } from "./battleScenario";
+import { makeBattleUser } from "../../../setup/combat";
 
 export const DEMON = "ai-demon";
 export const TIGER = "ai-tiger";

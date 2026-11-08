@@ -5,7 +5,7 @@ import { clear } from "@/libs/combat/tags";
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
 import { hasMasteryRequirements } from "@/libs/mastery";
-import { makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeCompleteBattle, makeEffect } from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const titleUser = () => makeCombatQueryUser("title-caster", {

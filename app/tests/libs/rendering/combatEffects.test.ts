@@ -6,7 +6,7 @@ import { getBattleGrid } from "@/libs/combat/util";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
 import { applyEffects, expireGroundEffects } from "@/libs/combat/process";
-import { makeBattleUser, makeDamageEffect, makeEffect, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeDamageEffect, makeEffect, makeCompleteBattle } from "../../setup/combat";
 
 let sequence = 0;
 const scopes: (() => void)[] = [];

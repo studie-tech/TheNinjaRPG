@@ -14,7 +14,7 @@ import {
   makeBattleUser,
   makeCompleteBattle,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const damage = (power = 100) =>
   makeEffect(

@@ -9,7 +9,7 @@ import type {
 } from "@/libs/combat/types";
 import { alignBattle } from "@/libs/combat/turn";
 import { DiffuseTag, getTagSchema, tagTypes } from "@/validators/combat";
-import { makeBattleUser, makeCombatAction, makeDamageEffect, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCombatAction, makeDamageEffect, makeEffect } from "../../setup/combat";
 
 const ROUND = 3;
 const runtime = (targetId = "defender") => ({

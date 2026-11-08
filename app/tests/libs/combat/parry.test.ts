@@ -6,7 +6,7 @@ import {
   makeBattleUser,
   makeCompleteBattle,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const defense = (power: number, targetId = "defender", id = `parry-${power}`) =>
   makeEffect(

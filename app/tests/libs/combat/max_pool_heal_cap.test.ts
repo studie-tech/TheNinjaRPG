@@ -13,7 +13,7 @@ import {
   makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 /**
  * Equipment with `increasemaxpools` raises a combatant's maximum pools for the

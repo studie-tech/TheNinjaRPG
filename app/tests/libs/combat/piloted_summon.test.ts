@@ -4,7 +4,7 @@ import { shouldPilotSummon } from "@/libs/combat/summon";
 import { wantsHumanActionSet } from "@/libs/combat/turn";
 import { maskBattle, maskUsersState } from "@/libs/combat/masking";
 import type { BattleUserState } from "@/libs/combat/types";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const P = "p1";
 

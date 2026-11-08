@@ -12,7 +12,7 @@ import {
   questDebuffTypes,
   type ZodAllTags,
 } from "@/validators/combat";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 describe("opening quest effects", () => {
   it("resolves failed/successful stuns before the first action without mutating content", () => {

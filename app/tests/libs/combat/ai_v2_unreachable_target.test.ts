@@ -9,7 +9,7 @@ import {
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
 import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
-import { makeJutsu, makeTag } from "./helpers/battleScenario";
+import { makeJutsu, makeTag } from "../../setup/combat";
 
 /**
  * An AI whose chosen action turns out to be impossible must fall through to its

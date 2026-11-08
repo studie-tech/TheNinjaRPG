@@ -17,7 +17,7 @@ import {
   makeBattleUser,
   makeCompleteBattle,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const PROFILE = "lazy-path-profile";
 const endTurn = { conditions: [], action: ActionEndTurn.parse({}) };

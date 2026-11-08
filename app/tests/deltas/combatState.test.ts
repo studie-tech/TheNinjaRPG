@@ -3,7 +3,7 @@ import type { RouterOutputs } from "@/app/_trpc/client";
 import superjson from "superjson";
 import { buildCombatStateUpdate, captureCombatStateUpdate, getCombatEventUpdate, getCombatStateUpdate } from "@/deltas/combat";
 import { maskBattle } from "@/libs/combat/masking";
-import { makeBattleUser, makeCompleteBattle, makeEffect } from "../libs/combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../setup/combat";
 
 const fixture = () => makeCompleteBattle({ id: "battle", version: 1, usersState: [
   makeBattleUser("actor", { strength: 1234567 }),

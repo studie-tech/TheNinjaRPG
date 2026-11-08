@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { alignBattle } from "@/libs/combat/turn";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import type { BattleUserState } from "@/libs/combat/types";
 
 /**

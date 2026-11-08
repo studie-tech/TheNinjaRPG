@@ -23,7 +23,7 @@ import {
   makeDamageEffect,
   makeDamageModifierEffect as makeModifierEffect,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 /**
  * Damage of an attacker-to-defender hit through the full packet pipeline. Unset options mean

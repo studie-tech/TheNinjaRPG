@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { availableUserActions } from "@/libs/combat/actions";
 import { ElementalSealTag } from "@/validators/combat";
-import { makeBattleUser, makeBattleUserItem, makeEffect, makeInjectBattle, makeJutsu, makeTag, makeWeapon } from "./helpers/battleScenario";
+import { makeBattleUser, makeBattleUserItem, makeEffect, makeInjectBattle, makeJutsu, makeTag, makeWeapon } from "../../setup/combat";
 
 const fixture = () => {
   const jutsus = [

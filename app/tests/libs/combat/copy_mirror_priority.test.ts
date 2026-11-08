@@ -14,7 +14,7 @@ import type { BattleUserState, UserEffect } from "@/libs/combat/types";
 import { selectTransferEffects } from "@/libs/combat/util";
 import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
 import type { ZodAllTags } from "@/validators/combat";
-import { makeBattleUser, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeEffect } from "../../setup/combat";
 
 const SELF = "self-1";
 const OPP = "opp-1";

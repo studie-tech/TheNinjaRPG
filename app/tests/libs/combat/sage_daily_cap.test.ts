@@ -5,7 +5,7 @@ import {
 } from "@/drizzle/constants";
 import { handleInjectedJutsus } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import { makeInjectBattle } from "./helpers/battleScenario";
+import { makeInjectBattle } from "../../setup/combat";
 import { activateSageMode, makeSageMode, makeSageUser } from "./helpers/sageMode";
 import type { BattleUserState } from "@/libs/combat/types";
 

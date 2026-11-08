@@ -20,7 +20,7 @@ import {
   insertClans,
 } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "../../../libs/combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../../setup/combat";
 import { barrier, withoutTransactions, interceptExecute } from "../../../setup/statements";
 
 const state = async () => (await getTestDatabase()).query.village.findFirst({ where: eq(village.id, "v1") });

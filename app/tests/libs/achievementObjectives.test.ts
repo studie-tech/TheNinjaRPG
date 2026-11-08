@@ -6,7 +6,7 @@ import { getReward } from "@/libs/quest/rewards";
 import { CombatActivityTasks, getObjectiveSchema, objectiveImageMap, QuestCompletionTasks, QuestTracker } from "@/validators/objectives";
 import type { AllObjectiveTask } from "@/validators/objectives";
 import { trackerQuest, trackerUser } from "../setup/quest";
-import { makeBattleUser, makeCompleteBattle } from "./combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 
 const completionTasks = [...Object.values(QuestCompletionTasks), "dungeons_completed", "raids_completed"] as const;
 const tasks = [...CombatActivityTasks, ...completionTasks];

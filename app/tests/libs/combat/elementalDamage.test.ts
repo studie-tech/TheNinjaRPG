@@ -9,7 +9,7 @@ import type { BattleUserJutsu, CombatQueryUser, GroundEffect, UserEffect } from 
 import { getBattleGrid } from "@/libs/combat/util";
 import { ElementalDamageTag, JutsuValidatorRawSchema } from "@/validators/combat";
 import { updateUserPreferencesSchema } from "@/validators/user";
-import { makeBattleUser, makeCompleteBattle, makeEffect, makeJutsu, makeTag } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle, makeEffect, makeJutsu, makeTag } from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const sourceUser = (patch: Partial<CombatQueryUser> = {}): CombatQueryUser =>

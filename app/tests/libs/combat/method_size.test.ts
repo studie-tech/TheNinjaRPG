@@ -6,7 +6,7 @@ import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { insertAction } from "@/libs/combat/actions";
 import { DamageTag, JutsuValidatorRawSchema, JutsuValidator, MoveTag } from "@/validators/combat";
 import { methodSizeSchema } from "@/validators/methodSize";
-import { makeCombatAction, makeCompleteBattle, makeBattleUser, makeJutsu } from "./helpers/battleScenario";
+import { makeCombatAction, makeCompleteBattle, makeBattleUser, makeJutsu } from "../../setup/combat";
 
 const actor = () => makeBattleUser("actor", { longitude: 0, latitude: 0, direction: "left" });
 const setup = () => {

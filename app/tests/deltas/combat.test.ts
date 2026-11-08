@@ -8,7 +8,7 @@ import { effectiveMasteries } from "@/libs/mastery";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { ZodAllTags } from "@/validators/combat";
-import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 import { observeProfile, soloPveResult } from "../libs/combat/helpers/profileCache";
 import { maskBattle } from "@/libs/combat/masking";
 import { QuestTracker } from "@/validators/objectives";

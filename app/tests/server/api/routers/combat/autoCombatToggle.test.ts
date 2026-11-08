@@ -5,7 +5,7 @@ import { AutoBattleTypes, ManualStartBattleTypes, type BattleType } from "@/driz
 import { battle, userData } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
-import { makeCompleteBattle, makeUser } from "../../../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../../../setup/combat";
 import { insertUsers } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 

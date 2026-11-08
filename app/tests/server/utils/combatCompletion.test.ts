@@ -3,7 +3,7 @@ import type { Redis } from "@upstash/redis";
 import * as Sentry from "@sentry/nextjs";
 import type { CombatResult, ReturnedBattle } from "@/libs/combat/types";
 import { createCombatCompletionStore } from "@/server/utils/combatCompletion";
-import { makeCompleteBattle } from "../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle } from "../../setup/combat";
 import { hasLocalRedis, startLocalRedis } from "../../setup/localRedis";
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });

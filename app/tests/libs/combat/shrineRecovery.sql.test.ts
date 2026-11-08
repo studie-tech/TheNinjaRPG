@@ -14,7 +14,7 @@ import {
   recordQueries,
   resetTables,
 } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 describeWithDatabase("war shrine recovery", () => {
   beforeEach(async () => resetTables(war));

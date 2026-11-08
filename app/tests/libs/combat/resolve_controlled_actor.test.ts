@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { resolveControlledActorId } from "@/libs/combat/turn";
-import { makeBattleUser } from "./helpers/battleScenario";
+import { makeBattleUser } from "../../setup/combat";
 import type { BattleUserState, ReturnedBattle } from "@/libs/combat/types";
 
 // isAi matters here: resolveControlledActorId projects getTurnControl, and a

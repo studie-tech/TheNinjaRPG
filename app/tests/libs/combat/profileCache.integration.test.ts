@@ -23,7 +23,7 @@ import {
 } from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { observeProfile, soloPveResult } from "./helpers/profileCache";
 
 describeWithDatabase("combat profile cache inventory confirmation", () => {

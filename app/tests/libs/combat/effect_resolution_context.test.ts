@@ -1,7 +1,7 @@
 import { describe, expect, it, spyOn } from "bun:test";
 import { applyEffects, applySingleEffect } from "@/libs/combat/process";
 import type { ActionEffect, CompleteBattle, Consequence, GroundEffect, UserEffect } from "@/libs/combat/types";
-import { makeBattleUser, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 const resolve = (battle: CompleteBattle, effect: UserEffect, resolved: UserEffect[] = []) => {
   const users = structuredClone(battle.usersState);

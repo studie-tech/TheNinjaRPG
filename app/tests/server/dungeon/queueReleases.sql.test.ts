@@ -16,7 +16,7 @@ import { ObjectiveReward } from "@/validators/rewards";
 import { combatRouter } from "@/server/api/routers/combat";
 import { tournamentRouter } from "@/server/api/routers/tournament";
 import { Pusher } from "@/libs/pusher";
-import { makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../setup/combat";
 import { dungeonContent } from "../../setup/dungeon";
 import {
   insertPetSpecies,

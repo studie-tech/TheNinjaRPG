@@ -15,7 +15,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const USER_ID = "raid-user";
 const QUEST_ID = "raid-quest-1";

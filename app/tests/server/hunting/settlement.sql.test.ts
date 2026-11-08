@@ -5,7 +5,7 @@ import { updateBattle, updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
 import type { PusherClient } from "@/libs/pusher";
 import { settleHuntingBattle } from "@/server/utils/hunting";
-import { makeBattleUserItem, makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";
+import { makeBattleUserItem, makeCompleteBattle, makeUser } from "../../setup/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import { huntingBattleState } from "../../setup/hunting";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";

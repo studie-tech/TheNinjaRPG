@@ -10,7 +10,7 @@ import {
   wound,
 } from "@/libs/combat/tags";
 import type { Consequence, GroundEffect, UserEffect } from "@/libs/combat/types";
-import { makeBattleUser, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeEffect } from "../../setup/combat";
 
 const ROUND = 5;
 const target = () => makeBattleUser("defender", { longitude: 1, latitude: 1 });

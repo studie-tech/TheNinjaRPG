@@ -3,7 +3,7 @@ import { Grid, rectangle } from "honeycomb-grid";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { defineHex } from "@/libs/hexgrid";
 import { combatHighlightEdges, combatHighlightPlan } from "@/libs/rendering/combatHighlights";
-import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const fixture = () => {
   const grid = new Grid(defineHex(), rectangle({ width: 3, height: 3 }));

@@ -6,7 +6,7 @@ import {
 import type { SageMode } from "@/drizzle/schema";
 import { availableUserActions } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import { makeInjectBattle } from "./helpers/battleScenario";
+import { makeInjectBattle } from "../../setup/combat";
 import { makeSageMode, makeSageUser } from "./helpers/sageMode";
 
 /** AP cost of the Activation action after `availableUserActions` builds it. */

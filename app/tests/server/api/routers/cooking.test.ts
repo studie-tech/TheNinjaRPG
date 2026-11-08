@@ -18,7 +18,7 @@ import {
   IncreaseStatTag,
 } from "@/validators/combat";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
-import { makeCompleteBattle } from "../../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle } from "../../../setup/combat";
 import {
   insertItems,
   insertUserItems,

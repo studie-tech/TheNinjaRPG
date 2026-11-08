@@ -1,4 +1,4 @@
-import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "./combat";
 export const competitor = { id: "village:home", name: "Home", villageId: "home", clanId: null };
 
 /**

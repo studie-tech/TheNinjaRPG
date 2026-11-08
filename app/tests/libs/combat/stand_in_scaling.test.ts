@@ -3,7 +3,7 @@ import type { Battle } from "@/drizzle/schema";
 import { dmgConfig } from "@/libs/combat/constants";
 import { clone, damageBarrier, damageCalc, summon } from "@/libs/combat/tags";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
-import { makeBattleUser, makeDamageEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeDamageEffect } from "../../setup/combat";
 
 // Level 100 with the experience of 8 x 450k per-type stats and 4 x 200k generals,
 // merged into one 450k offence and defence.

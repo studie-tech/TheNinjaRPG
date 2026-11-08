@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { buildCombatTrackerTasks } from "@/libs/combat/settlement";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 
 const makeResult = (didWin: number): CombatResult =>

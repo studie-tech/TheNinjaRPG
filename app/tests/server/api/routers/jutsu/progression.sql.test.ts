@@ -8,7 +8,7 @@ import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { profileRouter } from "@/server/api/routers/profile";
 import { insertJutsus, insertUsers, jutsuRow } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../../../setup/combat";
 
 const USER = "elite-progression";
 /** Minimal catalog definition shared by training, evolution and combat fixtures. */

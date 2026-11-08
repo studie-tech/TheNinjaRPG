@@ -27,7 +27,7 @@ import { fetchMasterySources } from "@/queries/skillTree";
 import { itemRouter } from "@/server/api/routers/item";
 import { countUserReads } from "../../../setup/userReads";
 import { beforeStatements, overrideQuery } from "../../../setup/statements";
-import { makeEffect } from "../../../libs/combat/helpers/battleScenario";
+import { makeEffect } from "../../../setup/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import {

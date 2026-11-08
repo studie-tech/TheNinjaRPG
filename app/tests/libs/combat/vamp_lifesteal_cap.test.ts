@@ -9,7 +9,7 @@ import {
   makeDamageEffect,
   makeEffect,
   makeShield,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const ROUND = 3;
 

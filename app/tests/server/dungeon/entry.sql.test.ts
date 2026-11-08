@@ -9,7 +9,7 @@ import { wakeQueuedUser } from "@/queries/profile";
 import { updateUserDataForGetRankedPvpQueue } from "@/queries/pvprank";
 import { rollbackDungeonStart, expireDungeonRun } from "@/server/utils/dungeon";
 import { commitDungeonEntryBattle, dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
-import { makeCompleteBattle } from "../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle } from "../../setup/combat";
 import { dungeonBattleState, dungeonContent } from "../../setup/dungeon";
 import { insertItems, insertUserItems, insertUsers, insertUserPets } from "../../setup/factories";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";

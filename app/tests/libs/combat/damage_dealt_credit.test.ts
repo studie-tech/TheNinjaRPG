@@ -8,7 +8,7 @@ import {
   makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 /**
  * Regression tests for damage_dealt attribution: every source of HP loss must

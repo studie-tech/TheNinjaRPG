@@ -25,7 +25,7 @@ import { queueEnergy } from "../../setup/queues";
 import {
   callerFor, describeWithDatabase, getTestDatabase, resetTables,
 } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const userId = "pet-owner";
 const petId = "owned-pet";

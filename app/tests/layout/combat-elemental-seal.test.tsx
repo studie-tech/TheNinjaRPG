@@ -8,7 +8,7 @@ import {
   makeEffect,
   makeInjectBattle,
   makeTag,
-} from "../libs/combat/helpers/battleScenario";
+} from "../setup/combat";
 
 afterEach(() => cleanup());
 

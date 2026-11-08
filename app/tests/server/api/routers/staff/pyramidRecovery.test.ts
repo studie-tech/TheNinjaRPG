@@ -11,7 +11,7 @@ import { staffRouter } from "@/server/api/routers/staff";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { DialogObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { makeBattleUser, makeCompleteBattle } from "../../../../libs/combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../../../setup/combat";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
 import { huntingBattleState, huntingHabitatContent } from "../../../../setup/hunting";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";

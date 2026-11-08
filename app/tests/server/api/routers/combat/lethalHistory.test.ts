@@ -8,7 +8,7 @@ import type { BattleUpdate } from "@/libs/combat/log";
 import { buildCombatStateUpdate, captureCombatStateUpdate, getCombatEventUpdate, type CombatStateUpdate } from "@/deltas/combat";
 import { maskBattle } from "@/libs/combat/masking";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
-import { makeEffect } from "../../../../libs/combat/helpers/battleScenario";
+import { makeEffect } from "../../../../setup/combat";
 import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";

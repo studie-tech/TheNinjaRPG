@@ -11,7 +11,7 @@ import * as preferences from "@/hooks/combat";
 import * as tutorial from "@/hooks/tutorial";
 import type { BattleState } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
-import { makeCompleteBattle, makeEffect, makeUser } from "../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeEffect, makeUser } from "../../setup/combat";
 import { dungeonBattleState } from "../../setup/dungeon";
 import * as battleHotkeys from "@/hooks/useBattleHotkeys";
 import * as mediaQuery from "@/hooks/useMediaQuery";
