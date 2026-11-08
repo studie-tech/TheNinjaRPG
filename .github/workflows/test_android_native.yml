@@ -42,11 +42,37 @@ jobs:
             mobile/android/gradle/wrapper/gradle-wrapper.properties
             mobile/bun.lock
       - name: Install locked native dependencies
-        run: bun install --frozen-lockfile
+        # Icon generation uses Sharp's install-time binaries; sync and Java tests do not.
+        run: bun install --frozen-lockfile --ignore-scripts
         working-directory: mobile
       - name: Generate Android plugin projects
         run: bunx cap sync android
         working-directory: mobile
+      - name: Install verified Gradle distribution
+        # The release API avoids reliance on browser-download redirects. Keep the
+        # version and checksum in the wrapper properties as the single source of truth.
+        working-directory: mobile/android
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          properties=gradle/wrapper/gradle-wrapper.properties
+          archive=$(sed -n 's|^distributionUrl=.*/||p' "$properties")
+          version=${archive#gradle-}
+          version=${version%-*.zip}
+          checksum=$(sed -n 's/^distributionSha256Sum=//p' "$properties")
+          destination="$RUNNER_TEMP/gradle"
+          mkdir -p "$destination"
+          for attempt in 1 2 3; do
+            if gh release download "v$version" --repo gradle/gradle-distributions \
+              --pattern "$archive" --dir "$destination" --clobber; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep "$((attempt * 2))"
+          done
+          echo "$checksum  $destination/$archive" | shasum -a 256 -c -
+          unzip -q "$destination/$archive" -d "$destination"
+          echo "$destination/gradle-$version/bin" >> "$GITHUB_PATH"
       - name: Run native unit tests
-        run: ./gradlew :app:testDebugUnitTest --console=plain
+        run: gradle :app:testDebugUnitTest --console=plain
         working-directory: mobile/android

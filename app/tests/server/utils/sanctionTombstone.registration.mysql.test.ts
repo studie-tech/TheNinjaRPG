@@ -997,6 +997,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
     const { entered, release } = prepareAndPause();
     const pending = register("Concurrent");
     await entered;
+    // The publication CAS uses MySQL's clock, which Bun's controlled clock cannot advance.
     await new Promise((resolve) =>
       setTimeout(resolve, Math.max(0, endsAt.getTime() - Date.now()) + 30),
     );

@@ -46,8 +46,15 @@ jobs:
             .github
       - uses: ./.github/actions/setup-app
       - name: run tests
-        run: bun run test
         working-directory: ./app
+        run: bun run test
+        env:
+          TEST_LOG_DIR: ${{ runner.temp }}/test-logs
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: test-logs
+          path: ${{ runner.temp }}/test-logs
       - uses: actions/cache@v6
         with:
           path: app/.next/cache

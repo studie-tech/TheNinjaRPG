@@ -6,7 +6,7 @@ import { createCombatCompletionStore } from "@/server/utils/combatCompletion";
 import { makeCompleteBattle } from "../../libs/combat/helpers/battleScenario";
 import { hasLocalRedis, startLocalRedis } from "../../setup/localRedis";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 const fixture = () => {
   const entries = new Map<string, unknown>();
@@ -30,16 +30,25 @@ it("retains a dated arena result for ten minutes and permits repeated display wi
 });
 
 it("never returns another player's receipt or a different battle's result", async () => {
+  vi.useFakeTimers();
   const { store, battle, result } = fixture();
   await store.save("player", battle, result);
-  expect(await store.recover("other-player", battle.id)).toBeNull();
-  expect(await store.recover("player", "another-battle")).toBeNull();
+  const otherPlayer = store.recover("other-player", battle.id);
+  await Promise.resolve();
+  vi.runAllTimers();
+  expect(await otherPlayer).toBeNull();
+  const otherBattle = store.recover("player", "another-battle");
+  await Promise.resolve();
+  vi.runAllTimers();
+  expect(await otherBattle).toBeNull();
 });
 
 it("waits for the winning request to finish publishing its result", async () => {
+  vi.useFakeTimers();
   const { store, battle, result } = fixture();
   const recovery = store.recover("player", battle.id);
   await store.save("player", battle, result);
+  vi.runAllTimers();
   expect(await recovery).toEqual({ battle, result });
 });
 

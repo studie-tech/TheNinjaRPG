@@ -35,7 +35,8 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 
 | Command | Purpose |
 | --- | --- |
-| `make test` | Bun native test API; real-SQL suites skip without explicit throwaway DB configuration |
+| `make test` | Up to four isolated Bun shards; real-SQL suites skip without explicit throwaway DB configuration |
+| `make test-serial` | One Bun process for debugging |
 | `make lint` | Biome |
 | `make typecheck` | Native TypeScript |
 | `make check` | Biome linting, formatting and TypeScript diagnostics |
@@ -46,7 +47,13 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 | `make dev-status` / `make dev-down` | Inspect URL/logs / stop only this worktree's managed server |
 | `make dev-user REQUEST=<file>` / `make dev-call USER_KEY=<key> ENDPOINT=<path>` | Provision disposable users / call tRPC through the authenticated broker |
 
-SQL tests **truncate every table in the configured database**. Use only a throwaway DB; CI supplies one. Local dev-stack invocation:
+`make test` uses up to four available CPUs; `TEST_SHARDS=2 make test` selects fewer workers.
+With SQL enabled, it creates unique schemas per invocation and shard, then drops those schemas
+after success, failure or SIGINT/SIGTERM. The configured credentials need CREATE/DROP DATABASE
+permission on the throwaway MySQL server. Simultaneous runs and worktrees have separate schemas.
+
+Direct `bun test` and `make test-serial` **truncate every table in the configured database**.
+Use only a throwaway DB; CI supplies one. Local dev-stack invocation:
 
 ```sh
 TEST_MYSQL_ALLOW_DESTRUCTIVE=1 TEST_MYSQL_URL='mysql://root:placeholder@127.0.0.1:3307/tnr_test' make test

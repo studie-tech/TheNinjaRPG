@@ -71,7 +71,7 @@ const updateUser = vi.fn<(patch: UserPatch | undefined, mutation?: UserUpdateOpt
 beforeEach(() => {
   prepareUserUpdate.mockReset().mockReturnValue(17);
   updateUser.mockReset().mockResolvedValue(false);
-  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true, animationFrame: true });
   timeDiff = 0;
   previousBattleEnabled = PET_BATTLE_CONFIG.enabled;
   PET_BATTLE_CONFIG.enabled = true;
@@ -141,10 +141,17 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   queryClient.clear();
+  vi.useRealTimers();
   PET_BATTLE_CONFIG.enabled = previousBattleEnabled;
   vi.restoreAllMocks();
   restoreBrowserGlobals();
 });
+
+const advanceClock = async (milliseconds: number) => {
+  await act(async () => { vi.advanceTimersByTime(milliseconds); });
+  // Query observers publish on a task after their transport's promise resolves.
+  await act(async () => { vi.advanceTimersByTime(0); });
+};
 
 const mount = (strictMode = false) => {
   const trpcClient = fakeTrpcClient(async (path, input) => {
@@ -503,14 +510,19 @@ it.each(["hospital", "rejection", "success"] as const)("keeps redraw %s feedback
 });
 
 it("waits for the server retry time before offering another redraw", async () => {
+  vi.useFakeTimers({ now: Date.now() });
   data = { ...data, generationRetryAt: new Date(Date.now() + 2000) };
   const view = mount();
-  await view.findByRole("tab", { name: "Settings" });
+  await advanceClock(0);
   selectTab(view, "Settings");
-  await view.findByText(/Appearance retry available in/);
+  expect(view.getByText(/Appearance retry available in/)).toBeDefined();
   expect(view.queryByRole("button", { name: "Regenerate appearance" })).toBeNull();
   data = { ...data, generationRetryAt: null };
-  await view.findByRole("button", { name: "Regenerate appearance" }, { timeout: 4000 });
+  await advanceClock(1990);
+  expect(view.queryByRole("button", { name: "Regenerate appearance" })).toBeNull();
+  expect(getPet).toHaveBeenCalledTimes(1);
+  await advanceClock(10);
+  expect(view.getByRole("button", { name: "Regenerate appearance" })).toBeDefined();
   expect(getPet).toHaveBeenCalledTimes(2);
 });
 
@@ -643,6 +655,7 @@ it.each([0, 3])("keeps evolution and artwork recoverable with %s attempts left i
 });
 
 it("polls a server-side cosmetic replacement while keeping accepted art and care usable", async () => {
+  vi.useFakeTimers({ now: Date.now() });
   const pending = { ...data.pet!, generationStatus: "GENERATING" as const };
   data = { ...data, pet: pending, pets: [pending], generationRetryAt: new Date(Date.now() + 60000) };
   getPet.mockImplementation(() => {
@@ -651,12 +664,17 @@ it("polls a server-side cosmetic replacement while keeping accepted art and care
     return snapshot;
   });
   const view = mount();
-  await view.findByRole("img", { name: "Miso" });
+  await advanceClock(0);
+  expect(view.getByRole("img", { name: "Miso" })).toBeDefined();
   expect(mealButton(view).disabled).toBe(false);
   selectTab(view, "Settings");
   expect(view.getByRole("status").textContent).toBe("Creating appearance... Your current appearance stays usable.");
   expect(view.queryByRole("button", { name: "Regenerate appearance" })).toBeNull();
-  await view.findByRole("button", { name: "Regenerate appearance" }, { timeout: 4500 });
+  await advanceClock(2990);
+  expect(getPet).toHaveBeenCalledTimes(1);
+  expect(view.queryByRole("button", { name: "Regenerate appearance" })).toBeNull();
+  await advanceClock(10);
+  expect(view.getByRole("button", { name: "Regenerate appearance" })).toBeDefined();
   expect(getPet).toHaveBeenCalledTimes(2);
 });
 
