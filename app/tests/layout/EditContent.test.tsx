@@ -694,7 +694,8 @@ const CoordinateDraftForm = () => {
   );
 };
 
-describe("effect drafts", () => {
+/** Radix selects and popovers need these browser APIs; installs them around each test of a describe. */
+const withRadixBrowserGlobals = () => {
   beforeEach(() => {
     installBrowserGlobals({ resizeObserver: true, scrollIntoView: true, animationFrame: true });
   });
@@ -702,6 +703,10 @@ describe("effect drafts", () => {
     cleanup();
     restoreBrowserGlobals();
   });
+};
+
+describe("effect drafts", () => {
+  withRadixBrowserGlobals();
 
   it("shows normal size for a legacy effect in the mass editor", () => {
     const legacy = DamageTag.parse({});
@@ -865,6 +870,8 @@ describe("effect drafts", () => {
       );
     },
   );
+});
+
 const CacheDraftForm = () => {
   const [effects, setEffects] = useState<ZodAllTags[]>([
     NonCombatConsumeRewardTag.parse({ reward_money: 17, rewardMode: "weightedCache", weightedCache: {
@@ -887,6 +894,7 @@ const CompanionRewardDraftForm = () => {
 };
 
 describe("companion reward editing", () => {
+  withRadixBrowserGlobals();
   afterEach(() => vi.restoreAllMocks());
   it.each([
     ["Fox", "fox-id"],
@@ -919,6 +927,7 @@ const VillageRewardForm = () => {
 };
 
 describe("village membership reward", () => {
+  withRadixBrowserGlobals();
   it("offers the starter villages as a selector and keeps the chosen key", async () => {
     const view = render(<VillageRewardForm />);
     const field = view.getByText("Village Membership").closest<HTMLElement>('[data-slot="form-item"]');
@@ -941,6 +950,7 @@ const VariantTokenDraftForm =({ variantId }: { variantId: string | null }) => {
 };
 
 describe("variant token effect drafts", () => {
+  withRadixBrowserGlobals();
   afterEach(() => vi.restoreAllMocks());
   it.each([
     ["Any variant", "red-variant", null],
@@ -999,6 +1009,7 @@ const ItemQuestDraftForm = ({ initial }: { initial: ZodAllTags }) => {
 };
 
 describe("Special quest item drafts", () => {
+  withRadixBrowserGlobals();
   beforeEach(() => {
     vi.spyOn(names, "useQuery").mockReturnValue({ data: [
       { id: "special-quest", name: "Special contract", questType: "special" },
@@ -1052,6 +1063,7 @@ describe("Special quest item drafts", () => {
 });
 
 describe("weighted cache effect drafts", () => {
+  withRadixBrowserGlobals();
   beforeEach(() => {
     vi.spyOn(names, "useQuery").mockReturnValue({ data: [{ id: "pill", name: "Chakra Pill" }] } as never);
   });
@@ -1166,5 +1178,4 @@ describe("weighted cache effect drafts", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ rewardMode: "standard", reward_money: 17, weightedCache: { rolls: [{ count: 1, probability: 4900 }, { count: 2, probability: 5000 }], tiers: [{ entries: [{ items: [{ itemId: "replacement", quantity: 1 }] }] }] } });
   });
-});
 });
