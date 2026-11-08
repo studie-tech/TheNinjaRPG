@@ -145,3 +145,15 @@ it("clears the reason once a retry succeeds", async () => {
   fireEvent.submit(form);
   await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
 });
+
+it("renders one trait picker per attribute slot, each showing its own choice", () => {
+  const { view } = mount(async () => ({ success: true, message: "OK" }));
+  const pickers = [1, 2, 3].map((slot) => {
+    const label = view.getByText(`Trait ${slot}`);
+    const trigger = label.closest("[data-slot='form-item'], div")?.querySelector("button[role='combobox']");
+    if (!trigger) throw new Error(`Trait ${slot} has no picker`);
+    return trigger.textContent;
+  });
+  expect(pickers.every(Boolean)).toBe(true);
+  expect(new Set(pickers).size).toBe(3);
+});
