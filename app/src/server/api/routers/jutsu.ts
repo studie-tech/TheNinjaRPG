@@ -799,7 +799,9 @@ export const jutsuRouter = createTRPCRouter({
           `Jutsu is being used by: ${blockers.join(", ")}. So you cannot delete it.`,
         );
       }
-      // Mutate
+      // Mutate. The transaction locks the jutsu row before re-reading its reskins, the
+      // lock reskin creation takes first, so no reskin can link to it between the child
+      // check and the delete; a plain DELETE ... NOT EXISTS would check a stale snapshot.
       const deleted = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
           await selectJutsuForDelete(tx, input);

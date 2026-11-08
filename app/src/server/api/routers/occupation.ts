@@ -513,6 +513,9 @@ export const occupationRouter = createTRPCRouter({
         : undefined;
       const craftedAt = getNextUserSnapshotAt(user.updatedAt);
       const materialConflict = Symbol("materialConflict");
+      // One statement cannot claim the user snapshot, debit a variable set of material
+      // stacks (each an UPDATE or a DELETE) and insert the crafted stacks and cooking job;
+      // a failed debit must roll back the claim and every earlier debit.
       try {
         const craftCommitted = await ctx.drizzle.transaction(async (tx) => {
           const claimResult = await updateUserDataForCraftItem(
