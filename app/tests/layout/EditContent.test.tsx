@@ -958,6 +958,46 @@ describe("variant token effect drafts", () => {
   });
 });
 
+const cacheItem = {
+  ...ItemValidator.parse({
+    name: "Cache item", image: "cache.webp", description: "Cache", battleDescription: "",
+    stackSize: 10, chakraCost: 0, healthCost: 0, staminaCost: 0,
+    healthCostReducePerLvl: 0, chakraCostReducePerLvl: 0, staminaCostReducePerLvl: 0,
+    actionCostPerc: 100, maxImbueNumber: 1, maxDurability: 100, hidden: false,
+    cooldown: 0, cost: 1, repsCost: 0, seichiSilverCost: 0, range: 0, maxEquips: 0,
+    method: "SINGLE", target: "SELF", itemType: "CONSUMABLE", weaponType: "NONE",
+    destroyOnUse: true, preventBattleUsage: true,
+    rarity: "COMMON", slot: "NONE", expireFromStoreAt: null, bloodlineId: null,
+    farmYieldItemId: null, farmExtractSeedItemId: null, crystalTargetTypes: null,
+    effects: [NonCombatConsumeRewardTag.parse({ reward_money: 17, rewardMode: "weightedCache", weightedCache: {
+      version: 1, displayName: "Pill Cache", rolls: [{ count: 1, probability: 5000 }, { count: 2, probability: 5000 }],
+      tiers: [{ name: "Common", probability: 10_000, entries: [{ items: [{ itemId: "pill", quantity: 2 }] }] }],
+    } })],
+  }),
+  id: "cache", craftingRequirements: [],
+} as unknown as Item & { craftingRequirements: [] };
+
+const ItemCacheDraftForm = ({ item = cacheItem }: { item?: typeof cacheItem }) => {
+  const { effects, setEffects, handleItemSubmit, isUpdating } = useItemEditForm(item, async () => undefined);
+  const validEffects = (effects?.filter((effect): effect is ZodAllTags => effect !== undefined) ?? []) as ZodAllTags[];
+  return <>
+    <EffectFormWrapper type="item" idx={0} tag={validEffects[0]!} effects={validEffects} setEffects={setEffects} availableTags={["noncombatconsumereward"]} submitLoading={isUpdating} />
+    <button type="button" onClick={() => void handleItemSubmit()}>Save item</button>
+  </>;
+};
+
+const ItemQuestDraftForm = ({ initial }: { initial: ZodAllTags }) => {
+  const [item] = useState(() => ({ ...cacheItem, effects: [initial] }));
+  const { effects, setEffects, handleItemSubmit, isUpdating } = useItemEditForm(item, async () => undefined);
+  const validEffects = effects as ZodAllTags[];
+  const tag = validEffects[0]!;
+  return <>
+    <EffectFormWrapper key={tag.type} type="item" idx={0} tag={tag} effects={validEffects} setEffects={setEffects} availableTags={["heal", "noncombatquest"]} submitLoading={isUpdating} />
+    <button type="button" onClick={() => void handleItemSubmit()}>Save item</button>
+    <button type="button" onClick={() => setEffects([{ ...tag, questId: "" } as ZodAllTags])}>Clear quest draft</button>
+  </>;
+};
+
 describe("Special quest item drafts", () => {
   beforeEach(() => {
     vi.spyOn(names, "useQuery").mockReturnValue({ data: [
@@ -1127,44 +1167,4 @@ describe("weighted cache effect drafts", () => {
     expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ rewardMode: "standard", reward_money: 17, weightedCache: { rolls: [{ count: 1, probability: 4900 }, { count: 2, probability: 5000 }], tiers: [{ entries: [{ items: [{ itemId: "replacement", quantity: 1 }] }] }] } });
   });
 });
-
-const cacheItem = {
-  ...ItemValidator.parse({
-    name: "Cache item", image: "cache.webp", description: "Cache", battleDescription: "",
-    stackSize: 10, chakraCost: 0, healthCost: 0, staminaCost: 0,
-    healthCostReducePerLvl: 0, chakraCostReducePerLvl: 0, staminaCostReducePerLvl: 0,
-    actionCostPerc: 100, maxImbueNumber: 1, maxDurability: 100, hidden: false,
-    cooldown: 0, cost: 1, repsCost: 0, seichiSilverCost: 0, range: 0, maxEquips: 0,
-    method: "SINGLE", target: "SELF", itemType: "CONSUMABLE", weaponType: "NONE",
-    destroyOnUse: true, preventBattleUsage: true,
-    rarity: "COMMON", slot: "NONE", expireFromStoreAt: null, bloodlineId: null,
-    farmYieldItemId: null, farmExtractSeedItemId: null, crystalTargetTypes: null,
-    effects: [NonCombatConsumeRewardTag.parse({ reward_money: 17, rewardMode: "weightedCache", weightedCache: {
-      version: 1, displayName: "Pill Cache", rolls: [{ count: 1, probability: 5000 }, { count: 2, probability: 5000 }],
-      tiers: [{ name: "Common", probability: 10_000, entries: [{ items: [{ itemId: "pill", quantity: 2 }] }] }],
-    } })],
-  }),
-  id: "cache", craftingRequirements: [],
-} as unknown as Item & { craftingRequirements: [] };
-
-const ItemCacheDraftForm = ({ item = cacheItem }: { item?: typeof cacheItem }) => {
-  const { effects, setEffects, handleItemSubmit, isUpdating } = useItemEditForm(item, async () => undefined);
-  const validEffects = (effects?.filter((effect): effect is ZodAllTags => effect !== undefined) ?? []) as ZodAllTags[];
-  return <>
-    <EffectFormWrapper type="item" idx={0} tag={validEffects[0]!} effects={validEffects} setEffects={setEffects} availableTags={["noncombatconsumereward"]} submitLoading={isUpdating} />
-    <button type="button" onClick={() => void handleItemSubmit()}>Save item</button>
-  </>;
-};
-
-const ItemQuestDraftForm = ({ initial }: { initial: ZodAllTags }) => {
-  const [item] = useState(() => ({ ...cacheItem, effects: [initial] }));
-  const { effects, setEffects, handleItemSubmit, isUpdating } = useItemEditForm(item, async () => undefined);
-  const validEffects = effects as ZodAllTags[];
-  const tag = validEffects[0]!;
-  return <>
-    <EffectFormWrapper key={tag.type} type="item" idx={0} tag={tag} effects={validEffects} setEffects={setEffects} availableTags={["heal", "noncombatquest"]} submitLoading={isUpdating} />
-    <button type="button" onClick={() => void handleItemSubmit()}>Save item</button>
-    <button type="button" onClick={() => setEffects([{ ...tag, questId: "" } as ZodAllTags])}>Clear quest draft</button>
-  </>;
-};
 });
