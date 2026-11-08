@@ -22,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   AUCTION_HOUSE_MIN_LEVEL,

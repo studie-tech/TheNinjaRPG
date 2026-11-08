@@ -11,7 +11,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
-import type { z } from "zod";
 import { api, type RouterInputs } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

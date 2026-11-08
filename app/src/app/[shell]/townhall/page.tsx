@@ -9,7 +9,6 @@ import {
   UsersRound,
 } from "lucide-react";
 import type React from "react";
-import type { Village } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { AllianceHall } from "@/layout/AllianceHall";
 import BanInfo from "@/layout/BanInfo";

@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Village } from "@/drizzle/schema";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import { KageDefense } from "@/layout/KageDefense";
