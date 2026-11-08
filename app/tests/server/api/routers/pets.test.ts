@@ -833,37 +833,31 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     ["2026-10-18T01:00:00.000Z", "2026-10-18T04:00:00.000Z", "2026-10-18T02:00:00.000Z"],
     ["2026-10-17T23:30:00.000Z", "2026-10-18T02:30:00.000Z", "2026-10-18T00:30:00.000Z"],
   ] as const) it.each([false, true])(`enforces the three-hour deadline after ${fedAt} with companion combat enabled=%s`, async (battleEnabled) => {
-    const previousBattleEnabled = PET_BATTLE_CONFIG.enabled;
-    try {
-      PET_BATTLE_CONFIG.enabled = battleEnabled;
-      const lastFedAt = new Date(fedAt);
-      const availableAt = new Date(nextFeedAt);
-      setSystemTime(new Date(duringCooldown));
-      const database = await getTestDatabase();
-      await readyPet(database, { lastFedAt });
-      await mealStack();
-      const caller = callerForDatabase(petsRouter, userId, database);
-      const input = { petId, userItemId: "meal-stack", expectedQuantity: 2 };
-      expect(await caller.getPet()).toEqual(expect.objectContaining({ canFeed: false, feedAvailableAt: availableAt }));
-      const original = await readPet(database);
-      expect(await caller.feedPet(input)).toMatchObject({ success: false,
-        message: `Feed this companion once every ${PET_FEED_COOLDOWN_HOURS} hours. Wait until its next feeding is available.` });
-      setSystemTime(new Date(availableAt.getTime() - 1));
-      expect((await caller.feedPet(input)).success).toBe(false);
-      expect(await readPet(database)).toEqual(original);
-      expect((await readOwner(database))?.petExperience).toBe(0);
-      expect((await database.query.userItem.findFirst())?.quantity).toBe(2);
-      setSystemTime(availableAt);
-      expect(await caller.getPet()).toMatchObject({ canFeed: true, feedAvailableAt: null });
-      expect((await caller.feedPet(input)).success).toBe(true);
-      expect((await readPet(database))?.lastFedAt).toEqual(availableAt);
-      expect((await readOwner(database))?.petExperience).toBe(PET_FEED_EXPERIENCE_BY_RARITY.COMMON);
-      expect((await database.query.userItem.findFirst())?.quantity).toBe(1);
-      expect((await caller.feedPet({ ...input, expectedQuantity: 1 })).success).toBe(false);
-    } finally {
-      PET_BATTLE_CONFIG.enabled = previousBattleEnabled;
-      setSystemTime();
-    }
+    PET_BATTLE_CONFIG.enabled = battleEnabled;
+    const lastFedAt = new Date(fedAt);
+    const availableAt = new Date(nextFeedAt);
+    setSystemTime(new Date(duringCooldown));
+    const database = await getTestDatabase();
+    await readyPet(database, { lastFedAt });
+    await mealStack();
+    const caller = callerForDatabase(petsRouter, userId, database);
+    const input = { petId, userItemId: "meal-stack", expectedQuantity: 2 };
+    expect(await caller.getPet()).toEqual(expect.objectContaining({ canFeed: false, feedAvailableAt: availableAt }));
+    const original = await readPet(database);
+    expect(await caller.feedPet(input)).toMatchObject({ success: false,
+      message: `Feed this companion once every ${PET_FEED_COOLDOWN_HOURS} hours. Wait until its next feeding is available.` });
+    setSystemTime(new Date(availableAt.getTime() - 1));
+    expect((await caller.feedPet(input)).success).toBe(false);
+    expect(await readPet(database)).toEqual(original);
+    expect((await readOwner(database))?.petExperience).toBe(0);
+    expect((await database.query.userItem.findFirst())?.quantity).toBe(2);
+    setSystemTime(availableAt);
+    expect(await caller.getPet()).toMatchObject({ canFeed: true, feedAvailableAt: null });
+    expect((await caller.feedPet(input)).success).toBe(true);
+    expect((await readPet(database))?.lastFedAt).toEqual(availableAt);
+    expect((await readOwner(database))?.petExperience).toBe(PET_FEED_EXPERIENCE_BY_RARITY.COMMON);
+    expect((await database.query.userItem.findFirst())?.quantity).toBe(1);
+    expect((await caller.feedPet({ ...input, expectedQuantity: 1 })).success).toBe(false);
   });
 
   it("feeds a parked companion into its own bank, which follows it when activated", async () => {
