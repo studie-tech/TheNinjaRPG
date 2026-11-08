@@ -128,8 +128,6 @@ export default function DiscordLinksStaffPage() {
   );
 }
 
-type StaffLink = RouterOutputs["discord"]["searchLinks"]["links"][number];
-
 const DiscordLinkCard: React.FC<{ link: StaffLink; canManage: boolean }> = ({
   link,
   canManage,
@@ -288,3 +286,5 @@ const DiscordLinkCard: React.FC<{ link: StaffLink; canManage: boolean }> = ({
     </div>
   );
 };
+
+type StaffLink = RouterOutputs["discord"]["searchLinks"]["links"][number];
