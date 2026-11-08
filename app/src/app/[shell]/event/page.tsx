@@ -71,7 +71,7 @@ export default function NotifyUsers() {
   );
 }
 
-export const EventGainMultiplierPanel: React.FC<{
+const EventGainMultiplierPanel: React.FC<{
   setting: ChangeSettingSchema["setting"];
   title: string;
   subtitle: string;

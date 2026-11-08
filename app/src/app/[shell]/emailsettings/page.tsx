@@ -32,18 +32,18 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 
-// Helper function to format dates
-const formatDate = (date: Date | string): string => {
-  return format(new Date(date), "MMM d, yyyy h:mm a");
-};
-
-export const EmailReminderSkeleton: React.FC = () => {
+export default function EmailReminderPage() {
   return (
-    <Skeleton className="flex h-[400px] w-full items-start justify-center">
-      <Loader explanation="Loading email reminder settings" />
-    </Skeleton>
+    <ContentBox
+      title="Email Reminder Settings"
+      subtitle="Manage your email notification preferences"
+    >
+      <Suspense fallback={<EmailReminderSkeleton />}>
+        <EmailReminderContent />
+      </Suspense>
+    </ContentBox>
   );
-};
+}
 
 // Component that uses useSearchParams
 const EmailReminderContent: React.FC = () => {
@@ -223,15 +223,15 @@ const EmailReminderContent: React.FC = () => {
   );
 };
 
-export default function EmailReminderPage() {
+const EmailReminderSkeleton: React.FC = () => {
   return (
-    <ContentBox
-      title="Email Reminder Settings"
-      subtitle="Manage your email notification preferences"
-    >
-      <Suspense fallback={<EmailReminderSkeleton />}>
-        <EmailReminderContent />
-      </Suspense>
-    </ContentBox>
+    <Skeleton className="flex h-[400px] w-full items-start justify-center">
+      <Loader explanation="Loading email reminder settings" />
+    </Skeleton>
   );
-}
+};
+
+// Helper function to format dates
+const formatDate = (date: Date | string): string => {
+  return format(new Date(date), "MMM d, yyyy h:mm a");
+};

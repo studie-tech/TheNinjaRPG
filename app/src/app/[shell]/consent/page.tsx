@@ -79,7 +79,7 @@ export default function CookieConsent() {
   );
 }
 
-export const CookieConsentSkeleton: React.FC = () => (
+const CookieConsentSkeleton: React.FC = () => (
   <Skeleton className="flex h-[2000px] w-full items-start justify-center">
     <Loader explanation="Loading consent data" />
   </Skeleton>
