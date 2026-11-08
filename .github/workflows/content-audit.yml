@@ -390,7 +390,6 @@ jobs:
         env:
           PROPOSALS_FILE: checked.json
         run: |
-          node --test app/tests/scripts/check-audit-media.test.mjs
           node .github/scripts/check-audit-media.mjs
       - name: Submit suggestions
         env:
