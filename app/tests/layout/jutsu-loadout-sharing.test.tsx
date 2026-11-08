@@ -94,6 +94,24 @@ describe("jutsu loadout sharing dialogs", () => {
     }
   });
 
+  it("sends one preview for a same-tick double activation and keeps the dialog open until it settles", async () => {
+    let settle: (value: Awaited<ReturnType<Props["onPreview"]>>) => void = () => undefined;
+    const onPreview = vi.fn<Props["onPreview"]>(() => new Promise((resolve) => { settle = resolve; }));
+    const { view } = setup({ onPreview });
+    fireEvent.click(view.getByRole("button", { name: "Import" }));
+    fireEvent.change(view.getByLabelText("Loadout text"), { target: { value: exportJutsuLoadout(["strike"]) } });
+    const previewButton = view.getByRole("button", { name: "Preview" });
+    fireEvent.click(previewButton);
+    fireEvent.click(previewButton);
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect((view.getByRole("button", { name: "Please wait…" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(view.getByRole("dialog"), { key: "Escape" });
+    expect(view.getByRole("dialog")).toBeDefined();
+    settle({ success: true, preview });
+    await waitFor(() => expect(view.getByText("Swift strike")).toBeDefined());
+    expect((view.getByRole("button", { name: "Preview" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("shows recoverable mutation errors, clears pending state and requires another preview", async () => {
     const onReplace = vi.fn(async () => ({ success: false, message: "Loadout changed. Preview again." }));
     const { view, props, pasteAndPreview } = setup({ onReplace });
