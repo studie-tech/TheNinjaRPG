@@ -1,5 +1,16 @@
 import { createHash } from "node:crypto";
-import { and, eq, gte, inArray, like, ne, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  like,
+  ne,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -2703,28 +2714,10 @@ export const jutsuDatabaseFilter = (
     // Exclude: Single-value cols
     // ---------------------------
     ...(input?.excludedJutsuTypes?.length
-      ? input.excludedJutsuTypes.map((excludedType) =>
-          ne(
-            jutsu.jutsuType,
-            excludedType as
-              | "NORMAL"
-              | "EVENT"
-              | "CLAN"
-              | "SPECIAL"
-              | "BLOODLINE"
-              | "FORBIDDEN"
-              | "LOYALTY"
-              | "AI",
-          ),
-        )
+      ? [notInArray(jutsu.jutsuType, input.excludedJutsuTypes)]
       : []),
     ...(input?.excludedClassifications?.length
-      ? input.excludedClassifications.map((c) =>
-          ne(
-            jutsu.statClassification,
-            c as "None" | "Ninjutsu" | "Genjutsu" | "Taijutsu" | "Bukijutsu",
-          ),
-        )
+      ? [notInArray(jutsu.statClassification, input.excludedClassifications)]
       : []),
     ...(input?.excludedRarities?.length
       ? input.excludedRarities.map((r) =>
@@ -2732,49 +2725,13 @@ export const jutsuDatabaseFilter = (
         )
       : []),
     ...(input?.excludedRanks?.length
-      ? input.excludedRanks.map((r) =>
-          ne(
-            jutsu.requiredRank,
-            r as
-              | "STUDENT"
-              | "GENIN"
-              | "CHUNIN"
-              | "JONIN"
-              | "ELITE JONIN"
-              | "ELDER"
-              | "NONE",
-          ),
-        )
+      ? [notInArray(jutsu.requiredRank, input.excludedRanks)]
       : []),
     ...(input?.excludedMethods?.length
-      ? input.excludedMethods.map((m) =>
-          ne(
-            jutsu.method,
-            m as
-              | "ALL"
-              | "SINGLE"
-              | "AOE_CIRCLE_SPAWN"
-              | "AOE_LINE_SHOOT"
-              | "AOE_WALL_SHOOT"
-              | "AOE_CIRCLE_SHOOT"
-              | "AOE_SPIRAL_SHOOT",
-          ),
-        )
+      ? [notInArray(jutsu.method, input.excludedMethods)]
       : []),
     ...(input?.excludedTargets?.length
-      ? input.excludedTargets.map((t) =>
-          ne(
-            jutsu.target,
-            t as
-              | "SELF"
-              | "OTHER_USER"
-              | "OPPONENT"
-              | "ALLY"
-              | "CHARACTER"
-              | "GROUND"
-              | "EMPTY_GROUND",
-          ),
-        )
+      ? [notInArray(jutsu.target, input.excludedTargets)]
       : []),
 
     // --------------------------

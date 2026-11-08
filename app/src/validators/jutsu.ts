@@ -44,12 +44,12 @@ export const jutsuFilteringSchema = z.object({
   // ------------------------------
   // "Exclusion" fields
   // ------------------------------
-  excludedJutsuTypes: z.array(z.string()).optional(),
-  excludedClassifications: z.array(z.string()).optional(),
+  excludedJutsuTypes: z.array(z.enum(JutsuTypes)).optional(),
+  excludedClassifications: z.array(z.enum(StatTypes)).optional(),
   excludedRarities: z.array(z.string()).optional(),
-  excludedRanks: z.array(z.string()).optional(),
-  excludedMethods: z.array(z.string()).optional(),
-  excludedTargets: z.array(z.string()).optional(),
+  excludedRanks: z.array(z.enum(UserRanks)).optional(),
+  excludedMethods: z.array(z.enum(AttackMethods)).optional(),
+  excludedTargets: z.array(z.enum(AttackTargets)).optional(),
   excludedAppear: z.array(z.string()).optional(),
   excludedAppearSfx: z.array(z.string()).optional(),
   excludedDisappear: z.array(z.string()).optional(),
