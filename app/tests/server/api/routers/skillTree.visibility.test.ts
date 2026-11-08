@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { MySqlDialect, QueryBuilder } from "drizzle-orm/mysql-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { UserRoles, type UserRole } from "@/drizzle/constants";
+import { actionLog } from "@/drizzle/schema";
 import * as socials from "@/libs/socials";
 import { dataRouter } from "@/server/api/routers/data";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
@@ -28,6 +29,7 @@ const skill = (
 ) => ({
   id,
   name: id,
+  image: `${id}.webp`,
   hidden,
   folder,
   folderId: folder.id,
@@ -249,12 +251,37 @@ describe("hidden skill-tree permissions", () => {
       success: true,
     });
     expect(drizzle.update).toHaveBeenCalledTimes(1);
+    expect(drizzle.insert).toHaveBeenCalledTimes(1);
+    expect(drizzle.insert).toHaveBeenCalledWith(actionLog);
     expect(socials.callDiscordContent).toHaveBeenCalledTimes(1);
     expect(socials.callDiscordContent).toHaveBeenCalledWith(
       "staff-fixture",
-      "Updated skill: public",
-      [expect.stringContaining('Updated: {"folderId":null}')],
+      "public",
+      expect.arrayContaining([expect.stringContaining('Updated: {"folderId":null}')]),
+      visible.image,
     );
+  });
+
+  it("logs a deleted skill to the audit trail", async () => {
+    const { drizzle, skills, user } = setup("CONTENT");
+    const remove = vi.fn().mockResolvedValue({ rowsAffected: 1 });
+    Object.assign(drizzle, { delete: vi.fn(() => ({ where: remove })) });
+    Object.assign(drizzle.query, {
+      item: { findMany: vi.fn().mockResolvedValue([]) },
+      jutsu: { findMany: vi.fn().mockResolvedValue([]) },
+    });
+    drizzle.query.userData.findFirst.mockReset();
+    drizzle.query.userData.findFirst.mockResolvedValueOnce(user).mockResolvedValueOnce(null);
+    drizzle.query.skillTree.findFirst.mockResolvedValue(skills[0]);
+    drizzle.query.skillTree.findMany.mockResolvedValue([]);
+    drizzle.query.userSkill.findMany.mockResolvedValue([]);
+
+    expect(await invoke("delete", drizzle, { id: "public" })).toMatchObject({
+      success: true,
+    });
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(drizzle.insert).toHaveBeenCalledTimes(1);
+    expect(drizzle.insert).toHaveBeenCalledWith(actionLog);
   });
 
   it.each([null, ...excluded, "CONTENT", "OWNER"] as (UserRole | null)[])(

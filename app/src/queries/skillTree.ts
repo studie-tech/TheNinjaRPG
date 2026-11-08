@@ -338,6 +338,39 @@ export const deleteSkillTreeForDelete = (
   input: { id: string },
 ) => client.delete(skillTree).where(eq(skillTree.id, input.id));
 
+/** Build the `actionLog` insert for `update`. */
+export const insertActionLogForUpdate = (
+  client: Pick<DrizzleClient, "insert">,
+  ctx: { userId: string },
+  diff: string[],
+  entry: { id: string; name: string; image: string },
+) =>
+  client.insert(actionLog).values({
+    id: nanoid(),
+    userId: ctx.userId,
+    tableName: "skillTree",
+    changes: diff,
+    relatedId: entry.id,
+    relatedMsg: `Update: ${entry.name}`,
+    relatedImage: entry.image,
+  });
+
+/** Build the `actionLog` insert for `delete`. */
+export const insertActionLogForDelete = (
+  client: Pick<DrizzleClient, "insert">,
+  ctx: { userId: string },
+  entry: { id: string; name: string; image: string },
+) =>
+  client.insert(actionLog).values({
+    id: nanoid(),
+    userId: ctx.userId,
+    tableName: "skillTree",
+    changes: [`Deleted: ${entry.name}`],
+    relatedId: entry.id,
+    relatedMsg: `Delete: ${entry.name}`,
+    relatedImage: entry.image,
+  });
+
 /**
  * Build the `userData` update for `resetSkillPoints`, using predicates on `userId`,
  * `monthlySkillResets`, `reputationPoints`.

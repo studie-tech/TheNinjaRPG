@@ -30,9 +30,11 @@ import {
   findSkillTreeForUpdate,
   findSkillWithFolderById,
   findUserDataForUpdate,
+  insertActionLogForDelete,
   insertActionLogForResetAllUsersSkillPoints,
   insertActionLogForResetAllUsersSkillPoints2,
   insertActionLogForResetSkillPoints,
+  insertActionLogForUpdate,
   insertSkillTreeFolderForCreateFolder,
   insertSkillTreeForCreate,
   insertUserSkillForPurchaseSkill,
@@ -465,8 +467,9 @@ export const skillTreeRouter = createTRPCRouter({
         if (result.rowsAffected !== 1)
           return errorResponse("Tier changed or was purchased. Refresh and try again");
 
-        await callDiscordContent(user.username, `Updated skill: ${skill.name}`, [
-          diff.join(", "),
+        await Promise.all([
+          insertActionLogForUpdate(ctx.drizzle, ctx, diff, skill),
+          callDiscordContent(user.username, skill.name, diff, skill.image),
         ]);
       }
 
@@ -513,7 +516,10 @@ export const skillTreeRouter = createTRPCRouter({
         return errorResponse("Cannot delete skill that users have purchased");
       }
 
-      await deleteSkillTreeForDelete(ctx.drizzle, input);
+      await Promise.all([
+        deleteSkillTreeForDelete(ctx.drizzle, input),
+        insertActionLogForDelete(ctx.drizzle, ctx, skill),
+      ]);
 
       await callDiscordContent(user.username, `Deleted skill: ${skill.name}`, [
         "skill deleted",
