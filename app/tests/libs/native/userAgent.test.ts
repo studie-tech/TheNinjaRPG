@@ -5,6 +5,7 @@ import {
   isOutdatedNativeClient,
   parseNativeUserAgent,
 } from "@/libs/native/userAgent";
+import { toInternalPath, toSafePath } from "@/libs/native/deepLink";
 
 const IOS_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 " +
@@ -74,8 +75,7 @@ describe("isOutdatedNativeClient", () => {
 });
 
 describe("toInternalPath", () => {
-  it("accepts the site and its subdomains", async () => {
-    const { toInternalPath } = await import("@/libs/native/deepLink");
+  it("accepts the site and its subdomains", () => {
     expect(toInternalPath("https://www.theninja-rpg.com/battlearena")).toBe(
       "/battlearena",
     );
@@ -84,23 +84,20 @@ describe("toInternalPath", () => {
     );
   });
 
-  it("rejects a host that merely ends with ours", async () => {
+  it("rejects a host that merely ends with ours", () => {
     // The whole point: endsWith would open eviltheninja-rpg.com inside the app, which is
     // an attacker-controlled page rendered as if it were the game.
-    const { toInternalPath } = await import("@/libs/native/deepLink");
     expect(toInternalPath("https://eviltheninja-rpg.com/steal")).toBeNull();
     expect(toInternalPath("https://theninja-rpg.com.attacker.dev/steal")).toBeNull();
   });
 
-  it("rejects non-https and malformed links", async () => {
-    const { toInternalPath } = await import("@/libs/native/deepLink");
+  it("rejects non-https and malformed links", () => {
     expect(toInternalPath("http://www.theninja-rpg.com/profile")).toBeNull();
     expect(toInternalPath("javascript:alert(1)")).toBeNull();
     expect(toInternalPath("not a url")).toBeNull();
   });
 
-  it("cannot be talked into a protocol-relative path that leaves the app", async () => {
-    const { toInternalPath, toSafePath } = await import("@/libs/native/deepLink");
+  it("cannot be talked into a protocol-relative path that leaves the app", () => {
     // Handed to the router as-is, "//evil.com/x" navigates to https://evil.com/x.
     expect(toInternalPath("https://www.theninja-rpg.com//evil.com/x")).toBe(
       "/evil.com/x",

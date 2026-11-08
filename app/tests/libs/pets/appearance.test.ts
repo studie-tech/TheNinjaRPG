@@ -62,7 +62,7 @@ describe("companion provider pipeline", () => {
 
   it.each([
     ["a semi-transparent haze", () => cutout(180, 1024, 30)],
-    ["an opaque backdrop", () => sharp({ create: { width: 1024, height: 1024, channels: 3, background: "white" } }).png().toBuffer()],
+    ["an opaque backdrop", () => opaqueImage(1024, "png")],
   ])("cuts out a GPT sprite with %s using 851-labs on the neutral backdrop", async (_label, source) => {
     vi.spyOn(replicate, "generateSpriteGPT").mockResolvedValue(await source());
     const clean = await cutout(180, 1024);
@@ -76,7 +76,7 @@ describe("companion provider pipeline", () => {
   });
 
   it("rejects a GPT sprite whose fallback cutout still keeps its background", async () => {
-    const opaque = await sharp({ create: { width: 1024, height: 1024, channels: 3, background: "white" } }).png().toBuffer();
+    const opaque = await opaqueImage(1024, "png");
     vi.spyOn(replicate, "generateSpriteGPT").mockResolvedValue(opaque);
     vi.spyOn(replicate, "removeBackgroundToBuffer").mockResolvedValue(await cutout(180, 1024, 30));
     await expect(generatePetAppearance(pet, "GPT", async () => {})).rejects.toThrow("not removed cleanly");
@@ -85,7 +85,7 @@ describe("companion provider pipeline", () => {
   });
 
   it("rejects an opaque Nano Banana cutout without another cutout attempt", async () => {
-    const opaque = await sharp({ create: { width: 128, height: 128, channels: 3, background: "white" } }).webp().toBuffer();
+    const opaque = await opaqueImage(128, "webp");
     const nano = vi.spyOn(replicate, "generateNanoBananaImage").mockResolvedValue(opaque);
     const fallback = vi.spyOn(replicate, "removeBackgroundToBuffer");
     await expect(generatePetAppearance(pet, "NANO_BANANA", async () => {})).rejects.toThrow("transparent background");
@@ -228,7 +228,7 @@ describe("companion provider pipeline", () => {
         .mockResolvedValueOnce({ isNsfw: false, reason: "Safe cutout" })
         .mockResolvedValueOnce({ isNsfw: true, reason: "Unsafe correction" });
     } else {
-      edit.mockResolvedValueOnce(await cutout()).mockResolvedValueOnce(await sharp({ create: { width: 128, height: 128, channels: 3, background: "white" } }).webp().toBuffer());
+      edit.mockResolvedValueOnce(await cutout()).mockResolvedValueOnce(await opaqueImage(128, "webp"));
     }
     await expect(generatePetAppearance(pet, "NANO_BANANA", async () => {})).rejects.toThrow(failure === "unsafe" ? "content review" : "transparent background");
     expect(edit).toHaveBeenCalledTimes(2);
@@ -371,6 +371,9 @@ describe("companion provider pipeline", () => {
   });
 });
 
+/** A square, fully opaque white image: a sprite whose background was never removed. */
+const opaqueImage = (size: number, format: "png" | "webp") =>
+  sharp({ create: { width: size, height: size, channels: 3, background: "white" } })[format]().toBuffer();
 const stubReview = () => vi.spyOn(quality, "classifyPetAppearanceImage").mockResolvedValue(acceptedQuality);
 
 const stubModeration = () => vi.spyOn(moderator, "classifyNsfwImage").mockResolvedValue({ isNsfw: false, reason: "Safe" });

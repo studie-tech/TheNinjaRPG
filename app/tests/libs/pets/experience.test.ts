@@ -29,6 +29,11 @@ import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScen
 
 const userId = "pet-owner";
 const petId = "owned-pet";
+/** The pet task that keeps the companion away on a contract. */
+const awayTask = {
+  petId, questId: "contract", questHistoryId: "attempt", startedAt: 1,
+  questVersion: 1, finishesAt: 2,
+};
 const readUser = async () => {
   const user = await (await getTestDatabase()).query.userData.findFirst({
     where: eq(userData.userId, userId),
@@ -111,10 +116,7 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
   it("withholds accompanying XP while the active pet is away and resumes on its return", async () => {
     const database = await getTestDatabase();
     await insertPet();
-    await database.update(userData).set({ petTask: {
-      petId, questId: "contract", questHistoryId: "attempt", startedAt: 1,
-      questVersion: 1, finishesAt: 2,
-    } }).where(eq(userData.userId, userId));
+    await database.update(userData).set({ petTask: awayTask }).where(eq(userData.userId, userId));
     await grantExperience(17);
     expect((await readUser()).petExperience).toBe(23);
     await database.update(userData).set({ petTask: null }).where(eq(userData.userId, userId));
@@ -212,10 +214,7 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
     async (state) => {
       const client = await getTestDatabase();
       if (state !== "missing") await insertPet({ battleEnabled: state !== "disabled" });
-      if (state === "away") await client.update(userData).set({ petTask: {
-        petId, questId: "contract", questHistoryId: "attempt", startedAt: 1,
-        questVersion: 1, finishesAt: 2,
-      } }).where(eq(userData.userId, userId));
+      if (state === "away") await client.update(userData).set({ petTask: awayTask }).where(eq(userData.userId, userId));
       const before = await readUser();
       await updateRewards({ client, user: before, reason: "Quest complete",
         rewards: PostProcessedRewardSchema.parse({ reward_pet_experience: 100 }),
