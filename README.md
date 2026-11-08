@@ -44,16 +44,6 @@ the manifests without changing files. Review upstream migration guides and rebas
 versioned patches before running `make check` and `make test`. Native dependencies
 also require `make mobile-sync` and the checks documented in `mobile/README.md`.
 
-The PlanetScale client factory in `app/src/server/dbClient.ts` adapts Drizzle's
-parameterized calls to driver 2's SQL-only `execute` API. It binds values with
-`sql-escaper` in UTC on the client and its transaction objects, retaining Drizzle's
-result modes and transaction handling. Use the factory when constructing clients
-for Drizzle; `tests/server/planetscaleDriver.test.ts` covers the integration.
-
-Content editor hooks explicitly register parent-owned object fields even while
-their conditional editors are hidden. This preserves dirty tracking and validation
-when clearing targeting drafts; see `tests/hooks/coordinate-targeting.test.tsx`.
-
 The [dev-server skill](.agents/skills/tnr-dev-server/SKILL.md) documents disposable users,
 authenticated endpoint calls, Chrome coordination and Codex local environments.
 
@@ -68,12 +58,10 @@ shows all five designs. Their identifiers are `default`, `pixel`,
 `app/src/libs/gameLayouts.ts` defines their names, appearance, frame selection and
 responsive behavior; every game frame uses the same controller and layout preference.
 
-Visitors without a saved choice receive the existing welcome design. To set a different
-welcome default, set `NEXT_PUBLIC_WELCOME_LAYOUT` to any layout identifier
-and restart the dev server or rebuild the deployment. A visitor's explicit choice takes
-precedence. Unset or unrecognized values preserve the existing default. Search crawlers
-continue to receive the default public shell. Signing out returns to the public welcome
-page and preserves the selected layout.
+`NEXT_PUBLIC_WELCOME_LAYOUT` sets the welcome design for visitors without a saved choice;
+unset or unrecognized values use `default`, and changes need a dev server restart or a
+rebuild. A visitor's explicit choice takes precedence. Search crawlers receive the default
+public shell. Signing out returns to the public welcome page with the selected layout.
 
 # :books: Learning Guide
 

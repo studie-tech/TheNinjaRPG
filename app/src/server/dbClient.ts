@@ -6,7 +6,12 @@ import {
 } from "@planetscale/database";
 import { escapeId, escape as escapeValue, type SqlValue } from "sql-escaper";
 
-/** Keep Drizzle's parameterized calls at the boundary to the SQL-only HTTP driver. */
+/**
+ * Keep Drizzle's parameterized calls at the boundary to the SQL-only HTTP driver: values
+ * are bound with `sql-escaper` in UTC on the client and its transaction objects, keeping
+ * Drizzle's result modes and transaction handling. Construct every Drizzle client through
+ * this factory; `tests/server/dbClient.test.ts` covers the integration.
+ */
 export const createPlanetScaleClient = (config: Config) => {
   const client = new Client(config);
   const transaction = client.transaction.bind(client);
