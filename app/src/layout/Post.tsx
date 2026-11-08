@@ -1,5 +1,5 @@
 import type React from "react";
-import type { TavernColorPreset } from "@/drizzle/constants";
+import type { FederalStatus, TavernColorPreset, UserRole } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import Link from "@/layout/Link";
 import { showUserRank } from "@/libs/profile";
@@ -59,7 +59,7 @@ const Post: React.FC<PostProps> = (props) => {
       break;
   }
 
-  const { userColor, userRole, titleColor } = getPostUserClasses(
+  const { userColor, userRole, roleTextColor, titleColor } = getPostUserClasses(
     props.user,
     props.tavernStyling,
   );
@@ -80,17 +80,13 @@ const Post: React.FC<PostProps> = (props) => {
             {props.user.displayTitle}
           </span>
         )}
-        {props.user.villageKageId &&
-          props.user.villageKageId === props.user.userId &&
-          (props.user?.isOutlaw ? (
-            <span className="m-1 rounded-md bg-slate-300 p-1 text-black">Daimyo</span>
-          ) : (
-            <span className="m-1 rounded-md bg-slate-300 p-1 text-black">Kage</span>
-          ))}
+        {props.user.villageKageId && props.user.villageKageId === props.user.userId && (
+          <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
+            {props.user?.isOutlaw ? "Daimyo" : "Kage"}
+          </span>
+        )}
         {props.user?.role !== "USER" && (
-          <span
-            className={`${userRole} m-1 rounded-md p-1 ${["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN", "HEAD_EVENT", "HEAD_CONTENT", "HEAD_BALANCE"].includes(props.user.role) ? "text-black" : ""}`}
-          >
+          <span className={`${userRole} m-1 rounded-md p-1 ${roleTextColor}`}>
             {capitalizeFirstLetter(props.user?.role)}
           </span>
         )}
@@ -173,85 +169,14 @@ export const getPostUserClasses = (
   user: PostProps["user"],
   tavernStyling?: boolean,
 ) => {
-  let userColor = "text-popover-foreground";
-  let userRole = "bg-slate-300";
+  const roleStyle = user && user.role !== "USER" ? ROLE_STYLES[user.role] : undefined;
+  let userColor =
+    roleStyle?.name ??
+    (user && FEDERAL_NAME_STYLES[user.federalStatus]) ??
+    "text-popover-foreground";
+  const userRole = roleStyle?.badge ?? "bg-slate-300";
+  const roleTextColor = roleStyle?.badgeText ?? "";
   let titleColor = "bg-gray-500 text-white";
-  switch (user?.federalStatus) {
-    case "NORMAL":
-      userColor =
-        "bg-linear-to-r from-sky-500 via-sky-300 to-sky-500 bg-clip-text text-transparent font-black";
-      break;
-    case "SILVER":
-      userColor =
-        "bg-linear-to-r from-gray-500 via-gray-400 to-gray-500 bg-clip-text text-transparent font-black";
-      break;
-    case "GOLD":
-      userColor =
-        "bg-linear-to-r from-amber-600 via-amber-400 to-amber-600 bg-clip-text text-transparent font-black";
-      break;
-  }
-
-  switch (user?.role) {
-    case "MODERATOR":
-    case "JR_MODERATOR":
-      userColor =
-        "bg-linear-to-r from-green-800 via-green-500 to-green-800 bg-clip-text text-transparent";
-      userRole = "bg-green-500";
-      break;
-    case "HEAD_MODERATOR":
-      userColor =
-        "bg-linear-to-r from-emerald-700 via-emerald-500 to-emerald-700 bg-clip-text text-transparent";
-      userRole = "bg-emerald-700";
-      break;
-    case "HEAD_EVENT":
-      userColor =
-        "bg-linear-to-r from-pink-600 via-pink-500 to-pink-600 bg-clip-text text-transparent";
-      userRole = "bg-pink-600";
-      break;
-    case "EVENT":
-      userColor =
-        "bg-linear-to-r from-orange-600 via-orange-500 to-orange-600 bg-clip-text text-transparent";
-      userRole = "bg-orange-500";
-      break;
-    case "HEAD_CONTENT":
-    case "HEAD_BALANCE":
-      userColor =
-        "bg-linear-to-r from-sky-600 via-sky-500 to-sky-600 bg-clip-text text-transparent";
-      userRole = "bg-sky-600";
-      break;
-    case "CONTENT":
-    case "BALANCE":
-      userColor =
-        "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent";
-      userRole = "bg-purple-400";
-      break;
-    case "CODER":
-      userColor =
-        "bg-linear-to-r from-pink-500 via-pink-300 to-pink-500 bg-clip-text text-transparent";
-      userRole = "bg-pink-300";
-      break;
-    case "CONTENT-ADMIN":
-      userColor =
-        "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent";
-      userRole = "bg-purple-400";
-      break;
-    case "EVENT-ADMIN":
-      userColor =
-        "bg-linear-to-r from-rose-500 via-rose-300 to-rose-500 bg-clip-text text-transparent";
-      userRole = "bg-rose-300";
-      break;
-    case "MODERATOR-ADMIN":
-      userColor =
-        "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent";
-      userRole = "bg-red-400";
-      break;
-    case "CODING-ADMIN":
-    case "OWNER":
-      userColor =
-        "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent";
-      userRole = "bg-red-400";
-      break;
-  }
 
   if (user) {
     const tavernColors = resolveTavernColorClasses({
@@ -265,5 +190,96 @@ export const getPostUserClasses = (
     userColor = tavernColors.usernameClass;
     titleColor = tavernColors.titleClass;
   }
-  return { userColor, userRole, titleColor };
+  return { userColor, userRole, roleTextColor, titleColor };
+};
+
+/** Supporter username gradients; staff role styles take precedence. */
+const FEDERAL_NAME_STYLES: Partial<Record<FederalStatus, string>> = {
+  NORMAL:
+    "bg-linear-to-r from-sky-500 via-sky-300 to-sky-500 bg-clip-text text-transparent font-black",
+  SILVER:
+    "bg-linear-to-r from-gray-500 via-gray-400 to-gray-500 bg-clip-text text-transparent font-black",
+  GOLD: "bg-linear-to-r from-amber-600 via-amber-400 to-amber-600 bg-clip-text text-transparent font-black",
+};
+
+/** Username gradient, badge background and badge text colour per staff role. */
+const ROLE_STYLES: Record<
+  Exclude<UserRole, "USER">,
+  { name: string; badge: string; badgeText: "text-black" | "" }
+> = {
+  MODERATOR: {
+    name: "bg-linear-to-r from-green-800 via-green-500 to-green-800 bg-clip-text text-transparent",
+    badge: "bg-green-500",
+    badgeText: "text-black",
+  },
+  JR_MODERATOR: {
+    name: "bg-linear-to-r from-green-800 via-green-500 to-green-800 bg-clip-text text-transparent",
+    badge: "bg-green-500",
+    badgeText: "text-black",
+  },
+  HEAD_MODERATOR: {
+    name: "bg-linear-to-r from-emerald-700 via-emerald-500 to-emerald-700 bg-clip-text text-transparent",
+    badge: "bg-emerald-700",
+    badgeText: "",
+  },
+  HEAD_EVENT: {
+    name: "bg-linear-to-r from-pink-600 via-pink-500 to-pink-600 bg-clip-text text-transparent",
+    badge: "bg-pink-600",
+    badgeText: "text-black",
+  },
+  EVENT: {
+    name: "bg-linear-to-r from-orange-600 via-orange-500 to-orange-600 bg-clip-text text-transparent",
+    badge: "bg-orange-500",
+    badgeText: "",
+  },
+  HEAD_CONTENT: {
+    name: "bg-linear-to-r from-sky-600 via-sky-500 to-sky-600 bg-clip-text text-transparent",
+    badge: "bg-sky-600",
+    badgeText: "text-black",
+  },
+  HEAD_BALANCE: {
+    name: "bg-linear-to-r from-sky-600 via-sky-500 to-sky-600 bg-clip-text text-transparent",
+    badge: "bg-sky-600",
+    badgeText: "text-black",
+  },
+  CONTENT: {
+    name: "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent",
+    badge: "bg-purple-400",
+    badgeText: "",
+  },
+  BALANCE: {
+    name: "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent",
+    badge: "bg-purple-400",
+    badgeText: "",
+  },
+  CODER: {
+    name: "bg-linear-to-r from-pink-500 via-pink-300 to-pink-500 bg-clip-text text-transparent",
+    badge: "bg-pink-300",
+    badgeText: "text-black",
+  },
+  "CONTENT-ADMIN": {
+    name: "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent",
+    badge: "bg-purple-400",
+    badgeText: "",
+  },
+  "EVENT-ADMIN": {
+    name: "bg-linear-to-r from-rose-500 via-rose-300 to-rose-500 bg-clip-text text-transparent",
+    badge: "bg-rose-300",
+    badgeText: "text-black",
+  },
+  "MODERATOR-ADMIN": {
+    name: "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent",
+    badge: "bg-red-400",
+    badgeText: "",
+  },
+  "CODING-ADMIN": {
+    name: "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent",
+    badge: "bg-red-400",
+    badgeText: "",
+  },
+  OWNER: {
+    name: "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent",
+    badge: "bg-red-400",
+    badgeText: "",
+  },
 };
