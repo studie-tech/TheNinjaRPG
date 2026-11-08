@@ -49,6 +49,7 @@ import { isPetAppearanceReady } from "@/libs/pets/progression";
 import {
   isPetTaskAttempt,
   isPetTaskContract,
+  PET_TASK_IN_PROGRESS_MESSAGE,
   petTaskDispatchBlockMessage,
 } from "@/libs/pets/tasks";
 import { eliteJoninExamBlockMessage } from "@/libs/profile";
@@ -2156,8 +2157,7 @@ const petTaskReturnBlockMessage = (
     return "This contract attempt changed. Return your companion without rewards.";
   if (owner.status !== "AWAKE" || owner.battleId)
     return "Wake up and finish combat before collecting task rewards.";
-  if (task.finishesAt > Date.now())
-    return "Your companion is still working on this task.";
+  if (task.finishesAt > Date.now()) return PET_TASK_IN_PROGRESS_MESSAGE;
   return null;
 };
 

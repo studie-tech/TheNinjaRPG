@@ -19,6 +19,7 @@ import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   isPetTaskContract,
+  PET_TASK_IN_PROGRESS_MESSAGE,
   PET_TASK_MIN_RANK_NAME,
   petTaskDispatchBlockMessage,
 } from "@/libs/pets/tasks";
@@ -89,8 +90,7 @@ export const PetTasks = ({ petId }: { petId: string }) => {
             </p>
           </div>
           {task.data?.blockMessage &&
-            task.data.blockMessage !==
-              "Your companion is still working on this task." && (
+            task.data.blockMessage !== PET_TASK_IN_PROGRESS_MESSAGE && (
               <p className="text-sm">{task.data.blockMessage}</p>
             )}
           <div className="flex flex-wrap gap-2">

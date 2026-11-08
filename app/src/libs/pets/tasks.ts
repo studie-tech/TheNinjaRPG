@@ -13,8 +13,12 @@ import {
 } from "@/libs/pets/progression";
 import type { PetTask } from "@/validators/petTasks";
 
-/** Name of the lowest companion rank that can take tasks. */
+/** Name of the lowest companion rank that can take profession contracts. */
 export const PET_TASK_MIN_RANK_NAME = getPetRank(PET_TASK_MIN_RANK).name;
+
+/** Why a dispatched companion cannot return yet; the task panel shows its countdown instead. */
+export const PET_TASK_IN_PROGRESS_MESSAGE =
+  "Your companion is still working on this task.";
 
 /** Only opted-in hunting and gathering contracts have an unattended completion contract. */
 export const isPetTaskContract = <
