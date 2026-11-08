@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { actionLog, jutsu, userData, userJutsu } from "@/drizzle/schema";
 import * as socials from "@/libs/socials";
 import { profileRouter } from "@/server/api/routers/profile";
@@ -33,8 +33,8 @@ const aiState = async () => {
 };
 
 describeWithDatabase("profile.updateAi username uniqueness", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
-    vi.restoreAllMocks();
     vi.spyOn(socials, "callDiscordContent").mockResolvedValue(undefined);
     await resetTables(actionLog, userJutsu, jutsu, userData);
     await insertUsers([
