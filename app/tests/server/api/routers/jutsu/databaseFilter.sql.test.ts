@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { jutsu } from "@/drizzle/schema";
 import { jutsuDatabaseFilter } from "@/server/api/routers/jutsu";
@@ -41,7 +41,7 @@ describeWithDatabase("jutsuDatabaseFilter", () => {
       .select({ id: jutsu.id })
       .from(jutsu)
       .leftJoin(parent, eq(parent.id, "water"))
-      .where(and(...jutsuDatabaseFilter({ limit: 50, name: "wall" } as JutsuFilteringSchema, false, parent.name)))
+      .where(and(...jutsuDatabaseFilter({ limit: 50, name: "wall" } as JutsuFilteringSchema, false, sql`${parent.name}`)))
       .orderBy(asc(jutsu.id));
     expect(rows.map((row) => row.id)).toEqual(["fire", "pet", "water"]);
   });
