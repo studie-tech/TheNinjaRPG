@@ -77,6 +77,12 @@ describeWithDatabase("data.getStatistics", () => {
     expect(result.levelDistribution).toBeNull();
   });
 
+  it("rejects balance filters outside their enums", async () => {
+    const caller = await callerFor(dataRouter, "viewer");
+    await expect(caller.getRankedLoadoutStatistics({ types: ["bogus"] as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.getBloodlineBalanceStatistics({ bloodlineRanks: ["Z"] as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("rejects an unknown statistics type", async () => {
     await expect(statistics({ id: "fireball", type: "basic" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });

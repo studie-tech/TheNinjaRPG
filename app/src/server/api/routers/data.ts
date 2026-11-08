@@ -1,22 +1,19 @@
 import { and, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import type {
-  BattleType,
-  ItemType,
-  LetterRank,
-  RankedRank,
-  StatType,
-  UserRank,
-} from "@/drizzle/constants";
+import type { BattleType, RankedRank } from "@/drizzle/constants";
 import {
   BattleDataEntryType,
   BattleTypes,
+  ItemTypes,
+  LetterRanks,
   MAX_PLAYER_LEVEL,
   QuestRewardMetrics,
   QuestTypes,
   RANKED_RANKS,
   RecruitmentMetricMax,
   RecruitmentMetrics,
+  StatTypes,
+  UserRanks,
 } from "@/drizzle/constants";
 import {
   abEvent,
@@ -26,6 +23,7 @@ import {
   jutsu,
   logBattleLengths,
   logQueueLengths,
+  logRankedPicks,
   paypalTransaction,
   quest,
   skillTree,
@@ -735,8 +733,8 @@ export const dataRouter = createTRPCRouter({
       z.object({
         battleTypes: z.array(z.enum(BattleTypes)).optional(),
         minCount: z.number().min(1).default(1),
-        bloodlineRanks: z.array(z.string()).optional(),
-        statClassifications: z.array(z.string()).optional(),
+        bloodlineRanks: z.array(z.enum(LetterRanks)).optional(),
+        statClassifications: z.array(z.enum(StatTypes)).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -753,18 +751,13 @@ export const dataRouter = createTRPCRouter({
       // Build bloodline rank filter if needed
       const bloodlineWhereConditions: QueryCondition[] = [];
       if (input.bloodlineRanks && input.bloodlineRanks.length > 0) {
-        bloodlineWhereConditions.push(
-          inArray(bloodline.rank, input.bloodlineRanks as LetterRank[]),
-        );
+        bloodlineWhereConditions.push(inArray(bloodline.rank, input.bloodlineRanks));
       }
 
       // Build stat classification filter if needed
       if (input.statClassifications && input.statClassifications.length > 0) {
         bloodlineWhereConditions.push(
-          inArray(
-            bloodline.statClassification,
-            input.statClassifications as StatType[],
-          ),
+          inArray(bloodline.statClassification, input.statClassifications),
         );
       }
 
@@ -1063,7 +1056,7 @@ export const dataRouter = createTRPCRouter({
       z.object({
         battleTypes: z.array(z.enum(BattleTypes)).optional(),
         minCount: z.number().min(1).default(1),
-        itemTypes: z.array(z.string()).optional(),
+        itemTypes: z.array(z.enum(ItemTypes)).optional(),
         bloodlineIds: z.array(z.string()).optional(),
       }),
     )
@@ -1076,7 +1069,7 @@ export const dataRouter = createTRPCRouter({
 
       // Build item type filter if needed
       if (input.itemTypes && input.itemTypes.length > 0) {
-        whereConditions.push(inArray(item.itemType, input.itemTypes as ItemType[]));
+        whereConditions.push(inArray(item.itemType, input.itemTypes));
       }
 
       // Run equippedCounts and usage queries in parallel for efficiency
@@ -1105,7 +1098,7 @@ export const dataRouter = createTRPCRouter({
       z.object({
         battleTypes: z.array(z.enum(BattleTypes)).optional(),
         minCount: z.number().min(1).default(1),
-        userRanks: z.array(z.string()).optional(),
+        userRanks: z.array(z.enum(UserRanks)).optional(),
         villages: z.array(z.string()).optional(),
         minLevel: z.number().min(1).default(1),
         maxLevel: z.number().max(MAX_PLAYER_LEVEL).default(MAX_PLAYER_LEVEL),
@@ -1125,7 +1118,7 @@ export const dataRouter = createTRPCRouter({
 
       // Build user rank filter if needed
       if (input.userRanks && input.userRanks.length > 0) {
-        whereConditions.push(inArray(userData.rank, input.userRanks as UserRank[]));
+        whereConditions.push(inArray(userData.rank, input.userRanks));
       }
 
       // Build village filter if needed
@@ -1283,7 +1276,7 @@ export const dataRouter = createTRPCRouter({
       z.object({
         minCount: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(50),
-        types: z.array(z.string()).optional(),
+        types: z.array(z.enum(logRankedPicks.type.enumValues)).optional(),
         name: z.string().optional(),
       }),
     )
