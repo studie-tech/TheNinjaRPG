@@ -5,6 +5,9 @@ import type { BossArrival, EncounterWave } from "@/validators/coop";
 /** The AI that fights as this form, and how it rises when it follows another form. */
 export type BossForm = { readonly aiId: string; readonly arrival?: BossArrival };
 
+/** Who a fight is against, and the waves they arrive in when there is more than one. */
+export type BossFight = { targetIds: string[]; waves?: EncounterWave[] };
+
 /** A chain's forms in order from `aiId`, which is a boss fight once there is more than one. */
 export const bossFormsFrom = (
   aiId: string,
@@ -23,21 +26,6 @@ export const bossFormsFrom = (
   return forms;
 };
 
-/**
- * `initiateBattle` input for a multi-form boss, weakest form first. Each form falls into the
- * next on the same tile, in one battle.
- */
-export const bossFightEncounter = (forms: readonly BossForm[]) => ({
-  targetIds: forms.map((form) => form.aiId),
-  encounterWaves: forms.map(
-    ({ aiId, arrival }): EncounterWave => ({
-      aiIds: [aiId],
-      delayRounds: 0,
-      ...(arrival ? { arrival } : {}),
-    }),
-  ),
-});
-
 /** Follow each lone wave enemy with its later forms; packs have no single form to replace. */
 export const expandBossWaves = (
   waves: EncounterWave[],
@@ -46,11 +34,34 @@ export const expandBossWaves = (
   waves.flatMap((wave) => {
     const [aiId, ...others] = wave.aiIds;
     if (!aiId || others.length > 0) return [wave];
-    const [, ...later] = bossFightEncounter(
-      bossFormsFrom(aiId, transformations),
-    ).encounterWaves;
+    const later = bossFormsFrom(aiId, transformations)
+      .slice(1)
+      .map(
+        ({ aiId, arrival }): EncounterWave => ({
+          aiIds: [aiId],
+          delayRounds: 0,
+          ...(arrival ? { arrival } : {}),
+        }),
+      );
     return [wave, ...later];
   });
+
+/**
+ * A fight's opponents once each lone enemy brings its later forms. A single target that
+ * transforms becomes a boss fight: each form falls into the next on the same tile, in one
+ * battle. Returns `fight` itself when nobody transforms.
+ */
+export const withBossForms = (
+  fight: BossFight,
+  transformations: AiTransformation[],
+): BossFight => {
+  const authored =
+    fight.waves ??
+    (fight.targetIds.length === 1 ? [{ aiIds: fight.targetIds, delayRounds: 0 }] : []);
+  const waves = expandBossWaves(authored, transformations);
+  if (waves.length === authored.length) return fight;
+  return { targetIds: waves.flatMap((wave) => wave.aiIds), waves };
+};
 
 /** Why saving this link would break a chain, walking every chain it could join. */
 export const bossChainIssue = (

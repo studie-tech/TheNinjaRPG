@@ -10,7 +10,6 @@ import {
 } from "@/deltas/dungeon";
 import { DUNGEON_RUN_SECONDS, DUNGEON_SOLO_PETS } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
-import { expandBossWaves } from "@/libs/combat/bossFight";
 import { transitionCoopParty } from "@/libs/coop";
 import { dungeonFloorAt, dungeonRequirements } from "@/libs/dungeon";
 import {
@@ -21,7 +20,7 @@ import {
 import { canUsePet } from "@/libs/pets/progression";
 import { isWeightedCacheEffect } from "@/libs/weightedCache";
 import { fetchActionUser } from "@/queries/actionReadiness";
-import { listAiTransformations, listAiUserIds } from "@/queries/ai";
+import { listAiUserIds } from "@/queries/ai";
 import { listUserPetForInitiateBattle } from "@/queries/combat";
 import {
   claimDungeonQueue,
@@ -539,18 +538,13 @@ export const dungeonRouter = createTRPCRouter({
             );
             return claimed.rowsAffected === 1;
           },
-          initiate: async ({ battleId }) => {
-            // Floors stay authored by first form; a boss brings its later forms with it.
-            const waves = expandBossWaves(
-              floor.waves,
-              await listAiTransformations(ctx.drizzle),
-            );
-            return initiateBattle(
+          initiate: ({ battleId }) =>
+            initiateBattle(
               {
                 client: ctx.drizzle,
                 cacheUserId: ctx.userId,
                 userIds: state.memberIds,
-                targetIds: waves.flatMap((w) => w.aiIds),
+                targetIds: floor.waves.flatMap((w) => w.aiIds),
                 biome: run.content.background,
                 forceKeepPools: true,
                 autoCombatFromDefaults: true,
@@ -565,13 +559,12 @@ export const dungeonRouter = createTRPCRouter({
                   totalFloors: run.content.tiers.flat().length,
                   roomKind: floor.kind,
                   expiresAt: expiresAt.getTime(),
-                  waves,
+                  waves: floor.waves,
                 },
               },
               "QUEST",
               0,
-            );
-          },
+            ),
           recover: ({ battleId }) =>
             rollbackDungeonStart(ctx.drizzle, run, battleId, run.version + 1),
         });

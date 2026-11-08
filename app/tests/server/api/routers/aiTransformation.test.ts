@@ -5,7 +5,7 @@ import { aiRouter } from "@/server/api/routers/ai";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { deleteAiTransformationsFor } from "@/queries/ai";
 import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 const EDITOR = "boss-editor";
 const PLAYER = "boss-player";
@@ -90,6 +90,19 @@ describeWithDatabase("AI boss transformations", () => {
     const client = await getTestDatabase();
     expect(await fight("QUEST", ["boss-one", "boss-three"])).toMatchObject({ success: true });
     expect((await client.query.battle.findFirst())?.extraState.encounter).toBeUndefined();
+  });
+
+  it("reads boss links alongside the participants, so a fight without a boss pays no extra round trip", async () => {
+    const client = await getTestDatabase();
+    const trips = async (targetIds: string[]) => {
+      const { result, roundTrips } = await recordQueries(() => fight("QUEST", targetIds));
+      expect(result).toMatchObject({ success: true });
+      await resetTables(battle);
+      await client.update(userData).set({ status: "AWAKE", battleId: null });
+      return roundTrips;
+    };
+    // A pack never reads the links; a lone enemy reads them in the same wave.
+    expect(await trips(["boss-one"])).toBe(await trips(["boss-one", "boss-three"]));
   });
 
   it("drops links to and from a deleted AI", async () => {

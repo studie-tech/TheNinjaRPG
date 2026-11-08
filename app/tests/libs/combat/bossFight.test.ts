@@ -7,9 +7,9 @@ import {
 import { findSidebarOpponent } from "@/libs/combat/actions";
 import {
   bossChainIssue,
-  bossFightEncounter,
   bossFormsFrom,
   expandBossWaves,
+  withBossForms,
 } from "@/libs/combat/bossFight";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
 import { maskBattle } from "@/libs/combat/masking";
@@ -59,17 +59,21 @@ const trial = (pending: string[] = ["genin", "chunin"]) =>
   });
 
 describe("boss fight", () => {
-  it("fights every form in order, one at a time, keeping each arrival", () => {
-    const rising = arrival("SECOND");
-    expect(
-      bossFightEncounter([{ aiId: "first" }, { aiId: "second", arrival: rising }]),
-    ).toEqual({
+  it("turns a lone target that transforms into a boss fight, and leaves other fights as they are", () => {
+    const links = [link("first", "second")];
+    expect(withBossForms({ targetIds: ["first"] }, links)).toEqual({
       targetIds: ["first", "second"],
-      encounterWaves: [
+      waves: [
         { aiIds: ["first"], delayRounds: 0 },
-        { aiIds: ["second"], delayRounds: 0, arrival: rising },
+        { aiIds: ["second"], delayRounds: 0, arrival: arrival("SECOND") },
       ],
     });
+    const alone = { targetIds: ["alone"] };
+    expect(withBossForms(alone, links)).toBe(alone);
+    const pack = { targetIds: ["first", "guard"] };
+    expect(withBossForms(pack, links)).toBe(pack);
+    const authored = { targetIds: ["first"], waves: [{ aiIds: ["first"], delayRounds: 3 }] };
+    expect(withBossForms(authored, links).targetIds).toEqual(["first", "second"]);
   });
 
   it("walks an AI's links into forms, stopping at the end, a loop or the form limit", () => {

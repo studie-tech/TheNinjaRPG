@@ -51,6 +51,7 @@ import {
 } from "@/drizzle/constants";
 import {
   type AiProfile,
+  type AiTransformation,
   type BattleAction,
   battleAction,
   battleHistory,
@@ -76,7 +77,7 @@ import {
   stillInBattle,
 } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import { bossFightEncounter, bossFormsFrom } from "@/libs/combat/bossFight";
+import { withBossForms } from "@/libs/combat/bossFight";
 import { compactBattleCatalogs } from "@/libs/combat/catalog";
 import {
   COMBAT_LOBBY_SECONDS,
@@ -313,7 +314,6 @@ import {
   statSchema,
   type ZodAllTags,
 } from "@/validators/combat";
-import type { EncounterWave } from "@/validators/coop";
 import type { HuntingBattleState } from "@/validators/hunting";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 import {
@@ -1939,8 +1939,8 @@ export const initiateBattle = async (
     startingEffects?: ZodAllTags[];
     /** Open run whose version, receipt and inventory are guarded at battle creation. */
     questAttempt?: UserQuest;
-    /** Forms fought one after another, with `targetIds` matching them. See `bossFightEncounter`. */
-    encounterWaves?: EncounterWave[];
+    /** Every boss link, once read: each lone enemy then fights with its later forms. */
+    aiTransformations?: AiTransformation[];
     /** The attacked creator, whom a win credits and whose name the first form takes. */
     creatorTrial?: CreatorTrialState;
     /** Attribute battle progress to its owning objective instead of unrelated matching kills. */
@@ -1985,10 +1985,18 @@ export const initiateBattle = async (
     userDelta?: UserDelta;
   }
 > => {
-  const { longitude, latitude, sector, userIds, targetIds, client } = info;
+  const { longitude, latitude, sector, userIds, client } = info;
   const dungeonEncounter = info.coop?.kind === "dungeon" ? info.coop : undefined;
   const questEncounter = info.coop?.kind === "quest" ? info.coop : undefined;
-  const encounterWaves = dungeonEncounter?.waves ?? info.encounterWaves;
+  const allyAiIds = info.allyAiIds ?? [];
+  // Bosses fight alone, and only in battle types that carry their forms. See `withBossForms`.
+  const canBeBoss = BossFightBattleTypes.includes(battleType) && !allyAiIds.length;
+  const authoredFight = { targetIds: info.targetIds, waves: dungeonEncounter?.waves };
+  const bossFight =
+    canBeBoss && info.aiTransformations
+      ? withBossForms(authoredFight, info.aiTransformations)
+      : authoredFight;
+  const { targetIds, waves: encounterWaves } = bossFight;
   if (
     dungeonEncounter &&
     userIds.length !== (dungeonEncounter.runState.pets ? 1 : DUNGEON_PARTY_SIZE)
@@ -1998,7 +2006,6 @@ export const initiateBattle = async (
       message: `A dungeon requires ${DUNGEON_PARTY_SIZE} players`,
     };
 
-  const allyAiIds = info.allyAiIds ?? [];
   if (allyAiIds.length > 0 && !supportsNpcAllies(battleType)) {
     return {
       success: false,
@@ -2111,13 +2118,12 @@ export const initiateBattle = async (
     dungeonEncounter && !dungeonEncounter.runState.entryPaidAt
       ? fetchDungeonEntryData(client, userIds)
       : null,
-    // A lone AI opponent may be the first form of a boss; other fights skip the read.
-    BossFightBattleTypes.includes(battleType) &&
-    !encounterWaves &&
-    !allyAiIds.length &&
-    targetIds.length === 1
+    // A lone enemy or a dungeon wave may open a boss, as may a lone attack on the creator.
+    !info.aiTransformations &&
+    ((canBeBoss && (!!dungeonEncounter || targetIds.length === 1)) ||
+      (battleType === "COMBAT" && targetIds.length === 1))
       ? listAiTransformations(client)
-      : [],
+      : null,
   ]);
 
   // An open-world attack on the creator never reaches their account. It stays bound to
@@ -2143,23 +2149,19 @@ export const initiateBattle = async (
         ...info,
         targetIds: [CREATOR_TRIAL_FIRST_FORM],
         creatorTrial: { creatorId: creator.userId, username: creator.username },
+        aiTransformations: aiTransformations ?? undefined,
       },
       "OVERWORLD",
     );
   }
 
-  // A lone AI that transforms is a boss: start over with every form as a wave.
-  const [loneTarget] = targetIds;
-  const bossForms =
-    loneTarget && aiTransformations.length
-      ? bossFormsFrom(loneTarget, aiTransformations)
-      : [];
-  if (bossForms.length > 1) {
-    return await initiateBattle(
-      { ...info, ...bossFightEncounter(bossForms) },
-      battleType,
-      scaleGains,
-    );
+  // A boss's later forms join the fight, so start over to read them with the rest.
+  if (
+    canBeBoss &&
+    aiTransformations &&
+    withBossForms(bossFight, aiTransformations) !== bossFight
+  ) {
+    return await initiateBattle({ ...info, aiTransformations }, battleType, scaleGains);
   }
   if (info.creatorTrial && !encounterWaves) {
     return { success: false, message: "The trial is unavailable" };
