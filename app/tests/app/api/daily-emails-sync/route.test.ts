@@ -67,6 +67,28 @@ describe("daily-emails-sync cron", () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
+  it("records unknown Clerk users that have a primary email", async () => {
+    const values = vi.fn().mockResolvedValue(undefined);
+    insert.mockReturnValue({ values });
+    execute.mockResolvedValue({ rowsAffected: 0 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json([
+        { id: "known", username: "k", first_name: null, last_name: null, primary_email_address_id: "e0", email_addresses: [{ id: "e0", email_address: "k@example.com" }], last_active_at: 1000 },
+        { id: "named", username: "ninja", first_name: "A", last_name: "B", primary_email_address_id: "e1", email_addresses: [{ id: "e2", email_address: "other@example.com" }, { id: "e1", email_address: "ninja@example.com" }], last_active_at: 2000 },
+        { id: "unnamed", username: null, first_name: "Ada", last_name: "Lee", primary_email_address_id: "e3", email_addresses: [{ id: "e3", email_address: "ada@example.com" }], last_active_at: 3000 },
+        { id: "noEmail", username: "x", first_name: null, last_name: null, primary_email_address_id: "gone", email_addresses: [], last_active_at: 4000 },
+      ]) as never,
+    );
+
+    expect((await GET(cronRequest())).status).toBe(200);
+
+    expect(values).toHaveBeenCalledTimes(1);
+    expect(values.mock.calls[0]?.[0]).toEqual([
+      { userId: "named", callName: "ninja", email: "ninja@example.com", secret: expect.any(String), lastActivity: new Date(2000) },
+      { userId: "unnamed", callName: "Ada Lee", email: "ada@example.com", secret: expect.any(String), lastActivity: new Date(3000) },
+    ]);
+  });
+
   it("only rewrites reminders whose lastActivity changed", async () => {
     execute.mockResolvedValue({ rowsAffected: 0 });
 
