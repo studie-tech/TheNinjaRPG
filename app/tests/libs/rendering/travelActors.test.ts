@@ -28,11 +28,13 @@ describe("travel actor snapshots", () => {
   it("omits restricted attack actions while preserving healing and profile details", () => {
     expect(recipes([player({ rank: "STUDENT" })])[0]?.parts.map((part) => part.kind)).toEqual(["marker", "marker", "avatar", "heal", "info"]);
   });
-  it("tucks the profile control in by a character sprite's head, clear of a wider portrait", () => {
-    const info = (patch: Partial<SectorUser>) => recipes([player(patch)])[0]?.parts.find((part) => part.kind === "info");
-    const portrait = info({}), sprite = info({ spriteAppearance: { body: "male", layers: [] } as never });
-    expect(portrait).toMatchObject({ x: 20 * 0.1, y: 10 * 1.4 });
-    expect(sprite).toMatchObject({ x: 20 * 0.22, y: 10 * 1.2 });
+  it("tucks player controls in around a character sprite, clear of a wider portrait", () => {
+    const controls = (patch: Partial<SectorUser>) => Object.fromEntries(recipes([player(patch)])[0]!.parts.filter((part) => ["attack", "heal", "info"].includes(part.kind)).map((part) => [part.kind, [Math.round(part.x * 5) / 100, Math.round(part.y * 10) / 100]]));
+    const portrait = controls({}), sprite = controls({ spriteAppearance: { body: "male", layers: [] } as never });
+    expect(portrait).toEqual({ attack: [0.9, 1.4], heal: [1, 0.5], info: [0.1, 1.4] });
+    expect(sprite).toEqual({ attack: [0.79, 1.2], heal: [0.8, 0.5], info: [0.22, 1.2] });
+    for (const kind of ["attack", "heal", "info"] as const)
+      expect(Math.abs(sprite[kind]![0] - 0.5)).toBeLessThan(Math.abs(portrait[kind]![0] - 0.5));
   });
   it("preserves solo PvE battle pins and adds a second portrait when available", () => {
     const solo = recipes([player({ status: "BATTLE", battleId: "battle" })]);

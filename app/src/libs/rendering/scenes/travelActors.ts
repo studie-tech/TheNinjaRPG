@@ -891,6 +891,17 @@ const sheetLoop = (animation: CharacterAnimation): WorldLoop => ({
 });
 const headingOf = (dx: number, previous?: AvatarFacing): AvatarFacing | undefined =>
   Math.abs(dx) < 0.001 ? previous : dx < 0 ? "left" : "right";
+/** Player control centers in tile units: x across the tile width, y up from the tile's foot. */
+const PORTRAIT_CONTROLS = {
+  attack: [0.9, 1.4],
+  heal: [1, 0.5],
+  info: [0.1, 1.4],
+} as const;
+const SPRITE_CONTROLS = {
+  attack: [0.79, 1.2],
+  heal: [0.8, 0.5],
+  info: [0.22, 1.2],
+} as const;
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
 /** Repeated NPC appearances remain distinct through placement identity; players use account identity. */
@@ -1001,16 +1012,16 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
       ),
     );
   else {
+    // Character sprites are narrower than portraits, so their controls tuck in around the body.
+    const at = user.spriteAppearance ? SPRITE_CONTROLS : PORTRAIT_CONTROLS;
     if (
       user.username === CREATOR_USERNAME ||
       !RANKS_RESTRICTED_FROM_PVP.includes(user.rank)
     )
-      parts.push(part(tile, "attack", IMG_SECTOR_ATTACK, 0.8, 0.9, 1.4));
-    // Character sprites are narrower than portraits, so their profile control tucks in by the head.
-    const [infoX, infoY] = user.spriteAppearance ? [0.22, 1.2] : [0.1, 1.4];
+      parts.push(part(tile, "attack", IMG_SECTOR_ATTACK, 0.8, ...at.attack));
     parts.push(
-      part(tile, "heal", IMG_ICON_HEAL, 0.7, 1, 0.5),
-      part(tile, "info", IMG_SECTOR_INFO, 0.7, infoX, infoY),
+      part(tile, "heal", IMG_ICON_HEAL, 0.7, ...at.heal),
+      part(tile, "info", IMG_SECTOR_INFO, 0.7, ...at.info),
     );
   }
   return parts;

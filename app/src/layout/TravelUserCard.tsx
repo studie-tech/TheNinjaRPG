@@ -46,6 +46,8 @@ export const TravelUserCard: React.FC<{
         side="top"
         sideOffset={12}
         collisionPadding={12}
+        // A map tap opened it: focusing the HP tooltip trigger would ring the bar.
+        onOpenAutoFocus={(event) => event.preventDefault()}
         className="w-64 p-3"
         aria-label={`${user.username} profile summary`}
       >

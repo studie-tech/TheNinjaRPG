@@ -80,8 +80,9 @@ it("shows unknown levels like the scouting list and flags players who are not aw
   expect(view.getByText("hospitalized")).toBeTruthy();
 });
 
-it("closes on Escape", () => {
+it("leaves focus outside the card, so the HP tooltip trigger is not ringed, and closes on Escape", () => {
   const view = mount(user());
+  expect(view.getByRole("dialog").contains(document.activeElement)).toBe(false);
   fireEvent.keyDown(view.getByRole("dialog"), { key: "Escape" });
   expect(view.onClose).toHaveBeenCalledTimes(1);
 });
