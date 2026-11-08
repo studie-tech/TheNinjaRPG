@@ -58,8 +58,6 @@ export default function ManualJutsuReskins() {
     };
   });
 
-  const totalLoading = isFetching;
-
   return (
     <>
       <ContentBox
@@ -103,12 +101,12 @@ export default function ManualJutsuReskins() {
             <ItemWithEffects item={item} showEdit="jutsu/reskins" />
           </div>
         ))}
-        {!totalLoading && transformedReskins?.length === 0 && (
+        {!isFetching && transformedReskins?.length === 0 && (
           <div>No reskins found given the search criteria.</div>
         )}
         <ListLoader
           initialLoading={isPending}
-          loading={totalLoading}
+          loading={isFetching}
           explanation="Loading data"
         />
       </ContentBox>
