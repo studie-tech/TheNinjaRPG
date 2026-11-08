@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { CombatStatNames, MAX_STORED_POOL, SCALED_AI_STAT_BUDGET_SHARE } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { calcLevelRequirements } from "@/libs/profile";
-import { scaleEditedAi } from "../../../../../src/server/api/routers/profile";
+import { scaleEditedAi } from "@/server/api/routers/profile";
 
 // Row _-LABA3r7vwogsQ4O3ALq in data/ai.sql: a specialist whose six stats hold more than
 // half its experience.

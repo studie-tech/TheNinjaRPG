@@ -6,7 +6,7 @@ import { bankTransfers, quest, questHistory, userData, village } from "@/drizzle
 import { calcHP } from "@/libs/profile";
 import { getNewTrackers } from "@/libs/quest";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { claimRewardChoiceTrackers } from "../../../../../src/server/api/routers/quests";
+import { claimRewardChoiceTrackers } from "@/server/api/routers/quests";
 import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import { updateRewards } from "@/server/utils/questRewards";
 import { PostProcessedRewardSchema } from "@/validators/rewards";

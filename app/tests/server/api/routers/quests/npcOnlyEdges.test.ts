@@ -1,6 +1,6 @@
 
 import { describe, expect, it, vi } from "bun:test";
-import { restrictedNewQuestEdgeError } from "../../../../../src/server/api/routers/quests";
+import { restrictedNewQuestEdgeError } from "@/server/api/routers/quests";
 
 const newQuestObjective = (id: string, newQuestIds: string[]) => ({
   id,
