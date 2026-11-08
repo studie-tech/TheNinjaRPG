@@ -37,6 +37,7 @@ import { isSkillVisible } from "@/libs/skillRequirements";
 import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { fetchBloodline } from "@/queries/bloodline";
 import {
+  dateRangeConditions,
   deleteDataBattleActionForDeleteAllDataBattleAction,
   deleteDataBattleActionForDeleteSingleDataBattleAction,
   deleteLogBattleLengthsForClearAllBattleLengths,
@@ -198,11 +199,7 @@ export const dataRouter = createTRPCRouter({
         );
       }
       // Filtering
-      const visitorWhere: QueryCondition[] = [];
-      if (input.startDate)
-        visitorWhere.push(gte(visitorLog.createdAt, new Date(input.startDate)));
-      if (input.endDate)
-        visitorWhere.push(lte(visitorLog.createdAt, new Date(input.endDate)));
+      const visitorWhere = dateRangeConditions(visitorLog.createdAt, input);
       if (input.utmSource) {
         visitorWhere.push(eq(visitorLog.utmSource, input.utmSource));
       } else {
@@ -391,13 +388,8 @@ export const dataRouter = createTRPCRouter({
       ];
       whereConditions.push(
         inArray(paypalTransaction.status, ["COMPLETED", "REVIEW_REQUIRED"]),
+        ...dateRangeConditions(paypalTransaction.createdAt, input),
       );
-      if (input.startDate)
-        whereConditions.push(
-          gte(paypalTransaction.createdAt, new Date(input.startDate)),
-        );
-      if (input.endDate)
-        whereConditions.push(lte(paypalTransaction.createdAt, new Date(input.endDate)));
 
       // Query revenue grouped by utmSource using visitorLog tracking
       const rows = await selectPaypalTransactionForGetRevenueByReferralSource(

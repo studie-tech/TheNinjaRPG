@@ -3,6 +3,7 @@
  */
 
 import {
+  type AnyColumn,
   and,
   asc,
   avg,
@@ -16,7 +17,6 @@ import {
   isNotNull,
   isNull,
   lt,
-  lte,
   ne,
   notExists,
   or,
@@ -49,7 +49,7 @@ import {
   visitorLog,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { WEEK_S } from "@/utils/time";
+import { getDateRangeEndExclusive, WEEK_S } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 
 /** Table alias for completion joins, keeping its columns distinct from other participants. */
@@ -462,14 +462,22 @@ export const selectUserDataForGetRecruitmentLevelDistribution4 = (
     .where(and(...dynamicWhere))
     .groupBy(userData.userId);
 
+/** Optional user-selected date range on `column`, from its start day through its whole end day. */
+export const dateRangeConditions = (
+  column: AnyColumn,
+  input: { startDate?: undefined | string; endDate?: undefined | string },
+): QueryCondition[] => [
+  ...(input.startDate ? [gte(column, new Date(input.startDate))] : []),
+  ...(input.endDate ? [lt(column, getDateRangeEndExclusive(input.endDate))] : []),
+];
+
 /** Non-AI players created inside the optional recruitment date range. */
 export const recruitmentUserConditions = (input: {
   startDate?: undefined | string;
   endDate?: undefined | string;
 }): QueryCondition[] => [
   eq(userData.isAi, false),
-  ...(input.startDate ? [gte(userData.createdAt, new Date(input.startDate))] : []),
-  ...(input.endDate ? [lte(userData.createdAt, new Date(input.endDate))] : []),
+  ...dateRangeConditions(userData.createdAt, input),
 ];
 
 /** The Dynamic cohort: players with neither a referral row nor a recruiter. */
@@ -1068,12 +1076,7 @@ export const selectDataBattleActionForGetStatistics = (
         ...(input.battleType
           ? [eq(dataBattleAction.battleType, input.battleType)]
           : []),
-        ...(input.startDate
-          ? [gte(dataBattleAction.createdAt, new Date(input.startDate))]
-          : []),
-        ...(input.endDate
-          ? [lte(dataBattleAction.createdAt, new Date(input.endDate))]
-          : []),
+        ...dateRangeConditions(dataBattleAction.createdAt, input),
       ),
     );
 
