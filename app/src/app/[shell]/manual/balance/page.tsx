@@ -6,7 +6,7 @@ import Link from "@/layout/Link";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
 
-export default function ManualCombat() {
+export default function ManualBalance() {
   const data = [
     {
       content: "Bloodlines",
