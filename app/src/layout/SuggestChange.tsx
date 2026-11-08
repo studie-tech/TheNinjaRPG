@@ -98,7 +98,6 @@ export const SuggestChange: React.FC<SuggestChangeProps> = (props) => {
         setIsOpen={setIsOpen}
         proceed_label="Send for review"
         proceed_loading_label="Sending..."
-        isValid={isValid}
         proceedDisabled={!isValid}
         isLoading={isPending}
         keepOpenOnAccept={true}
