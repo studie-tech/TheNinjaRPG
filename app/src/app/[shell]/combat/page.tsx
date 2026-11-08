@@ -613,7 +613,7 @@ export default function CombatPage() {
             action={actions.find((a) => a.id === actionId)}
             user={{
               userId: controlledActorId,
-              actionPoints: user?.actionPoints ?? 0,
+              actionPoints: user.actionPoints,
             }}
             battle={battle}
             isPending={battleState.isPending}
@@ -656,7 +656,6 @@ export default function CombatPage() {
       resultShown,
       actions,
       actionId,
-      userId,
       controlledActorId,
       config,
       userData,
@@ -745,7 +744,6 @@ export default function CombatPage() {
       );
     },
     [
-      userId,
       isInBattle,
       battle,
       isAutoCombatActive,
@@ -963,7 +961,7 @@ export default function CombatPage() {
             .map((id) => (
               <div key={id}>{renderComponent(id)}</div>
             ))}
-          {battle && renderTabbedContent()}
+          {renderTabbedContent()}
         </>
       ) : (
         // Non-tabs mode: render all components in order
