@@ -647,14 +647,9 @@ html[data-game-layout="20-eclipse-observatory"] .theme-welcome-community {
   .welcome-section h2 {
     font-size: 2.5rem;
   }
-  .welcome-feature-list,
-  html[data-game-frame="panel"] .welcome-feature-list {
+  .welcome-feature-list {
     grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
-  }
-  html[data-game-frame="panel"] .welcome-feature:last-child {
-    grid-column: auto;
-    display: flex;
   }
   .welcome-feature-copy {
     padding: 1.7rem;
@@ -672,7 +667,7 @@ html[data-game-layout="20-eclipse-observatory"] .theme-welcome-community {
   }
 
   html[data-game-layout="17-obsidian-council"] .theme-welcome-hero {
-    width: 100%;
+    width: calc(100% - 1rem);
     grid-template-areas: "copy";
     min-height: calc(100svh - 6rem);
     padding: 6rem 2rem 3rem;
@@ -682,12 +677,6 @@ html[data-game-layout="20-eclipse-observatory"] .theme-welcome-community {
     inset: 0;
     height: auto;
     min-height: 0;
-  }
-  html[data-game-layout="17-obsidian-council"] .theme-welcome-hero {
-    width: calc(100% - 1rem);
-    padding-inline: 2rem;
-  }
-  html[data-game-layout="17-obsidian-council"] .theme-welcome-art {
     background-image:
       linear-gradient(0deg, #14202bf0, #14202bb8), var(--theme-art-mobile);
   }
