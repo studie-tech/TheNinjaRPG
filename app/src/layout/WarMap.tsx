@@ -115,6 +115,9 @@ export const WarMap: React.FC<{
       { userVillageId: user.villageId ?? "", targetVillageId: sectorVillage?.id ?? "" },
       { enabled: !!sectorVillage && user.isOutlaw && showModal },
     );
+  const raidBlock = raidOptions?.find(
+    (option) => option.route === structureRoute,
+  )?.block;
 
   // Mutations
   const { mutate: releaseSector, isPending: isReleasingSector } =
@@ -207,7 +210,7 @@ export const WarMap: React.FC<{
     structureRoute,
     structures,
     setStructureRoute,
-    raidOptions,
+    raidBlock,
   };
 
   // What to show in the modal
@@ -259,7 +262,7 @@ export const WarMap: React.FC<{
           });
         };
       }
-    } else if (ownsTargetSector && targetSector) {
+    } else if (ownsTargetSector) {
       proceedLabel = "Release Sector";
       modalTitle = "Your Sector";
       modalContent = <div>You own sector {targetSector}. Abandon this sector?</div>;
@@ -376,9 +379,7 @@ export const WarMap: React.FC<{
           proceedDisabled={
             user.isOutlaw &&
             !!sectorVillage &&
-            (isLoadingRaidOptions ||
-              !raidOptions ||
-              !!raidOptions.find((option) => option.route === structureRoute)?.block)
+            (isLoadingRaidOptions || !raidOptions || !!raidBlock)
           }
         >
           {isLoading && <Loader explanation="Execution Action" />}
@@ -448,10 +449,7 @@ const DeclareSectorWarDialogContent: React.FC<DialogContentProps> = (props) => {
       </p>
       <p className="py-2">
         The cost of declaring war is {WAR_DECLARATION_COST.toLocaleString()} Village
-        Tokens. Each day at war reduces your tokens by{" "}
-        {WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to{" "}
-        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5}% after 5 days and{" "}
-        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days).
+        Tokens. {WAR_TOKEN_DECAY_NOTE}
       </p>
       <p>Do you confirm?</p>
     </div>
@@ -476,6 +474,12 @@ const BreakAllianceDialogContent: React.FC<DialogContentProps> = (props) => {
  */
 const DeclareEnemyDialogContent: React.FC<DialogContentProps> = (props) => {
   if (!props.sectorVillage) return null;
+  const { newEnemies, newNeutrals } = calculateEnemyConsequences(
+    props.relationships,
+    props.villages ?? [],
+    props.user.villageId ?? "",
+    props.sectorVillage.id,
+  );
   return (
     <div className="relative rounded-lg border p-4 text-center">
       <SectorVillageDialogContent {...props} />
@@ -483,34 +487,22 @@ const DeclareEnemyDialogContent: React.FC<DialogContentProps> = (props) => {
         You are about to declare {props.sectorVillage.name} an enemy. Are you sure? The
         cost of declaring a village as enemy is {WAR_FUNDS_COST} village tokens.
       </p>
-      {(() => {
-        const { newEnemies, newNeutrals } = calculateEnemyConsequences(
-          props.relationships,
-          props.villages ?? [],
-          props.user.villageId ?? "",
-          props.sectorVillage.id,
-        );
-        return (
-          <>
-            {newEnemies && newEnemies.length > 0 && (
-              <p>
-                <span className="font-bold">Additional Enemies: </span>
-                <span className="font-normal">
-                  {newEnemies.map((v) => v.name).join(", ")} will become enemies
-                </span>
-              </p>
-            )}
-            {newNeutrals && newNeutrals.length > 0 && (
-              <p>
-                <span className="font-bold">Broken Alliances: </span>
-                <span className="font-normal">
-                  {newNeutrals.map((v) => v.name).join(", ")} will become neutral
-                </span>
-              </p>
-            )}
-          </>
-        );
-      })()}
+      {newEnemies && newEnemies.length > 0 && (
+        <p>
+          <span className="font-bold">Additional Enemies: </span>
+          <span className="font-normal">
+            {newEnemies.map((v) => v.name).join(", ")} will become enemies
+          </span>
+        </p>
+      )}
+      {newNeutrals && newNeutrals.length > 0 && (
+        <p>
+          <span className="font-bold">Broken Alliances: </span>
+          <span className="font-normal">
+            {newNeutrals.map((v) => v.name).join(", ")} will become neutral
+          </span>
+        </p>
+      )}
     </div>
   );
 };
@@ -534,7 +526,7 @@ const InitiateVillageWarDialogContent: React.FC<DialogContentProps> = (props) =>
         Village Tokens.
         {rules?.enabled
           ? ` After elder approval, there is a ${rules.noticeHours}-hour notice period. The war lasts ${rules.durationDays} days, with ${rules.dailyDecay} townhall health lost each day.`
-          : ` Each day at war reduces your tokens by ${WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to ${WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5}% after 5 days and ${WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days).`}
+          : ` ${WAR_TOKEN_DECAY_NOTE}`}
       </p>
     </div>
   );
@@ -589,13 +581,9 @@ const InitiateRaidDialogContent: React.FC<DialogContentProps> = (props) => {
               ))}
           </SelectContent>
         </Select>
-        {props.raidOptions?.find((option) => option.route === props.structureRoute)
-          ?.block && (
+        {props.raidBlock && (
           <p role="status" className="text-destructive text-sm">
-            {
-              props.raidOptions.find((option) => option.route === props.structureRoute)
-                ?.block
-            }
+            {props.raidBlock}
           </p>
         )}
       </div>
@@ -603,11 +591,15 @@ const InitiateRaidDialogContent: React.FC<DialogContentProps> = (props) => {
   );
 };
 
+/** How a village war drains the declaring village's tokens over time. */
+const WAR_TOKEN_DECAY_NOTE = `Each day at war reduces your tokens by ${WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to ${WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5}% after 5 days and ${WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days).`;
+
 /**
  * Props passed to all dialog content components
  */
 interface DialogContentProps {
-  raidOptions?: { route: string; block?: string }[];
+  /** Why the selected structure cannot be raided, when it cannot. */
+  raidBlock?: string;
   status: string;
   textColor: string;
   relationships: VillageAlliance[];
