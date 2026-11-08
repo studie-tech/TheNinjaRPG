@@ -5,7 +5,6 @@ import { applyEffects } from "@/libs/combat/process";
 import { clear, copy } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
-import { activeTrainedElement, elementalGainRoom, getUserElements } from "@/libs/elementalMastery";
 import { DamageTag, IncreaseDamageGivenTag } from "@/validators/combat";
 import { flatCombatStats, makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
@@ -98,14 +97,5 @@ describe("elemental mastery battle integration", () => {
     expect(copied.map(effect => effect.fromEffectId)).toEqual([temporaryBuff.id]);
     expect(newBattle.usersEffects.filter(effect => effect.fromType === "elementalMastery")).toHaveLength(1);
     expect(packet(newBattle.usersEffects, "Wind", 2)).toBeCloseTo(packet([], "Wind", 2));
-  });
-
-  it("does not expose progress until capped, and exposes at most one trained element", () => {
-    const caster = user();
-    expect(getUserElements(caster as never)).toEqual(["Fire", "Water", "Wind", "None"]);
-    expect(getUserElements(user({ elementalMastery: { Wind: ELEMENTAL_MASTERY_CAP - 1 } }) as never)).toEqual(["Fire", "Water", "None"]);
-    expect(elementalGainRoom(caster, "Earth")).toBe(0);
-    expect(elementalGainRoom(caster, "Lightning")).toBe(ELEMENTAL_MASTERY_CAP);
-    expect(activeTrainedElement(caster)).toBe("Wind");
   });
 });

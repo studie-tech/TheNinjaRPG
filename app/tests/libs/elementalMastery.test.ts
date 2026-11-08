@@ -58,3 +58,24 @@ describe("bloodline element overrides", () => {
     expect(user.elementalMastery.Fire).toBe(ELEMENTAL_MASTERY_CAP);
   });
 });
+
+describe("trained element progress", () => {
+  // The elemental fields of the combat suite's caster: Fire/Water innate, Wind and Earth mastered.
+  const caster = (patch: Partial<ElementalMasterySource> = {}): ElementalMasterySource => ({
+    primaryElement: "Fire",
+    secondaryElement: "Water",
+    elementalMastery: { Wind: ELEMENTAL_MASTERY_CAP, Earth: ELEMENTAL_MASTERY_CAP },
+    activeTrainedElement: "Wind",
+    bloodline: null,
+    ...patch,
+  });
+
+  it("does not expose progress until capped, and exposes at most one trained element", () => {
+    const user = caster();
+    expect(getUserElements(user)).toEqual(["Fire", "Water", "Wind", "None"]);
+    expect(getUserElements(caster({ elementalMastery: { Wind: ELEMENTAL_MASTERY_CAP - 1 } }))).toEqual(["Fire", "Water", "None"]);
+    expect(elementalGainRoom(user, "Earth")).toBe(0);
+    expect(elementalGainRoom(user, "Lightning")).toBe(ELEMENTAL_MASTERY_CAP);
+    expect(activeTrainedElement(user)).toBe("Wind");
+  });
+});
