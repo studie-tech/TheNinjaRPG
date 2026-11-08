@@ -25,6 +25,7 @@ const SAGE_MODE_FILTERING_SCHEMA = defineFilteringSchema({
       })),
       emptyValues: ["None"],
       includeNone: true,
+      normalizeForFilter: (v: string) => Number.parseInt(v, 10),
     },
     {
       id: "village",
@@ -60,15 +61,9 @@ const SageModeFiltering: React.FC<SageModeFilteringProps> = (props) => {
 
 export default SageModeFiltering;
 
-/** tRPC filter for `api.sageMode.getAll` (coerces level from the select string). */
-export const getFilter = (state: SageModeFilteringState) => {
-  const filter = buildFilter(state.cf, SAGE_MODE_FILTERING_SCHEMA);
-  // Convert level from string to number if present
-  if (filter.level && typeof filter.level === "string") {
-    filter.level = parseInt(filter.level, 10);
-  }
-  return filter;
-};
+/** tRPC filter for `api.sageMode.getAll`; the level select's string is parsed to a number. */
+export const getFilter = (state: SageModeFilteringState) =>
+  buildFilter(state.cf, SAGE_MODE_FILTERING_SCHEMA);
 
 /** State for the Sage Mode Filtering component. */
 export const useFiltering = () => {
