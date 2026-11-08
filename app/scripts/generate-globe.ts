@@ -155,36 +155,23 @@ const main = () => {
     const rowOffset = north ? 0 : VISUAL_SCALE * sectorStride;
     return outTiles[sector]!.vc[rowOffset + localColumn]!;
   };
-  const polarCapColors = {
-    north: Array.from(
+  const polarCap = (sign: 1 | -1) =>
+    Array.from(
       { length: (POLAR_CAP_VISUAL_ROWS + 1) * (POLAR_CAP_VISUAL_COLUMNS + 1) },
       (_, index) => {
         const column = index % (POLAR_CAP_VISUAL_COLUMNS + 1);
         const ring = Math.floor(index / (POLAR_CAP_VISUAL_COLUMNS + 1));
-        if (ring === 0) return polarBoundaryColor(column, true);
+        if (ring === 0) return polarBoundaryColor(column, sign === 1);
         const longitude = -180 + (column / POLAR_CAP_VISUAL_COLUMNS) * 360;
         const latitude =
-          MAP_NAVIGABLE_LATITUDE_LIMIT +
-          (ring / POLAR_CAP_VISUAL_ROWS) * (90 - MAP_NAVIGABLE_LATITUDE_LIMIT);
+          sign *
+          (MAP_NAVIGABLE_LATITUDE_LIMIT +
+            (ring / POLAR_CAP_VISUAL_ROWS) * (90 - MAP_NAVIGABLE_LATITUDE_LIMIT));
         const point = sphericalPoint(longitude, latitude);
         return visualColorAt(point, landScore(point));
       },
-    ),
-    south: Array.from(
-      { length: (POLAR_CAP_VISUAL_ROWS + 1) * (POLAR_CAP_VISUAL_COLUMNS + 1) },
-      (_, index) => {
-        const column = index % (POLAR_CAP_VISUAL_COLUMNS + 1);
-        const ring = Math.floor(index / (POLAR_CAP_VISUAL_COLUMNS + 1));
-        if (ring === 0) return polarBoundaryColor(column, false);
-        const longitude = -180 + (column / POLAR_CAP_VISUAL_COLUMNS) * 360;
-        const latitude =
-          -MAP_NAVIGABLE_LATITUDE_LIMIT -
-          (ring / POLAR_CAP_VISUAL_ROWS) * (90 - MAP_NAVIGABLE_LATITUDE_LIMIT);
-        const point = sphericalPoint(longitude, latitude);
-        return visualColorAt(point, landScore(point));
-      },
-    ),
-  };
+    );
+  const polarCapColors = { north: polarCap(1), south: polarCap(-1) };
 
   const payload = JSON.stringify({
     radius: WORLDGEN_RADIUS,
