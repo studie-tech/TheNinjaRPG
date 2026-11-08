@@ -9,6 +9,7 @@ export const VISUAL_EFFECT_KEYS = {
   weather: "showWorldWeather",
   wind: "showWorldWind",
   spriteAnimations: "showGameAnimations",
+  wildlife: "showWorldWildlife",
 } as const;
 
 /** One independently persisted visual control. */
@@ -25,6 +26,7 @@ export const DEFAULT_VISUAL_EFFECTS: VisualEffects = {
   weather: true,
   wind: true,
   spriteAnimations: true,
+  wildlife: true,
 };
 
 /**
@@ -44,6 +46,7 @@ export const readVisualEffects = (): VisualEffects => {
     ["localLights", "dayNight"],
     ["weather", "spriteAnimations"],
     ["wind", "spriteAnimations"],
+    ["wildlife", "spriteAnimations"],
   ] as const) {
     const key = VISUAL_EFFECT_KEYS[effect];
     if (safeLocalStorageGetItem(key) === null) {

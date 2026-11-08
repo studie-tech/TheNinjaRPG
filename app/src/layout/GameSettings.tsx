@@ -752,6 +752,12 @@ export const VisualEffectsSettings = () => {
           onCheckedChange={(enabled) => setVisualEffect("wind", enabled)}
         />
         <SettingsToggle
+          label="Wildlife"
+          description="Animals roaming the world map"
+          checked={visualEffects.wildlife}
+          onCheckedChange={(enabled) => setVisualEffect("wildlife", enabled)}
+        />
+        <SettingsToggle
           label="Sprite animations"
           description="Animated characters, scenery and effects"
           checked={visualEffects.spriteAnimations}

@@ -35,6 +35,11 @@ import {
 import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
 import { hasWorldWaterDepth } from "@/libs/rendering/worldArt";
+import {
+  type CritterSectorInput,
+  createWorldCritters,
+  critterSpots,
+} from "@/libs/rendering/worldCritters";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import {
   createWorldWeather,
@@ -122,6 +127,13 @@ export const createTravelScene = async (options: {
     const lightingLayer = shadows.container;
     const weather = createWorldWeather(game, options.lightLayout);
     const sceneryBounds = new WeakMap<Container, WorldBounds>();
+    const critters = createWorldCritters(
+      game,
+      { depth: depthLayer, ground: actorGroundLayer },
+      sceneryBounds,
+      options.lightLayout,
+    );
+    const critterInputs = new Map<number, CritterSectorInput>();
     const route = createTravelPath(),
       actors = createTravelActors(
         game,
@@ -142,6 +154,7 @@ export const createTravelScene = async (options: {
       terrainLayer,
       artLayer,
       lightingLayer,
+      critters.container,
       weather.container,
       uiLayer,
       actors.container,
@@ -768,6 +781,14 @@ export const createTravelScene = async (options: {
       }
       // Zoom can reclassify foreground scenery before actor contact order is resolved.
       actors.animate(frame, movements);
+      for (const [sector, rendered] of sectors) {
+        const input = critterInputs.get(sector);
+        if (input?.key === rendered.key) input.position = rendered.position;
+        else critterInputs.set(sector, critterInput(sector, rendered));
+      }
+      for (const sector of critterInputs.keys())
+        if (!sectors.has(sector)) critterInputs.delete(sector);
+      critters.update(frame, critterInputs, viewport, game.visualEffects.wildlife);
       sceneryScale = scale();
       const pointer = controls.pointer();
       let hoverTile: TravelPick["tile"] = null;
@@ -958,6 +979,18 @@ type TravelSector = {
   terrain: Awaited<ReturnType<typeof createHexTerrain>>;
   art: Awaited<ReturnType<typeof createWorldSprites>>;
   startScenery: () => Promise<void>;
+};
+
+/** Critters plan once per sector terrain; only the sector's origin is refreshed each frame. */
+const critterInput = (sector: number, rendered: TravelSector): CritterSectorInput => {
+  const first = rendered.grid.getHex({ col: 0, row: 0 });
+  return {
+    sector,
+    key: rendered.key,
+    position: rendered.position,
+    tile: { width: first?.width ?? 1, height: first?.height ?? 1 },
+    spots: () => critterSpots(rendered.grid),
+  };
 };
 
 /** Capture ref-driven changes that need a frame even when decorative animation and lighting are disabled. */
