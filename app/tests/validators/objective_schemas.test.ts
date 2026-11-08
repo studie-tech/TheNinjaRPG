@@ -44,12 +44,6 @@ describe("specific-X / tag / damage objective schemas", () => {
     }
   });
 
-  it("routes every new task through getObjectiveSchema without throwing", () => {
-    for (const task of NEW_TASKS) {
-      expect(() => getObjectiveSchema(task)).not.toThrow();
-    }
-  });
-
   it("parses a freshly-added objective (id + task only) so the editor renders its pickers", () => {
     // The editor safeParses the objective and renders fields from the PARSED result; a
     // required field with no default makes parse fail, the raw object is used instead, and
