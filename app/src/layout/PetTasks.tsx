@@ -17,7 +17,11 @@ import Loader from "@/layout/Loader";
 import { QueryError } from "@/layout/QueryError";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
-import { isPetTaskContract, petTaskDispatchBlockMessage } from "@/libs/pets/tasks";
+import {
+  isPetTaskContract,
+  PET_TASK_MIN_RANK_NAME,
+  petTaskDispatchBlockMessage,
+} from "@/libs/pets/tasks";
 import { formatQuestEntryCost } from "@/libs/questRun";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
@@ -114,9 +118,9 @@ export const PetTasks = ({ petId }: { petId: string }) => {
       ) : (
         <>
           <p className="text-muted-foreground text-sm">
-            Send one Hunter-rank companion on an enabled profession contract. The final
-            quest reward and usual profession drops are paid on return; objectives and
-            intermediate rewards are not simulated.
+            Send one {PET_TASK_MIN_RANK_NAME}-rank companion on an enabled profession
+            contract. The final quest reward and usual profession drops are paid on
+            return; objectives and intermediate rewards are not simulated.
           </p>
           {task.data?.dispatchBlockMessage ? (
             <p className="text-sm">{task.data.dispatchBlockMessage}</p>
@@ -229,7 +233,8 @@ export const PetTaskDispatch = ({
         />
       ) : !selected ? (
         <p className="text-muted-foreground text-sm">
-          A ready Hunter-rank companion can complete this contract for you.
+          A ready {PET_TASK_MIN_RANK_NAME}-rank companion can complete this contract for
+          you.
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">

@@ -25,6 +25,7 @@ import { RaidThresholdEditor } from "@/layout/RaidThresholdEditor";
 import { RewardEditor } from "@/layout/RewardEditor";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
+import { PET_TASK_MIN_RANK_NAME } from "@/libs/pets/tasks";
 import { verifyQuestObjectiveFlow } from "@/libs/quest/validation";
 import { getQuestFlowPositions, restoreQuestFlowPositions } from "@/libs/questFlow";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
@@ -250,10 +251,11 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         )}
         {isPetTaskQuestType(currentValues.questType) && (
           <p className="mb-4 text-muted-foreground text-sm">
-            Set a companion task duration to allow Hunter-rank companions to complete
-            this contract unattended. The task pays only the final quest reward and its
-            usual profession drops; objectives, intermediate rewards and their effects
-            are not simulated. Leave the duration blank to disable tasks.
+            Set a companion task duration to allow {PET_TASK_MIN_RANK_NAME}-rank
+            companions to complete this contract unattended. The task pays only the
+            final quest reward and its usual profession drops; objectives, intermediate
+            rewards and their effects are not simulated. Leave the duration blank to
+            disable tasks.
           </p>
         )}
         <div className="mb-4 flex items-center justify-between">
