@@ -121,49 +121,6 @@ import {
 } from "@/validators/auction";
 import { AuctionOffers, NewOfferDialog } from "./Offers";
 
-type AuctionListingRow = RouterOutputs["auction"]["getAuctionListings"]["data"][number];
-
-function formatAuctionCurrency(
-  amount: number,
-  currencyType: AuctionListingRow["currencyType"],
-) {
-  return `${amount.toLocaleString()} ${currencyType === "MONEY" ? "ryo" : "reputation"}`;
-}
-
-function formatAuctionPerUnitLine(
-  totalAmount: number,
-  quantity: number,
-  currencyType: AuctionListingRow["currencyType"],
-) {
-  if (quantity <= 1) return null;
-  const per = totalAmount / quantity;
-  const suffix = currencyType === "MONEY" ? "ryo" : "reputation";
-  const perStr = per.toLocaleString(undefined, {
-    maximumFractionDigits: 4,
-    minimumFractionDigits: Number.isInteger(per) ? 0 : 2,
-  });
-  return `${perStr} ${suffix}/unit · ×${quantity.toLocaleString()}`;
-}
-
-type BidStanding = "winning" | "outbid" | "won" | "lost";
-
-function getAuctionBidStanding(
-  listing: AuctionListingRow,
-  userId: string,
-): BidStanding {
-  if (listing.listingType !== "AUCTION") {
-    return "lost";
-  }
-  if (listing.status === "ACTIVE") {
-    const lead = listing.bids[0];
-    return lead?.bidderId === userId ? "winning" : "outbid";
-  }
-  if (listing.buyerId === userId) {
-    return "won";
-  }
-  return "lost";
-}
-
 export default function AuctionHousePage() {
   // Settings
   const { userData, access } = useRequireInVillage("/auctionhouse");
@@ -283,61 +240,6 @@ export default function AuctionHousePage() {
     </ContentBox>
   );
 }
-
-interface AuctionListingProps {
-  selectedStatus: AuctionListingState;
-  browseTab: Exclude<BrowseTab, "REQUEST" | "TRADE">;
-}
-
-type BrowseTab = "AUCTION" | "DIRECT" | "REQUEST" | "TRADE" | "MINE" | "MY_BIDS";
-
-const BROWSE_TAB_OPTIONS: {
-  key: BrowseTab;
-  label: string;
-  Icon: LucideIcon;
-  description: string;
-}[] = [
-  {
-    key: "AUCTION",
-    label: "Auctions",
-    Icon: Gavel,
-    description: "Bid on items until the timer ends, or buy out at the listed price.",
-  },
-  {
-    key: "DIRECT",
-    label: "Direct sales",
-    Icon: Handshake,
-    description: "Private sales — only the chosen player can accept the offer.",
-  },
-  {
-    key: "REQUEST",
-    label: "Requests",
-    Icon: ShoppingCart,
-    description:
-      "Buy materials at a fixed total price, or supply another player's request to earn ryo.",
-  },
-  {
-    key: "TRADE",
-    label: "Trades",
-    Icon: ArrowLeftRight,
-    description:
-      "Exchange items without currency. Inspect the offered item before accepting.",
-  },
-  {
-    key: "MINE",
-    label: "My auctions",
-    Icon: List,
-    description:
-      "Your auctions and direct sales. Find your requests and trades in their own tabs.",
-  },
-  {
-    key: "MY_BIDS",
-    label: "My bids",
-    Icon: Hammer,
-    description:
-      "Auctions you have bid on — see whether you are leading or have been outbid.",
-  },
-];
 
 const AuctionListing: React.FC<AuctionListingProps> = ({
   selectedStatus,
@@ -589,13 +491,6 @@ const AuctionListing: React.FC<AuctionListingProps> = ({
   );
 };
 
-type AuctionLotCardProps = {
-  listing: AuctionListingRow;
-  timeDiff: number;
-  bidStanding?: BidStanding;
-  onOpen: () => void;
-};
-
 const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
   listing,
   timeDiff,
@@ -800,12 +695,6 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
     </button>
   );
 };
-
-interface AuctionDetailsDialogProps {
-  auctionId: string;
-  isOpen: boolean;
-  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-}
 
 /**
  * @param auctionId - Auction ID
@@ -2087,3 +1976,114 @@ export const NewAuctionListingDialog: React.FC<{
     </Dialog>
   );
 };
+
+const BROWSE_TAB_OPTIONS: {
+  key: BrowseTab;
+  label: string;
+  Icon: LucideIcon;
+  description: string;
+}[] = [
+  {
+    key: "AUCTION",
+    label: "Auctions",
+    Icon: Gavel,
+    description: "Bid on items until the timer ends, or buy out at the listed price.",
+  },
+  {
+    key: "DIRECT",
+    label: "Direct sales",
+    Icon: Handshake,
+    description: "Private sales — only the chosen player can accept the offer.",
+  },
+  {
+    key: "REQUEST",
+    label: "Requests",
+    Icon: ShoppingCart,
+    description:
+      "Buy materials at a fixed total price, or supply another player's request to earn ryo.",
+  },
+  {
+    key: "TRADE",
+    label: "Trades",
+    Icon: ArrowLeftRight,
+    description:
+      "Exchange items without currency. Inspect the offered item before accepting.",
+  },
+  {
+    key: "MINE",
+    label: "My auctions",
+    Icon: List,
+    description:
+      "Your auctions and direct sales. Find your requests and trades in their own tabs.",
+  },
+  {
+    key: "MY_BIDS",
+    label: "My bids",
+    Icon: Hammer,
+    description:
+      "Auctions you have bid on — see whether you are leading or have been outbid.",
+  },
+];
+
+function formatAuctionCurrency(
+  amount: number,
+  currencyType: AuctionListingRow["currencyType"],
+) {
+  return `${amount.toLocaleString()} ${currencyType === "MONEY" ? "ryo" : "reputation"}`;
+}
+
+function formatAuctionPerUnitLine(
+  totalAmount: number,
+  quantity: number,
+  currencyType: AuctionListingRow["currencyType"],
+) {
+  if (quantity <= 1) return null;
+  const per = totalAmount / quantity;
+  const suffix = currencyType === "MONEY" ? "ryo" : "reputation";
+  const perStr = per.toLocaleString(undefined, {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: Number.isInteger(per) ? 0 : 2,
+  });
+  return `${perStr} ${suffix}/unit · ×${quantity.toLocaleString()}`;
+}
+
+function getAuctionBidStanding(
+  listing: AuctionListingRow,
+  userId: string,
+): BidStanding {
+  if (listing.listingType !== "AUCTION") {
+    return "lost";
+  }
+  if (listing.status === "ACTIVE") {
+    const lead = listing.bids[0];
+    return lead?.bidderId === userId ? "winning" : "outbid";
+  }
+  if (listing.buyerId === userId) {
+    return "won";
+  }
+  return "lost";
+}
+
+type AuctionListingRow = RouterOutputs["auction"]["getAuctionListings"]["data"][number];
+
+type BidStanding = "winning" | "outbid" | "won" | "lost";
+
+type BrowseTab = "AUCTION" | "DIRECT" | "REQUEST" | "TRADE" | "MINE" | "MY_BIDS";
+
+interface AuctionListingProps {
+  selectedStatus: AuctionListingState;
+  browseTab: Exclude<BrowseTab, "REQUEST" | "TRADE">;
+}
+
+type AuctionLotCardProps = {
+  listing: AuctionListingRow;
+  timeDiff: number;
+  bidStanding?: BidStanding;
+  onOpen: () => void;
+};
+
+interface AuctionDetailsDialogProps {
+  auctionId: string;
+  isOpen: boolean;
+  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}
