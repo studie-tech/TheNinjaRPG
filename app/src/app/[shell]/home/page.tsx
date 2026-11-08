@@ -91,7 +91,7 @@ function Residence() {
   const { userData, sectorVillage, access, ownVillage } = useRequireInVillage("/home");
   const router = useRouter();
   const searchParams = useSearchParams();
-  const canOpenKitchen = !!userData && access && ownVillage;
+  const isOwnerView = !!userData && access && ownVillage;
 
   // State
   const [selectedItem, setSelectedItem] = useState<UserItemWithRelations | undefined>(
@@ -115,13 +115,13 @@ function Residence() {
 
   // Deep links use the existing owner-only kitchen and are consumed so closing stays final.
   useEffect(() => {
-    if (!canOpenKitchen || searchParams.get("panel") !== "kitchen") return;
+    if (!isOwnerView || searchParams.get("panel") !== "kitchen") return;
     setIsKitchenOpen(true);
     const params = new URLSearchParams(searchParams.toString());
     params.delete("panel");
     const query = params.toString();
     router.replace(query ? `/home?${query}` : "/home", { scroll: false });
-  }, [canOpenKitchen, router, searchParams]);
+  }, [isOwnerView, router, searchParams]);
 
   // Guests use common navigation without fetching owner-only data; hooks stay unconditional.
   const {
@@ -131,7 +131,7 @@ function Residence() {
     isError: isHomeError,
     refetch: userHomeRefetch,
   } = api.home.getUserHome.useQuery(undefined, {
-    enabled: !!userData && access && ownVillage,
+    enabled: isOwnerView,
     staleTime: 0,
   });
   const {
@@ -140,7 +140,7 @@ function Residence() {
     isError: isUpgradesError,
     refetch: upgradesRefetch,
   } = api.home.getAvailableUpgrades.useQuery(undefined, {
-    enabled: !!userData && access && ownVillage,
+    enabled: isOwnerView,
   });
   const {
     data: userItems,
@@ -149,14 +149,14 @@ function Residence() {
     isError: isItemsError,
     refetch: userItemsRefetch,
   } = api.item.getUserItems.useQuery(undefined, {
-    enabled: !!userData && access && ownVillage,
+    enabled: isOwnerView,
   });
   const pets = api.pets.getCollection.useQuery(undefined, {
-    enabled: !!userData && access && ownVillage,
+    enabled: isOwnerView,
   });
 
   const missingFurnitureIds =
-    userData && access && ownVillage && userItems
+    isOwnerView && userItems
       ? (homeData?.furniture
           .filter((piece) => !userItems.some((owned) => owned.id === piece.id))
           .map((piece) => piece.id)
