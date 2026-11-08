@@ -278,17 +278,17 @@ export const executeResultForUpgradeSubscription = (
   },
 ) =>
   client.execute(sql`
-        UPDATE ${userData} u INNER JOIN ${paypalSubscription} p ON p.affectedUserId = u.userId
-        SET u.federalStatus = ${input.plan},
-            u.reputationPoints = u.reputationPoints - ${cost},
-            u.reputationPointsTotal = u.reputationPointsTotal - ${cost},
-            p.federalStatus = ${input.plan}, p.updatedAt = CURRENT_TIMESTAMP(3)
-        WHERE u.userId = ${ctx.userId} AND u.federalStatus = ${target.federalStatus}
-          AND u.reputationPoints >= ${cost} AND p.id = ${subscription.id}
-          AND p.createdById = ${ctx.userId} AND p.federalStatus = ${subscription.federalStatus}
-          AND p.status IN ('ACTIVE', 'CANCELLED')
-          AND p.updatedAt = ${subscription.updatedAt}
-          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL ${PAYPAL_PAID_PERIOD_DAYS} DAY`);
+        UPDATE ${userData} INNER JOIN ${paypalSubscription} ON ${paypalSubscription.affectedUserId} = ${userData.userId}
+        SET ${userData.federalStatus} = ${input.plan},
+            ${userData.reputationPoints} = ${userData.reputationPoints} - ${cost},
+            ${userData.reputationPointsTotal} = ${userData.reputationPointsTotal} - ${cost},
+            ${paypalSubscription.federalStatus} = ${input.plan}, ${paypalSubscription.updatedAt} = CURRENT_TIMESTAMP(3)
+        WHERE ${userData.userId} = ${ctx.userId} AND ${userData.federalStatus} = ${target.federalStatus}
+          AND ${userData.reputationPoints} >= ${cost} AND ${paypalSubscription.id} = ${subscription.id}
+          AND ${paypalSubscription.createdById} = ${ctx.userId} AND ${paypalSubscription.federalStatus} = ${subscription.federalStatus}
+          AND ${paypalSubscription.status} IN ('ACTIVE', 'CANCELLED')
+          AND ${paypalSubscription.updatedAt} = ${subscription.updatedAt}
+          AND ${paypalSubscription.updatedAt} >= CURRENT_TIMESTAMP(3) - INTERVAL ${PAYPAL_PAID_PERIOD_DAYS} DAY`);
 
 /** Build the `paypalSubscription` lookup for `cancelPaypalSubscription`, using predicates on `subscriptionId`. */
 export const findPaypalSubscriptionForCancelPaypalSubscription = (

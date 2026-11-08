@@ -12,6 +12,7 @@ import {
   lt,
   lte,
   ne,
+  notExists,
   or,
   type SQL,
   sql,
@@ -25,6 +26,7 @@ import {
   item,
   userData,
   userItem,
+  userItemImbuement,
 } from "@/drizzle/schema";
 import { getAuctionSellerPayout } from "@/libs/itemEconomy";
 import { nextSnapshotSql } from "@/queries/concurrency";
@@ -176,7 +178,7 @@ export const findUserItemForCreateAuctionListing = (
  * saves and the store/retrieve toggle never act on it.
  */
 export const updateUserItemForCreateAuctionListing = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   auctionUserItemId: string,
   ctx: { userId: string },
   listingQuantity: number,
@@ -199,7 +201,17 @@ export const updateUserItemForCreateAuctionListing = (
         gt(userItem.quantity, 0),
         eq(userItem.equipped, "NONE"),
         eq(userItem.isInAuction, false),
-        sql`NOT EXISTS (SELECT 1 FROM UserItemImbuement WHERE UserItemImbuement.userItemId = ${auctionUserItemId} AND UserItemImbuement.craftingFinishedAt > NOW())`,
+        notExists(
+          client
+            .select({ id: userItemImbuement.id })
+            .from(userItemImbuement)
+            .where(
+              and(
+                eq(userItemImbuement.userItemId, auctionUserItemId),
+                gt(userItemImbuement.craftingFinishedAt, sql`NOW()`),
+              ),
+            ),
+        ),
       ),
     );
 
@@ -370,17 +382,17 @@ export const executeCancelResForCancelAuction = (
   ctx: { userId: string },
 ) =>
   client.execute(sql`
-        UPDATE \`AuctionListing\` AS al
-        INNER JOIN \`UserItem\` AS ui ON ui.\`id\` = al.\`userItemId\`
-        SET al.\`status\` = 'CANCELLED',
-            al.\`updatedAt\` = CURRENT_TIMESTAMP(3),
-            ui.\`isInAuction\` = 0,
-            ui.\`updatedAt\` = CURRENT_TIMESTAMP(3)
-        WHERE al.\`id\` = ${auctionId}
-          AND al.\`sellerId\` = ${ctx.userId}
-          AND al.\`status\` = 'ACTIVE'
+        UPDATE ${auctionListing}
+        INNER JOIN ${userItem} ON ${userItem.id} = ${auctionListing.userItemId}
+        SET ${auctionListing.status} = 'CANCELLED',
+            ${auctionListing.updatedAt} = CURRENT_TIMESTAMP(3),
+            ${userItem.isInAuction} = 0,
+            ${userItem.updatedAt} = CURRENT_TIMESTAMP(3)
+        WHERE ${auctionListing.id} = ${auctionId}
+          AND ${auctionListing.sellerId} = ${ctx.userId}
+          AND ${auctionListing.status} = 'ACTIVE'
           AND NOT EXISTS (
-            SELECT 1 FROM \`AuctionBid\` AS ab WHERE ab.\`auctionId\` = al.\`id\`
+            SELECT 1 FROM ${auctionBid} WHERE ${auctionBid.auctionId} = ${auctionListing.id}
           )
       `);
 
