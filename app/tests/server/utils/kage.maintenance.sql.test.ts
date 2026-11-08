@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, setSystemTime } from "bun:test";
 import { eq } from "drizzle-orm";
-import { KAGE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
+import { KAGE_DEFENSE_SETUP_HOURS, KAGE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
 import { actionLog, battle, kageDefendedChallenges, notification, userData, village, war } from "@/drizzle/schema";
 import { kageRouter } from "@/server/api/routers/kage";
 import { maintainKageDefenses, syncKageDefense } from "@/server/utils/kage";
@@ -9,6 +9,7 @@ import { beforeStatements } from "../../setup/statements";
 import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 
 const now = new Date("2026-10-12T12:00:00Z");
+const SETUP_MS = KAGE_DEFENSE_SETUP_HOURS * 3600_000;
 const villageId = "maintenance-home";
 
 describeWithDatabase("Kage defense maintenance", () => {
@@ -122,7 +123,7 @@ describeWithDatabase("Kage defense maintenance", () => {
     await maintainKageDefenses(db);
     const state = (await db.query.village.findFirst())!.kageSchedule!;
     expect(state.paused).toBe(false);
-    expect(new Date(state.setupDueAt!).getTime()).toBe(now.getTime() + 24 * 3600_000 + 120_000);
+    expect(new Date(state.setupDueAt!).getTime()).toBe(now.getTime() + SETUP_MS + 120_000);
   });
 
   it("freezes publication across a war between healthy observations without extending it twice", async () => {
@@ -135,7 +136,7 @@ describeWithDatabase("Kage defense maintenance", () => {
     const recorded = await recordQueries(() => maintainKageDefenses(db));
     expect(recorded.statements.some((s) => /start transaction|begin/i.test(s))).toBe(true);
     const updated = (await db.query.village.findFirst())!;
-    const extendedDeadline = new Date(deadline.getTime() + 10_000 + 24 * 3600_000);
+    const extendedDeadline = new Date(deadline.getTime() + 10_000 + SETUP_MS);
     expect(updated.kageId).toBe("maintenance-kage");
     expect(updated.kageSchedule?.paused).toBe(false);
     expect(updated.kageSchedule?.setupDueAt).toBe(extendedDeadline.toISOString());
@@ -171,7 +172,7 @@ describeWithDatabase("Kage defense maintenance", () => {
     await maintainKageDefenses(db);
     const updated = (await db.query.village.findFirst())!;
     expect(updated.kageId).toBe("maintenance-kage");
-    expect(updated.kageSchedule?.setupDueAt).toBe(new Date(deadline.getTime() - 10_000 + 24 * 3600_000).toISOString());
+    expect(updated.kageSchedule?.setupDueAt).toBe(new Date(deadline.getTime() - 10_000 + SETUP_MS).toISOString());
   });
 
   it("initializes a changed tenure instead of copying its predecessor's state", async () => {
@@ -183,7 +184,7 @@ describeWithDatabase("Kage defense maintenance", () => {
     const state = (await db.query.village.findFirst())!.kageSchedule!;
     expect(state.kageId).toBe("maintenance-challenger");
     expect(state.tenure).toBe(tenure.toISOString());
-    expect(new Date(state.setupDueAt!).getTime()).toBe(tenure.getTime() + 24 * 3600_000);
+    expect(new Date(state.setupDueAt!).getTime()).toBe(tenure.getTime() + SETUP_MS);
   });
   it("guarantees a full setup window after a war that ends near the deadline", async () => {
     const db = await getTestDatabase();
@@ -205,12 +206,12 @@ describeWithDatabase("Kage defense maintenance", () => {
     await maintainKageDefenses(db);
     const resumed = (await db.query.village.findFirst())!;
     expect(resumed.kageId).toBe("maintenance-kage");
-    expect(resumed.kageSchedule?.setupDueAt).toBe(new Date(warEnd.getTime() + 24 * 3600_000).toISOString());
-    setSystemTime(new Date(warEnd.getTime() + 24 * 3600_000 - 60_000));
+    expect(resumed.kageSchedule?.setupDueAt).toBe(new Date(warEnd.getTime() + SETUP_MS).toISOString());
+    setSystemTime(new Date(warEnd.getTime() + SETUP_MS - 60_000));
     await db.update(village).set({ kageSchedule: { ...resumed.kageSchedule!, observedAt: new Date(Date.now() - 60_000).toISOString() } }).where(eq(village.id, villageId));
     await maintainKageDefenses(db);
     expect((await db.query.village.findFirst())?.kageId).toBe("maintenance-kage");
-    setSystemTime(new Date(warEnd.getTime() + 24 * 3600_000));
+    setSystemTime(new Date(warEnd.getTime() + SETUP_MS));
     await maintainKageDefenses(db);
     expect((await db.query.village.findFirst())?.kageId).not.toBe("maintenance-kage");
   });
@@ -230,7 +231,7 @@ describeWithDatabase("Kage defense maintenance", () => {
     await maintainKageDefenses(db);
     const updated = (await db.query.village.findFirst())!;
     expect(updated.kageId).toBe(withElder ? "maintenance-elder" : "");
-    const reason = "Kage removed for not publishing a defense schedule within 24 hours";
+    const reason = `Kage removed for not publishing a defense schedule within ${KAGE_DEFENSE_SETUP_HOURS} hours`;
     if (withElder) {
       expect(updated.kageSchedule?.predecessor).toEqual({
         removedUserId: "maintenance-kage", removedUsername: "maintenance-kage",
@@ -241,7 +242,7 @@ describeWithDatabase("Kage defense maintenance", () => {
       const tenure = (await db.query.village.findFirst())!.kageSchedule!;
       expect(tenure.kageId).toBe("maintenance-elder");
       expect(tenure.predecessor?.removedUserId).toBe("maintenance-kage");
-      expect(tenure.setupDueAt).toBe(new Date(deadline.getTime() + 24 * 3600_000).toISOString());
+      expect(tenure.setupDueAt).toBe(new Date(deadline.getTime() + SETUP_MS).toISOString());
     } else {
       expect(updated.kageSchedule?.vacancy).toEqual({ removedUserId: "maintenance-kage", reason });
     }
@@ -256,7 +257,7 @@ describeWithDatabase("Kage defense maintenance", () => {
     ]));
     const announcements = await db.query.notification.findMany();
     expect(announcements).toHaveLength(1);
-    expect(announcements[0]!.content).toContain("maintenance-kage was removed as Kage of Maintenance home for not publishing a defense schedule within 24 hours");
+    expect(announcements[0]!.content).toContain(`maintenance-kage was removed as Kage of Maintenance home for not publishing a defense schedule within ${KAGE_DEFENSE_SETUP_HOURS} hours`);
     const users = await db.query.userData.findMany({ columns: { userId: true, unreadNotifications: true, rank: true } });
     expect(users.find((u) => u.userId === "maintenance-kage")?.unreadNotifications).toBe(1);
     expect(users.find((u) => u.userId === "maintenance-challenger")?.unreadNotifications).toBe(0);
