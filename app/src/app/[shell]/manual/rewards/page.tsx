@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +78,15 @@ export default function RewardsPage() {
     setDescription("");
     setFields([]);
     setRewards([ObjectiveReward.parse({})]);
+    setMessage(null);
+  };
+  /** Load a package into the editor, as a new package named after it when copying. */
+  const openPackage = (pack: CatalogPackage, asCopy: boolean) => {
+    setEditing("package");
+    setId(asCopy ? undefined : pack.id);
+    setName(asCopy ? `${pack.name} copy` : pack.name);
+    setDescription(pack.description);
+    setRewards([structuredClone(pack.rewards)]);
     setMessage(null);
   };
   /** Validate the draft before dispatch; server validators own stored normalization and access. */
@@ -222,28 +232,14 @@ export default function RewardsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        setEditing("package");
-                        setId(pack.id);
-                        setName(pack.name);
-                        setDescription(pack.description);
-                        setRewards([structuredClone(pack.rewards)]);
-                        setMessage(null);
-                      }}
+                      onClick={() => openPackage(pack, false)}
                     >
                       Edit
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        setEditing("package");
-                        setId(undefined);
-                        setName(`${pack.name} copy`);
-                        setDescription(pack.description);
-                        setRewards([structuredClone(pack.rewards)]);
-                        setMessage(null);
-                      }}
+                      onClick={() => openPackage(pack, true)}
                     >
                       Copy
                     </Button>
@@ -334,3 +330,5 @@ export default function RewardsPage() {
     </ContentBox>
   );
 }
+
+type CatalogPackage = RouterOutputs["rewardPackages"]["getCatalog"]["packages"][number];
