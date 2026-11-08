@@ -362,15 +362,14 @@ describe("scene cast media", () => {
 
 
 describe("generated scene candidates", () => {
-  const originalFetch = globalThis.fetch;
-  afterEach(() => { vi.restoreAllMocks(); globalThis.fetch = originalFetch; });
+  afterEach(() => vi.restoreAllMocks());
   it("uses cutout generation for quest casts and rejects opaque output", async () => {
     const generate = vi.spyOn(replicate, "txt2imgNanoBanana").mockResolvedValue(["https://example.com/character.png"]);
     const pixels = Buffer.alloc(128 * 128 * 4);
     for (let y = 20; y < 110; y += 1) for (let x = 40; x < 90; x += 1) pixels[(y * 128 + x) * 4 + 3] = 255;
     const cutout = await sharp(pixels, { raw: { width: 128, height: 128, channels: 4 } }).png().toBuffer();
     const fetchImage = vi.fn().mockResolvedValue(new Response(cutout));
-    globalThis.fetch = fetchImage;
+    vi.spyOn(globalThis, "fetch").mockImplementation(fetchImage);
     const request = { kind: "IMAGE" as const, path: "content.objectives.0.sceneCharacters.0", catalogIds: [], search: null, generate: "A dignified village representative" };
     const candidates = await collectCandidates({} as DrizzleClient, request, { searches: 0, generations: 1 }, "quest");
     expect(generate).toHaveBeenCalledWith(expect.objectContaining({ removeBg: true, width: 341, height: 512, size: "portrait", preprompt: expect.stringContaining("scene character") }));

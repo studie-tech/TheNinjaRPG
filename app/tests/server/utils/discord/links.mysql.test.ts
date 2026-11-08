@@ -64,7 +64,6 @@ const ENV = {
   DISCORD_TOKEN_ENCRYPTION_KEY: KEY.toString("base64"),
   NEXT_PUBLIC_BASE_URL: "http://localhost:3000",
 };
-const originalFetch = globalThis.fetch;
 
 type Call = {
   method: string;
@@ -85,7 +84,7 @@ let authorization = {
 
 /** A small fake of the Discord endpoints the feature calls. */
 const fakeDiscord = (user = { id: OLD_DISCORD, username: "naruto_fan" }) => {
-  globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     // Public procedures (getStatus) pass the rate limiter: let every call through.
     const rateLimit = rateLimitResponse(init);
     if (rateLimit) return rateLimit;
@@ -129,7 +128,7 @@ const fakeDiscord = (user = { id: OLD_DISCORD, username: "naruto_fan" }) => {
     if (path.startsWith(`/guilds/${GUILD}/members/`) && method === "PUT" && !path.includes("/roles/"))
       return ok({ roles: [] }, 201);
     return ok(null, 204);
-  }) as unknown as typeof fetch;
+  }) as unknown as typeof fetch);
 };
 
 const linkValues = (userId: string, discordId: string) => ({
@@ -251,7 +250,6 @@ describeWithDatabase("Discord links (SQL)", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    globalThis.fetch = originalFetch;
   });
 
   it("keeps one link per character and at most two per Discord account", async () => {

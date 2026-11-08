@@ -26,19 +26,16 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
     headers: { "Content-Type": "application/json", ...headers },
   });
 
-const originalFetch = globalThis.fetch;
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-});
+afterEach(() => vi.restoreAllMocks());
 
 const mockFetch = (...responses: Response[]) => {
   const calls: { url: string; init: RequestInit }[] = [];
-  globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: String(url), init: init ?? {} });
     const next = responses.shift();
     if (!next) throw new Error("Unexpected fetch");
     return next;
-  }) as unknown as typeof fetch;
+  }) as unknown as typeof fetch);
   return calls;
 };
 
