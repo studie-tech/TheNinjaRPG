@@ -17,7 +17,6 @@ import {
   WALLPAPER_VARIANTS,
   type WallpaperVariant,
 } from "@/libs/wallpaperExperiment";
-import { getRandomElement } from "@/utils/array";
 
 /**
  * The application shell is prerendered once per variant and served from the CDN.
@@ -41,15 +40,17 @@ export interface ShellVariant {
 export const SHELL_CLIENTS = ["web", "ios", "android"] as const;
 export const SHELL_LAYOUTS = GAME_LAYOUTS.map((layout) => layout.id);
 
+/** A variant segment, capturing its client, layout, session and optional wallpaper. */
+const SHELL_SEGMENT = `(${SHELL_CLIENTS.join("|")})-(${SHELL_LAYOUTS.join("|")})-(in|out)(?:-(${WALLPAPER_VARIANTS.join("|")}))?`;
+const SHELL_PARAM_REGEX = new RegExp(`^${SHELL_SEGMENT}$`);
+
 /** The URL segment a variant renders under, e.g. "web-pixel-in". */
 export const shellParam = ({ client, layout, signedIn, wallpaper }: ShellVariant) =>
   `${client}-${layout}-${signedIn ? "in" : "out"}${wallpaper ? `-${wallpaper}` : ""}`;
 
 /** Inverse of shellParam; null for anything that is not a known variant. */
 export const parseShellParam = (param: string): ShellVariant | null => {
-  const match = new RegExp(
-    `^(${SHELL_CLIENTS.join("|")})-(${SHELL_LAYOUTS.join("|")})-(in|out)(?:-(${WALLPAPER_VARIANTS.join("|")}))?$`,
-  ).exec(param);
+  const match = SHELL_PARAM_REGEX.exec(param);
   if (!match) return null;
   const [, client, layout, session, wallpaper] = match;
   if (wallpaper && (client !== "web" || layout !== "default" || session !== "out"))
@@ -77,9 +78,7 @@ export const SHELL_PARAMS = [
   ),
 ];
 
-const SHELL_PARAM_PATTERN = new RegExp(
-  `^/(?:${SHELL_CLIENTS.join("|")})-(?:${SHELL_LAYOUTS.join("|")})-(?:in|out)(?:-(?:${WALLPAPER_VARIANTS.join("|")}))?(?=/|$)`,
-);
+const SHELL_PATH_PATTERN = new RegExp(`^/${SHELL_SEGMENT}(?=/|$)`);
 
 /**
  * The public path a variant path stands for, or null when the path is not one. Variant
@@ -89,7 +88,7 @@ const SHELL_PARAM_PATTERN = new RegExp(
  * as //host cannot turn the redirect into one that leaves the site.
  */
 export const publicPathForShellPath = (pathname: string): string | null => {
-  const match = SHELL_PARAM_PATTERN.exec(pathname);
+  const match = SHELL_PATH_PATTERN.exec(pathname);
   if (!match) return null;
   const rest = pathname.slice(match[0].length).replace(/^[/\\]+/, "");
   return `/${rest}`;
@@ -104,7 +103,7 @@ export interface ShellRequest {
   cookies: ReadonlyMap<string, string>;
   /** Draws an experiment assignment for a visitor who has none. */
   draw: () => LemuVariant;
-  drawWallpaper?: () => WallpaperVariant;
+  drawWallpaper: () => WallpaperVariant;
   /** Only a document visit can enroll a new visitor, never prefetch or RSC navigation. */
   isDocument?: boolean;
 }
@@ -172,8 +171,8 @@ export const chooseShell = (
   }
   let wallpaper = parseWallpaperVariant(request.cookies.get(WALLPAPER_EXPERIMENT));
   if (client === "web" && isLandingVisit && !wallpaper) {
-    wallpaper = request.drawWallpaper?.() ?? getRandomElement(WALLPAPER_VARIANTS);
-    if (wallpaper) assigned[WALLPAPER_EXPERIMENT] = wallpaper;
+    wallpaper = request.drawWallpaper();
+    assigned[WALLPAPER_EXPERIMENT] = wallpaper;
   }
   return {
     variant: {

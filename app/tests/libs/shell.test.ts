@@ -1,7 +1,7 @@
 import { GAME_LAYOUTS } from "@/libs/gameLayouts";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
-import { WALLPAPER_EXPERIMENT, WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
-import { describe, expect, it } from "bun:test";
+import { drawWallpaperVariant, WALLPAPER_EXPERIMENT, WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import {
   chooseShell,
@@ -230,7 +230,7 @@ describe("chooseShell", () => {
       const variant = { client: "web" as const, layout: "default" as const, signedIn: false, wallpaper };
       expect(parseShellParam(shellParam(variant))).toEqual(variant);
       expect(publicPathForShellPath(`/${shellParam(variant)}/signup`)).toBe("/signup");
-      const choice = chooseShell({ userAgent: "Chrome", userId: null, pathname: "/signup", cookies: new Map([[WALLPAPER_EXPERIMENT, wallpaper]]), draw: () => "control" });
+      const choice = chooseShell({ userAgent: "Chrome", userId: null, pathname: "/signup", cookies: new Map([[WALLPAPER_EXPERIMENT, wallpaper]]), draw: () => "control", drawWallpaper: () => "control" });
       expect(choice.variant).toEqual(variant);
       expect(choice.assigned).toEqual({});
     });
@@ -243,6 +243,16 @@ describe("chooseShell", () => {
   });
   it("replaces an invalid assignment on a document landing visit", () => {
     expect(chooseShell({ userAgent: "Chrome", userId: null, pathname: "/", cookies: new Map([[WALLPAPER_EXPERIMENT, "bogus"]]), draw: () => "control", drawWallpaper: () => "summer" }).variant.wallpaper).toBe("summer");
+  });
+  describe("drawWallpaperVariant", () => {
+    afterEach(() => vi.restoreAllMocks());
+    it.each([
+      [0, "control"],
+      [0.999, "horizon"],
+    ] as const)("allocates random draw %s to %s", (draw, variant) => {
+      vi.spyOn(Math, "random").mockReturnValue(draw);
+      expect(drawWallpaperVariant()).toBe(variant);
+    });
   });
  });
 describe("selected Lemu portraits", () => {
