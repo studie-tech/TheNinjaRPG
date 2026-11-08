@@ -1,6 +1,7 @@
 import type { Grid } from "honeycomb-grid";
 import { Container, Graphics, Rectangle, type RenderLayer, Text } from "pixi.js";
 import {
+  type AvatarFacing,
   CREATOR_USERNAME,
   IMG_AVATAR_DEFAULT,
   IMG_ICON_HEAL,
@@ -22,12 +23,12 @@ import { lpcFacing } from "@/libs/lpc/catalog";
 import { passesBracketFilter } from "@/libs/profile";
 import { getActiveObjectives } from "@/libs/quest";
 import { hasRequiredRank } from "@/libs/rank";
-import type { AnimationClip } from "@/libs/rendering/animation";
 import { animationTextureUrl } from "@/libs/rendering/animationTextures";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createRenderScope } from "@/libs/rendering/scope";
 import type {
+  WorldLoop,
   WorldMotionDirection,
   WorldSpriteDescription,
 } from "@/libs/rendering/sectorSprites";
@@ -67,6 +68,7 @@ export const createTravelActors = (
       user.spriteAppearance,
       user.bodyArt,
       user.bodyIdle?.id,
+      user.bodyMove?.id,
       user.avatar,
       user.avatarLight,
       user.isNpc,
@@ -304,6 +306,7 @@ export const createTravelActors = (
         x: previous?.x ?? -recipe.tile.center.x,
         y: previous?.y ?? -recipe.tile.center.y,
         facing: previous?.facing ?? 2,
+        heading: previous?.heading,
         depth: 0,
         contactY:
           recipe.tile.height *
@@ -565,10 +568,12 @@ export const createTravelActors = (
           movement.y - record.y,
           record.facing,
         );
+        record.heading = headingOf(movement.x - record.x, record.heading);
         record.x = movement.x;
         record.y = movement.y;
       } else if (moving) {
         record.facing = lpcFacing(dx, dy, record.facing);
+        record.heading = headingOf(dx, record.heading);
         // Still frames reach the authoritative tile in one update; animated movement catches up its queued path.
         const step = frame.reducedMotion
           ? distance
@@ -589,7 +594,7 @@ export const createTravelActors = (
           moving && !frame.reducedMotion ? "walk" : "idle",
           record.facing,
         );
-      record.art?.animateLoops(frame);
+      record.art?.animateLoops(frame, { moving, heading: record.heading });
       const phi = angle + recipe.orbit;
       root.position.set(
         record.x +
@@ -873,14 +878,19 @@ const NPC_TRAVEL_HEIGHT = 1.3;
 const PLAYER_TRAVEL_SHADOW = 0.16;
 const PLAYER_TRAVEL_LIGHT = 0.65;
 /** A sheet's cells share its still image's square framing, so frames swap in place. */
-const idleLoop = (animation: CharacterAnimation): AnimationClip => ({
-  images: [animationTextureUrl(animation, 256)],
-  columns: animation.columns,
-  rows: animation.rows,
-  frameCount: animation.frameCount,
-  frameDurationMs: 1000 / animation.fps,
-  loop: true,
+const sheetLoop = (animation: CharacterAnimation): WorldLoop => ({
+  clip: {
+    images: [animationTextureUrl(animation, 256)],
+    columns: animation.columns,
+    rows: animation.rows,
+    frameCount: animation.frameCount,
+    frameDurationMs: 1000 / animation.fps,
+    loop: true,
+  },
+  facing: animation.facing,
 });
+const headingOf = (dx: number, previous?: AvatarFacing): AvatarFacing | undefined =>
+  Math.abs(dx) < 0.001 ? previous : dx < 0 ? "left" : "right";
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
 /** Repeated NPC appearances remain distinct through placement identity; players use account identity. */
@@ -971,7 +981,8 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
                 ? {
                     shadow: PLAYER_TRAVEL_SHADOW,
                     light: PLAYER_TRAVEL_LIGHT,
-                    loop: user.bodyIdle && idleLoop(user.bodyIdle),
+                    loop: user.bodyIdle && sheetLoop(user.bodyIdle),
+                    walk: user.bodyMove && sheetLoop(user.bodyMove),
                   }
                 : {}),
             }
@@ -1065,6 +1076,8 @@ type ActorRecord = {
   x: number;
   y: number;
   facing: LpcDirection;
+  /** Last sideways direction walked; up and down keep it, so looping art never flips. */
+  heading?: AvatarFacing;
   recipe: ActorRecipe;
   signature: string;
   scope: GameRenderer;

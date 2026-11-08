@@ -7,6 +7,7 @@ import {
   Sprite,
   Texture,
 } from "pixi.js";
+import type { AvatarFacing } from "@/drizzle/constants";
 import { type TerrainHex, tileKeysNear } from "@/libs/hexgrid";
 import { sampleAnimationClip } from "@/libs/rendering/animation";
 import {
@@ -107,6 +108,7 @@ export const createWorldSprites = async (
     groundY: number;
     motion: Awaited<ReturnType<typeof createClipTextures>> | null;
     loop: Awaited<ReturnType<typeof createClipTextures>> | null;
+    walk: Awaited<ReturnType<typeof createClipTextures>> | null;
     idleTexture: Texture;
     motionFrame: number;
   }[] = [];
@@ -127,6 +129,7 @@ export const createWorldSprites = async (
     for (const entry of entries) {
       entry.motion?.dispose();
       entry.loop?.dispose();
+      entry.walk?.dispose();
     }
     lightTexture?.destroy(true);
     shadowLease?.release();
@@ -145,7 +148,14 @@ export const createWorldSprites = async (
             description.character,
             description.characterMode,
           );
-          return { texture: null, description, character, motion: null, loop: null };
+          return {
+            texture: null,
+            description,
+            character,
+            motion: null,
+            loop: null,
+            walk: null,
+          };
         } catch (error) {
           if (game.signal.aborted) throw error;
           console.warn("Character artwork unavailable; showing portrait", error);
@@ -187,28 +197,40 @@ export const createWorldSprites = async (
             return null;
           })
         : null;
-      const loop = description.loop
-        ? await createClipTextures(game, description.loop, {
-            size: description.size,
-            rendition: 0,
-          }).catch((error: unknown) => {
-            if (
-              game.signal.aborted ||
-              game.isDisposed() ||
-              (error instanceof Error && error.name === "AbortError")
-            )
-              throw error;
-            // The still image remains if the optional loop cannot load.
-            console.warn("Looping artwork unavailable", error);
-            return null;
-          })
-        : null;
+      const [loop, walk] = await Promise.all(
+        [description.loop, description.walk].map((sheet) =>
+          sheet
+            ? createClipTextures(game, sheet.clip, {
+                size: description.size,
+                rendition: 0,
+              }).catch((error: unknown) => {
+                if (
+                  game.signal.aborted ||
+                  game.isDisposed() ||
+                  (error instanceof Error && error.name === "AbortError")
+                )
+                  throw error;
+                // The still image remains if an optional loop cannot load.
+                console.warn("Looping artwork unavailable", error);
+                return null;
+              })
+            : null,
+        ),
+      );
       if (disposed || game.signal.aborted) {
         motion?.dispose();
         loop?.dispose();
+        walk?.dispose();
         return null;
       }
-      return { texture, description, motion, loop, character: undefined };
+      return {
+        texture,
+        description,
+        motion,
+        loop: loop ?? null,
+        walk: walk ?? null,
+        character: undefined,
+      };
     }),
   );
   let shadowTexture: Texture | null = null;
@@ -305,7 +327,8 @@ export const createWorldSprites = async (
         !description.character &&
         !description.mask &&
         !description.motion &&
-        !description.loop;
+        !description.loop &&
+        !description.walk;
       if (isCharacterCutout && texture) {
         const frame = opaqueFrame(texture);
         const scale = sprite.scale.clone();
@@ -458,6 +481,7 @@ export const createWorldSprites = async (
         groundY,
         motion: result.value.motion,
         loop: result.value.loop,
+        walk: result.value.walk,
         idleTexture: texture ?? Texture.EMPTY,
         motionFrame: -1,
         bounds: worldSpriteBounds({
@@ -540,8 +564,8 @@ export const createWorldSprites = async (
   } | null = null;
   const softEffects = entries.filter((entry) => entry.shadow || entry.light);
   const looping = entries.flatMap((entry) =>
-    entry.loop && entry.sprite instanceof Sprite
-      ? [{ ...entry, loop: entry.loop, sprite: entry.sprite }]
+    (entry.loop || entry.walk) && entry.sprite instanceof Sprite
+      ? [{ ...entry, sprite: entry.sprite }]
       : [],
   );
   return {
@@ -549,18 +573,38 @@ export const createWorldSprites = async (
     entries,
     missing,
     dispose,
-    /** Plays each looping artwork from the scene clock; reduced motion holds the still image. */
-    animateLoops: (frame: GameFrame) => {
+    /**
+     * Plays each looping artwork from the scene clock: the walk while its owner moves, else the
+     * idle loop, mirrored when the heading differs from the way the art faces. Reduced motion
+     * holds the still image.
+     */
+    animateLoops: (
+      frame: GameFrame,
+      pose: { moving: boolean; heading?: AvatarFacing } = { moving: false },
+    ) => {
       if (disposed) return;
       const still =
         frame.reducedMotion || game.visualEffects?.spriteAnimations === false;
       for (const entry of looping) {
-        const texture = still
-          ? entry.idleTexture
-          : (entry.loop.views[sampleAnimationClip(entry.loop.clip, frame.now).index] ??
-            entry.idleTexture);
-        if (entry.sprite.texture === texture) continue;
-        const facing = Math.sign(entry.sprite.scale.x);
+        const walking = pose.moving && !!entry.walk;
+        const views = walking ? entry.walk : entry.loop;
+        const sheet = walking ? entry.description.walk : entry.description.loop;
+        const texture =
+          still || !views || !sheet
+            ? entry.idleTexture
+            : (views.views[sampleAnimationClip(sheet.clip, frame.now).index] ??
+              entry.idleTexture);
+        const facing =
+          !still && sheet && pose.heading
+            ? sheet.facing === pose.heading
+              ? 1
+              : -1
+            : Math.sign(entry.sprite.scale.x) || 1;
+        if (
+          entry.sprite.texture === texture &&
+          Math.sign(entry.sprite.scale.x) === facing
+        )
+          continue;
         entry.sprite.texture = texture;
         entry.sprite.width = (entry.description.size * texture.width) / texture.height;
         entry.sprite.height = entry.description.size;

@@ -106,12 +106,13 @@ describeWithDatabase("travel.getSectorData player visibility", () => {
       { userId: CREATOR_TRIAL_FIRST_FORM, isAi: true, avatar: "https://example.com/robot.webp" },
     ]);
     const db = await getTestDatabase();
-    await db.insert(spriteAnimation).values(["idle", "strike"].map((id) => ({
+    await db.insert(spriteAnimation).values(["idle", "move", "strike"].map((id) => ({
       id, name: id, url: `https://example.com/${id}.png`, columns: 8, rows: 3,
       frameCount: 24, fps: 12.5, facing: "left" as const, createdByUserId: "editor",
     })));
     await db.insert(aiSpriteAnimation).values([
       { userId: CREATOR_TRIAL_FIRST_FORM, actionKey: "idle", animationId: "idle" },
+      { userId: CREATOR_TRIAL_FIRST_FORM, actionKey: "move", animationId: "move" },
       { userId: CREATOR_TRIAL_FIRST_FORM, actionKey: "basic:basicAttack", animationId: "strike" },
     ]);
     for (const callerId of [VIEWER, "creator"]) {
@@ -119,6 +120,7 @@ describeWithDatabase("travel.getSectorData player visibility", () => {
       expect(result.users.find((u) => u.userId === "creator")).toMatchObject({
         bodyArt: "https://example.com/robot.webp",
         bodyIdle: { id: "idle", url: "https://example.com/idle.png", frameCount: 24 },
+        bodyMove: { id: "move", url: "https://example.com/move.png", facing: "left" },
       });
       expect(result.users.find((u) => u.userId === "active")).not.toHaveProperty("bodyArt");
     }

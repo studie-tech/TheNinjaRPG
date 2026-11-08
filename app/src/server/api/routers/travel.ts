@@ -510,6 +510,8 @@ export const travelRouter = createTRPCRouter({
         visibleLocations.map((l) => `${l.sector}:${l.longitude}:${l.latitude}`),
       );
 
+      const creatorSheets =
+        creatorBody && snapshotSpriteAnimations(creatorBody.spriteAnimationBindings);
       return {
         // A disguise renames the creator, so a disguised creator keeps the disguise.
         users: creatorBody?.avatar
@@ -518,9 +520,8 @@ export const travelRouter = createTRPCRouter({
                 ? {
                     ...u,
                     bodyArt: creatorBody.avatar,
-                    bodyIdle: snapshotSpriteAnimations(
-                      creatorBody.spriteAnimationBindings,
-                    ).idle,
+                    bodyIdle: creatorSheets?.idle,
+                    bodyMove: creatorSheets?.move,
                   }
                 : u,
             )
