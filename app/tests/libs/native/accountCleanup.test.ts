@@ -4,7 +4,7 @@ import {
   nativeWidgetAccountAction,
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
-import { installCapacitor, removeCapacitor } from "../setup/native";
+import { installCapacitor, removeCapacitor } from "../../setup/native";
 
 const clearWidget = vi.fn();
 const endAll = vi.fn();

@@ -9,8 +9,8 @@ import { DUNGEON_FLOORS_PER_TIER } from "@/drizzle/constants";
 import * as ContentBox from "@/layout/ContentBox";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { dungeonContent } from "../setup/dungeon";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { dungeonContent } from "../../setup/dungeon";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 type SaveInput = RouterInputs["coop"]["dungeon"]["save"];
 type SaveResult = RouterOutputs["coop"]["dungeon"]["save"];

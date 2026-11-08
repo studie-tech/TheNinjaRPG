@@ -17,8 +17,8 @@ import * as toast from "@/libs/toast";
 import { createTrpcSession, SESSION_CHANGED_MESSAGE, trpcSessionLink } from "@/libs/trpcSession";
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { actualShowMutationToast } from "../setup/preload";
-import { deferred } from "../setup/deferred";
+import { actualShowMutationToast } from "../../setup/preload";
+import { deferred } from "../../setup/deferred";
 
 const key = [["profile", "getUser"], { type: "query" }];
 type Result = RouterOutputs["misc"]["submitNotification"];

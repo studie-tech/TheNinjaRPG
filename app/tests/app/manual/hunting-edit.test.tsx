@@ -7,8 +7,8 @@ import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import HuntingEditor from "@/app/[shell]/manual/hunting/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as UserContext from "@/utils/UserContext";
-import { huntingHabitatContent } from "../setup/hunting";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { huntingHabitatContent } from "../../setup/hunting";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 type SaveInput = RouterInputs["hunting"]["save"];
 type SaveResult = RouterOutputs["hunting"]["save"];

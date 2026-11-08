@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { GET } from "@/app/api/push-timers/route";
 import * as settings from "@/libs/gamesettings";
 import * as timers from "@/server/utils/push/timed";
-import { resetServerModuleStubs, stubCronAuth } from "../../setup/serverModules";
+import { resetServerModuleStubs, stubCronAuth } from "../../../setup/serverModules";
 
 const previous = new Date("2026-10-19T10:00:00Z");
 const run = vi.fn();

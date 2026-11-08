@@ -5,7 +5,7 @@ import {
   resetServerModuleStubs,
   stubCronAuth,
   stubDatabase,
-} from "../../setup/serverModules";
+} from "../../../setup/serverModules";
 
 const NOW = new Date("2026-10-21T12:00:00Z");
 

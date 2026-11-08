@@ -5,8 +5,8 @@ import NativeStore from "@/components/native/NativeStore";
 import { STORE_FEDERAL_PRODUCTS } from "@/drizzle/constants";
 import { purchases as nativePurchases } from "@/libs/native";
 import type { StorePackage } from "@/libs/native/purchases";
-import { createToastMock } from "../setup/toastMock";
-import { capacitorWindow, installCapacitor, removeCapacitor } from "../setup/native";
+import { createToastMock } from "../../setup/toastMock";
+import { capacitorWindow, installCapacitor, removeCapacitor } from "../../setup/native";
 
 type AsyncMock = ReturnType<
   typeof vi.fn<(...args: unknown[]) => Promise<unknown>>
