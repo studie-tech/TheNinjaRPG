@@ -1714,6 +1714,10 @@ export const COST_RESKIN_JUTSU = 60;
 // Village config
 export const VILLAGE_LEAVE_REQUIRED_RANK = "CHUNIN";
 export const VILLAGE_REDUCED_GAINS_DAYS = 7;
+// Regeneration and training multiplier while village gains are reduced.
+export const VILLAGE_REDUCED_GAINS_FACTOR = 0.5;
+// Highest level a Horizon user can reach before joining one of the main villages.
+export const HORIZON_MAX_LEVEL = 10;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
 /** Guardian AI behind village protector encounters and the last-resort shrine defence. */
 export const VILLAGE_PROTECTOR_AI_ID = "MJMzOE67Cx2YP3NX8SAbh";

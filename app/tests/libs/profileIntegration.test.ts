@@ -59,7 +59,7 @@ describe("shared profile system contracts", () => {
         experience: calcLevelRequirements(10),
         village: { name: "Horizon" },
       }),
-    ).toContain("Horizon");
+    ).toContain("Horizon users cannot level beyond level 10.");
     expect(
       levelUpBlockMessage({
         ...user,

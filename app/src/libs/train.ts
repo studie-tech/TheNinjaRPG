@@ -26,6 +26,7 @@ import {
   STATS_PER_ENERGY,
   VILLAGE_LEAVE_REQUIRED_RANK,
   VILLAGE_REDUCED_GAINS_DAYS,
+  VILLAGE_REDUCED_GAINS_FACTOR,
 } from "@/drizzle/constants";
 import type { GameSetting, Jutsu, UserData, UserQueue } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
@@ -267,7 +268,7 @@ export const trainingMultiplier = (user: UserData) => {
  * Player training modifiers independent of the selected training interval.
  */
 export const getTrainingMultiplierBoost = (user: UserData) => {
-  const factor = getReducedGainsDays(user) > 0 ? 0.5 : 1;
+  const factor = getReducedGainsDays(user) > 0 ? VILLAGE_REDUCED_GAINS_FACTOR : 1;
   return user.rank === "GENIN" && user.senseiId
     ? factor * (1 + SENSEI_GENIN_TRAIN_EXP_BOOST_PERC / 100)
     : factor;
