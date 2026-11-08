@@ -3,9 +3,9 @@ import { eq } from "drizzle-orm";
 import { AUCTION_HOUSE_MIN_LEVEL } from "@/drizzle/constants";
 import { actionLog, auctionBid, auctionListing, item, userData, userItem } from "@/drizzle/schema";
 import { auctionRouter } from "@/server/api/routers/auction";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
-import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
-import { overrideQuery } from "../../../setup/statements";
+import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { overrideQuery } from "../../../../setup/statements";
 
 describeWithDatabase("cooking trade quantities", () => {
   beforeEach(async () => {
