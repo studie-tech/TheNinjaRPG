@@ -46,7 +46,13 @@ import {
 } from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
-import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
+import {
+  COMBAT_LOBBY_SECONDS,
+  COMBAT_SECONDS,
+  ITEM_BROKEN_NOTICE,
+  ITEM_DURABILITY_CRITICAL_NOTICE,
+  ITEM_DURABILITY_NOTICE,
+} from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { isPvpEnergyRewardBattle, sendsToHospital } from "@/libs/combat/settlement";
 import { validateActionTarget } from "@/libs/combat/targetValidation";
@@ -496,12 +502,12 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
       if (data?.result?.notifications.length !== 0) {
         data?.result?.notifications.forEach((notification) => {
-          // Check if this is a durability warning (contains "durability is now" or "has broken")
+          // Check if this is a durability warning
           const isDurabilityWarning =
-            notification.includes("durability is now") ||
-            notification.includes("durability is critically low") ||
-            notification.includes("has broken");
-          const isBrokenItem = notification.includes("has broken");
+            notification.includes(ITEM_DURABILITY_NOTICE) ||
+            notification.includes(ITEM_DURABILITY_CRITICAL_NOTICE) ||
+            notification.includes(ITEM_BROKEN_NOTICE);
+          const isBrokenItem = notification.includes(ITEM_BROKEN_NOTICE);
           // Check if this is a war notification
           const isWarNotification =
             notification.includes("townhall") || notification.includes("Shrine");

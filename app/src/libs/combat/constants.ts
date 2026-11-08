@@ -35,6 +35,14 @@ export const EFFECT_TEXT_COLORS: Record<ActionEffect["color"], string> = {
   gray: "text-gray-500",
 };
 
+/**
+ * Phrases in the item durability notices a battle result carries. The battle screen
+ * titles its notification toasts by them, so the notices and the titles share these.
+ */
+export const ITEM_BROKEN_NOTICE = "has broken";
+export const ITEM_DURABILITY_CRITICAL_NOTICE = "durability is critically low";
+export const ITEM_DURABILITY_NOTICE = "durability is now";
+
 /** Ranked bloodlines boost every damage element, including attacks outside Highest. */
 export const RANKED_BLOODLINE_DAMAGE_TAG = IncreaseDamageGivenTag.parse({
   power: (RANKED_BLOODLINE_EFFECT_MULT - 1) * 100,

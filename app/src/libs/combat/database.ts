@@ -21,6 +21,11 @@ import {
 } from "@/drizzle/constants";
 import { type Battle, userData, userJutsu, war } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
+import {
+  ITEM_BROKEN_NOTICE,
+  ITEM_DURABILITY_CRITICAL_NOTICE,
+  ITEM_DURABILITY_NOTICE,
+} from "@/libs/combat/constants";
 import { settleObjectiveWarCombat } from "@/libs/combat/objectiveWar";
 import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
@@ -1645,7 +1650,7 @@ const durabilityNotifications = (battle: CompleteBattle, user: BattleUserState) 
       // Broken: now at 0
       if (initial > 0 && final <= 0) {
         notifications.push(
-          `${item.name} has broken and cannot be used until repaired!`,
+          `${item.name} ${ITEM_BROKEN_NOTICE} and cannot be used until repaired!`,
         );
       } else if (
         // Urgent warning: crossed down to <=25%
@@ -1654,7 +1659,7 @@ const durabilityNotifications = (battle: CompleteBattle, user: BattleUserState) 
         final > 0
       ) {
         notifications.push(
-          `${item.name} durability is critically low at ${finalPct}%! Repair it soon to prevent it from breaking!`,
+          `${item.name} ${ITEM_DURABILITY_CRITICAL_NOTICE} at ${finalPct}%! Repair it soon to prevent it from breaking!`,
         );
       } else if (
         // Regular warning: crossed down to <=50% (but still above 25%)
@@ -1664,7 +1669,7 @@ const durabilityNotifications = (battle: CompleteBattle, user: BattleUserState) 
         final > 0
       ) {
         notifications.push(
-          `${item.name} durability is now ${finalPct}%. Consider repairing it soon!`,
+          `${item.name} ${ITEM_DURABILITY_NOTICE} ${finalPct}%. Consider repairing it soon!`,
         );
       }
     }
