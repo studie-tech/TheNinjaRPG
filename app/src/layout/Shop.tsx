@@ -439,7 +439,6 @@ const Shop: React.FC<ShopProps> = (props) => {
       proceed_label={isPurchasing ? undefined : canAfford ? costString : missingString}
       isOpen={isOpen}
       setIsOpen={setItemConfirmOpen}
-      isValid={false}
       isLoading={isPurchasing}
       keepOpenOnAccept
       proceedDisabled={!canReviewRollOdds || !canPurchaseQuantity || isPurchasing}

@@ -483,7 +483,6 @@ export const RankedLoadoutSelector: React.FC = () => {
           title={selectedItem.name}
           isOpen={isItemModalOpen}
           setIsOpen={setIsItemModalOpen}
-          isValid={false}
           isLoading={isSaving}
           keepOpenOnAccept={true}
           proceed_label={equippedItems.includes(selectedItem.id) ? "Unequip" : "Equip"}
@@ -564,7 +563,6 @@ export const RankedLoadoutSelector: React.FC = () => {
           title={selectedJutsu.name}
           isOpen={isOpen}
           setIsOpen={setIsOpen}
-          isValid={false}
           isLoading={isSaving}
           keepOpenOnAccept={true}
           proceed_label={loadoutJutsus.includes(selectedJutsu.id) ? "Unequip" : "Equip"}

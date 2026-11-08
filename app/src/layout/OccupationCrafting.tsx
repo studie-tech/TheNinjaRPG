@@ -688,7 +688,6 @@ export default function OccupationCrafting() {
                           proceed_loading_label="Imbuing"
                           isOpen={isImbueModalOpen}
                           setIsOpen={setIsImbueModalOpen}
-                          isValid={false}
                           isLoading={imbueFlight.isPending}
                           keepOpenOnAccept
                           proceedDisabled={committedImbue !== null}

@@ -3387,7 +3387,7 @@ interface AdjustSeichiSilverProps {
   username: string;
 }
 
-const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
+export const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
   userId,
   username,
 }) => {
@@ -3441,13 +3441,11 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
         title="Adjust Seichi Silver"
         isOpen={isOpen}
         setIsOpen={setIsOpen}
-        proceed_label={isPending ? "Saving" : "Apply"}
-        // Modal auto-closes on Apply when isValid is true/undefined. Pass false so a
-        // failed mutation (AI rejection / insufficient balance) keeps the form open
-        // with the entered amount + reason; we close in onSuccess instead. The accept
-        // button stays gated via proceedDisabled below.
-        isValid={false}
-        proceedDisabled={!isValid || isPending}
+        proceed_label="Apply"
+        proceed_loading_label="Saving"
+        isLoading={isPending}
+        keepOpenOnAccept
+        proceedDisabled={!isValid}
         onAccept={(e) => {
           e.preventDefault();
           if (!isValid) return;
