@@ -30,7 +30,8 @@ import {
 } from "@/validators/combat";
 
 /**
- * MassEffectEditor (re-exported) - generic mass editor that reuses EffectFieldInputGeneric
+ * Edit selected effect fields across many entries of one content kind; each row saves
+ * every effect of its entry.
  */
 export const MassEffectEditor = <
   T extends { id: string; name: string; effects: ZodAllTags[]; updatedAt: Date },
@@ -49,17 +50,9 @@ export const MassEffectEditor = <
   const [committed, setCommitted] = useState<
     Record<string, { effects: ZodAllTags[]; baseUpdatedAt: number }>
   >({});
-  const [pendingItemId, setPendingItemId] = useState<string | null>(null);
-  const [pendingJutsuId, setPendingJutsuId] = useState<string | null>(null);
-  const [pendingBloodlineId, setPendingBloodlineId] = useState<string | null>(null);
-  const itemSaveInFlight = useRef(false);
-  const jutsuSaveInFlight = useRef(false);
-  const bloodlineSaveInFlight = useRef(false);
-  const itemEditorPending = kind === "item" && pendingItemId !== null;
-  const jutsuEditorPending = kind === "jutsu" && pendingJutsuId !== null;
-  const bloodlineEditorPending = kind === "bloodline" && pendingBloodlineId !== null;
-  const editorPending =
-    itemEditorPending || jutsuEditorPending || bloodlineEditorPending;
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const saveInFlight = useRef(false);
+  const editorPending = pendingId !== null;
 
   useEffect(
     () => () => {
@@ -144,10 +137,7 @@ export const MassEffectEditor = <
                     const next: Record<string, ZodAllTags[]> = { ...prev };
                     const baseEffs =
                       next[entry.id] ?? committed[entry.id]?.effects ?? entry.effects;
-                    const effsArray = Array.isArray(baseEffs)
-                      ? baseEffs
-                      : entry.effects;
-                    const updated = [...effsArray];
+                    const updated = [...baseEffs];
                     const current = updated[idx] ?? effect;
                     updated[idx] = { ...current, [f]: v } as ZodAllTags;
                     next[entry.id] = updated;
@@ -200,131 +190,68 @@ export const MassEffectEditor = <
       });
       return;
     }
-    if (kind === "item") {
-      if (itemSaveInFlight.current) return;
-      itemSaveInFlight.current = true;
-      setPendingItemId(entry.id);
-      props.onPendingChange?.(true);
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
+    setPendingId(entry.id);
+    props.onPendingChange?.(true);
+    try {
+      const res =
+        kind === "item"
+          ? await itemUpdate.mutateAsync({
+              id: entry.id,
+              data: { ...(entry as unknown as ZodItemType), effects } as ZodItemType,
+            })
+          : kind === "jutsu"
+            ? await jutsuUpdate.mutateAsync({
+                id: entry.id,
+                data: {
+                  ...(entry as unknown as ZodJutsuType),
+                  effects,
+                } as ZodJutsuType,
+              })
+            : await bloodlineUpdate.mutateAsync({
+                id: entry.id,
+                data: {
+                  ...(entry as unknown as ZodBloodlineType),
+                  effects,
+                } as ZodBloodlineType,
+              });
+      showMutationToast(res);
+      if (!res.success) return;
+      setCommitted((prev) => ({
+        ...prev,
+        [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
+      }));
+      setModified((prev) => {
+        const next = { ...prev };
+        delete next[row.entryId];
+        return next;
+      });
       try {
-        const data = { ...(entry as unknown as ZodItemType), effects } as ZodItemType;
-        const res = await itemUpdate.mutateAsync({ id: entry.id, data });
-        showMutationToast(res);
-        if (!res.success) return;
-        setCommitted((prev) => ({
-          ...prev,
-          [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
-        }));
-        setModified((prev) => {
-          const next = { ...prev };
-          delete next[row.entryId];
-          return next;
-        });
-        try {
-          await props.onEntriesUpdated?.();
-        } catch {
-          // The committed local snapshot keeps the successful write truthful if
-          // the authoritative list cannot be refreshed immediately.
-        }
-      } catch (error) {
+        await props.onEntriesUpdated?.();
+      } catch {
+        // The committed local snapshot keeps the successful write truthful if
+        // the authoritative list cannot be refreshed immediately.
+      }
+    } catch (error) {
+      // The draft is retained. Item saves report every thrown error here; jutsu and
+      // bloodline saves report only retryable transport errors.
+      if (kind === "item") {
         showMutationToast({
           success: false,
           message:
             error instanceof Error ? error.message : "Unable to save item effects",
         });
-      } finally {
-        itemSaveInFlight.current = false;
-        setPendingItemId(null);
-        props.onPendingChange?.(false);
-      }
-      return;
-    } else if (kind === "jutsu") {
-      if (jutsuSaveInFlight.current) return;
-      jutsuSaveInFlight.current = true;
-      setPendingJutsuId(entry.id);
-      props.onPendingChange?.(true);
-      try {
-        const data = {
-          ...(entry as unknown as ZodJutsuType),
-          effects,
-        } as ZodJutsuType;
-        const res = await jutsuUpdate.mutateAsync({ id: entry.id, data });
-        showMutationToast(res);
-        if (!res.success) return;
-        setCommitted((prev) => ({
-          ...prev,
-          [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
-        }));
-        setModified((prev) => {
-          const next = { ...prev };
-          delete next[row.entryId];
-          return next;
+      } else if (error instanceof Error && isRetryableTrpcError(error)) {
+        showMutationToast({
+          success: false,
+          message: error.message || `Unable to save ${kind} effects`,
         });
-        try {
-          await props.onEntriesUpdated?.();
-        } catch {
-          // Preserve the committed local snapshot if the authoritative list
-          // cannot be refreshed immediately.
-        }
-      } catch (error) {
-        // The global mutation handler intentionally suppresses retryable
-        // transport/CDN failures. Surface those here so the retained draft has
-        // an actionable explanation, while server errors remain globally handled.
-        if (error instanceof Error && isRetryableTrpcError(error)) {
-          showMutationToast({
-            success: false,
-            message: error.message || "Unable to save jutsu effects",
-          });
-        }
-      } finally {
-        jutsuSaveInFlight.current = false;
-        setPendingJutsuId(null);
-        props.onPendingChange?.(false);
       }
-      return;
-    } else {
-      if (bloodlineSaveInFlight.current) return;
-      bloodlineSaveInFlight.current = true;
-      setPendingBloodlineId(entry.id);
-      props.onPendingChange?.(true);
-      const data = {
-        ...(entry as unknown as ZodBloodlineType),
-        effects,
-      } as ZodBloodlineType;
-      try {
-        const res = await bloodlineUpdate.mutateAsync({ id: entry.id, data });
-        showMutationToast(res);
-        if (!res.success) return;
-        setCommitted((prev) => ({
-          ...prev,
-          [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
-        }));
-        setModified((prev) => {
-          const next = { ...prev };
-          delete next[row.entryId];
-          return next;
-        });
-        try {
-          await props.onEntriesUpdated?.();
-        } catch {
-          // Preserve the committed local snapshot if the authoritative list
-          // cannot be refreshed immediately.
-        }
-      } catch (error) {
-        // Server/validation errors are already handled by the global mutation
-        // handler. It intentionally suppresses retryable transport/CDN errors,
-        // so surface only those here while retaining the exact draft.
-        if (error instanceof Error && isRetryableTrpcError(error)) {
-          showMutationToast({
-            success: false,
-            message: error.message || "Unable to save bloodline effects",
-          });
-        }
-      } finally {
-        bloodlineSaveInFlight.current = false;
-        setPendingBloodlineId(null);
-        props.onPendingChange?.(false);
-      }
-      return;
+    } finally {
+      saveInFlight.current = false;
+      setPendingId(null);
+      props.onPendingChange?.(false);
     }
   };
 
@@ -344,96 +271,27 @@ export const MassEffectEditor = <
       <Table<Row, keyof Row>
         data={rows}
         columns={columns}
-        buttons={
-          kind === "item"
-            ? [
-                {
-                  label: (row: Row) =>
-                    pendingItemId === row.entryId ? (
-                      <>
-                        <Loader2
-                          className="mr-2 h-4 w-4 animate-spin"
-                          aria-hidden="true"
-                        />
-                        Saving
-                      </>
-                    ) : (
-                      "Save"
-                    ),
-                  ariaLabel: (row: Row) =>
-                    pendingItemId === row.entryId
-                      ? `Saving item effects for ${row.name}`
-                      : `Save item effects for ${row.name}`,
-                  disabled: () => itemEditorPending,
-                  onClick: (r: Row) => void saveRow(r),
-                },
-              ]
-            : kind === "jutsu"
-              ? [
-                  {
-                    label: (row: Row) =>
-                      pendingJutsuId === row.entryId ? (
-                        <>
-                          <Loader2
-                            className="mr-2 h-4 w-4 animate-spin"
-                            aria-hidden="true"
-                          />
-                          Saving
-                        </>
-                      ) : (
-                        "Save"
-                      ),
-                    ariaLabel: (row: Row) =>
-                      pendingJutsuId === row.entryId
-                        ? `Saving jutsu effects for ${row.name}`
-                        : `Save jutsu effects for ${row.name}`,
-                    disabled: () => jutsuEditorPending,
-                    onClick: (r: Row) => void saveRow(r),
-                  },
-                ]
-              : [
-                  {
-                    label: (row: Row) =>
-                      pendingBloodlineId === row.entryId ? (
-                        <>
-                          <Loader2
-                            className="mr-2 h-4 w-4 animate-spin"
-                            aria-hidden="true"
-                          />
-                          Saving
-                        </>
-                      ) : (
-                        "Save"
-                      ),
-                    ariaLabel: (row: Row) =>
-                      pendingBloodlineId === row.entryId
-                        ? `Saving bloodline effects for ${row.name}`
-                        : `Save bloodline effects for ${row.name}`,
-                    disabled: () => bloodlineEditorPending,
-                    onClick: (r: Row) => void saveRow(r),
-                  },
-                ]
-        }
+        buttons={[
+          {
+            label: (row: Row) =>
+              pendingId === row.entryId ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  Saving
+                </>
+              ) : (
+                "Save"
+              ),
+            ariaLabel: (row: Row) =>
+              pendingId === row.entryId
+                ? `Saving ${kind} effects for ${row.name}`
+                : `Save ${kind} effects for ${row.name}`,
+            disabled: () => editorPending,
+            onClick: (r: Row) => void saveRow(r),
+          },
+        ]}
       />
-      {itemEditorPending && (
-        <p
-          className="px-3 pb-2 text-muted-foreground text-sm"
-          role="status"
-          aria-live="polite"
-        >
-          Saving
-        </p>
-      )}
-      {jutsuEditorPending && (
-        <p
-          className="px-3 pb-2 text-muted-foreground text-sm"
-          role="status"
-          aria-live="polite"
-        >
-          Saving
-        </p>
-      )}
-      {bloodlineEditorPending && (
+      {editorPending && (
         <p
           className="px-3 pb-2 text-muted-foreground text-sm"
           role="status"
