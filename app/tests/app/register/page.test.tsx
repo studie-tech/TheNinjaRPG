@@ -157,3 +157,13 @@ it("renders one trait picker per attribute slot, each showing its own choice", (
   expect(pickers.every(Boolean)).toBe(true);
   expect(new Set(pickers).size).toBe(3);
 });
+
+it("offers hair, eye and skin colours before the three traits", () => {
+  const { view } = mount(async () => ({ success: true, message: "Created" }));
+  const labels = ["Hair color", "Eye color", "Skin color", "Trait 1", "Trait 2", "Trait 3"];
+  const all = Array.from(view.container.querySelectorAll("label")).map((label) => label.textContent);
+  expect(all.filter((label) => labels.includes(label ?? ""))).toEqual(labels);
+  for (const label of labels) {
+    expect(view.getByText(label).closest("div")?.querySelector("[role=combobox]")).toBeTruthy();
+  }
+});
