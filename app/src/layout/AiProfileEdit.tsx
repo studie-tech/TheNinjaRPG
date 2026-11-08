@@ -177,6 +177,21 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
     setActiveElement(id);
   };
 
+  /** Swap a rule with a neighbour; a move past either end keeps the order. */
+  const moveRule = (from: number, to: number) => {
+    setRules((prevRules) => {
+      if (to < 0 || to >= prevRules.length) return prevRules;
+      const newRules = [...prevRules];
+      const a = newRules[from];
+      const b = newRules[to];
+      if (a && b) {
+        newRules[from] = b;
+        newRules[to] = a;
+      }
+      return newRules;
+    });
+  };
+
   // Convenience method for updating rules
   const updateCondition = (
     ruleIndex: number,
@@ -332,19 +347,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                         size="icon"
                         aria-label="Move rule up"
                         className="h-6 w-6 hover:cursor-pointer hover:text-orange-500"
-                        onClick={() => {
-                          setRules((prevRules) => {
-                            if (ruleIndex < 1) return prevRules;
-                            const newRules = [...prevRules];
-                            const a = newRules[ruleIndex];
-                            const b = newRules[ruleIndex - 1];
-                            if (a && b) {
-                              newRules[ruleIndex] = b;
-                              newRules[ruleIndex - 1] = a;
-                            }
-                            return newRules;
-                          });
-                        }}
+                        onClick={() => moveRule(ruleIndex, ruleIndex - 1)}
                       >
                         <SquareArrowUp className="h-6 w-6" />
                       </Button>
@@ -355,19 +358,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                         size="icon"
                         aria-label="Move rule down"
                         className="h-6 w-6 hover:cursor-pointer hover:text-orange-500"
-                        onClick={() => {
-                          setRules((prevRules) => {
-                            if (ruleIndex + 1 >= prevRules.length) return prevRules;
-                            const newRules = [...prevRules];
-                            const a = newRules[ruleIndex];
-                            const b = newRules[ruleIndex + 1];
-                            if (a && b) {
-                              newRules[ruleIndex] = b;
-                              newRules[ruleIndex + 1] = a;
-                            }
-                            return newRules;
-                          });
-                        }}
+                        onClick={() => moveRule(ruleIndex, ruleIndex + 1)}
                       >
                         <SquareArrowDown className="h-6 w-6" />
                       </Button>
@@ -429,7 +420,6 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                   <div className="flex flex-col gap-2">
                     <Select
                       disabled={!canEdit}
-                      defaultValue={""}
                       value={""}
                       onValueChange={(e) =>
                         setRules((prevRules) => {
@@ -626,7 +616,6 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                   <div className="flex flex-col gap-2">
                     <Select
                       disabled={!canEdit}
-                      defaultValue={currentActionType}
                       value={currentActionType}
                       onValueChange={(e) =>
                         updateAction(ruleIndex, () =>
@@ -684,7 +673,6 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                       {"itemId" in rule.action && (
                         <Select
                           disabled={!canEdit}
-                          defaultValue={rule.action.itemId}
                           value={rule.action.itemId}
                           onValueChange={(e) =>
                             updateAction(ruleIndex, (action) => ({
@@ -742,7 +730,6 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                       {"target" in rule.action && (
                         <Select
                           disabled={!canEdit}
-                          defaultValue={rule.action.target}
                           value={rule.action.target}
                           onValueChange={(e) =>
                             updateAction(ruleIndex, (action) => {
@@ -823,7 +810,6 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                       {"effect" in rule.action && rule.action.effect && (
                         <Select
                           disabled={!canEdit}
-                          defaultValue={rule.action.effect}
                           value={rule.action.effect}
                           onValueChange={(e) =>
                             updateAction(ruleIndex, (action) => ({
