@@ -819,7 +819,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       "userItem",
       { findMany: (read, args) => waitForCatalog(() => read(args)) },
     );
-    const api = farmingRouter.createCaller({ drizzle: skewed, userId: "farm-user" } as never);
+    const api = callerForDatabase(farmingRouter, "farm-user", skewed);
     const recorded = await recordQueries(() => api.getFarmState());
     const state = recorded.result;
     expect(catalogRead).toBe(true);
@@ -943,8 +943,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       findFirst: async () => stalePlot,
       findMany: async () => [stalePlot],
     });
-    const { farmingRouter: router } = { farmingRouter };
-    const api = router.createCaller({ drizzle: staleClient, userId: "farm-user" } as never);
+    const api = callerForDatabase(farmingRouter, "farm-user", staleClient);
 
     const result = await api.waterPlot({ plotId: "plot-w" });
 
@@ -1010,10 +1009,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
         return await read(args);
       },
     });
-    const skewed = farmingRouter.createCaller({
-      drizzle: skewedClient,
-      userId: "farm-user",
-    } as never);
+    const skewed = callerForDatabase(farmingRouter, "farm-user", skewedClient);
 
     const second = await skewed.waterPlot({ plotId: "plot-q1" });
     expect(second.success).toBe(true);
@@ -1064,9 +1060,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       findMany: async () => [finished],
       findFirst: async () => finished,
     });
-    await farmingRouter
-      .createCaller({ drizzle: staleClient, userId: "farm-user" } as never)
-      .getFarmState();
+    await callerForDatabase(farmingRouter, "farm-user", staleClient).getFarmState();
 
     // One extraction, one payout: awarding before claiming mints a seed and, at the
     // material cap, an extra inventory row alongside the full stack.
@@ -1178,9 +1172,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       findMany: async (read, args) =>
         (await read(args)).map((row) => ({ ...row, quantity: 40 })),
     });
-    await farmingRouter
-      .createCaller({ drizzle: staleClient, userId: "farm-user" } as never)
-      .getFarmState();
+    await callerForDatabase(farmingRouter, "farm-user", staleClient).getFarmState();
 
     // The two seeds belong in the existing stack. Opening a row for them because the
     // snapshot said 40 puts the player a row closer to the cap for nothing.
@@ -1259,9 +1251,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
 
     // The seed grant commits, then the delete of the settled row fails transiently.
     const failingDelete = failStatements(database, farmExtraction, Infinity, { operations: ["delete"] });
-    await farmingRouter
-      .createCaller({ drizzle: failingDelete, userId: "farm-user" } as never)
-      .getFarmState();
+    await callerForDatabase(farmingRouter, "farm-user", failingDelete).getFarmState();
 
     const [afterGrant] = await database.select().from(farmExtraction);
     expect(afterGrant).toBeDefined();
@@ -1303,9 +1293,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
 
     // Stand in for the item write failing after the extraction has been claimed.
     const failingClient = failStatements(database, userItem, Infinity, { operations: ["insert"] });
-    await farmingRouter
-      .createCaller({ drizzle: failingClient, userId: "farm-user" } as never)
-      .getFarmState();
+    await callerForDatabase(farmingRouter, "farm-user", failingClient).getFarmState();
 
     // The reward must not go down with the row: the claim is released and the next
     // settlement pays it out.
@@ -1334,9 +1322,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       await (await caller("farm-user")).getFarmState();
       competed = true;
     }]);
-    await farmingRouter
-      .createCaller({ drizzle: holdingClaim, userId: "farm-user" } as never)
-      .getFarmState();
+    await callerForDatabase(farmingRouter, "farm-user", holdingClaim).getFarmState();
 
     expect(competed).toBe(true);
     const stacks = await database.select().from(userItem);
@@ -1367,9 +1353,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       await database.update(farmExtraction).set({ settledAt: new Date() });
       settled = true;
     }]);
-    await farmingRouter
-      .createCaller({ drizzle: racing, userId: "farm-user" } as never)
-      .getFarmState();
+    await callerForDatabase(farmingRouter, "farm-user", racing).getFarmState();
 
     expect(settled).toBe(true);
     expect(await database.select().from(userItem)).toHaveLength(0);
