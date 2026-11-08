@@ -585,7 +585,6 @@ export const homeRouter = createTRPCRouter({
       const blocked = homeStorageBlockReason(user);
       if (blocked) return errorResponse(blocked);
       if (!userItemResult) return errorResponse("Item not found or is equipped");
-      if (!userItemResult.item) return errorResponse("Item data not found");
       if (userItemResult.equipped !== "NONE") {
         return errorResponse("You can't store/retrieve already equipped items");
       }
@@ -599,9 +598,9 @@ export const homeRouter = createTRPCRouter({
       // Mutate
       if (userItemResult.storedAtHome) {
         const inventoryBucket = getInventoryBucket(userItemResult.item);
-        const bucketCount =
-          nonStoredItems.filter((ui) => getInventoryBucket(ui.item) === inventoryBucket)
-            .length || 0;
+        const bucketCount = nonStoredItems.filter(
+          (ui) => getInventoryBucket(ui.item) === inventoryBucket,
+        ).length;
         if (bucketCount >= getInventoryBucketCapacity(inventoryBucket, user)) {
           return errorResponse(getInventoryBucketFullMessage(inventoryBucket));
         }
@@ -609,9 +608,9 @@ export const homeRouter = createTRPCRouter({
         // Check storage limits based on home-storage bucket
         const homeBucket = getHomeStorageBucket(userItemResult.item);
         const homeStorage = HomeTypeDetails[user.homeType].storage;
-        const storedInBucket =
-          storedItems.filter((ui) => getHomeStorageBucket(ui.item) === homeBucket)
-            .length || 0;
+        const storedInBucket = storedItems.filter(
+          (ui) => getHomeStorageBucket(ui.item) === homeBucket,
+        ).length;
         if (storedInBucket >= getHomeStorageBucketCapacity(homeBucket, homeStorage)) {
           return errorResponse(getHomeStorageBucketFullMessage(homeBucket));
         }
