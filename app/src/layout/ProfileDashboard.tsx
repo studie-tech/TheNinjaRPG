@@ -14,6 +14,7 @@ import {
   Gift,
   Hammer,
   LockKeyhole,
+  type LucideIcon,
   MapPin,
   RotateCcw,
   ScrollText,
@@ -66,6 +67,7 @@ import {
   dashboardRaidAction,
   dashboardTrainingAction,
   describeOccupationLine,
+  type OccupationAction,
   orderDashboardContent,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
@@ -619,7 +621,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                     userData.occupation === "CRAFTING" ? occupationLine.detail : null
                   }
                   href="/occupation"
-                  icon={iconForRowAction(occupationLine.action)}
+                  icon={rowActionIcons[occupationLine.action]}
                 >
                   {occupationLine.action}
                 </RowAction>
@@ -976,19 +978,15 @@ function SectionHeader({
   );
 }
 
-const rowActionIcons = {
+const rowActionIcons: Record<OccupationAction, LucideIcon> = {
   "Start a job": Briefcase,
   "Pick a quest": ScrollText,
   "Open quest": BookOpen,
   View: Eye,
   "Start crafting": Hammer,
   Open: ArrowRight,
-} as const;
-
-const iconForRowAction = (action: string) =>
-  action in rowActionIcons
-    ? rowActionIcons[action as keyof typeof rowActionIcons]
-    : ArrowRight;
+  "View contract": ArrowRight,
+};
 
 function RowAction({
   href,
