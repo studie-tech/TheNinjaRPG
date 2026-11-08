@@ -77,15 +77,11 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   // Tracks the URL of the most recently uploaded image so the dialog preview
   // reflects the upload immediately (before the parent re-renders with the new prop).
+  // It applies only within the generation that wrote it, so a new identity drops it.
   const [localImage, setLocalImage] = useState<{
     url: string;
     generation: number;
   } | null>(null);
-
-  // Clear local override when the parent updates imageUrl (e.g. form reset or variant switch).
-  useEffect(() => {
-    setLocalImage(null);
-  }, [imageUrl, operationIdentity]);
 
   useEffect(
     () => () => {
