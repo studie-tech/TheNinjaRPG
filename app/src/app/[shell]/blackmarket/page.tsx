@@ -490,7 +490,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
       topRightContent={
         <div className="flex flex-row items-center">
           <NavTabs
-            id="hospital-page"
+            id="blackmarket-ryo-shop"
             current={tab}
             options={["Active", "Ledger"]}
             setValue={setTab}
@@ -634,7 +634,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                         </p>
                       )}
                       {(offerReps === 0 || offerRyo === 0) && (
-                        <p>Must enter reputation & reputation values above 0.</p>
+                        <p>Must enter reputation & ryo values above 0.</p>
                       )}
                     </Confirm>
                   </div>
