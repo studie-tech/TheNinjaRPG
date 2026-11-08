@@ -1,9 +1,6 @@
 import type { FederalStatus, LetterRank } from "@/drizzle/constants";
 import {
-  BLOODLINE_SWAP_FREE_AMOUNT,
-  BLOODLINE_SWAP_FREE_GOLD,
-  BLOODLINE_SWAP_FREE_NORMAL,
-  BLOODLINE_SWAP_FREE_SILVER,
+  BLOODLINE_SWAP_FREE,
   LetterRanks,
   PITY_BLOODLINE_ROLLS,
 } from "@/drizzle/constants";
@@ -107,18 +104,8 @@ export const getReskinnedBloodline = <T extends Bloodline>(
  * @param federalStatus
  * @returns
  */
-export const getFreeBloodlineSwaps = (federalStatus: FederalStatus) => {
-  switch (federalStatus) {
-    case "GOLD":
-      return BLOODLINE_SWAP_FREE_GOLD;
-    case "SILVER":
-      return BLOODLINE_SWAP_FREE_SILVER;
-    case "NORMAL":
-      return BLOODLINE_SWAP_FREE_NORMAL;
-    default:
-      return BLOODLINE_SWAP_FREE_AMOUNT;
-  }
-};
+export const getFreeBloodlineSwaps = (federalStatus: FederalStatus) =>
+  BLOODLINE_SWAP_FREE[federalStatus];
 
 /** Resolve a user's free-swap allowance from the swaps logged this month. */
 export const getBloodlineSwapAllowance = (

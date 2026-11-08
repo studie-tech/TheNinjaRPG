@@ -1,8 +1,4 @@
-import {
-  SKILL_TREE_RESET_FREE_GOLD,
-  SKILL_TREE_RESET_FREE_NORMAL,
-  SKILL_TREE_RESET_FREE_SILVER,
-} from "@/drizzle/constants";
+import { SKILL_TREE_RESET_FREE } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { isStaffMember } from "@/utils/permissions";
@@ -25,19 +21,8 @@ export const freeResetNote = (
  * @param user - The user
  * @returns The free reset amount
  */
-export const getFreeResetAmount = (user: UserData) => {
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return SKILL_TREE_RESET_FREE_NORMAL;
-    case "SILVER":
-      return SKILL_TREE_RESET_FREE_SILVER;
-    case "GOLD":
-      return SKILL_TREE_RESET_FREE_GOLD;
-    default:
-      return SKILL_TREE_RESET_FREE_NORMAL;
-  }
-};
+export const getFreeResetAmount = (user: UserData) =>
+  SKILL_TREE_RESET_FREE[getUserFederalStatus(user)];
 
 /**
  * The monthly allowance skill and Bloodright resets share. Staff reset for free without

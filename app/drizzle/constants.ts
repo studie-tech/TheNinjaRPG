@@ -1642,10 +1642,9 @@ export const BLOODLINE_ROLL_TYPES = [
 // Bloodline swap config
 export const BLOODLINE_SWAP_COOLDOWN_HOURS = 120;
 export const BLOODLINE_SWAP_FREE_DAYS = 30;
-export const BLOODLINE_SWAP_FREE_AMOUNT = 0;
-export const BLOODLINE_SWAP_FREE_NORMAL = 0;
-export const BLOODLINE_SWAP_FREE_SILVER = 0;
-export const BLOODLINE_SWAP_FREE_GOLD = 1;
+export const BLOODLINE_SWAP_FREE: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 0, SILVER: 0, GOLD: 1,
+};
 
 /** Provenance stored on `SageModeRolls.type`. There is no pity or swap path. */
 export const SAGE_MODE_ROLL_TYPES = ["ITEM", "QUEST"] as const;
@@ -1695,9 +1694,9 @@ export const SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE = "%user enters sage mode!";
 export const SAGE_MODE_DEFAULT_ACTION_COST_PERC = 80;
 
 // Skill tree config
-export const SKILL_TREE_RESET_FREE_NORMAL = 1;
-export const SKILL_TREE_RESET_FREE_SILVER = 1;
-export const SKILL_TREE_RESET_FREE_GOLD = 2;
+export const SKILL_TREE_RESET_FREE: Record<FederalStatus, number> = {
+  NONE: 1, NORMAL: 1, SILVER: 1, GOLD: 2,
+};
 
 // Jutsu level transfer config
 export const JUTSU_TRANSFER_DAYS = 20;
@@ -2109,12 +2108,20 @@ export const MAX_REPS_EXTRA_PER_MONTH = 250;
 export const PAYPAL_PAID_PERIOD_DAYS = 31;
 /** Days a store receipt with no expiry still vouches: a monthly cycle plus billing retry. */
 export const STORE_RECEIPT_FALLBACK_DAYS = 63;
-export const FED_NORMAL_REPS_COST = 15;
-export const FED_SILVER_REPS_COST = 35;
-export const FED_GOLD_REPS_COST = 50;
-export const FED_NORMAL_BANK_INTEREST = 2;
-export const FED_SILVER_BANK_INTEREST = 5;
-export const FED_GOLD_BANK_INTEREST = 8;
+export const FED_REPS_COST = {
+  NORMAL: 15, SILVER: 35, GOLD: 50,
+} as const satisfies Record<Exclude<FederalStatus, "NONE">, number>;
+/** Reputation charged to move a paid federal tier up to a higher one. */
+export const FED_UPGRADE_REPS_COST: Partial<
+  Record<FederalStatus, Partial<Record<FederalStatus, number>>>
+> = {
+  NORMAL: { SILVER: 20, GOLD: 40 },
+  SILVER: { GOLD: 20 },
+};
+/** Daily interest percentage points added to the village bank rate. */
+export const FED_BANK_INTEREST: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 2, SILVER: 5, GOLD: 8,
+};
 export const FED_INVENTORY_SLOTS: Record<FederalStatus, number> = {
   NONE: 0, NORMAL: 2, SILVER: 5, GOLD: 10,
 };
@@ -2122,14 +2129,16 @@ export const FED_JUTSU_SLOTS: Record<FederalStatus, number> = {
   NONE: 0, NORMAL: 1, SILVER: 2, GOLD: 3,
 };
 export const FED_JUTSU_LOADOUTS_BASE = 2;
-export const FED_NORMAL_JUTSU_LOADOUTS = 1;
-export const FED_SILVER_JUTSU_LOADOUTS = 2;
-export const FED_GOLD_JUTSU_LOADOUTS = 3;
+/** Loadouts added to the base allowance. */
+export const FED_JUTSU_LOADOUTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 1, SILVER: 2, GOLD: 3,
+};
 
 export const FED_ITEM_LOADOUTS_BASE = 2;
-export const FED_NORMAL_ITEM_LOADOUTS = 1;
-export const FED_SILVER_ITEM_LOADOUTS = 2;
-export const FED_GOLD_ITEM_LOADOUTS = 3;
+/** Loadouts added to the base allowance. */
+export const FED_ITEM_LOADOUTS: Record<FederalStatus, number> = {
+  NONE: 0, NORMAL: 1, SILVER: 2, GOLD: 3,
+};
 export const LOADOUT_NAME_MAX_LENGTH = 24;
 // Matches the `actionLog.relatedText` varchar column width; audit text must be
 // clamped to this before insert or a long reason fails the write.
