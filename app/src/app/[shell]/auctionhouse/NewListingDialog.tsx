@@ -105,8 +105,24 @@ export const NewAuctionListingDialog: React.FC<{
   const maxUsers = 1;
   const { methods: userSearchMethods } = useUserPicker(maxUsers);
 
-  // Mutations
+  // Item search
   const [itemSearchTerm, setItemSearchTerm] = useState("");
+
+  const resetDialog = () => {
+    createForm.reset();
+    setItemSearchTerm("");
+    setDropdownOpen(false);
+    userSearchMethods.reset();
+  };
+
+  // Selecting an item refocuses the picker, which must not reopen the dropdown.
+  const openDropdown = () => {
+    if (ignoreNextPopoverOpenRef.current) {
+      ignoreNextPopoverOpenRef.current = false;
+      return;
+    }
+    setDropdownOpen(true);
+  };
 
   // Ensure keyboard focus is moved into the dialog's search field on every open.
   // (autoFocus only happens on mount, but some popover implementations may keep the input mounted)
@@ -139,10 +155,7 @@ export const NewAuctionListingDialog: React.FC<{
         showMutationToast(data);
         if (data.success) {
           setIsOpen(false);
-          createForm.reset();
-          setItemSearchTerm("");
-          setDropdownOpen(false);
-          userSearchMethods.reset();
+          resetDialog();
           onCreated?.();
           await Promise.all([
             utils.auction.getAuctionListings.invalidate(),
@@ -243,11 +256,8 @@ export const NewAuctionListingDialog: React.FC<{
           setItemSearchTerm("");
           setDropdownOpen(true);
         } else {
-          createForm.reset();
-          setItemSearchTerm("");
-          setDropdownOpen(false);
+          resetDialog();
           ignoreNextPopoverOpenRef.current = false;
-          userSearchMethods.reset();
         }
       }}
     >
@@ -286,20 +296,8 @@ export const NewAuctionListingDialog: React.FC<{
                           placeholder="Search your items..."
                           value={field.value ? selectedItem?.item?.name || "" : ""}
                           readOnly
-                          onFocus={() => {
-                            if (ignoreNextPopoverOpenRef.current) {
-                              ignoreNextPopoverOpenRef.current = false;
-                              return;
-                            }
-                            setDropdownOpen(true);
-                          }}
-                          onClick={() => {
-                            if (ignoreNextPopoverOpenRef.current) {
-                              ignoreNextPopoverOpenRef.current = false;
-                              return;
-                            }
-                            setDropdownOpen(true);
-                          }}
+                          onFocus={openDropdown}
+                          onClick={openDropdown}
                           className="mb-2 w-full cursor-text border border-gray-400 bg-white font-semibold text-black placeholder:font-bold placeholder:text-gray-600"
                         />
                       </FormControl>
@@ -656,10 +654,7 @@ export const NewAuctionListingDialog: React.FC<{
                 variant="outline"
                 onClick={() => {
                   setIsOpen(false);
-                  createForm.reset();
-                  setItemSearchTerm("");
-                  setDropdownOpen(false);
-                  userSearchMethods.reset();
+                  resetDialog();
                 }}
               >
                 Cancel
