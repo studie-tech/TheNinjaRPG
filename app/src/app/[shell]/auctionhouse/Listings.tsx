@@ -151,13 +151,9 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
                 <Input
                   id="search"
                   placeholder={
-                    browseTab === "AUCTION"
-                      ? "Search by item name…"
-                      : browseTab === "DIRECT"
-                        ? "Search by item name…"
-                        : browseTab === "MINE"
-                          ? "Search your listings by item…"
-                          : "Search by item name…"
+                    browseTab === "MINE"
+                      ? "Search your listings by item…"
+                      : "Search by item name…"
                   }
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}

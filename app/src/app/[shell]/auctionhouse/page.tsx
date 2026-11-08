@@ -75,7 +75,7 @@ export default function AuctionHousePage() {
             </SelectContent>
           </Select>
           {!belowAuctionMinLevel &&
-            (browseTab === "REQUEST" || browseTab === "TRADE" ? (
+            (isOfferTab ? (
               <NewOfferDialog
                 key={browseTab}
                 offerType={browseTab}
@@ -137,7 +137,7 @@ export default function AuctionHousePage() {
           </div>
         </div>
         <TabsContent value={browseTab} className="mt-0">
-          {browseTab === "REQUEST" || browseTab === "TRADE" ? (
+          {isOfferTab ? (
             <AuctionOffers
               key={browseTab}
               offerType={browseTab}
