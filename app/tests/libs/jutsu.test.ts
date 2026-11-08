@@ -98,10 +98,6 @@ describe("jutsu loadout sharing preview", () => {
 });
 
 describe("computeJutsuLoadoutAssignments", () => {
-  beforeEach(() => {
-    calcJutsuEquipLimitMock.mockReturnValue(100);
-  });
-
   it("equips all valid jutsu, preserving loadout order", () => {
     const userjutsus = [
       uj({ jutsuId: "a" }),
@@ -177,32 +173,24 @@ describe("computeJutsuLoadoutAssignments", () => {
     expect(out.invalidJutsus[0]).toMatch(/equip limit/);
   });
 
-  it("enforces the event-jutsu cap", () => {
-    const count = 2 + 1;
-    const userjutsus = Array.from({ length: count }, (_, i) =>
-      uj({ jutsuId: `e${i}`, name: `Event ${i}`, jutsuType: "EVENT" }),
+  it.each([
+    ["event", 2, "e", { jutsuType: "EVENT" }],
+    ["forbidden", 1, "f", { jutsuType: "FORBIDDEN" }],
+    ["barrier", 1, "b", { effectTypes: ["barrier"] }],
+    ["shield", 2, "s", { effectTypes: ["shield"] }],
+    ["heal", 3, "h", { effectTypes: ["heal"] }],
+  ] as const)("enforces the %s-jutsu cap", (kind, cap, prefix, marker) => {
+    const name = `${kind[0]!.toUpperCase()}${kind.slice(1)}`;
+    const userjutsus = Array.from({ length: cap + 1 }, (_, i) =>
+      uj({ jutsuId: `${prefix}${i}`, name: `${name} ${i}`, ...marker }),
     );
     const out = computeJutsuLoadoutAssignments({ caps,
       jutsuIds: userjutsus.map((j) => j.jutsuId),
       userjutsus,
       user: USER,
     });
-    expect(out.equipIds).toHaveLength(2);
-    expect(out.invalidJutsus[0]).toMatch(/event/);
-  });
-
-  it("enforces the forbidden-jutsu cap", () => {
-    const count = 1 + 1;
-    const userjutsus = Array.from({ length: count }, (_, i) =>
-      uj({ jutsuId: `f${i}`, name: `Forbidden ${i}`, jutsuType: "FORBIDDEN" }),
-    );
-    const out = computeJutsuLoadoutAssignments({ caps,
-      jutsuIds: userjutsus.map((j) => j.jutsuId),
-      userjutsus,
-      user: USER,
-    });
-    expect(out.equipIds).toHaveLength(1);
-    expect(out.invalidJutsus[0]).toMatch(/forbidden/);
+    expect(out.equipIds).toHaveLength(cap);
+    expect(out.invalidJutsus[0]).toMatch(new RegExp(kind));
   });
 
   it("deduplicates repeated jutsuIds so they do not double-count toward caps", () => {
@@ -219,47 +207,6 @@ describe("computeJutsuLoadoutAssignments", () => {
     expect(out.invalidJutsus).toEqual([]);
   });
 
-  it("enforces the barrier-jutsu cap", () => {
-    const count = 1 + 1;
-    const userjutsus = Array.from({ length: count }, (_, i) =>
-      uj({ jutsuId: `b${i}`, name: `Barrier ${i}`, effectTypes: ["barrier"] }),
-    );
-    const out = computeJutsuLoadoutAssignments({ caps,
-      jutsuIds: userjutsus.map((j) => j.jutsuId),
-      userjutsus,
-      user: USER,
-    });
-    expect(out.equipIds).toHaveLength(1);
-    expect(out.invalidJutsus[0]).toMatch(/barrier/);
-  });
-
-  it("enforces the shield-jutsu cap", () => {
-    const count = 2 + 1;
-    const userjutsus = Array.from({ length: count }, (_, i) =>
-      uj({ jutsuId: `s${i}`, name: `Shield ${i}`, effectTypes: ["shield"] }),
-    );
-    const out = computeJutsuLoadoutAssignments({ caps,
-      jutsuIds: userjutsus.map((j) => j.jutsuId),
-      userjutsus,
-      user: USER,
-    });
-    expect(out.equipIds).toHaveLength(2);
-    expect(out.invalidJutsus[0]).toMatch(/shield/);
-  });
-
-  it("enforces the heal-jutsu cap", () => {
-    const count = 3 + 1;
-    const userjutsus = Array.from({ length: count }, (_, i) =>
-      uj({ jutsuId: `h${i}`, name: `Heal ${i}`, effectTypes: ["heal"] }),
-    );
-    const out = computeJutsuLoadoutAssignments({ caps,
-      jutsuIds: userjutsus.map((j) => j.jutsuId),
-      userjutsus,
-      user: USER,
-    });
-    expect(out.equipIds).toHaveLength(3);
-    expect(out.invalidJutsus[0]).toMatch(/heal/);
-  });
 });
 
 describe("computeJutsuLoadoutCapAssignments", () => {
