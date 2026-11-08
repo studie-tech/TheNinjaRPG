@@ -20,7 +20,7 @@ type Options = {
 };
 let captured: Record<string, Options>;
 const prepareUserUpdate = vi.fn(() => 7);
-const updateUser = vi.fn(async () => undefined);
+const updateUser = vi.fn(async (..._args: unknown[]) => undefined);
 const invalidate = vi.fn(async () => undefined);
 const user = { userId: "viewer", money: 500, bank: 900, level: 50, isBanned: false };
 const capture = (name: string) => ({
