@@ -1118,6 +1118,27 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     expect(await database.select().from(farmExtraction)).toHaveLength(1);
   });
 
+  it("keeps the crop when another extraction takes the slot first", async () => {
+    await farmer({ farmExtractorsOwned: 1 });
+    const database = await getTestDatabase();
+    await database
+      .update(item)
+      .set({ farmExtractSeedItemId: "seed-1", farmExtractSeedCount: 1 })
+      .where(eq(item.id, "crop-1"));
+    await giveItem("ui-crop", "crop-1", 2);
+    const rival = { id: "rival-extraction", userId: "farm-user", extractorSlot: 0, cropItemId: "crop-1",
+      seedItemId: "seed-1", cropQuantity: 1, seedQuantity: 1, startedAt: new Date(), finishAt: new Date(Date.now() + 60_000) };
+    const raced = beforeStatements(database, farmExtraction, [() => database.insert(farmExtraction).values(rival)], { operations: ["insert"] });
+    const result = await callerForDatabase(farmingRouter, "farm-user", raced).extractSeeds({
+      extractorSlot: 0,
+      userItemId: "ui-crop",
+      quantity: 1,
+    });
+    expect(result).toMatchObject({ success: false, message: "Seed extractor 1 is already processing crops" });
+    expect(await database.select({ id: farmExtraction.id }).from(farmExtraction)).toEqual([{ id: "rival-extraction" }]);
+    expect(await database.query.userItem.findFirst({ where: eq(userItem.id, "ui-crop") })).toMatchObject({ quantity: 2 });
+  });
+
   it("merges two extractions of the same seed into one stack", async () => {
     await farmer();
     const database = await getTestDatabase();
