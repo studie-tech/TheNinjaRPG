@@ -59,6 +59,7 @@ import {
   isWalkableCoordinate,
 } from "@/libs/sector-map/validation";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
+import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { getTimedRegenerationGain, type TimedBuff } from "@/libs/timedBuffs";
 import { regenerationBuffs } from "@/libs/titles";
@@ -513,7 +514,15 @@ export const travelRouter = createTRPCRouter({
         // A disguise renames the creator, so a disguised creator keeps the disguise.
         users: creatorBody?.avatar
           ? processedUsers.map((u) =>
-              isCreator(u) ? { ...u, bodyArt: creatorBody.avatar } : u,
+              isCreator(u)
+                ? {
+                    ...u,
+                    bodyArt: creatorBody.avatar,
+                    bodyIdle: snapshotSpriteAnimations(
+                      creatorBody.spriteAnimationBindings,
+                    ).idle,
+                  }
+                : u,
             )
           : processedUsers,
         village: villageData,

@@ -4,6 +4,7 @@ import type {
   UserRank,
   UserStatus,
 } from "@/drizzle/constants";
+import type { CharacterAnimation } from "@/libs/spriteAnimations";
 
 type NonEmptyArray<T> = T[] & { 0: T };
 
@@ -55,6 +56,8 @@ export interface SectorUser {
   spriteAppearance?: import("@/validators/lpc").SpriteAppearance;
   /** Full-body art drawn in place of the layered character, at twice an NPC's height. */
   bodyArt?: string;
+  /** Idle sheet looped in place of `bodyArt`'s still image. */
+  bodyIdle?: CharacterAnimation;
   userId: string;
   username: string;
   /** Viewer-specific anonymity from the authenticated sector snapshot. */

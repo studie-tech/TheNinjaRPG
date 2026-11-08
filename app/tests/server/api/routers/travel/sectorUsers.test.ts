@@ -2,12 +2,14 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { CREATOR_TRIAL_FIRST_FORM, CREATOR_USERNAME } from "@/drizzle/constants";
 import {
+  aiSpriteAnimation,
   anbuSquad,
   battle,
   overworldAiPlacement,
   quest,
   questHistory,
   sector,
+  spriteAnimation,
   userData,
   village,
   war,
@@ -35,7 +37,7 @@ describeWithDatabase("travel.getSectorData player visibility", () => {
   beforeEach(async () => {
     await resetTables(
       userData, anbuSquad, battle, village, sector, war,
-      overworldAiPlacement, questHistory, quest,
+      overworldAiPlacement, questHistory, quest, spriteAnimation, aiSpriteAnimation,
     );
     await (await getTestDatabase()).insert(anbuSquad).values({
       ...SQUAD,
@@ -103,10 +105,20 @@ describeWithDatabase("travel.getSectorData player visibility", () => {
       { userId: "creator", username: CREATOR_USERNAME, status: "AWAKE", sector: SECTOR },
       { userId: CREATOR_TRIAL_FIRST_FORM, isAi: true, avatar: "https://example.com/robot.webp" },
     ]);
+    const db = await getTestDatabase();
+    await db.insert(spriteAnimation).values(["idle", "strike"].map((id) => ({
+      id, name: id, url: `https://example.com/${id}.png`, columns: 8, rows: 3,
+      frameCount: 24, fps: 12.5, facing: "left" as const, createdByUserId: "editor",
+    })));
+    await db.insert(aiSpriteAnimation).values([
+      { userId: CREATOR_TRIAL_FIRST_FORM, actionKey: "idle", animationId: "idle" },
+      { userId: CREATOR_TRIAL_FIRST_FORM, actionKey: "basic:basicAttack", animationId: "strike" },
+    ]);
     for (const callerId of [VIEWER, "creator"]) {
       const result = await (await callerFor(travelRouter, callerId)).getSectorData({ sector: SECTOR });
       expect(result.users.find((u) => u.userId === "creator")).toMatchObject({
         bodyArt: "https://example.com/robot.webp",
+        bodyIdle: { id: "idle", url: "https://example.com/idle.png", frameCount: 24 },
       });
       expect(result.users.find((u) => u.userId === "active")).not.toHaveProperty("bodyArt");
     }
