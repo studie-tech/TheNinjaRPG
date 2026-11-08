@@ -38,6 +38,7 @@ import {
   PET_BATTLE_CONFIG,
   PET_FEED_COOLDOWN_HOURS,
   PET_GENDER_LABELS,
+  PET_NAME_MAX_LENGTH,
   PET_RANKS,
   PET_REPLACEMENT_COST,
   PET_SANCTUARY_NAME,
@@ -1527,7 +1528,7 @@ export function PetProfile() {
                           {
                             message: !name.trim()
                               ? "Enter a companion name."
-                              : "Use 1–40 characters without control characters.",
+                              : `Use 1–${PET_NAME_MAX_LENGTH} characters without control characters.`,
                           },
                           { shouldFocus: true },
                         );
@@ -1548,7 +1549,7 @@ export function PetProfile() {
                             <FormControl>
                               <Input
                                 {...field}
-                                maxLength={40}
+                                maxLength={PET_NAME_MAX_LENGTH}
                                 disabled={settingsDisabled}
                                 onChange={(event) => {
                                   field.onChange(event);

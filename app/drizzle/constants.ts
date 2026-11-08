@@ -669,6 +669,8 @@ export const PET_FED_COLLECTION_SLOTS: Record<FederalStatus, number> = {
 };
 export const PET_MAX_ABILITY_SLOTS = 6;
 export const PET_MAX_CONSUME_PETS = 1;
+/** Longest companion name players can choose. */
+export const PET_NAME_MAX_LENGTH = 40;
 export const PET_TASK_MIN_RANK = 5;
 export const PET_TASK_MAX_MINUTES = 7 * 24 * 60;
 /** Rarity grants slots immediately; progression still controls the shared power budget. */
@@ -2621,6 +2623,11 @@ export const messagingLevelMessage = `You must reach level ${MESSAGING_MIN_LEVEL
 export const forumLevelMessage = `You must reach level ${FORUM_MIN_LEVEL} to post in the forum`;
 export const auctionHouseLevelMessage = `You must reach level ${AUCTION_HOUSE_MIN_LEVEL} to use the auction house`;
 export const repTradeLevelMessage = `You must reach level ${REP_TRADE_MIN_LEVEL} to buy or sell reputation with other players`;
+
+// Parental controls
+/** Players a parent can approve for private messages. */
+export const PARENTAL_MAX_APPROVED_PLAYERS = 50;
+
 export const REPORT_CONTEXT_WINDOW = 20;
 
 // Kage config

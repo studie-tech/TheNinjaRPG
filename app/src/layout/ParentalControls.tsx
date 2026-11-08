@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  PARENTAL_MAX_APPROVED_PLAYERS,
   PARENTAL_PIN_MAX_ATTEMPTS,
   PARENTAL_PIN_WINDOW_MINUTES,
 } from "@/drizzle/constants";
@@ -73,7 +74,10 @@ function ParentalSettingsForm({
   const [message, setMessage] = useState<{ success: boolean; message: string } | null>(
     null,
   );
-  const { methods: searchForm, users } = useUserPicker(50, settings.approvedPlayers);
+  const { methods: searchForm, users } = useUserPicker(
+    PARENTAL_MAX_APPROVED_PLAYERS,
+    settings.approvedPlayers,
+  );
   const utils = api.useUtils();
   const save = api.parentalControls.save.useMutation({
     onSuccess: async (result) => {
@@ -189,7 +193,7 @@ function ParentalSettingsForm({
                   label="Search players to approve"
                   showYourself={false}
                   showAi={false}
-                  maxUsers={50}
+                  maxUsers={PARENTAL_MAX_APPROVED_PLAYERS}
                 />
                 <p className="text-muted-foreground text-xs">
                   Only approve people you know. An empty list blocks all private

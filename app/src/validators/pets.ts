@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   AI_PROFILE_MAX_RULES,
   AvatarFacings,
+  PET_NAME_MAX_LENGTH,
   PetGenders,
   PetPaymentCurrencies,
   PetSpawnPositions,
@@ -22,7 +23,7 @@ export const petNameSchema = z
   .string()
   .trim()
   .min(1)
-  .max(40)
+  .max(PET_NAME_MAX_LENGTH)
   .refine(
     (name) => !/[\p{Cc}\p{Cf}]/u.test(name),
     "Pet names cannot contain control characters.",
