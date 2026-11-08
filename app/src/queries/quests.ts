@@ -1256,8 +1256,8 @@ export const updateWarDamageForUpdateRewards = (
     .update(war)
     .set(
       side === "attacker"
-        ? { attackerWarHealth: sql`GREATEST(attackerWarHealth - ${damage}, 0)` }
-        : { defenderWarHealth: sql`GREATEST(defenderWarHealth - ${damage}, 0)` },
+        ? { attackerWarHealth: sql`GREATEST(${war.attackerWarHealth} - ${damage}, 0)` }
+        : { defenderWarHealth: sql`GREATEST(${war.defenderWarHealth} - ${damage}, 0)` },
     )
     .where(and(eq(war.id, warId), isNull(war.endedAt), warRaidCombatGuard()));
 
@@ -1273,10 +1273,10 @@ export const updateWarHealingForUpdateRewards = (
     .set(
       side === "attacker"
         ? {
-            attackerWarHealth: sql`LEAST(attackerWarHealth + ${healing}, attackerWarHealthMax)`,
+            attackerWarHealth: sql`LEAST(${war.attackerWarHealth} + ${healing}, ${war.attackerWarHealthMax})`,
           }
         : {
-            defenderWarHealth: sql`LEAST(defenderWarHealth + ${healing}, defenderWarHealthMax)`,
+            defenderWarHealth: sql`LEAST(${war.defenderWarHealth} + ${healing}, ${war.defenderWarHealthMax})`,
           },
     )
     .where(and(eq(war.id, warId), isNull(war.endedAt), warRaidCombatGuard()));

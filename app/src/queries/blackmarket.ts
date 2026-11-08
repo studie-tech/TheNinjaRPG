@@ -314,7 +314,7 @@ export const updateUserDataForChangeUserGender = (
     .update(userData)
     .set({
       gender: input.gender,
-      reputationPoints: sql`reputationPoints - ${COST_CHANGE_GENDER}`,
+      reputationPoints: sql`${userData.reputationPoints} - ${COST_CHANGE_GENDER}`,
     })
     .where(
       and(
@@ -339,7 +339,7 @@ export const updateUserDataForBuySlot = (
     .update(userData)
     .set({
       [slot.column]: sql`${userData[slot.column]} + 1`,
-      reputationPoints: sql`reputationPoints - ${slot.cost}`,
+      reputationPoints: sql`${userData.reputationPoints} - ${slot.cost}`,
     })
     .where(
       and(
@@ -396,7 +396,7 @@ export const updateUserDataForRerollElement = (
   client
     .update(userData)
     .set({
-      reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
+      reputationPoints: sql`${userData.reputationPoints} - ${COST_REROLL_ELEMENT}`,
       ...element,
     })
     .where(

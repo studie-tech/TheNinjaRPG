@@ -171,9 +171,9 @@ export const updateUserDataForAwardReputation = (
   client
     .update(userData)
     .set({
-      reputationPoints: sql`reputationPoints + ${input.reputationAmount || 0}`,
-      reputationPointsTotal: sql`reputationPointsTotal + ${input.reputationAmount || 0}`,
-      money: sql`money + ${input.moneyAmount || 0}`,
+      reputationPoints: sql`${userData.reputationPoints} + ${input.reputationAmount || 0}`,
+      reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${input.reputationAmount || 0}`,
+      money: sql`${userData.money} + ${input.moneyAmount || 0}`,
     })
     .where(inArray(userData.userId, input.userIds));
 

@@ -947,8 +947,8 @@ export const updateUserDataForRemoveFromClan = (
       clanId: null,
       status:
         readiness?.set.status ??
-        sql`CASE WHEN status = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE status END`,
-      villageId: sql`CASE WHEN isOutlaw = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE villageId END`,
+        sql`CASE WHEN ${userData.status} = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE ${userData.status} END`,
+      villageId: sql`CASE WHEN ${userData.isOutlaw} = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE ${userData.villageId} END`,
     })
     .where(and(eq(userData.userId, userId), readiness?.where));
 
@@ -1057,8 +1057,8 @@ export const updateUserDataForRemoveFromClan2 = (
     .update(userData)
     .set({
       clanId: null,
-      status: sql`CASE WHEN status = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE status END`,
-      villageId: sql`CASE WHEN isOutlaw = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE villageId END`,
+      status: sql`CASE WHEN ${userData.status} = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE ${userData.status} END`,
+      villageId: sql`CASE WHEN ${userData.isOutlaw} = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE ${userData.villageId} END`,
     })
     // Exclude the leaver, whose row the primary-key update above already
     // covers; two overlapping updates on UserData deadlock InnoDB.
