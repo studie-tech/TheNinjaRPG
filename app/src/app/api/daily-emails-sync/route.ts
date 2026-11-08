@@ -1,5 +1,5 @@
+import { clerkClient, type User } from "@clerk/nextjs/server";
 import { nanoid } from "nanoid";
-import { env } from "@/env/server.mjs";
 import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   executeRowsForGET,
@@ -12,60 +12,6 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { MONTH_S, secondsFromNow } from "@/utils/time";
 
 const ENDPOINT_NAME = "daily-emails-sync";
-const CLERK_API_ENDPOINT = "https://api.clerk.com/v1";
-
-// Define types for Clerk API response based on documentation
-interface ClerkEmailAddress {
-  id: string;
-  email_address: string;
-  verification: {
-    status: string;
-    strategy: string;
-    external_verification_redirect_url: string | null;
-    attempts: number | null;
-    expire_at: number | null;
-  };
-  linked_to: Array<{
-    id: string;
-    type: string;
-  }>;
-  reserved: boolean;
-}
-
-interface ClerkUser {
-  id: string;
-  external_id: string | null;
-  username: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  profile_image_url: string;
-  image_url: string;
-  has_image: boolean;
-  primary_email_address_id: string;
-  primary_phone_number_id: string | null;
-  primary_web3_wallet_id: string | null;
-  password_enabled: boolean;
-  two_factor_enabled: boolean;
-  totp_enabled: boolean;
-  backup_code_enabled: boolean;
-  email_addresses: ClerkEmailAddress[];
-  phone_numbers: any[];
-  web3_wallets: any[];
-  external_accounts: any[];
-  public_metadata: Record<string, any>;
-  private_metadata: Record<string, any>;
-  unsafe_metadata: Record<string, any>;
-  last_sign_in_at: number | null;
-  banned: boolean;
-  locked: boolean;
-  lockout_expires_at: number | null;
-  verification_attempts_count: number | null;
-  created_at: number;
-  updated_at: number;
-  last_active_at: number;
-  delete_self_enabled: boolean;
-}
-
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
@@ -80,74 +26,42 @@ export async function GET(request: Request) {
       (reminder: (typeof reminders)[number]) => reminder.userId,
     );
 
-    // Fetch all users from Clerk API iteratively
-    const allClerkUsers: ClerkUser[] = [];
+    // Fetch recently active Clerk users page by page
+    const clerk = await clerkClient();
+    const allClerkUsers: User[] = [];
     let hasMoreUsers = true;
     let offset = 0;
     const limit = 500;
     const lastActiveAtAfter = secondsFromNow(-MONTH_S).getTime();
     while (hasMoreUsers) {
-      const response = await fetch(
-        `${CLERK_API_ENDPOINT}/users?offset=${offset}&order_by=-created_at&limit=${limit}&last_active_at_after=${lastActiveAtAfter}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${env.CLERK_SECRET_KEY}`,
-          },
-        },
-      );
-      if (!response.ok) {
-        throw new Error(`Failed to fetch users from Clerk API: ${response.statusText}`);
-      }
-      const clerkUsersData = (await response.json()) as ClerkUser[];
-
-      // Add users to our collection
-      if (Array.isArray(clerkUsersData)) {
-        allClerkUsers.push(
-          ...clerkUsersData.filter((user) => !userIds.includes(user.id)),
-        );
-        if (clerkUsersData.length < limit) {
-          hasMoreUsers = false;
-        } else {
-          offset += limit;
-        }
-      } else {
+      const { data } = await clerk.users.getUserList({
+        offset,
+        orderBy: "-created_at",
+        limit,
+        lastActiveAtAfter,
+      });
+      allClerkUsers.push(...data.filter((user) => !userIds.includes(user.id)));
+      if (data.length < limit) {
         hasMoreUsers = false;
+      } else {
+        offset += limit;
       }
     }
 
     // Insert the clerk users & their emails into the database
-    const newReminders = allClerkUsers
-      .map((user) => {
-        // Data to fill in
-        const mail = user.email_addresses.find(
-          (e) => e.id === user.primary_email_address_id,
-        );
-        const callName = user.username || `${user.first_name} ${user.last_name}`;
-        const lastActivity = new Date(user.last_active_at);
-        if (mail) {
-          return {
-            userId: user.id,
-            callName: callName,
-            email: mail.email_address,
-            secret: nanoid(21),
-            lastActivity: lastActivity,
-          };
-        } else {
-          return null;
-        }
-      })
-      .filter(
-        (
-          v,
-        ): v is {
-          userId: string;
-          callName: string;
-          email: string;
-          secret: string;
-          lastActivity: Date;
-        } => v !== null,
-      );
+    const newReminders = allClerkUsers.flatMap((user) => {
+      const mail = user.primaryEmailAddress;
+      if (!mail) return [];
+      return [
+        {
+          userId: user.id,
+          callName: user.username || `${user.firstName} ${user.lastName}`,
+          email: mail.emailAddress,
+          secret: nanoid(21),
+          lastActivity: new Date(user.lastActiveAt ?? 0),
+        },
+      ];
+    });
 
     // Every Clerk user may already be known, or none may have a primary email, in
     // which case there is nothing to insert - drizzle rejects an empty values() list.

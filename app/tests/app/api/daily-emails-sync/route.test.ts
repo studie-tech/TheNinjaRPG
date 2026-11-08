@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as clerk from "@clerk/nextjs/server";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { GET } from "@/app/api/daily-emails-sync/route";
@@ -11,6 +12,12 @@ import {
 } from "../../../setup/serverModules";
 
 const cronRequest = () => new Request("https://example.com/api/daily-emails-sync");
+
+/** Answer the Clerk user listing with one page of users. */
+const clerkUsers = (data: object[]) =>
+  vi.spyOn(clerk, "clerkClient").mockResolvedValue({
+    users: { getUserList: vi.fn().mockResolvedValue({ data, totalCount: data.length }) },
+  } as unknown as Awaited<ReturnType<typeof clerk.clerkClient>>);
 
 describe("daily-emails-sync cron", () => {
   const execute = vi.fn();
@@ -41,7 +48,7 @@ describe("daily-emails-sync cron", () => {
       return new Response("error", { status: 500 });
     });
     // Clerk has no users that are not already known, so nothing is inserted.
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json([]) as never);
+    clerkUsers([]);
   });
 
   afterEach(() => {
@@ -71,14 +78,12 @@ describe("daily-emails-sync cron", () => {
     const values = vi.fn().mockResolvedValue(undefined);
     insert.mockReturnValue({ values });
     execute.mockResolvedValue({ rowsAffected: 0 });
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      Response.json([
-        { id: "known", username: "k", first_name: null, last_name: null, primary_email_address_id: "e0", email_addresses: [{ id: "e0", email_address: "k@example.com" }], last_active_at: 1000 },
-        { id: "named", username: "ninja", first_name: "A", last_name: "B", primary_email_address_id: "e1", email_addresses: [{ id: "e2", email_address: "other@example.com" }, { id: "e1", email_address: "ninja@example.com" }], last_active_at: 2000 },
-        { id: "unnamed", username: null, first_name: "Ada", last_name: "Lee", primary_email_address_id: "e3", email_addresses: [{ id: "e3", email_address: "ada@example.com" }], last_active_at: 3000 },
-        { id: "noEmail", username: "x", first_name: null, last_name: null, primary_email_address_id: "gone", email_addresses: [], last_active_at: 4000 },
-      ]) as never,
-    );
+    clerkUsers([
+      { id: "known", username: "k", firstName: null, lastName: null, primaryEmailAddress: { emailAddress: "k@example.com" }, lastActiveAt: 1000 },
+      { id: "named", username: "ninja", firstName: "A", lastName: "B", primaryEmailAddress: { emailAddress: "ninja@example.com" }, lastActiveAt: 2000 },
+      { id: "unnamed", username: null, firstName: "Ada", lastName: "Lee", primaryEmailAddress: { emailAddress: "ada@example.com" }, lastActiveAt: 3000 },
+      { id: "noEmail", username: "x", firstName: null, lastName: null, primaryEmailAddress: null, lastActiveAt: 4000 },
+    ]);
 
     expect((await GET(cronRequest())).status).toBe(200);
 
