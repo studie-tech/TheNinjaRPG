@@ -664,14 +664,7 @@ export const combatRouter = createTRPCRouter({
         const grid = getBattleGrid(1, battle);
 
         // Instantiate new state variables
-        const history: {
-          battleRound: number;
-          appliedEffects: ActionEffect[];
-          description: string;
-          battleVersion: number;
-          actionId?: string;
-          userId?: string;
-        }[] = [];
+        const history: Parameters<typeof createAction>[2] = [];
 
         // Actionless updates mutate the fetched object in place; retain its version for CAS.
         const fetchedVersion = battle.version;
@@ -1678,11 +1671,14 @@ export const combatRouter = createTRPCRouter({
         findVillageBySector(ctx.drizzle, input.sector),
       ]);
 
+      // Check that user was found
+      if (!user) return errorResponse("User not found");
+
       // Find the war the user is involved with
       const userWar = findShrineAttackWar(
         activeWars,
-        user?.villageId ?? null,
-        user?.userId,
+        user.villageId,
+        user.userId,
         input.sector,
         { allowDefend: true },
       );
@@ -1691,8 +1687,6 @@ export const combatRouter = createTRPCRouter({
       const isVillageWarOrRaid =
         userWar?.type === "VILLAGE_WAR" || userWar?.type === "WAR_RAID";
 
-      // Check that user was found
-      if (!user) return errorResponse("User not found");
       if (user.isBanned) return errorResponse("Cannot attack shrine while banned");
       if (MAP_RESERVED_SECTORS.includes(input.sector) && !userWar?.rules) {
         return errorResponse("This sector is reserved and cannot be attacked");
@@ -2680,6 +2674,17 @@ export const initiateBattle = async (
     }
   }
 
+  const QUEUED_BATTLES = [
+    "TERRITORY_WAR",
+    "RANKED_PVP",
+    "CLAN_BATTLE",
+    "KAGE_PVP",
+    "RAID",
+  ];
+  const isQueuedBattle = QUEUED_BATTLES.includes(battleType);
+  const isAutoBattle = AutoBattleTypes.includes(battleType);
+  const isShrineBattle = battleType === "SHRINE_WAR";
+
   // Loop through each user
   for (const i of users.keys()) {
     // Get the user
@@ -2700,17 +2705,6 @@ export const initiateBattle = async (
     }
 
     // Check if user is asleep
-    const QUEUED_BATTLES = [
-      "TERRITORY_WAR",
-      "RANKED_PVP",
-      "CLAN_BATTLE",
-      "KAGE_PVP",
-      "RAID",
-    ];
-    const isQueuedBattle = QUEUED_BATTLES.includes(battleType);
-    const isAutoBattle = AutoBattleTypes.includes(battleType);
-    const isShrineBattle = battleType === "SHRINE_WAR";
-
     // Scheduled title fights claim both participants directly from ordinary play.
     if (battleType === "KAGE_PVP") {
       if (!user.isAi && user.status !== "AWAKE")
@@ -3461,7 +3455,6 @@ export const initiateBattle = async (
       initiatorIds: info.userIds,
       users,
     });
-    const pusher = getServerPusher();
     // Keep human fighters on the sector map as combat markers so nearby players
     // can see who is fighting. AI templates are not sector-map entities and must
     // not be broadcast. Auto-battles stay off this broadcast.
