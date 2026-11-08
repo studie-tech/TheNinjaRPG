@@ -82,6 +82,7 @@ import {
   COST_SWAP_BLOODLINE,
   COST_SWAP_VILLAGE,
   COST_TAVERN_COLOR_CHANGE,
+  GeneralTypes,
   MAX_ATTRIBUTES,
   TavernColorPresets,
 } from "@/drizzle/constants";
@@ -779,67 +780,44 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                 className="grid w-full grid-cols-1 items-end gap-3 p-4 sm:grid-cols-2"
                 aria-busy={isUpdatingPreferences}
               >
-                <FormField
-                  control={form.control}
-                  name="preferredGeneral1"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>General 1</FormLabel>
-                      <Select
-                        disabled={isUpdatingPreferences}
-                        onValueChange={(value) =>
-                          field.onChange(value === "__highest__" ? null : value)
-                        }
-                        value={field.value ?? "__highest__"}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Highest" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="__highest__">Highest</SelectItem>
-                          <SelectItem value="Strength">Strength</SelectItem>
-                          <SelectItem value="Intelligence">Intelligence</SelectItem>
-                          <SelectItem value="Willpower">Willpower</SelectItem>
-                          <SelectItem value="Speed">Speed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="preferredGeneral2"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>General 2</FormLabel>
-                      <Select
-                        disabled={isUpdatingPreferences}
-                        onValueChange={(value) =>
-                          field.onChange(value === "__highest__" ? null : value)
-                        }
-                        value={field.value ?? "__highest__"}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Highest" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="__highest__">Highest</SelectItem>
-                          <SelectItem value="Strength">Strength</SelectItem>
-                          <SelectItem value="Intelligence">Intelligence</SelectItem>
-                          <SelectItem value="Willpower">Willpower</SelectItem>
-                          <SelectItem value="Speed">Speed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {(["preferredGeneral1", "preferredGeneral2"] as const).map(
+                  (name, i) => (
+                    <FormField
+                      key={name}
+                      control={form.control}
+                      name={name}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>General {i + 1}</FormLabel>
+                          <Select
+                            disabled={isUpdatingPreferences}
+                            onValueChange={(value) =>
+                              field.onChange(value === "__highest__" ? null : value)
+                            }
+                            value={field.value ?? "__highest__"}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Highest" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="__highest__">Highest</SelectItem>
+                              {GeneralTypes.filter(
+                                (general) => general !== "Highest",
+                              ).map((general) => (
+                                <SelectItem key={general} value={general}>
+                                  {general}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ),
+                )}
                 <FormField
                   control={form.control}
                   name="preferredDamageElement"
