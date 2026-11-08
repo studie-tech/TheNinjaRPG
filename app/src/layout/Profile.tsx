@@ -65,16 +65,10 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { nextRegenerationTickAt } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-const profileTabs = [
-  "Dashboard",
-  "Character",
-  "Pet",
-  "Achievements",
-  "History",
-  "Settings",
-  "Sharing",
-] as const;
+/** Tabs whose label shows beside the icon on wide layouts. */
+const labelledProfileTabs = ["Dashboard", "Character", "Pet"] as const;
 const iconProfileTabs = ["Achievements", "History", "Settings", "Sharing"] as const;
+const profileTabs = [...labelledProfileTabs, ...iconProfileTabs] as const;
 /** Maps remembered and linked tab names to the current profile sections. */
 const profileTabAliases: Partial<Record<string, ProfileTab>> = {
   "Edit Character": "Settings",
@@ -195,15 +189,13 @@ export function Profile() {
             }}
             iconOnlyOptions={profileTabs}
             labelClassName={(option) =>
-              option === "Dashboard" || option === "Character" || option === "Pet"
-                ? "@min-[480px]:not-sr-only"
-                : ""
+              isLabelledProfileTab(option) ? "@min-[480px]:not-sr-only" : ""
             }
             values={profileTabValues}
             counts={{ Sharing: newInRecruit }}
             listClassName="w-full flex-nowrap justify-start gap-[4px]"
             itemClassName={(option) =>
-              `shrink-0 w-[min(44px,calc((100cqw_-_24px)/7))] ${option === "Pet" ? "mr-auto" : "mr-0"} ${option === "Dashboard" || option === "Character" || option === "Pet" ? "@min-[480px]:w-auto" : ""}`
+              `shrink-0 w-[min(44px,calc((100cqw_-_24px)/7))] ${option === "Pet" ? "mr-auto" : "mr-0"} ${isLabelledProfileTab(option) ? "@min-[480px]:w-auto" : ""}`
             }
             className="min-h-[44px] w-full min-w-0 @min-[480px]:px-[12px] px-0 text-base"
           />
@@ -635,3 +627,6 @@ const ProfileSharing = lazy(() =>
     default: module.ProfileSharing,
   })),
 );
+
+const isLabelledProfileTab = (option: string) =>
+  (labelledProfileTabs as readonly string[]).includes(option);
