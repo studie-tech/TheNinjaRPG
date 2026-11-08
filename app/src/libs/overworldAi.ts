@@ -181,6 +181,7 @@ export const placementCopyPositions = (
 
 export type OverworldCopy = {
   copy: number;
+  sector: number;
   anchor: WanderTile;
   seed: string;
   groupSize: number;
@@ -212,6 +213,7 @@ export const placementCopiesInSector = (
     return [
       {
         copy,
+        sector,
         anchor,
         seed,
         groupSize: wanderGroupSize(seed, placement.groupMin, placement.groupMax),
@@ -296,7 +298,7 @@ export const placementToSectorUser = (
   maxHealth: template.maxHealth,
   avatar: template.avatar,
   avatarLight: template.avatarLight,
-  sector: placement.sector,
+  sector: copy?.sector ?? placement.sector,
   longitude: copy?.anchor.x ?? placement.longitude,
   latitude: copy?.anchor.y ?? placement.latitude,
   location: null,

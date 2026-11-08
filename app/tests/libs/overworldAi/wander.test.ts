@@ -156,6 +156,11 @@ describe("placement copies", () => {
       expect(copy.groupSize).toBeGreaterThanOrEqual(3);
       expect(copy.groupSize).toBeLessThanOrEqual(5);
     }
+    // Copies served away from the stored sector report the sector they stand in.
+    const [away] = placementCopiesInSector(placement({ spawnCount: 30 }), 302, map(), [301, 302]);
+    const template = { userId: "ai", username: "Deer", avatar: null, avatarLight: null, curHealth: 1, maxHealth: 1, level: 1, rank: "STUDENT" as const };
+    expect(away?.copy).toBeGreaterThan(0);
+    expect(placementToSectorUser(placement(), template, away).sector).toBe(302);
     // A hand-placed, non-wild copy 0 keeps its doorstep tile exactly.
     const keeper = placementCopiesInSector(placement({ wildOnly: false, longitude: 1, latitude: 2, spawnCount: 1 }), 301, map());
     expect(keeper.map((copy) => copy.anchor)).toEqual([{ x: 1, y: 2 }]);
