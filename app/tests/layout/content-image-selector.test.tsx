@@ -15,7 +15,7 @@ import * as ContentImageSelector from "@/layout/ContentImageSelector";
 import * as EditContent from "@/layout/EditContent";
 import { FurnitureViewsEditor } from "@/layout/FurnitureViewsEditor";
 import * as Image from "@/layout/Image";
-import * as ProfileEdit from "@/layout/ProfileEdit";
+import * as HistoricalAiAvatarModule from "@/layout/HistoricalAiAvatar";
 import * as RichInput from "@/layout/RichInput";
 import { FURNITURE_IMAGE_PROMPT, furnitureViewPrompt } from "@/libs/imagePrompts";
 import * as toast from "@/libs/toast";
@@ -38,7 +38,7 @@ type UploadCallbacks = {
 };
 let options: GenerationOptions;
 let upload: UploadCallbacks;
-let history: ComponentProps<typeof ProfileEdit.HistoricalAiAvatar>;
+let history: ComponentProps<typeof HistoricalAiAvatarModule.HistoricalAiAvatar>;
 const requests: { input: Record<string, unknown>; complete: GenerationOptions["onSuccess"] }[] = [];
 const mutate = vi.fn((input: Record<string, unknown>) => {
   requests.push({ input, complete: options.onSuccess });
@@ -82,7 +82,7 @@ beforeEach(() => {
     },
   });
   // Isolate application mutation callbacks from image storage, history and rich-editor widgets.
-  vi.spyOn(ProfileEdit, "HistoricalAiAvatar").mockImplementation((next) => {
+  vi.spyOn(HistoricalAiAvatarModule, "HistoricalAiAvatar").mockImplementation((next) => {
     history = next;
     return null;
   });

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import * as Avatar from "@/layout/Avatar";
 import * as Modal from "@/layout/Modal";
-import { HistoricalAiAvatar } from "@/layout/ProfileEdit";
+import { HistoricalAiAvatar } from "@/layout/HistoricalAiAvatar";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
 

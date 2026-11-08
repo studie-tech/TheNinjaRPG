@@ -8,7 +8,7 @@ const key = [["profile", "getUser"], { type: "query" }];
 const flows = [
   { file: "app/[shell]/village/page.tsx", procedure: "leaveVillage" },
   { file: "app/[shell]/travel/page.tsx", procedure: "joinVillage" },
-  { file: "layout/ProfileEdit.tsx", procedure: "swapVillage" },
+  { file: "layout/profileEdit/SwapVillage.tsx", procedure: "swapVillage" },
 ];
 
 describe.each(flows)("village.$procedure profile reconciliation", ({ file, procedure }) => {

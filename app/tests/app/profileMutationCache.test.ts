@@ -11,13 +11,13 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 const key = [["profile", "getUser"], { type: "query" }];
 const flows = [
   { file: "app/[shell]/blackmarket/page.tsx", procedure: "bloodline.pityRoll", patch: { bloodlineId: "new", bloodline: { id: "new" } } },
-  { file: "layout/ProfileEdit.tsx", procedure: "bloodline.swapBloodline", patch: { bloodlineId: "new", bloodline: { id: "new" }, reputationPoints: 10 } },
-  { file: "layout/ProfileEdit.tsx", procedure: "staff.unequipAllGear", patch: { items: [], maxEnergy: 100 } },
-  { file: "layout/ProfileEdit.tsx", procedure: "staff.unequipAllJutsus", patch: { loadout: { jutsuIds: [] } } },
-  { file: "layout/ProfileEdit.tsx", procedure: "blackmarket.updateStats", patch: { offence: 100, defence: 100 }, invalidations: 0 },
-  { file: "layout/ProfileEdit.tsx", procedure: "skillTree.resetSkillPoints", patch: { userSkills: [], monthlySkillResets: { month: "2026-10", count: 1 }, maxEnergy: 100, effectiveMasteries: {} }, invalidations: 2 },
+  { file: "layout/profileEdit/SwapBloodline.tsx", procedure: "bloodline.swapBloodline", patch: { bloodlineId: "new", bloodline: { id: "new" }, reputationPoints: 10 } },
+  { file: "layout/profileEdit/ManagementCommands.tsx", procedure: "staff.unequipAllGear", patch: { items: [], maxEnergy: 100 } },
+  { file: "layout/profileEdit/ManagementCommands.tsx", procedure: "staff.unequipAllJutsus", patch: { loadout: { jutsuIds: [] } } },
+  { file: "layout/profileEdit/ResetStats.tsx", procedure: "blackmarket.updateStats", patch: { offence: 100, defence: 100 }, invalidations: 0 },
+  { file: "layout/profileEdit/ResetSkills.tsx", procedure: "skillTree.resetSkillPoints", patch: { userSkills: [], monthlySkillResets: { month: "2026-10", count: 1 }, maxEnergy: 100, effectiveMasteries: {} }, invalidations: 2 },
   { file: "layout/clan/ClanInfo.tsx", procedure: "clan.editClanColor", patch: { village: { id: "home", hexColor: "#123456" } }, invalidations: 0 },
-  { file: "layout/ProfileEdit.tsx", procedure: "skillTree.resetAllUsersSkillPoints", patch: { userSkills: [], skillPoints: 12 } },
+  { file: "layout/profileEdit/ManagementCommands.tsx", procedure: "skillTree.resetAllUsersSkillPoints", patch: { userSkills: [], skillPoints: 12 } },
   { file: "app/[shell]/adminbuilding/page.tsx", procedure: "quests.startQuest", patch: { userQuests: [], questData: [] } },
   { file: "layout/RaidBrowser.tsx", procedure: "raids.claimDamageReward", patch: { reputationPoints: 10 }, invalidations: 2 },
   { file: "layout/clan/ClanInfo.tsx", procedure: "clan.upgradeHideoutToStronghold", patch: { village: { id: "home", type: "STRONGHOLD" } }, invalidations: 0 },
@@ -134,7 +134,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, in
 
 describe("generated avatar profile recovery", () => {
   it("keeps a confirmed file-generation rejection local", async () => {
-    const test = setup("layout/ProfileEdit.tsx", "avatar.createAvatar");
+    const test = setup("layout/profileEdit/AvatarSettings.tsx", "avatar.createAvatar");
     try {
       const response = { success: false, message: "Failed to create avatar", userDelta: {} };
       await test.options.onSuccess(response, undefined, test.options.onMutate());
@@ -146,7 +146,7 @@ describe("generated avatar profile recovery", () => {
   });
 
   it("recovers a rejected guarded debit without confirmed profile state", async () => {
-    const test = setup("layout/ProfileEdit.tsx", "avatar.createAvatar");
+    const test = setup("layout/profileEdit/AvatarSettings.tsx", "avatar.createAvatar");
     const changed = { ...test.profile, userData: { ...test.profile.userData, reputationPoints: 0 } };
     test.getUser.mockResolvedValue(changed);
     try {
@@ -157,7 +157,7 @@ describe("generated avatar profile recovery", () => {
   });
 
   it("applies the avatar pair and confirmed debit without fetching the profile", async () => {
-    const test = setup("layout/ProfileEdit.tsx", "avatar.createAvatar");
+    const test = setup("layout/profileEdit/AvatarSettings.tsx", "avatar.createAvatar");
     try {
       await test.options.onSuccess({ success: true, userPatch: { avatar: "/generated.webp", avatarLight: null }, userDelta: { reputationPoints: -1 } }, undefined, test.options.onMutate());
       expect(test.value()?.userData).toMatchObject({ avatar: "/generated.webp", avatarLight: null, reputationPoints: 29 });
@@ -166,7 +166,7 @@ describe("generated avatar profile recovery", () => {
   });
 
   it("recovers a generated avatar response arriving after another profile revision", async () => {
-    const test = setup("layout/ProfileEdit.tsx", "avatar.createAvatar");
+    const test = setup("layout/profileEdit/AvatarSettings.tsx", "avatar.createAvatar");
     try {
       const revision = test.options.onMutate();
       test.client.setQueryData(key, { ...test.profile, userData: { ...test.profile.userData, reputationPoints: 20 } });
