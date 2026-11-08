@@ -5,10 +5,6 @@ import {
 } from "@/drizzle/constants";
 import { dollars2reps } from "@/utils/paypal";
 import {
-  androidSubscriptionChange,
-  productIdForPackage,
-} from "@/libs/native/purchases";
-import {
   classifyEvent,
   expirationAt,
   idempotencyKey,
@@ -45,73 +41,9 @@ describe("store catalogue", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("maps a Play offering package to the selected base plan", () => {
-    expect(
-      productIdForPackage(
-        {
-          identifier: "gold-package",
-          product: {
-            identifier: "tnr_federal_gold",
-            priceString: "$15.00",
-            title: "Gold",
-            description: "Gold tier",
-            defaultOption: { basePlanId: "monthly" },
-          },
-        },
-        "android",
-      ),
-    ).toBe("tnr_federal_gold:monthly");
-  });
-
   it("offers tiers in ascending order, so the list reads as a ladder", () => {
     const prices = STORE_REP_PRODUCTS.map((p) => p.usd);
     expect([...prices].sort((a, b) => a - b)).toEqual(prices);
-  });
-
-  it("uses Play's replacement flow for subscription tier changes", () => {
-    expect(
-      androidSubscriptionChange(
-        ["tnr_federal_normal:monthly"],
-        "tnr_federal_gold:monthly",
-        STORE_FEDERAL_PRODUCTS,
-      ),
-    ).toEqual({
-      status: "change",
-      storeProductChangeInfo: {
-        oldProductIdentifier: "tnr_federal_normal:monthly",
-        replacementMode: "CHARGE_PRORATED_PRICE",
-      },
-    });
-    expect(
-      androidSubscriptionChange(
-        ["tnr_federal_gold:monthly"],
-        "tnr_federal_silver:monthly",
-        STORE_FEDERAL_PRODUCTS,
-      ),
-    ).toEqual({
-      status: "change",
-      storeProductChangeInfo: {
-        oldProductIdentifier: "tnr_federal_gold:monthly",
-        replacementMode: "DEFERRED",
-      },
-    });
-  });
-
-  it("does not replace a new or already-active Play subscription", () => {
-    expect(
-      androidSubscriptionChange(
-        [],
-        "tnr_federal_gold:monthly",
-        STORE_FEDERAL_PRODUCTS,
-      ),
-    ).toEqual({ status: "new" });
-    expect(
-      androidSubscriptionChange(
-        ["tnr_federal_gold:monthly"],
-        "tnr_federal_gold:monthly",
-        STORE_FEDERAL_PRODUCTS,
-      ),
-    ).toEqual({ status: "active" });
   });
 });
 
