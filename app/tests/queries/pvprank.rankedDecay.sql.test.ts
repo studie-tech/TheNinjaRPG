@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
 import { asc } from "drizzle-orm";
 import { battleHistory, userData } from "@/drizzle/schema";
-import { executeRowsForGET } from "@/queries/pvprank";
+import { decayInactiveLegendRankedLp } from "@/queries/pvprank";
 import { insertUsers } from "../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
 
@@ -35,7 +35,7 @@ describeWithDatabase("daily ranked LP decay", () => {
       { battleId: "b5", battleType: null, attackedId: "idle", defenderId: "opponent", createdAt: recent },
     ]);
 
-    const result = await executeRowsForGET(db, cutoff);
+    const result = await decayInactiveLegendRankedLp(db, cutoff);
 
     expect(result.rowsAffected).toBe(4);
     const rows = await db

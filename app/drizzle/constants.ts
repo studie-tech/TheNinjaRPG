@@ -2579,6 +2579,10 @@ export const RANKED_RANKS = [
 ] as const;
 export type RankedRank = (typeof RANKED_RANKS)[number];
 export const RANKED_LEGEND_LP_REQUIREMENT = 900;
+/** LP a Legend player loses at each daily reset without a recent ranked battle. */
+export const RANKED_LP_DAILY_DECAY = 70;
+/** Days without a ranked battle, on either side, before a Legend player's LP decays. */
+export const RANKED_DECAY_INACTIVE_DAYS = 5;
 export const RANKED_DIVISIONS = [
   { key: "UNRANKED", name: "Unranked", rankedLp: 0, kFactor: 40 },
   { key: "WOOD", name: "Wood", rankedLp: 150, kFactor: 40 },
