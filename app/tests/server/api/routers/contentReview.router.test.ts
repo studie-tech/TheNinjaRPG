@@ -46,6 +46,15 @@ const badgeRow = (id: string, description: string) => ({
   description,
 });
 
+/** An agent's request for one image at `path`, generated from `generate` when set. */
+const imageRequest = (generate: string | null, path = "image") => ({
+  kind: "IMAGE" as const,
+  path,
+  catalogIds: [],
+  search: null,
+  generate,
+});
+
 const suggestion = (description: string) => ({
   entityType: "BADGE" as const,
   entityId: BADGE,
@@ -130,6 +139,14 @@ describeWithDatabase("content review", () => {
     basis: [{ entityType: "BADGE" as const, entityId: BADGE, v: await versionOf(BADGE) }],
   });
 
+  /** Submit the default revision as an agent draft and read it back. */
+  const submitDraft = async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    return { id, initial: (await readAgentProposal(database, id))! };
+  };
+
   it("refines the same pending agent draft and refuses a stale revision token", async () => {
     const database = await getTestDatabase();
     const submitted = await ingestAgentSubmission(database, { agentName: "original agent", proposals: [await revisionProposal()] });
@@ -148,9 +165,7 @@ describeWithDatabase("content review", () => {
 
   it("refuses staff decisions made from a view predating a refinement", async () => {
     const database = await getTestDatabase();
-    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
-    const id = submitted.accepted[0]!.id;
-    const initial = (await readAgentProposal(database, id))!;
+    const { id, initial } = await submitDraft();
     const token = initial.statusChangedAt.toISOString();
     expect((await reviseAgentProposal(database, id, { proposal: await revisionProposal("Awarded for demonstrated bravery."), expectedStatusChangedAt: token, reactivate: false, feedbackResponse: null })).ok).toBe(true);
     const reviewer = await callerFor(contentReviewRouter, EDITOR);
@@ -252,9 +267,7 @@ describeWithDatabase("content review", () => {
 
   it("refuses stale basis, changed targets, and staff or already applied proposals", async () => {
     const database = await getTestDatabase();
-    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
-    const id = submitted.accepted[0]!.id;
-    const initial = (await readAgentProposal(database, id))!;
+    const { id, initial } = await submitDraft();
     const input = { proposal: await revisionProposal("Awarded for demonstrated bravery."),
       expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null };
     expect(await reviseAgentProposal(database, id, { ...input, proposal: { ...input.proposal, basis: [{ entityType: "BADGE", entityId: BADGE, v: "0000000000000000" }] } })).toMatchObject({ ok: false, status: 422 });
@@ -268,9 +281,7 @@ describeWithDatabase("content review", () => {
 
   it("does not overwrite a staff decision made while revision media is prepared", async () => {
     const database = await getTestDatabase();
-    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
-    const id = submitted.accepted[0]!.id;
-    const initial = (await readAgentProposal(database, id))!;
+    const { id, initial } = await submitDraft();
     const { promise: ready, resolve: preparing } = deferred<void>();
     const { promise: wait, resolve: release } = deferred<void>();
     const deleted = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
@@ -283,7 +294,7 @@ describeWithDatabase("content review", () => {
     const proposal = await revisionProposal("Awarded for demonstrated bravery.");
     const refining = reviseAgentProposal(database, id, {
       expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null,
-      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [{ kind: "IMAGE", path: "image", catalogIds: [], search: null, generate: "A badge portrait" }] }] },
+      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [imageRequest("A badge portrait")] }] },
     });
     await ready;
     await database.update(contentProposal).set({ status: "APPLIED", statusChangedAt: new Date(initial.statusChangedAt.getTime() + 1) }).where(eq(contentProposal.id, id));
@@ -297,9 +308,7 @@ describeWithDatabase("content review", () => {
 
   it("lets only one concurrent refinement commit and deletes the losing upload", async () => {
     const database = await getTestDatabase();
-    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
-    const id = submitted.accepted[0]!.id;
-    const initial = (await readAgentProposal(database, id))!;
+    const { id, initial } = await submitDraft();
     let calls = 0;
     const { promise: ready, resolve: bothPreparing } = deferred<void>();
     const { promise: wait, resolve: release } = deferred<void>();
@@ -315,7 +324,7 @@ describeWithDatabase("content review", () => {
     const proposal = await revisionProposal("Awarded for demonstrated bravery.");
     const input = {
       expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null,
-      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [{ kind: "IMAGE" as const, path: "image", catalogIds: [], search: null, generate: "A badge portrait" }] }] },
+      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [imageRequest("A badge portrait")] }] },
     };
     const first = reviseAgentProposal(database, id, input);
     const second = reviseAgentProposal(database, id, input);
@@ -336,9 +345,7 @@ describeWithDatabase("content review", () => {
 
   it("refuses content edited while refinement media is prepared and cleans its upload", async () => {
     const database = await getTestDatabase();
-    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
-    const id = submitted.accepted[0]!.id;
-    const initial = (await readAgentProposal(database, id))!;
+    const { id, initial } = await submitDraft();
     const { promise: ready, resolve: preparing } = deferred<void>();
     const { promise: wait, resolve: release } = deferred<void>();
     const deleted = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
@@ -352,7 +359,7 @@ describeWithDatabase("content review", () => {
     const proposal = await revisionProposal("Awarded for demonstrated bravery.");
     const refining = reviseAgentProposal(database, id, {
       expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null,
-      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [{ kind: "IMAGE", path: "image", catalogIds: [], search: null, generate: "A badge portrait" }] }] },
+      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [imageRequest("A badge portrait")] }] },
     });
     await ready;
     await database.update(badge).set({ description: "Edited while generating art." }).where(eq(badge.id, BADGE));
@@ -367,9 +374,7 @@ describeWithDatabase("content review", () => {
 
   it("does not outdate a new refinement using an old freshness snapshot", async () => {
     const database = await getTestDatabase();
-    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
-    const id = submitted.accepted[0]!.id;
-    const initial = (await readAgentProposal(database, id))!;
+    const { id, initial } = await submitDraft();
     expect(await reviseAgentProposal(database, id, {
       expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false,
       feedbackResponse: null, proposal: await revisionProposal("Awarded for demonstrated bravery."),
@@ -390,7 +395,7 @@ describeWithDatabase("content review", () => {
     const entity = (await loadEntities(database, [{ entityType: "QUEST", entityId: "cast-quest" }])).get(entityKey("QUEST", "cast-quest"))!;
     const collector = vi.spyOn(media, "collectCandidates").mockResolvedValue([{ kind: "IMAGE", source: "GENERATED", externalId: null, title: "Village representative", url: "https://ui0arpl8sm.ufs.sh/f/elder-cutout.png", fileKey: null, lengthMs: null, prompt: "A calm village representative" }]);
     const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [{ title: "Add a village award representative", category: "VISUAL", rationale: "A visible calm elder suits the civic award scene.", confidence: 90, usesUsageData: false,
-      changes: [{ entityType: "QUEST", entityId: "cast-quest", operation: "UPDATE", set: [], media: [{ kind: "IMAGE", path: "content.sceneCharacters.0", catalogIds: [], search: null, generate: "A calm village representative" }] }], basis: [{ entityType: "QUEST", entityId: "cast-quest", v: entity.version }] }] });
+      changes: [{ entityType: "QUEST", entityId: "cast-quest", operation: "UPDATE", set: [], media: [imageRequest("A calm village representative", "content.sceneCharacters.0")] }], basis: [{ entityType: "QUEST", entityId: "cast-quest", v: entity.version }] }] });
     expect(submitted.refused).toEqual([]);
     const id = submitted.accepted[0]!.id;
     expect(await database.query.gameAsset.findMany()).toHaveLength(0);
@@ -399,7 +404,7 @@ describeWithDatabase("content review", () => {
     collector.mockClear();
     vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
     const submittedProposal = { title: "Add a village award representative", category: "VISUAL" as const, rationale: "Inspected the actual generated cutout and its calm award-scene appearance.", confidence: 90, usesUsageData: false,
-      changes: [{ entityType: "QUEST" as const, entityId: "cast-quest", operation: "UPDATE" as const, set: [], media: [{ kind: "IMAGE" as const, path: "content.sceneCharacters.0", catalogIds: [], search: null, generate: null }] }], basis: [{ entityType: "QUEST" as const, entityId: "cast-quest", v: entity.version }] };
+      changes: [{ entityType: "QUEST" as const, entityId: "cast-quest", operation: "UPDATE" as const, set: [], media: [imageRequest(null, "content.sceneCharacters.0")] }], basis: [{ entityType: "QUEST" as const, entityId: "cast-quest", v: entity.version }] };
     expect((await reviseAgentProposal(database, id, { expectedStatusChangedAt: candidate.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null, retainMediaIds: [candidate.media[0]!.id], proposal: submittedProposal })).ok).toBe(true);
     expect(collector).not.toHaveBeenCalled();
     const retained = (await readAgentProposal(database, id))!;
@@ -432,7 +437,7 @@ describeWithDatabase("content review", () => {
         entityType: "BADGE" as const, entityId: null, operation: "CREATE" as const,
         set: [{ path: "name", valueJson: JSON.stringify(name) },
           { path: "description", valueJson: JSON.stringify(`Awarded for ${name}.`) }],
-        media: [{ kind: "IMAGE" as const, path: "image", catalogIds: [], search: null, generate: name }],
+        media: [imageRequest(name)],
       })),
     };
     const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [proposal] });
@@ -741,13 +746,7 @@ describeWithDatabase("content review", () => {
               operation: "UPDATE",
               set: [],
               media: [
-                {
-                  kind: "IMAGE",
-                  path: "image",
-                  catalogIds: [],
-                  search: null,
-                  generate: "a brave badge",
-                },
+                imageRequest("a brave badge"),
               ],
             },
           ],
@@ -787,13 +786,7 @@ describeWithDatabase("content review", () => {
           operation: "UPDATE" as const,
           set: [],
           media: [
-            {
-              kind: "IMAGE" as const,
-              path: "image",
-              catalogIds: [],
-              search: null,
-              generate: "a badge",
-            },
+            imageRequest("a badge"),
           ],
         },
       ],
@@ -844,13 +837,7 @@ describeWithDatabase("content review", () => {
                 operation: "UPDATE",
                 set: [],
                 media: [
-                  {
-                    kind: "IMAGE",
-                    path: "image",
-                    catalogIds: [],
-                    search: null,
-                    generate: "a badge",
-                  },
+                  imageRequest("a badge"),
                 ],
               },
             ],
@@ -1127,7 +1114,7 @@ describeWithDatabase("content review", () => {
     const proposal = await revisionProposal("Awarded for demonstrated bravery.");
     const revising = reviseAgentProposal(database, id, { expectedStatusChangedAt: original.statusChangedAt.toISOString(),
       reactivate: true, feedbackResponse: "Clarify the wording to address the earlier rejection.",
-      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [{ kind: "IMAGE", path: "image", catalogIds: [], search: null, generate: "A new badge" }] }] } });
+      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [imageRequest("A new badge")] }] } });
     await prepared;
     const cleaning = cleanupContentProposals(database);
     await started;
@@ -1142,9 +1129,7 @@ describeWithDatabase("content review", () => {
 
   it("retries orphan files after storage failure without reviving a deleted proposal", async () => {
     const database = await getTestDatabase();
-    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
-    const id = submitted.accepted[0]!.id;
-    const original = (await readAgentProposal(database, id))!;
+    const { id, initial: original } = await submitDraft();
     await database.update(contentProposal).set({ status: "REJECTED", statusChangedAt: new Date(Date.now() - (CONTENT_PROPOSAL_RETENTION_DAYS + 1) * 86_400_000) }).where(eq(contentProposal.id, id));
     await database.insert(contentProposalMedia).values([
       { id: "retry-file", proposalId: id, changeId: original.changes[0]!.id, path: "image", kind: "IMAGE", source: "GENERATED", title: "Retry image", url: "https://example.com/retry.webp", fileKey: "retry-file-key", chosen: true },
