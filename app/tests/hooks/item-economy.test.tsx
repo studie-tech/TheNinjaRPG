@@ -54,6 +54,31 @@ const itemUtils = { item: Object.fromEntries(Object.entries(catalogueInvalidatio
 const ActualFurnitureViewsEditor = furnitureEditor.FurnitureViewsEditor;
 const ActualEditContent = EditContent;
 const actualUseItemEditForm = useItemEditForm;
+const MEAL_FIELD_IDS = [
+  "name",
+  "image",
+  "itemType",
+  "rarity",
+  "description",
+  "cost",
+  "repsCost",
+  "seichiSilverCost",
+  "stackSize",
+  "canStack",
+  "hidden",
+  "isEventItem",
+  "inShop",
+  "canBeCrafted",
+  "canBeTraded",
+  "auctionMinPrice",
+  "auctionMaxPrice",
+  "cookingMinLevel",
+  "cookingTimeSeconds",
+  "cookingOutputQuantity",
+  "cookingExperience",
+  "mealDurationSeconds",
+  "craftingRequirements",
+];
 
 beforeEach(() => {
   installBrowserGlobals();
@@ -336,6 +361,13 @@ describe("staff item economy editor", () => {
     expect(
       ids.slice(ids.indexOf("canBeTraded"), ids.indexOf("canBeTraded") + 3),
     ).toEqual(["canBeTraded", "auctionMinPrice", "auctionMaxPrice"]);
+  });
+  it("limits meals to their listing, crafting and cooking fields", async () => {
+    const { result } = renderHook(() => useItemEditForm(data, async () => undefined));
+    await act(async () => {
+      result.current.form.setValue("itemType", "MEAL");
+    });
+    expect(result.current.formData.map((field): string => field.id)).toEqual(MEAL_FIELD_IDS);
   });
   it("requires quantity for a limited period and allows clearing bounds", async () => {
     const { result } = renderHook(() => useItemEditForm(data, async () => undefined));
