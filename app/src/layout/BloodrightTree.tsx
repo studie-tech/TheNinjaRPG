@@ -90,13 +90,7 @@ export const BloodrightTree = ({ tiers, purchasedIds, silver, onSelect }: Props)
             >
               <SkillCard
                 skill={skill}
-                status={{
-                  isOwned,
-                  isActivated: isOwned,
-                  hasPrereqs,
-                  hasPoints,
-                  canPurchase: !isOwned && hasPrereqs && hasPoints,
-                }}
+                status={{ isOwned, isActivated: isOwned, hasPrereqs, hasPoints }}
                 costLabel={`${skill.seichiSilverCost.toLocaleString()} Silver`}
                 onClick={() => onSelect(skill.id)}
               />
