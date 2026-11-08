@@ -169,7 +169,7 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
   const tableData =
     data &&
     (() => {
-      // Group by id: names are not unique, and each row links to its own jutsu
+      // Group by id: each row links to its own jutsu
       const groups = groupBy(data, "jutsuId");
       const rows = Array.from(groups.entries()).map(([jutsuId, entries]) => {
         const name = entries[0]?.name ?? jutsuId;

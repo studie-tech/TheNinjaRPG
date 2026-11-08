@@ -166,7 +166,6 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
   const utils = api.useUtils();
 
   // Check if user can change content
-  const canDelete = canChangeContent(userData?.role ?? "USER");
   const canEdit = canChangeContent(userData?.role ?? "USER");
 
   // Process data for table
@@ -222,7 +221,7 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
         <div className="flex items-center gap-2">
           {props.navTabs}
           <BloodlineBalanceFiltering state={filterState} />
-          {canDelete && (
+          {canEdit && (
             <ClearBattleDataButton
               type="bloodline"
               label="bloodline"
