@@ -4,7 +4,7 @@ import {
 } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
 import { applySingleEffect } from "@/libs/combat/process";
-import { makeBattleUser, makeEffect } from "./battleScenario";
+import { type EffectRuntimeOverrides, makeBattleUser, makeEffect } from "./battleScenario";
 import type {
   ActionEffect,
   BattleUserState,
@@ -13,8 +13,6 @@ import type {
   GroundEffect,
   UserEffect,
 } from "@/libs/combat/types";
-
-type EffectRuntimeOverrides = Partial<UserEffect> & Record<string, unknown>;
 
 /**
  * Partial `SageMode` catalog row for combat tests. Only fields the processor

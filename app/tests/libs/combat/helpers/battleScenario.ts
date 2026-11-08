@@ -29,7 +29,7 @@ type DamageModifierType = Extract<
   | "decreasedamagetaken"
 >;
 type BattleUserOverrides = Partial<BattleUserState> & Record<string, unknown>;
-type EffectRuntimeOverrides = Partial<UserEffect> & Record<string, unknown>;
+export type EffectRuntimeOverrides = Partial<UserEffect> & Record<string, unknown>;
 
 const effectSourceTypes = [
   "jutsu",
@@ -130,7 +130,7 @@ const battleUserBooleanDefaults = {
  * `.passthrough()` so a test can still provide uncommon `BattleUserState`
  * fields without expanding this helper first.
  */
-export const battleUserSchema = z
+const battleUserSchema = z
   .object({
     ...numberFields(StatNames, 450_000),
     ...numberFields(GenNames, 100_000),

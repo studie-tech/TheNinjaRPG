@@ -4,7 +4,7 @@ import { shouldPilotSummon } from "@/libs/combat/summon";
 import { wantsHumanActionSet } from "@/libs/combat/turn";
 import { maskBattle, maskUsersState } from "@/libs/combat/masking";
 import type { BattleUserState } from "@/libs/combat/types";
-import { makeBattleUser, makeCompleteBattle, makeInjectBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 
 const P = "p1";
 
@@ -116,7 +116,7 @@ describe("piloted summons have no basic clear/cleanse", () => {
     });
 
   const actionIds = (users: BattleUserState[], actorId: string) =>
-    availableUserActions(makeInjectBattle(users), actorId, true, true).map((a) => a.id);
+    availableUserActions(makeCompleteBattle({ usersState: users }), actorId, true, true).map((a) => a.id);
 
   it("excludes clear and cleanse for a piloted summon, keeping other basics", () => {
     const ids = actionIds([player(), summon({ isPiloted: true })], "s1");
