@@ -2,9 +2,13 @@ import type { Clerk } from "@clerk/shared/types";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as navigation from "next/navigation";
 import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
+import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
+import { useLiveActivity } from "@/hooks/useLiveActivity";
+import { useNativePush } from "@/hooks/useNativePush";
 import { createTrpcSession, trpcSessionLink } from "@/libs/trpcSession";
 import type { UserWithRelations } from "@/routers/profile";
 import { deferred } from "../setup/deferred";
@@ -30,28 +34,22 @@ interface NativeLifecycleMocks {
   stateListeners: Array<(payload: { isActive: boolean }) => void>;
 }
 
-function getMocks(): NativeLifecycleMocks {
-  const globals = globalThis as typeof globalThis & {
-    __nativeLifecycleMocks?: NativeLifecycleMocks;
-  };
-  globals.__nativeLifecycleMocks ??= {
-    actionListeners: [],
-    detachToken: vi.fn(),
-    endActivity: vi.fn(),
-    endKind: vi.fn(),
-    endLiveActivity: vi.fn(),
-    liveStart: vi.fn(),
-    liveTokenListeners: [],
-    pushCheckPermissions: vi.fn(),
-    pushRegister: vi.fn(),
-    registrationErrorListeners: [],
-    registrationListeners: [],
-    registerActivity: vi.fn(),
-    sendToken: vi.fn(),
-    stateListeners: [],
-  };
-  return globals.__nativeLifecycleMocks;
-}
+const mocks: NativeLifecycleMocks = {
+  actionListeners: [],
+  detachToken: vi.fn(),
+  endActivity: vi.fn(),
+  endKind: vi.fn(),
+  endLiveActivity: vi.fn(),
+  liveStart: vi.fn(),
+  liveTokenListeners: [],
+  pushCheckPermissions: vi.fn(),
+  pushRegister: vi.fn(),
+  registrationErrorListeners: [],
+  registrationListeners: [],
+  registerActivity: vi.fn(),
+  sendToken: vi.fn(),
+  stateListeners: [],
+};
 
 const subscribe = <T,>(
   listeners: Array<(payload: T) => void>,
@@ -64,38 +62,28 @@ const subscribe = <T,>(
   };
 };
 
-vi.mock("next/navigation", () => {
-  const router = { push: vi.fn() };
-  return { useRouter: () => router };
-});
-
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    push: {
-      registerDevice: {
-        useMutation: () => ({ mutateAsync: getMocks().sendToken }),
-      },
-      unregisterDevice: {
-        useMutation: () => ({ mutateAsync: getMocks().detachToken }),
-      },
-      registerActivity: {
-        useMutation: (options?: Record<string, unknown>) => {
-          getMocks().registerActivityOptions = options;
-          return { mutateAsync: getMocks().registerActivity };
-        },
-      },
-      endActivity: {
-        useMutation: () => ({ mutate: getMocks().endActivity }),
+const router = { push: vi.fn() };
+const api = {
+  push: {
+    registerDevice: {
+      useMutation: () => ({ mutateAsync: mocks.sendToken }),
+    },
+    unregisterDevice: {
+      useMutation: () => ({ mutateAsync: mocks.detachToken }),
+    },
+    registerActivity: {
+      useMutation: (options?: Record<string, unknown>) => {
+        mocks.registerActivityOptions = options;
+        return { mutateAsync: mocks.registerActivity };
       },
     },
+    endActivity: {
+      useMutation: () => ({ mutate: mocks.endActivity }),
+    },
   },
-}));
-
-import { useLiveActivity } from "@/hooks/useLiveActivity";
-import { useNativePush } from "@/hooks/useNativePush";
+};
 
 const TOKEN = "a".repeat(64);
-const mocks = getMocks();
 const profile = (status: "AWAKE" | "HOSPITALIZED", userId = "user-a") =>
   ({
     regenAt: new Date(),
@@ -105,6 +93,8 @@ const profile = (status: "AWAKE" | "HOSPITALIZED", userId = "user-a") =>
   }) as unknown as UserWithRelations;
 
 beforeEach(() => {
+  vi.spyOn(navigation, "useRouter").mockReturnValue(router as never);
+  Object.assign(vi.spyOn(client, "api" as never), api);
   localStorage.clear();
   mocks.actionListeners.length = 0;
   mocks.liveTokenListeners.length = 0;
@@ -165,6 +155,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   removeCapacitor();
+  vi.restoreAllMocks();
 });
 
 describe("native push ownership", () => {
