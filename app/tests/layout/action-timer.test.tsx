@@ -3,14 +3,11 @@ import { Profiler, type ProfilerOnRenderCallback } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import ActionTimer from "@/layout/ActionTimer";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
+import * as userContext from "@/utils/UserContext";
 import {
   makeBattleUser,
   makeCompleteBattle,
 } from "../libs/combat/helpers/battleScenario";
-
-vi.mock("@/utils/UserContext", () => ({
-  useUserData: () => ({ timeDiff: 0 }),
-}));
 
 const FROZEN_NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
 let nowMs = FROZEN_NOW;
@@ -71,6 +68,7 @@ const flushMount = () => {
 };
 
 beforeEach(() => {
+  vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
   nowMs = FROZEN_NOW;
   vi.useFakeTimers();
   vi.spyOn(Date, "now").mockImplementation(() => nowMs);

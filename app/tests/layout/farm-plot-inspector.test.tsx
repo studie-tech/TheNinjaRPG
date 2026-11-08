@@ -2,20 +2,13 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { FarmMarket } from "@/layout/FarmMarket";
 import { FarmPlotInspector } from "@/layout/FarmPlotInspector";
+import * as Image from "@/layout/Image";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getFarmGrowTimeSeconds } from "@/libs/farming";
 import { DecreaseFarmingTime } from "@/validators/combat";
+import * as userContext from "@/utils/UserContext";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
-vi.mock("@/utils/UserContext", () => ({
-  useRequiredUserData: () => ({ timeDiff: 0 }),
-}));
-vi.mock("@/layout/Image", () => ({
-  default: (props: { src: string; alt: string }) => (
-    // biome-ignore lint/performance/noImgElement: isolated component test stub
-    <img src={props.src} alt={props.alt} />
-  ),
-}));
 
 const plot = (patch: Partial<FarmPlotState> = {}): FarmPlotState => ({
   id: "plot-1",
@@ -76,9 +69,17 @@ const handlers = {
 };
 
 describe("FarmPlotInspector", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ timeDiff: 0 } as never);
+    vi.spyOn(Image, "default").mockImplementation(((props: { src: string; alt: string }) => (
+      // biome-ignore lint/performance/noImgElement: isolated component test stub
+      <img src={props.src} alt={props.alt} />
+    )) as never);
   });
 
   it.each([
