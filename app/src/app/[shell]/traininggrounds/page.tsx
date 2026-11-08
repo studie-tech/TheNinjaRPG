@@ -156,8 +156,7 @@ import { safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
-
-const getJutsuLevelCap = (_jutsu: { parentJutsuId?: string | null }) => JUTSU_LEVEL_CAP;
+import type { BaseServerResponse } from "@/validators/base";
 
 // Favorites live on the ranked loadout, whose cleanup drops jutsu ranked cannot use
 const isRankedFavoritable = (j: Jutsu) =>
@@ -303,6 +302,12 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
     staleTime: 5000,
   });
 
+  /** Report a sensei request change and refresh the open requests. */
+  const onRequestChange = async (data: BaseServerResponse) => {
+    showMutationToast(data);
+    if (data.success) await utils.sensei.getRequests.invalidate();
+  };
+
   // Mutations
   const { mutate: remove, isPending: isRemoving } =
     api.sensei.removeStudent.useMutation({
@@ -318,14 +323,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
     });
 
   const { mutate: create, isPending: isCreating } =
-    api.sensei.createRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.sensei.getRequests.invalidate();
-        }
-      },
-    });
+    api.sensei.createRequest.useMutation({ onSuccess: onRequestChange });
 
   const { mutate: accept, isPending: isAccepting } =
     api.sensei.acceptRequest.useMutation({
@@ -343,24 +341,10 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
     });
 
   const { mutate: reject, isPending: isRejecting } =
-    api.sensei.rejectRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.sensei.getRequests.invalidate();
-        }
-      },
-    });
+    api.sensei.rejectRequest.useMutation({ onSuccess: onRequestChange });
 
   const { mutate: cancel, isPending: isCancelling } =
-    api.sensei.cancelRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.sensei.getRequests.invalidate();
-        }
-      },
-    });
+    api.sensei.cancelRequest.useMutation({ onSuccess: onRequestChange });
 
   const { mutate: leaveSensei, isPending: isLeaving } =
     api.sensei.leaveSensei.useMutation({
@@ -1348,7 +1332,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           isFavorite: favoriteJutsuIds.includes(j.id),
         };
       })
-      .filter((j) => j.level < getJutsuLevelCap(j))
+      .filter((j) => j.level < JUTSU_LEVEL_CAP)
       // Favorites first, then jutsu in training/queued, then highest level
       .sort(
         (a, b) =>
@@ -1365,7 +1349,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     canTrainJutsu(tutorialJutsu, userData, masteries) &&
     // The list drops capped jutsu; pinning one back would show a tile whose
     // confirm modal can only say "Level capped".
-    tutorialJutsuLevel < getJutsuLevelCap(tutorialJutsu) &&
+    tutorialJutsuLevel < JUTSU_LEVEL_CAP &&
     !alljutsus.some((j) => j.id === tutorialJutsu.id)
   ) {
     alljutsus.unshift({
@@ -1402,12 +1386,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     : userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
   // The same jutsu can be bought several levels at once, up to the free queue slots
   // (all of them, the active one included, when nothing is training) and the level cap.
-  const levelCap = jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP;
   const freeSlots =
     (trainingQueue?.capacity ?? 1) -
     (finishTrainingAt?.finishTraining ? 1 : 0) -
     queuedJobs.length;
-  const maxLevelCount = Math.max(1, Math.min(freeSlots, levelCap - level));
+  const maxLevelCount = Math.max(1, Math.min(freeSlots, JUTSU_LEVEL_CAP - level));
   const count = Math.min(levelCount || 1, maxLevelCount);
   const countLevels = Array.from({ length: count }, (_, i) => level + i);
   const trainTimeLabel =
@@ -1429,7 +1412,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const okVillage = checkJutsuVillage(jutsu, userData);
   const okBloodline = checkJutsuBloodline(jutsu, userData);
   const canAfford = cost && userData.money >= cost;
-  const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
+  const isCapped = level >= JUTSU_LEVEL_CAP;
   const canTrain =
     okRank &&
     okVillage &&
