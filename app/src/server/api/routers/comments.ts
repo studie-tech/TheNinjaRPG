@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, like, notExists, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, notExists, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
