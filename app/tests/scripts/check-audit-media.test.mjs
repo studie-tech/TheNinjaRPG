@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { isSceneCharacterPath } from "@/libs/contentReview/paths";
 
 const check = async (media) => {
   const dir = await mkdtemp(path.join(tmpdir(), "audit-media-"));
@@ -43,3 +44,11 @@ for (const mediaPath of ["content.sceneCharacters.0", "content.objectives.2.scen
     assert.match(result.stderr, /generated scene characters require interactive visual inspection/);
   });
 }
+
+test("defers generation exactly at the paths the review desk treats as scene characters", { timeout: 30_000 }, async () => {
+  const paths = ["content.objectives.2.sceneCharacters.1", "content.sceneCharacters.0.image", "content.objectives.sceneCharacters.0", "image"];
+  for (const mediaPath of paths) {
+    const result = await check([{ kind: "IMAGE", path: mediaPath, generate: "A village elder" }]);
+    assert.equal(result.status !== 0, isSceneCharacterPath(mediaPath), mediaPath);
+  }
+});
