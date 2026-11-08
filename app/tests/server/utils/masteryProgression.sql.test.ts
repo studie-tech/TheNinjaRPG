@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
 import { MasteryNames, TOTAL_MASTERY_CAP } from "@/drizzle/constants";
 import { userData, quest, questHistory } from "@/drizzle/schema";
-import { masteryQuestTemplates } from "../../../setup/mastery";
+import { masteryQuestTemplates } from "../../setup/mastery";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { QuestReward } from "@/validators/rewardPackages";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -11,12 +11,12 @@ import {
   masteryRankUpdate,
 } from "@/server/utils/masteryProgression";
 
-import { insertUsers } from "../../../setup/factories";
+import { insertUsers } from "../../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
-} from "../../../setup/testDatabase";
+} from "../../setup/testDatabase";
 import { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 
 
