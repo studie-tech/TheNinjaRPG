@@ -22,11 +22,7 @@ const makeCaller = (historyCount = 0) => {
   const values = vi.fn().mockResolvedValue({ rowsAffected: 1 });
   const insert = vi.fn().mockReturnValue({ values });
   const database = {
-    query: {
-      historicalAvatar: {
-        findMany: vi.fn().mockResolvedValue(Array.from({ length: historyCount }, () => ({}))),
-      },
-    },
+    $count: vi.fn().mockResolvedValue(historyCount),
     insert,
   };
   return {
@@ -80,15 +76,25 @@ describe("content image provider routing", () => {
   });
 
   it.each([
-    { role: "USER", historyCount: 0, code: "UNAUTHORIZED" },
-    { role: "OWNER", historyCount: 101, code: "TOO_MANY_REQUESTS" },
-  ] as const)("keeps the $code guard for OpenAI", async ({ role, historyCount, code }) => {
+    { role: "USER", historyCount: 0, message: "You are not allowed to change content" },
+    { role: "OWNER", historyCount: 101, message: "Maximum of 100 creations per day reached" },
+  ] as const)("answers the $message guard for OpenAI", async ({ role, historyCount, message }) => {
     stubProfile("fetchUser", async () => ({ role }));
     const { caller, insert } = makeCaller(historyCount);
-    await expect(caller.createImg({ ...input, provider: "OPENAI" })).rejects.toMatchObject({ code });
+    expect(await caller.createImg({ ...input, provider: "OPENAI" })).toEqual({
+      success: false,
+      message,
+      url: null,
+    });
     expect(replicate.txt2imgGPT).not.toHaveBeenCalled();
     expect(replicate.txt2imgNanoBanana).not.toHaveBeenCalled();
     expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("allows the hundredth creation of the day", async () => {
+    const { caller, insert } = makeCaller(100);
+    expect(await caller.createImg({ ...input, provider: "OPENAI" })).toMatchObject({ success: true });
+    expect(insert).toHaveBeenCalledWith(historicalAvatar);
   });
 
   it("retains recoverable generation failures without publishing content history", async () => {

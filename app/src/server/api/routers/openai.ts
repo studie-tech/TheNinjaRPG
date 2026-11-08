@@ -2,16 +2,16 @@ import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { txt2imgGPT, txt2imgNanoBanana } from "@/libs/replicate";
 import {
+  countHistoricalAvatarForCreateImg,
   insertHistoricalAvatarForCreateImg,
-  listHistoricalAvatarForCreateImg,
 } from "@/queries/avatar";
 import { fetchUser } from "@/queries/profile";
 
 import {
   baseServerResponse,
   createTRPCRouter,
+  errorResponse,
   protectedProcedure,
-  serverError,
 } from "@/server/api/trpc";
 import { canChangeContent } from "@/utils/permissions";
 import { contentImageInputSchema } from "@/validators/ai";
@@ -22,19 +22,19 @@ export const generativeAiRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ url: z.url().optional().nullable() }))
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, historicalToday] = await Promise.all([
+      const [user, createdToday] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        listHistoricalAvatarForCreateImg(ctx.drizzle),
+        countHistoricalAvatarForCreateImg(ctx.drizzle),
       ]);
       // Guard
       if (!canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "You are not allowed to change content");
+        return { ...errorResponse("You are not allowed to change content"), url: null };
       }
-      if (historicalToday.length > 100) {
-        throw serverError(
-          "TOO_MANY_REQUESTS",
-          "Maximum of 100 creations per day reached",
-        );
+      if (createdToday > 100) {
+        return {
+          ...errorResponse("Maximum of 100 creations per day reached"),
+          url: null,
+        };
       }
       // Create image. nano-banana collapses every upstream Gemini failure (safety
       // refusal, text-instead-of-image, transient model error) into one opaque

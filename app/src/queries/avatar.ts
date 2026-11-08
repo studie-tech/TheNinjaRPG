@@ -137,17 +137,18 @@ export const insertHistoricalAvatarForUploadHistoricalAvatar = (
     done: true,
   });
 
-/** Build the `historicalAvatar` listing for `createImg`, using predicates on `status`, `done`, `createdAt`. */
-export const listHistoricalAvatarForCreateImg = (
-  client: Pick<DrizzleClient, "query">,
+/** Build the `historicalAvatar` count for `createImg`, using predicates on `status`, `done`, `createdAt`. */
+export const countHistoricalAvatarForCreateImg = (
+  client: Pick<DrizzleClient, "$count">,
 ) =>
-  client.query.historicalAvatar.findMany({
-    where: and(
+  client.$count(
+    historicalAvatar,
+    and(
       eq(historicalAvatar.status, "content-success"),
       eq(historicalAvatar.done, true),
       gte(historicalAvatar.createdAt, sql`NOW() - INTERVAL 1 DAY`),
     ),
-  });
+  );
 
 /** Build the `historicalAvatar` insert for `createImg`. */
 export const insertHistoricalAvatarForCreateImg = (
