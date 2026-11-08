@@ -68,7 +68,6 @@ import {
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
 import { getRandomElement } from "@/utils/array";
 import { round } from "@/utils/math";
@@ -236,9 +235,7 @@ export const blackMarketRouter = createTRPCRouter({
       }
 
       // Claim the offer and move the ryo and reputation in one guarded statement
-      const result = await retryOnDeadlock(() =>
-        executeResultForTakeOffer(ctx.drizzle, offer, ctx.userId),
-      );
+      const result = await executeResultForTakeOffer(ctx.drizzle, offer, ctx.userId);
       if (result.rowsAffected === 0) {
         return errorResponse(
           "The offer was taken or a balance changed. Please try again",
