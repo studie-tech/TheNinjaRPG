@@ -58,8 +58,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   initialIsSignedIn = false,
   children,
 }) => {
-  ReactDOM.prefetchDNS("https://o4507797256601600.ingest.de.sentry.io");
-  ReactDOM.prefetchDNS("https://consentcdn.cookiebot.com");
   ReactDOM.prefetchDNS("https://region1.analytics.google.com");
   ReactDOM.prefetchDNS("https://connect.facebook.net");
   ReactDOM.prefetchDNS("https://api.github.com");

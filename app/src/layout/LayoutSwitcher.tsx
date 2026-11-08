@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useState } from "react";
+import ReactDOM from "react-dom";
 import { GameLayout } from "@/components/layout/GameLayout";
 import { PanelPublicLayout } from "@/components/layout/PanelPublicLayout";
 import PixelPublicLayout from "@/components/layout/PixelPublicLayout";
@@ -51,6 +52,9 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   initialLayout,
   wallpaper,
 }) => {
+  // Error reporting and consent load in every frame, signed in or not.
+  ReactDOM.prefetchDNS("https://o4507797256601600.ingest.de.sentry.io");
+  ReactDOM.prefetchDNS("https://consentcdn.cookiebot.com");
   const pathname = usePublicPathname();
   const { isClerkLoaded, isSignedIn } = useUserInfo();
   // Explicit choices replace only the presentation; remounting the root shell would
