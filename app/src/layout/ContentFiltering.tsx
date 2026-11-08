@@ -43,6 +43,14 @@ import { useUserData } from "@/utils/UserContext";
 /** Discrete UI option for (single|multi)-select fields */
 export type Option<V extends string = string> = { value: V; label: string };
 
+/** Built-in option lists a select field can load instead of static options */
+export type FilteringDataSource =
+  | "bloodlines"
+  | "assets"
+  | "villages"
+  | "referralSources"
+  | "visitorUtmSources";
+
 // Field config types (discriminated unions ensure correct value types)
 
 /** Free-text input */
@@ -105,12 +113,7 @@ export interface SingleSelectFieldConfig<
   type: "single-select";
   defaultValue: V | NV;
   options?: Option<V>[];
-  dataSource?:
-    | "bloodlines"
-    | "assets"
-    | "villages"
-    | "referralSources"
-    | "visitorUtmSources";
+  dataSource?: FilteringDataSource;
   filterOptions?: (options: Option<string>[], ctx?: unknown) => Option<string>[];
   includeNone?: boolean;
   noneOption?: Option<NV>;
@@ -129,12 +132,7 @@ export interface MultiSelectFieldConfig<Id extends string, V extends string> {
   type: "multi-select";
   defaultValue: V[];
   options?: Option<V>[];
-  dataSource?:
-    | "bloodlines"
-    | "assets"
-    | "villages"
-    | "referralSources"
-    | "visitorUtmSources";
+  dataSource?: FilteringDataSource;
   filterOptions?: (options: Option<string>[], ctx?: unknown) => Option<string>[];
   includeNone?: boolean;
   noneOption?: Option<string>;
@@ -633,10 +631,7 @@ export const ContentFiltering = <
 
   // Determine which dynamic data sources are needed by the currently visible fields
   const needsDataSource = useMemo(() => {
-    const mutableRequired: Record<
-      "bloodlines" | "assets" | "villages" | "referralSources" | "visitorUtmSources",
-      boolean
-    > = {
+    const mutableRequired: Record<FilteringDataSource, boolean> = {
       bloodlines: false,
       assets: false,
       villages: false,
@@ -644,19 +639,11 @@ export const ContentFiltering = <
       visitorUtmSources: false,
     };
     for (const field of fieldsToRender) {
-      if (!("dataSource" in field)) continue;
+      if (!("dataSource" in field) || !field.dataSource) continue;
       const hasStaticOptions =
         "options" in field && Array.isArray(field.options) && field.options.length > 0;
       if (hasStaticOptions) continue;
-      if (
-        field.dataSource === "bloodlines" ||
-        field.dataSource === "assets" ||
-        field.dataSource === "villages" ||
-        field.dataSource === "referralSources" ||
-        field.dataSource === "visitorUtmSources"
-      ) {
-        mutableRequired[field.dataSource] = true;
-      }
+      mutableRequired[field.dataSource] = true;
     }
     return mutableRequired;
   }, [fieldsToRender]);
@@ -678,23 +665,19 @@ export const ContentFiltering = <
     enabled: needsDataSource.visitorUtmSources,
   });
 
+  const dataSourceOptions: Record<FilteringDataSource, Option[]> = {
+    bloodlines: (bloodlineNames ?? []).map((b) => ({ value: b.id, label: b.name })),
+    assets: (assetNames ?? []).map((a) => ({ value: a.id, label: a.name })),
+    villages: (villageNames ?? []).map((v) => ({ value: v.id, label: v.name })),
+    referralSources: (referralSources ?? []).map((s) => ({ value: s, label: s })),
+    visitorUtmSources: (utmSources ?? []).map((s) => ({ value: s, label: s })),
+  };
+
   // Resolve options for a field: prefer static options, otherwise derive from data source
   const resolveOptions = (field: AnyFieldConfig): Option[] => {
     let opts: Option[] | undefined = "options" in field ? field.options : undefined;
-    if (!opts && "dataSource" in field && field.dataSource === "bloodlines") {
-      opts = (bloodlineNames ?? []).map((b) => ({ value: b.id, label: b.name }));
-    }
-    if (!opts && "dataSource" in field && field.dataSource === "assets") {
-      opts = (assetNames ?? []).map((a) => ({ value: a.id, label: a.name }));
-    }
-    if (!opts && "dataSource" in field && field.dataSource === "villages") {
-      opts = (villageNames ?? []).map((v) => ({ value: v.id, label: v.name }));
-    }
-    if (!opts && "dataSource" in field && field.dataSource === "referralSources") {
-      opts = (referralSources ?? []).map((s) => ({ value: s, label: s }));
-    }
-    if (!opts && "dataSource" in field && field.dataSource === "visitorUtmSources") {
-      opts = (utmSources ?? []).map((s) => ({ value: s, label: s }));
+    if (!opts && "dataSource" in field && field.dataSource) {
+      opts = dataSourceOptions[field.dataSource];
     }
     const finalOpts = opts ?? [];
     return "filterOptions" in field && field.filterOptions
