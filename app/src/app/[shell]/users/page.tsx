@@ -23,10 +23,11 @@ import { getRankedRank } from "@/libs/ranked_pvp";
 import { canSeeIps } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
+import type { GetPublicUsersSchema } from "@/validators/user";
 
 export default function Users() {
   const { data: userData, isClerkLoaded } = useRequiredUserData();
-  const tabNames = [
+  const tabNames: TabName[] = [
     "Online",
     "Strongest",
     "PvP",
@@ -38,21 +39,8 @@ export default function Users() {
     "Medical",
     "Staff",
     "Recruiters",
-    ...(userData?.role !== "USER" ? ["Dailies"] : []),
+    ...(userData?.role !== "USER" ? (["Dailies"] as const) : []),
   ];
-  type TabName =
-    | "Online"
-    | "Strongest"
-    | "PvP"
-    | "Ranked"
-    | "Outlaws"
-    | "Community"
-    | "Crafting"
-    | "Farming"
-    | "Medical"
-    | "Staff"
-    | "Recruiters"
-    | "Dailies";
   const [activeTab, setActiveTab] = useState<TabName>("Online");
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
@@ -226,3 +214,5 @@ export default function Users() {
     </ContentBox>
   );
 }
+
+type TabName = GetPublicUsersSchema["orderBy"];
