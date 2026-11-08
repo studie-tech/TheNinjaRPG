@@ -817,18 +817,19 @@ export const ContentFiltering = <
                       setShowActive={(v) => setter(v)}
                       disabled={disabled}
                       labelActive={
-                        ("triStateLabels" in field &&
-                          field.triStateLabels?.labelActive) ||
-                        "Active"
+                        "triStateLabels" in field
+                          ? field.triStateLabels?.labelActive
+                          : undefined
                       }
                       labelInactive={
-                        ("triStateLabels" in field &&
-                          field.triStateLabels?.labelInactive) ||
-                        "Inactive"
+                        "triStateLabels" in field
+                          ? field.triStateLabels?.labelInactive
+                          : undefined
                       }
                       labelAll={
-                        ("triStateLabels" in field && field.triStateLabels?.labelAll) ||
-                        "All"
+                        "triStateLabels" in field
+                          ? field.triStateLabels?.labelAll
+                          : undefined
                       }
                     />
                   </div>
