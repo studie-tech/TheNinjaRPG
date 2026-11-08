@@ -553,11 +553,7 @@ type MakeCompleteBattleInput = {
   Omit<CompleteBattle, "usersState" | "usersEffects" | "groundEffects" | "extraState">
 >;
 
-/**
- * Minimal `CompleteBattle` for unit tests. Combat helpers only read a handful of
- * fields; the rest are filled with COMBAT defaults and cast through, matching the
- * per-suite `makeBattle` fixtures this replaces.
- */
+/** Minimal `CompleteBattle` for unit tests; unset fields default to a COMBAT battle. */
 export const makeCompleteBattle = (
   overrides: MakeCompleteBattleInput = {},
 ): CompleteBattle => {

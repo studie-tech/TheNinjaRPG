@@ -22,6 +22,7 @@ import { effectiveMasteries } from "@/libs/mastery";
 import type { ZodAllTags } from "@/validators/combat";
 import {
   makeBattleUserItem,
+  makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
   makeUser,
@@ -157,9 +158,7 @@ const makeBattle = (
   usersEffects: UserEffect[] = [],
   round = 1,
 ): CompleteBattle =>
-  ({
-    id: "battle-1",
-    battleType: "COMBAT",
+  makeCompleteBattle({
     width: 5,
     height: 5,
     round,
@@ -169,7 +168,6 @@ const makeBattle = (
     roundStartAt: new Date("2020-01-01T00:00:00Z"),
     usersState: users,
     usersEffects,
-    groundEffects: [],
     extraState: {
       dmgConfig,
       jutsus: {
@@ -194,7 +192,6 @@ const makeBattle = (
           effects: [],
         },
       },
-      jutsuReskins: {},
       items: {
         [GATED_BLADE]: {
           id: GATED_BLADE,
@@ -219,21 +216,8 @@ const makeBattle = (
           effects: [],
         },
       },
-      bloodlines: {},
-      villages: {},
-      anbuSquads: {},
-      keystoneItems: {},
-      wars: {},
-      aiProfiles: {},
-      relations: {},
-      clans: {},
-      userQuests: {},
-      completedQuests: {},
-      questData: {},
-      bounties: {},
-      bountySignups: {},
-    },
-  }) as unknown as CompleteBattle;
+    } as never,
+  });
 
 /** A residual Ninjutsu mastery tag on `targetId`, as applyEffects stores it once cast. */
 const masteryEffect = (
