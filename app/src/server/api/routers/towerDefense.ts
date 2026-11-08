@@ -1,4 +1,3 @@
-import type { InferSelectModel } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { UTApi, UTFile } from "uploadthing/server";
@@ -14,8 +13,8 @@ import {
 } from "@/drizzle/constants";
 import {
   type TowerDefenseCharacterDb,
+  type TowerDefenseUpgrade,
   towerDefenseCharacter,
-  type towerDefenseUpgrade,
 } from "@/drizzle/schema";
 import {
   applyUpgradesToAbility,
@@ -862,11 +861,9 @@ export const towerDefenseRouter = createTRPCRouter({
 // Helper Functions for Session Initiation
 // ============================================
 
-type TowerDefenseUpgradeDb = InferSelectModel<typeof towerDefenseUpgrade>;
-
 /** Convert upgrade definitions to signed format for SpacetimeDB */
 function toSignedUpgradeDefinitions(
-  upgrades: TowerDefenseUpgradeDb[],
+  upgrades: TowerDefenseUpgrade[],
 ): SignedUpgradeDefinition[] {
   return upgrades.map((def) => ({
     id: def.id,
@@ -966,7 +963,7 @@ function initiateSession(input: {
   ability: ReturnType<typeof getShurikenAbility>;
   playerBonuses: ReturnType<typeof getDefaultPlayerBonuses>;
   maxHealth: number;
-  upgradeDefinitions: TowerDefenseUpgradeDb[];
+  upgradeDefinitions: TowerDefenseUpgrade[];
   enemyDefinitionsDb: TowerDefenseCharacterDb[];
   playerCharactersDb: TowerDefenseCharacterDb[];
   isGuest?: boolean;

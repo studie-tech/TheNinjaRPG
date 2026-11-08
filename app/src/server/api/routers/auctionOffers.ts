@@ -10,7 +10,7 @@ import {
   AUCTION_OFFER_TYPES,
   auctionHouseLevelMessage,
 } from "@/drizzle/constants";
-import type { UserItemWithRelations, userData } from "@/drizzle/schema";
+import type { UserData, UserItemWithRelations } from "@/drizzle/schema";
 import { isEquippableUserItem, isImbuing } from "@/libs/item";
 import { getAuctionPriceError } from "@/libs/itemEconomy";
 import {
@@ -274,7 +274,7 @@ export const auctionOfferProcedures = {
     }),
 };
 
-const offerUserError = (user: typeof userData.$inferSelect | undefined | null) => {
+const offerUserError = (user: UserData | undefined | null) => {
   if (!user) return "Account not found";
   if (user.isBanned || user.isTradeBanned) return "Account is banned from trading";
   if (user.level < AUCTION_HOUSE_MIN_LEVEL) return auctionHouseLevelMessage;

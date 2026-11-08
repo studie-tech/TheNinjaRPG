@@ -7,7 +7,7 @@ import {
   CONTENT_PROPOSAL_RATIONALE_LENGTH,
   type ContentProposalEntityType,
 } from "@/drizzle/constants";
-import type { contentProposalMedia } from "@/drizzle/schema";
+import type { ContentProposalMedia } from "@/drizzle/schema";
 import type { MediaInsert, Rows } from "@/queries/contentReview";
 import {
   deleteContentProposalBasisForReviseAgentProposal,
@@ -388,7 +388,7 @@ const planAgentProposal = async (
   budget: MediaBudget,
   guards: Guards,
   uploaded: string[],
-  retained?: Map<string, (typeof contentProposalMedia.$inferSelect)[]>,
+  retained?: Map<string, ContentProposalMedia[]>,
 ): Promise<Rows | string> => {
   const proposalId = nanoid();
   const rows: Rows = {

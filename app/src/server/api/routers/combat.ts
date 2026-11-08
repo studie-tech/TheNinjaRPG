@@ -3147,7 +3147,7 @@ export const initiateBattle = async (
     // The existing participant claim commits recovery together with BATTLE; no standalone wake can overwrite it.
     for (const [key, value] of Object.entries(actionReadiness.set)) {
       if (key === "status") continue;
-      const column = userData[key as keyof typeof userData.$inferSelect];
+      const column = userData[key as keyof UserData];
       const fallback = queueUpdate[key] ?? column;
       queueUpdate[key] =
         sql`CASE WHEN ${userData.userId} = ${actionActor.userId} THEN ${value instanceof SQL ? value : sql.param(value, column)} ELSE ${fallback} END`;

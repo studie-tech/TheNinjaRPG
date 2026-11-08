@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { DUNGEON_LOBBY_SECONDS } from "@/drizzle/constants";
-import { type dungeonRun, userData } from "@/drizzle/schema";
+import { type DungeonRun, userData } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { dungeonBattleOutcome, dungeonNextState } from "@/libs/dungeon";
@@ -24,7 +24,7 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 /** Compensate every committed sibling write before reopening a failed floor start. */
 export const rollbackDungeonStart = (
   client: DrizzleClient,
-  run: typeof dungeonRun.$inferSelect,
+  run: DungeonRun,
   battleId: string,
   version: number,
 ) =>
@@ -121,10 +121,7 @@ export const settleDungeonBattle = async (
  * also delete the battle and restore its preloaded energy recovery values atomically.
  * Return whether readers must refresh, including when a competing version won the expiry CAS.
  */
-export const expireDungeonRun = async (
-  client: DrizzleClient,
-  run: typeof dungeonRun.$inferSelect,
-) => {
+export const expireDungeonRun = async (client: DrizzleClient, run: DungeonRun) => {
   const deadline =
     run.expiresAt ??
     (run.status === "LOBBY"
