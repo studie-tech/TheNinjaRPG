@@ -122,6 +122,7 @@ export const createTravelActors = (
   let selectionKey: string | null = null;
   let characterKeys = new Set<string>();
   let paintedOriginY = container.y;
+  let lastDepthSortAt = Number.NEGATIVE_INFINITY;
   /** Cull before acquiring artwork; padding preloads nearby actors and the viewer stays present. */
   const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
     const bounds = viewport;
@@ -606,6 +607,7 @@ export const createTravelActors = (
     const angle = frame.reducedMotion ? 0 : (frame.now * Math.PI) / 5000;
     const cycle = frame.reducedMotion ? 0 : (frame.now / 1000) % 2;
     const wobble = cycle < 1 ? Math.sin(cycle * Math.PI * 4) * (1 - cycle) * 2 : 0;
+    let urgentDepth = false;
     for (const record of records.values()) {
       const { recipe, root } = record;
       if (frame.reducedMotion) {
@@ -621,6 +623,7 @@ export const createTravelActors = (
         recipe.user?.isNpc ? recipe.key : (recipe.user?.userId ?? ""),
       );
       const moving = movement ? movement.direction !== null : distance > 0.01;
+      const [fromX, fromY] = [record.x, record.y];
       if (movement) {
         // The published edge owns interpolation; its destination consumes any queued snapshot path.
         record.path.length = 0;
@@ -650,6 +653,12 @@ export const createTravelActors = (
           record.path.shift();
         }
       }
+      // Players, quest NPCs and orbiting crowds re-sort the moment they cross scenery.
+      if (
+        recipe.user?.npcInteractionType !== "AMBIENT" &&
+        (record.x !== fromX || record.y !== fromY || recipe.spread || recipe.quest)
+      )
+        urgentDepth = true;
       for (const entry of record.art?.entries ?? [])
         entry.character?.render(
           frame,
@@ -668,11 +677,20 @@ export const createTravelActors = (
       // Contact uses the interpolated/orbiting position and the current sector origin.
       record.depth = -(root.y + record.contactY + container.y);
     }
+    // A sort rebuilds the whole scene's batches, and wildlife in a forest crosses trees all the
+    // time; crossings that only roaming wildlife cause wait for the next sort slot.
+    const depthDue =
+      urgentDepth || frame.now - lastDepthSortAt >= AMBIENT_DEPTH_SORT_MS;
     if (
       paintedOriginY !== container.y ||
-      hasDepthCrossing(layers?.depth.renderLayerChildren ?? container.children, true) ||
-      (layers?.overlay && hasDepthCrossing(layers.overlay.renderLayerChildren))
+      (depthDue &&
+        (hasDepthCrossing(
+          layers?.depth.renderLayerChildren ?? container.children,
+          true,
+        ) ||
+          (layers?.overlay && hasDepthCrossing(layers.overlay.renderLayerChildren))))
     ) {
+      lastDepthSortAt = frame.now;
       // Publish moving keys together so actor crossings and new scenery share one coherent order.
       for (const record of records.values()) record.root.zIndex = record.depth;
       layers?.depth.sortRenderLayerChildren();
@@ -1169,6 +1187,8 @@ type ActorRecipe = {
 };
 type CastLight = { x: number; y: number; z: number; day: number };
 /** Matches projected scenery silhouettes, so NPC and tree shadows read as one light. */
+/** Wildlife-only depth crossings re-sort at most this often. */
+const AMBIENT_DEPTH_SORT_MS = 250;
 const CAST_SHADOW_TINT = 0x202932;
 const CAST_SHADOW_ALPHA = 0.22;
 type ActorRecord = {

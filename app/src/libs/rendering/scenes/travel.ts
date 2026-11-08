@@ -6,7 +6,14 @@ import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { hexGridHeightRatio } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
-import { type WanderTile, wanderPose, wanderSpots } from "@/libs/overworldWander";
+import {
+  type WanderLeg,
+  type WanderTile,
+  wanderClock,
+  wanderLeg,
+  wanderProgress,
+  wanderSpots,
+} from "@/libs/overworldWander";
 import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import { createMapControls } from "@/libs/rendering/mapControls";
@@ -190,6 +197,8 @@ export const createTravelScene = async (options: {
     let lastActorSnapshot: TravelSnapshot | null = null;
     let lastShowAmbient: boolean | undefined;
     const wanderSpotCache = new Map<string, WanderTile[]>();
+    /** Each roaming member's current walk in world points; rebuilt only when its cycle moves on. */
+    const wanderWalks = new Map<string, WanderWalk>();
     let wanderSpotsSector: number | null = null;
     let isStill = false;
     let lastFrameInputs: ReturnType<typeof travelFrameInputs> | null = null;
@@ -695,39 +704,57 @@ export const createTravelScene = async (options: {
       if (wanderMap && wanderSpotsSector !== snapshot.sector) {
         wanderSpotsSector = snapshot.sector;
         wanderSpotCache.clear();
+        wanderWalks.clear();
       }
       const clock = snapshot.weatherTime ?? Date.now();
       for (const user of wanderMap ? snapshot.users : []) {
         const wander = user.npcWander;
         if (!wander || !wanderMap) continue;
-        const key = `${wander.seed}:${wander.radius}:${wander.wildOnly}`;
-        let spots = wanderSpotCache.get(key);
-        if (!spots) {
-          spots = wanderSpots(wanderMap, wander.anchor, wander.radius, wander.wildOnly);
-          wanderSpotCache.set(key, spots);
+        const actorKey = travelActorKey(user);
+        const { cycle, into } = wanderClock(wander, clock);
+        let walk = wanderWalks.get(actorKey);
+        if (walk?.seed !== wander.seed || walk.cycle !== cycle) {
+          const key = `${wander.seed}:${wander.radius}:${wander.wildOnly}`;
+          let spots = wanderSpotCache.get(key);
+          if (!spots) {
+            spots = wanderSpots(
+              wanderMap,
+              wander.anchor,
+              wander.radius,
+              wander.wildOnly,
+            );
+            wanderSpotCache.set(key, spots);
+          }
+          const leg = wanderLeg({ ...wander, spots }, user.npcMember ?? 0, cycle);
+          const point = (tile: WanderTile, offset: WanderTile) => {
+            const hex = entry.grid.getHex({ col: tile.x, row: tile.y });
+            return hex
+              ? {
+                  x: -hex.center.x + offset.x * hex.width,
+                  y: -hex.center.y + offset.y * hex.height,
+                }
+              : null;
+          };
+          walk = {
+            seed: wander.seed,
+            cycle,
+            leg,
+            from: point(leg.from, leg.fromOffset),
+            to: point(leg.to, leg.toOffset),
+            via: leg.via ? point(leg.via, { x: 0, y: 0 }) : null,
+          };
+          wanderWalks.set(actorKey, walk);
         }
-        const pose = wanderPose({ ...wander, spots }, user.npcMember ?? 0, clock);
-        const point = (tile: WanderTile, offset: WanderTile) => {
-          const hex = entry.grid.getHex({ col: tile.x, row: tile.y });
-          return hex
-            ? {
-                x: -hex.center.x + offset.x * hex.width,
-                y: -hex.center.y + offset.y * hex.height,
-              }
-            : null;
-        };
-        const from = point(pose.from, pose.fromOffset),
-          to = point(pose.to, pose.toOffset);
+        const { from, to, via } = walk;
         if (!from || !to) continue;
-        const via = pose.via ? point(pose.via, { x: 0, y: 0 }) : null;
-        const progress = frame.reducedMotion
-          ? Math.round(pose.progress)
-          : pose.progress;
+        const walked = wanderProgress(walk.leg, into);
+        const progress = frame.reducedMotion ? Math.round(walked) : walked;
         const at = alongWalk(from, via, to, progress);
-        movements.set(travelActorKey(user), {
+        movements.set(actorKey, {
           x: at.x,
           y: at.y,
-          direction: pose.moving && !frame.reducedMotion ? "horizontal" : null,
+          direction:
+            walked > 0 && walked < 1 && !frame.reducedMotion ? "horizontal" : null,
           facing: to.x < from.x ? 1 : -1,
         });
       }
@@ -1015,6 +1042,16 @@ type TravelSector = {
   terrain: Awaited<ReturnType<typeof createHexTerrain>>;
   art: Awaited<ReturnType<typeof createWorldSprites>>;
   startScenery: () => Promise<void>;
+};
+
+type WanderPoint = { x: number; y: number };
+type WanderWalk = {
+  seed: string;
+  cycle: number;
+  leg: WanderLeg;
+  from: WanderPoint | null;
+  to: WanderPoint | null;
+  via: WanderPoint | null;
 };
 
 /** Position along a walk, through `via` when the direct line was blocked. */

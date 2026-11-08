@@ -213,6 +213,22 @@ describe("travel actor artwork loading", () => {
     users = [users[0]!, player(2, { longitude: 5, latitude: 5 })]; actors.sync(snapshot(users)); check(-120, -90);
     actors.container.y += 500; check(-85, -115);
   });
+  it("lets crossings caused only by wildlife wait for the next depth sort", () => {
+    holdCharacters();
+    const { actors, grid, stage, depth, snapshot } = fixture();
+    actors.sync(snapshot([player(0, { longitude: 4, latitude: 4, isNpc: true, npcPlacementId: "herd", npcInteractionType: "AMBIENT", avatar: "deer.png" })]));
+    const offset = grid.getHex({ col: 4, row: 4 })!.height * (0.1 + 1.8 * 0.7 * 4 / 64);
+    const fixed = new Container(); fixed.zIndex = -100; stage.addChild(fixed); depth.attach(fixed);
+    const root = actors.container.children[0]!;
+    const place = (now: number, contact: number) => actors.animate({ ...frame, now }, new Map([["npc:herd:0:0", { x: 100, y: -contact - offset - actors.container.y, direction: null, facing: 1 }]]));
+    const behindScenery = () => depth.renderLayerChildren.indexOf(root) < depth.renderLayerChildren.indexOf(fixed);
+    place(1000, -150);
+    expect(behindScenery()).toBe(true);
+    place(1100, -50);
+    expect(behindScenery()).toBe(true);
+    place(1300, -50);
+    expect(behindScenery()).toBe(false);
+  });
   it("preserves a roaming NPC's rectangular artwork proportions", async () => {
     const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4 * 8 * 4), width: 4, height: 8 }) });
     vi.spyOn(Assets, "load").mockImplementation(async () => texture);
