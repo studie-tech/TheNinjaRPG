@@ -323,7 +323,6 @@ describe("user cache updates", () => {
 
   it("rejects a delayed village snapshot after a newer profile refresh", async () => {
     const test = setup();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
     const village = { id: "village", tokens: 1000 } as Village;
     test.client.setQueryData(key, { userData: { ...profile(100).userData, village } });
     const revision = prepareUserUpdate(test.client, key);
@@ -450,7 +449,7 @@ describe("user cache updates", () => {
       queryKey: key,
       queryFn: () => new Promise<ReturnType<typeof profile>>((done) => { resolve = done; }),
     });
-    expect(await prepareUserUpdate(client, key)).toBeUndefined();
+    expect(prepareUserUpdate(client, key)).toBeUndefined();
     expect(client.getQueryState(key)?.fetchStatus).toBe("fetching");
     resolve(profile(100));
     await pending;
@@ -460,9 +459,9 @@ describe("user cache updates", () => {
 
   it("applies a confirmed debit without a query and preserves unrelated fields", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision });
     expect(test.value()).toEqual(profile(90));
     expect(test.reads()).toBe(0);
     test.close();
@@ -486,7 +485,7 @@ describe("user cache updates", () => {
     expect(revision).toBeUndefined();
     expect(client.getQueryState(key)?.fetchStatus).toBe("fetching");
 
-    await updateUserCache(client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(client, key, undefined, { delta: { money: -10 }, revision });
     resolveInitial(profile(100));
     await Promise.resolve();
     expect(reads).toBe(2);
@@ -498,10 +497,10 @@ describe("user cache updates", () => {
 
   it("does not debit twice when a refetch already contains the mutation", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
     await test.observer.refetch();
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(2);
     test.close();
@@ -509,10 +508,10 @@ describe("user cache updates", () => {
 
   it("refreshes after an absolute patch that may already include the debit", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
     test.client.setQueryData(key, profile(90));
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(1);
     test.close();
@@ -532,8 +531,8 @@ describe("user cache updates", () => {
 
   it("refreshes the second overlapping delta instead of using an ambiguous snapshot", async () => {
     const test = setup();
-    const first = await prepareUserUpdate(test.client, key);
-    const second = await prepareUserUpdate(test.client, key);
+    const first = prepareUserUpdate(test.client, key);
+    const second = prepareUserUpdate(test.client, key);
     test.setDatabase(70);
     await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: first });
     await updateUserCache(test.client, key, undefined, { delta: { money: -20 }, revision: second });
@@ -544,11 +543,11 @@ describe("user cache updates", () => {
 
   it("detects intervening writes even when they return to the original balance", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.client.setQueryData(key, profile(90));
     test.client.setQueryData(key, profile(100));
     test.setDatabase(90);
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(1);
     test.close();
@@ -556,14 +555,14 @@ describe("user cache updates", () => {
 
   it("restarts an unfinished query instead of discarding its reconciliation", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     let resolve!: (value: ReturnType<typeof profile>) => void;
     const pending = test.client.fetchQuery({
       queryKey: key,
       queryFn: () => new Promise<ReturnType<typeof profile>>((done) => { resolve = done; }),
     }).catch(() => undefined);
     test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => profile(110) });
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision });
     resolve(profile(100));
     await pending;
     expect(test.value()?.userData.money).toBe(110);
@@ -572,10 +571,10 @@ describe("user cache updates", () => {
 
   it("honors an invalidation even when its query has not completed", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.client.getQueryCache().find({ queryKey: key })!.invalidate();
     test.setDatabase(110);
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision });
     expect(test.value()?.userData.money).toBe(110);
     expect(test.reads()).toBe(1);
     test.close();
@@ -583,9 +582,9 @@ describe("user cache updates", () => {
 
   it("refreshes when an identity-dependent patch cannot be applied", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
-    await updateUserCache(test.client, key, () => undefined, { delta: {}, revision: revision });
+    await updateUserCache(test.client, key, () => undefined, { delta: {}, revision });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(1);
     test.close();
@@ -593,9 +592,9 @@ describe("user cache updates", () => {
 
   it("refreshes when no confirmed delta is available", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
-    await updateUserCache(test.client, key, undefined, { delta: undefined, revision: revision });
+    await updateUserCache(test.client, key, undefined, { delta: undefined, revision });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(1);
     test.close();
@@ -680,7 +679,6 @@ describe("shared mutation user response", () => {
 
   it("applies a village debit while preserving unrelated boosts and the settings just saved", async () => {
     const test = setup();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
     const village = {
       id: "village", tokens: 1007, name: "Hidden Leaf",
       shrineSettings: { activeBoosts: { PVP: "existing" }, unlockedAiIds: [], activeAiIds: [] },
@@ -730,7 +728,6 @@ describe("shared mutation user response", () => {
 
   it("refreshes a delayed village debit after a newer profile already includes it", async () => {
     const test = setup();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
     const village = { id: "village", tokens: 1000 } as Village;
     test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
     const revision = prepareUserUpdate(test.client, key);
@@ -1012,7 +1009,6 @@ describe("notification effects during cache updates", () => {
 
   it("adds and removes shrine notifications from confirmed settings without fetching", async () => {
     const test = setup();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
     const village = { id: "village", sectors: [{}], shrineSettings: { activeBoosts: {} } } as Village;
     test.client.setQueryData(key, { userData: { ...profile(100).userData, village }, notifications: [] });
     await updateUserCache(test.client, key, { village: { id: village.id, shrineSettings: { activeBoosts: { Training: new Date(Date.now() + 60000).toISOString() } } } }, { revision: prepareUserUpdate(test.client, key), delta: {} });
@@ -1025,7 +1021,6 @@ describe("notification effects during cache updates", () => {
   });
   it("preserves existing boost links without duplicates or replaying toasts", async () => {
     const client = new QueryClient();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
     const expires = new Date(Date.now() + 60000).toISOString();
     const village = { id: "village", sectors: [{}], shrineSettings: { activeBoosts: { PVP: expires } } } as unknown as Village;
     const existing = { href: "/shrine", name: "Shrine: +10% PVP gains", color: "green", group: "Active boosts" };
@@ -1190,3 +1185,5 @@ it.each([true, false])("applies a confirmed global boost notice, active=%s", asy
   expect(test.reads()).toBe(0);
   test.close();
 });
+
+type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
