@@ -144,9 +144,9 @@ describeWithDatabase("staff user-id rename", () => {
   it("rejects renaming a character that does not exist", async () => {
     const database = await getTestDatabase();
     const caller = await callerFor(staffRouter, STAFF);
-    await expect(
-      caller.updateUserId({ userId: "missing-character", newUserId: NEW_USER_ID }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(
+      await caller.updateUserId({ userId: "missing-character", newUserId: NEW_USER_ID }),
+    ).toEqual({ success: false, message: "User not found" });
     expect(await database.query.storeUserIdAlias.findFirst()).toBeUndefined();
   });
 

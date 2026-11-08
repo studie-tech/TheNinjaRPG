@@ -1,6 +1,5 @@
 import { Client as PlanetScaleClient } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
-import { TRPCError } from "@trpc/server";
 import { after } from "next/server";
 import { z } from "zod";
 import {
@@ -193,6 +192,7 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "@/server/api/trpc";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
@@ -213,6 +213,7 @@ import {
   canUnequipAllUsers,
   canUnstuckVillage,
   canUseMonitoringTests,
+  isStaffRole,
 } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -230,7 +231,7 @@ export const staffRouter = createTRPCRouter({
   getBackups: protectedProcedure.query(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
     if (!canControlBackups(user.role)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed for you" });
+      throw serverError("FORBIDDEN", "Not allowed for you");
     }
     return listContentBackupForGetBackups(ctx.drizzle);
   }),
@@ -353,10 +354,7 @@ export const staffRouter = createTRPCRouter({
         await Sentry.flush(2000);
       });
       // Mutate
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Test error",
-      });
+      throw serverError("INTERNAL_SERVER_ERROR", "Test error");
     }),
   unequipAllJutsus: protectedProcedure
     .output(userDeltaResponseSchema)
@@ -544,7 +542,7 @@ export const staffRouter = createTRPCRouter({
 
       return { success: true, message: "Badge removed" };
     }),
-  // Copy user setting to Terriator - exclusive to Terriator user for debugging
+  // Copy a user's settings onto the calling staff member for debugging
   cloneUserForDebug: protectedProcedure
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
@@ -628,10 +626,10 @@ export const staffRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canSeeIps(user.role)) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You don't have permission to view IP addresses",
-        });
+        throw serverError(
+          "FORBIDDEN",
+          "You don't have permission to view IP addresses",
+        );
       }
       // Fetch historical IPs
       const historicalIps = await listHistoricalIpForGetUserHistoricalIps(
@@ -681,10 +679,10 @@ export const staffRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canSeeActivityEvents(user.role)) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You don't have permission to view activity events",
-        });
+        throw serverError(
+          "FORBIDDEN",
+          "You don't have permission to view activity events",
+        );
       }
       // Fetch activity events
       const activityEvents = await listUserActivityEventForGetUserActivityEvents(
@@ -736,12 +734,12 @@ export const staffRouter = createTRPCRouter({
         return { success: false, message: "UserId was already renamed to another id" };
       }
       if (!fromUser && !resuming) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        return errorResponse("User not found");
       }
       if (toUser && !movedAlready) {
         return { success: false, message: "UserId already exists" };
       }
-      if (fromUser && fromUser.role !== "USER") {
+      if (fromUser && isStaffRole(fromUser.role)) {
         return { success: false, message: "Cannot change staff member's userId " };
       }
       // Battles carry immutable participant identities and settlement ownership.
