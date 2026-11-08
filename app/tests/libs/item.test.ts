@@ -26,6 +26,7 @@ import {
   type EquippedConstraintState,
   finishedImbuementItems,
   finishedImbuements,
+  isImbuing,
   userItemDisplay,
   getItemStackMergeBucketKey,
   getHomeStorageBucket,
@@ -1152,6 +1153,14 @@ describe("finishedImbuements", () => {
       ],
     };
     expect(finishedImbuements(ui, NOW).map((i) => i.id)).toEqual(["done", "boundary", "legacy"]);
+  });
+
+  it("counts an item as imbuing only while an imbuement finishes after now", () => {
+    const at = (craftingFinishedAt: Date | null) => ({ imbuements: [{ craftingFinishedAt }] });
+    expect(isImbuing(at(new Date(NOW.getTime() + 1)), NOW)).toBe(true);
+    expect(isImbuing(at(NOW), NOW)).toBe(false);
+    expect(isImbuing(at(null), NOW)).toBe(false);
+    expect(isImbuing({ imbuements: [] }, NOW)).toBe(false);
   });
 });
 
