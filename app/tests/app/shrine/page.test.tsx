@@ -254,6 +254,10 @@ describe("shrine page war affiliation", () => {
         button: 0,
         ctrlKey: false,
       });
+      expect(view.queryByRole("button", { name: "Attack shrine" })).toBeNull();
+      expect(view.queryAllByText(/Form a team to attack this shrine together!/)).toHaveLength(
+        side === "attacker" ? 1 : 0,
+      );
       fireEvent.click(view.getByRole("button", { name: "Create Shrine Attack Party" }));
       expect(challenge).toHaveBeenCalledWith({ sectorNumber });
     },
