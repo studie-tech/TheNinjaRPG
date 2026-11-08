@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as navigation from "next/navigation";
 import { type ReactNode, useState } from "react";
@@ -51,7 +51,6 @@ const invalidateUser = vi.fn(async () => {});
 const updateUser = vi.fn(async (_patch: unknown) => {});
 const router = testRouter("war-panels");
 const NOW = Date.UTC(2026, 9, 1, 12);
-let nowMs: number;
 let timeDiff: number;
 let user: NonNullable<UserWithRelations>;
 let info: ObjectiveInfo | null | undefined;
@@ -149,7 +148,6 @@ const openTab = (view: ReturnType<typeof render>, name: RegExp | string) => {
 };
 const advance = (ms: number) =>
   act(() => {
-    nowMs += ms;
     vi.advanceTimersByTime(ms);
   });
 const readyAttempt = (endsAt = new Date(NOW - 1000).toISOString()) => ({
@@ -170,9 +168,8 @@ beforeEach(() => {
   installBrowserGlobals();
   vi.clearAllMocks();
   vi.useFakeTimers();
-  nowMs = NOW;
+  setSystemTime(NOW);
   timeDiff = 0;
-  vi.spyOn(Date, "now").mockImplementation(() => nowMs);
   user = {
     userId: "ninja",
     villageId: "own",

@@ -1,21 +1,12 @@
 import { act, cleanup, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
 import Countdown from "@/layout/Countdown";
 
 const BASE = Date.UTC(2026, 8, 16, 12, 0, 0);
-let nowMs = BASE;
-
-// Countdown reads Date.now() directly, so the clock is a spy advanced in step with the
-// fake timers (same approach as tests/layout/action-timer.test.tsx).
-const advanceTimers = (ms: number) => {
-  nowMs += ms;
-  vi.advanceTimersByTime(ms);
-};
 
 beforeEach(() => {
-  nowMs = BASE;
   vi.useFakeTimers();
-  vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+  setSystemTime(BASE);
 });
 
 afterEach(() => {
@@ -33,7 +24,7 @@ describe("Countdown", () => {
 
     // 1000 ms in: 500 ms remain. Every floored part reads 0, but the timer is not over.
     act(() => {
-      advanceTimers(1_000);
+      vi.advanceTimersByTime(1_000);
     });
 
     expect(onFinish).not.toHaveBeenCalled();
@@ -48,14 +39,14 @@ describe("Countdown", () => {
     );
 
     act(() => {
-      advanceTimers(1_500);
+      vi.advanceTimersByTime(1_500);
     });
 
     expect(onFinish).toHaveBeenCalledTimes(1);
     expect(view.getByText("Done")).toBeTruthy();
 
     act(() => {
-      advanceTimers(5_000);
+      vi.advanceTimersByTime(5_000);
     });
     expect(onFinish).toHaveBeenCalledTimes(1);
   });
@@ -79,12 +70,12 @@ describe("Countdown", () => {
     );
 
     act(() => {
-      advanceTimers(2_000);
+      vi.advanceTimersByTime(2_000);
     });
     expect(onFinish).not.toHaveBeenCalled();
 
     act(() => {
-      advanceTimers(500);
+      vi.advanceTimersByTime(500);
     });
     expect(onFinish).toHaveBeenCalledTimes(1);
   });

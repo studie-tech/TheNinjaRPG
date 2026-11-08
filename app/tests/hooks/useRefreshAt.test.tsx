@@ -1,17 +1,11 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { nextUtcDayAt } from "@/utils/time";
 
-let nowMs = 0;
-const advanceTimers = (ms: number) => {
-  nowMs += ms;
-  vi.advanceTimersByTime(ms);
-};
 beforeEach(() => {
-  nowMs = Date.UTC(2026, 9, 1, 12);
   vi.useFakeTimers();
-  vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+  setSystemTime(Date.UTC(2026, 9, 1, 12));
 });
 afterEach(() => {
   cleanup();
@@ -27,7 +21,7 @@ describe("boundary refresh", () => {
       useRefreshAt([now - 1000, now + 5000, now + 10_000], refresh, 2000),
     );
     act(() => {
-      advanceTimers(2000);
+      vi.advanceTimersByTime(2000);
     });
     expect(refresh).toHaveBeenCalledTimes(1);
     unmount();
@@ -39,11 +33,11 @@ describe("boundary refresh", () => {
       useRefreshAt([nextUtcDayAt(new Date(Date.now()))], refresh),
     );
     act(() => {
-      advanceTimers(12 * 60 * 60 * 1000 + 1000);
+      vi.advanceTimersByTime(12 * 60 * 60 * 1000 + 1000);
     });
     expect(refresh).toHaveBeenCalledTimes(1);
     act(() => {
-      advanceTimers(24 * 60 * 60 * 1000);
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000);
     });
     expect(refresh).toHaveBeenCalledTimes(2);
     unmount();
@@ -57,11 +51,11 @@ describe("boundary refresh", () => {
       { initialProps: { dates: [boundary] } },
     );
     act(() => {
-      advanceTimers(5500);
+      vi.advanceTimersByTime(5500);
     });
     rerender({ dates: [boundary] });
     act(() => {
-      advanceTimers(1000);
+      vi.advanceTimersByTime(1000);
     });
     expect(refresh).toHaveBeenCalledTimes(1);
     unmount();
@@ -75,12 +69,12 @@ describe("boundary refresh", () => {
       { initialProps: { enabled: false } },
     );
     act(() => {
-      advanceTimers(1000);
+      vi.advanceTimersByTime(1000);
     });
     rerender({ enabled: true });
     unmount();
     act(() => {
-      advanceTimers(10_000);
+      vi.advanceTimersByTime(10_000);
     });
     expect(refresh).not.toHaveBeenCalled();
   });
