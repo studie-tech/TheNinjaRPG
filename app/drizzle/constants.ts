@@ -2611,6 +2611,9 @@ export const SECTOR_TYPES = [
 
 // Conversation config
 export const CONVERSATION_PAUSE_HIDDEN_MINS = 5;
+/** Length bounds of a conversation or report comment. */
+export const COMMENT_MIN_LENGTH = 4;
+export const COMMENT_MAX_LENGTH = 5000;
 /** Conversations a player can mute individually in the chat panel. */
 export const MAX_MUTED_CONVERSATIONS = 100;
 export const MESSAGING_MIN_LEVEL = 3;
