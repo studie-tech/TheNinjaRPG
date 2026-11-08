@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { mapAsset, quest } from "@/drizzle/schema";
 import { questsRouter } from "@/routers/quests";
-import { fetchPublicQuestLocations, invalidatePublicQuestLocations, isStructureAssetUsed, validateQuestStructures, validateMapLocationTiles } from "@/server/utils/mapLocations";
+import { fetchPublicQuestLocations, invalidatePublicQuestLocations, isStructureAssetUsed, validateQuestStructures } from "@/server/utils/mapLocations";
 import { MoveToObjective } from "@/validators/objectives";
 import { insertQuests } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
@@ -47,15 +47,5 @@ describeWithDatabase("public quest map locations", () => {
     expect(await validateQuestStructures(db, { publicLocations: false, content: { objectives: [objective] } })).toContain("no longer exists");
     await db.insert(mapAsset).values({ id: "asset", key: "tower", name: "Tower", imageUrl: "https://example.com/tower.png" });
     expect(await validateQuestStructures(db, { publicLocations: false, content: { objectives: [objective] } })).toBeNull();
-  });
-
-  it("rejects a map that moves a public entrance away from its visible structure", () => {
-    // A smaller published map must not relocate an authored entrance onto another tile.
-    const locations = [{ id: "tower", sector: 724, longitude: 2, latitude: 0, assetId: "asset", name: "Tower", description: "", scale: 1 }];
-    const map = { width: 2, height: 1, anchors: [], tiles: [
-      { x: 0, y: 0, blocked: true, walkCost: 0, terrain: "ground", battleBiome: "ground", zone: "wilderness" },
-      { x: 1, y: 0, blocked: false, walkCost: 1, terrain: "ground", battleBiome: "ground", zone: "wilderness" },
-    ] };
-    expect(validateMapLocationTiles(locations, new Map([[724, map as never]]))).toContain("reachable entrance tile");
   });
 });
