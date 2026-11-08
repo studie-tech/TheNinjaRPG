@@ -88,26 +88,6 @@ const globalTerrainCounts = (sector: number) => {
   return counts;
 };
 
-const localTerrainGrid = (sector: number, village = true) => {
-  const tiled = buildTiledJson({
-    sector,
-    width: MAP_SIZE,
-    height: MAP_SIZE,
-    village,
-    seed: "v1",
-    ensureWalkable: [],
-  });
-  const terrainData = tiled.layers[0]?.data;
-  if (!terrainData) throw new Error(`Sector ${sector} has no terrain tile layer`);
-  const terrainByGid = new Map(
-    tiled.tilesets[0]!.tiles.map((tile) => [
-      tile.id + 1,
-      tile.properties.find((property) => property.name === "terrain")!.value as string,
-    ]),
-  );
-  return terrainData.map((gid) => terrainByGid.get(gid)!);
-};
-
 const localTileProperties = (sector: number, village = true) => {
   const tiled = buildTiledJson({
     sector,
@@ -129,6 +109,9 @@ const localTileProperties = (sector: number, village = true) => {
   );
   return terrainData.map((gid) => propertiesByGid.get(gid)!);
 };
+
+const localTerrainGrid = (sector: number, village = true) =>
+  localTileProperties(sector, village).map((tile) => tile.terrain as string);
 
 describe("canonical world landmarks", () => {
   it("keeps every settlement on a distinct, intentional sector", () => {
