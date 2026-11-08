@@ -1491,42 +1491,29 @@ export const findUserVoteForClaimVotes = (
     where: eq(userVote.userId, ctx.userId),
   });
 
-/** Build the `userVote` update for `claimVotes`, using predicates on `userId`, `claimed`, `site`. */
-export const updateUserVoteForClaimVotes = (
-  client: Pick<DrizzleClient, "update">,
-  smallNanoid: (size?: number) => string,
-  ctx: { userId: string },
-) =>
-  client
-    .update(userVote)
-    .set({
-      claimed: true,
-      totalClaims: sql`${userVote.totalClaims} + 1`,
-      secret: smallNanoid(),
-    })
-    .where(
-      and(
-        eq(userVote.userId, ctx.userId),
-        eq(userVote.claimed, false),
-        ...ACTIVE_VOTING_SITES.map((site) => eq(userVote[site], true)),
-      ),
-    );
-
 /**
- * Build the `userData` update for `claimVotes`, setting `reputationPoints` and
- * `reputationPointsTotal`, using predicates on `userId`.
+ * Execute the claim of a completed vote set together with its reputation credit. One
+ * guarded multi-table UPDATE flips `claimed` and credits the voter atomically, so only the
+ * request that claims the votes is credited; zero affected rows means nothing was claimed.
  */
-export const updateUserDataForClaimVotes = (
-  client: Pick<DrizzleClient, "update">,
+export const executeClaimVotes = (
+  client: Pick<DrizzleClient, "execute">,
+  secret: string,
   ctx: { userId: string },
 ) =>
-  client
-    .update(userData)
-    .set({
-      reputationPoints: sql`${userData.reputationPoints} + 1`,
-      reputationPointsTotal: sql`${userData.reputationPointsTotal} + 1`,
-    })
-    .where(eq(userData.userId, ctx.userId));
+  client.execute(sql`
+    UPDATE ${userVote} INNER JOIN ${userData} ON ${userData.userId} = ${userVote.userId}
+    SET ${userVote.claimed} = true,
+        ${userVote.totalClaims} = ${userVote.totalClaims} + 1,
+        ${userVote.secret} = ${secret},
+        ${userData.reputationPoints} = ${userData.reputationPoints} + 1,
+        ${userData.reputationPointsTotal} = ${userData.reputationPointsTotal} + 1
+    WHERE ${and(
+      eq(userVote.userId, ctx.userId),
+      eq(userVote.claimed, false),
+      ...ACTIVE_VOTING_SITES.map((site) => eq(userVote[site], true)),
+    )}
+  `);
 
 /** Build the `userPet` listing for `getPetImageGenerationForStaff`, using predicates on `userId`. */
 export const listUserPetForGetPetImageGenerationForStaff = (

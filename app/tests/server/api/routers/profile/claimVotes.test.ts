@@ -12,7 +12,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { overrideQuery } from "../../../../setup/statements";
+import { overrideQuery, withoutTransactions } from "../../../../setup/statements";
 
 /** A completed vote set is credited exactly once, however many claims race for it. */
 const VOTER = "vote-claimer";
@@ -49,6 +49,18 @@ describeWithDatabase("vote claims", () => {
     const result = await (await callerFor(profileRouter, VOTER)).claimVotes();
     expect(result.success).toBe(true);
     expect(await readVoter()).toMatchObject({ reputationPoints: 1, reputationPointsTotal: 1 });
+  });
+
+  it("claims and credits in one statement without a transaction", async () => {
+    const database = await getTestDatabase();
+    const result = await callerForDatabase(
+      profileRouter,
+      VOTER,
+      withoutTransactions(database),
+    ).claimVotes();
+    expect(result.success).toBe(true);
+    expect(await readVoter()).toMatchObject({ reputationPoints: 1, reputationPointsTotal: 1 });
+    expect(await readVote()).toMatchObject({ claimed: true, totalClaims: 1 });
   });
 
   it("credits nothing when the votes were claimed after the read", async () => {

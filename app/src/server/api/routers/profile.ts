@@ -159,6 +159,7 @@ import {
   deleteUserBlackListForToggleBlacklistEntry,
   deleteUserItemForApplyUserContentChanges,
   deleteUserJutsuForApplyUserContentChanges,
+  executeClaimVotes,
   fetchAchievementCatalogue,
   fetchActiveRaids,
   fetchActiveShrineLobbies,
@@ -238,7 +239,6 @@ import {
   updateQuestHistoryForFetchUpdatedUserOnce,
   updateUserDataForAwardExperience,
   updateUserDataForAwardExperienceToAll,
-  updateUserDataForClaimVotes,
   updateUserDataForFetchUpdatedUserOnce,
   updateUserDataForFetchUpdatedUserOnce2,
   updateUserDataForGetPublicUser,
@@ -253,7 +253,6 @@ import {
   updateUserItemForUpdateAi,
   updateUserNindoForUpdateNindo,
   updateUserPetForResetPetImageGeneration,
-  updateUserVoteForClaimVotes,
   updateVillageForFetchUpdatedUserOnce,
   upsertHistoricalIp,
 } from "@/queries/profile";
@@ -2203,20 +2202,9 @@ export const profileRouter = createTRPCRouter({
       if (userVoteRecord.claimed) {
         return errorResponse("Votes already claimed");
       }
-      // Update user's reputation points and mark votes as claimed
-      // Only the request that flips `claimed` from false is credited, and the credit commits
-      // together with that claim
-      const claimed = await retryOnDeadlock(() =>
-        ctx.drizzle.transaction(async (tx) => {
-          const claim = await updateUserVoteForClaimVotes(tx, voteSecret, ctx);
-          if (claim.rowsAffected !== 1) return false;
-          const credit = await updateUserDataForClaimVotes(tx, ctx);
-          if (credit.rowsAffected !== 1)
-            throw new Error("Vote reward recipient not found");
-          return true;
-        }),
-      );
-      if (!claimed) {
+      // Mark the votes as claimed and credit the reputation point in one guarded statement
+      const claim = await executeClaimVotes(ctx.drizzle, voteSecret(), ctx);
+      if (claim.rowsAffected === 0) {
         return errorResponse("Votes already claimed");
       }
       return {
