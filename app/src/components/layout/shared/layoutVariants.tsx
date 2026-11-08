@@ -10,10 +10,7 @@ import {
   IMG_WALLPAPER_SUMMER,
   IMG_WALLPAPER_WINTER,
 } from "@/drizzle/constants";
-import type { GameLayoutId } from "@/libs/gameLayouts";
 import { getCurrentSeason } from "@/utils/time";
-
-export type LayoutVariant = GameLayoutId;
 
 export const ANONYMOUS_PIXEL_NAV_LINKS = [
   { href: "/#world", name: "World" },
@@ -22,7 +19,7 @@ export const ANONYMOUS_PIXEL_NAV_LINKS = [
   { href: "/#community", name: "Community" },
 ];
 
-const BETA_YELLOW_BUTTON_STYLE =
+const CLASSIC_YELLOW_BUTTON_STYLE =
   "h-14 w-14 sm:h-15 sm:w-15 md:h-16 md:w-16 bg-yellow-500 hover:bg-yellow-300 transition-colors text-orange-100 rounded-full p-3 shadow-md shadow-black border-2 stroke-3";
 
 const PIXEL_YELLOW_BUTTON_STYLE =
@@ -44,6 +41,10 @@ const PANEL_MENU_CLASSES = {
   mainMenuDecoration: "none" as const,
   rightMenuButton: "relative w-full theme-menu-button",
   rightMenuDecoration: "none" as const,
+  rightMenuEnabled: "",
+  rightMenuDisabled: "",
+  leftSidebarReservation: undefined,
+  rightSidebarReservation: undefined,
 };
 
 export const layoutVariantClasses = {
@@ -51,12 +52,16 @@ export const layoutVariantClasses = {
   "17-obsidian-council": PANEL_MENU_CLASSES,
   "3-sakura-courtyard": PANEL_MENU_CLASSES,
   default: {
-    yellowButton: BETA_YELLOW_BUTTON_STYLE,
+    yellowButton: CLASSIC_YELLOW_BUTTON_STYLE,
     mobileNavbarButton: MOBILE_NAVBAR_BUTTON_STYLE,
     mainMenuButton: "w-full hover:bg-orange-200",
     mainMenuDecoration: "gold" as const,
     rightMenuButton: "relative w-full",
     rightMenuDecoration: "gold" as const,
+    rightMenuEnabled: "hover:bg-orange-200",
+    rightMenuDisabled: "opacity-30",
+    leftSidebarReservation: "md:min-h-[48.5rem]",
+    rightSidebarReservation: "md:min-h-[29rem]",
   },
   pixel: {
     yellowButton: PIXEL_YELLOW_BUTTON_STYLE,
@@ -65,6 +70,10 @@ export const layoutVariantClasses = {
     mainMenuDecoration: "none" as const,
     rightMenuButton: "relative w-full tnr-pixel-menu-btn",
     rightMenuDecoration: "none" as const,
+    rightMenuEnabled: "",
+    rightMenuDisabled: "opacity-35",
+    leftSidebarReservation: undefined,
+    rightSidebarReservation: undefined,
   },
 };
 

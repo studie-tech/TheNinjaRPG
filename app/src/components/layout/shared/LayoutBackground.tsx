@@ -3,15 +3,16 @@
 import { useState } from "react";
 import ReactDOM from "react-dom";
 import { IMG_PIXEL_HERO_POSTER, IMG_WALLPAPER_HORIZON } from "@/drizzle/constants";
+import type { GameLayoutId } from "@/libs/gameLayouts";
 import { cn } from "@/libs/shadui";
 import { WALLPAPER_IMAGES } from "@/libs/wallpaperExperiment";
 import type { UserWithRelations } from "@/routers/profile";
 import { bunnyImageUrl } from "@/utils/image";
 import { useWallpaperVariant } from "@/utils/LayoutContext";
-import { getImageSet, type LayoutVariant } from "./layoutVariants";
+import { getImageSet } from "./layoutVariants";
 
 interface LayoutBackgroundProps {
-  variant: LayoutVariant;
+  variant: GameLayoutId;
   userData?: Pick<NonNullable<UserWithRelations>, "village"> | null;
   isAnonymousLayout?: boolean;
 }

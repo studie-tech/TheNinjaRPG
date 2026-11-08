@@ -26,14 +26,14 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
-import { getGameLayout } from "@/libs/gameLayouts";
+import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import { getMainNavbarLinks, type NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserData, useUserDataSelector } from "@/utils/UserContext";
 import { CollapsibleNotifications } from "./LayoutNotifications";
-import { type LayoutVariant, layoutVariantClasses } from "./layoutVariants";
+import { layoutVariantClasses } from "./layoutVariants";
 
 export const SideBannerTitle: React.FC<{
   children: React.ReactNode;
@@ -62,8 +62,6 @@ export const SideBannerTitle: React.FC<{
 // the account loads, its skeletons hold the height the loaded sidebars take at the default
 // font scale (in rem, to follow the font scale), so nothing under them moves when it
 // arrives. The right one stops above the location card, which a later query fills in.
-const BETA_LEFT_SIDEBAR_RESERVATION = "md:min-h-[48.5rem]";
-const BETA_RIGHT_SIDEBAR_RESERVATION = "md:min-h-[29rem]";
 
 const SidebarLoadingSkeleton: React.FC<{ className?: string }> = ({ className }) => (
   <div className={cn("pt-6", className)}>
@@ -132,7 +130,7 @@ const GithubStar: React.FC = () => (
 );
 
 interface LayoutLeftSidebarProps {
-  variant: LayoutVariant;
+  variant: GameLayoutId;
   isSignedInLayout: boolean;
   accountState: AccountMenuState;
   userData?: Pick<
@@ -194,7 +192,7 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
       )}
       {accountState === "loading" && (
         <SidebarLoadingSkeleton
-          className={variant === "default" ? BETA_LEFT_SIDEBAR_RESERVATION : undefined}
+          className={layoutVariantClasses[variant].leftSidebarReservation}
         />
       )}
       {accountState === "error" && <AccountLoadError />}
@@ -203,7 +201,7 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
 };
 
 interface LayoutRightSidebarContentProps {
-  variant: LayoutVariant;
+  variant: GameLayoutId;
   isSignedInLayout: boolean;
   accountState: AccountMenuState;
   userData?: Pick<
@@ -298,7 +296,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
       )}
       {accountState === "loading" && (
         <RightSidebarLoadingSkeleton
-          className={variant === "default" ? BETA_RIGHT_SIDEBAR_RESERVATION : undefined}
+          className={layoutVariantClasses[variant].rightSidebarReservation}
         />
       )}
       {accountState === "error" && <AccountLoadError />}
@@ -308,7 +306,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
 };
 
 interface SignedInIconsProps {
-  variant: LayoutVariant;
+  variant: GameLayoutId;
   isSignedIn: boolean;
   userData?: GameSettingsUser | null;
   updateUser: (data: Partial<UserWithRelations>) => Promise<unknown>;
@@ -356,7 +354,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         trigger="settings"
         section={userData ? "audio" : "all"}
       />
-      {variant === "default" && (
+      {getGameLayout(variant).supportsColorMode && (
         <Eclipse
           className="mx-1 h-6 min-h-6 w-6 min-w-6 rounded-full bg-blue-100 bg-yellow-100 bg-opacity-80 p-1 text-slate-700 hover:cursor-pointer hover:bg-blue-300 hover:text-black xl:h-7 xl:min-h-7 xl:w-7 xl:min-w-7 dark:bg-blue-100"
           onClick={onThemeToggle}
@@ -367,7 +365,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
 };
 
 interface LayoutMainMenuProps {
-  variant: LayoutVariant;
+  variant: GameLayoutId;
   navbarMenuItems: NavBarDropdownLink[];
   signedInIcons: React.ReactNode;
   onNavigate: () => void;
@@ -405,7 +403,7 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
 };
 
 interface RightSideBarProps {
-  variant: LayoutVariant;
+  variant: GameLayoutId;
   systems: NavBarDropdownLink[];
   userData: Pick<NonNullable<UserWithRelations>, "status">;
   notifications?: NavBarDropdownLink[];
@@ -438,9 +436,9 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
                 decoration={variantClasses.rightMenuDecoration}
                 className={cn(
                   variantClasses.rightMenuButton,
-                  variant === "default" &&
-                    (disabled ? "opacity-30" : "hover:bg-orange-200"),
-                  variant === "pixel" && disabled && "opacity-35",
+                  disabled
+                    ? variantClasses.rightMenuDisabled
+                    : variantClasses.rightMenuEnabled,
                 )}
                 count={system.notificationCount}
               >
@@ -570,4 +568,5 @@ const shouldShowPublicContent = ({
   "variant" | "isSignedInLayout" | "accountState" | "userData"
 >) =>
   !userData &&
-  (accountState === "create-character" || (variant === "default" && !isSignedInLayout));
+  (accountState === "create-character" ||
+    (getGameLayout(variant).publicFrame === "game" && !isSignedInLayout));

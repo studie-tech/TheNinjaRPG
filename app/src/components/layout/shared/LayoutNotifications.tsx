@@ -11,11 +11,11 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Link from "@/layout/Link";
+import type { GameLayoutId } from "@/libs/gameLayouts";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import { groupBy } from "@/utils/grouping";
 import {
-  type LayoutVariant,
   layoutVariantClasses,
   PIXEL_MOBILE_HEADER_BUTTON_STYLE,
   PIXEL_MOBILE_HEADER_ICON_STYLE,
@@ -199,7 +199,7 @@ export const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> =
 
 interface MobileNotificationsPopoverProps {
   notifications?: NavBarDropdownLink[];
-  variant: LayoutVariant;
+  variant: GameLayoutId;
 }
 
 export const MobileNotificationsPopover: React.FC<MobileNotificationsPopoverProps> = ({
