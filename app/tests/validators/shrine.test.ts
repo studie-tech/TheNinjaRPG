@@ -1,58 +1,31 @@
 import { describe, expect, it } from "bun:test";
+import { SHRINE_BOOST_SLOTS_PER_DAY, SHRINE_BOOST_TYPES } from "@/drizzle/constants";
 import { boostTemplateSchema } from "@/validators/shrine";
 
 describe("boostTemplateSchema", () => {
+  const capacity = 7 * SHRINE_BOOST_SLOTS_PER_DAY * SHRINE_BOOST_TYPES.length;
+  const grid = Array.from({ length: 7 * SHRINE_BOOST_SLOTS_PER_DAY }, (_, slotOffset) =>
+    SHRINE_BOOST_TYPES.map((boostType) => ({
+      boostType,
+      dayOfWeek: Math.floor(slotOffset / SHRINE_BOOST_SLOTS_PER_DAY),
+      slotIndex: slotOffset % SHRINE_BOOST_SLOTS_PER_DAY,
+    })),
+  ).flat();
+
   it("accepts the full weekly grid capacity", () => {
-    const entries = Array.from({ length: 7 * 12 }, (_, slotOffset) => {
-      const dayOfWeek = Math.floor(slotOffset / 12);
-      const slotIndex = slotOffset % 12;
+    const result = boostTemplateSchema.safeParse(grid);
 
-      return [
-        {
-          boostType: "Training" as const,
-          dayOfWeek,
-          slotIndex,
-        },
-        {
-          boostType: "PVP" as const,
-          dayOfWeek,
-          slotIndex,
-        },
-        {
-          boostType: "Mission" as const,
-          dayOfWeek,
-          slotIndex,
-        },
-        {
-          boostType: "Errands" as const,
-          dayOfWeek,
-          slotIndex,
-        },
-        {
-          boostType: "Crafting" as const,
-          dayOfWeek,
-          slotIndex,
-        },
-      ];
-    }).flat();
-
-    const result = boostTemplateSchema.safeParse(entries);
-
-    expect(entries).toHaveLength(420);
+    expect(grid).toHaveLength(capacity);
     expect(result.success).toBe(true);
   });
 
   it("rejects templates larger than the full weekly grid capacity", () => {
-    const entries = Array.from({ length: 421 }, (_, index) => ({
-      boostType: "Training" as const,
-      dayOfWeek: Math.floor(index / 12) % 7,
-      slotIndex: index % 12,
-    }));
+    const entries = [...grid, grid[0]!];
 
     const result = boostTemplateSchema.safeParse(entries);
     const messages = result.error?.issues.map((i) => i.message) ?? [];
 
     expect(result.success).toBe(false);
-    expect(messages).toContain("Template cannot exceed 420 entries");
+    expect(messages).toContain(`Template cannot exceed ${capacity} entries`);
   });
 });
