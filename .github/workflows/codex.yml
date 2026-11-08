@@ -205,6 +205,9 @@ jobs:
           responses-api-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           # Azure Responses API expects the deployment name here.
           model: "gpt-5.6-sol"
+          # An unpinned install takes CLI releases that were never run against the Azure
+          # deployment; 0.159.0 fails there before its first reply.
+          codex-version: "0.167.0"
           # Needed for branch/commit/push/PR operations (.git writes).
           sandbox: "danger-full-access"
           # Blacksmith runners currently fail both drop-sudo and sudo-based user switching checks.

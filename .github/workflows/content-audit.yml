@@ -242,7 +242,7 @@ jobs:
           model: "gpt-5.6-sol"
           # An unpinned install takes CLI releases that were never run against the Azure
           # deployments; 0.159.0 fails there before its first reply.
-          codex-version: "0.154.0"
+          codex-version: "0.167.0"
           sandbox: "read-only"
           # Blacksmith runners fail both drop-sudo and sudo-based user switching checks.
           safety-strategy: "unsafe"
@@ -341,7 +341,7 @@ jobs:
           openai-api-key: ${{ secrets.AZURE_API_KEY }}
           responses-api-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           model: "gpt-5.6-sol"
-          codex-version: "0.154.0"
+          codex-version: "0.167.0"
           sandbox: "read-only"
           safety-strategy: "unsafe"
           allow-users: "MathiasGruber"
