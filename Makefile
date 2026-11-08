@@ -211,17 +211,17 @@ mobile-configure: # Apply capabilities and the widget target to the generated Xc
 	cd mobile && bun run configure:ios
 
 .PHONY: mobile-beta
-mobile-beta: mobile-sync # Upload builds to TestFlight and the Play internal track
+mobile-beta: # Upload builds to TestFlight and the Play internal track
 	@echo "${GREEN}mobile-beta${RESET}"
 	cd mobile && bun run beta:ios && bun run beta:android
 
 .PHONY: mobile-ios
-mobile-ios: mobile-sync # Build and run the iOS shell in the simulator
+mobile-ios: # Build and run the iOS shell in the simulator
 	@echo "${GREEN}mobile-ios${RESET}"
 	cd mobile && bun run run:ios
 
 .PHONY: mobile-android
-mobile-android: mobile-sync # Build and run the Android shell in an emulator
+mobile-android: # Build and run the Android shell in an emulator
 	@echo "${GREEN}mobile-android${RESET}"
 	cd mobile && bun run run:android
 

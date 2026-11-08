@@ -12,7 +12,7 @@
     "open:ios": "bun run configure:ios && cap open ios",
     "open:android": "cap open android",
     "run:ios": "bun run sync && bun run configure:ios && cap run ios --no-sync",
-    "run:android": "cap run android",
+    "run:android": "bun run sync && cap run android --no-sync",
     "beta:ios": "bundle exec fastlane ios beta",
     "beta:android": "bundle exec fastlane android beta",
     "configure:ios": "bundle exec ruby scripts/configure-xcode.rb"
