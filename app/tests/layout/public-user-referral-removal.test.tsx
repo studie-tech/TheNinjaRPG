@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import * as client from "@/app/_trpc/client";
-import { RemoveReferralButton } from "@/layout/PublicUser";
+import { RemoveReferralButton } from "@/layout/publicUser/RecruitedUsersTab";
 import * as toast from "@/libs/toast";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";

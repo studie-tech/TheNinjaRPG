@@ -4,7 +4,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
-import { ResetPetImageGeneration } from "@/layout/PublicUser";
+import { ResetPetImageGeneration } from "@/layout/publicUser/ResetPetImageGeneration";
 import * as toast from "@/libs/toast";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";

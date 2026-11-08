@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import * as client from "@/app/_trpc/client";
-import { AdjustSeichiSilver } from "@/layout/PublicUser";
+import { AdjustSeichiSilver } from "@/layout/publicUser/AdjustSeichiSilver";
 import * as toast from "@/libs/toast";
 import { deferred } from "../setup/deferred";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
