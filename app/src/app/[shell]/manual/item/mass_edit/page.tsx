@@ -36,6 +36,7 @@ export default function ItemMassEditPage() {
       lastElementRef={setLastElement}
       onEntriesUpdated={() => refetch()}
       renderFilter={(disabled) => <ItemFiltering state={state} disabled={disabled} />}
+      filterEffectTypes={state.effect}
     />
   );
 }
