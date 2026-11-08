@@ -66,6 +66,25 @@ const wrapWriteBuilder = <T extends object>(builder: T): T =>
     },
   });
 
+/** Normalise `execute` results and write builders on a client and on the transactions it opens. */
+const normalizeWrites = <T extends object>(database: T): T =>
+  new Proxy(database, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver) as (...args: unknown[]) => unknown;
+      if (property === "execute") {
+        return async (...args: unknown[]) => normalize(await value.apply(target, args));
+      }
+      if (property === "insert" || property === "update" || property === "delete") {
+        return (...args: unknown[]) => wrapWriteBuilder(value.apply(target, args) as object);
+      }
+      if (property === "transaction") {
+        return (callback: (tx: unknown) => Promise<unknown>, ...rest: unknown[]) =>
+          value.call(target, async (tx: object) => callback(normalizeWrites(tx)), ...rest);
+      }
+      return value;
+    },
+  });
+
 /**
  * Bring the database in line with `drizzle/schema.ts`. `push` diffs against what is already
  * there, so a database left over from a previous run costs a diff rather than 130 CREATE TABLEs,
@@ -126,45 +145,7 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
       instrumentQueries(connection as unknown as Parameters<typeof instrumentQueries>[0]);
       return connection;
     };
-    const database = drizzle(pool, { schema, mode: "default" });
-    client = new Proxy(database, {
-      get(target, property, receiver) {
-        if (property === "transaction") {
-          return (callback: (tx: unknown) => Promise<unknown>) =>
-            target.transaction(async (tx) =>
-              callback(
-                new Proxy(tx, {
-                  get(transaction, key, txReceiver) {
-                    const value = Reflect.get(transaction, key, txReceiver);
-                    if (key === "execute") {
-                      return async (...args: unknown[]) => normalize(await value.apply(transaction, args));
-                    }
-                    if (key === "insert" || key === "update" || key === "delete") {
-                      return (...args: unknown[]) =>
-                        wrapWriteBuilder(value.apply(transaction, args));
-                    }
-                    return value;
-                  },
-                }),
-              ),
-            );
-        }
-        if (property === "execute") {
-          const method = Reflect.get(target, property, receiver) as (
-            ...args: unknown[]
-          ) => Promise<unknown>;
-          return async (...args: unknown[]) =>
-            normalize(await method.apply(target, args));
-        }
-        if (property === "insert" || property === "update" || property === "delete") {
-          const method = Reflect.get(target, property, receiver) as (
-            ...args: unknown[]
-          ) => object;
-          return (...args: unknown[]) => wrapWriteBuilder(method.apply(target, args));
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    }) as unknown as DrizzleClient;
+    client = normalizeWrites(drizzle(pool, { schema, mode: "default" })) as unknown as DrizzleClient;
   }
   return client;
 };
