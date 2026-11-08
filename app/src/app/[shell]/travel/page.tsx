@@ -31,7 +31,6 @@ import {
   useState,
 } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
@@ -107,7 +106,6 @@ import {
   useRequiredUserDataSelector,
   useUserDataRef,
 } from "@/utils/UserContext";
-import type { detectedUserSchema } from "@/validators/stealth";
 import {
   parseTravelPins,
   type SectorForm,
@@ -1833,7 +1831,9 @@ const RevealedPlayerCard = ({
 const activateSensory = api.stealth.useSensory;
 
 /** Public player fields shown by sensory reveals and their map markers. */
-type RevealedPlayer = z.infer<typeof detectedUserSchema>;
+type RevealedPlayer = NonNullable<
+  RouterOutputs["stealth"]["useSensory"]["data"]
+>["detectedUsers"][number];
 
 /** A revealed player the user is walking to attack on arrival. */
 type AttackTarget = Pick<
