@@ -2048,10 +2048,23 @@ export const BossFightBattleTypes: BattleType[] = [
 ];
 /** Intensity of an arrival cinematic, weakest first. */
 export const TRANSFORMATION_TIERS = [
-  { tier: 1, label: "Spark" },
-  { tier: 2, label: "Surge" },
-  { tier: 3, label: "Overload" },
-  { tier: 4, label: "Cataclysm" },
+  { tier: 1, label: "Spark", description: "A quick flash: one ring and a light shake." },
+  {
+    tier: 2,
+    label: "Surge",
+    description: "Two rings, more lightning and a stronger shake.",
+  },
+  {
+    tier: 3,
+    label: "Overload",
+    description: "Three rings, heavy lightning and a darker field.",
+  },
+  {
+    tier: 4,
+    label: "Cataclysm",
+    description:
+      "Five rings, a glitching field and a hard, long shake. Save it for the final form.",
+  },
 ] as const;
 export const STREAK_LEVEL_DIFF = 10;
 

@@ -22,6 +22,8 @@ import { lpcFacing } from "@/libs/lpc/catalog";
 import { passesBracketFilter } from "@/libs/profile";
 import { getActiveObjectives } from "@/libs/quest";
 import { hasRequiredRank } from "@/libs/rank";
+import type { AnimationClip } from "@/libs/rendering/animation";
+import { animationTextureUrl } from "@/libs/rendering/animationTextures";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createRenderScope } from "@/libs/rendering/scope";
@@ -37,6 +39,7 @@ import {
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
+import type { CharacterAnimation } from "@/libs/spriteAnimations";
 import type { UserWithRelations } from "@/routers/profile";
 import { canShowMapAttack } from "@/utils/alliance";
 import type { LpcDirection } from "@/validators/lpc";
@@ -63,6 +66,7 @@ export const createTravelActors = (
     const key = JSON.stringify([
       user.spriteAppearance,
       user.bodyArt,
+      user.bodyIdle?.id,
       user.avatar,
       user.avatarLight,
       user.isNpc,
@@ -585,6 +589,7 @@ export const createTravelActors = (
           moving && !frame.reducedMotion ? "walk" : "idle",
           record.facing,
         );
+      record.art?.animateLoops(frame);
       const phi = angle + recipe.orbit;
       root.position.set(
         record.x +
@@ -865,6 +870,17 @@ const LPC_TRAVEL_HEIGHT = 1.8 * LPC_TRAVEL_SCALE;
 const LPC_TRAVEL_FOOT_Y = 0.1;
 const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
 const NPC_TRAVEL_HEIGHT = 1.3;
+const PLAYER_TRAVEL_SHADOW = 0.16;
+const PLAYER_TRAVEL_LIGHT = 0.65;
+/** A sheet's cells share its still image's square framing, so frames swap in place. */
+const idleLoop = (animation: CharacterAnimation): AnimationClip => ({
+  images: [animationTextureUrl(animation, 256)],
+  columns: animation.columns,
+  rows: animation.rows,
+  frameCount: animation.frameCount,
+  frameDurationMs: 1000 / animation.fps,
+  loop: true,
+});
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
 /** Repeated NPC appearances remain distinct through placement identity; players use account identity. */
@@ -939,8 +955,8 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
             character: user.spriteAppearance,
             characterMode: "travel",
             shadowCaster: "character",
-            shadow: 0.16,
-            light: 0.65,
+            shadow: PLAYER_TRAVEL_SHADOW,
+            light: PLAYER_TRAVEL_LIGHT,
           }
         : fullBody
           ? {
@@ -950,6 +966,14 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
               preserveAspect: true,
               nearest: !user.bodyArt,
               shadowCaster: "character",
+              // Body art stands in for a player, so it is grounded and lit as players are.
+              ...(user.bodyArt
+                ? {
+                    shadow: PLAYER_TRAVEL_SHADOW,
+                    light: PLAYER_TRAVEL_LIGHT,
+                    loop: user.bodyIdle && idleLoop(user.bodyIdle),
+                  }
+                : {}),
             }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },
     ),

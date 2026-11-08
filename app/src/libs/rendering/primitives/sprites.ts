@@ -106,6 +106,7 @@ export const createWorldSprites = async (
     bounds: WorldBounds;
     groundY: number;
     motion: Awaited<ReturnType<typeof createClipTextures>> | null;
+    loop: Awaited<ReturnType<typeof createClipTextures>> | null;
     idleTexture: Texture;
     motionFrame: number;
   }[] = [];
@@ -123,7 +124,10 @@ export const createWorldSprites = async (
     if (!container.destroyed)
       container.destroy({ children: true, texture: false, textureSource: false });
     for (const view of views) view.destroy(false);
-    for (const entry of entries) entry.motion?.dispose();
+    for (const entry of entries) {
+      entry.motion?.dispose();
+      entry.loop?.dispose();
+    }
     lightTexture?.destroy(true);
     shadowLease?.release();
     views.length = 0;
@@ -141,7 +145,7 @@ export const createWorldSprites = async (
             description.character,
             description.characterMode,
           );
-          return { texture: null, description, character, motion: null };
+          return { texture: null, description, character, motion: null, loop: null };
         } catch (error) {
           if (game.signal.aborted) throw error;
           console.warn("Character artwork unavailable; showing portrait", error);
@@ -183,11 +187,28 @@ export const createWorldSprites = async (
             return null;
           })
         : null;
+      const loop = description.loop
+        ? await createClipTextures(game, description.loop, {
+            size: description.size,
+            rendition: 0,
+          }).catch((error: unknown) => {
+            if (
+              game.signal.aborted ||
+              game.isDisposed() ||
+              (error instanceof Error && error.name === "AbortError")
+            )
+              throw error;
+            // The still image remains if the optional loop cannot load.
+            console.warn("Looping artwork unavailable", error);
+            return null;
+          })
+        : null;
       if (disposed || game.signal.aborted) {
         motion?.dispose();
+        loop?.dispose();
         return null;
       }
-      return { texture, description, motion, character: undefined };
+      return { texture, description, motion, loop, character: undefined };
     }),
   );
   let shadowTexture: Texture | null = null;
@@ -283,7 +304,8 @@ export const createWorldSprites = async (
         !worldAssetSource(description.image) &&
         !description.character &&
         !description.mask &&
-        !description.motion;
+        !description.motion &&
+        !description.loop;
       if (isCharacterCutout && texture) {
         const frame = opaqueFrame(texture);
         const scale = sprite.scale.clone();
@@ -435,6 +457,7 @@ export const createWorldSprites = async (
         description,
         groundY,
         motion: result.value.motion,
+        loop: result.value.loop,
         idleTexture: texture ?? Texture.EMPTY,
         motionFrame: -1,
         bounds: worldSpriteBounds({
@@ -516,11 +539,35 @@ export const createWorldSprites = async (
     offsetY: number;
   } | null = null;
   const softEffects = entries.filter((entry) => entry.shadow || entry.light);
+  const looping = entries.flatMap((entry) =>
+    entry.loop && entry.sprite instanceof Sprite
+      ? [{ ...entry, loop: entry.loop, sprite: entry.sprite }]
+      : [],
+  );
   return {
     container,
     entries,
     missing,
     dispose,
+    /** Plays each looping artwork from the scene clock; reduced motion holds the still image. */
+    animateLoops: (frame: GameFrame) => {
+      if (disposed) return;
+      const still =
+        frame.reducedMotion || game.visualEffects?.spriteAnimations === false;
+      for (const entry of looping) {
+        const texture = still
+          ? entry.idleTexture
+          : (entry.loop.views[sampleAnimationClip(entry.loop.clip, frame.now).index] ??
+            entry.idleTexture);
+        if (entry.sprite.texture === texture) continue;
+        const facing = Math.sign(entry.sprite.scale.x);
+        entry.sprite.texture = texture;
+        entry.sprite.width = (entry.description.size * texture.width) / texture.height;
+        entry.sprite.height = entry.description.size;
+        entry.sprite.scale.x = Math.abs(entry.sprite.scale.x) * facing;
+        entry.sprite.scale.y = -Math.abs(entry.sprite.scale.y);
+      }
+    },
     /** Offscreen sectors retain their art while leaving the renderer's per-frame group traversal. */
     setRenderable: (value: boolean) => {
       if (container.renderable === value) return;

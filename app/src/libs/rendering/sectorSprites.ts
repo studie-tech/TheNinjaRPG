@@ -986,6 +986,8 @@ export type WorldSpriteDescription = {
   worldMaterial?: { material: string; surfaces: string };
   /** Pixel rectangle in a shared atlas; the scene owns only the texture view. */
   frame?: { x: number; y: number; width: number; height: number };
+  /** Artwork looped from the scene clock in place of the still image, e.g. an idle pose. */
+  loop?: AnimationClip;
   /** Movement-only artwork shares the scene clock and returns to the original texture when stopped. */
   motion?: {
     clip: AnimationClip;

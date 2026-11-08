@@ -309,6 +309,12 @@ export const listQuestHistoryForGetSectorData2 = (
 export const findUserDataForCreatorBody = (client: Pick<DrizzleClient, "query">) =>
   client.query.userData.findFirst({
     columns: { avatar: true },
+    with: {
+      spriteAnimationBindings: {
+        where: (binding) => eq(binding.actionKey, "idle"),
+        with: { animation: true },
+      },
+    },
     where: eq(userData.userId, CREATOR_TRIAL_FIRST_FORM),
   });
 

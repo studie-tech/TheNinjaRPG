@@ -120,6 +120,21 @@ describeWithDatabase("lethal combat history", () => {
     expect(superjson.deserialize<BattleAction[]>(notification.logEntries!)).toEqual(response.logEntries);
   });
 
+  it("announces a solo fight's actions on its channel for Colosseum spectators", async () => {
+    const snapshot = await startLethalBattle("ARENA");
+    const db = await getTestDatabase();
+    // The defender becomes an AI, leaving one human in the fight.
+    const usersState = snapshot.usersState.map((user) => user.userId === "victim" ? { ...user, isAi: true } : user);
+    await db.update(battle).set({ usersState }).where(eq(battle.id, snapshot.id));
+    const response = await (await callerFor(combatRouter, "killer")).performAction({
+      battleId: snapshot.id, version: snapshot.version, actionId: "basicAttack", longitude: 1, latitude: 0,
+    });
+    if (!("battleUpdate" in response) || !response.battleUpdate) throw new Error("Expected an action");
+    const notification = [...trigger.mock.calls].reverse().find(([channel]) => channel === snapshot.id)?.[2] as BattleUpdate;
+    expect(notification).toMatchObject({ version: response.battleUpdate.version });
+    expect(superjson.deserialize<BattleAction[]>(notification.logEntries!)).toEqual(response.logEntries);
+  });
+
   it.each([false, true])("sends a bounded PvP delta without extra battle/log SELECTs (oversized=%s)", async (oversized) => {
     const snapshot = await startLethalBattle("COMBAT");
     const db = await getTestDatabase();

@@ -854,7 +854,11 @@ const Combat: React.FC<CombatProps> = (props) => {
         // auto combat can be the initiative winner of a PvP lobby battle.
         const inLobby = battleRef.current.createdAt.getTime() > Date.now() - timeDiff;
         const { isAITurn } = getTurnControl(actor, suid);
-        if (isAITurn && !isPending && !inLobby) {
+        // Spectators follow the battle's channel; only its fighters drive its AI turns.
+        const isFighter = battleRef.current.usersState.some(
+          (user) => user.controllerId === suid,
+        );
+        if (isAITurn && isFighter && !isPending && !inLobby) {
           // Nothing resolves until a visible field can show it. Hidden pages and
           // fields that cannot load still advance, or the battle would wait forever.
           if (isPageActive && !combat.scene.current && !fieldFailedRef.current) return;

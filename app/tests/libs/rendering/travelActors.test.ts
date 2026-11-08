@@ -53,7 +53,22 @@ describe("travel actor snapshots", () => {
       // Twice an NPC's height on the 10px test tile, from the native source, sampled smoothly.
       expect(body).toMatchObject({ image: "robot.webp", rendition: 0, nearest: false, size: 26 });
       expect(body).not.toHaveProperty("character");
+      // Grounded and lit as players are, still when no idle sheet is bound.
+      expect(body).toMatchObject({ shadow: 0.16, light: 0.65 });
+      expect(body?.loop).toBeUndefined();
     }
+  });
+  it("loops the body art's idle sheet from its full-size cells", () => {
+    const bodyIdle = { id: "idle", name: "Idle", url: "https://example.com/idle.png", smallUrl: "https://example.com/idle-small.png", columns: 8, rows: 3, frameCount: 24, fps: 12.5, facing: "left" as const };
+    const [recipe] = recipes([player({ username: CREATOR_USERNAME, bodyArt: "robot.webp", bodyIdle })]);
+    expect(recipe?.parts.find((part) => part.kind === "avatar")?.loop).toEqual({
+      images: ["https://example.com/idle.png"],
+      columns: 8,
+      rows: 3,
+      frameCount: 24,
+      frameDurationMs: 80,
+      loop: true,
+    });
   });
   it("still pins a battle beside an ordinary player, and once the creator has left the tile", () => {
     const challenger = player({ userId: "challenger", status: "BATTLE", battleId: "fight" });
