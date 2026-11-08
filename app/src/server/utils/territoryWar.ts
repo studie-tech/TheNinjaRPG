@@ -22,6 +22,7 @@ import {
   executeRowsForCleanupTerritoryWarTeams,
   executeRowsForCleanupTerritoryWarTeams2,
   executeRowsForResolveTerritoryWar,
+  expiredTerritoryWarLobby,
   fetchLatestTerritoryWar,
   findTerritoryWarForSyncTerritoryWars,
   findUserDataForFetchTerritoryWarUser,
@@ -212,7 +213,7 @@ export const cleanupTerritoryWarTeams = async (
   client: DrizzleClient,
   now = new Date(),
 ) => {
-  const expired = sql`q.battleType = 'TERRITORY_WAR' AND (w.resolvedAt IS NOT NULL OR w.endsAt <= ${now}) AND b.id IS NULL`;
+  const expired = expiredTerritoryWarLobby(now);
   await executeRowsForCleanupTerritoryWarTeams(client, expired);
   await executeRowsForCleanupTerritoryWarTeams2(client, expired);
 };
