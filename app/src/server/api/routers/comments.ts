@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, like, notExists, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -11,7 +11,6 @@ import {
   type Conversation,
   conversationComment,
   type UserData,
-  user2conversation,
   userBlackList,
   userData,
 } from "@/drizzle/schema";
@@ -48,6 +47,7 @@ import {
   listNotificationUserCandidates,
   listPublicConversationsByTitle,
   listUserReportCommentForGetReportComments,
+  noConversationMembersLeft,
   selectConversationCommentForFetchConversationComment,
   selectConversationCommentForGetConversationComments,
   updateConversationCommentForEditConversationComment,
@@ -321,12 +321,7 @@ export const commentsRouter = createTRPCRouter({
         // which the awaited membership delete above already settled. Guarding
         // each one on that condition keeps a concurrent exit from wiping a
         // conversation someone still belongs to, without serializing them.
-        const noMembersLeft = notExists(
-          ctx.drizzle
-            .select({ userId: user2conversation.userId })
-            .from(user2conversation)
-            .where(eq(user2conversation.conversationId, convo.id)),
-        );
+        const noMembersLeft = noConversationMembersLeft(ctx.drizzle, convo);
         await Promise.all([
           deleteConversationForExitConversation(ctx.drizzle, convo, noMembersLeft),
           deleteConversationCommentForExitConversation(

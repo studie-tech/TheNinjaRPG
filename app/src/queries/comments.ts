@@ -3,7 +3,18 @@
  */
 
 import type { SQL } from "drizzle-orm";
-import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  notExists,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { SupportTicketStatus, UserRole } from "@/drizzle/constants";
@@ -186,6 +197,18 @@ export const deleteConversationForExitConversation = (
   noMembersLeft: SQL<unknown>,
 ) =>
   client.delete(conversation).where(and(eq(conversation.id, convo.id), noMembersLeft));
+
+/** True once no membership row remains for the conversation. */
+export const noConversationMembersLeft = (
+  client: Pick<DrizzleClient, "select">,
+  convo: { id: string },
+) =>
+  notExists(
+    client
+      .select({ userId: user2conversation.userId })
+      .from(user2conversation)
+      .where(eq(user2conversation.conversationId, convo.id)),
+  );
 
 /** Build the `conversationComment` deletion for `exitConversation`, using predicates on `conversationId`. */
 export const deleteConversationCommentForExitConversation = (
