@@ -312,15 +312,7 @@ export const useTowerDefense = (userId?: string) => {
    * PERFORMANCE: This ensures no data leaks between runs.
    */
   const resetGameRefs = useCallback(() => {
-    // Clear entities
-    const store = entitiesRef.current;
-    store.enemies.clear();
-    store.projectiles.clear();
-    store.enemySpawns.clear();
-    store.enemiesArray = [];
-    store.projectilesArray = [];
-    store.enemiesVersion++;
-    store.projectilesVersion++;
+    clearEntities(entitiesRef.current);
 
     // Reset runtime and session data
     runtimeStateRef.current = createRuntimeState();
@@ -436,10 +428,6 @@ export const useTowerDefense = (userId?: string) => {
         sessionIdRef.current = session.id;
         // Subscribe to this session's entities (enemies, projectiles, upgrades)
         connectionRef.current.subscribeToSession(session.id);
-        setGameState((prev) => ({
-          ...prev,
-          seed: session.seed,
-        }));
       }
 
       // If we already have this session tracked, ensure seed is set
@@ -618,12 +606,9 @@ export const useTowerDefense = (userId?: string) => {
             waveInProgress: state.waveInProgress,
             existingSession: null,
           }));
-          // ALSO sync HUD store for mode changes (so InRunUpgrades gets initial values)
-          syncHudStore();
-        } else {
-          // For non-critical updates during gameplay, update HUD store
-          syncHudStore();
         }
+        // Mode changes also need it, so InRunUpgrades gets initial values
+        syncHudStore();
         return;
       }
 
@@ -760,14 +745,7 @@ export const useTowerDefense = (userId?: string) => {
   }, []);
 
   const clearEntityStore = useCallback(() => {
-    const store = entitiesRef.current;
-    store.enemies.clear();
-    store.projectiles.clear();
-    store.enemySpawns.clear();
-    store.enemiesArray = [];
-    store.projectilesArray = [];
-    store.enemiesVersion++;
-    store.projectilesVersion++;
+    clearEntities(entitiesRef.current);
     playerHitEventsRef.current = [];
     // Clear runtime enemy count
     runtimeStateRef.current.enemyCount = 0;
@@ -954,14 +932,10 @@ export const useTowerDefense = (userId?: string) => {
 
       // The session_update event will trigger and update the game state to "playing"
       // Set initial local state while waiting for server response
-      const center = Math.floor(secureSession.params.initialGridSize / 2);
-      const initialState = {
-        playerHealth: secureSession.params.playerMaxHealth,
-        playerPosition: { col: center, row: center },
-        inRunCurrency: 0,
-        activeUpgrades: {},
-        gridSize: secureSession.params.initialGridSize,
-      };
+      const initialState = initialPlayerState(
+        secureSession.params.initialGridSize,
+        secureSession.params.playerMaxHealth,
+      );
 
       // PERFORMANCE: Update runtime ref IMMEDIATELY so the renderer sees it on mount
       runtimeStateRef.current = {
@@ -1009,14 +983,10 @@ export const useTowerDefense = (userId?: string) => {
 
       // Transition to connecting mode and set initial state
       // The mode will be corrected to "playing" or "wave-end" when session_state arrives
-      const center = Math.floor(sessionToResume.gridSize / 2);
-      const initialState = {
-        playerHealth: sessionToResume.health,
-        playerPosition: { col: center, row: center },
-        inRunCurrency: 0,
-        activeUpgrades: {},
-        gridSize: sessionToResume.gridSize,
-      };
+      const initialState = initialPlayerState(
+        sessionToResume.gridSize,
+        sessionToResume.health,
+      );
 
       // PERFORMANCE: Update runtime ref IMMEDIATELY so the renderer sees it on mount
       // We use current values from ref for abilities/bonuses since we don't have them in existingSession yet
@@ -1378,5 +1348,28 @@ export const useTowerDefense = (userId?: string) => {
 
     // Guest mode flag
     isGuest: !userId,
+  };
+};
+
+/** Empty the entity store and bump its versions so the renderer drops the old entities. */
+const clearEntities = (store: ExtendedEntityStore) => {
+  store.enemies.clear();
+  store.projectiles.clear();
+  store.enemySpawns.clear();
+  store.enemiesArray = [];
+  store.projectilesArray = [];
+  store.enemiesVersion++;
+  store.projectilesVersion++;
+};
+
+/** Local player state shown until the session's first state update: centred, no upgrades. */
+const initialPlayerState = (gridSize: number, playerHealth: number) => {
+  const center = Math.floor(gridSize / 2);
+  return {
+    playerHealth,
+    playerPosition: { col: center, row: center },
+    inRunCurrency: 0,
+    activeUpgrades: {},
+    gridSize,
   };
 };
