@@ -11,7 +11,7 @@ const flowId = "a".repeat(43);
 const callbackUrl = `tnr://oauth-callback?flow=${flowId}&code=${"c".repeat(43)}`;
 
 beforeEach(() => {
-  approve.mockReset().mockResolvedValue({ callbackUrl });
+  approve.mockReset().mockResolvedValue({ success: true, message: "Sign-in approved", callbackUrl });
   signOut.mockReset().mockResolvedValue(undefined);
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(new URLSearchParams({ flow: flowId }) as never);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ back: vi.fn(), push: vi.fn() } as never);
@@ -36,6 +36,17 @@ it("replaces approval with its callback so a consumed flow cannot be approved ag
   expect(view.queryByRole("button", { name: "Use another account" })).toBeNull();
   expect(approve).toHaveBeenCalledTimes(1);
   expect(approve).toHaveBeenCalledWith({ flowId });
+});
+
+it("shows an expired approval and keeps the flow recoverable", async () => {
+  const message = "Sign-in expired or was already used. Return to the app and try again.";
+  approve.mockResolvedValue({ success: false, message });
+  const view = render(<NativeBrowserSignIn />);
+  fireEvent.click(view.getByRole("button", { name: "Continue to the app" }));
+  await waitFor(() => expect(view.getByRole("alert").textContent).toContain(message));
+  expect(view.queryByRole("link", { name: "Open the app" })).toBeNull();
+  expect(view.getByRole("button", { name: "Continue to the app" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "Use another account" })).toBeTruthy();
 });
 
 it("keeps account recovery available when approval fails", async () => {

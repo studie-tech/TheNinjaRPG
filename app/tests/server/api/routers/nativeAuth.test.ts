@@ -9,6 +9,7 @@ import { stubRateLimitTransport } from "../../../setup/rateLimit";
 const flowId = "f".repeat(43);
 const proof = "p".repeat(43);
 const code = "c".repeat(43);
+const expired = "Sign-in expired or was already used. Return to the app and try again.";
 const mocks = {
   start: vi.fn(), describe: vi.fn(), approve: vi.fn(), redeem: vi.fn(),
   ticket: vi.fn(),
@@ -50,6 +51,8 @@ describe("native auth session issuance", () => {
   });
   it("binds approval to the authenticated browser identity, never caller input", async () => {
     expect(await caller("user-browser").approve({ flowId })).toEqual({
+      success: true,
+      message: "Sign-in approved",
       callbackUrl: `tnr://oauth-callback?flow=${flowId}&code=${code}`,
     });
     expect(mocks.approve).toHaveBeenCalledWith(flowId, "user-browser");
@@ -58,14 +61,26 @@ describe("native auth session issuance", () => {
     expect(mocks.approve).toHaveBeenCalledTimes(1);
   });
   it("issues a short-lived ticket only for the identity returned by atomic redemption", async () => {
-    expect(await caller().exchange({ flowId, verifier: proof, code })).toEqual({ ticket: "short-lived-ticket" });
+    expect(await caller().exchange({ flowId, verifier: proof, code })).toEqual({
+      success: true,
+      message: "Sign-in ready",
+      ticket: "short-lived-ticket",
+    });
     expect(mocks.redeem).toHaveBeenCalledWith(flowId, proof, code);
     expect(mocks.ticket).toHaveBeenCalledWith({ userId: "user-approved", expiresInSeconds: 60 });
   });
   it("does not call Clerk for an expired, invalid or replayed proof", async () => {
     mocks.redeem.mockResolvedValue(null);
-    await expect(caller().exchange({ flowId, verifier: proof, code })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(await caller().exchange({ flowId, verifier: proof, code })).toEqual({ success: false, message: expired });
     expect(mocks.ticket).not.toHaveBeenCalled();
+  });
+  it("answers an expired or used approval without a callback", async () => {
+    mocks.approve.mockResolvedValue(null);
+    expect(await caller("user-browser").approve({ flowId })).toEqual({ success: false, message: expired });
+  });
+  it("rejects describing an expired flow", async () => {
+    mocks.describe.mockResolvedValue(null);
+    await expect(caller().describe({ flowId })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expired });
   });
   it("rate-limits authentication without charging a character or issuing a ticket", async () => {
     limitSuccess = false;

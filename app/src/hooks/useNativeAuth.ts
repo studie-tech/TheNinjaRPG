@@ -227,7 +227,7 @@ export const useNativeAuth = () => {
           void oauthBrowser.open(target.toString()).catch(finish);
         });
         if (!callback || !alive.current) return { status: "cancelled" };
-        const { ticket } = await handoff.exchange({
+        const exchanged = await handoff.exchange({
           flowId,
           verifier: proof.verifier,
           code: callback.searchParams.get("code") ?? "",
@@ -235,6 +235,8 @@ export const useNativeAuth = () => {
         if (!alive.current || (clerk.session?.id ?? null) !== initialSessionId) {
           return { status: "cancelled" };
         }
+        if (!exchanged.success) return { status: "error", message: exchanged.message };
+        const { ticket } = exchanged;
         // This ticket is consumed by the WebView's client, so existing SSR/session
         // cookies, logout and device isolation retain their normal behavior.
         const created = await signIn.create({ strategy: "ticket", ticket });

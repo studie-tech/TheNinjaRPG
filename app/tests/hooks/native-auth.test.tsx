@@ -33,7 +33,7 @@ beforeEach(() => {
   vi.spyOn(native, "platform").mockReturnValue("android");
   mocks.create.mockReset().mockResolvedValue({ createdSessionId: "session-native" });
   mocks.start.mockReset().mockResolvedValue({ flowId });
-  mocks.exchange.mockReset().mockResolvedValue({ ticket: "single-use-ticket" });
+  mocks.exchange.mockReset().mockResolvedValue({ success: true, message: "Sign-in ready", ticket: "single-use-ticket" });
   mocks.setActive.mockReset().mockResolvedValue(undefined);
   mocks.close.mockReset().mockResolvedValue(undefined);
   mocks.open.mockReset().mockImplementation(async () => onUrl(callback));
@@ -139,8 +139,16 @@ describe("native browser-to-shell authentication", () => {
     expect(mocks.setActive).not.toHaveBeenCalled();
   });
 
+  it("reports an expired or used handoff and never attempts a ticket sign-in", async () => {
+    const message = "Sign-in expired or was already used. Return to the app and try again.";
+    mocks.exchange.mockResolvedValue({ success: false, message });
+    expect(await signIn()).toEqual({ status: "error", message });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.setActive).not.toHaveBeenCalled();
+  });
+
   it("does not overwrite a different app session established during the handoff", async () => {
-    mocks.exchange.mockImplementation(async () => { session = { id: "other-account" }; return { ticket: "ticket" }; });
+    mocks.exchange.mockImplementation(async () => { session = { id: "other-account" }; return { success: true, message: "Sign-in ready", ticket: "ticket" }; });
     expect(await signIn()).toEqual({ status: "cancelled" });
     expect(mocks.create).not.toHaveBeenCalled();
   });
