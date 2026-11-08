@@ -17,7 +17,6 @@ import {
   makeBattleUser,
   makeCompleteBattle,
   makeEffect,
-  makeTag,
 } from "./helpers/battleScenario";
 
 const PROFILE = "lazy-path-profile";
@@ -54,14 +53,12 @@ const setup = (rules: AiRuleType[] = [endTurn], count = 2) => {
   return { battle, grid, run: () => performAIaction(battle, grid, "actor") };
 };
 
-const barrier = (longitude: number, latitude: number): GroundEffect => ({
-  ...makeEffect("barrier", { power: 100, rounds: 10, absorbPercentage: 50 }, {
-    creatorId: "enemy-1", longitude, latitude,
-  }),
-  ...makeTag("barrier", {
-    power: 100, rounds: 10, absorbPercentage: 50, curHealth: 10_000, maxHealth: 10_000,
-  }),
-});
+const barrier = (longitude: number, latitude: number): GroundEffect =>
+  makeEffect(
+    "barrier",
+    { power: 100, rounds: 10, absorbPercentage: 50, curHealth: 10_000, maxHealth: 10_000 },
+    { creatorId: "enemy-1", longitude, latitude },
+  );
 
 afterEach(() => {
   // Bun shares the module registry between suites; restore every local spy.
