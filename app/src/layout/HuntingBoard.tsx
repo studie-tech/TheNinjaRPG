@@ -124,6 +124,8 @@ export function HuntingBoard({
   const receipt = session?.lastResult ?? victory;
   const experience = user?.huntingExperience ?? receipt?.totalExperience ?? 0;
   const rankProgress = getHuntingRankProgress(experience);
+  const creatureById = new Map(data?.creatures.map((ai) => [ai.userId, ai]));
+  const materialNameById = new Map(data?.materials.map((m) => [m.id, m.name]));
   // Drop empty habitats after combining filters so the board has one empty state.
   const filteredHabitats = (data?.habitats ?? [])
     .filter((h) => !habitatId || habitatId === h.id)
@@ -135,7 +137,7 @@ export function HuntingBoard({
         contracts: h.content.contracts
           .map((c) => (h.id === session?.habitatId && c.id === active?.id ? active : c))
           .filter((c) => {
-            const ai = data?.creatures.find((a) => a.userId === c.aiId);
+            const ai = creatureById.get(c.aiId);
             return (
               (!rank || c.rank === rank) &&
               (!creature.trim() ||
@@ -144,9 +146,9 @@ export function HuntingBoard({
                   .includes(creature.trim().toLowerCase())) &&
               (!material.trim() ||
                 c.rewards.some((r) =>
-                  data?.materials
-                    .find((m) => m.id === r.itemId)
-                    ?.name.toLowerCase()
+                  materialNameById
+                    .get(r.itemId)
+                    ?.toLowerCase()
                     .includes(material.trim().toLowerCase()),
                 ))
             );
@@ -400,7 +402,7 @@ export function HuntingBoard({
                           experience,
                           c,
                         );
-                        const ai = data.creatures.find((a) => a.userId === c.aiId);
+                        const ai = creatureById.get(c.aiId);
                         return (
                           <article
                             key={c.id}
@@ -420,7 +422,7 @@ export function HuntingBoard({
                                   .filter((r) => r.chance === 100)
                                   .map(
                                     (r) =>
-                                      `${r.quantity}× ${data.materials.find((m) => m.id === r.itemId)?.name ?? "Unavailable material"}`,
+                                      `${r.quantity}× ${materialNameById.get(r.itemId) ?? "Unavailable material"}`,
                                   )
                                   .join(", ")}
                               </p>
@@ -430,7 +432,7 @@ export function HuntingBoard({
                                   .filter((r) => r.chance < 100)
                                   .map(
                                     (r) =>
-                                      `${r.quantity}× ${data.materials.find((m) => m.id === r.itemId)?.name ?? "Unavailable material"} (${r.chance}%)`,
+                                      `${r.quantity}× ${materialNameById.get(r.itemId) ?? "Unavailable material"} (${r.chance}%)`,
                                   )
                                   .join(", ") || "None"}
                               </p>
