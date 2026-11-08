@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
 import { actionLog, jutsu } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
-import { resolverOf } from "../../../../setup/testDatabase";
+import { callerForDatabase } from "../../../../setup/testDatabase";
 
 const source = {
   id: "source",
@@ -31,23 +31,17 @@ const setup = (
   const insert = vi.fn((table: object) => ({
     values: table === actionLog ? logValues : values,
   }));
-  const resolver = resolverOf(jutsuRouter.clone);
+  const database = {
+    query: {
+      userData: { findFirst: async () => user },
+      jutsu: { findFirst: async () => row },
+    },
+    insert,
+    transaction: async (callback: (tx: object) => Promise<unknown>) =>
+      callback({ insert }),
+  };
   const clone = () =>
-    resolver({
-      ctx: {
-        userId: "staff",
-        drizzle: {
-          query: {
-            userData: { findFirst: async () => user },
-            jutsu: { findFirst: async () => row },
-          },
-          insert,
-          transaction: async (callback: (tx: object) => Promise<unknown>) =>
-            callback({ insert }),
-        },
-      },
-      input: { id: source.id },
-    });
+    callerForDatabase(jutsuRouter, "staff", database as never).clone({ id: source.id });
   return { clone, insert, values, logValues };
 };
 

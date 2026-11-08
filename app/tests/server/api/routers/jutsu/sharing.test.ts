@@ -5,7 +5,7 @@ import { exportJutsuLoadout } from "@/libs/loadout";
 import * as jutsuRequirements from "@/libs/jutsuRequirements";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
-import { resolverOf } from "../../../../setup/testDatabase";
+import { callerForDatabase } from "../../../../setup/testDatabase";
 
 /** Exercise resolver guards with deterministic fixture reads and observable attempted writes. */
 const setup = () => {
@@ -42,9 +42,9 @@ const setup = () => {
     execute,
   };
   type Result = { success: boolean; message: string; preview?: { token: string; jutsuIds: string[] } };
-  /** Invoke the actual resolver with this fixture's user and database. */
+  /** Invoke the actual procedure with this fixture's user and database. */
   const call = (name: "previewJutsuLoadout" | "importJutsuLoadout", input: { loadoutId: string; text: string; previewToken?: string }) => {
-    return resolverOf(jutsuRouter[name])({ ctx: { drizzle: database, userId: user.userId }, input }) as Promise<Result>;
+    return callerForDatabase(jutsuRouter, user.userId, database as never)[name](input) as Promise<Result>;
   };
   const input = { loadoutId: "active", text: exportJutsuLoadout(["b", "a"]) };
   /** Obtain the actual resolver's fingerprint rather than constructing one in the test. */
