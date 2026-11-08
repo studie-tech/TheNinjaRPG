@@ -332,6 +332,7 @@ export const EventTournaments = ({
           currentRound={currentRound}
           tournamentId={tournamentId ?? ""}
           pending={pending}
+          refresh={refresh}
           onEdit={() => setEditing(true)}
           onAction={staffAction}
         />
@@ -597,7 +598,8 @@ const StaffTournamentControls = ({
   event,
   currentRound,
   tournamentId,
-  pending,
+  pending: lifecyclePending,
+  refresh,
   onEdit,
   onAction,
 }: {
@@ -605,6 +607,7 @@ const StaffTournamentControls = ({
   currentRound: number;
   tournamentId: string;
   pending: boolean;
+  refresh: () => Promise<void>;
   onEdit: () => void;
   onAction: (
     action: "PUBLISH" | "SEED" | "BEGIN" | "CANCEL",
@@ -615,21 +618,17 @@ const StaffTournamentControls = ({
   const [seatId, setSeatId] = useState("");
   const [message, setMessage] = useState("");
   const { methods: form } = useUserPicker();
-  const utils = api.useUtils();
   const reconcile = useEventActionCache();
   const mutation = api.tournament.manageEvent.useMutation({
     onSettled: reconcile.settle,
     onSuccess: async (result) => {
       setMessage(result.message);
       showMutationToast(result);
-      await Promise.all([
-        utils.tournament.getEvent.invalidate(),
-        utils.tournament.listEvents.invalidate(),
-        reconcile.refreshNotices(),
-        reconcile.apply(),
-      ]);
+      await Promise.all([refresh(), reconcile.apply()]);
     },
   });
+  // Roster and lifecycle actions edit the same event, so either one blocks the other.
+  const pending = lifecyclePending || mutation.isPending;
   const applyRoster = (action: "INVITE" | "REMOVE_INVITE" | "SUBSTITUTE") =>
     mutation.mutate({
       tournamentId,
@@ -745,15 +744,12 @@ const StaffTournamentControls = ({
             <div className="flex flex-wrap gap-2">
               {event.status === "REGISTRATION" ? (
                 <>
-                  <Button
-                    disabled={mutation.isPending}
-                    onClick={() => applyRoster("INVITE")}
-                  >
+                  <Button disabled={pending} onClick={() => applyRoster("INVITE")}>
                     Invite / overwrite invitation
                   </Button>
                   <Button
                     variant="outline"
-                    disabled={mutation.isPending || !seatId}
+                    disabled={pending || !seatId}
                     onClick={() => applyRoster("REMOVE_INVITE")}
                   >
                     Withdraw invitation
@@ -761,7 +757,7 @@ const StaffTournamentControls = ({
                 </>
               ) : (
                 <Button
-                  disabled={mutation.isPending || !seatId}
+                  disabled={pending || !seatId}
                   onClick={() => applyRoster("SUBSTITUTE")}
                 >
                   Substitute player in seat
