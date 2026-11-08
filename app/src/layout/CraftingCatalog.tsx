@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ItemRarities } from "@/drizzle/constants";
+import { ItemRarities, MAX_COOKING_BATCHES } from "@/drizzle/constants";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 import { useActivityBonusRefresh } from "@/hooks/useActivityBonusRefresh";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -191,7 +191,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   // Calculate max craftable for selected item
   const maxCraftable = useMemo(() => {
     if (!selectedItem || !userItems) return 0;
-    let max = 10;
+    let max = MAX_COOKING_BATCHES;
     for (const req of selectedItem.craftingRequirements) {
       const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
       const maxForThisMaterial = Math.floor(totalQuantity / req.quantity);
@@ -457,7 +457,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                 id="craft-quantity"
                 inputMode="numeric"
                 min={maxCraftable > 0 ? 1 : 0}
-                max={maxCraftable > 0 ? Math.min(maxCraftable, 10) : 0}
+                max={maxCraftable > 0 ? maxCraftable : 0}
                 value={maxCraftable > 0 ? craftQuantityInput : 0}
                 onValueChange={setCraftQuantity}
                 emptyFallback={1}
