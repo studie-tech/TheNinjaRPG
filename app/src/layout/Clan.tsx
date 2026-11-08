@@ -2160,7 +2160,9 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 </p>
                 <ul className="list-disc space-y-1 pl-5">
                   <li>All three co-leader slots will be cleared.</li>
-                  <li>All ten assassin slots will be cleared.</li>
+                  <li>
+                    All {ASSASSIN_MAX_PER_FACTION} assassin slots will be cleared.
+                  </li>
                 </ul>
                 <p className="text-muted-foreground text-sm">
                   The leader will remain in place. Everyone will remain a member of the{" "}
