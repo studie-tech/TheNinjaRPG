@@ -3,42 +3,39 @@ import { InfiniteQueryObserver, QueryClient, type InfiniteData } from "@tanstack
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { ComponentProps } from "react";
 import { type Control, useController } from "react-hook-form";
+import * as client from "@/app/_trpc/client";
 import { CommentOnConversation } from "@/layout/Comment";
 import * as CommentModule from "@/layout/Comment";
 import * as Avatar from "@/layout/Avatar";
 import { CompactComment } from "@/layout/CompactComment";
 import * as PostModule from "@/layout/Post";
 import * as Confirm from "@/layout/Confirm";
+import * as EmojiPicker from "@/layout/EmojiPicker";
+import * as ModerationSummary from "@/layout/ModerationSummary";
 import { ConversationComments } from "@/layout/ConversationComments";
 import type { PostProps } from "@/layout/Post";
+import * as Report from "@/layout/Report";
+import * as RichInput from "@/layout/RichInput";
 import type { MutateCommentSchema } from "@/validators/comments";
 import * as Parse from "@/utils/parse";
+import * as UserContext from "@/utils/UserContext";
 import { conversationQueryOptions } from "../setup/conversationQueryOptions";
-import { createToastMock } from "../setup/toastMock";
+import { spyOnToasts } from "../setup/toastMock";
 import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const edit = vi.fn();
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    useUtils: () => ({ comments: { getConversationComments: { invalidate: vi.fn() } } }),
-    profile: { toggleBlacklistEntry: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) } },
-    comments: {
-      editConversationComment: { useMutation: () => ({ mutate: edit, isPending: false }) },
-      deleteConversationComment: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-    },
+const api = {
+  useUtils: () => ({ comments: { getConversationComments: { invalidate: vi.fn() } } }),
+  profile: { toggleBlacklistEntry: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) } },
+  comments: {
+    editConversationComment: { useMutation: () => ({ mutate: edit, isPending: false }) },
+    deleteConversationComment: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
   },
-}));
-vi.mock("@/utils/UserContext", () => ({ useUserData: () => ({ data: { userId: "friend", role: "USER" } }) }));
-vi.mock("@/libs/toast", createToastMock);
-vi.mock("@/layout/RichInput", () => ({
-  default: ({ control, disabled }: { control: Control<MutateCommentSchema>; disabled?: boolean }) => {
-    const { field } = useController({ control, name: "comment" });
-    return <><textarea aria-label="Edit message" {...field} disabled={disabled} /><button type="submit" disabled={disabled}>Save message</button></>;
-  },
-}));
-vi.mock("@/layout/ModerationSummary", () => ({ ModerationSummary: () => null }));
-vi.mock("@/layout/Report", () => ({ default: () => null }));
-vi.mock("@/layout/EmojiPicker", () => ({ EmojiPicker: () => null }));
+};
+const EditorInput = ({ control, disabled }: { control: Control<MutateCommentSchema>; disabled?: boolean }) => {
+  const { field } = useController({ control, name: "comment" });
+  return <><textarea aria-label="Edit message" {...field} disabled={disabled} /><button type="submit" disabled={disabled}>Save message</button></>;
+};
 
 let postSpy: { mockRestore: () => void };
 let confirmSpy: { mockRestore: () => void };
@@ -46,6 +43,13 @@ let rowSpy: { mockRestore: () => void } | undefined;
 let parseSpy: { mockRestore: () => void } | undefined;
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.assign(vi.spyOn(client, "api" as never), api);
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { userId: "friend", role: "USER" } } as never);
+  spyOnToasts();
+  vi.spyOn(RichInput, "default").mockImplementation(EditorInput as never);
+  vi.spyOn(ModerationSummary, "ModerationSummary").mockImplementation(() => null);
+  vi.spyOn(Report, "default").mockImplementation(() => null);
+  vi.spyOn(EmojiPicker, "EmojiPicker").mockImplementation(() => null);
   postSpy = vi.spyOn(PostModule, "default").mockImplementation(({ children, options }) => <div>{options}{children}</div>);
   confirmSpy = vi.spyOn(Confirm, "default").mockImplementation(() => null);
 });
@@ -57,6 +61,7 @@ afterEach(() => {
   parseSpy?.mockRestore();
   rowSpy = undefined;
   parseSpy = undefined;
+  vi.restoreAllMocks();
 });
 
 const comment = {
