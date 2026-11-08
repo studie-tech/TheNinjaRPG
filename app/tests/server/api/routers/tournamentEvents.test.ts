@@ -581,8 +581,7 @@ describeWithDatabase("event tournament persistence", () => {
       rewards: ObjectiveReward.parse({}),
     });
     const accept = (userId: string, client = database) =>
-      tournamentRouter
-        .createCaller({ drizzle: client, userId } as never)
+      callerForDatabase(tournamentRouter, userId, client)
         .participateEvent({
           tournamentId: "launch",
           action: "ACCEPT",
