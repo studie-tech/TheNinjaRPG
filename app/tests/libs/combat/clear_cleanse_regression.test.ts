@@ -3,6 +3,14 @@ import { computeDamagePacket } from "@/libs/combat/damagePipeline";
 import { cleanse, clear } from "@/libs/combat/tags";
 import type { UserEffect } from "@/libs/combat/types";
 import {
+  isNegativeUserEffect,
+  isPositiveUserEffect,
+  questBuffTypes,
+  questDebuffTypes,
+  tagTypes,
+  type ZodAllTags,
+} from "@/validators/combat";
+import {
   gearMods,
   makeBattleUser,
   makeDamageEffect,
@@ -68,6 +76,30 @@ describe("Clear/Cleanse damage modifier regressions", () => {
 
     expect(damageUnder(effects)).toBeCloseTo(villageOnlyDamage, 10);
     expect(damageUnder(effects)).toBeGreaterThan(noStatusDamage);
+  });
+
+  it("cleanse removes stun and movement prevention, clear removes neither", () => {
+    const controls = () => [
+      makeEffect("stun", { rounds: 2 }, { id: "stun", targetId: "defender" }),
+      makeEffect("moveprevent", { rounds: 2 }, { id: "root", targetId: "defender" }),
+    ];
+    const cleared = controls();
+    applyBasicEffect("clear", cleared);
+    expect(cleared.map((effect) => effect.rounds)).toEqual([2, 2]);
+    const cleansed = controls();
+    applyBasicEffect("cleanse", cleansed);
+    expect(cleansed.map((effect) => effect.rounds)).toEqual([0, 0]);
+  });
+
+  it("classifies every effect at most once, matching the quest starting-effect lists", () => {
+    const tag = (type: string) => ({ type }) as ZodAllTags;
+    expect(
+      tagTypes.filter(
+        (t) => isPositiveUserEffect(tag(t)) && isNegativeUserEffect(tag(t)),
+      ),
+    ).toEqual([]);
+    expect(questBuffTypes.filter((t) => !isPositiveUserEffect(tag(t)))).toEqual([]);
+    expect(questDebuffTypes.filter((t) => !isNegativeUserEffect(tag(t)))).toEqual([]);
   });
 });
 
