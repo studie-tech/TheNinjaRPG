@@ -34,7 +34,7 @@ import {
   startDeclaredWar,
 } from "@/server/utils/war";
 import { insertClans, insertUsers } from "../../../setup/factories";
-import { beforeTransaction } from "../../../setup/statements";
+import { beforeStatements, beforeTransaction } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -447,6 +447,35 @@ describeWithDatabase("faction war declarations", () => {
     });
     expect((await readFaction())?.tokens).toBe(TOKENS - WAR_DECLARATION_COST);
   });
+
+  it("answers the losing one of two simultaneous declarations with a message", async () => {
+    await seedWorld("VILLAGE");
+    const database = await getTestDatabase();
+    await seedElderVote();
+    const declareOn = (client: typeof database) =>
+      callerForDatabase(warRouter, LEADER, client).declareVillageWarOrRaid({
+        userVillageId: FACTION,
+        targetVillageId: TARGET,
+        targetStructureRoute: "/townhall",
+      });
+    // The second request passes every read, then the first commits its vote before the
+    // second inserts its own.
+    let first: Awaited<ReturnType<typeof declareOn>> | undefined;
+    const racing = beforeStatements(database, villageElderVote, [
+      async () => {
+        first = await declareOn(database);
+      },
+    ]);
+    const second = await declareOn(racing);
+    expect(first?.success).toBe(true);
+    expect(second).toMatchObject({
+      success: false,
+      message: "Your village already has a pending war declaration vote",
+    });
+    expect(await database.select().from(villageElderVote)).toHaveLength(1);
+    expect(await database.select().from(notification)).toHaveLength(1);
+  });
+
   it("releases the approved vote back to pending when the war start throws", async () => {
     await seedWorld("VILLAGE");
     const database = await getTestDatabase();

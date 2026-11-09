@@ -1347,15 +1347,23 @@ export const warRouter = createTRPCRouter({
       // index rejects only a same-target duplicate.
       const voteId = nanoid();
       const endsAt = secondsFromNow(ELDER_WAR_VOTE_HOURS * 3600);
-      await insertVillageElderVoteForDeclareVillageWarOrRaid(
-        ctx.drizzle,
-        voteId,
-        { villageId: user.villageId, userId: user.userId },
-        input,
-        warType,
-        structure,
-        endsAt,
-      );
+      try {
+        await insertVillageElderVoteForDeclareVillageWarOrRaid(
+          ctx.drizzle,
+          voteId,
+          { villageId: user.villageId, userId: user.userId },
+          input,
+          warType,
+          structure,
+          endsAt,
+        );
+      } catch (error) {
+        if (isMysqlDuplicateKeyError(error))
+          return errorResponse(
+            "Your village already has a pending war declaration vote",
+          );
+        throw error;
+      }
       const content = `${user.username} has submitted a war declaration against ${defenderVillage.name}. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
       const allNotifyIds = [user.userId, ...eligibleElders.map((e) => e.userId)];
       await Promise.all([
