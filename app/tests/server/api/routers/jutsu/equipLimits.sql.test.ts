@@ -179,7 +179,7 @@ describeWithDatabase("configured equipment limits", () => {
         userId: "player",
         userJutsuId,
         maxEquip: 15,
-        flags: getJutsuCapFlags({ effects: [], jutsuType }),
+        flags: getJutsuCapFlags({ effects: [], jutsuType, actionCostPerc: 100 }),
         caps,
       });
     expect(await equip("festival", "EVENT")).toBe("equipped");

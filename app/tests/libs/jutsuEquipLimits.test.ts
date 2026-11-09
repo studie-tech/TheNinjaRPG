@@ -3,7 +3,7 @@ import type { Jutsu } from "@/drizzle/schema";
 import { buildJutsuEquipCaps, computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import { DamageTag, HealTag } from "@/validators/combat";
 import { jutsuEquipLimitSchema } from "@/validators/jutsuEquipLimit";
-import { makeJutsu } from "./combat/helpers/battleScenario";
+import { makeJutsu } from "../setup/combat";
 
 describe("configurable equipment limits", () => {
   it("limits only exact 40 AP costs, preserves order, and supports overrides", () => {
