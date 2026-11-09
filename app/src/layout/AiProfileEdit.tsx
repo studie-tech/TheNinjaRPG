@@ -258,8 +258,9 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
       }
     >
       {rules.map((rule, ruleIndex) => {
-        const isLastTwo = ruleIndex >= rules.length - backupRules.length;
-        const isLastThree = ruleIndex >= rules.length - backupRules.length - 1;
+        // With includeDefault, enforceExtraRules keeps the backup rules last and locked.
+        const isBackupRule = ruleIndex >= rules.length - backupRules.length;
+        const cannotMoveDown = ruleIndex >= rules.length - backupRules.length - 1;
         const ruleKey = rule.id ?? `rule-${ruleIndex}`;
         const group = rule.group;
         const beginsGroup = group && rules[ruleIndex - 1]?.group?.id !== group.id;
@@ -280,14 +281,14 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
               <Accordion
                 selectionKey={ruleKey}
                 collapsible
-                className={includeDefault && isLastTwo ? "opacity-50" : ""}
+                className={includeDefault && isBackupRule ? "opacity-50" : ""}
                 title={`Rule ${ruleIndex + 1}`}
                 titlePostfix={`: ${rule.conditions.map((c) => c.type).join(", ")} -> ${rule.action.type}`}
                 selectedTitle={activeElement}
                 onClick={setActiveElement}
                 options={
                   <span className="flex">
-                    {canEdit && (!includeDefault || !isLastTwo) && (
+                    {canEdit && (!includeDefault || !isBackupRule) && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -298,7 +299,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                         <SquareArrowUp className="h-6 w-6" />
                       </Button>
                     )}
-                    {canEdit && (!includeDefault || !isLastThree) && (
+                    {canEdit && (!includeDefault || !cannotMoveDown) && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -309,7 +310,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                         <SquareArrowDown className="h-6 w-6" />
                       </Button>
                     )}
-                    {canEdit && (!includeDefault || !isLastTwo) && (
+                    {canEdit && (!includeDefault || !isBackupRule) && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -327,7 +328,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                   </span>
                 }
               >
-                {canEdit && (!includeDefault || !isLastTwo) && (
+                {canEdit && (!includeDefault || !isBackupRule) && (
                   <div className="py-2">
                     <Label>Rule group</Label>
                     <Select
