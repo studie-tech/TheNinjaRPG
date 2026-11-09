@@ -25,6 +25,21 @@ export const getUserFederalStatus = (
   }
 };
 
+/**
+ * Why a monthly allowance use cost nothing. Staff come first; the federal tier is named only
+ * when the use falls beyond what an account without supporter status gets.
+ */
+export const freeAllowanceNote = (
+  allowance: Record<FederalStatus, number>,
+  federalStatus: FederalStatus,
+  used: number,
+  isStaff: boolean,
+) => {
+  if (isStaff) return "Free for staff member";
+  if (used >= allowance.NONE) return `Free for ${federalStatus} supporter`;
+  return "Free monthly allowance";
+};
+
 /** Jobs that may wait behind the active one in each timed queue. */
 export const getQueueWaitingSlots = (
   user: Pick<UserData, "staffAccount" | "federalStatus">,

@@ -10,6 +10,7 @@ import {
   COST_SKILL_RESET,
   IMG_AVATAR_DEFAULT,
   SKILL_RESET_STAFF_RELATED_MSG,
+  SKILL_TREE_RESET_FREE,
 } from "@/drizzle/constants";
 import { skillTree } from "@/drizzle/schema";
 import { isSkillVisible } from "@/libs/skillRequirements";
@@ -67,7 +68,7 @@ import {
 } from "@/server/api/trpc";
 import { offsetPage } from "@/server/utils/pagination";
 import { calculateContentDiff } from "@/utils/diff";
-import { getUserFederalStatus } from "@/utils/paypal";
+import { freeAllowanceNote, getUserFederalStatus } from "@/utils/paypal";
 import {
   canAccessHiddenSkillTree,
   canChangeContent,
@@ -548,8 +549,15 @@ export const skillTreeRouter = createTRPCRouter({
       const {
         isFree: isFreeReset,
         isStaff: isStaffFreeReset,
+        used: freeResetsUsed,
         next: monthlySkillResets,
       } = getResetAllowance(user);
+      const freeNote = freeAllowanceNote(
+        SKILL_TREE_RESET_FREE,
+        federalStatus,
+        freeResetsUsed,
+        isStaffFreeReset,
+      );
 
       // Guard: if not free, ensure user can afford
       if (!isFreeReset && user.reputationPoints < COST_SKILL_RESET) {
@@ -585,7 +593,7 @@ export const skillTreeRouter = createTRPCRouter({
             }
           : {
               changes: [`Skill tree reset (free ${federalStatus} - monthly)`],
-              relatedMsg: `Free monthly reset for ${federalStatus} supporter`,
+              relatedMsg: freeNote,
               relatedValue: 0,
             };
 
@@ -609,7 +617,7 @@ export const skillTreeRouter = createTRPCRouter({
           user,
         }),
 
-        message: `Skills points reset!${isFreeReset ? (isStaffFreeReset ? " (Free for staff member)" : ` (Free for ${federalStatus} supporter)`) : ""}`,
+        message: `Skill points reset!${isFreeReset ? ` (${freeNote})` : ""}`,
       };
     }),
 

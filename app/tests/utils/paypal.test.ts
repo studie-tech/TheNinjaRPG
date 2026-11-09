@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { dollars2reps, fedRepsUnavailableNote, reps2dollars } from "@/utils/paypal";
+import { BLOODLINE_SWAP_FREE, SKILL_TREE_RESET_FREE } from "@/drizzle/constants";
+import {
+  dollars2reps,
+  fedRepsUnavailableNote,
+  freeAllowanceNote,
+  reps2dollars,
+} from "@/utils/paypal";
 
 describe("reps2dollars / dollars2reps round-trip", () => {
   it("reps2dollars and dollars2reps functions", () => {
@@ -40,6 +46,29 @@ describe("fedRepsUnavailableNote", () => {
   it("says a recipient's higher tier can only be reached by the recipient", () => {
     expect(fedRepsUnavailableNote("NORMAL", "GOLD", false)).toContain(
       "Only they can upgrade it.",
+    );
+  });
+});
+
+describe("freeAllowanceNote", () => {
+  it("names staff before any tier", () => {
+    expect(freeAllowanceNote(SKILL_TREE_RESET_FREE, "GOLD", 5, true)).toBe(
+      "Free for staff member",
+    );
+  });
+
+  it("names the tier only beyond the allowance every account gets", () => {
+    expect(freeAllowanceNote(SKILL_TREE_RESET_FREE, "NONE", 0, false)).toBe(
+      "Free monthly allowance",
+    );
+    expect(freeAllowanceNote(SKILL_TREE_RESET_FREE, "GOLD", 0, false)).toBe(
+      "Free monthly allowance",
+    );
+    expect(freeAllowanceNote(SKILL_TREE_RESET_FREE, "GOLD", 1, false)).toBe(
+      "Free for GOLD supporter",
+    );
+    expect(freeAllowanceNote(BLOODLINE_SWAP_FREE, "GOLD", 0, false)).toBe(
+      "Free for GOLD supporter",
     );
   });
 });
