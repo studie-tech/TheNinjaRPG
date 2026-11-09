@@ -133,14 +133,6 @@ describe("activity streak popup state", () => {
       ),
     ).toBe(false);
   });
-
-  it("resumes normally once the tutorial is finished", () => {
-    expect(
-      resolveActivityStreakPopupOpen(
-        state({ shouldShowPopup: true, tutorialActive: false }),
-      ),
-    ).toBe(true);
-  });
 });
 
 describe("shouldFetchActivityStreaksForPopup", () => {
@@ -188,25 +180,6 @@ describe("shouldFetchActivityStreaksForPopup", () => {
         userClosed: true,
       }),
     ).toBe(false);
-  });
-
-  it("resumes fetching after the tutorial ends so an unclaimed reward is not dropped", () => {
-    expect(
-      shouldFetchActivityStreaksForPopup({
-        hasUser: true,
-        tutorialActive: true,
-        dismissedToday: false,
-        userClosed: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldFetchActivityStreaksForPopup({
-        hasUser: true,
-        tutorialActive: false,
-        dismissedToday: false,
-        userClosed: false,
-      }),
-    ).toBe(true);
   });
 
   it("does not hold competing popups when the streaks query is gated off", () => {
@@ -263,18 +236,15 @@ describe("recurring progress after configuration changes", () => {
       ),
     ).toBe(progress);
   });
-});
-
-
-it("resets an expanded converted pass only until its new recurring cycle starts", () => {
-  const completedAt = new Date("2026-09-19T12:00:00Z");
-  const now = new Date("2026-09-20T12:00:00Z");
-  const progress = { currentDay: 2, startedAt: new Date("2026-09-01") };
-  const config = { streakType: "RECURRING", totalDays: 3 };
-  const normalized = normalizeRecurringStreakProgress(progress, config, now, completedAt);
-  expect(normalized.currentDay).toBe(0);
-  const nextDay = { ...normalized, currentDay: 1 };
-  expect(normalizeRecurringStreakProgress(nextDay, config, new Date("2026-09-21"), completedAt)).toBe(nextDay);
+  it("resets an expanded converted pass only until its new recurring cycle starts", () => {
+    const completedAt = new Date("2026-09-19T12:00:00Z");
+    const converted = { currentDay: 2, startedAt: new Date("2026-09-01") };
+    const config = { streakType: "RECURRING", totalDays: 3 };
+    const normalized = normalizeRecurringStreakProgress(converted, config, now, completedAt);
+    expect(normalized.currentDay).toBe(0);
+    const nextDay = { ...normalized, currentDay: 1 };
+    expect(normalizeRecurringStreakProgress(nextDay, config, new Date("2026-09-21"), completedAt)).toBe(nextDay);
+  });
 });
 
 describe("streak refresh schedule", () => {

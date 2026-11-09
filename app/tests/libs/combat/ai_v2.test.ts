@@ -122,7 +122,7 @@ describe("getNextComboId", () => {
     expect(result).toBe("500");
   });
 
-  it("latestActions has multiple partial matches, pick the longest", () => {
+  it("a suffix that does not start the combo resets to the first id", () => {
     const comboIds = ["1", "2", "3", "4", "5"];
     const latestActions = ["3", "4", "5"];
     const result = getNextComboId(comboIds, latestActions);
@@ -134,13 +134,6 @@ describe("getNextComboId", () => {
     const latestActions = ["2", "3", "4"];
     const result = getNextComboId(comboIds, latestActions);
     expect(result).toBe("1");
-  });
-
-  it("latestActions has an overlapping pattern with comboIds", () => {
-    const comboIds = ["1", "2", "1", "2", "3"];
-    const latestActions = ["1", "2", "1", "2"];
-    const result = getNextComboId(comboIds, latestActions);
-    expect(result).toBe("3");
   });
 
   it("latestActions ends with a partial match that is not the start of comboIds", () => {

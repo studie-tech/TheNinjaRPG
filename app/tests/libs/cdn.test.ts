@@ -40,7 +40,6 @@ describe("contentSecurityPolicy", () => {
     expect(csp).not.toContain("tnrprod");
     expect(directive(csp, "font-src")).toBe("font-src 'self'");
     expect(directive(csp, "script-src")).toContain("'self'");
-    expect(directive(csp, "font-src")).toBe("font-src 'self'");
   });
 
   it("leaves the fallback alone, which is what covers the types it does not name", () => {
