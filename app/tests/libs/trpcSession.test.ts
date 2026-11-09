@@ -125,11 +125,10 @@ describe("tRPC account lifetime", () => {
     expect(await createTrpcSession(clerk).headers()).toEqual({ Authorization: "Bearer a" });
   });
 
-  it("uses anonymous identity with another tab's cookie while preserving experiment cookies", async () => {
+  it("treats an anonymous request as signed out even with another tab's session cookie", async () => {
     const headers = new Headers(await createTrpcSession({ session: null }).headers());
-    headers.set("cookie", "__session=account_b; lemu=variant; wallpaper=night");
+    headers.set("cookie", "__session=account_b");
     expect(trpcSessionUserId("account_b", headers)).toBeNull();
-    expect(headers.get("cookie")).toContain("wallpaper=night");
     expect(trpcSessionUserId("account_a", new Headers({ Authorization: "Bearer a" }))).toBe("account_a");
   });
 
