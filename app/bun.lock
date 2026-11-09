@@ -101,8 +101,11 @@
       },
       "devDependencies": {
         "@babel/parser": "7.29.0",
+        "@babel/types": "7.29.8",
         "@biomejs/biome": "^2.6.2",
         "@radix-ui/react-use-size": "1.1.5",
+        "@sentry/browser": "11.8.0",
+        "@sentry/core": "11.8.0",
         "@tailwindcss/postcss": "^4.3.3",
         "@testing-library/dom": "^10.4.2",
         "@testing-library/react": "^16.3.3",
