@@ -685,7 +685,7 @@ it("refreshes furniture storage after a downgrade stores a carried piece from a 
               observer.complete();
               return;
             }
-            let data;
+            let data: unknown;
             if (op.path === "home.getUserHome") data = { ...home };
             else if (op.path === "item.getUserItems") {
               itemQueries++;
@@ -1096,7 +1096,7 @@ it("preserves a draft across a tier refresh and requires recovery before saving"
               observer.complete();
               return;
             }
-            let data;
+            let data: unknown;
             if (op.path === "home.getUserHome") data = home;
             else if (op.path === "item.getUserItems") data = ownedItems;
             else if (op.path === "home.getAvailableUpgrades") data = [];

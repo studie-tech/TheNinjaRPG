@@ -1587,7 +1587,7 @@ describeWithDatabase("sanction tombstones", () => {
       async (decision) => {
         const database = await getTestDatabase();
         const { deleting, release } = await pauseWebDeletion();
-        let revised;
+        let revised: Awaited<ReturnType<typeof database.query.userReport.findFirst>>;
         try {
           expect(
             await (await callerFor(reportsRouter, "staff"))[decision](input),
