@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { actionLog, item, resourceSilo, rewardPackage, userData, userItem, userRewards, userVote } from "@/drizzle/schema";
 import { resourceSiloProgressUpdate, resolveWarTornRespawn } from "@/queries/resourceSilos";
+import * as profileQueries from "@/queries/profile";
 import { resourceSilosRouter } from "@/server/api/routers/resourceSilos";
 import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
 import type { DrizzleClient } from "@/server/db";
@@ -38,6 +39,27 @@ describeWithDatabase("resource silo claims and recovery", () => {
     expect((await row())!.money).toBe(50123);
     expect((await row())!.resourceSiloProgress?.claimed).toBe(true);
     expect((await caller.claim()).success).toBe(false);
+  });
+  it.each(["claim", "respawn"] as const)("settles %s without fetching display-only notifications", async operation => {
+    const polls = vi.spyOn(profileQueries, "fetchHasUnvotedPolls");
+    const lobbies = vi.spyOn(profileQueries, "fetchActiveShrineLobbies");
+    const raids = vi.spyOn(profileQueries, "fetchActiveRaids");
+    const caller = await api();
+    if (operation === "respawn") {
+      const db = await getTestDatabase();
+      await db.update(userData).set({ status: "HOSPITALIZED", warTornRespawn: true, curHealth: 0 }).where(eq(userData.userId, userId));
+      expect((await caller.respawn({ destination: "village" })).success).toBe(true);
+      expect((await row())!.warTornRespawn).toBe(false);
+      expect((await row())!.status).toBe("HOSPITALIZED");
+      expect((await row())!.money).toBe(50000);
+    } else {
+      expect((await caller.claim()).success).toBe(true);
+      expect((await row())!.resourceSiloProgress?.claimed).toBe(true);
+      expect((await row())!.money).toBe(50123);
+    }
+    expect(polls).not.toHaveBeenCalled();
+    expect(lobbies).not.toHaveBeenCalled();
+    expect(raids).not.toHaveBeenCalled();
   });
   it("retries a rolled-back delivery without compounding PvP bonuses", async () => {
     const db = await getTestDatabase();

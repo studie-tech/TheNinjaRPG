@@ -158,7 +158,12 @@ export const resourceSilosRouter = createTRPCRouter({
     }),
   claim: protectedProcedure.mutation(async ({ ctx }) => {
     const [snapshot, config] = await Promise.all([
-      fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId, forceRegen: true }),
+      fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+        includeNotifications: false,
+      }),
       findResourceSilo(ctx.drizzle),
     ]);
     if (!snapshot.user) return errorResponse("User not found");
@@ -238,7 +243,12 @@ export const resourceSilosRouter = createTRPCRouter({
     .input(z.object({ destination: z.enum(["shrine", "village"]) }))
     .mutation(async ({ ctx, input }) => {
       const [snapshot, map] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId, forceRegen: true }),
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          forceRegen: true,
+          includeNotifications: false,
+        }),
         input.destination === "shrine"
           ? fetchPublishedSectorMap(
               ctx.drizzle,
