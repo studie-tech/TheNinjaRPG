@@ -43,11 +43,10 @@ import {
 import {
   type HexTerrainData,
   hexTerrainAt,
-  terrainFrost,
+  sectorFieldCell,
 } from "@/libs/rendering/terrainData";
 import {
   createTerrainField,
-  isFlatZone,
   liftSpritesToTerrain,
   objectFootprints,
   sectorRelief,
@@ -481,20 +480,14 @@ export const createTravelScene = async (options: {
             const grid = prepared.get(entry.sector)?.grid;
             const footprints = grid
               ? objectFootprints(grid, entry.map.objects)
-              : new Set();
+              : new Set<TerrainHex>();
             for (const tile of grid ?? []) {
               const unified = nav.toUnified(entry.dx, entry.dy, tile.col, tile.row);
               if (unified)
-                cells.set(unified, {
-                  isWater: !!tile.spec?.isWater,
-                  frost: terrainFrost(tile.spec?.key ?? ""),
-                  flat:
-                    settled ||
-                    !!tile.hasStructure ||
-                    isFlatZone(tile.zone) ||
-                    footprints.has(tile),
-                  relief: relief(tile.col, tile.row),
-                });
+                cells.set(
+                  unified,
+                  sectorFieldCell(tile, { settled, footprints, relief }),
+                );
             }
           }
         const field = nav ? createTerrainField(nav.pathFinder.grid, cells) : null;

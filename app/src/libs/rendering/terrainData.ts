@@ -9,12 +9,14 @@ import {
 import {
   applyTerrainField,
   createTerrainField,
+  isFlatZone,
   LAND_STEP,
   MAX_SEABED_DEPTH,
   SEABED_STEP,
+  type TerrainCell,
   type TerrainField,
 } from "@/libs/rendering/terrainElevation";
-import { STOCK_OCEAN_DEPRESSION } from "@/libs/rendering/worldArt";
+import { hasWorldWaterDepth, STOCK_OCEAN_DEPRESSION } from "@/libs/rendering/worldArt";
 import { parseHexColor } from "@/utils/color";
 
 /**
@@ -763,6 +765,32 @@ const appendLilyPads = (
 };
 
 const snap = (value: number) => Math.round(value / 0.75) * 0.75;
+
+/**
+ * A sector tile as the terrain field sees it. Only the stock ocean has a seabed; any other
+ * water is drawn as a flat surface, so the field holds it level instead of sinking it.
+ */
+export const sectorFieldCell = (
+  tile: TerrainHex,
+  options: {
+    settled: boolean;
+    footprints: ReadonlySet<TerrainHex>;
+    relief: (col: number, row: number) => number;
+  },
+): TerrainCell => {
+  const seabed = hasWorldWaterDepth(tile.spec);
+  return {
+    isWater: seabed,
+    frost: terrainFrost(tile.spec?.key ?? ""),
+    flat:
+      options.settled ||
+      !!tile.hasStructure ||
+      isFlatZone(tile.zone) ||
+      options.footprints.has(tile) ||
+      (!seabed && !!tile.spec?.isWater),
+    relief: options.relief(tile.col, tile.row),
+  };
+};
 
 /** Frost class of a stock terrain key; snow and ice coasts freeze their stock water. */
 export const terrainFrost = (key: string): TerrainLook["frost"] =>

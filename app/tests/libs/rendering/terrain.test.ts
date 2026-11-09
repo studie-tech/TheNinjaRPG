@@ -6,13 +6,13 @@ import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
 import { resolveWorldTerrain } from "@/libs/rendering/worldArt";
-import { hexTerrainAt, KIND, LAND_SEGMENT } from "@/libs/rendering/terrainData";
+import { hexTerrainAt, KIND, LAND_SEGMENT, sectorFieldCell } from "@/libs/rendering/terrainData";
 import { textureRanges } from "@/libs/rendering/primitives/terrain";
 import { createTerrainField, LAND_STEP, liftSpritesToTerrain, MAX_SEABED_DEPTH, standingOffset, WATER_FIELD_REACH } from "@/libs/rendering/terrainElevation";
 import { linearRenderColor } from "@/libs/rendering/color";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
-import { PathCalculator } from "@/libs/hexgrid";
+import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { buildWindowNav } from "@/libs/sector-map/navigation";
 import { getNeighborCoordinates, isReachableCoordinate, isWalkableCoordinate } from "@/libs/sector-map/validation";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
@@ -375,6 +375,28 @@ describe("shared hex terrain data", () => {
 
 
 describe("coastal water depth", () => {
+  it("sinks a seabed only under the stock ocean, whatever form its stored texture URL takes", () => {
+    const seabedUnder = (textureUrl: string) => {
+      const map = mapOf(8, 4);
+      map.tiles = map.tiles.map((tile) => ({ ...tile, terrain: tile.x < 2 ? "ground" : "ocean", battleBiome: tile.x < 2 ? "ground" : "ocean" }));
+      const registry = mergeTerrainSpecs([]);
+      registry.set("ocean", { ...registry.get("ocean")!, textureUrl });
+      const random = alea(map.sector + 1);
+      const { grid } = prepareSectorGrid(1024, random, 1, [], map, registry, null);
+      const footprints = new Set<TerrainHex>();
+      const field = createTerrainField(grid, new Map(grid.toArray().map((tile) => [tile, sectorFieldCell(tile, { settled: false, footprints, relief: () => 0 })])));
+      const data = buildSectorTerrainData(grid, random, false, { field });
+      return { grid, seabed: vertices(data).some((vertex) => vertex.kind === KIND.seabed), field };
+    };
+    const stock = mergeTerrainSpecs([]).get("ocean")!.textureUrl!;
+    expect(seabedUnder(stock.replace(/\.webp$/, "")).seabed).toBe(true);
+    const custom = seabedUnder(stock.replace("/f/", "/f/custom-"));
+    // Custom water is drawn flat, so the field holds it level instead of cutting seabed walls.
+    expect(custom.seabed).toBe(false);
+    for (const tile of custom.grid) expect(custom.field.level(tile)).toBe(0);
+  });
+
+
   const coast = (sector: number, hasLand: boolean) => {
     const map = mapOf(8, 6);
     map.sector = sector;

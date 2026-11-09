@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import sharp from "sharp";
-import { GROUND_DETAIL_ART, resolveWorldDecoration, resolveWorldTerrain } from "@/libs/rendering/worldArt";
+import { GROUND_DETAIL_ART, hasWorldWaterDepth, resolveWorldDecoration, resolveWorldTerrain } from "@/libs/rendering/worldArt";
 import { WORLD_STRUCTURE_ART, resolveWorldStructure } from "@/libs/rendering/worldStructures";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import { transformImageUrl } from "@/utils/image";
@@ -89,6 +89,16 @@ describe("world art skinning", () => {
       const custom = { ...stock, filepath: "custom-ground.webp" };
       expect(resolveWorldDecoration(custom, "snow")).toBe(custom);
     }
+  });
+
+  it("gives the stock ocean its depth material from any stored form of its texture URL", () => {
+    const ocean = BUILTIN_TERRAINS_BY_KEY.get("ocean")!;
+    const raw = ocean.textureUrl!.replace(/\.webp$/, "");
+    for (const textureUrl of [ocean.textureUrl, raw, `${raw}?width=256`, raw.replace("uploadthing.b-cdn.net", "utfs.io")])
+      expect(hasWorldWaterDepth({ ...ocean, textureUrl })).toBe(true);
+    expect(hasWorldWaterDepth({ ...ocean, textureUrl: raw.replace("/f/", "/f/custom-") })).toBe(false);
+    expect(hasWorldWaterDepth({ ...ocean, textureUrl: null })).toBe(false);
+    expect(hasWorldWaterDepth({ ...ocean, colors: ["#123456", "#345678", "#567890"] })).toBe(false);
   });
 
   it("preserves custom terrain material and movement contracts", () => {
