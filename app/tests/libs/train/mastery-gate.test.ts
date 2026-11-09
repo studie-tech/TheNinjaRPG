@@ -14,9 +14,6 @@ import { jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import type { UserWithRelations } from "@/routers/profile";
 import type { ZodAllTags } from "@/validators/combat";
 
-// Goes through jutsuRequirementWarning, not canUseJutsu: tests/libs/jutsu.test.ts stubs
-// canUseJutsu for the whole bun run.
-
 const jutsu = {
   id: "gated",
   jutsuType: "NORMAL",
