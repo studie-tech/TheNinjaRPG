@@ -4,11 +4,11 @@ import { canPostAsAi } from "@/utils/permissions";
 /**
  * Resolve the effective sender for posting content.
  * - If no sender is provided or sender equals current user, use current user
- * - If a different sender is provided, only allow when:
- *   - current user has permission (canSubmitNotification)
+ * - If a different sender is provided, use it only when:
+ *   - the current user may post as AI (canPostAsAi)
  *   - and the sender is an AI account
  *
- * @returns the resolved userId to post as, or null if not allowed
+ * @returns the resolved userId to post as; the current user's id when the sender is not allowed
  */
 export function resolveSenderId(
   user: { userId: string; role: UserRole },
