@@ -57,6 +57,18 @@ export const createTerrainField = (
   grid: Grid<TerrainHex>,
   cells: ReadonlyMap<TerrainHex, TerrainCell>,
 ): TerrainField => {
+  // Every flood and the smoothing pass walk the same neighbours, so each ring is found once.
+  const rings = new Map<TerrainHex, TerrainHex[]>();
+  const around = (tile: TerrainHex) => {
+    let neighbours = rings.get(tile);
+    if (!neighbours) {
+      neighbours = [...grid.traverse(ring({ center: tile, radius: 1 }))].filter(
+        (neighbour) => cells.has(neighbour),
+      );
+      rings.set(tile, neighbours);
+    }
+    return neighbours;
+  };
   const flood = (seeds: TerrainHex[], reach: number) => {
     const distances = new Map(seeds.map((tile) => [tile, 0]));
     const queue = [...seeds];
@@ -64,8 +76,8 @@ export const createTerrainField = (
       const tile = queue[index];
       const distance = tile && distances.get(tile);
       if (!tile || distance === undefined || distance >= reach) continue;
-      for (const neighbor of grid.traverse(ring({ center: tile, radius: 1 })))
-        if (!distances.has(neighbor) && cells.has(neighbor)) {
+      for (const neighbor of around(tile))
+        if (!distances.has(neighbor)) {
           distances.set(neighbor, distance + 1);
           queue.push(neighbor);
         }
@@ -91,8 +103,8 @@ export const createTerrainField = (
     const tile = queue[index];
     const value = tile && offshore.get(tile);
     if (!tile || !value || value.distance >= WATER_FIELD_REACH) continue;
-    for (const neighbor of grid.traverse(ring({ center: tile, radius: 1 })))
-      if (!offshore.has(neighbor) && cells.has(neighbor)) {
+    for (const neighbor of around(tile))
+      if (!offshore.has(neighbor)) {
         offshore.set(neighbor, { distance: value.distance + 1, frozen: value.frozen });
         queue.push(neighbor);
       }
@@ -123,17 +135,17 @@ export const createTerrainField = (
   const smoothed = new Map(levels);
   for (const [tile, level] of levels) {
     if (cells.get(tile)?.isWater) continue;
-    const around = [...grid.traverse(ring({ center: tile, radius: 1 }))]
-      .filter((neighbor) => cells.has(neighbor) && !cells.get(neighbor)?.isWater)
+    const landAround = around(tile)
+      .filter((neighbor) => !cells.get(neighbor)?.isWater)
       .map((neighbor) => levels.get(neighbor) ?? 0);
-    if (around.length < 3) continue;
-    const highest = Math.max(...around),
-      lowest = Math.min(...around);
+    if (landAround.length < 3) continue;
+    const highest = Math.max(...landAround),
+      lowest = Math.min(...landAround);
     if (level > highest) smoothed.set(tile, highest);
     else if (level < lowest) smoothed.set(tile, Math.min(lowest, caps.get(tile) ?? 0));
   }
   for (const [tile, level] of smoothed) levels.set(tile, level);
-  const vertices = new Map<string, { depth: number; frozen: number; count: number }>();
+  const vertices = new Map<number, { depth: number; frozen: number; count: number }>();
   for (const tile of cells.keys()) {
     const value = offshore.get(tile);
     const depth = Math.min(SHORE_REACH, value?.distance ?? SHORE_REACH);
@@ -267,5 +279,6 @@ export const isFlatZone = (zone: string | undefined) =>
   zone === "structure" ||
   zone === "shrine";
 
+/** Shared hex corners as one number, at 1/64-unit precision; the grids span well under 8,000 units. */
 const vertexKey = (point: { x: number; y: number }) =>
-  `${point.x.toFixed(4)},${point.y.toFixed(4)}`;
+  Math.round(point.x * 64) * 1048576 + Math.round(point.y * 64);

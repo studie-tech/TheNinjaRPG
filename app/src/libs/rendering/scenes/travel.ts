@@ -50,7 +50,6 @@ import {
   standingOffset,
   type TerrainCell,
   type TerrainField,
-  WATER_FIELD_REACH,
 } from "@/libs/rendering/terrainElevation";
 import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
@@ -444,13 +443,14 @@ export const createTravelScene = async (options: {
         let { grid, villageWallPlan, prng } = preparedSector;
         const unifiedOrigin = nav?.toUnified(entry.dx, entry.dy, 0, 0),
           localOrigin = grid.getHex({ col: 0, row: 0 });
-        // Only nearby cells shape a retained sector's terraces; distant window changes keep its artwork cached.
+        // A retained sector keeps its artwork while its own terrain results are unchanged.
         const shoreKey =
           shoreline.keys.get(entry.sector) ??
           (field && nav && unifiedOrigin
-            ? terrainNeighbourhoodKey(
+            ? terrainResultKey(
                 nav.pathFinder.grid,
                 cells,
+                field,
                 unifiedOrigin,
                 entry.map,
               )
@@ -1175,32 +1175,39 @@ const cachedSectorData = new Map<
 >();
 
 /**
- * Water, frost and flat cells within the field's reach of a sector, relative to its
- * origin. Terraces, seabeds and ice depend only on these and the sector's own relief.
+ * What the terrain field gives one sector: its tiles' terraces, its water's ice and shore
+ * samples, and the terraces just across its borders that its edge walls drop to. Window
+ * changes that leave these alone keep the sector's terrain and artwork.
  */
-const terrainNeighbourhoodKey = (
+const terrainResultKey = (
   grid: Grid<TerrainHex>,
   cells: ReadonlyMap<TerrainHex, TerrainCell>,
+  field: TerrainField,
   origin: TerrainHex,
   map: Pick<NormalizedSectorMap, "width" | "height">,
 ) => {
-  const reach = WATER_FIELD_REACH;
   let key = "";
-  for (let row = origin.row - reach; row < origin.row + map.height + reach; row++) {
-    for (let col = origin.col - reach; col < origin.col + map.width + reach; col++) {
+  for (let row = origin.row - 1; row <= origin.row + map.height; row++) {
+    for (let col = origin.col - 1; col <= origin.col + map.width; col++) {
       const tile = grid.getHex({ col, row });
       const cell = tile && cells.get(tile);
-      key += !cell
-        ? " "
-        : cell.isWater
-          ? "w"
-          : cell.flat
-            ? cell.frost
-              ? "+"
-              : "_"
-            : cell.frost
-              ? "*"
-              : ".";
+      if (!tile || !cell) {
+        key += " ";
+        continue;
+      }
+      key += String.fromCharCode(76 + field.level(tile));
+      const inside =
+        col >= origin.col &&
+        col < origin.col + map.width &&
+        row >= origin.row &&
+        row < origin.row + map.height;
+      if (inside && cell.isWater)
+        for (const corner of tile.corners) {
+          const sample = field.sample(corner);
+          key += String.fromCharCode(
+            97 + Math.round(sample.depth * 8) * 3 + Math.round(sample.frozen * 2),
+          );
+        }
     }
     key += "/";
   }
