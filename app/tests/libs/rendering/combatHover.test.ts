@@ -51,7 +51,7 @@ describe("getHighlightTilesCacheKey", () => {
 
   it("treats a missing action id as empty", () => {
     expect(getHighlightTilesCacheKey({ ...base, actionId: undefined })).toEqual(
-      getHighlightTilesCacheKey({ ...base, actionId: undefined }),
+      getHighlightTilesCacheKey({ ...base, actionId: "" }),
     );
     expect(getHighlightTilesCacheKey({ ...base, actionId: undefined })).not.toEqual(
       getHighlightTilesCacheKey(base),
