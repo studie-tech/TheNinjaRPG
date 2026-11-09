@@ -648,16 +648,7 @@ export type SupportTicketWithRelations = Awaited<
   ReturnType<typeof getSupportTicketWithRelations>
 >;
 
-/**
- * Get support tickets with relations.
- * @param client - The database client
- * @param skip - The number of tickets to skip
- * @param limit - The maximum number of tickets to return
- * @param filters - The filters to apply to the tickets
- * @param isStaff - Whether the user is staff
- * @param userId - The ID of the user
- * @returns The tickets with relations
- */
+/** Page through support tickets matching the filters; non-staff viewers only see their own or public tickets. */
 export const getSupportTicketsWithRelations = async (info: {
   client: DrizzleClient;
   skip: number;

@@ -45,7 +45,6 @@ import {
   invalidatePublishedMapCache,
 } from "@/server/utils/sectorMap";
 import { canChangeContent } from "@/utils/permissions";
-// Reuse the centralized sector-id bounds instead of redefining them here
 import { sectorIdSchema as sectorSchema } from "@/validators/travel";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -68,10 +67,8 @@ export const worldMapRouter = createTRPCRouter({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      // Filter in SQL (uses the SectorMap_sector_status_idx index) instead of
-      // scanning the whole ever-growing table and filtering in JS. Conditions
-      // derive only from input, so the listing can run parallel with the auth
-      // guard (metadata-only columns, so no heavy blobs leak before the check).
+      // Conditions come only from input, so the metadata-only listing runs in
+      // parallel with the auth guard.
       const conditions = [
         input?.sector !== undefined ? eq(sectorMap.sector, input.sector) : undefined,
         input?.status ? eq(sectorMap.status, input.status) : undefined,
@@ -437,8 +434,8 @@ export const worldMapRouter = createTRPCRouter({
       if (!structure?.village) return errorResponse("Structure not found");
 
       // Guards: the target tile must be inside the sector's published map bounds
-      // and not already occupied by another structure (the map read genuinely
-      // depends on the structure's sector, so it stays sequential here)
+      // and not already occupied by another structure (the map read depends on
+      // the structure's sector)
       const maps = await fetchPublishedSectorMaps(ctx.drizzle, [
         structure.village.sector,
       ]);

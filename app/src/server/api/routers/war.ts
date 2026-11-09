@@ -1336,7 +1336,9 @@ export const warRouter = createTRPCRouter({
           `At least ${ELDER_MIN_VOTING_COUNT} elders must be in position before war can be declared`,
         );
 
-      // Insert vote — existingPending guard above prevents concurrent dupes
+      // Insert vote. existingPending is a plain read, so concurrent declarations by the
+      // same Kage against different targets can both insert; the active-pending unique
+      // index rejects only a same-target duplicate.
       const voteId = nanoid();
       const endsAt = secondsFromNow(ELDER_WAR_VOTE_HOURS * 3600);
       await insertVillageElderVoteForDeclareVillageWarOrRaid(

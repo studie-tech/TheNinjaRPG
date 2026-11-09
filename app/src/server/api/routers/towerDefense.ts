@@ -180,7 +180,7 @@ export const towerDefenseRouter = createTRPCRouter({
    *
    * Security flow:
    * 1. Server fetches user's upgrades AND upgrade definitions from MySQL
-   * 2. Server calculates stats using the same formulas as before, but server-side
+   * 2. Server calculates the starting stats from those upgrades
    * 3. Server signs (userId, nonce, stats, upgrade_definitions) with HMAC
    * 4. Client passes signed params + definitions to SpacetimeDB
    * 5. SpacetimeDB stores everything for use during the game

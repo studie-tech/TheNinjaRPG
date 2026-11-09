@@ -685,8 +685,8 @@ export const travelRouter = createTRPCRouter({
         user.status = "TRAVEL";
         user.travelFinishAt = endTime;
         // Only broadcast if user is NOT stealthed. The sector being left is told
-        // too, the same way a sector crossing already does it, so the departing
-        // player stops being drawn there instead of lingering until the next poll.
+        // too, so the departing player stops being drawn there instead of lingering
+        // until the next poll.
         if (!isUserCurrentlyStealthed(user)) {
           after(() => updateUserOnMap(pusher, input.sector, user));
           if (departureSector !== input.sector) {
@@ -1337,7 +1337,7 @@ export const completeExpiredGlobalTravel = async (client: DrizzleClient) => {
         maxEnergy: calcMaxEnergy(user),
       }),
     ),
-    // Empty queues keep the existing lazy passive recovery behavior.
+    // Users without an energy queue recover lazily on their next regeneration read.
     retryOnDeadlock(() =>
       updateUserDataForCompleteExpiredGlobalTravel(client, expiredTravel, hasQueue),
     ),
