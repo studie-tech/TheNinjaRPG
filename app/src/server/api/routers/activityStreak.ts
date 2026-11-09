@@ -195,8 +195,7 @@ export const activityStreakRouter = createTRPCRouter({
       mcp: { description: "Get available event passes for purchase" },
     })
     .query(async ({ ctx }) => {
-      // Historical completion logs cover passes completed before progress rows
-      // became permanent purchase records.
+      // Completion audit entries also prove ownership when no progress row exists.
       const [eventPasses, userProgress, completionLogs] = await Promise.all([
         listActivityStreakConfigForGetAvailablePasses(ctx.drizzle),
         listUserStreakProgressForGetAvailablePasses(ctx.drizzle, ctx),
