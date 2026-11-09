@@ -78,6 +78,16 @@ describe("wander spots", () => {
     expect(wanderSpots(map(), anchor, 0, true)).toEqual([anchor]);
   });
 
+  it("keeps to land, even where authored water is zoned as wilderness", () => {
+    const shore = map();
+    for (const tile of shore.tiles) if (tile.x >= 14) tile.terrain = "ocean";
+    const spots = wanderSpots(shore, { x: 12, y: 3 }, 4, false);
+    expect(spots.length).toBeGreaterThan(1);
+    expect(spots.every((spot) => spot.x < 14)).toBe(true);
+    // An anchor out at sea snaps to the nearest shore column.
+    expect(snapToWanderTile(shore, { x: 18, y: 3 }, false)?.x).toBe(13);
+  });
+
   it("keeps clear of the stairs and plaza of the sector shrine", () => {
     const withShrine = { ...map(), anchors: [{ key: "shrine.default", x: 6, y: 3 }], objects: [] };
     const spots = wanderSpots(withShrine, { x: 6, y: 8 }, 5, true);
@@ -174,6 +184,13 @@ describe("placement copies", () => {
     // A hand-placed, non-wild copy 0 keeps its doorstep tile exactly.
     const keeper = placementCopiesInSector(placement({ wildOnly: false, longitude: 1, latitude: 2, spawnCount: 1 }), 301, map());
     expect(keeper.map((copy) => copy.anchor)).toEqual([{ x: 1, y: 2 }]);
+  });
+
+  it("keeps the stored copy on its tile when the sector has no land, dropping only extra copies", () => {
+    const ocean = map();
+    for (const tile of ocean.tiles) tile.terrain = "ocean";
+    const copies = placementCopiesInSector(placement({ spawnCount: 30 }), 301, ocean, [301]);
+    expect(copies.map((copy) => [copy.copy, copy.anchor])).toEqual([[0, { x: 6, y: 7 }]]);
   });
 });
 

@@ -13,7 +13,7 @@ import {
   proceduralDecoration,
 } from "@/libs/rendering/proceduralBiomes";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
-import { buildHexTerrainData } from "@/libs/rendering/terrainData";
+import { buildHexTerrainData, terrainFrost } from "@/libs/rendering/terrainData";
 
 /** Arena generation keeps the game's seeded layout and traversal costs independent of rendering. */
 export const prepareCombatTerrain = (
@@ -61,6 +61,7 @@ export const prepareCombatTerrain = (
         depression: look.spec.depression,
         isWater: look.spec.isWater,
         waterDepth: look.spec.key === "ocean",
+        frost: terrainFrost(look.spec.key),
         waveOffset:
           look.spec.isWater && !lightLayout
             ? (Math.floor(prng() * 8) * Math.PI) / 4

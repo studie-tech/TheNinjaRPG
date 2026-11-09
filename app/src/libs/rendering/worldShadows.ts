@@ -476,14 +476,14 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     registerTerrain: (parent: Container, data: HexTerrainData) => {
       const values: number[] = [];
       let minHeight = 0;
-      for (const batch of data.batches)
-        for (const tile of batch.tiles) {
+      for (const segment of data.segments)
+        for (const tile of segment.tiles) {
           const height = data.faceOffsets.get(tile.key) ?? 0;
           minHeight = Math.min(minHeight, height);
           for (let i = tile.start; i < tile.start + tile.count; i++)
             values.push(
-              batch.positions[i * 2] ?? 0,
-              batch.positions[i * 2 + 1] ?? 0,
+              segment.positions[i * 2] ?? 0,
+              segment.positions[i * 2 + 1] ?? 0,
               height,
             );
         }

@@ -45,7 +45,7 @@ describe("combat terrain preparation", () => {
   it.each(COMBAT_BIOMES)("keeps the %s grid, costs and decorations deterministic", (background) => {
     const first = prepare(background), second = prepare(background);
     expect(first.scenery).toEqual(second.scenery);
-    expect(first.terrain.batches).toEqual(second.terrain.batches);
+    expect(first.terrain.segments).toEqual(second.terrain.segments);
     expect(first.grid.size).toBe(120);
     expect(first.grid.toArray().map((tile) => tile.cost)).toEqual(second.grid.toArray().map((tile) => tile.cost));
     for (const tile of first.grid) {

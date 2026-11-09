@@ -44,7 +44,7 @@ const fixture = (instanced = false, resolution = 1) => {
   const shadows = createWorldShadows(game, world);
   world.addChild(shadows.container, parent);
   const terrain = {
-    batches: [{ positions: new Float32Array([0, 0, 10, 0, 0, 10]), tiles: [{ key: "0,0", start: 0, count: 3 }] }],
+    segments: [{ positions: new Float32Array([0, 0, 10, 0, 0, 10]), tiles: [{ key: "0,0", start: 0, count: 3 }] }],
     faceOffsets: new Map([["0,0", -4]]),
   } as unknown as HexTerrainData;
   return { world, parent, shadows, terrain, render, game,

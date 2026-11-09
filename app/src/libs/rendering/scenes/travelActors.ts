@@ -33,6 +33,10 @@ import { getActiveObjectives } from "@/libs/quest";
 import { hasRequiredRank } from "@/libs/rank";
 import { animationTextureUrl } from "@/libs/rendering/animationTextures";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
+import {
+  createWaterRipples,
+  RIPPLE_INTERVAL,
+} from "@/libs/rendering/primitives/waterRipples";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createRenderScope } from "@/libs/rendering/scope";
 import type {
@@ -40,6 +44,7 @@ import type {
   WorldMotionDirection,
   WorldSpriteDescription,
 } from "@/libs/rendering/sectorSprites";
+import { standingOffset } from "@/libs/rendering/terrainElevation";
 import {
   boundsOverlap,
   isObjectChainVisible,
@@ -62,6 +67,16 @@ export const createTravelActors = (
   sceneryBounds?: WeakMap<Container, WorldBounds>,
 ) => {
   const container = new Container();
+  // Rings sit on the water surface beneath every actor, created once a character first stands in water.
+  let ripples: ReturnType<typeof createWaterRipples> | null = null;
+  const waterRipples = () => {
+    if (ripples) return ripples;
+    ripples = createWaterRipples(game);
+    ripples.container.zIndex = -Number.MAX_VALUE;
+    container.addChild(ripples.container);
+    layers?.ground?.attach(ripples.container);
+    return ripples;
+  };
   const records = new Map<string, ActorRecord>();
   const byRoot = new Map<Container, ActorRecord>();
   const appearanceParts = new Map<
@@ -320,9 +335,10 @@ export const createTravelActors = (
         tile: previous?.tile ?? recipe.tile,
         path: previous?.path ?? [],
         x: previous?.x ?? -recipe.tile.center.x,
-        y: previous?.y ?? -recipe.tile.center.y,
+        y: previous?.y ?? -recipe.tile.center.y + standingOffset(recipe.tile),
         facing: previous?.facing ?? 2,
         heading: previous?.heading,
+        ripple: previous?.ripple ?? 0,
         depth: 0,
         cast: null,
         castKey: "",
@@ -616,7 +632,7 @@ export const createTravelActors = (
       }
       const waypoint = record.path[0] ?? recipe.tile;
       const dx = -waypoint.center.x - record.x,
-        dy = -waypoint.center.y - record.y;
+        dy = -waypoint.center.y + standingOffset(waypoint) - record.y;
       const distance = Math.hypot(dx, dy);
       // Roaming NPC copies share a template userId, so their movement is keyed per actor.
       const movement = movements?.get(
@@ -674,6 +690,14 @@ export const createTravelActors = (
           (recipe.quest ? wobble : 0),
         record.y + (recipe.spread ? recipe.tile.height * 0.1 * Math.cos(phi) : 0),
       );
+      if (recipe.user && !frame.reducedMotion && isOpenWater(groundTile(record))) {
+        record.ripple -= frame.delta;
+        if (record.ripple <= 0) {
+          record.ripple = moving ? RIPPLE_INTERVAL.moving : RIPPLE_INTERVAL.idle;
+          const feet = actorFeet(record);
+          waterRipples().emit(feet.x, feet.y, recipe.tile.width / 44);
+        }
+      } else record.ripple = 0;
       // Contact uses the interpolated/orbiting position and the current sector origin.
       record.depth = -(root.y + record.contactY + container.y);
     }
@@ -698,6 +722,23 @@ export const createTravelActors = (
     }
     paintedOriginY = container.y;
     container.sortChildren();
+    ripples?.update(frame);
+  };
+  /** The hex under an actor's interpolated position, so wakes end where the shore begins; it is looked up only after a move. */
+  const groundTile = (record: ActorRecord) => {
+    if (record.ground && record.ground.x === record.x && record.ground.y === record.y)
+      return record.ground.tile;
+    const anchor = record.recipe.tile;
+    const tile =
+      sourceSnapshot?.grid.pointToHex(
+        {
+          x: anchor.x + anchor.center.x + record.x,
+          y: anchor.y + anchor.center.y + record.y,
+        },
+        { allowOutside: false },
+      ) ?? record.tile;
+    record.ground = { x: record.x, y: record.y, tile };
+    return tile;
   };
   /** Retain the latest snapshot so viewport changes can materialize its actors without another fetch. */
   const sync = (snapshot: TravelActorsSnapshot) => {
@@ -773,13 +814,22 @@ export const createTravelActors = (
     feet: (userId: string) => {
       const record = records.get(`user:${userId}`);
       if (!record) return undefined;
-      const body = record.recipe.parts.find((part) => part.character);
+      const feet = actorFeet(record);
+      return { x: feet.x + container.x, y: feet.y + container.y };
+    },
+    /** World-space extent and paint depth of a user's actor; scenery above that depth covers it. */
+    body: (userId: string) => {
+      const record = records.get(`user:${userId}`);
+      if (!record) return undefined;
+      const body = actorBody(record);
       return {
-        x: record.root.x + (body?.x ?? record.recipe.tile.width / 2) + container.x,
-        y:
-          record.root.y +
-          (body ? body.y - (body.size * 28) / 64 : record.recipe.tile.height / 2) +
-          container.y,
+        bounds: {
+          minX: body.minX + container.x,
+          maxX: body.maxX + container.x,
+          minY: body.minY + container.y,
+          maxY: body.maxY + container.y,
+        },
+        depth: record.depth,
       };
     },
     setLighting: (next: number) => {
@@ -794,6 +844,45 @@ export const createTravelActors = (
     },
   };
 };
+
+/** Container-local contact point of an actor's body, or its tile center without one. */
+const actorFeet = (record: ActorRecord) => {
+  const body = record.recipe.parts.find((part) => part.character);
+  return {
+    x: record.root.x + (body?.x ?? record.recipe.tile.width / 2),
+    y:
+      record.root.y +
+      (body ? body.y - (body.size * 28) / 64 : record.recipe.tile.height / 2),
+  };
+};
+
+/**
+ * Container-local box of a character's visible figure within its sprite frame, from the feet up;
+ * other art uses its live bounds.
+ */
+const actorBody = (record: ActorRecord): WorldBounds => {
+  const body = record.recipe.parts.find((part) => part.character);
+  if (!body) {
+    const local = record.root.getLocalBounds();
+    return {
+      minX: local.minX + record.root.x,
+      maxX: local.maxX + record.root.x,
+      minY: local.minY + record.root.y,
+      maxY: local.maxY + record.root.y,
+    };
+  }
+  const feet = actorFeet(record);
+  return {
+    minX: feet.x - body.size * LPC_FIGURE_HALF_WIDTH,
+    maxX: feet.x + body.size * LPC_FIGURE_HALF_WIDTH,
+    minY: feet.y,
+    maxY: feet.y + body.size * LPC_FIGURE_HEIGHT,
+  };
+};
+
+/** Characters walk on unfrozen water; ice, bridges and foundations carry no rings. */
+const isOpenWater = (tile: TerrainHex) =>
+  !!tile.spec?.isWater && !tile.frozen && !tile.hasStructure && tile.zone !== "road";
 
 /** Viewer-filtered user/NPC/battle groups; stable recipe keys preserve actor identity between syncs. */
 export const travelActorRecipes = (
@@ -962,6 +1051,9 @@ const LPC_TRAVEL_SCALE = 0.7;
 const LPC_TRAVEL_HEIGHT = 1.8 * LPC_TRAVEL_SCALE;
 const LPC_TRAVEL_FOOT_Y = 0.1;
 const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
+/** A walking LPC figure spans about 24 of its frame's 64 columns and 48 of its rows. */
+const LPC_FIGURE_HALF_WIDTH = 12 / 64;
+const LPC_FIGURE_HEIGHT = 48 / 64;
 const NPC_TRAVEL_HEIGHT = 1.3;
 const PLAYER_TRAVEL_SHADOW = 0.16;
 const PLAYER_TRAVEL_LIGHT = 0.65;
@@ -1228,6 +1320,10 @@ type ActorRecord = {
   facing: LpcDirection;
   /** Last sideways direction walked; up and down keep it, so looping art never flips. */
   heading?: AvatarFacing;
+  /** Seconds until the next water ring; zero emits on the first frame over water. */
+  ripple: number;
+  /** Hex under the actor at its last looked-up position, for water rings. */
+  ground?: { x: number; y: number; tile: TerrainHex };
   recipe: ActorRecipe;
   signature: string;
   scope: GameRenderer;

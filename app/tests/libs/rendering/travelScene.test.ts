@@ -6,7 +6,7 @@ import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Texture } 
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
-import * as terrainData from "@/libs/rendering/terrainData";
+import * as terrainElevation from "@/libs/rendering/terrainElevation";
 import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
 import * as navigation from "@/libs/sector-map/navigation";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
@@ -62,7 +62,7 @@ const gameFixture = () => {
     const container = new Container();
     const dispose = () => { if (!container.destroyed) container.destroy({ children: true }); };
     scope.own(dispose);
-    return { container, dispose, isAnimated: false, setLighting: () => {}, setTints: () => {} };
+    return { container, dispose, isAnimated: false, setLighting: () => {}, setTints: () => {}, setOrigin: () => {}, setDepthBias: () => {}, setRain: () => {} };
   });
   const event = (type: string, x: number, y: number) => {
     const pointer = new window.MouseEvent(type, { button: 0, clientX: x, clientY: y });
@@ -88,6 +88,7 @@ beforeEach(() => {
   vi.spyOn(maskedTextures, "acquireMaskedTexture").mockImplementation(() => ({ resource: Promise.resolve(texture), release: () => {} }));
 });
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
+const standingOffsetFor = (tile: { height: number }, terrace: number) => terrace * terrainElevation.LAND_STEP * tile.height;
 
 describe("still travel rendering", () => {
   it("makes terrain ready while a published light-field request is still pending", async () => {
@@ -294,7 +295,7 @@ describe("travel scene ground depth", () => {
     entry.globalTileType = 0;
     state.terrains = new Map([["ocean", BUILTIN_TERRAINS_BY_KEY.get("ocean")!]]);
     if (shared) state.nav = navigation.buildWindowNav(state.window, 10);
-    const nav = vi.spyOn(navigation, "buildWindowNav"), shelf = vi.spyOn(terrainData, "createWaterShelf");
+    const nav = vi.spyOn(navigation, "buildWindowNav"), shelf = vi.spyOn(terrainElevation, "createTerrainField");
     const { scene } = await sceneFixture(state);
     const builds = [nav.mock.calls.length, shelf.mock.calls.length];
     expect(builds[0]).toBe(shared ? 0 : 1); expect(builds[1]).toBeGreaterThan(0);
@@ -331,6 +332,49 @@ describe("travel scene ground depth", () => {
     expect(building.sprite).toMatchObject(placement);
   });
 
+  it("stands roaming herds on the terrace beneath them", async () => {
+    const herdYs = async (terrace: number) => {
+      const state = snapshotFixture(), entry = state.window[0]!;
+      entry.map = { ...entry.map, objects: [] };
+      entry.structures = [];
+      const real = terrainElevation.createTerrainField;
+      const field = vi.spyOn(terrainElevation, "createTerrainField").mockImplementation((...args) => ({ ...real(...args), level: () => terrace }));
+      const deer = (member: number) => player({ userId: "deer", isNpc: true, npcPlacementId: "herd", npcCopy: 0, npcMember: member, npcInteractionType: "AMBIENT", longitude: 6, latitude: 5,
+        npcWander: { seed: "herd:hill", anchor: { x: 6, y: 5 }, radius: 0, wildOnly: true } });
+      state.users = [player(), ...Array.from({ length: 4 }, (_, member) => deer(member))];
+      const { scene, depth, advance } = await sceneFixture(state);
+      advance(); await settle(); advance();
+      field.mockRestore();
+      const tile = scene.sectors.get(724)!.grid.getHex({ col: 6, row: 5 })!;
+      return { tile, ys: depth.renderLayerChildren.filter((child) => child.label.startsWith("npc:herd")).map((child) => child.y) };
+    };
+    const level = await herdYs(0), raised = await herdYs(2);
+    expect(raised.ys).toHaveLength(4);
+    raised.ys.forEach((y, index) => expect(y - level.ys[index]!).toBeCloseTo(standingOffsetFor(raised.tile, 2)));
+  });
+
+  it("keeps every member of a shore herd on land, pulling offsets in from the water", async () => {
+    const state = snapshotFixture(), entry = state.window[0]!;
+    entry.map = { ...entry.map, objects: [], tiles: Array.from({ length: 144 }, (_, index) => {
+      const x = index % 12, y = Math.floor(index / 12);
+      return { x, y, terrain: x >= 7 ? "ocean" : "ground", walkCost: 1, blocked: false, zone: "wilderness" as const, battleBiome: x >= 7 ? "ocean" as const : "ground" as const };
+    }) };
+    entry.structures = [];
+    state.terrains = new Map([["ocean", BUILTIN_TERRAINS_BY_KEY.get("ocean")!]]);
+    const deer = (member: number) => player({ userId: "deer", isNpc: true, npcPlacementId: "herd", npcCopy: 0, npcMember: member, npcInteractionType: "AMBIENT", longitude: 6, latitude: 5,
+      npcWander: { seed: "herd:shore", anchor: { x: 6, y: 5 }, radius: 0, wildOnly: true } });
+    state.users = [player(), ...Array.from({ length: 6 }, (_, member) => deer(member))];
+    const { scene, depth, advance } = await sceneFixture(state);
+    advance(); await settle(); advance();
+    const grid = scene.sectors.get(724)!.grid, anchor = grid.getHex({ col: 6, row: 5 })!;
+    const herd = depth.renderLayerChildren.filter((child) => child.label.startsWith("npc:herd"));
+    expect(herd).toHaveLength(6);
+    for (const member of herd) {
+      const under = grid.pointToHex({ x: anchor.x + anchor.center.x + member.x, y: anchor.y + anchor.center.y + member.y }, { allowOutside: false });
+      expect(under?.spec?.isWater).toBe(false);
+    }
+  });
+
   it("interleaves the same moving actor with trees and buildings at their ground baselines", async () => {
     const { scene, state, depth, advance } = await sceneFixture();
     const sector = scene.sectors.get(724)!;
@@ -353,6 +397,35 @@ describe("travel scene ground depth", () => {
     expect(depth.renderLayerChildren.find((child) => child.label === "user:self")).toBe(actor);
     depth.sortRenderLayerChildren();
     for (const entry of [tree, building]) expect(depth.renderLayerChildren.indexOf(actor)).toBeLessThan(depth.renderLayerChildren.indexOf(entry.sprite));
+  });
+
+  it("fades scenery that paints over the viewer and restores it once the viewer stands clear", async () => {
+    const { scene, state, depth, advance } = await sceneFixture();
+    const sector = scene.sectors.get(724)!;
+    const tree = sector.art.entries.find((entry) => entry.description.id === "tree")!;
+    const building = sector.art.entries.find((entry) => entry.description.id === "building")!;
+    const walk = (latitude: number) => {
+      state.users = [player({ latitude })]; state.row = latitude; state.actorRevision++;
+      for (let tick = 0; tick < 8; tick++) advance(frame(1200 + tick));
+    };
+    walk(4);
+    expect(tree.sprite.alpha).toBe(1);
+    walk(6);
+    depth.sortRenderLayerChildren();
+    const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
+    expect(depth.renderLayerChildren.indexOf(tree.sprite)).toBeGreaterThan(depth.renderLayerChildren.indexOf(actor));
+    expect(tree.sprite.alpha).toBeCloseTo(0.45);
+    expect(building.sprite.alpha).toBe(1);
+    // Live frames ease back rather than popping.
+    state.users = [player({ latitude: 4 })]; state.row = 4; state.actorRevision++;
+    const alphas: number[] = [];
+    for (let tick = 0; tick < 120; tick++) {
+      advance(frame(1300 + tick * 16, false));
+      alphas.push(tree.sprite.alpha);
+    }
+    expect(alphas.some((alpha) => alpha > 0.5 && alpha < 0.95)).toBe(true);
+    for (let index = 1; index < alphas.length; index++) expect(alphas[index]!).toBeGreaterThanOrEqual(alphas[index - 1]!);
+    expect(alphas.at(-1)).toBe(1);
   });
 
   it("refreshes retained scenery and actor depths on sector offsets and world rebasing, and detaches disposed sectors", async () => {

@@ -7,6 +7,7 @@ import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldBounds } from "@/libs/rendering/visibility";
+import { standingOffset } from "@/libs/rendering/terrainElevation";
 import { travelActorRecipes, createTravelActors, type TravelActorMovement, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
@@ -69,6 +70,41 @@ describe("travel actor artwork loading", () => {
     const recipes=travelActorRecipes({...snapshot(users),characterKeys:new Set(roots.map(root=>root.label))});
     expect(recipes.find(recipe=>recipe.key==="npc:guide:0:0")?.parts.some(part=>part.kind===(npcInteractionType==="HOSTILE"?"attack":"talk"))).toBe(true);
     expect(recipes.find(recipe=>recipe.counter)?.counter).toBe(31);
+  });
+
+  it("stands characters on raised terraces and walks them up and down the steps", () => {
+    const { actors, grid, snapshot } = fixture();
+    const raised = grid.getHex({ col: 0, row: 0 })!, plain = grid.getHex({ col: 1, row: 0 })!;
+    raised.terrace = 2;
+    actors.sync(snapshot([player(0)]));
+    const root = actors.container.children.find(child => child.label === "user:loading-0")!;
+    expect(root.y).toBeCloseTo(-raised.center.y + standingOffset(raised));
+    actors.sync(snapshot([player(0, { longitude: 1 })]));
+    actors.animate({ ...frame, reducedMotion: true });
+    expect(root.y).toBeCloseTo(-plain.center.y);
+  });
+
+  it("rings characters standing on open water, but not on frozen water or land", () => {
+    const { actors, grid, snapshot, ground } = fixture();
+    for (const tile of grid) tile.spec = { isWater: tile.col < 2 } as never;
+    grid.getHex({ col: 1, row: 0 })!.frozen = true;
+    actors.sync(snapshot([player(0), player(1), player(2)]));
+    actors.animate({ ...frame, reducedMotion: false });
+    const rings = ground.renderLayerChildren.find(effect => effect.label === "water-ripples")!;
+    const visible = () => rings.children.filter(ring => ring.alpha > 0);
+    expect(visible()).toHaveLength(1);
+    const feet = actors.feet("loading-0")!, ring = visible()[0]!;
+    expect(ring.x).toBeCloseTo(feet.x - actors.container.x);
+    expect(ring.y).toBeCloseTo(feet.y - actors.container.y);
+    actors.animate({ ...frame, reducedMotion: false, delta: 0.5 });
+    expect(visible()).toHaveLength(1);
+    // Idle rings repeat each second and fade out after their lifetime.
+    actors.animate({ ...frame, reducedMotion: false, delta: 0.6 });
+    expect(visible()).toHaveLength(2);
+    actors.animate({ ...frame, reducedMotion: false, delta: 0.7 });
+    expect(visible()).toHaveLength(1);
+    actors.animate({ ...frame, reducedMotion: true, delta: 2 });
+    expect(visible()).toHaveLength(0);
   });
 
   it("keeps moving contact effects on the ground and batches emitter pools together", async () => {

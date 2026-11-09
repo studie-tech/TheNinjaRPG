@@ -6,7 +6,11 @@ import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
 import { resolveWorldTerrain } from "@/libs/rendering/worldArt";
-import { createWaterShelf, hexTerrainAt } from "@/libs/rendering/terrainData";
+import { hexTerrainAt, KIND, LAND_SEGMENT } from "@/libs/rendering/terrainData";
+import { textureRanges } from "@/libs/rendering/primitives/terrain";
+import { createTerrainField, LAND_STEP, liftSpritesToTerrain, MAX_SEABED_DEPTH, standingOffset, WATER_FIELD_REACH } from "@/libs/rendering/terrainElevation";
+import { linearRenderColor } from "@/libs/rendering/color";
+import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import { PathCalculator } from "@/libs/hexgrid";
 import { buildWindowNav } from "@/libs/sector-map/navigation";
@@ -24,6 +28,22 @@ const prepare = (map: NormalizedSectorMap, light = false, registry = mergeTerrai
   const { grid } = prepareSectorGrid(1024, random, 1, [], map, registry, null);
   return { grid, data: buildSectorTerrainData(grid, random, light) };
 };
+
+type TerrainData = ReturnType<typeof prepare>["data"];
+/** The face vertices of one tile, wherever its segment placed them. */
+const faceOf = (data: TerrainData, key: string) => {
+  for (const segment of data.segments) {
+    const tile = segment.tiles.find((entry) => entry.key === key);
+    if (tile) return { segment, start: tile.start, count: tile.count };
+  }
+  throw new Error(`no face for ${key}`);
+};
+/** Per-vertex kinds across all segments, with each vertex's segment order. */
+const vertices = (data: TerrainData) =>
+  data.segments.flatMap((segment) => Array.from(segment.kinds, (kind, index) => ({
+    kind, order: segment.order, slot: segment.slots[index]!, x: segment.positions[index * 2]!, y: segment.positions[index * 2 + 1]!,
+    color: [...segment.colors.slice(index * 4, index * 4 + 4)], relief: [...segment.relief.slice(index * 2, index * 2 + 2)],
+  })));
 
 const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
@@ -78,54 +98,107 @@ describe("shared hex terrain textures", () => {
     registry.set("ocean", { ...registry.get("ocean")!, textureUrl: "optional-water.png" });
     return prepare(map, false, registry);
   };
-  it.each(["mixed", "ocean", "ice"] as const)("orders %s sector sides below neighboring faces and recessed outlines below flat land", async (kind) => {
+  it.each(["mixed", "ocean", "ice"] as const)("draws %s terrain as an underwater mesh below a land mesh, back to front by sector", async (kind) => {
     const map = mapOf(5, 3);
     if (kind !== "mixed") map.tiles = map.tiles.map((tile) => ({ ...tile, terrain: kind, battleBiome: kind }));
     const { data } = prepare(map);
     const { game } = renderer(async () => Texture.WHITE);
-    const terrains = await Promise.all([createHexTerrain(game, data), createHexTerrain(game, data)]);
-    const meshes = terrains.flatMap((terrain) => terrain.container.children as Mesh[]);
-    const sides = meshes.filter((mesh) => [data.ground, data.groundEdges].some((points) => points === mesh.geometry.getBuffer("aPosition").data));
-    const faces = meshes.filter((mesh) => mesh.geometry.attributes.aTint);
-    expect(Math.max(...sides.map((mesh) => mesh.zIndex))).toBeLessThan(Math.min(...faces.map((mesh) => mesh.zIndex)));
-    const recessedEdges = meshes.filter((mesh) => mesh.geometry.getBuffer("aPosition").data === data.edges.get(-0.5));
-    const flatFaces = faces.filter((mesh) => data.batches.some((batch) => batch.layer === 0 && batch.positions === mesh.geometry.getBuffer("aPosition").data));
-    if (flatFaces.length) expect(Math.max(...recessedEdges.map((mesh) => mesh.zIndex))).toBeLessThan(Math.min(...flatFaces.map((mesh) => mesh.zIndex)));
+    const terrain = await createHexTerrain(game, data);
+    const meshes = (terrain.container.children as Mesh[]).filter((mesh) => mesh.geometry.attributes.aKind);
+    expect(meshes.map((mesh) => mesh.zIndex).sort()).toEqual(data.segments.map((segment) => segment.order).sort());
+    const all = vertices(data);
+    // The seabed and translucent surface share the underwater mesh; the surface paints after its seabed.
+    const lastSeabed = all.map((vertex) => vertex.kind).lastIndexOf(KIND.seabed);
+    const firstSurface = all.findIndex((vertex) => vertex.kind === KIND.water);
+    if (kind !== "ice") {
+      expect(lastSeabed).toBeGreaterThanOrEqual(0);
+      expect(lastSeabed).toBeLessThan(firstSurface);
+      expect(all[firstSurface]!.order).toBeLessThan(4);
+    }
+    for (const mesh of meshes) expect(mesh.state.blend).toBe(true);
+    terrain.setDepthBias(-0.001);
+    expect(meshes.every((mesh, index) => mesh.zIndex === data.segments[index]!.order - 0.001)).toBe(true);
   });
 
-  it("covers buried dirt and recessed outlines with higher tile faces", async () => {
-    const { data } = prepare(mapOf(5, 3));
+  it("paints each sector's rim beneath every sector's terrain so borders show the neighbour, not a cut", async () => {
+    const map = mapOf(6, 4);
+    map.tiles = map.tiles.map((tile) => ({ ...tile, terrain: tile.x < 3 ? "ground" : "ocean", battleBiome: tile.x < 3 ? "ground" : "ocean" }));
+    const { data } = prepare(map);
+    const [rim, ...terrain] = data.segments;
+    expect(rim!.order).toBeLessThan(Math.min(...terrain.map((segment) => segment.order)));
+    // The rim holds only the cut faces: no tile faces, and sector-local, never inside the grid's footprint.
+    expect(rim!.tiles).toEqual([]);
+    expect([...rim!.kinds].every((kind) => kind === KIND.flat)).toBe(true);
     const { game } = renderer(async () => Texture.WHITE);
-    const terrain = await createHexTerrain(game, data);
-    const meshes = terrain.container.children as Mesh[];
-    const faces = meshes.filter((mesh) => mesh.geometry.attributes.aTint);
-    const dirtEdges = meshes.find((mesh) => mesh.geometry.topology === "line-list")!;
-    expect(meshes.indexOf(dirtEdges)).toBeLessThan(meshes.indexOf(faces[0]!));
-    data.batches.forEach((batch, index) => {
-      const outline = meshes.find((mesh) => mesh.geometry.getBuffer("aPosition").data === data.edges.get(batch.layer))!;
-      expect(meshes.indexOf(outline)).toBeGreaterThan(meshes.indexOf(faces[index]!));
-      const higherFace = data.batches.findIndex((next) => next.layer > batch.layer);
-      if (higherFace !== -1) expect(meshes.indexOf(outline)).toBeLessThan(meshes.indexOf(faces[higherFace]!));
-    });
+    const terrainMeshes = await Promise.all([createHexTerrain(game, data), createHexTerrain(game, data)]);
+    terrainMeshes[1]!.setDepthBias(0.001);
+    const zIndices = (index: number) => (terrainMeshes[index]!.container.children as Mesh[]).filter((mesh) => mesh.geometry.attributes.aKind).map((mesh) => mesh.zIndex);
+    // Even a sector further forward keeps its rim below the other sector's underwater and land meshes.
+    expect(Math.max(zIndices(1)[0]!, zIndices(0)[0]!)).toBeLessThan(Math.min(...zIndices(0).slice(1), ...zIndices(1).slice(1)));
+    expect(prepare(map, true).data.segments.every((segment) => segment.order !== rim!.order)).toBe(true);
+  });
+
+  it("splits a segment only when it needs more images than a mesh binds", () => {
+    const slots = new Float32Array([1, 1, 1, 2, 2, 2, 0, 0, 0, 3, 3, 3, 4, 4, 4, 5, 5, 5, 1, 1, 1]);
+    expect(textureRanges(slots, 4)).toEqual([
+      { start: 0, end: 15, slots: [1, 2, 3, 4] },
+      { start: 15, end: 21, slots: [5, 1] },
+    ]);
+  });
+
+  it("raises terraces with lit cliffs, drop outlines and pickable faces, painting higher levels later", async () => {
+    const map = mapOf(6, 5);
+    map.tiles = map.tiles.map((tile) => ({ ...tile, terrain: "ground", battleBiome: "ground" }));
+    const random = alea(3);
+    const { grid } = prepareSectorGrid(1024, random, 1, [], map, mergeTerrainSpecs([]), null);
+    const plateau = new Set(["2,2", "3,2", "2,3", "3,3"]);
+    const field = { level: (tile: { col: number; row: number }) => (plateau.has(`${tile.col},${tile.row}`) ? 2 : 0), sample: () => ({ depth: 1, frozen: 0 }), at: () => null };
+    const data = buildSectorTerrainData(grid, random, false, { field: field as never });
+    const raised = grid.getHex({ col: 2, row: 2 })!;
+    expect(raised.terrace).toBe(2);
+    expect(data.faceOffsets.get("2,2")).toBeCloseTo(2 * LAND_STEP * raised.height);
+    expect(data.faceOffsets.get("0,0")).toBe(0);
+    expect(standingOffset(raised)).toBeCloseTo(2 * LAND_STEP * raised.height);
+    const top = faceOf(data, "2,2"), flat = faceOf(data, "0,0");
+    expect(top.segment).toBe(flat.segment);
+    // Painter order: plain ground, then the cliffs it carries, then the plateau above them.
+    const cliffs = Array.from(flat.segment.kinds).map((kind, index) => ({ kind, index })).filter(({ kind, index }) => kind === KIND.flat && index > flat.start && index < top.start && flat.segment.colors[index * 4 + 3] === 1);
+    expect(top.start).toBeGreaterThan(flat.start);
+    expect(cliffs.length).toBeGreaterThan(0);
+    // Cliff faces turned toward the upper-left light are brighter than those turned away.
+    const shades = new Set(cliffs.map(({ index }) => flat.segment.colors[index * 4]!.toFixed(3)));
+    expect(shades.size).toBeGreaterThan(2);
+    // A dark outline traces the plateau's rim after its face.
+    const rim = Array.from(top.segment.kinds).some((kind, index) => kind === KIND.flat && index > top.start && top.segment.colors[index * 4 + 3] === 0.5);
+    expect(rim).toBe(true);
+    const center = { x: raised.x, y: raised.y + (data.faceOffsets.get("2,2") ?? 0) };
+    expect(hexTerrainAt(grid, data.faceOffsets, center.x, center.y)).toBe(raised);
+    const sprite = { x: raised.x, y: raised.y, groundY: raised.y } as WorldSpriteDescription;
+    liftSpritesToTerrain([sprite], grid);
+    expect(sprite.y).toBeCloseTo(raised.y + standingOffset(raised));
+    expect(sprite.groundY).toBe(sprite.y);
   });
 
   it("keeps terrain geometry, palette and picking when one optional image fails", async () => {
     const { grid, data } = textured(mapOf(3, 2));
-    const failedTexture = data.batches.find((batch) => batch.kind === "image")!.texture;
+    const failedTexture = data.textures[0]!;
     const failure = new Error("HTTP 404 for optional terrain image");
     const image = new Texture({ source: new BufferImageSource({ resource: new Uint8Array([255, 255, 255, 255]), width: 1, height: 1 }) });
     const { game } = renderer(async (path) => { if (path === failedTexture) throw failure; return image; });
     cleanups.push(() => image.destroy(true));
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const terrain = await createHexTerrain(game, data);
-    const meshes = terrain.container.children.filter((child): child is Mesh => child instanceof Mesh && Boolean(child.geometry.attributes.aRawTint));
-    expect(meshes).toHaveLength(data.batches.length);
-    data.batches.forEach((batch, index) => {
+    const meshes = terrain.container.children.filter((child): child is Mesh => child instanceof Mesh && Boolean(child.geometry.attributes.aKind));
+    expect(meshes).toHaveLength(data.segments.length);
+    data.segments.forEach((segment, index) => {
       const mesh = meshes[index]!;
-      expect(mesh.geometry.getBuffer("aPosition").data).toEqual(batch.positions);
-      expect(mesh.geometry.getBuffer("aTint").data).toEqual(batch.colors);
-      if (batch.kind === "image") expect(mesh.shader!.resources.uTexture).toBe((batch.texture === failedTexture ? Texture.WHITE : image).source);
+      const length = segment.positions.length;
+      expect([...mesh.geometry.getBuffer("aPosition").data].slice(0, length)).toEqual([...segment.positions]);
+      expect([...mesh.geometry.getBuffer("aColor").data].slice(0, segment.colors.length)).toEqual([...segment.colors]);
     });
+    const images = meshes.flatMap((mesh) => [1, 2, 3, 4].map((slot) => mesh.shader!.resources[`uImage${slot}`]));
+    expect(images).toContain(Texture.WHITE.source);
+    if (data.textures.length > 1) expect(images).toContain(image.source);
     expect(warning).toHaveBeenCalledWith("Terrain texture unavailable", failure);
     for (const tile of grid) {
       const offset = data.faceOffsets.get(`${tile.col},${tile.row}`) ?? 0;
@@ -176,13 +249,25 @@ describe("shared hex terrain data", () => {
     for (const tile of grid) expect(hexTerrainAt(grid, data.faceOffsets, tile.x, tile.y)).toBe(tile);
     expect(prepare(map, true).data.surface.length).toBeGreaterThan(0);
     const bare = { ...map, tiles: map.tiles.map((tile) => ({ ...tile, zone: "wilderness" as const })) };
-    expect(data.batches).toEqual(prepare(bare).data.batches);
+    expect(data.segments).toEqual(prepare(bare).data.segments);
     const road = grid.getHex({ col: 1, row: 0 })!;
     const xs = Array.from(data.surface).filter((_, index) => index % 2 === 0);
     expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(road.width * 0.4);
     const paved = { ...map, tiles: map.tiles.map((tile) => ({ ...tile, zone: "road" as const })) };
     expect(prepare(paved).data.surface.length).toBeGreaterThan(0);
     expect(map).toEqual(before);
+  });
+
+  it("keeps a land segment for bridges and roads in a sector that is all water", async () => {
+    const map = mapOf(3, 2);
+    map.tiles = map.tiles.map((tile) => ({ ...tile, terrain: "ocean", battleBiome: "ocean", zone: tile.x === 1 ? "road" : "wilderness" }));
+    const { data } = prepare(map);
+    expect(data.surface.length).toBeGreaterThan(0);
+    expect(data.segments.some((segment) => segment.order === LAND_SEGMENT)).toBe(false);
+    const { game } = renderer(async () => Texture.WHITE);
+    const terrain = await createHexTerrain(game, data);
+    const meshes = (terrain.container.children as Mesh[]).filter((mesh) => mesh.geometry.attributes.aKind);
+    expect(meshes.some((mesh) => mesh.zIndex === LAND_SEGMENT)).toBe(true);
   });
 
   it("preserves positive fractional terrain costs in both navigation grids", () => {
@@ -209,10 +294,10 @@ describe("shared hex terrain data", () => {
     // Movement does not rewrite the authored palette or its shaded appearance.
     expect(map).toEqual(before);
     if (terrain !== "ocean") {
-      const batch = data.batches.find((batch) => batch.tiles.some((entry) => entry.key === "1,0"))!;
-      const start = batch.tiles.find((entry) => entry.key === "1,0")!.start * 4;
-      const color = Number.parseInt(resolveWorldTerrain(tile.spec!).colors[2]!.slice(1), 16);
-      expect([...batch.rawColors.slice(start, start + 4)]).toEqual([color >> 16, (color >> 8) & 255, color & 255, 255]);
+      const face = faceOf(data, "1,0");
+      const color = linearRenderColor(resolveWorldTerrain(tile.spec!).colors[2]!);
+      const [r, g, b] = face.segment.colors.slice(face.start * 4, face.start * 4 + 3);
+      expect([r, g, b].map((value) => value!.toFixed(4))).toEqual([color.r, color.g, color.b].map((value) => value.toFixed(4)));
     }
   });
 
@@ -252,30 +337,39 @@ describe("shared hex terrain data", () => {
     const map = mapOf(26, 26), before = JSON.stringify(map);
     const { data } = prepare(map);
     expect(JSON.stringify(map)).toBe(before);
-    expect(data.batches.length).toBeLessThan(10);
-    expect(data.batches.reduce((sum, batch) => sum + batch.positions.length / 2, 0)).toBe(26 * 26 * 12);
+    expect(data.segments.length).toBeLessThanOrEqual(4);
+    expect(data.segments.reduce((sum, segment) => sum + segment.tiles.length, 0)).toBe(26 * 26);
+    const all = vertices(data);
+    // Each stock water tile adds one seabed block beneath its surface.
+    const surfaces = all.filter((vertex) => vertex.kind === KIND.water).length;
+    expect(all.filter((vertex) => vertex.kind === KIND.seabed).length).toBe(surfaces);
     expect(data.animatedTiles).toBeGreaterThan(0);
     expect(data.boundary.length).toBeGreaterThan(0);
-    for (const batch of data.batches) {
-      expect(batch.uvs.length).toBe(batch.positions.length);
-      expect(batch.colors.length / 3).toBe(batch.positions.length / 2);
-      expect(batch.rawColors.length / 4).toBe(batch.positions.length / 2);
-      expect(batch.waves.length).toBe(batch.positions.length / 2);
-      expect([...batch.positions, ...batch.uvs, ...batch.colors].every(Number.isFinite)).toBe(true);
+    for (const segment of data.segments) {
+      const count = segment.positions.length / 2;
+      expect(segment.uvs.length).toBe(count * 2);
+      expect(segment.colors.length).toBe(count * 4);
+      expect(segment.kinds.length).toBe(count);
+      expect(segment.slots.length).toBe(count);
+      expect(segment.waves.length).toBe(count);
+      expect(segment.relief.length).toBe(count * 2);
+      expect([...segment.positions, ...segment.uvs, ...segment.colors].every(Number.isFinite)).toBe(true);
     }
   });
   it("light layout drops texture requests, water animation and recessed geometry", () => {
     const { data } = prepare(mapOf(26, 26), true);
-    expect(data.ground.length).toBe(0);
     expect(data.animatedTiles).toBe(0);
+    expect(data.textures).toEqual([]);
     expect([...data.faceOffsets.values()].every((offset) => offset === 0)).toBe(true);
-    expect(data.batches.every((batch) => batch.kind === "solid" && batch.texture === null)).toBe(true);
+    for (const segment of data.segments)
+      for (const tile of segment.tiles)
+        expect([...segment.kinds.slice(tile.start, tile.start + tile.count)].every((kind) => kind === KIND.solid)).toBe(true);
+    expect(vertices(data).every((vertex) => vertex.kind === KIND.solid || vertex.kind === KIND.flat)).toBe(true);
   });
   it("keeps seeded terrain and water phases stable across renderer remounts", () => {
     const map = mapOf(8, 8);
     const a = prepare(map).data, b = prepare(map).data;
-    expect(a.batches).toEqual(b.batches);
-    expect(a.ground).toEqual(b.ground);
+    expect(a.segments).toEqual(b.segments);
   });
 });
 
@@ -295,37 +389,77 @@ describe("coastal water depth", () => {
     const maps = [coast(222, true), coast(223, false)];
     const nav = buildWindowNav(maps.map((map, dx) => ({ dx, dy: 0, map })), 10)!;
     const grids = maps.map((map) => prepare(map).grid);
-    const materials = new Map();
+    const cells = new Map();
     for (const [dx, grid] of grids.entries())
       for (const tile of grid)
-        materials.set(nav.toUnified(dx, 0, tile.col, tile.row)!, { isWater: !!tile.spec?.isWater });
-    const shelf = createWaterShelf(nav.pathFinder.grid, materials);
+        cells.set(nav.toUnified(dx, 0, tile.col, tile.row)!, { isWater: !!tile.spec?.isWater, flat: true });
+    const field = createTerrainField(nav.pathFinder.grid, cells);
     const seams: Map<string, number[]>[] = [];
     for (const [dx, grid] of grids.entries()) {
       const before = grid.toArray().map((tile) => [tile.cost, tile.blocked, tile.spec]);
       const local = grid.getHex({ col: 0, row: 0 })!;
       const unified = nav.toUnified(dx, 0, 0, 0)!;
-      const sample = (point: { x: number; y: number }) => shelf({
+      const toWindow = (point: { x: number; y: number }) => ({
         x: unified.x + (point.x - local.x) * unified.width / local.width,
         y: unified.y + (point.y - local.y) * unified.height / local.height,
       });
+      const local_field = {
+        level: (tile: { col: number; row: number }) => field.level(nav.toUnified(dx, 0, tile.col, tile.row)!),
+        sample: (point: { x: number; y: number }) => field.sample(toWindow(point)),
+        at: (point: { x: number; y: number }) => field.at(toWindow(point)),
+      };
       const plain = buildSectorTerrainData(grid, alea(1), false);
-      const data = buildSectorTerrainData(grid, alea(1), false, { waterDepthAt: sample });
-      expect(data.batches.map((batch) => batch.positions)).toEqual(plain.batches.map((batch) => batch.positions));
+      const data = buildSectorTerrainData(grid, alea(1), false, { field: local_field as never });
+      // Edges shared with the other sector drop to its real seabed instead of a cut to the floor.
+      const rimOf = (terrain: typeof data) => terrain.segments.find((segment) => segment.tiles.length === 0 && segment.kinds.every((kind) => kind === KIND.flat));
+      expect(rimOf(data)?.positions.length ?? 0).toBeLessThan(rimOf(plain)!.positions.length);
+      const surfaces = (terrain: typeof data) => vertices(terrain).filter((vertex) => vertex.kind === KIND.water || vertex.kind === KIND.noise || vertex.kind === KIND.image).map((vertex) => [vertex.x, vertex.y]);
+      expect(surfaces(data)).toEqual(surfaces(plain));
       expect(data.faceOffsets).toEqual(plain.faceOffsets);
       expect(grid.toArray().map((tile) => [tile.cost, tile.blocked, tile.spec])).toEqual(before);
-      const water = data.batches.find((batch) => batch.layer < 0)!;
-      const vertices = new Map<string, number[]>();
-      for (let index = 0; index < water.positions.length; index += 2) {
-        const x = water.positions[index]! + dx * 8 * local.width * 0.75;
-        const y = water.positions[index + 1]!;
-        vertices.set(`${x.toFixed(4)},${y.toFixed(4)}`, [...water.colors.slice(index / 2 * 3, index / 2 * 3 + 3)]);
-      }
-      seams.push(vertices);
+      const shared = new Map<string, number[]>();
+      for (const vertex of vertices(data).filter((vertex) => vertex.kind === KIND.water))
+        shared.set(`${(vertex.x + dx * 8 * local.width * 0.75).toFixed(4)},${vertex.y.toFixed(4)}`, [...vertex.color, ...vertex.relief]);
+      seams.push(shared);
     }
     const shared = [...seams[0]!].filter(([point]) => seams[1]!.has(point));
     expect(shared.length).toBeGreaterThan(3);
     for (const [point, color] of shared) expect(seams[1]!.get(point)).toEqual(color);
+  });
+
+  const frozenCoast = (frost: "snow" | "ground") => {
+    const map = mapOf(16, 4);
+    map.tiles = map.tiles.map((tile) => ({ ...tile,
+      terrain: tile.x < 2 ? frost : "ocean",
+      battleBiome: tile.x < 2 ? (frost === "snow" ? "snow" : "ground") : "ocean",
+    }));
+    return prepare(map);
+  };
+
+  it("freezes stock water off an icy coast and leaves open water beyond its reach", () => {
+    const { grid, data } = frozenCoast("snow");
+    const frozen = grid.toArray().filter((tile) => tile.frozen).map((tile) => tile.col);
+    expect(frozen.length).toBeGreaterThan(0);
+    expect(Math.min(...frozen)).toBe(2);
+    expect(Math.max(...frozen)).toBeLessThanOrEqual(1 + WATER_FIELD_REACH);
+    expect(grid.toArray().some((tile) => tile.spec?.isWater && !tile.frozen)).toBe(true);
+    expect(grid.toArray().every((tile) => !tile.frozen || tile.spec?.isWater)).toBe(true);
+    const water = vertices(data).filter((vertex) => vertex.kind === KIND.water);
+    expect(water.some((vertex) => vertex.relief[1] === 1)).toBe(true);
+    expect(water.every((vertex) => vertex.relief[0]! >= 0 && vertex.relief[0]! <= 1)).toBe(true);
+    // The seabed under the ice steps down offshore, a block per terrace.
+    const depths = vertices(data).filter((vertex) => vertex.kind === KIND.seabed).map((vertex) => Math.round(vertex.relief[0]! * MAX_SEABED_DEPTH));
+    expect(Math.min(...depths)).toBe(1);
+    expect(Math.max(...depths)).toBeGreaterThan(1);
+  });
+
+  it("keeps temperate coasts liquid and their tidal edge unfrozen", () => {
+    const { grid, data } = frozenCoast("ground");
+    const snowy = frozenCoast("snow").data;
+    expect(grid.toArray().some((tile) => tile.frozen)).toBe(false);
+    expect(vertices(data).some((vertex) => vertex.kind === KIND.water && vertex.relief[1]! > 0)).toBe(false);
+    expect(data.surfaceColors).not.toEqual(snowy.surfaceColors);
+    expect(data.faceOffsets).toEqual(snowy.faceOffsets);
   });
 
   it("keeps custom water textures and light layout outside the stock depth treatment", () => {
@@ -333,11 +467,11 @@ describe("coastal water depth", () => {
     const ocean = registry.get("ocean")!;
     registry.set("ocean", { ...ocean, colors: ["#203040", "#304050", "#405060"] });
     const colored = prepare(map, false, registry).data;
-    expect(colored.batches.find((batch) => batch.layer < 0)?.texture).toBe(ocean.textureUrl);
+    expect(colored.textures).toContain(ocean.textureUrl!);
     registry.set("ocean", { ...ocean, textureUrl: "custom-water.png" });
     const { grid } = prepareSectorGrid(1024, alea(1), 1, [], map, registry, null);
     const custom = buildSectorTerrainData(grid, alea(1), false, { sector: 222 });
-    expect(custom.batches.find((batch) => batch.layer < 0)?.texture).toBe("custom-water.png");
+    expect(custom.textures).toContain("custom-water.png");
     expect(buildSectorTerrainData(grid, alea(1), true, { sector: 222 }).animatedTiles).toBe(0);
   });
 });

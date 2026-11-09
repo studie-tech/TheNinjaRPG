@@ -1,4 +1,5 @@
 import { oddQHexDistance, oddQLineStep } from "@/libs/hexgrid";
+import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import type {
   NormalizedSectorMap,
   NormalizedSectorTile,
@@ -30,7 +31,10 @@ type WanderMap = Pick<NormalizedSectorMap, "width" | "height" | "tiles"> &
  */
 const STRUCTURE_CLEARANCE = { columns: 2, behind: 3, front: 2 } as const;
 
-/** An open tile a roaming AI may stand on; `wildOnly` keeps it out of villages and roads. */
+/**
+ * An open land tile a roaming AI may stand on; `wildOnly` keeps it out of villages and roads.
+ * Authored water is usually zoned as wilderness, so water terrain is excluded by its kind.
+ */
 export const isWanderTile = (
   tile: NormalizedSectorTile | undefined,
   wildOnly: boolean,
@@ -39,6 +43,7 @@ export const isWanderTile = (
   !tile.blocked &&
   tile.zone !== "structure" &&
   tile.zone !== "water" &&
+  !BUILTIN_TERRAINS_BY_KEY.get(tile.terrain)?.isWater &&
   tile.zone !== "shrine" &&
   (!wildOnly || tile.zone === "wilderness");
 

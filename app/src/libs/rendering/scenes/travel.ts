@@ -20,7 +20,11 @@ import { createMapControls } from "@/libs/rendering/mapControls";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
-import { createGameRenderer, type GameRenderer } from "@/libs/rendering/runtime";
+import {
+  createGameRenderer,
+  type GameFrame,
+  type GameRenderer,
+} from "@/libs/rendering/runtime";
 import {
   createTravelActors,
   type TravelActorHit,
@@ -37,13 +41,23 @@ import {
   type WorldSpriteDescription,
 } from "@/libs/rendering/sectorSprites";
 import {
-  createWaterShelf,
   type HexTerrainData,
   hexTerrainAt,
+  terrainFrost,
 } from "@/libs/rendering/terrainData";
+import {
+  createTerrainField,
+  isFlatZone,
+  liftSpritesToTerrain,
+  objectFootprints,
+  sectorRelief,
+  standingOffset,
+  type TerrainCell,
+  type TerrainField,
+  waterSampleKey,
+} from "@/libs/rendering/terrainElevation";
 import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
-import { hasWorldWaterDepth } from "@/libs/rendering/worldArt";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import {
   createWorldWeather,
@@ -159,9 +173,72 @@ export const createTravelScene = async (options: {
     const sectors = new Map<number, TravelSector>();
     const movements = new Map<string, TravelActorMovement>();
     let sceneryScale = Number.NaN;
+    /** Scenery currently painted over the viewer's actor. */
+    const covering = new Set<Container>();
+    /** Faded or easing scenery, with the opacity each sprite returns to. */
+    const revealed = new Map<Container, number>();
+    let covered: { bounds: WorldBounds; depth: number; art: number } | null = null,
+      artRevision = 0;
+    /** Ease scenery that hides the viewer translucent, and back once the viewer has moved on. */
+    const revealViewer = (frame: GameFrame, userId: string | undefined) => {
+      const body = userId ? actors.body(userId) : undefined;
+      if (!sameCover(covered, body, artRevision)) {
+        covered = body ? { ...body, art: artRevision } : null;
+        covering.clear();
+        if (body)
+          for (const rendered of sectors.values()) {
+            const { x, y } = rendered.position;
+            // Sector-local extent of the body, so each placed sprite is tested without allocating.
+            const minX = body.bounds.minX - x,
+              maxX = body.bounds.maxX - x,
+              minY = body.bounds.minY - y,
+              maxY = body.bounds.maxY - y;
+            if (
+              maxX < -rendered.margin ||
+              minX > logicalWidth + rendered.margin ||
+              maxY < -rendered.margin ||
+              minY > rendered.height + rendered.margin
+            )
+              continue;
+            for (const entry of rendered.art.entries) {
+              if (entry.sprite.zIndex <= body.depth) continue;
+              const { bounds } = entry;
+              if (
+                bounds.maxX < minX ||
+                bounds.minX > maxX ||
+                bounds.maxY < minY ||
+                bounds.minY > maxY ||
+                entry.description.small ||
+                entry.character
+              )
+                continue;
+              covering.add(entry.sprite);
+            }
+          }
+      }
+      for (const sprite of covering)
+        if (!revealed.has(sprite)) revealed.set(sprite, sprite.alpha);
+      if (!revealed.size) return;
+      const blend = frame.reducedMotion ? 1 : -Math.expm1(-REVEAL_RATE * frame.delta);
+      for (const [sprite, opacity] of revealed) {
+        if (sprite.destroyed) {
+          revealed.delete(sprite);
+          continue;
+        }
+        const target = covering.has(sprite) ? opacity * REVEAL_OPACITY : opacity;
+        if (sprite.alpha === target) {
+          if (target === opacity) revealed.delete(sprite);
+          continue;
+        }
+        const alpha = sprite.alpha + (target - sprite.alpha) * blend;
+        sprite.alpha = Math.abs(target - alpha) < 0.01 ? target : alpha;
+        game.invalidate();
+      }
+    };
     /** Keep draw order global while retained sector scopes continue owning their sprites. */
     const placeArt = (art: TravelSector["art"], position: { x: number; y: number }) => {
       sceneryScale = Number.NaN;
+      artRevision++;
       art.attachLayers(
         { ground: groundArtLayer, world: depthLayer, ui: uiLayer },
         position.y,
@@ -284,12 +361,12 @@ export const createTravelScene = async (options: {
         getBackgroundColor(map.tiles[0]?.battleBiome ?? "ground").color,
       );
     };
-    // Account refreshes do not change water topology; retain its grid and per-sector signatures together.
+    // Account refreshes do not change terrain topology; retain its grid and per-sector signatures together.
     let shoreline: {
       key: string;
       nav: ReturnType<typeof buildWindowNav>;
-      coast: Map<TerrainHex, { isWater: boolean }>;
-      shelf: ReturnType<typeof createWaterShelf> | null;
+      cells: Map<TerrainHex, TerrainCell>;
+      field: TerrainField | null;
       keys: Map<number, string>;
     } | null = null;
     /** Latest request wins; completed sectors remain usable until departure or successful replacement. */
@@ -332,15 +409,8 @@ export const createTravelScene = async (options: {
             Number(b.sector === snapshot.sector) - Number(a.sector === snapshot.sector),
         );
       const wallPlans = planVillageWallWindow(snapshot.window);
-      // A shared shoreline field spans the same aligned grid as travel, without changing its navigation.
-      const hasWaterShelf =
-        !options.lightLayout &&
-        hasWorldWaterDepth(snapshot.terrains.get("ocean")) &&
-        snapshot.window.some(
-          (entry) =>
-            entry.globalTileType === 0 ||
-            entry.map.tiles.some((tile) => tile.terrain === "ocean"),
-        );
+      // One terrain field spans the same aligned grid as travel, without changing its navigation.
+      const hasTerrainField = !options.lightLayout;
       const prepared = new Map<
         number,
         {
@@ -350,7 +420,7 @@ export const createTravelScene = async (options: {
           prng?: () => number;
         }
       >(
-        (hasWaterShelf ? snapshot.window : ordered).map((entry) => {
+        (hasTerrainField ? snapshot.window : ordered).map((entry) => {
           const sourceKey = travelSectorKey(
             entry,
             snapshot.libraryVersion,
@@ -386,7 +456,7 @@ export const createTravelScene = async (options: {
         }),
       );
       const shorelineKey = JSON.stringify([
-        hasWaterShelf,
+        hasTerrainField,
         snapshot.window.map((entry) => [
           entry.sector,
           entry.dx,
@@ -395,20 +465,42 @@ export const createTravelScene = async (options: {
         ]),
       ]);
       if (!shoreline || shoreline.key !== shorelineKey) {
-        const nav = hasWaterShelf
+        const nav = hasTerrainField
           ? (snapshot.nav ?? buildWindowNav(snapshot.window, 10))
           : null;
-        const coast = new Map<TerrainHex, { isWater: boolean }>();
+        const cells = new Map<TerrainHex, TerrainCell>();
         if (nav)
-          for (const entry of snapshot.window)
-            for (const tile of prepared.get(entry.sector)?.grid ?? []) {
+          for (const entry of snapshot.window) {
+            // Settlements stay level; wild sectors rise in steps around their shrines and paths.
+            const settled = !!entry.villageType;
+            const relief = sectorRelief(
+              entry.sector,
+              entry.map.width,
+              entry.map.height,
+            );
+            const grid = prepared.get(entry.sector)?.grid;
+            const footprints = grid
+              ? objectFootprints(grid, entry.map.objects)
+              : new Set();
+            for (const tile of grid ?? []) {
               const unified = nav.toUnified(entry.dx, entry.dy, tile.col, tile.row);
-              if (unified) coast.set(unified, { isWater: !!tile.spec?.isWater });
+              if (unified)
+                cells.set(unified, {
+                  isWater: !!tile.spec?.isWater,
+                  frost: terrainFrost(tile.spec?.key ?? ""),
+                  flat:
+                    settled ||
+                    !!tile.hasStructure ||
+                    isFlatZone(tile.zone) ||
+                    footprints.has(tile),
+                  relief: relief(tile.col, tile.row),
+                });
             }
-        const shelf = nav ? createWaterShelf(nav.pathFinder.grid, coast) : null;
-        shoreline = { key: shorelineKey, nav, coast, shelf, keys: new Map() };
+          }
+        const field = nav ? createTerrainField(nav.pathFinder.grid, cells) : null;
+        shoreline = { key: shorelineKey, nav, cells, field, keys: new Map() };
       }
-      const { nav, coast, shelf } = shoreline;
+      const { nav, cells, field } = shoreline;
       for (const entry of ordered) {
         if (disposed || token !== generation) return;
         const locations = snapshot.locations.filter(
@@ -419,28 +511,20 @@ export const createTravelScene = async (options: {
         let { grid, villageWallPlan, prng } = preparedSector;
         const unifiedOrigin = nav?.toUnified(entry.dx, entry.dy, 0, 0),
           localOrigin = grid.getHex({ col: 0, row: 0 });
-        // Only nearby dry cells affect a retained sector's shelf; distant window changes keep its artwork cached.
+        // A retained sector keeps its artwork while its own terrain results are unchanged.
         const shoreKey =
           shoreline.keys.get(entry.sector) ??
-          (shelf && unifiedOrigin
-            ? [...coast]
-                .filter(
-                  ([tile, material]) =>
-                    !material.isWater &&
-                    tile.col >= unifiedOrigin.col - 4 &&
-                    tile.col < unifiedOrigin.col + entry.map.width + 4 &&
-                    tile.row >= unifiedOrigin.row - 4 &&
-                    tile.row < unifiedOrigin.row + entry.map.height + 4,
-                )
-                .map(
-                  ([tile]) =>
-                    `${tile.col - unifiedOrigin.col},${tile.row - unifiedOrigin.row}`,
-                )
-                .sort()
-                .join(";")
+          (field && nav && unifiedOrigin
+            ? terrainResultKey(
+                nav.pathFinder.grid,
+                cells,
+                field,
+                unifiedOrigin,
+                entry.map,
+              )
             : "");
         shoreline.keys.set(entry.sector, shoreKey);
-        const key = preparedSector.sourceKey + (shelf ? `water:${shoreKey}` : "");
+        const key = preparedSector.sourceKey + (field ? `terrain:${shoreKey}` : "");
         const position = {
           x: origin.x + entry.dx * spanX,
           y: origin.y + entry.dy * spanY,
@@ -452,6 +536,8 @@ export const createTravelScene = async (options: {
         if (existing?.key === key) {
           existing.position = position;
           existing.terrain.container.position.copyFrom(position);
+          existing.terrain.setOrigin(position.x, position.y);
+          existing.terrain.setDepthBias(sectorDepthBias(entry.dy));
           existing.art.container.position.copyFrom(position);
           placeArt(existing.art, position);
           // A retained neighbor may become occupied before the previous sector finishes its artwork.
@@ -494,26 +580,39 @@ export const createTravelScene = async (options: {
               mapAssets: snapshot.mapAssets,
               roads,
             });
+            const { dx, dy } = entry;
+            // Sector-local points map onto the window grid the field was built on.
+            const toWindow = (point: { x: number; y: number }) =>
+              unifiedOrigin && localOrigin
+                ? {
+                    x:
+                      unifiedOrigin.x +
+                      ((point.x - localOrigin.x) * unifiedOrigin.width) /
+                        localOrigin.width,
+                    y:
+                      unifiedOrigin.y +
+                      ((point.y - localOrigin.y) * unifiedOrigin.height) /
+                        localOrigin.height,
+                  }
+                : point;
             data = buildSectorTerrainData(grid, prng, options.lightLayout, {
               sector: entry.sector,
               sprites: descriptions,
               wall: villageWallPlan,
               roads,
-              waterDepthAt:
-                shelf && unifiedOrigin && localOrigin
-                  ? (point) =>
-                      shelf({
-                        x:
-                          unifiedOrigin.x +
-                          ((point.x - localOrigin.x) * unifiedOrigin.width) /
-                            localOrigin.width,
-                        y:
-                          unifiedOrigin.y +
-                          ((point.y - localOrigin.y) * unifiedOrigin.height) /
-                            localOrigin.height,
-                      })
+              field:
+                field && nav && unifiedOrigin && localOrigin
+                  ? {
+                      level: (tile) => {
+                        const unified = nav.toUnified(dx, dy, tile.col, tile.row);
+                        return unified ? field.level(unified) : 0;
+                      },
+                      sample: (point) => field.sample(toWindow(point)),
+                      at: (point) => field.at(toWindow(point)),
+                    }
                   : undefined,
             });
+            liftSpritesToTerrain(descriptions, grid);
           }
           // Retain only CPU scenery data across navigation; each scene owns its GPU resources.
           cachedSectorData.delete(entry.sector);
@@ -578,6 +677,8 @@ export const createTravelScene = async (options: {
           terrain.setLighting(1);
           scope.own(shadows.registerTerrain(terrain.container, data));
           terrain.container.position.copyFrom(position);
+          terrain.setOrigin(position.x, position.y);
+          terrain.setDepthBias(sectorDepthBias(entry.dy));
           art.container.position.copyFrom(position);
           terrainLayer.addChild(terrain.container);
           // Interleave sector depths while retaining each sector's transform and ownership.
@@ -691,10 +792,11 @@ export const createTravelScene = async (options: {
               Math.min(1, (frame.now - step.startedAt) / SECTOR_WALK_STEP_MS),
             );
         const ax = -a.center.x + from.position.x,
-          ay = -a.center.y + from.position.y;
+          ay = -a.center.y + standingOffset(a) + from.position.y;
+        const by = -b.center.y + standingOffset(b) + to.position.y;
         movements.set(userId, {
           x: ax + (-b.center.x + to.position.x - ax) * progress - entry.position.x,
-          y: ay + (-b.center.y + to.position.y - ay) * progress - entry.position.y,
+          y: ay + (by - ay) * progress - entry.position.y,
           direction: progress < 1 ? step.direction : null,
           facing: step.facing,
         });
@@ -728,12 +830,28 @@ export const createTravelScene = async (options: {
           const leg = wanderLeg({ ...wander, spots }, user.npcMember ?? 0, cycle);
           const point = (tile: WanderTile, offset: WanderTile) => {
             const hex = entry.grid.getHex({ col: tile.x, row: tile.y });
-            return hex
-              ? {
-                  x: -hex.center.x + offset.x * hex.width,
-                  y: -hex.center.y + offset.y * hex.height,
-                }
-              : null;
+            if (!hex) return null;
+            // A herd member's offset from its leader's land spot pulls in rather than stand in
+            // water, and stands on the terrace of the tile it ends up on.
+            let share = 1,
+              ground = hex;
+            for (; share > 0; share -= 0.5) {
+              const under = entry.grid.pointToHex(
+                {
+                  x: hex.x + offset.x * hex.width * share,
+                  y: hex.y + offset.y * hex.height * share,
+                },
+                { allowOutside: false },
+              );
+              if (!under?.spec?.isWater) {
+                ground = under ?? hex;
+                break;
+              }
+            }
+            return {
+              x: -hex.center.x + offset.x * hex.width * share,
+              y: -hex.center.y + offset.y * hex.height * share + standingOffset(ground),
+            };
           };
           walk = {
             seed: wander.seed,
@@ -763,7 +881,10 @@ export const createTravelScene = async (options: {
         const movement = movements.get(snapshot.viewer?.userId ?? "");
         const target = {
           x: (movement?.x ?? -tile.center.x) + tile.width / 2 + entry.position.x,
-          y: (movement?.y ?? -tile.center.y) + tile.height / 2 + entry.position.y,
+          y:
+            (movement?.y ?? -tile.center.y + standingOffset(tile)) +
+            tile.height / 2 +
+            entry.position.y,
         };
         if (!camera) camera = target;
         else if (!hasManualCamera) {
@@ -847,6 +968,7 @@ export const createTravelScene = async (options: {
       }
       // Zoom can reclassify foreground scenery before actor contact order is resolved.
       actors.animate(frame, movements);
+      revealViewer(frame, snapshot.viewer?.userId);
       sceneryScale = scale();
       const pointer = controls.pointer();
       let hoverTile: TravelPick["tile"] = null;
@@ -936,20 +1058,31 @@ export const createTravelScene = async (options: {
         route.set(points, tile?.width ?? 50);
       }
       route.animate(frame, actors.feet(snapshot.viewer?.userId ?? ""), scale());
+      const currentWeather =
+        snapshot.weather ??
+        getWorldWeather(
+          getBiomeFromTileType(
+            snapshot.window.find((region) => region.sector === snapshot.sector)
+              ?.globalTileType ?? 1,
+          ),
+          snapshot.weatherTime ?? Number.NaN,
+        );
       weather.update(
         sourceFrame,
-        snapshot.weather ??
-          getWorldWeather(
-            getBiomeFromTileType(
-              snapshot.window.find((region) => region.sector === snapshot.sector)
-                ?.globalTileType ?? 1,
-            ),
-            snapshot.weatherTime ?? Number.NaN,
-          ),
+        currentWeather,
         world.position,
         snapshot.brightness,
         scale(),
       );
+      // Raindrops ring open water only while the rain itself is drawn.
+      const rain =
+        game.visualEffects.weather &&
+        !sourceFrame.reducedMotion &&
+        currentWeather.kind === "rain" &&
+        Number.isFinite(currentWeather.intensity)
+          ? currentWeather.intensity
+          : 0;
+      for (const rendered of sectors.values()) rendered.terrain.setRain(rain);
       // World lighting excludes the canvas UI and the actors' identity markers.
       bakedLighting?.blendSun(worldSunlight(snapshot.lightDate));
       const sun = worldSunlight(snapshot.lightDate, 60_000);
@@ -1114,3 +1247,61 @@ const cachedSectorData = new Map<
     descriptions: WorldSpriteDescription[];
   }
 >();
+
+/**
+ * What the terrain field gives one sector: its tiles' terraces, its water's ice and shore
+ * samples, and the terraces just across its borders that its edge walls drop to. Window
+ * changes that leave these alone keep the sector's terrain and artwork.
+ */
+const terrainResultKey = (
+  grid: Grid<TerrainHex>,
+  cells: ReadonlyMap<TerrainHex, TerrainCell>,
+  field: TerrainField,
+  origin: TerrainHex,
+  map: Pick<NormalizedSectorMap, "width" | "height">,
+) => {
+  let key = "";
+  for (let row = origin.row - 1; row <= origin.row + map.height; row++) {
+    for (let col = origin.col - 1; col <= origin.col + map.width; col++) {
+      const tile = grid.getHex({ col, row });
+      const cell = tile && cells.get(tile);
+      if (!tile || !cell) {
+        key += " ";
+        continue;
+      }
+      key += String.fromCharCode(76 + field.level(tile));
+      const inside =
+        col >= origin.col &&
+        col < origin.col + map.width &&
+        row >= origin.row &&
+        row < origin.row + map.height;
+      if (inside && cell.isWater)
+        for (const corner of tile.corners) key += waterSampleKey(field.sample(corner));
+    }
+    key += "/";
+  }
+  return key;
+};
+
+/** Whether the viewer's body and the placed artwork are unchanged since covering scenery was found. */
+const sameCover = (
+  previous: { bounds: WorldBounds; depth: number; art: number } | null,
+  body: { bounds: WorldBounds; depth: number } | undefined,
+  art: number,
+) =>
+  previous && body
+    ? previous.art === art &&
+      previous.depth === body.depth &&
+      previous.bounds.minX === body.bounds.minX &&
+      previous.bounds.maxX === body.bounds.maxX &&
+      previous.bounds.minY === body.bounds.minY &&
+      previous.bounds.maxY === body.bounds.maxY
+    : !previous && !body;
+
+/** Opacity factor of scenery painted over the viewer's own actor. */
+const REVEAL_OPACITY = 0.45;
+/** Exponential easing rate, per second, of scenery fading over and back from the viewer. */
+const REVEAL_RATE = 10;
+
+/** Sectors further back paint first, so raised terraces along a border cover the sector behind. */
+const sectorDepthBias = (dy: number) => -dy * 0.001;
