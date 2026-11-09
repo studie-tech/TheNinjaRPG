@@ -2793,7 +2793,7 @@ export const initiateBattle = async (
     return errorResponse("One of the targets is immune from combat.");
   }
 
-  // Repeat fights within 60 minutes divide reward scaling
+  // Repeat PvP fights within 60 minutes divide reward scaling (and human shrine-war XP)
   // Friendly NPCs do not increase the reward for defeating the authored enemies.
   let rewardScaling = (scaleGains * (users.length - allyAiIds.length)) / 2;
   const repeatOpponentScaling =

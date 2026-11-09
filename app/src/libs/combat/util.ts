@@ -718,8 +718,9 @@ export const isUserImmobilized = (
 /**
  * Get copies of the barriers on the shortest path between two tiles, and the total
  * fraction of damage they absorb (0-1). Barriers are taken in path order; each copy's
- * absorbPercentage is replaced by its marginal 0-1 share of that total
- * (remaining share × absorbPercentage / 100), not the schema's 1-100 percentage.
+ * absorbPercentage is replaced by the 0-1 fraction of the hit it absorbs after the
+ * barriers before it (remaining × absorbPercentage / 100), not the schema's 1-100
+ * percentage. These fractions sum to the returned total.
  * The caster's own barriers are skipped unless they sit on the target tile.
  */
 export const getBarriersBetween = (

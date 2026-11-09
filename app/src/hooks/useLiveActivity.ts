@@ -9,9 +9,9 @@ import type { UserWithRelations } from "@/routers/profile";
 /**
  * Puts the hospital countdown on the Lock Screen and in the Dynamic Island.
  *
- * Only hospital has a known finish time: training runs until the player stops it, and
- * the server publishes no raid schedule. The plugin also handles training and raid
- * activities.
+ * Only hospital has a finish time the client knows: training runs until the player
+ * stops it, and wars publish no end time here. The plugin also renders the training and
+ * war kinds.
  *
  * The activity is started on the device and driven from the server afterwards, which is
  * what keeps it counting down while the app is closed.

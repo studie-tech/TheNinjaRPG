@@ -145,7 +145,7 @@ const initialGameState = towerDefenseGameStateSchema.parse({
   existingSession: null,
 });
 
-// COST OPTIMIZATION: Extended EntityStore to include enemy spawn data
+// EntityStore also holds enemy spawn data (static path, maxHealth).
 // Enemy spawn data (path, maxHealth) is stored separately and never updated
 interface ExtendedEntityStore extends EntityStore {
   enemySpawns: Map<string, EnemySpawn>;
@@ -269,7 +269,6 @@ export const useTowerDefense = (userId?: string) => {
 
   // PERFORMANCE: Entity store lives outside React state
   // Animation loop reads directly from this - no re-renders on entity updates
-  // COST OPTIMIZATION: Extended to include enemySpawns for static path data
   const entitiesRef = useRef<ExtendedEntityStore>(createEntityStore());
 
   // PERFORMANCE: Runtime state lives outside React state. Game data updates here

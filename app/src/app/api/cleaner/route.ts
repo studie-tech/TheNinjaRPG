@@ -85,7 +85,8 @@ export async function GET(request: Request) {
     await completeExpiredGlobalTravel(drizzleDB);
 
     // A device can end an orphaned activity after a cold launch without JavaScript knowing
-    // its id. Keep a retry window for failed APNs endings, then drain those dead addresses.
+    // its id. Keep a one-day retry window past endsAt for failed APNs endings, then drain
+    // those dead addresses.
     await deleteUserLiveActivityForGET(drizzleDB);
 
     // Battle retention periods:
@@ -118,10 +119,10 @@ export async function GET(request: Request) {
     // so LIMIT bounds the scan instead of sorting every row in each retention class.
     await executeRowsForGET2(drizzleDB, pvpTypes, cleanupBatchSize);
 
-    // Delete conversations older than 14 days
+    // Delete private, non-staff conversations not updated for 14 days
     await deleteConversationForGET(drizzleDB);
 
-    // Delete conversation comments older than 14 days
+    // Delete comments older than 14 days outside staff conversations and Global
     await executeRowsForGET3(drizzleDB);
 
     // Delete other public conversation comments older than 2 days
@@ -208,6 +209,7 @@ export async function GET(request: Request) {
     // Clear automatedModeration older than 3 months
     await deleteAutomatedModerationForGET(drizzleDB, rangeCleanupBatchSize);
 
+    // Clear moderation scans past MODERATION_SCAN_RETENTION_DAYS
     await deleteModerationScanForGET(drizzleDB, rangeCleanupBatchSize);
 
     // Federal status is derived state. Reconcile its exact maximum active tier
