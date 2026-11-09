@@ -15,7 +15,10 @@ export const fetchBadge = async (client: DrizzleClient, id: string) => {
   });
 };
 
-/** List each current badge holder once, ordered by their first recorded award. */
+/**
+ * List public holder fields once per user, using the earliest duplicate award.
+ * The profile join excludes orphan assignments; user IDs stabilize timestamp ties.
+ */
 export const listBadgeAchievers = (
   client: Pick<DrizzleClient, "select">,
   input: { badgeId: string; page: number; limit: number; order: "newest" | "oldest" },
@@ -39,7 +42,7 @@ export const listBadgeAchievers = (
     .limit(input.limit);
 };
 
-/** Count distinct badge holders with an existing public profile. */
+/** Count the same distinct, existing profiles as the paginated holder query. */
 export const countBadgeAchievers = (
   client: Pick<DrizzleClient, "select">,
   badgeId: string,

@@ -150,6 +150,7 @@ const EditUserComponent = dynamic(
   { loading: () => <Loader explanation="Loading user editor" /> },
 );
 
+// Keep statistics code and its query off the initial public-profile load.
 const BadgeStatisticsModal = dynamic(() =>
   import("@/layout/BadgeStatisticsModal").then((module) => module.BadgeStatisticsModal),
 );

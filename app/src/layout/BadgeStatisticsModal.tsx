@@ -22,7 +22,10 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { formatDateTimeShort } from "@/utils/time";
 
-/** Load public badge holders only while the statistics dialog is mounted. */
+/**
+ * Show public badge holders in the shared dialog with UTC award times and pagination.
+ * Mounting only for a selected badge defers queries and resets page/sort on reopening.
+ */
 export const BadgeStatisticsModal = ({
   badge,
   setIsOpen,
@@ -43,7 +46,7 @@ export const BadgeStatisticsModal = ({
   const total = query.data?.total;
   const pages = Math.max(1, Math.ceil((total ?? 0) / limit));
 
-  // Cached pages keep the body mounted, so each result set needs its own scroll reset.
+  // Modal owns the scrolling parent; cached pages otherwise retain its old offset.
   useEffect(() => {
     summaryRef.current?.parentElement?.scrollTo({ top: 0 });
   }, [page, order]);
@@ -209,6 +212,7 @@ export const BadgeStatisticsModal = ({
   );
 };
 
+/** Badge selection and focus restoration stay with the profile's badge controls. */
 interface BadgeStatisticsModalProps {
   badge: Pick<Badge, "id" | "name" | "image">;
   setIsOpen: Dispatch<SetStateAction<boolean>>;

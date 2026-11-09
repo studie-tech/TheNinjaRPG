@@ -39,6 +39,7 @@ import { BadgeValidator } from "@/validators/badge";
 import { idSchema } from "@/validators/misc";
 
 export const badgeRouter = createTRPCRouter({
+  /** Public, read-only holder pages and totals; independent reads run concurrently. */
   getAchievers: publicProcedure
     .input(
       z.object({

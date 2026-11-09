@@ -5,6 +5,7 @@ import { insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
+/** Exercise the public procedure without granting a signed-in user or staff role. */
 const anonymousCaller = async () => badgeRouter.createCaller({
   drizzle: await getTestDatabase(), userId: null, userIp: "127.0.0.1",
 } as never);
@@ -19,6 +20,7 @@ describeWithDatabase("public badge achievers", () => {
       { userId: "c", username: "Third" },
     ]);
     const db = await getTestDatabase();
+    // Duplicate awards, timestamp ties and orphan assignments exercise holder identity.
     await db.insert(userBadge).values([
       { userId: "a", badgeId: "badge", createdAt: new Date("2026-01-01T12:00:00Z") },
       { userId: "a", badgeId: "badge", createdAt: new Date("2026-03-01T12:00:00Z") },
