@@ -10,32 +10,43 @@ import * as context from "@/utils/UserContext";
 
 let unmutedTavernIds: string[];
 let chatMuted: boolean;
+let storedTavern: string | undefined;
+let role: string;
+let globalTavernEnabled: boolean;
 const toggleTavernMute = vi.fn();
 const setChatMuted = vi.fn();
 
 beforeEach(() => {
   unmutedTavernIds = [];
   chatMuted = false;
+  storedTavern = "Konoki";
+  role = "USER";
+  globalTavernEnabled = true;
   toggleTavernMute.mockReset();
   setChatMuted.mockReset();
-  vi.spyOn(context, "useRequiredUserData").mockReturnValue({
-    data: { userId: "reader", role: "USER", isBanned: false, isSilenced: false },
-  } as never);
-  vi.spyOn(taverns, "useTaverns").mockReturnValue({
-    availTaverns: ["Global", "Konoki"],
-    localTavern: "Konoki",
-    canAccessGlobal: true,
-    globalTavernEnabled: true,
-    isLoading: false,
-  } as never);
+  vi.spyOn(context, "useRequiredUserData").mockImplementation(
+    () =>
+      ({
+        data: { userId: "reader", role, isBanned: false, isSilenced: false },
+      }) as never,
+  );
+  vi.spyOn(taverns, "useTaverns").mockImplementation(() => {
+    const canAccessGlobal = globalTavernEnabled || role !== "USER";
+    return {
+      availTaverns: canAccessGlobal ? ["Global", "Konoki"] : ["Konoki"],
+      localTavern: "Konoki",
+      canAccessGlobal,
+      globalTavernEnabled,
+      isLoading: false,
+    } as never;
+  });
   vi.spyOn(tavernActivity, "useTavernIds").mockReturnValue([
     { id: "global-id", title: "Global" },
     { id: "konoki-id", title: "Konoki" },
   ]);
-  vi.spyOn(localStorage, "useLocalStorage").mockReturnValue([
-    "Konoki",
-    vi.fn(),
-  ] as never);
+  vi.spyOn(localStorage, "useLocalStorage").mockImplementation(
+    () => [storedTavern, vi.fn()] as never,
+  );
   vi.spyOn(mutes, "useChatMutes").mockImplementation(
     () =>
       ({
@@ -48,10 +59,17 @@ beforeEach(() => {
   );
   // The conversation itself loads over the network; the page only places the controls.
   vi.spyOn(conversation, "default").mockImplementation((({
+    convo_title,
     topRightContent,
   }: {
+    convo_title: string;
     topRightContent: React.ReactNode;
-  }) => <div>{topRightContent}</div>) as never);
+  }) => (
+    <div>
+      <h1>{`Conversation ${convo_title}`}</h1>
+      {topRightContent}
+    </div>
+  )) as never);
 });
 
 afterEach(() => {
@@ -83,4 +101,25 @@ it("turns muting all chat off rather than changing one tavern", () => {
   fireEvent.click(view.getByRole("button", { name: "Unmute chat notifications" }));
   expect(setChatMuted).toHaveBeenCalledWith(false);
   expect(toggleTavernMute).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["no stored tavern", undefined, true, "Global"],
+  ["a stored Global tavern while it is disabled", "Global", false, "Konoki"],
+] as const)("selects the shown tavern with %s", (_case, stored, enabled, expected) => {
+  storedTavern = stored;
+  globalTavernEnabled = enabled;
+  const view = render(<Tavern />);
+  expect(view.getByRole("heading", { name: `Conversation ${expected}` })).toBeDefined();
+  expect(
+    view.getByRole("button", { name: expected }).classList.contains("active"),
+  ).toBe(true);
+});
+
+it("shows the open tavern in the staff tavern picker before one is chosen", () => {
+  storedTavern = undefined;
+  role = "MODERATOR";
+  const view = render(<Tavern />);
+  expect(view.getByRole("heading", { name: "Conversation Global" })).toBeDefined();
+  expect(view.getByRole("combobox").textContent).toBe("Global");
 });
