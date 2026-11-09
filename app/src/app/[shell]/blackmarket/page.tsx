@@ -169,11 +169,7 @@ const BlackMarketItemCatalog: React.FC<{
   );
 };
 
-/**
- * For every 150 failed rolls, let the user get a free bloodline of the given rank
- * @param param0
- * @returns
- */
+/** Every PITY_BLOODLINE_ROLLS item rolls for a rank grant one guaranteed roll of that rank. */
 const PityBloodlineRoll: React.FC<{
   userData: NonNullable<UserWithRelations>;
 }> = ({ userData }) => {
@@ -262,10 +258,9 @@ const PityBloodlineRoll: React.FC<{
     >
       <Table data={itemRolls} columns={columns} />
       <p className="p-3 text-xs italic">
-        Once you have have rolled {PITY_BLOODLINE_ROLLS} times for a given rank
-        bloodline using items, you get 1 free roll, which is guarenteed to give you a
-        random bloodline of the given rank. <b>Note:</b> Pity system will be disabled
-        next monday alongside sales of S-rank items!
+        Once you have rolled {PITY_BLOODLINE_ROLLS} times for a given rank bloodline
+        using items, you get 1 free roll, which is guaranteed to give you a random
+        bloodline of the given rank.
       </p>
     </ContentBox>
   );
