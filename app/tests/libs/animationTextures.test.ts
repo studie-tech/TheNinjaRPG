@@ -195,6 +195,28 @@ describe("Pixi AI atlases", () => {
     expect(acquireAnimationTexture(long, 256)).toBeUndefined();
     expect(acquireAnimationTexture(long, 128, 1024)).toBeUndefined();
   });
+  it("serves legacy small sheets from the CDN and keeps their decoded atlas apart from linear loads", async () => {
+    const legacy = {
+      ...idle,
+      url: "https://ui0arpl8sm.ufs.sh/f/legacy",
+      smallUrl: "https://ui0arpl8sm.ufs.sh/f/legacy",
+    };
+    expect(animationTextureUrl(legacy, 128)).toBe(
+      "https://uploadthing.b-cdn.net/f/legacy",
+    );
+    const load = vi.spyOn(Assets, "load").mockImplementation(async () => atlas());
+    vi.spyOn(Assets, "unload").mockResolvedValue(undefined);
+    const lease = acquireAnimationTexture(legacy, 128)!;
+    await lease.resource;
+    // Scenes load the same file linearly by its plain address; Pixi must not hand either
+    // cache the other's texture or let one unload it under the other.
+    expect(load).toHaveBeenCalledWith(
+      expect.objectContaining({
+        src: "https://uploadthing.b-cdn.net/f/legacy#tnr-animation",
+      }),
+    );
+    lease.release();
+  });
   it("uses a stable bounded WebP rendition", () => {
     const url = new URL(animationTextureUrl(idle, 128));
     expect(url.searchParams.get("width")).toBe("256");

@@ -2,6 +2,7 @@
  * Audio utility functions for handling browser compatibility and user interactions
  */
 
+import { transformImageUrl } from "@/utils/image";
 import { clamp } from "@/utils/math";
 import { safeLocalStorageGetItem } from "@/utils/storage";
 
@@ -186,7 +187,8 @@ export const preloadAudioBuffers = async (urls: string[]) => {
   if (!ctx) return;
   const bufferCache = getAudioBufferCache();
   const bufferPending = getAudioBufferPending();
-  const unique = [...new Set(urls.filter(Boolean))];
+  // Uploads play from the Bunny pull zone, whose 30-day caching outlives a direct UploadThing copy.
+  const unique = [...new Set(urls.filter(Boolean).map(transformImageUrl))];
   const results = await Promise.allSettled(
     unique.map(async (url) => {
       const cached = bufferCache.get(url);
@@ -214,8 +216,13 @@ export const preloadAudioBuffers = async (urls: string[]) => {
 /**
  * Play a preloaded audio URL (falls back to on-demand if not preloaded).
  */
-export const playPreloadedAudio = async (url: string, volume = 0.8): Promise<void> => {
-  if (!url || typeof window === "undefined") return;
+export const playPreloadedAudio = async (
+  source: string,
+  volume = 0.8,
+): Promise<void> => {
+  if (!source || typeof window === "undefined") return;
+  // Preloads are keyed by the same CDN address.
+  const url = transformImageUrl(source);
   const ctx = getSharedAudioContext();
   const bufferCache = getAudioBufferCache();
   const bufferPending = getAudioBufferPending();
