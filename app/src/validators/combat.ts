@@ -1297,6 +1297,10 @@ export type EffectType = (typeof tagTypes)[number];
 
 // clearprevent, cleanseprevent and injectjutsus are deliberately unclassified, so
 // clear/cleanse cannot remove their own prevention effects.
+// These sets decide what clear (positive), cleanse (negative), copy (positive) and
+// mirror (negative) act on. They differ from questBuffTypes / questDebuffTypes:
+// moveprevent is in both sets, stun is a quest debuff but in neither set, and
+// summonprevent is a quest buff but classified negative here.
 const POSITIVE_USER_EFFECT_TYPES: ReadonlySet<string> = new Set([
   "absorb",
   "consume",
