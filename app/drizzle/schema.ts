@@ -2366,6 +2366,11 @@ export const recruitRankMilestone = mysqlTable(
 );
 export type RecruitRankMilestone = InferSelectModel<typeof recruitRankMilestone>;
 
+/**
+ * Global announcement feed. `userId` is the author; incrementing
+ * `UserData.unreadNotifications` decides who sees the newest rows as unread. A unique
+ * `warId` keeps each war-end announcement to one row. Per-player push delivery is separate.
+ */
 export const notification = mysqlTable(
   "Notification",
   {
@@ -3723,9 +3728,9 @@ export const userQueue = mysqlTable(
     jutsuId: varchar("jutsuId", { length: 191 }),
     /** CRAFT */
     itemId: varchar("itemId", { length: 191 }),
-    /** MASTERY: a mastery name; ENERGY: a combat stat name */
+    /** MASTERY: a mastery name; ELEMENT: an element; ENERGY: a combat stat name */
     stat: varchar("stat", { length: 64 }),
-    /** MASTERY: session interval */
+    /** MASTERY, ELEMENT: session interval */
     speed: mysqlEnum("speed", consts.TrainingSpeeds),
     /** ENERGY: Energy to spend */
     energy: double("energy"),
@@ -4213,8 +4218,7 @@ export const villageStructure = mysqlTable(
     villageId: varchar("villageId", { length: 191 }).notNull(),
     // Atlas, numerical material and stair geometry travel with each structure's published artwork.
     worldArt: json("worldArt").$type<import("@/libs/rendering/worldStructures").StructureArt>(),
-    // Signed: -1/-1 is the long-standing "not on the map" sentinel used by
-    // non-physical structures (Walls, Protectors) in every environment
+    // Signed: -1/-1 marks structures without a map position (Walls, Protectors)
     longitude: smallint("longitude").default(10).notNull(),
     latitude: smallint("latitude").default(10).notNull(),
     hasPage: tinyint("hasPage").default(0).notNull(),
@@ -5239,7 +5243,10 @@ export const war = mysqlTable(
       .notNull(),
     endedAt: datetime("endedAt", { mode: "date", fsp: 3 }),
     settlement: json("settlement").$type<WarSettlement>(),
-    /** Null selects legacy war behavior; approved objective wars keep their rules unchanged. */
+    /**
+     * Objective-war rules, kept unchanged once the war is approved. Null for sector wars,
+     * raids and village wars declared while objective wars are disabled.
+     */
     rules: json("rules").$type<WarRules>(),
     objectiveState: json("objectiveState").$type<ObjectiveWarState>(),
     combatStartedAt: datetime("combatStartedAt", { mode: "date", fsp: 3 }),
@@ -6734,8 +6741,7 @@ export const storePurchase = mysqlTable(
       transactionKey: uniqueIndex("StorePurchase_transactionId_key").on(
         table.transactionId,
       ),
-      // Same shape: every reader is one player's receipts, then a window on createdAt or
-      // a newest-first limit. Neither single-column index was serving that.
+      // Every reader loads one player's receipts, windowed on createdAt or newest-first.
       userIdCreatedAtIdx: index("StorePurchase_userId_createdAt_idx").on(
         table.userId,
         table.createdAt,
