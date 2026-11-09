@@ -1,7 +1,5 @@
 "use client";
-/**
- * This is a confirmation modal that is used to display a modal.
- */
+
 import type React from "react";
 import { useState } from "react";
 import Modal from "@/layout/Modal";
@@ -37,6 +35,7 @@ interface ConfirmProps {
   onClose?: () => void;
 }
 
+/** Clickable wrapper that opens a Modal and runs onAccept once the user confirms. */
 export const Confirm: React.FC<ConfirmProps> = (props) => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const { onAccept } = props;

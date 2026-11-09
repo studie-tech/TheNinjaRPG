@@ -29,7 +29,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   const router = useRouter();
   const [canGoBack, setCanGoBack] = useState(false);
 
-  // Handle back navigation
+  // Detect whether browser history has a previous page
   useEffect(() => {
     setCanGoBack(history.length > 1);
   }, []);

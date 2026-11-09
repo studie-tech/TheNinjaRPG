@@ -1000,13 +1000,13 @@ const renderRaidTips = (quest: DeepPartial<ZodQuestFormType>) => {
 const renderItemTips = (item: DeepPartial<ZodItemType>) => {
   const warnings = [];
 
-  // Warning for canBeCrafted without canBeTraded
+  // Craftable or gatherable items should usually be tradeable
   if ((item.canBeCrafted || item.canBeGathered) && !item.canBeTraded) {
     warnings.push({
       type: "warning",
       title: "Trading Recommendation",
       message:
-        "Items that can be crafted should typically also be tradeable. Consider enabling 'canBeTraded' for better item economy.",
+        "Items that can be crafted or gathered should typically also be tradeable. Consider enabling 'canBeTraded' for better item economy.",
       color: "orange",
     });
   }
@@ -1081,7 +1081,6 @@ const renderItemTips = (item: DeepPartial<ZodItemType>) => {
 
 /**
  * Renders the tips for jutsu information
- * @param jutsu - The jutsu to render the tips for
  * @returns The tips for jutsu information
  */
 const renderJutsuInformation = () => {
