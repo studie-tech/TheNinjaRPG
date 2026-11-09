@@ -708,8 +708,8 @@ describe("effect drafts", () => {
     const view = render(<EffectFieldInputGeneric effect={legacy} field="animationScale" onChange={onChange} />);
     const input = view.getByRole("spinbutton") as HTMLInputElement;
     expect(input.value).toBe("1");
-    fireEvent.input(input, { target: { value: "2.5" } });
-    expect(onChange).toHaveBeenLastCalledWith(2.5);
+    fireEvent.input(input, { target: { value: "1.375" } });
+    expect(onChange).toHaveBeenLastCalledWith(1.375);
   });
 
   it("edits one tag's animation scale without changing its sibling", async () => {
@@ -727,24 +727,26 @@ describe("effect drafts", () => {
       </>;
     };
     const view = render(<Fixture />);
-    const input = view.getByLabelText("Animation scale (1 = normal, 2.5 = large)");
+    const input = view.getByLabelText("Animation scale (1–3×)");
     expect((input as HTMLInputElement).value).toBe("1");
     await act(async () => {});
     expect(onChange).not.toHaveBeenCalled();
-    fireEvent.input(input, { target: { value: "2.5" } });
+    fireEvent.input(input, { target: { value: "1.375" } });
     await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([
-      expect.objectContaining({ animationScale: 2.5 }),
+      expect.objectContaining({ animationScale: 1.375 }),
       initial[1],
     ]));
-    fireEvent.input(input, { target: { value: "0" } });
-    await waitFor(() => expect(onChange.mock.calls.at(-1)?.[0][0]?.animationScale).toBe(0));
-    fireEvent.click(view.getByRole("button", { name: "Save sizes" }));
-    expect(save).not.toHaveBeenCalled();
+    for (const scale of [0.99, 3.01]) {
+      fireEvent.input(input, { target: { value: String(scale) } });
+      await waitFor(() => expect(onChange.mock.calls.at(-1)?.[0][0]?.animationScale).toBe(scale));
+      fireEvent.click(view.getByRole("button", { name: "Save sizes" }));
+      expect(save).not.toHaveBeenCalled();
+    }
     fireEvent.input(input, { target: { value: "" } });
     await waitFor(() => expect(onChange.mock.calls.at(-1)?.[0][0]?.animationScale).toBeNaN());
     fireEvent.click(view.getByRole("button", { name: "Save sizes" }));
     expect(save).not.toHaveBeenCalled();
-    fireEvent.input(input, { target: { value: "2.5" } });
+    fireEvent.input(input, { target: { value: "3" } });
     fireEvent.click(view.getByRole("button", { name: "Save sizes" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   });

@@ -30,7 +30,7 @@ describe("battlefieldSceneOf", () => {
     });
     expect(scene?.effects.map((effect) => effect.animationScale)).toEqual([2.5, 1]);
   });
-  it.each([0, -1, 6, Number.NaN, Number.POSITIVE_INFINITY, "invalid"])("keeps invalid scale drafts drawable: %s", (animationScale) => {
+  it.each([0, -1, 0.99, 3.01, 6, Number.NaN, Number.POSITIVE_INFINITY, "invalid"])("keeps invalid scale drafts drawable: %s", (animationScale) => {
     const scene = battlefieldSceneOf("JUTSU", "draft", {
       effects: [{ ...tag({ staticAnimation: "field" }), animationScale }],
     });

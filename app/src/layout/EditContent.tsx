@@ -1768,7 +1768,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           form.formState.isValid
         ) {
           setEffects(newEffects);
-          if (parsedTag.success) form.reset(draft);
+          if (parsedTag.success && !hasAnimationScaleDraft) form.reset(draft);
         }
       }
     }
@@ -3100,7 +3100,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   tagType: "Combat Tag Type",
   singleBattle: "Track best single-battle only (else cumulative)",
   bloodlineRanks: "Bloodline ranks to include",
-  animationScale: "Animation scale (1 = normal, 2.5 = large)",
+  animationScale: "Animation scale (1–3×)",
   shieldRounds: "Shield Rounds",
   delayRounds: "Diffuse Repayment Turns",
 };
