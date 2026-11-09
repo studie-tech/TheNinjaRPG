@@ -6,6 +6,9 @@ const clerkScript =
   "https://clerk.theninja-rpg.com/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
 const lookalikeScript = "https://cdn.example.net/vendor/@clerk/clerk.browser.js";
 const fapi = "https://clerk.theninja-rpg.com/v1/client";
+const proxiedScript =
+  "https://www.theninja-rpg.com/__clerk/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+const proxiedFapi = "https://www.theninja-rpg.com/__clerk/v1/client";
 
 const clerkNetworkError = (url: string, cause: string) =>
   `ClerkJS: Network error at "${url}" - TypeError: ${cause}. Please try again.`;
@@ -40,20 +43,21 @@ describe("network failure Sentry filter", () => {
     ],
     ["sign-in", `${fapi}/sign_ins?__clerk_api_version=2025-11-10`],
     ["preview sign-in", "https://example-app.clerk.accounts.dev/v1/client/sign_ins"],
+    ["proxied sign-in", `${proxiedFapi}/sign_ins?__clerk_api_version=2025-11-10`],
   ])("reports a failed Clerk %s request", async (_label, url) => {
     for (const cause of ["Failed to fetch", "network error"]) {
       const message = clerkNetworkError(url, cause);
       expect(await fromScript("Error", message, clerkScript)).toEqual([false, false]);
+      expect(await fromScript("Error", message, own)).toEqual([false, false]);
     }
   });
 
   it.each(["Failed to fetch", "network error"])(
     "reports a %s failure raised in the Clerk script",
     async (message) => {
-      expect(await fromScript("TypeError", message, clerkScript)).toEqual([
-        false,
-        false,
-      ]);
+      for (const script of [clerkScript, proxiedScript]) {
+        expect(await fromScript("TypeError", message, script)).toEqual([false, false]);
+      }
     },
   );
 
@@ -67,6 +71,11 @@ describe("network failure Sentry filter", () => {
       true,
       true,
     ]);
+    const ownNonClerk = clerkNetworkError(
+      "https://www.theninja-rpg.com/api/trpc/profile.getUser",
+      "Failed to fetch",
+    );
+    expect(await fromScript("Error", ownNonClerk, own)).toEqual([true, true]);
   });
 
   it("keeps dropping a failed Clerk session touch", async () => {

@@ -666,10 +666,12 @@ const isClerkOriginError = (event: Sentry.ErrorEvent): boolean =>
 const CLERK_NETWORK_ERROR_URL = /^ClerkJS: Network error at "([^"]+)"/;
 
 /**
- * The path clerk-js and its lazy chunks load from. Frame normalization replaces every
- * frame's origin with app://, so a frame keeps only this path, never the Clerk host.
+ * The path clerk-js and its lazy chunks load from, directly or through the native shell's
+ * same-origin /__clerk proxy. Frame normalization replaces every frame's origin with
+ * app://, so a frame keeps only this path, never the Clerk host.
  */
-const CLERK_SCRIPT_PATH = /^\/npm\/@clerk\/clerk-js@[^/]+\/dist\/[^/]+\.js$/;
+const CLERK_SCRIPT_PATH =
+  /^(\/__clerk)?\/npm\/@clerk\/clerk-js@[^/]+\/dist\/[^/]+\.js$/;
 
 /** Check if a stack frame URL is a clerk-js script. */
 const isClerkScriptUrl = (value: string | undefined): boolean => {
@@ -690,11 +692,18 @@ const isClerkScriptUrl = (value: string | undefined): boolean => {
 const CLERK_HOST =
   /^(clerk\.(www\.)?theninja-rpg\.(com|ai)|([a-z0-9-]+\.)+clerk\.(com|accounts\.dev))$/;
 
-/** Check if a URL is served from a Clerk host. */
+/** Our own hosts, which forward /__clerk/ requests to Clerk for the native shell. */
+const CLERK_PROXY_HOST = /^(www\.)?theninja-rpg\.(com|ai)$/;
+
+/** Check if a URL is served from a Clerk host or through our /__clerk proxy. */
 const isClerkHostUrl = (value: string | undefined): boolean => {
   if (!value) return false;
   try {
-    return CLERK_HOST.test(new URL(value).hostname);
+    const url = new URL(value);
+    return (
+      CLERK_HOST.test(url.hostname) ||
+      (CLERK_PROXY_HOST.test(url.hostname) && url.pathname.startsWith("/__clerk/"))
+    );
   } catch {
     return false; // Not an absolute URL, so not a Clerk request
   }
