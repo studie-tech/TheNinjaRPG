@@ -807,9 +807,9 @@ const textSEO = (
 /**
  * A transparent 1x1 GIF for the hero <video>'s poster. Chrome counts a poster-less
  * video's first frame as a contentful paint, larger than the still beneath it (an image
- * counts no more than its rendition's own pixels), so LCP waited seconds for the video
- * on phones. With a poster Chrome counts the poster instead, and a transparent one keeps
- * the still showing without a download. Posters load under `img-src`, which allows data:.
+ * counts no more than its rendition's own pixels), so LCP would wait for the video.
+ * With a poster Chrome counts the poster instead, and a transparent one keeps the still
+ * showing without a download. Posters load under `img-src`, which allows data:.
  */
 const TRANSPARENT_POSTER =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
@@ -817,12 +817,10 @@ const TRANSPARENT_POSTER =
 /**
  * Renditions of the hero still, keyed by the viewport range that should receive each.
  *
- * The still used to be the <video>'s poster attribute, which is a single URL: every
- * phone downloaded the 1280px JPEG (117 KB) for a 390px-wide slot, and nothing could
- * preload it because the browser only learns of a poster when it reaches the <video>.
- * Speed Insights put this element at a 4.15s LCP on mobile. As a <picture> the browser
- * picks a rendition sized for the screen (the 480px one is 27 KB), and the preload hint
- * lets it start before the parser reaches the body. The media queries are mutually
+ * A <video> poster is a single URL that the browser only discovers when it reaches the
+ * <video>, so it cannot be preloaded or sized per screen. As a <picture> the browser
+ * picks a rendition sized for the screen, and the preload hint lets it start before the
+ * parser reaches the body. The media queries are mutually
  * exclusive and gapless for the same reasons the wallpaper preloads are.
  */
 const HERO_POSTER_RENDITIONS = [
