@@ -740,7 +740,7 @@ export const CompleteSpecificQuest = z.object({
   ...questRewardFields,
 });
 
-// contentId stores the purchased item id (matched against buyItemIds). NPC shop only (v1).
+// contentId stores the purchased item id (matched against buyItemIds); only NPC shop purchases count.
 export const BuyItem = z.object({
   ...baseObjectiveFields,
   task: z.literal("buy_item"),
