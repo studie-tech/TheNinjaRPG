@@ -262,14 +262,12 @@ describe("village landscape", () => {
   });
   it("connects service entrances over dry ground without changing navigation or authored data", () => {
     const { grid, structures } = town();
-    const before = grid
-      .toArray()
-      .map((tile) => ({
-        cost: tile.cost,
-        blocked: tile.blocked,
-        spec: tile.spec,
-        authored: tile.authored,
-      }));
+    const before = grid.toArray().map((tile) => ({
+      cost: tile.cost,
+      blocked: tile.blocked,
+      spec: tile.spec,
+      authored: tile.authored,
+    }));
     const roads = planVillageLandscape(grid, structures, null);
     expect(roads.size).toBeGreaterThan(3);
     for (const tile of grid)
@@ -305,14 +303,12 @@ describe("village landscape", () => {
     for (const entrance of entrances.slice(1))
       expect(finder.getShortestPath(entrances[0]!, entrance)).toBeDefined();
     expect(
-      grid
-        .toArray()
-        .map((tile) => ({
-          cost: tile.cost,
-          blocked: tile.blocked,
-          spec: tile.spec,
-          authored: tile.authored,
-        })),
+      grid.toArray().map((tile) => ({
+        cost: tile.cost,
+        blocked: tile.blocked,
+        spec: tile.spec,
+        authored: tile.authored,
+      })),
     ).toEqual(before);
   });
 

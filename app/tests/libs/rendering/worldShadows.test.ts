@@ -1280,16 +1280,14 @@ describe("physical world lighting", () => {
       },
     ];
     let frame: ReturnType<typeof buildFrame> | undefined;
-    const frameSpy = vi
-      .spyOn(worldMaterials, "worldMaterialFrame")
-      .mockImplementation(
-        (material, rect) =>
-          (frame ??= {
-            ...buildFrame(material, rect),
-            points: new Float32Array(),
-            volumes: shared,
-          }),
-      );
+    const frameSpy = vi.spyOn(worldMaterials, "worldMaterialFrame").mockImplementation(
+      (material, rect) =>
+        (frame ??= {
+          ...buildFrame(material, rect),
+          points: new Float32Array(),
+          volumes: shared,
+        }),
+    );
     const createField = worldFields.createWorldOcclusion;
     const requests: worldFields.Occluder[][] = [];
     const fieldSpy = vi
@@ -2028,13 +2026,11 @@ describe("physical world lighting", () => {
         const moving = before[0]!.geometry.getBuffer(attribute),
           movingData = moving.data,
           movingSnapshot = Array.from(moving.data);
-        const fixed = before
-          .slice(1)
-          .map((mesh) => ({
-            mesh,
-            buffer: mesh.geometry.getBuffer(attribute),
-            data: mesh.geometry.getBuffer(attribute).data,
-          }));
+        const fixed = before.slice(1).map((mesh) => ({
+          mesh,
+          buffer: mesh.geometry.getBuffer(attribute),
+          data: mesh.geometry.getBuffer(attribute).data,
+        }));
         const uploads = fixed.map(({ buffer }) => vi.spyOn(buffer, "update"));
         sprites[0]!.zIndex = 30;
         sprites[0]!.x += 0.5;

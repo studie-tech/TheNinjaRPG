@@ -249,8 +249,15 @@ describe("placement copies", () => {
   it("keeps the stored copy on its tile when the sector has no land, dropping only extra copies", () => {
     const ocean = map();
     for (const tile of ocean.tiles) tile.terrain = "ocean";
-    const copies = placementCopiesInSector(placement({ spawnCount: 30 }), 301, ocean, [301]);
-    expect(copies.map((copy) => [copy.copy, copy.anchor])).toEqual([[0, { x: 6, y: 7 }]]);
+    const copies = placementCopiesInSector(
+      placement({ spawnCount: 30 }),
+      301,
+      ocean,
+      [301],
+    );
+    expect(copies.map((copy) => [copy.copy, copy.anchor])).toEqual([
+      [0, { x: 6, y: 7 }],
+    ]);
   });
 });
 

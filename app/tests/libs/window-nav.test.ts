@@ -121,7 +121,10 @@ describe("buildWindowNav", () => {
 
   it("treats a missing (polar) neighbor as an impassable wall", () => {
     // Only the center sector is present; the east neighbor is absent
-    const nav = buildWindowNav([{ sector: 100, dx: 0, dy: 0, map: makeMap(4, 4) }], HEXSIZE);
+    const nav = buildWindowNav(
+      [{ sector: 100, dx: 0, dy: 0, map: makeMap(4, 4) }],
+      HEXSIZE,
+    );
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 0, 1);
     const goalInMissing = nav.toUnified(1, 0, 0, 1);
