@@ -54,8 +54,9 @@ export const useResourceSilo = () => {
       await Promise.all([
         cache.updateCache(undefined, snapshot.status),
         updateUser(undefined, { revision: snapshot.user }),
-        reconcileOwnership(snapshot.userId),
       ]);
+      // Profile recovery can finish collection quests and grant inventory items.
+      await reconcileOwnership(snapshot.userId);
     },
   });
   return { status, claim };

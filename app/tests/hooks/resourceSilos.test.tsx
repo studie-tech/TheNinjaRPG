@@ -99,6 +99,48 @@ it.each(["success", "uncertain response", "rejected"])("reconciles granted owner
   }
 });
 
+it("refreshes active inventory after uncertain claim profile recovery grants collection items", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false }, mutations: { retry: false } } });
+  clients.push(client);
+  const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+  const inventoryKey = getQueryKey(testApi.item.getUserItems, undefined, "query");
+  const profile = { userData: { userId: "viewer", status: "AWAKE" } };
+  client.setQueryData(profileKey, profile);
+  client.setQueryData(inventoryKey, []);
+  client.setQueryData(getQueryKey(testApi.resourceSilos.getStatus, undefined, "query"), { window: { id: "spawn", active: true }, points: 60, claimed: false });
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({
+    data: { userId: "viewer" },
+    prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
+    updateUser: (patch, options) => updateUserCache(client, profileKey, patch, options),
+  }) as ReturnType<typeof userContext.useRequiredUserData>);
+  let finishRecovery!: () => void;
+  const recovery = new Promise<void>(resolve => { finishRecovery = resolve; });
+  let items: { id: string }[] = [];
+  const requests: string[] = [];
+  const trpc = fakeTrpcClient(path => {
+    requests.push(path);
+    if (path === "resourceSilos.claim") throw new Error("Response lost after delivery");
+    if (path === "resourceSilos.getStatus") return { window: { id: "spawn", active: true }, points: 60, claimed: true };
+    if (path === "item.getUserItems") return [...items];
+    if (path === "profile.getUser") return recovery.then(() => {
+      // Profile recovery materializes completed collection quest rewards before returning.
+      items = [{ id: "collection-reward" }];
+      return profile;
+    });
+    throw new Error(`Unexpected read: ${path}`);
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => <TrpcTestProviders client={trpc} queryClient={client}>{children}</TrpcTestProviders>;
+  const hook = renderHook(() => ({ silo: useResourceSilo(), inventory: testApi.item.getUserItems.useQuery(), profile: testApi.profile.getUser.useQuery() }), { wrapper });
+  let pending: Promise<unknown> | undefined;
+  await act(async () => { pending = hook.result.current.silo.claim.mutateAsync().catch(() => undefined); });
+  await waitFor(() => expect(requests).toContain("profile.getUser"));
+  const inventoryReadBeforeRecovery = requests.includes("item.getUserItems");
+  await act(async () => { finishRecovery(); await pending; });
+  expect(inventoryReadBeforeRecovery).toBe(false);
+  await waitFor(() => expect(hook.result.current.inventory.data?.map(row => row.id)).toEqual(["collection-reward"]));
+  expect(client.getQueryState(inventoryKey)?.isInvalidated).toBe(false);
+});
+
 it.each(["shrine", "village", "stale", "uncertain"])("delivers revival feedback before profile reconciliation: %s", async outcome => {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   clients.push(client);

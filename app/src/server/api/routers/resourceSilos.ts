@@ -10,6 +10,7 @@ import { postProcessRewards } from "@/libs/quest/rewards";
 import { rollResourceSiloRewards } from "@/libs/resourceSilos";
 import { getSectorShrinePosition } from "@/libs/sector-map/structures";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
+import { isWeightedCacheEffect } from "@/libs/weightedCache";
 import { fetchUser } from "@/queries/profile";
 import {
   auditResourceSilo,
@@ -74,13 +75,7 @@ export const resourceSilosRouter = createTRPCRouter({
       listRewardPackageForGetCatalog(ctx.drizzle),
       listResourceSiloCaches(ctx.drizzle),
     ]);
-    const caches = items.filter((item) =>
-      item.effects.some(
-        (effect) =>
-          effect.type === "noncombatconsumereward" &&
-          effect.rewardMode === "weightedCache",
-      ),
-    );
+    const caches = items.filter((item) => item.effects.some(isWeightedCacheEffect));
     return {
       entries: config?.entries ?? [],
       packages,
@@ -119,11 +114,7 @@ export const resourceSilosRouter = createTRPCRouter({
           (item) =>
             selection.kind === "cache" &&
             item.id === selection.sourceId &&
-            item.effects.some(
-              (effect) =>
-                effect.type === "noncombatconsumereward" &&
-                effect.rewardMode === "weightedCache",
-            ),
+            item.effects.some(isWeightedCacheEffect),
         );
         if (!pack && !cache)
           return errorResponse(
