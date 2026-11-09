@@ -12,7 +12,7 @@ import type { CombatAction } from "@/libs/combat/types";
 
 /**
  * The router calls this before performBattleAction, which spends pools inside
- * insertAction. Two properties matter and neither was covered: an action with no
+ * insertAction. Two properties matter: an action with no
  * summon tag must ALWAYS pass (otherwise every ordinary jutsu in the game would
  * be refused), and a capped summon must be refused with a player-facing reason.
  */

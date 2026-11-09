@@ -298,12 +298,12 @@ export const makeDamageEffect = (
  * Creates an active shield on the target that guarantees activation and absorbs
  * a large chunk of a hit's damage.
  *
- * `shield()` (process.ts) only rolls/activates on `isNew` when `effect.rounds`
+ * `shield()` (tags.ts) only rolls/activates on `isNew` when `effect.rounds`
  * is truthy; `ShieldTag.rounds` has a schema prefault of 3, so the default
  * (unset) rounds already satisfies that gate. On activation it rolls
  * `Math.random() < power/100` and, on success, sets `effect.power =
- * shieldEffect.health`, which the absorption pass later reads as remaining
- * shield capacity. `power: 100` makes the roll always succeed; `health` sets
+ * shieldEffect.health`, which applyEffects (process.ts) later reads as remaining
+ * shield capacity when it absorbs damage. `power: 100` makes the roll always succeed; `health` sets
  * the post-activation capacity.
  */
 export const makeShield = (targetId: string, round: number): UserEffect =>

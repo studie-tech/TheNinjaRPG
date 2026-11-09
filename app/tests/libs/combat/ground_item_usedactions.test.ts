@@ -1,9 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-// Does using a GROUND-targeted item (e.g. Smoke Bomb) record it in `usedActions`? That array
-// is what buildCombatTrackerTasks reads for the use_specific_item_combat tracker. The reported
-// "used the item but it didn't count" objective targets a GROUND consumable, so this pins down
-// whether the real action pipeline captures such usage.
+// Using a GROUND-targeted item (e.g. Smoke Bomb) through the real action pipeline records
+// it in `usedActions`, which buildCombatTrackerTasks reads for the use_specific_item_combat
+// tracker.
 
 import type { Item } from "@/drizzle/schema";
 import { insertAction } from "@/libs/combat/actions";

@@ -94,7 +94,7 @@ describe("copy/mirror priority constants", () => {
     expect(MIRROR_MAX_TAGS).toBe(4);
   });
 
-  it("copyable set is exactly the 8 expanded positive types", () => {
+  it("copyable set is exactly these 8 positive types", () => {
     expect([...COPYABLE_EFFECT_TYPES].sort()).toEqual(
       [
         "absorb",
@@ -412,7 +412,7 @@ describe("mirror tag: ceiling + priority + wound", () => {
     expect(mirrored.map((e) => e.type)).not.toContain("wound");
   });
 
-  it("now mirrors wound (previously excluded) when slots are available", () => {
+  it("mirrors wound when slots are available", () => {
     const effects: UserEffect[] = [selfDebuff("wound", 15)];
     mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
     const mirrored = effects.filter(

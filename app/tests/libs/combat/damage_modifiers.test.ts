@@ -467,8 +467,7 @@ describe("computeDamagePacket", () => {
     expect(damage).toBeCloseTo(Math.max(afterExtremeDr, floor), 2);
   });
 
-  it("keeps the reported Element Divine DR stack active after crossing the old floor", () => {
-    // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518235151878983771
+  it("keeps the Element Divine DR stack active below the cap floor computed before system DR", () => {
     const rawDamage = 742.44;
 
     const damageEffect = makeDamageEffect({
@@ -656,8 +655,7 @@ describe("computeDamagePacket", () => {
     expect(damage).toBeCloseTo(expectedDamage, 2);
   });
 
-  it("keeps the Colored Jewel DR stack active past the old cap breakpoint", () => {
-    // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518261616372744263
+  it("keeps the Colored Jewel DR stack active below the cap floor computed before system DR", () => {
     const reportedNoTagDamage = 743.74;
     const rawDamage =
       reportedNoTagDamage /
@@ -706,8 +704,7 @@ describe("computeDamagePacket", () => {
     expect(damage).not.toBeCloseTo(883.57, 2);
   });
 
-  it("keeps the smoke bomb DR stack active past the old cap breakpoint", () => {
-    // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518261967616475248
+  it("keeps the smoke bomb DR stack active below the cap floor computed before system DR", () => {
     const reportedNoTagDamage = 743.74;
     const rawDamage =
       reportedNoTagDamage /

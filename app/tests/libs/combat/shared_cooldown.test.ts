@@ -364,9 +364,9 @@ describe("global cooldown", () => {
   });
 
   it("locks an action whose running GCD is shorter than its own cooldown", () => {
-    // Replays production battle s1HJ8CinWk3L7RZHjmIy4: Heavenly Constructs in round 1
-    // put the potion on the GCD; Starlight Veil in round 3 then measured the potion
-    // against its 10-round base cooldown, left it alone, and it was drunk in round 4.
+    // Heavenly Constructs in round 1 puts the potion on the GCD; Starlight Veil in
+    // round 3 must lock it again even though its 10-round base cooldown is longer
+    // than the GCD, so it is not usable in round 4.
     const potion = sharedConsumable("miracle-potion", 10, ["debuffprevent", "clearprevent"]);
     const battle = makeGcdBattle(
       [

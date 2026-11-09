@@ -232,7 +232,7 @@ describe("sage mode active-phase aura teardown at expiry", () => {
         .filter((e) => isEffectActive(e) || e.type === "visual");
     }
 
-    // The buff has expired and dropped normally; the visual aura lingers (the bug)
+    // The buff has expired and dropped normally; the visual aura lingers
     // with rounds now <= 0, so no sage effect is reported "active" and the
     // after-round transition fires.
     const stillActiveSage = battle.usersEffects.some(

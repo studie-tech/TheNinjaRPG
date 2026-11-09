@@ -31,7 +31,7 @@ const makeDefender = (overrides: Record<string, unknown> = {}) =>
 /**
  * Same-round damage jutsu attacker -> defender. Distinct ids collapse onto one consequence.
  *
- * `rounds: 0` and `targetType: "user"` are added on top of the brief's fixture: neither
+ * `rounds: 0` and `targetType: "user"` are required: neither
  * `effectRuntimeSchema` nor `DamageTag`'s `BaseAttributes.rounds` supplies a default, so
  * without them `damageUser`'s `instant`/`residual` check is false and no consequence (and
  * thus no damage) is ever recorded — `applySingleEffect` also gates every effect type on
@@ -54,7 +54,7 @@ const makeAttack = (id = "damage-1"): UserEffect =>
 /**
  * Same-round vamp self-buff cast by the attacker (matches consequences by creatorId).
  *
- * `rounds: 0` is added on top of the brief's fixture: `calcEffectRoundInfo` recomputes
+ * `rounds: 0` is required: `calcEffectRoundInfo` recomputes
  * `effect.castThisRound` from `effect.rounds`/`effect.createdRound` at the top of
  * `applySingleEffect`, overwriting whatever the fixture set. `VampTag` (like `DamageTag`)
  * has no schema default for `rounds`, so without it `calcEffectRoundInfo` takes the
@@ -147,19 +147,18 @@ describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
     const { healGained, healthLost } = runLeech([makeAttack(), makeVamp(40), makeLifesteal(40)]);
 
     expect(healthLost).toBeGreaterThan(0);
-    // Combined heal clamps to the shared budget. (Before the fix this ratio was ~0.4 — vamp
-    // only — because lifesteal was fully suppressed by the mutual-exclusion guard.)
+    // Combined heal clamps to the shared budget.
     // Ratio assertion is robust to the damage formula's magnitude and to sub-HP flooring.
     expect(healGained / healthLost).toBeCloseTo(DAMAGE_LEECH_CAP_RATIO, 2);
   });
 
-  it("vamp alone still caps at 60% of damage", () => {
+  it("vamp alone caps at 60% of damage", () => {
     const { healGained, healthLost } = runLeech([makeAttack(), makeVamp(80)]);
     expect(healthLost).toBeGreaterThan(0);
     expect(healGained / healthLost).toBeCloseTo(DAMAGE_LEECH_CAP_RATIO, 2);
   });
 
-  it("lifesteal alone still caps at ~60% of damage", () => {
+  it("lifesteal alone caps at ~60% of damage", () => {
     const { healGained, healthLost } = runLeech([makeAttack(), makeLifesteal(80)]);
     expect(healthLost).toBeGreaterThan(0);
     expect(healGained / healthLost).toBeCloseTo(DAMAGE_LEECH_CAP_RATIO, 2);
@@ -221,14 +220,14 @@ describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
     // The shield absorbed damage, so less HP was lost than the unshielded reference.
     expect(shielded.healthLost).toBeLessThan(ref.healthLost);
     // ...but vamp heals off the FULL pre-shield hit, so the vamp heal matches the
-    // no-shield reference. (Before this change it would be smaller: ~0.4 * post-shield.)
+    // no-shield reference.
     expect(shielded.healGained).toBeCloseTo(ref.healGained, 5);
   });
 
-  it("reflect still kills a low-HP attacker before lifesteal can save them (ordering preserved)", () => {
+  it("reflect kills a low-HP attacker before lifesteal can save them", () => {
     // Attacker at 1 HP with a lingering lifesteal buff; defender reflects the hit.
     // Reflect runs before lifesteal and re-checks user.curHealth > 0, so the attacker dies
-    // and lifesteal never heals — exactly today's behavior.
+    // and lifesteal never heals.
     const attacker = makeAttacker({ curHealth: 1, maxHealth: 100_000_000 });
     const defender = makeDefender();
     const battle = makeBattle([attacker, defender], [makeAttack(), makeLifesteal(60), makeReflect(60)]);

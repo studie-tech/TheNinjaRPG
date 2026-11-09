@@ -66,7 +66,6 @@ describe("weapon action scaling", () => {
   });
 
   it("keeps a 30EP weapon below a comparable 50EP damage jutsu at equal levels", () => {
-    // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518261967616475248
     const battle = makeBattleWithWeapon({
       damage: {
         power: 30,

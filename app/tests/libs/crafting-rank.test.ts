@@ -9,10 +9,10 @@ import {
 } from "@/libs/crafting";
 
 describe("getMissingCraftingRank", () => {
-  // Experience of the support-ticket player (Apprentice crafter)
+  // Crafting experience at the Apprentice rank
   const apprentice = getCraftingRank(1_175_305);
 
-  it("treats the ticket player as an Apprentice", () => {
+  it("treats 1,175,305 crafting experience as Apprentice", () => {
     expect(apprentice).toBe("APPRENTICE");
   });
 
@@ -71,7 +71,7 @@ describe("formatCraftingRank", () => {
 });
 
 describe("getImbuementRankCapMessage", () => {
-  it("explains the rank cap for an Apprentice on a 2-slot item (ticket BU927m7MVb)", () => {
+  it("explains the rank cap for an Apprentice on a 2-slot item", () => {
     expect(getImbuementRankCapMessage("APPRENTICE", 2, 1)).toBe(
       "1/2 imbuements: your crafting rank (Apprentice) allows 1. Reach Master to add another.",
     );

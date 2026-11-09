@@ -4,7 +4,7 @@ import { damageCalc } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";
 import { makeDamageEffect, makeUser } from "../../setup/combat";
 
-describe("damageCalc - new HP-based formula", () => {
+describe("damageCalc HP-based formula", () => {
   it("returns effect power for non-formula calculations", () => {
     const effect = makeDamageEffect({ calculation: "static", power: 50 });
     const attacker = makeUser({ userId: "attacker" });

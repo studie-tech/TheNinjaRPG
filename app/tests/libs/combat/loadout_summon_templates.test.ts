@@ -17,13 +17,13 @@ import { flatCombatStats } from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 /**
- * Regression for support ticket i1jen8nR8S: "Summoning: Reptile Zoo" summons gave
- * up the round they were summoned. The player kept the jutsu only in a loadout
- * swapped in from the battle lobby. updateCombatLoadout reprocesses the player,
- * which loads the summon templates (Tor Tor + its nested Reptile King), but merged
- * back only jutsus/items/reskins/enemySkills/sageModes -- the templates' aiProfiles
- * were dropped, so getAiProfile returned undefined, no rule (not even end turn)
- * ran, and the AI fallback killed the summon.
+ * updateCombatLoadout reprocesses a player whose loadout is swapped in from the
+ * battle lobby, which loads every summon template that loadout can cast (here Tor
+ * Tor and its nested Reptile King from "Summoning: Reptile Zoo"). The merge must
+ * carry the templates' aiProfiles into the battle alongside their jutsus, items,
+ * reskins, enemy skills and sage modes: without them getAiProfile returns
+ * undefined, no rule (not even end turn) runs, and the AI fallback kills the
+ * summon on the round it is summoned.
  */
 
 const ZOO = "iWoiCf6NcredongvK-pJs";
