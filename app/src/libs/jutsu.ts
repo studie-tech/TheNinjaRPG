@@ -53,10 +53,11 @@ type JutsuLoadoutExclusion = {
   message: string;
 };
 
-type JutsuCapMatchInput = Pick<Jutsu, "effects" | "jutsuType">;
+type JutsuCapMatchInput = Pick<Jutsu, "effects" | "jutsuType" | "actionCostPerc">;
 
 /** What puts a jutsu in a category; equip caps turn the same descriptor into SQL. */
 type JutsuCategoryMatch =
+  | { kind: "actionCostPerc"; value: number }
   | { kind: "residual" }
   | { kind: "effect"; effectType: string }
   | { kind: "jutsuType"; jutsuType: string };
@@ -67,6 +68,11 @@ export const JUTSU_CATEGORY_DEFS: {
   label: string;
   match: JutsuCategoryMatch;
 }[] = [
+  {
+    key: "40 AP",
+    label: "40 AP",
+    match: { kind: "actionCostPerc", value: 40 },
+  },
   {
     key: "residual",
     label: "residual",
@@ -93,6 +99,8 @@ export const JUTSU_CATEGORY_DEFS: {
 /** Share category matching between equipment limits and ranked loadout checks. */
 const matchesJutsuCategory = (match: JutsuCategoryMatch, jutsu: JutsuCapMatchInput) => {
   switch (match.kind) {
+    case "actionCostPerc":
+      return jutsu.actionCostPerc === match.value;
     case "residual":
       return jutsu.effects.some(
         (effect) => "residualModifier" in effect && !!effect.residualModifier,

@@ -37,12 +37,32 @@ describeWithDatabase("configured equipment limits", () => {
     const effects = [DamageTag.parse({})];
     await insertJutsus(["a", "b"].map((id) => ({ id, effects, requiredRank: "GENIN" as const })));
     await db.insert(userJutsu).values(["a", "b"].map((id) => ({ id, userId: "player", jutsuId: id, equipped: false })));
-    const flags = getJutsuCapFlags({ effects, jutsuType: "NORMAL" });
+    const flags = getJutsuCapFlags({ effects, jutsuType: "NORMAL", actionCostPerc: 60 });
     const caps = await fetchJutsuEquipCaps(db);
     await Promise.all(["a", "b"].map((userJutsuId) => tryEquipUserJutsuAtomically({ client: db, userId: "player", userJutsuId, maxEquip: 15, flags, caps })));
     const equipped = await db.query.userJutsu.findMany();
     expect(equipped.filter((entry) => entry.equipped)).toHaveLength(1);
     const remaining = equipped.find((entry) => !entry.equipped)!;
     expect(await tryEquipUserJutsuAtomically({ client: db, userId: "player", userJutsuId: remaining.id, maxEquip: 15, flags, caps: [] })).toBe("equipped");
+  });
+  it("atomically limits concurrent 40 AP equips without blocking other costs", async () => {
+    const db = await getTestDatabase();
+    await db.insert(jutsuEquipLimit).values({ category: "40 AP", unrankedMaxEquipped: 8, rankedMaxEquipped: 8 });
+    const ids = Array.from({ length: 10 }, (_, index) => `ap-${index}`);
+    await insertJutsus(ids.map((id, index) => ({ id, actionCostPerc: index === 9 ? 60 : 40, requiredRank: "GENIN" as const })));
+    await db.insert(userJutsu).values(ids.map((id, index) => ({ id, userId: "player", jutsuId: id, equipped: index < 7 })));
+    const caps = await fetchJutsuEquipCaps(db);
+    // Compete for the last 40 AP slot, then equip another cost while the cap is full.
+    await Promise.all(ids.slice(7, 9).map((userJutsuId) => tryEquipUserJutsuAtomically({
+      client: db, userId: "player", userJutsuId, maxEquip: 15, caps,
+      flags: getJutsuCapFlags({ effects: [], jutsuType: "NORMAL", actionCostPerc: 40 }),
+    })));
+    expect(await tryEquipUserJutsuAtomically({
+      client: db, userId: "player", userJutsuId: "ap-9", maxEquip: 15, caps,
+      flags: getJutsuCapFlags({ effects: [], jutsuType: "NORMAL", actionCostPerc: 60 }),
+    })).toBe("equipped");
+    const equipped = await db.query.userJutsu.findMany();
+    expect(equipped.filter((entry) => entry.equipped)).toHaveLength(9);
+    expect(equipped.find((entry) => entry.jutsuId === "ap-9")?.equipped).toBe(true);
   });
 });

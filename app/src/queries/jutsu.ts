@@ -1690,6 +1690,9 @@ const residualModifierOnAliasSql = (alias: string) =>
 /** Build a cap category predicate against the supplied jutsu table alias. */
 const equipCapCategorySql = (cap: JutsuEquipCap, alias: string) => {
   const kind = cap.sql;
+  if (kind.kind === "actionCostPerc") {
+    return sql`${sql.raw(`${alias}.actionCostPerc`)} = ${kind.value}`;
+  }
   if (kind.kind === "residual") return residualModifierOnAliasSql(alias);
   if (kind.kind === "jutsuType") {
     return sql.raw(`${alias}.jutsuType = '${kind.jutsuType}'`);
