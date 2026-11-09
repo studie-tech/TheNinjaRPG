@@ -220,6 +220,8 @@ export const BRACKET_IMMUNITY_LIFT_SECS = 1800;
 
 /** Seconds of war participation after starting a war mission, wartime PvP or a shrine attack. */
 export const WAR_PARTICIPANT_SECS = 7200; // 2 hours
+/** Days a war kill row is kept after its kill, regardless of the war's state. */
+export const WAR_KILL_RETENTION_DAYS = 30;
 
 export const CoreVillages = [
   "Shirohana",

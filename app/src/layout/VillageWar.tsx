@@ -31,6 +31,7 @@ import {
   FACTION_RAID_REWARD,
   VILLAGE_WAR_TYPES,
   WAR_ALLY_OFFER_MIN,
+  WAR_KILL_RETENTION_DAYS,
   WAR_RECAPTURE_THRESHOLD,
   WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
   WAR_SHRINE_IMAGE,
@@ -73,7 +74,7 @@ export const VillageWar: React.FC<{
   userVillage?: Village;
   isKage: boolean;
 }> = ({ war: initialWar, user, villages, relationships, userVillage, isKage }) => {
-  // Add state for dialog
+  // Dialog state
   const [showKills, setShowKills] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showShrineMechanics, setShowShrineMechanics] = useState(false);
@@ -82,7 +83,7 @@ export const VillageWar: React.FC<{
     "townhallHpChange" | "shrineHpChange" | "totalKills"
   >("totalKills");
 
-  // Add query for war kills
+  // Objective war state, polled while active
   const { data: objectiveInfo } = api.war.getObjectiveWarInfo.useQuery(
     { warId: initialWar.id },
     {
@@ -105,7 +106,6 @@ export const VillageWar: React.FC<{
     { enabled: showKills && !war.rules },
   );
 
-  // Add query for war kill stats
   const { data: warKillStats } = api.war.getWarKillStats.useQuery(
     { warId: war.id, aggregateBy: selectedStat },
     { enabled: showStats && !war.rules },
@@ -487,7 +487,7 @@ export const VillageWar: React.FC<{
         </div>
       </Modal>
 
-      {/* Add dialog for war kills */}
+      {/* War kills */}
       <Modal
         title={`War Kills - ${war.attackerVillage.name} vs ${war.defenderVillage.name}`}
         isOpen={showKills && !war.rules}
@@ -496,7 +496,7 @@ export const VillageWar: React.FC<{
       >
         <div className="min-h-[200px]">
           <p className="text-muted-foreground text-sm">
-            Kills are recorded for 30 days after the war ends.
+            Kills are kept for {WAR_KILL_RETENTION_DAYS} days.
           </p>
           {warKills && warKills.length > 0 ? (
             <div className="rounded-lg border">
@@ -514,7 +514,7 @@ export const VillageWar: React.FC<{
         </div>
       </Modal>
 
-      {/* Add dialog for war kill stats */}
+      {/* War kill statistics */}
       <Modal
         title={`War Statistics - ${war.attackerVillage.name} vs ${war.defenderVillage.name}`}
         isOpen={showStats && !war.rules}
@@ -782,7 +782,6 @@ export const VillageWar: React.FC<{
             />
           </ContentBox>
         )}
-      {/* Shrine HP Status for Village Wars and Raids */}
     </div>
   );
 };

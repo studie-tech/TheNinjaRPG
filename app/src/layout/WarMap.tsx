@@ -50,7 +50,8 @@ import { capitalizeFirstLetter } from "@/utils/string";
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 
 /**
- * Sector Wars Component
+ * Globe for choosing a declaration target: sector war, village war, faction raid,
+ * alliance change or sector release.
  */
 export const WarMap: React.FC<{
   user: NonNullable<UserWithRelations>;
@@ -148,7 +149,6 @@ export const WarMap: React.FC<{
       },
     });
 
-  // Mutations
   const { mutate: declareVillageWarOrRaid, isPending: isDeclaringVillageWar } =
     api.war.declareVillageWarOrRaid.useMutation({
       onSuccess: async (data) => {

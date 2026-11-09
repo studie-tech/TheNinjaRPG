@@ -19,7 +19,10 @@ import {
   sql,
 } from "drizzle-orm";
 import type { AnyMySqlColumn, MySqlTable, TableConfig } from "drizzle-orm/mysql-core";
-import { MODERATION_SCAN_RETENTION_DAYS } from "@/drizzle/constants";
+import {
+  MODERATION_SCAN_RETENTION_DAYS,
+  WAR_KILL_RETENTION_DAYS,
+} from "@/drizzle/constants";
 import {
   anbuSquad,
   automatedModeration,
@@ -512,7 +515,12 @@ export const deleteWarKillForGET = (
 ) =>
   client
     .delete(warKill)
-    .where(lt(warKill.killedAt, sql`CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY`))
+    .where(
+      lt(
+        warKill.killedAt,
+        sql`CURRENT_TIMESTAMP(3) - INTERVAL ${WAR_KILL_RETENTION_DAYS} DAY`,
+      ),
+    )
     .orderBy(warKill.killedAt)
     .limit(rangeCleanupBatchSize);
 
