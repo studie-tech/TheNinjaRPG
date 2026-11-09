@@ -38,9 +38,8 @@ const MenuBoxCombat: React.FC = () => {
   return (
     <>
       <SideBannerTitle>
-        {/* AI combatants are given a synthetic id when the battle starts, so they have
-            no profile to link to. The link used to land on a "user does not exist" body
-            served with HTTP 200; it now resolves to a real 404, so do not offer it. */}
+        {/* AI combatants get a synthetic id when the battle starts and masked users
+            hide theirs, so neither has a profile to link to. */}
         {battleUser.isAi || battleUser.isMasked ? (
           battleUser.username
         ) : (
