@@ -1741,7 +1741,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     // Scale drafts reach the parent so Save validates the visible size, including invalid input.
     const hasAnimationScaleDraft = !Object.is(
       watchAll.animationScale,
-      tag.animationScale,
+      tag.animationScale ?? 1,
     );
     const leftCoordinateTarget = tag.target === "COORDINATES" && !hasCoordinateDraft;
     const draft = leftCoordinateTarget

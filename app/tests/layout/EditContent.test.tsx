@@ -714,7 +714,9 @@ describe("effect drafts", () => {
 
   it("edits one tag's animation scale without changing its sibling", async () => {
     const onChange = vi.fn();
-    const initial = [DamageTag.parse({}), HealTag.parse({})];
+    const legacy = DamageTag.parse({});
+    delete (legacy as Partial<typeof legacy>).animationScale;
+    const initial = [legacy, HealTag.parse({})];
     const Fixture = () => {
       const [effects, setEffects] = useState<ZodAllTags[]>(initial);
       return <>
@@ -727,6 +729,8 @@ describe("effect drafts", () => {
     const view = render(<Fixture />);
     const input = view.getByLabelText("Animation scale (1 = normal, 2.5 = large)");
     expect((input as HTMLInputElement).value).toBe("1");
+    await act(async () => {});
+    expect(onChange).not.toHaveBeenCalled();
     fireEvent.input(input, { target: { value: "2.5" } });
     await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([
       expect.objectContaining({ animationScale: 2.5 }),

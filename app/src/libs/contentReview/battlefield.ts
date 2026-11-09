@@ -1,4 +1,5 @@
 import type { ContentProposalEntityType } from "@/drizzle/constants";
+import { VisualTag } from "@/validators/combat";
 
 /**
  * What a jutsu, item, bloodline, AI or battlefield asset draws in combat, with every effect
@@ -26,11 +27,12 @@ export const battlefieldSceneOf = (
         disappearSfx: text(tag.disappearSfx),
       };
       if (!Object.values(media).some(Boolean)) return [];
+      // Preview drafts remain drawable while the editor reports invalid sizing.
+      const scale = VisualTag.shape.animationScale.safeParse(tag.animationScale);
       return [
         {
           ...media,
-          animationScale:
-            typeof tag.animationScale === "number" ? tag.animationScale : 1,
+          animationScale: scale.success ? scale.data : 1,
           placement: placementOf(text(tag.target) || "INHERIT"),
         },
       ];
