@@ -48,7 +48,7 @@ describe("verifyDialogBranches", () => {
 });
 
 describe("verifyQuestContentForSave", () => {
-  it("rejects a terminal dialog branch even when the quest is NOT consecutive (the gating-bypass fix)", () => {
+  it("rejects a terminal dialog branch even when the quest is NOT consecutive", () => {
     expect(verifyQuestContentForSave(terminalDialog, false).check).toBe(false);
   });
 

@@ -12,8 +12,8 @@ const makeQuest = (id: string, objectives: object[]) =>
 
 // ---------------------------------------------------------------------------
 // Runtime completion of TERMINAL dialog branches (branches with no follow-up
-// objective). Save-time validation now blocks authoring these, but already-saved
-// legacy content can still contain them — the runtime must complete them via the
+// objective). Save-time validation blocks authoring these, but already-saved
+// legacy content can contain them — the runtime must complete them via the
 // objective-scoped sentinel instead of re-opening the same dialog forever.
 // ---------------------------------------------------------------------------
 

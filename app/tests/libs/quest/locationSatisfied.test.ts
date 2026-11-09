@@ -34,7 +34,7 @@ describe("isObjectiveLocationSatisfied", () => {
     ).toBe(false);
   });
 
-  it("is not satisfied for a placement-bound objective when no placement context is supplied (non-overworld callers unchanged)", () => {
+  it("is not satisfied for a placement-bound objective when no placement context is supplied", () => {
     expect(isObjectiveLocationSatisfied(onNpcTile, boundDeliverWithStaleCoords)).toBe(false);
   });
 
@@ -57,7 +57,7 @@ describe("isObjectiveLocationSatisfied", () => {
     expect(isObjectiveLocationSatisfied(onNpcTile, boundCoordsMatch, new Set(["p9"]))).toBe(true);
   });
 
-  it("still satisfies on exact coordinate match (existing isLocationObjective behavior preserved)", () => {
+  it("satisfies an unbound objective on an exact coordinate match", () => {
     const atTile = DeliverItem.parse({
       id: "o2",
       task: "deliver_item",

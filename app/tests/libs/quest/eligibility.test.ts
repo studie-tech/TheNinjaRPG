@@ -39,7 +39,7 @@ describe("questTypeConcurrentBlockMessage", () => {
   });
 
   it.each(["story", "hunting", "gathering", "anbu", "event"])(
-    "preserves the shared %s concurrent limit extracted from startQuest",
+    "enforces the shared %s concurrent limit",
     (questType) => {
       const active = Array.from({ length: QUESTS_CONCURRENT_LIMIT }, () => ({
         questType,
@@ -54,7 +54,7 @@ describe("questTypeConcurrentBlockMessage", () => {
   );
 
   it.each(["battlepyramid", "starter"])(
-    "preserves the single-active limit for %s quests",
+    "enforces the single-active limit for %s quests",
     (questType) => {
       expect(
         questTypeConcurrentBlockMessage(
@@ -129,7 +129,7 @@ describe("questTypeConcurrentBlockMessage", () => {
   });
 });
 
-describe("fetchUncompletedQuests date-window compatibility", () => {
+describe("fetchUncompletedQuests date window", () => {
   it("prefilters currently active quests instead of future or expired quests", async () => {
     const { database, statements } = planetScaleFixture(() => ({ rows: [] }));
     await fetchUncompletedQuests(

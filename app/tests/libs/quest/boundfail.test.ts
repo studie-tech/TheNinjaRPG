@@ -91,7 +91,7 @@ describe("getNewTrackers — bound-placement check respects consecutive reachabi
 
   it("STILL fails the quest when the reachable start objective's placement was deleted", () => {
     // Control: the start objective is always reachable, so its deleted placement
-    // must still auto-fail — proving the fix didn't disable the feature.
+    // must still auto-fail.
     const quest = makeConsecutiveQuest("q1", [
       boundObjective("o1", "o2", "p1"), // DELETED and reachable (start)
       boundObjective("o2", undefined, "p2"),

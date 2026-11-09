@@ -46,7 +46,7 @@ const available = (
     ignorePreviousAttempts,
   );
 
-describe("isAvailableUserQuests legacy compatibility", () => {
+describe("isAvailableUserQuests core requirements", () => {
   it("requires Chunin or higher for regular and concurrent war missions", () => {
     for (const rank of [
       "STUDENT",
@@ -72,7 +72,7 @@ describe("isAvailableUserQuests legacy compatibility", () => {
     expect(available({}, { rank: "GENIN" }).check).toBe(true);
   });
 
-  it("keeps the baseline legacy quest available when new fields are absent", () => {
+  it("keeps a baseline quest available when optional fields are absent", () => {
     expect(available()).toEqual({ check: true, message: "" });
   });
 

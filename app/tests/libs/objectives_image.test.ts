@@ -25,7 +25,7 @@ describe("objectiveImageMap / getObjectiveImage", () => {
     }
   });
 
-  it("preserves the previous image + title verbatim for representative tasks", () => {
+  it("maps representative tasks to their image and title", () => {
     expect(
       getObjectiveImage({ task: "pvp_kills" } as unknown as AllObjectivesType),
     ).toEqual({ image: IMG_BADGE_PVPKILLS, title: "PVP kills" });

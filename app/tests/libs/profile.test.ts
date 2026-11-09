@@ -326,7 +326,7 @@ test("scaleUserStats keeps the seeded Clown of Chaos AI row as a fixed point", (
   expect(clown).toEqual(stored);
 });
 
-test("scaleUserStats keeps every seeded AI row at its pre-#1277 values", () => {
+test("scaleUserStats keeps saved seeded AI rows fixed and spreads unsaved ones over the AI budget", () => {
   const rows = readSeededAiRows();
   expect(rows).toHaveLength(100);
   for (const row of rows) {
@@ -340,7 +340,7 @@ test("scaleUserStats keeps every seeded AI row at its pre-#1277 values", () => {
           0.005 * row.statsMultiplier + 1e-6,
         );
       } else {
-        // Never saved: base stats spread like the 12-stat formula spread them.
+        // Never saved: the AI budget share spread evenly over the six combat stats.
         expect(stored[stat]).toBe(10);
         expect(row[stat]).toBe((10 + budget / 12) * row.statsMultiplier);
       }

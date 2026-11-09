@@ -1,4 +1,3 @@
-// app/tests/libs/quest.periodcap.test.ts
 import { describe, it, expect } from "bun:test";
 import { isAvailableUserQuests, periodCapReached } from "@/libs/quest/availability";
 
@@ -51,7 +50,7 @@ describe("isAvailableUserQuests — period cap vs lifetime cap", () => {
   } as const;
 
   it("repeatable quest is available in a new period despite lifetime completes >= maxCompletes", () => {
-    // Regression: lifetime previousCompletes(1) >= maxCompletes(1), but the only completion was
+    // Lifetime previousCompletes(1) >= maxCompletes(1), but the only completion was
     // a prior period — the period cap should govern, not the lifetime cap.
     expect(
       isAvailableUserQuests(
