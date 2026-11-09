@@ -141,26 +141,23 @@ const Button = ({
       }
     >
       {isGlow && (
+        // Gradients slide on inner tracks: a transform animates on the compositor, while
+        // a moving background repaints the page every frame.
         <div
           aria-hidden
-          className={cn(
-            "pointer-events-none absolute -inset-[2px] z-0 rounded-md blur-md",
-            // Gradient based on the button's own color via CSS var
-            "tnr-glow-bg",
-            // Animate gradient movement
-            "background-animate bg-[600%_auto] [animation-duration:5s] [animation-timing-function:linear]",
-          )}
-        />
+          className="pointer-events-none absolute -inset-[2px] z-0 overflow-hidden rounded-md blur-md"
+        >
+          <div className="tnr-glow-track" />
+        </div>
       )}
       {element}
       {isGlow && (
         <div
           aria-hidden
-          className={cn(
-            "tnr-shine pointer-events-none absolute inset-0 z-[15] rounded-md",
-            "background-animate bg-[200%_100%] [animation-duration:2.5s] [animation-timing-function:linear]",
-          )}
-        />
+          className="tnr-shine pointer-events-none absolute inset-0 z-[15] overflow-hidden rounded-md"
+        >
+          <div className="tnr-shine-track" />
+        </div>
       )}
       {decoration === "gold" && (
         <>

@@ -156,7 +156,7 @@ export const createTravelPath = () => {
     geometry.destroy(true);
     shader.destroy();
   };
-  return { container, set, animate, dispose };
+  return { container, shader, set, animate, dispose };
 };
 
 /** The first rounded corner is affine in the origin; later samples stay fixed as feet advance. */

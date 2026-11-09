@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { Hex } from "honeycomb-grid";
 import { HEX_ASPECT_RATIO, HEX_STACKING_DISPLACEMENT } from "@/drizzle/constants";
 import {
   createHexGrid,
@@ -17,6 +18,19 @@ describe("createHexGrid", () => {
 
   it.each([0, -1, Number.NaN])("yields an empty grid for hex size %p", (hexsize) => {
     expect(createHexGrid(hexsize, 4, 3).size).toBe(0);
+  });
+
+  it("keeps each tile's geometry equal to honeycomb's and immutable", () => {
+    const grid = createHexGrid(24, 5, 4, { x: -12, y: -12 });
+    for (const tile of grid) {
+      const reference = (key: "corners" | "center" | "x" | "y") =>
+        Reflect.get(Hex.prototype, key, tile) as unknown;
+      expect(tile.corners).toEqual(reference("corners") as typeof tile.corners);
+      expect(tile.center).toEqual(reference("center") as typeof tile.center);
+      expect([tile.x, tile.y]).toEqual([reference("x"), reference("y")] as number[]);
+      expect(tile.corners).toBe(tile.corners);
+      expect(Object.isFrozen(tile.corners) && Object.isFrozen(tile.corners[0])).toBe(true);
+    }
   });
 });
 

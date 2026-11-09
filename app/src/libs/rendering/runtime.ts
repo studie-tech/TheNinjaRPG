@@ -1,4 +1,10 @@
-import { Container, GlProgram, UniformGroup, WebGLRenderer } from "pixi.js";
+import {
+  Container,
+  GlProgram,
+  type Shader,
+  UniformGroup,
+  WebGLRenderer,
+} from "pixi.js";
 import { setGameSceneVisible } from "@/libs/gameSceneVisibility";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
@@ -249,6 +255,10 @@ export const createGameRenderer = async (options: {
       cleanups.delete(cleanup);
     },
     isDisposed: () => disposed,
+    /** Links shaders' programs now, so the frame that first draws them does not stall on it. */
+    compileShaders: (...shaders: Shader[]) => {
+      for (const shader of shaders) renderer.shader.bind(shader, true);
+    },
     setUpdate: (callback: typeof update) => {
       update = callback;
     },

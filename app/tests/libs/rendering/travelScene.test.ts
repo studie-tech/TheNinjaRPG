@@ -51,7 +51,7 @@ const gameFixture = () => {
     own: (cleanup: () => void) => { owned.add(cleanup); },
     disown: (cleanup: () => void) => { owned.delete(cleanup); },
     isDisposed: () => disposed,
-    setResize: () => {}, setBackground: () => {}, invalidate: vi.fn(), setAnimating: vi.fn(),
+    setResize: () => {}, setBackground: () => {}, invalidate: vi.fn(), setAnimating: vi.fn(), compileShaders: vi.fn(),
     listen: (type: string, callback: EventListener) => canvas.addEventListener(type, callback, { signal: listeners.signal }),
     setUpdate: (next: typeof update) => { update = next; },
     dispose: () => { if (disposed) return; disposed = true; controller.abort(); listeners.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); },
@@ -428,6 +428,87 @@ describe("travel scene ground depth", () => {
     expect(alphas.at(-1)).toBe(1);
   });
 
+  it("rebuilds only the terrain of a retained sector whose edge gains a neighbour, matching a full build", async () => {
+    const { scene, state } = await sceneFixture();
+    state.window.push(windowEntry(725, 1)); await scene.updateWindow();
+    const retained = scene.sectors.get(725)!;
+    const { art, terrain, scope } = retained;
+    state.window.push({ ...windowEntry(726, 1), dx: 1 }); await scene.updateWindow();
+    expect(scene.sectors.get(725)).toBe(retained);
+    expect(retained.art).toBe(art);
+    expect(retained.scope).toBe(scope);
+    expect(retained.terrain).not.toBe(terrain);
+    expect(terrain.container.destroyed).toBe(true);
+    // A fresh scene over the same window (new library version, so no cached build) agrees.
+    const fresh = snapshotFixture();
+    fresh.libraryVersion = "fresh-build";
+    fresh.window = [...state.window];
+    const reference = await sceneFixture(fresh);
+    await reference.scene.updateWindow();
+    const built = reference.scene.sectors.get(725)!;
+    expect(built.sourceKey).not.toBe(retained.sourceKey);
+    expect(retained.data.segments).toEqual(built.data.segments);
+    expect(retained.data.surface).toEqual(built.data.surface);
+  });
+
+  it("settles an edge-only rebuild cancelled by disposal without rejecting the window update", async () => {
+    const { scene, state } = await sceneFixture();
+    state.window.push(windowEntry(725, 1)); await scene.updateWindow();
+    const retained = scene.sectors.get(725)!;
+    (terrain.createHexTerrain as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => {
+      scene.dispose();
+      throw new DOMException("Scene disposed", "AbortError");
+    });
+    state.window.push({ ...windowEntry(726, 1), dx: 1 });
+    await expect(scene.updateWindow()).resolves.toBeUndefined();
+    expect(retained.scope.isDisposed()).toBe(true);
+  });
+
+  it("frees sectors leaving the window in their own tasks", async () => {
+    const { scene, state } = await sceneFixture();
+    state.window.push(windowEntry(725, 1), { ...windowEntry(726, 1), dx: 1 }); await scene.updateWindow();
+    const disposals = [scene.sectors.get(725)!, scene.sectors.get(726)!].map((sector) => vi.spyOn(sector.scope, "dispose"));
+    state.window = [windowEntry(724)]; await scene.updateWindow();
+    expect(scene.sectors.has(725) || scene.sectors.has(726)).toBe(false);
+    await settle(); await settle(); await settle();
+    for (const dispose of disposals) expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles window requests that arrive together once", async () => {
+    const { scene, state } = await sceneFixture();
+    const field = vi.spyOn(terrainElevation, "createTerrainField");
+    state.window.push(windowEntry(725, 1));
+    const requests = [scene.updateWindow(), scene.updateWindow(), scene.updateWindow()];
+    expect(new Set(requests).size).toBe(1);
+    await Promise.all(requests);
+    expect(field).toHaveBeenCalledTimes(1);
+    expect(scene.sectors.has(725)).toBe(true);
+  });
+
+  it("leaves retained sectors in place when the window is reconciled without changes", async () => {
+    const { scene, state } = await sceneFixture();
+    state.window.push(windowEntry(725, 1)); await scene.updateWindow();
+    const sectors = [...scene.sectors.values()];
+    const attaches = sectors.map((sector) => vi.spyOn(sector.art, "attachLayers"));
+    const terrains = sectors.map((sector) => sector.terrain);
+    await scene.updateWindow(); await scene.updateWindow();
+    for (const attach of attaches) expect(attach).not.toHaveBeenCalled();
+    expect([...scene.sectors.values()].map((sector) => sector.terrain)).toEqual(terrains);
+  });
+
+  it("reorders a retained sector's terrain by its new row when the window recentres", async () => {
+    const { scene, state, advance } = await sceneFixture();
+    state.window.push(windowEntry(725, 1)); await scene.updateWindow();
+    const original = scene.sectors.get(724)!, neighbor = scene.sectors.get(725)!;
+    const biases = [vi.spyOn(original.terrain, "setDepthBias"), vi.spyOn(neighbor.terrain, "setDepthBias")];
+    state.sector = 725;
+    state.window = [windowEntry(725), windowEntry(724, -1)];
+    await scene.updateWindow(); advance(); await settle();
+    expect(scene.sectors.get(724)).toBe(original);
+    expect(biases[0]).toHaveBeenLastCalledWith(0.001);
+    expect(biases[1]!.mock.lastCall?.[0]).toBeCloseTo(0);
+  });
+
   it("refreshes retained scenery and actor depths on sector offsets and world rebasing, and detaches disposed sectors", async () => {
     const { scene, state, depth, advance } = await sceneFixture();
     state.window.push(windowEntry(725, 1)); await scene.updateWindow();
@@ -455,6 +536,8 @@ describe("travel scene ground depth", () => {
     expect(neighborArt.sprite.parentRenderLayer).toBeNull();
     expect(depth.renderLayerChildren.includes(neighborArt.sprite)).toBe(false);
     state.window = [windowEntry(725)]; await scene.updateWindow();
+    // A sector leaving the window is freed in its own task.
+    await settle();
     expect(art.sprite.destroyed).toBe(true);
     expect(depth.renderLayerChildren).not.toContain(art.sprite);
     scene.dispose();
@@ -602,7 +685,8 @@ describe("travel scene window updates", () => {
     const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
     invalidate.mockClear(); state.window.push(ready, held);
     const updating = scene.updateWindow();
-    for (let i = 0; i < 20 && !scene.sectors.has(725); i++) await settle();
+    // Window requests are coalesced briefly before the first neighbor is built.
+    for (let i = 0; i < 40 && !scene.sectors.has(725); i++) await new Promise((resolve) => setTimeout(resolve, 5));
     expect(scene.sectors.has(725)).toBe(true);
     await updating;
     expect(scene.sectors.has(726)).toBe(true);

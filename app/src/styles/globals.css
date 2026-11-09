@@ -72,6 +72,18 @@
   --radius-sm: calc(var(--radius) - 4px);
 
   --animate-home-sleep: home-sleep 3s ease-in-out infinite;
+  /* Loading placeholders pulse below their resting 20% opacity, on the compositor. */
+  --animate-placeholder-pulse: placeholder-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes placeholder-pulse {
+    0%,
+    100% {
+      opacity: 0.2;
+    }
+    50% {
+      opacity: 0.1;
+    }
+  }
 
   @keyframes home-sleep {
     0% {
@@ -115,11 +127,6 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentColor);
   }
-}
-
-@utility background-animate {
-  background-size: 400% 400%;
-  animation: background-pan 1s ease infinite;
 }
 
 @layer base {
@@ -495,17 +502,6 @@
 }
 
 @layer utilities {
-  @keyframes background-pan {
-    0% {
-      background-position: 0% 50%;
-    }
-    50% {
-      background-position: 100% 50%;
-    }
-    100% {
-      background-position: 0% 50%;
-    }
-  }
   @keyframes wiggle {
     0% {
       transform: rotate(0deg);
@@ -645,6 +641,17 @@
 @layer utilities {
   /* Animated shine overlay derived from --tnr-glow (lighter tints) */
   .tnr-shine {
+    mix-blend-mode: screen;
+    opacity: 0.25;
+    mask-image: radial-gradient(60% 100% at 50% 0%, black 40%, transparent 100%);
+  }
+  /* Glow gradients slide by transform, which the compositor animates without repainting. */
+  .tnr-shine-track {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 200%;
+    animation: tnr-pan-shine 2.5s linear infinite;
     background-image: linear-gradient(
       110deg,
       transparent 0%,
@@ -655,14 +662,25 @@
       color-mix(in oklch, var(--tnr-glow) 60%, white) 80%,
       transparent 100%
     );
-    mix-blend-mode: screen;
-    opacity: 0.25;
-    mask-image: radial-gradient(60% 100% at 50% 0%, black 40%, transparent 100%);
+  }
+  @keyframes tnr-pan-shine {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(-50%);
+    }
   }
 }
 @layer utilities {
   /* Animated glow background derived from CSS var --tnr-glow */
-  .tnr-glow-bg {
+  .tnr-glow-track {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 600%;
+    animation: tnr-pan-glow 5s linear infinite;
     background-image: linear-gradient(
       45deg,
       color-mix(in oklch, var(--tnr-glow) 90%, black) 0%,
@@ -675,6 +693,16 @@
       color-mix(in oklch, var(--tnr-glow) 90%, white) 87.5%,
       color-mix(in oklch, var(--tnr-glow) 90%, black) 100%
     );
+  }
+  /* A 600% track sweeps the same five widths as a 600% background panned end to end. */
+  @keyframes tnr-pan-glow {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(-83.3333%);
+    }
   }
 
   html:not([data-reading-palette]) .tnr-pixel-game [data-content-box] h1,

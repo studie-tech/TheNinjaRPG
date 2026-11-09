@@ -15,6 +15,18 @@ export const LAND_STEP = 0.22;
 export const SEABED_STEP = 0.19;
 export const MAX_LAND_TERRACE = 3;
 export const MAX_SEABED_DEPTH = 5;
+/** One number per axial coordinate; travel windows span far fewer than 2^15 hexes per axis. */
+const axialKey = (q: number, r: number) => (q + 32768) * 65536 + (r + 32768);
+
+/** Axial steps to a hex's six neighbours. */
+const AXIAL_NEIGHBOURS = [
+  [1, 0],
+  [1, -1],
+  [0, -1],
+  [-1, 0],
+  [-1, 1],
+  [0, 1],
+] as const;
 /** Offshore reach of an icy coast's frozen sheet, in hexes; open water lies beyond it. */
 export const WATER_FIELD_REACH = 6;
 const SHORE_REACH = 4;
@@ -58,13 +70,18 @@ export const createTerrainField = (
   cells: ReadonlyMap<TerrainHex, TerrainCell>,
 ): TerrainField => {
   // Every flood and the smoothing pass walk the same neighbours, so each ring is found once.
+  // Neighbours come from an axial index of the field's own tiles, never from grid lookups.
+  const byAxial = new Map<number, TerrainHex>();
+  for (const tile of cells.keys()) byAxial.set(axialKey(tile.q, tile.r), tile);
   const rings = new Map<TerrainHex, TerrainHex[]>();
   const around = (tile: TerrainHex) => {
     let neighbours = rings.get(tile);
     if (!neighbours) {
-      neighbours = [...grid.traverse(ring({ center: tile, radius: 1 }))].filter(
-        (neighbour) => cells.has(neighbour),
-      );
+      neighbours = [];
+      for (const [dq, dr] of AXIAL_NEIGHBOURS) {
+        const neighbour = byAxial.get(axialKey(tile.q + dq, tile.r + dr));
+        if (neighbour) neighbours.push(neighbour);
+      }
       rings.set(tile, neighbours);
     }
     return neighbours;

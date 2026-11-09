@@ -131,7 +131,8 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
   // Color for the bars
   const color =
     isInBattle || current === undefined || total === undefined
-      ? `bg-linear-to-r from-slate-500 to-slate-400 background-animate opacity-20`
+      ? // An opacity pulse runs on the compositor; a moving gradient repaints every frame.
+        `bg-linear-to-r from-slate-500 to-slate-400 animate-placeholder-pulse opacity-20`
       : props.color;
 
   // Updating the bars based on regen
