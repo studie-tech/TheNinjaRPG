@@ -87,7 +87,7 @@ export const useUserEditForm = (
     return userjutsu ? { ...jutsu, name: `${jutsu.name} (${userjutsu.level})` } : jutsu;
   });
 
-  // Mutation for updating item
+  // Mutation for updating the user
   const { mutate: updateUser, isPending: l4 } = api.profile.updateUser.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);

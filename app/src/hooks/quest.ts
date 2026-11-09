@@ -99,7 +99,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
 
   const { data: titles, isPending: l11 } = api.title.getAllNames.useQuery();
 
-  // Mutation for updating item
+  // Mutation for updating the quest
   const utils = api.useUtils();
   const { mutateAsync: updateQuest, isPending: isUpdating } =
     api.quests.update.useMutation({
@@ -181,7 +181,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     (errors) => showFormErrorsToast(errors),
   );
 
-  // Watch the effects
+  // Watch the quest content
   const content = useWatch({
     control: form.control,
     name: "content",
@@ -369,7 +369,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   formData.push({ id: "description", type: "richinput", doubleWidth: true });
   formData.push({ id: "successDescription", type: "richinput", doubleWidth: true });
 
-  // Add description & image only for missions/crimes/events
+  // Availability window
   formData.push({ id: "endsAt", type: "date", label: "Ends At" });
   formData.push({ id: "startsAt", type: "date", label: "Starts At" });
 
