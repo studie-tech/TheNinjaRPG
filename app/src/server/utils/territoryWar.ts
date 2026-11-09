@@ -14,7 +14,7 @@ import type { userData } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
 import { areBattleAllies } from "@/libs/combat/participants";
 import type { CompleteBattle } from "@/libs/combat/types";
-import type { TerritoryCompetitor } from "@/libs/territoryWar";
+import type { TerritoryBoostWindow, TerritoryCompetitor } from "@/libs/territoryWar";
 import {
   executeInsertedForSyncTerritoryWars,
   executeReceiptForSettleTerritoryWarCombat,
@@ -228,8 +228,8 @@ export const fetchTerritoryWarUser = async (client: DrizzleClient, userId: strin
 /**
  * Correlated ISO bonus windows in the existing user query, bounded by its oldest
  * unsettled work. `since` additionally includes a queued job's logical start even
- * when collection occurs after its bonus expired. Qualified outer identifiers are
- * required because production relational extras otherwise strip column qualifiers.
+ * when collection occurs after its bonus expired. The competitorId CASE mirrors
+ * getTerritoryCompetitor in @/libs/territoryWar; keep both in sync.
  */
 export const territoryWarBoostWindowsSql = (
   user: Pick<
@@ -248,7 +248,7 @@ export const territoryWarBoostWindowsSql = (
   // shadowing the outer user's competitor and unsettled activity timestamps.
   const outerColumn = (column: AnyMySqlColumn) =>
     sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
-  return sql<import("@/libs/territoryWar").TerritoryBoostWindow[]>`
+  return sql<TerritoryBoostWindow[]>`
   COALESCE((SELECT JSON_ARRAYAGG(JSON_OBJECT(
     'startsAt', DATE_FORMAT(tw.resolvedAt, '%Y-%m-%dT%H:%i:%s.%fZ'),
     'endsAt', DATE_FORMAT(DATE_ADD(tw.resolvedAt, INTERVAL ${TERRITORY_WAR_BOOST_HOURS} HOUR), '%Y-%m-%dT%H:%i:%s.%fZ')))
@@ -259,8 +259,6 @@ export const territoryWarBoostWindowsSql = (
   , JSON_ARRAY())
 `.mapWith(
     (value: unknown) =>
-      (typeof value === "string"
-        ? JSON.parse(value)
-        : value) as import("@/libs/territoryWar").TerritoryBoostWindow[],
+      (typeof value === "string" ? JSON.parse(value) : value) as TerritoryBoostWindow[],
   );
 };

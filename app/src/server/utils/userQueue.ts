@@ -978,7 +978,8 @@ export const returnCraftMaterials = async (
 ) => {
   if (materials.length === 0) return;
   const merge = (material: CraftingQueueMaterial) => {
-    // The material's stack size, read in the same statement; 0 means unlimited.
+    // The material's stack size, read in the same statement. A stackSize of 0, which the
+    // item validator rejects, or a missing item leaves the merge uncapped.
     const stackSize = sql`(SELECT NULLIF(${item.stackSize}, 0) FROM ${item} WHERE ${item.id} = ${material.itemId})`;
     return updateUserItemForMerge(client, material, userId, stackSize);
   };
