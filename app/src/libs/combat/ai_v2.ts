@@ -249,10 +249,11 @@ export const performAIaction = (
       enforceExtraRules(aiProfile.rules, backupRules);
     }
 
-    // If we only have the last three actions (end turn, wait, and move),
-    // available, but more actions in total, then add wait rule. Auto-combat
-    // humans always get the end-turn fallback so an unmatched rule set passes
-    // the turn instead of reaching the give-up path below.
+    // Auto-combat actors, and actors with an affordable action outside
+    // nonEffectActions, get a trailing end_turn rule, so a turn that matches no
+    // earlier rule ends through it (see the end_turn branch). Without it, an
+    // unmatched actor reaches the give-up path below: an NPC loses all health,
+    // while summons and raid-battle actors forfeit the turn.
     const nonEffectActions = [
       "basicHeal",
       "meditate",
@@ -666,15 +667,15 @@ const mapDistancesToTarget = <T extends Point2D | UserLocation>(
 };
 
 /**
- * Updates the given grid by marking tiles with obstacles.
+ * Sets the cost of every tile occupied by a user or a barrier to 100.
  *
- * This function iterates over each tile in the provided grid and checks if the tile
- * is occupied by a user or a barrier. If an obstacle is found on the tile, the cost
- * of the tile is set to 100.
+ * Costs change in place on the hexes of `grid`; the returned Grid holds the same
+ * hexes. Action insertion builds its barrier-interception path calculator from
+ * `grid`, so it reads the costs left here.
  *
- * @param grid - The grid of TerrainHex tiles to be updated.
+ * @param grid - The battle grid whose tile costs are updated.
  * @param battle - The current state of the battle, containing information about users and ground effects.
- * @returns A new grid with updated tile costs where obstacles are present.
+ * @returns A Grid of the same, updated hexes.
  */
 const updateGridWithObstacles = (grid: Grid<TerrainHex>, battle: CompleteBattle) => {
   return grid.map((tile) => {
@@ -689,10 +690,13 @@ const updateGridWithObstacles = (grid: Grid<TerrainHex>, battle: CompleteBattle)
 };
 
 /**
- * Resets the cost of all tiles in the given grid to 1, effectively removing any obstacles.
+ * Resets the cost of all tiles in the given grid to 1, removing obstacle weights.
  *
- * @param grid - The grid of TerrainHex tiles to be reset.
- * @returns A new grid with all tile costs set to 1.
+ * Costs change in place on the hexes of `grid`; the returned Grid holds the same
+ * hexes, so callers may ignore it.
+ *
+ * @param grid - The battle grid whose tile costs are reset.
+ * @returns A Grid of the same, reset hexes.
  */
 const resetGridFromObstacles = (grid: Grid<TerrainHex>) => {
   return grid.map((tile) => {
