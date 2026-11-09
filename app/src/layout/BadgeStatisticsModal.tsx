@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight, Users } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { DialogDescription } from "@/components/ui/dialog";
@@ -30,6 +30,7 @@ export const BadgeStatisticsModal = ({
 }: BadgeStatisticsModalProps) => {
   const [page, setPage] = useState(0);
   const [order, setOrder] = useState<"newest" | "oldest">("newest");
+  const summaryRef = useRef<HTMLDivElement>(null);
   const limit = 10;
   const query = api.badge.getAchievers.useQuery(
     { badgeId: badge.id, page, limit, order },
@@ -41,6 +42,11 @@ export const BadgeStatisticsModal = ({
   );
   const total = query.data?.total;
   const pages = Math.max(1, Math.ceil((total ?? 0) / limit));
+
+  // Cached pages keep the body mounted, so each result set needs its own scroll reset.
+  useEffect(() => {
+    summaryRef.current?.parentElement?.scrollTo({ top: 0 });
+  }, [page, order]);
 
   return (
     <Modal
@@ -84,7 +90,10 @@ export const BadgeStatisticsModal = ({
       <DialogDescription className="sr-only">
         Players who earned {badge.name}, ordered by award time.
       </DialogDescription>
-      <div className="bg-muted/30 flex items-center gap-4 rounded-lg border p-4">
+      <div
+        ref={summaryRef}
+        className="bg-muted/30 flex items-center gap-4 rounded-lg border p-4"
+      >
         <Image
           src={badge.image}
           alt=""
