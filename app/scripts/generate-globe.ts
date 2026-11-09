@@ -5,9 +5,7 @@
  * polar caps. Every real neighbor therefore uses the same unrotated local frame.
  *
  * Sector id = row * MAP_WORLD_COLUMNS + column, with row 0 in the north. Output
- * keeps the existing { radius, tiles: [{ c, b[4], t, n, ne }] } schema so the
- * server, global map, authored sector maps and database sector references remain
- * compatible.
+ * follows GlobalMapData (src/libs/sector-map/world-types.ts).
  *
  * Usage (from /app): bun run scripts/generate-globe.ts
  *   [--villages 271,296,...]   additional ids that must be on land

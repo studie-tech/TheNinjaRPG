@@ -1,6 +1,7 @@
 """
 Game Trailer Generator for TheNinja-RPG
-Uses MoviePy to create a 30-second trailer with effects, transitions, and text overlays
+Uses MoviePy to create a trailer with effects, transitions, and text overlays.
+Its length is derived from the TIMELINE segment durations plus the intro and outro.
 """
 
 from moviepy import (
@@ -37,8 +38,7 @@ FONT_FILE = os.path.join(CLIPS_DIR, "aAsianNinja.ttf")
 OUTRO_NARRATION = os.path.join(CLIPS_DIR, "play-for-free.mp3")
 
 # Timeline segments with text overlays
-# Each segment has a duration in seconds - much simpler!
-# Total content: 59 seconds + 0.5s intro + 4s outro = ~63.5 seconds
+# Each segment has a duration in seconds
 # Each segment can optionally specify a "wallpaper" path for custom animated background
 # If not specified, uses WALLPAPER_ANIMATED as default
 # Each segment can optionally specify a "narration" path for voice-over audio
@@ -300,7 +300,6 @@ def load_and_prepare_clip(clip_name, target_duration, size=VIDEO_SIZE, scale_dur
         scale_duration: If True, scale clip to fit duration; if False, cut off after duration
         include_audio: If True, keep clip audio; if False, mute it
     """
-    # Handle clip names that already include file extension
     clip_path = os.path.join(CLIPS_DIR, clip_name)
     
     if not os.path.exists(clip_path):
@@ -355,7 +354,7 @@ def load_and_prepare_clip(clip_name, target_duration, size=VIDEO_SIZE, scale_dur
             bg = ColorClip(size=size, color=(0, 0, 0), duration=target_duration)
             clip = CompositeVideoClip([bg, clip.with_position(("center", 0))], size=size)
     else:
-        # Original logic: scale to height for widescreen videos
+        # Widescreen clip: scale to height and center-crop
         clip = clip.resized(height=size[1])
         
         # Center crop if wider than target
@@ -472,7 +471,7 @@ def load_background_music(duration):
         audio = audio.with_effects([
             afx.AudioFadeIn(3.0),  # Longer fade-in for smoother start
             afx.AudioFadeOut(2.0),
-            afx.MultiplyVolume(0.49)  # Reduced to 70% of previous volume (0.7 * 0.7)
+            afx.MultiplyVolume(0.49)  # Background music level
         ])
         
         print(f"✓ Background music loaded: {BACKGROUND_MUSIC}")
@@ -517,11 +516,11 @@ def create_variable_volume_background_music(base_audio, timeline_segments):
             in_segment = (t_array >= seg_start) & (t_array < seg_end)
             
             if seg["has_narration"]:
-                # During text with narration: moderate volume (louder than before)
+                # During text with narration: moderate volume
                 in_text = in_segment & (t_array < text_end)
                 volumes[in_text] = 0.45
                 
-                # During video clips: high volume (louder than before)
+                # During video clips: high volume
                 in_clips = in_segment & (t_array >= text_end)
                 volumes[in_clips] = 0.9
             else:

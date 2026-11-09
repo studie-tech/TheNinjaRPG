@@ -18,8 +18,8 @@ set -euo pipefail
 
 # Pinned rather than inferred: compose would otherwise derive the project from
 # the compose file's parent directory, which an ambient COMPOSE_PROJECT_NAME can
-# silently override, splitting the "shared" stack in two. This is the name the
-# existing containers already carry, so pinning it changes nothing today.
+# silently override, splitting the "shared" stack in two. It matches the name
+# compose derives from .devcontainer/ and the -p the Makefile docker targets pass.
 COMPOSE_PROJECT=devcontainer
 COMPOSE_FILE="$(git rev-parse --show-toplevel)/.devcontainer/docker-compose.yml"
 # Bound `--wait` so a service that never comes up cannot stall a run forever.
