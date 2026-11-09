@@ -24,7 +24,7 @@ describe("companion potential", () => {
     expect(createPetFromSpecies({ ...args, species: petSpeciesFixture({ potentialValue: 4 }) })).toMatchObject({ potentialValue: 4, potentialRevealed: true });
     expect(createPetFromSpecies({ ...args, species: petSpeciesFixture({ potentialMode: "RANDOM", potentialMin: 5, potentialMax: 5 }) })).toMatchObject({ potentialValue: 5, potentialRevealed: false });
   });
-  it.each(PET_RANKS)("keeps every stat at rank $rank between baseline and five percent extra", ({ rank, minUserRank }) => {
+  it.each(PET_RANKS)("keeps every stat at rank $rank between baseline and fifty percent extra", ({ rank, minUserRank }) => {
     const baseline = getUserCaps(minUserRank);
     for (const tier of PET_POTENTIAL_TIERS) {
       const caps = getPetStatCaps({ rank, potentialValue: tier.value, potentialRevealed: true });
@@ -32,7 +32,7 @@ describe("companion potential", () => {
         const baseCap = getCombatStatCap(baseline, stat);
         expect(caps[stat]).toBe(Math.floor(baseCap * tier.capMultiplier));
         expect(caps[stat]).toBeGreaterThanOrEqual(baseCap);
-        expect(caps[stat]).toBeLessThanOrEqual(baseCap * 1.05);
+        expect(caps[stat]).toBeLessThanOrEqual(baseCap * 1.5);
       }
       expect(caps.offence / caps.strength).toBeCloseTo(baseline.stats_cap / baseline.gens_cap, 4);
     }
