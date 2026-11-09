@@ -26,6 +26,8 @@ import {
 /**
  * Owns meshes/shaders for immutable CPU terrain data. Resolves after texture attempts;
  * missing optional images retain tinted faces, while cancellation rejects.
+ * With `deferTextures`, it resolves at once with tinted faces and applies each image
+ * as it arrives, so a scene can draw before its terrain artwork downloads.
  * setTints replaces the overlay from original colors without mutating data.
  * Each painter-ordered segment draws as one mesh (split only when it needs more than
  * four images), so terraces, cliffs and seabeds cost a couple of draws per sector.
@@ -36,23 +38,27 @@ export const createHexTerrain = async (
   game: GameRenderer,
   data: HexTerrainData,
   showBoundary = true,
+  { deferTextures = false }: { deferTextures?: boolean } = {},
 ) => {
-  const images = await Promise.all(
-    data.textures.map((texture) =>
-      game.assets.texture(texture).catch((error: unknown) => {
-        if (
-          game.signal.aborted ||
-          game.isDisposed() ||
-          (error instanceof Error && error.name === "AbortError")
-        )
-          throw error;
-        console.warn("Terrain texture unavailable", error);
-        return null;
-      }),
-    ),
+  const loads = data.textures.map((texture) =>
+    game.assets.texture(texture).catch((error: unknown) => {
+      if (
+        game.signal.aborted ||
+        game.isDisposed() ||
+        (error instanceof Error && error.name === "AbortError")
+      )
+        throw error;
+      console.warn("Terrain texture unavailable", error);
+      return null;
+    }),
   );
+  const images: (Texture | null)[] = deferTextures
+    ? loads.map(() => null)
+    : await Promise.all(loads);
   if (game.signal.aborted || game.isDisposed())
     throw new DOMException("Terrain cancelled", "AbortError");
+  /** Shader samplers waiting for each deferred image. */
+  const samplers = loads.map(() => [] as { shader: Shader; name: ImageUniform }[]);
   const container = new Container();
   const geometries: Geometry[] = [],
     shaders: Shader[] = [];
@@ -131,6 +137,10 @@ export const createHexTerrain = async (
           uImage4: imageSource(3),
         },
       });
+      IMAGE_UNIFORMS.forEach((name, index) => {
+        const slot = range.slots[index];
+        if (slot) samplers[slot - 1]?.push({ shader, name });
+      });
       const tiles = segment.tiles.filter(
         (tile) => tile.start >= range.start && tile.start < range.end,
       );
@@ -181,6 +191,19 @@ export const createHexTerrain = async (
     });
     own(geometry, shader, BOUNDARY_ORDER);
   }
+  if (deferTextures)
+    loads.forEach((load, index) => {
+      void load.then(
+        (texture) => {
+          if (disposed || !texture) return;
+          for (const { shader, name } of samplers[index] ?? [])
+            shader.resources[name] = texture.source;
+          game.invalidate();
+        },
+        // Cancellation disposes the terrain with its scene; nothing is waiting on the image.
+        () => undefined,
+      );
+    });
   const dispose = () => {
     if (disposed) return;
     disposed = true;
@@ -230,9 +253,11 @@ export const createHexTerrain = async (
 };
 
 const BOUNDARY_ORDER = 6;
-const MAX_IMAGE_SLOTS = 4;
+const IMAGE_UNIFORMS = ["uImage1", "uImage2", "uImage3", "uImage4"] as const;
+const MAX_IMAGE_SLOTS = IMAGE_UNIFORMS.length;
 
 type TerrainSegment = HexTerrainData["segments"][number];
+type ImageUniform = (typeof IMAGE_UNIFORMS)[number];
 
 /** Paths, shores and lily pads join the end of the land segment, above every terrace. */
 const appendSurface = (

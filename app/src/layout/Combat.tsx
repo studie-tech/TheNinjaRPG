@@ -308,9 +308,10 @@ const Combat: React.FC<CombatProps> = (props) => {
     { enabled: !!battleRef.current, placeholderData: (previous) => previous },
   );
   const hasGameAssets = gameAssets !== undefined;
+  // Effects wait for their asset names; the field itself draws without them.
   const gameAssetsRef = useRef({
     assets: gameAssets ?? [],
-    requestedIds: new Set(allAssets),
+    requestedIds: new Set(gameAssets && !hasPreviousGameAssets ? allAssets : []),
   });
   useEffect(() => {
     if (gameAssets && !hasPreviousGameAssets) {
@@ -908,7 +909,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         },
       }),
     `${battleId}:${lightLayout}`,
-    hasGameAssets && !!battleState.battle && !result,
+    !!battleState.battle && !result,
   );
   const webglError = combat.error;
   fieldFailedRef.current = webglError || hasGameAssetsError;

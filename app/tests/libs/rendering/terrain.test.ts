@@ -32,6 +32,7 @@ import {
   isReachableCoordinate,
   isWalkableCoordinate,
 } from "@/libs/sector-map/validation";
+import { deferred } from "../../setup/deferred";
 import { sectorMap } from "../../setup/sectorMap";
 
 const mapOf = (width: number, height: number): NormalizedSectorMap =>
@@ -381,6 +382,46 @@ describe("shared hex terrain textures", () => {
     game.dispose();
     expect(terrain.container.destroyed).toBe(true);
     expect(image.source.destroyed).toBe(false);
+  });
+
+  it("draws tinted faces before deferred images arrive and binds each image as it loads", async () => {
+    const { data } = textured(mapOf(3, 2));
+    expect(data.textures.length).toBeGreaterThan(1);
+    const loads = new Map(data.textures.map((path) => [path, deferred<Texture>()]));
+    const { game } = renderer((path) => loads.get(path)!.promise);
+    const invalidate = vi.fn();
+    Object.assign(game, { invalidate });
+    const terrain = await createHexTerrain(game, data, true, { deferTextures: true });
+    const meshes = terrain.container.children.filter(
+      (child): child is Mesh =>
+        child instanceof Mesh && Boolean(child.geometry.attributes.aKind),
+    );
+    const images = () =>
+      meshes.flatMap((mesh) =>
+        [1, 2, 3, 4].map((slot) => mesh.shader!.resources[`uImage${slot}`]),
+      );
+    expect(meshes).toHaveLength(data.segments.length);
+    expect(images().every((source) => source === Texture.WHITE.source)).toBe(true);
+    const [first, second] = data.textures;
+    const image = new Texture({
+      source: new BufferImageSource({
+        resource: new Uint8Array([90, 120, 60, 255]),
+        width: 1,
+        height: 1,
+      }),
+    });
+    cleanups.push(() => image.destroy(true));
+    loads.get(first!)!.resolve(image);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(images()).toContain(image.source);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    // An image that settles after its scene has gone binds nothing and draws nothing.
+    game.dispose();
+    loads.get(second!)!.resolve(image);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(invalidate).toHaveBeenCalledTimes(1);
   });
 
   it.each(["abort", "dispose"])(
