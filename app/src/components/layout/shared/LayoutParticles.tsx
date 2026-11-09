@@ -37,8 +37,11 @@ const PARTICLE_COUNT_MAX = 200;
 const PARTICLE_COUNT_MIN = 100;
 const PARTICLE_COUNT_STEP = 25;
 const PARTICLE_SAMPLE_MS = 1000;
-const PARTICLE_LOW_FPS_THRESHOLD = 60;
-const PARTICLE_RECOVERY_FPS_THRESHOLD = 60;
+// Frame health is sampled from requestAnimationFrame, which runs at the display's
+// refresh rate. A 60 Hz display samples just under 60 fps, so both thresholds sit
+// below it, with a gap between them so the count does not oscillate.
+const PARTICLE_LOW_FPS_THRESHOLD = 45;
+const PARTICLE_RECOVERY_FPS_THRESHOLD = 55;
 const PARTICLE_SLOW_FRAME_MS = 34;
 const PARTICLE_LOW_SAMPLE_LIMIT = 2;
 const PARTICLE_RECOVERY_SAMPLE_LIMIT = 6;
