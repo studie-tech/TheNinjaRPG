@@ -680,12 +680,6 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   );
 };
 
-/**
- * Renders the Anbu Orders component.
- *
- * @param props - The component props.
- * @returns The rendered component.
- */
 interface AnbuOrdersProps {
   squadId: string;
   title: string;
@@ -746,13 +740,6 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
   );
 };
 
-/**
- * Renders a component that displays ANBU requests for a squad.
- *
- * @component
- * @param {AnbuRequestsProps} props - The component props.
- * @returns {React.ReactNode} The rendered component.
- */
 interface AnbuRequestsProps {
   squadId: string;
   isLeader: boolean;
@@ -765,6 +752,7 @@ interface AnbuRequestsProps {
   canStaffEdit: boolean;
 }
 
+/** ANBU join requests for a squad. */
 const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
   // Destructure
   const {

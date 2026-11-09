@@ -47,7 +47,6 @@ import {
 
 /**
  * @param auctionId - Auction ID
- * @param userData - User data
  * @param isOpen - Whether the dialog is open
  * @param setIsOpen - Function to set the dialog open state
  * @returns Auction details dialog
